@@ -3,8 +3,9 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Bell,
+  AlertTriangle,
   Cable,
+  ChevronDown,
   Flame,
   LayoutDashboard,
   Package,
@@ -16,16 +17,21 @@ import {
 } from "lucide-react"
 
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 
 type NavItem = {
@@ -37,6 +43,7 @@ type NavItem = {
 
 type NavGroup = {
   label?: string
+  defaultOpen?: boolean
   items: NavItem[]
 }
 
@@ -44,11 +51,12 @@ const navGroups: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Alertas", href: "/alertas", icon: Bell, badge: 1 },
+      { label: "Alertas", href: "/alertas", icon: AlertTriangle, badge: 1 },
     ],
   },
   {
     label: "Operação",
+    defaultOpen: true,
     items: [
       { label: "Unidades", href: "/unidades", icon: Store },
       { label: "Plataformas", href: "/plataformas", icon: ShoppingBag },
@@ -58,10 +66,12 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "Financeiro",
+    defaultOpen: true,
     items: [{ label: "Resultado", href: "/financeiro", icon: Wallet }],
   },
   {
     label: "Integrações",
+    defaultOpen: true,
     items: [{ label: "Conexões", href: "/conexoes", icon: Cable }],
   },
   {
@@ -74,6 +84,39 @@ const navGroups: NavGroup[] = [
 function isItemActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/"
   return pathname === href || pathname.startsWith(href + "/")
+}
+
+function MenuItems({
+  items,
+  pathname,
+}: {
+  items: NavItem[]
+  pathname: string
+}) {
+  return (
+    <SidebarMenu>
+      {items.map((item) => {
+        const active = isItemActive(pathname, item.href)
+        return (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton
+              render={<Link href={item.href} />}
+              isActive={active}
+              tooltip={item.label}
+            >
+              <item.icon />
+              <span>{item.label}</span>
+              {item.badge !== undefined && (
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                  {item.badge}
+                </span>
+              )}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )
+      })}
+    </SidebarMenu>
+  )
 }
 
 export function AppSidebar() {
@@ -95,45 +138,45 @@ export function AppSidebar() {
           aria-hidden
         />
         <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground group-data-[collapsible=icon]:hidden">
-          Delivery OS
+          Gestão de Delivery
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {navGroups.map((group, idx) => (
-          <SidebarGroup key={group.label ?? `group-${idx}`}>
-            {group.label ? (
-              <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                {group.label}
-              </SidebarGroupLabel>
-            ) : null}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const active = isItemActive(pathname, item.href)
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        render={<Link href={item.href} />}
-                        isActive={active}
-                        tooltip={item.label}
-                      >
-                        <item.icon />
-                        <span>{item.label}</span>
-                        {item.badge !== undefined && (
-                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
-                            {item.badge}
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {navGroups.map((group, idx) => {
+          if (!group.label) {
+            return (
+              <SidebarGroup key={`group-${idx}`}>
+                <SidebarGroupContent>
+                  <MenuItems items={group.items} pathname={pathname} />
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )
+          }
+          return (
+            <Collapsible
+              key={group.label}
+              defaultOpen={group.defaultOpen}
+              className="group/collapsible"
+            >
+              <SidebarGroup>
+                <CollapsibleTrigger
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/80 outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+                >
+                  <ChevronDown className="size-3.5 shrink-0 transition-transform duration-200 group-data-[closed]/collapsible:-rotate-90" />
+                  <span>{group.label}</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarGroupContent className="mt-1">
+                    <MenuItems items={group.items} pathname={pathname} />
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          )
+        })}
       </SidebarContent>
       <SidebarFooter>
+        <SidebarSeparator className="group-data-[collapsible=icon]:hidden" />
         <div className="px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
           v0.1 · em construção
         </div>
