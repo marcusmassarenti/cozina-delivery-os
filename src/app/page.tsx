@@ -4,32 +4,42 @@ import {
   DollarSign,
   Filter,
   Percent,
+  PiggyBank,
   Receipt,
-  ShoppingCart,
+  Star,
   TrendingUp,
+  XCircle,
 } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { createClient } from "@/lib/supabase/server"
 
 //----------------------------------------------------------------
-// Sample data (substituir por dados reais quando iFood + manuais conectarem)
+// Tipos e dados de demonstração
 //----------------------------------------------------------------
+
+type Tone = "positive" | "neutral" | "warning"
 
 type Kpi = {
   label: string
   value: string
   trend: string
+  tone: Tone
   icon: React.ComponentType<{ className?: string }>
 }
 
-const kpis: Kpi[] = [
-  { label: "Pedidos Totais", value: "8.296", trend: "+100,0% vs mês anterior", icon: CalendarDays },
-  { label: "Média Pedidos/Dia", value: "277", trend: "+100,0% vs mês anterior", icon: CalendarDays },
-  { label: "Ticket Médio", value: "R$ 64", trend: "+100,0% vs mês anterior", icon: Receipt },
-  { label: "Total Bruto", value: "R$ 529,8k", trend: "+100,0% vs mês anterior", icon: DollarSign },
-  { label: "Total Líquido", value: "R$ 348,6k", trend: "+100,0% vs mês anterior", icon: DollarSign },
-  { label: "Taxa de Repasse", value: "65,8%", trend: "+100,0% vs mês anterior", icon: Percent },
+const kpisOperacao: Kpi[] = [
+  { label: "Pedidos Totais",      value: "8.296",      trend: "+100,0% vs mês ant.", tone: "positive", icon: CalendarDays },
+  { label: "Faturamento Bruto",   value: "R$ 529,8k",  trend: "+100,0% vs mês ant.", tone: "positive", icon: DollarSign },
+  { label: "Faturamento Líquido", value: "R$ 348,6k",  trend: "+100,0% vs mês ant.", tone: "positive", icon: DollarSign },
+  { label: "Ticket Médio",        value: "R$ 64",      trend: "+5,2% vs mês ant.",    tone: "positive", icon: Receipt },
+]
+
+const kpisSaude: Kpi[] = [
+  { label: "Margem Bruta",        value: "—",          trend: "Aguardando compras Cozina (Mai/26)", tone: "neutral",  icon: PiggyBank },
+  { label: "Taxa de Repasse",     value: "65,8%",      trend: "Acima da média da rede",            tone: "positive", icon: Percent },
+  { label: "Nota Média",          value: "4,7",        trend: "↗ 0,1 vs mês ant.",                  tone: "positive", icon: Star },
+  { label: "Cancelamentos",       value: "2,1%",       trend: "Dentro do limite (<3%)",            tone: "positive", icon: XCircle },
 ]
 
 type Platform = {
@@ -37,33 +47,82 @@ type Platform = {
   name: string
   bruto: string
   liquido: string
-  taxas: string
   pctLoja: number
-  pctTaxas: number
 }
-
-const platforms: Platform[] = [
-  { id: "ifood", name: "iFood", bruto: "R$ 96,2k", liquido: "R$ 59,8k", taxas: "R$ 36,4k", pctLoja: 62.2, pctTaxas: 37.8 },
-  { id: "99food", name: "99 Food", bruto: "R$ 26,8k", liquido: "R$ 19,7k", taxas: "R$ 7,1k", pctLoja: 73.6, pctTaxas: 26.4 },
-  { id: "keeta", name: "Keeta", bruto: "R$ 64,7k", liquido: "R$ 40,3k", taxas: "R$ 24,4k", pctLoja: 62.2, pctTaxas: 37.8 },
-]
 
 type Unit = {
   code: string
   name: string
+  city: string
+  state: string
   pedidos: string
   ticket: string
   bruto: string
   liquido: string
+  platforms: Platform[]
 }
 
 const units: Unit[] = [
-  { code: "2",  name: "Churrasco no Pote — JK",                 pedidos: "3.600", ticket: "R$ 60,65", bruto: "R$ 216.646,43", liquido: "R$ 146.835,99" },
-  { code: "4",  name: "Churrasco no Pote — Brooklin",           pedidos: "1.476", ticket: "R$ 65,41", bruto: "R$ 96.182,75",  liquido: "R$ 60.838,30"  },
-  { code: "5",  name: "Churrasco no Pote — Hortolândia",        pedidos: "—",     ticket: "R$ —",     bruto: "R$ —",          liquido: "R$ —"          },
-  { code: "10", name: "Churrasco no Pote — Ribeirão Preto",     pedidos: "83",    ticket: "R$ 63,53", bruto: "R$ 5.211,64",   liquido: "R$ 2.883,87"   },
-  { code: "11", name: "Churrasco no Pote — São José dos Campos",pedidos: "335",   ticket: "R$ 68,71", bruto: "R$ 22.770,83",  liquido: "R$ 14.575,10"  },
-  { code: "12", name: "Churrasco no Pote — Tatuapé",            pedidos: "126",   ticket: "R$ 82,22", bruto: "R$ 10.359,69",  liquido: "R$ 7.045,13"   },
+  {
+    code: "02", name: "Churrasco no Pote — JK", city: "São Paulo", state: "SP",
+    pedidos: "3.600", ticket: "R$ 60,65", bruto: "R$ 216.646", liquido: "R$ 146.836",
+    platforms: [
+      { id: "ifood",  name: "iFood",   bruto: "R$ 130k", liquido: "R$ 84k", pctLoja: 64.8 },
+      { id: "99food", name: "99 Food", bruto: "R$ 54k",  liquido: "R$ 40k", pctLoja: 74.1 },
+      { id: "keeta",  name: "Keeta",   bruto: "R$ 32k",  liquido: "R$ 20k", pctLoja: 62.5 },
+    ],
+  },
+  {
+    code: "04", name: "Churrasco no Pote — Brooklin", city: "São Paulo", state: "SP",
+    pedidos: "1.476", ticket: "R$ 65,41", bruto: "R$ 96.183", liquido: "R$ 60.838",
+    platforms: [
+      { id: "ifood",  name: "iFood",   bruto: "R$ 58k", liquido: "R$ 36k", pctLoja: 62.1 },
+      { id: "99food", name: "99 Food", bruto: "R$ 22k", liquido: "R$ 16k", pctLoja: 73.0 },
+      { id: "keeta",  name: "Keeta",   bruto: "R$ 16k", liquido: "R$ 9k",  pctLoja: 56.3 },
+    ],
+  },
+  {
+    code: "05", name: "Churrasco no Pote — Hortolândia", city: "Hortolândia", state: "SP",
+    pedidos: "—", ticket: "R$ —", bruto: "R$ —", liquido: "R$ —",
+    platforms: [
+      { id: "ifood",  name: "iFood",   bruto: "—", liquido: "—", pctLoja: 0 },
+      { id: "99food", name: "99 Food", bruto: "—", liquido: "—", pctLoja: 0 },
+      { id: "keeta",  name: "Keeta",   bruto: "—", liquido: "—", pctLoja: 0 },
+    ],
+  },
+  {
+    code: "10", name: "Churrasco no Pote — Ribeirão Preto", city: "Ribeirão Preto", state: "SP",
+    pedidos: "83", ticket: "R$ 63,53", bruto: "R$ 5.212", liquido: "R$ 2.884",
+    platforms: [
+      { id: "ifood",  name: "iFood",   bruto: "R$ 3,2k", liquido: "R$ 1,7k", pctLoja: 53.1 },
+      { id: "99food", name: "99 Food", bruto: "R$ 1,2k", liquido: "R$ 0,9k", pctLoja: 75.0 },
+      { id: "keeta",  name: "Keeta",   bruto: "R$ 0,8k", liquido: "R$ 0,3k", pctLoja: 37.5 },
+    ],
+  },
+  {
+    code: "11", name: "Churrasco no Pote — São José dos Campos", city: "S. J. dos Campos", state: "SP",
+    pedidos: "335", ticket: "R$ 68,71", bruto: "R$ 22.771", liquido: "R$ 14.575",
+    platforms: [
+      { id: "ifood",  name: "iFood",   bruto: "R$ 14k", liquido: "R$ 9k", pctLoja: 64.3 },
+      { id: "99food", name: "99 Food", bruto: "R$ 5k",  liquido: "R$ 4k", pctLoja: 80.0 },
+      { id: "keeta",  name: "Keeta",   bruto: "R$ 4k",  liquido: "R$ 2k", pctLoja: 50.0 },
+    ],
+  },
+  {
+    code: "12", name: "Churrasco no Pote — Tatuapé", city: "São Paulo", state: "SP",
+    pedidos: "126", ticket: "R$ 82,22", bruto: "R$ 10.360", liquido: "R$ 7.045",
+    platforms: [
+      { id: "ifood",  name: "iFood",   bruto: "R$ 6,5k", liquido: "R$ 4,4k", pctLoja: 67.7 },
+      { id: "99food", name: "99 Food", bruto: "R$ 2,1k", liquido: "R$ 1,6k", pctLoja: 76.2 },
+      { id: "keeta",  name: "Keeta",   bruto: "R$ 1,8k", liquido: "R$ 1,0k", pctLoja: 55.6 },
+    ],
+  },
+]
+
+const platformOverview = [
+  { id: "ifood"  as PlatformId, name: "iFood",   bruto: "R$ 96,2k", pct: 62.2 },
+  { id: "99food" as PlatformId, name: "99 Food", bruto: "R$ 26,8k", pct: 73.6 },
+  { id: "keeta"  as PlatformId, name: "Keeta",   bruto: "R$ 64,7k", pct: 62.2 },
 ]
 
 //----------------------------------------------------------------
@@ -96,31 +155,41 @@ export default async function Home() {
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <PageHeader />
-
       <ConnectionBadge status={supabaseStatus} />
 
-      <SectionDivider number={1} label="Performance Geral" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((kpi) => (
+      <SectionDivider number={1} label="Performance da Operação" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {kpisOperacao.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
-      <SectionDivider number={2} label="Margem de Ganho por Plataforma" />
-      <div className="grid gap-4 md:grid-cols-3">
-        {platforms.map((p) => (
-          <PlatformMarginCard key={p.id} platform={p} />
+      <SectionDivider number={2} label="Saúde do Negócio" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {kpisSaude.map((kpi) => (
+          <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
-      <SectionDivider number={3} label="Detalhamento por Unidade" />
-      <UnitTable />
+      <SectionDivider number={3} label="Visão Geral por Plataforma (rede)" />
+      <div className="grid gap-3 md:grid-cols-3">
+        {platformOverview.map((p) => (
+          <PlatformOverviewPill key={p.id} platform={p} />
+        ))}
+      </div>
+
+      <SectionDivider number={4} label="Detalhamento por Unidade" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {units.map((u) => (
+          <UnitCard key={u.code} unit={u} />
+        ))}
+      </div>
     </div>
   )
 }
 
 //----------------------------------------------------------------
-// Components
+// Componentes auxiliares
 //----------------------------------------------------------------
 
 function PageHeader() {
@@ -210,6 +279,11 @@ function SectionDivider({
 
 function KpiCard({ kpi }: { kpi: Kpi }) {
   const Icon = kpi.icon
+  const toneClass: Record<Tone, string> = {
+    positive: "text-emerald-600 dark:text-emerald-400",
+    neutral: "text-muted-foreground",
+    warning: "text-amber-600 dark:text-amber-400",
+  }
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
@@ -219,104 +293,132 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
         {kpi.label}
       </p>
       <p className="mt-1.5 text-2xl font-bold tracking-tight">{kpi.value}</p>
-      <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-        <TrendingUp className="size-3" />
+      <p className={`mt-1 text-[11px] font-medium ${toneClass[kpi.tone]}`}>
         {kpi.trend}
       </p>
     </div>
   )
 }
 
-function PlatformMarginCard({ platform }: { platform: Platform }) {
+function PlatformOverviewPill({
+  platform,
+}: {
+  platform: { id: PlatformId; name: string; bruto: string; pct: number }
+}) {
   return (
-    <div className="rounded-xl border bg-card p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <PlatformLogo platform={platform.id} size="md" />
-          <div>
-            <p className="text-sm font-semibold">{platform.name}</p>
-            <p className="text-[11px] text-muted-foreground">
-              Divisão entre receita líquida e taxas
-            </p>
-          </div>
+    <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+      <PlatformLogo platform={platform.id} size="md" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold">{platform.name}</span>
+          <span className="text-sm font-bold tabular-nums">
+            {platform.bruto}
+          </span>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Bruto
-          </p>
-          <p className="text-sm font-bold">{platform.bruto}</p>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-emerald-500"
+            style={{ width: `${platform.pct}%` }}
+          />
         </div>
-      </div>
-
-      <div className="mt-4 flex h-7 overflow-hidden rounded-md text-[11px] font-semibold">
-        <div
-          className="flex items-center justify-center bg-emerald-500 text-white"
-          style={{ width: `${platform.pctLoja}%` }}
-        >
-          {platform.pctLoja.toFixed(1)}% Loja
-        </div>
-        <div
-          className="flex items-center justify-center bg-slate-600 text-white"
-          style={{ width: `${platform.pctTaxas}%` }}
-        >
-          {platform.pctTaxas.toFixed(1)}% Taxas
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-[11px]">
-        <span className="text-emerald-600 dark:text-emerald-400">
-          Líquido: <span className="font-semibold">{platform.liquido}</span>
-        </span>
-        <span className="text-muted-foreground">
-          Taxas: <span className="font-semibold">{platform.taxas}</span>
-        </span>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {platform.pct.toFixed(1)}% líquido pra loja
+        </p>
       </div>
     </div>
   )
 }
 
-function UnitTable() {
+function UnitCard({ unit }: { unit: Unit }) {
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <div className="grid grid-cols-[2fr_repeat(4,_1fr)_auto] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <div>Unidade / Plataforma</div>
-        <div className="text-right">Pedidos</div>
-        <div className="text-right">Ticket Médio</div>
-        <div className="text-right">Total Bruto</div>
-        <div className="text-right">Total Líquido</div>
-        <div className="text-right">Status</div>
+    <div className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-sm">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <span className="text-xs font-bold tabular-nums">{unit.code}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-tight">{unit.name}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {unit.city} · {unit.state}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-primary hover:underline"
+        >
+          Ver detalhes
+          <ChevronRight className="size-3" />
+        </button>
       </div>
 
-      {units.map((u, idx) => (
-        <div
-          key={u.code}
-          className={`grid grid-cols-[2fr_repeat(4,_1fr)_auto] items-center gap-4 px-5 py-4 text-sm ${
-            idx < units.length - 1 ? "border-b" : ""
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-              <span className="text-[11px] font-bold">{u.code}</span>
-            </div>
-            <span className="font-medium">{u.name}</span>
-          </div>
-          <div className="text-right tabular-nums">{u.pedidos}</div>
-          <div className="text-right tabular-nums text-muted-foreground">
-            {u.ticket}
-          </div>
-          <div className="text-right tabular-nums font-semibold">{u.bruto}</div>
-          <div className="text-right tabular-nums font-semibold">
-            {u.liquido}
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-primary hover:bg-accent"
-          >
-            Ver detalhes
-            <ChevronRight className="size-3" />
-          </button>
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-center">
+        <div>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Pedidos
+          </p>
+          <p className="text-sm font-bold tabular-nums">{unit.pedidos}</p>
         </div>
-      ))}
+        <div className="border-x">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Bruto
+          </p>
+          <p className="text-sm font-bold tabular-nums">{unit.bruto}</p>
+        </div>
+        <div>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Líquido
+          </p>
+          <p className="text-sm font-bold tabular-nums">{unit.liquido}</p>
+        </div>
+      </div>
+
+      {/* Platform breakdown */}
+      <div className="flex flex-col gap-2.5">
+        {unit.platforms.map((p) => (
+          <PlatformRow key={p.id} platform={p} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PlatformRow({ platform }: { platform: Platform }) {
+  const hasData = platform.pctLoja > 0
+  return (
+    <div className="flex items-center gap-2.5">
+      <PlatformLogo platform={platform.id} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[11px] font-medium">{platform.name}</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {hasData ? `${platform.pctLoja.toFixed(0)}% loja` : "—"}
+          </span>
+        </div>
+        <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-muted">
+          {hasData ? (
+            <>
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${platform.pctLoja}%` }}
+              />
+              <div
+                className="h-full bg-slate-400 dark:bg-slate-600"
+                style={{ width: `${100 - platform.pctLoja}%` }}
+              />
+            </>
+          ) : null}
+        </div>
+        <div className="mt-1 flex items-baseline justify-between text-[10px] text-muted-foreground">
+          <span>Bruto {platform.bruto}</span>
+          <span className="text-emerald-600 dark:text-emerald-400">
+            Líq. {platform.liquido}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
