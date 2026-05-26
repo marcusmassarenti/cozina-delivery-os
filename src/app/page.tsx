@@ -1,9 +1,13 @@
 import {
+  CheckCircle2,
   DollarSign,
   Receipt,
   ShoppingCart,
   TrendingUp,
+  XCircle,
 } from "lucide-react"
+
+import { createClient } from "@/lib/supabase/server"
 
 type KpiStatus = "positive" | "attention" | "neutral"
 
@@ -52,7 +56,25 @@ const statusStyles: Record<KpiStatus, string> = {
   neutral: "bg-muted text-muted-foreground",
 }
 
-export default function Home() {
+async function checkSupabase() {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.getUser()
+    if (error && error.message !== "Auth session missing!") {
+      return { ok: false, message: error.message }
+    }
+    return { ok: true, message: "Supabase conectado" }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}
+
+export default async function Home() {
+  const supabaseStatus = await checkSupabase()
+
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-1">
@@ -67,7 +89,30 @@ export default function Home() {
         </p>
       </div>
 
-      <SectionDivider number={1} label="Performance Operacional — Pedidos e Faturamento" />
+      <div
+        className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${
+          supabaseStatus.ok
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-rose-200 bg-rose-50 text-rose-700"
+        }`}
+      >
+        {supabaseStatus.ok ? (
+          <CheckCircle2 className="size-4" />
+        ) : (
+          <XCircle className="size-4" />
+        )}
+        <span className="font-medium">{supabaseStatus.message}</span>
+        {!supabaseStatus.ok && (
+          <span className="text-rose-600/80">
+            — verifique .env.local
+          </span>
+        )}
+      </div>
+
+      <SectionDivider
+        number={1}
+        label="Performance Operacional — Pedidos e Faturamento"
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
@@ -79,10 +124,12 @@ export default function Home() {
 
       <div className="rounded-xl border border-dashed bg-card p-10 text-center">
         <p className="text-sm font-medium">
-          Aqui vão entrar: tabela por unidade, margem por plataforma, top produtos
+          Aqui vão entrar: tabela por unidade, margem por plataforma, top
+          produtos
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Próximo passo: conectar Supabase e modelar entidades multi-tenant
+          Próximo passo: modelar entidades multi-tenant (holdings, marcas,
+          unidades) no banco
         </p>
       </div>
     </div>
