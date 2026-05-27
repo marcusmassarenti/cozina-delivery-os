@@ -16,7 +16,6 @@ import type {
   PlatformSummary,
 } from "@/lib/data/lancamentos"
 import { fmtBRL, fmtPct } from "@/lib/format"
-import { PlatformKpis } from "./platform-kpis"
 import { saveMonthlyEntry, type ActionState } from "../_actions"
 
 const initial: ActionState = { ok: false }
@@ -52,6 +51,9 @@ export function MonthlyTab({
   const [general, setGeneral] = React.useState<MonthlyGeneral>(initialGeneral)
   const [platforms, setPlatforms] = React.useState<PlatformInputs>(
     initialPlatformEntries,
+  )
+  const [selected, setSelected] = React.useState<PlatformId>(
+    unitActivePlatforms[0] ?? "ifood",
   )
   const router = useRouter()
 
@@ -145,47 +147,98 @@ export function MonthlyTab({
       <input type="hidden" name="year" value={year} />
       <input type="hidden" name="month" value={month} />
 
-      {/* KPIs por plataforma (read-only, do diário) */}
-      <Section title="Volume por plataforma (do diário)">
-        <PlatformKpis summary={daySummary} />
-      </Section>
+      {/* Lançamento por plataforma — único bloco com seletor */}
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex items-center justify-between gap-3 border-b pb-3">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Lançamento por plataforma
+            </h3>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Selecione a plataforma e preencha taxas, VR e cancelamentos.
+            </p>
+          </div>
+        </div>
 
-      {/* Por plataforma: taxas + VR + cancelamentos */}
-      {PLATFORMS.map((p) => {
-        const isActive = unitActivePlatforms.includes(p.id)
-        const inputs = platforms[p.id]
-        const calcs = platformCalcs[p.id]
-        const summary = daySummary[p.id]
-        return (
-          <div
-            key={p.id}
-            className={`rounded-xl border bg-card p-5 ${
-              isActive ? "" : "opacity-70"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-3 border-b pb-3">
-              <div className="flex items-center gap-2.5">
-                <PlatformLogo platform={p.id} size="md" />
-                <h3 className="text-sm font-semibold">{p.label}</h3>
-                {!isActive && (
-                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
-                    inativa
+        {/* Platform selector buttons */}
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {PLATFORMS.map((p) => {
+            const isSelected = selected === p.id
+            const isActive = unitActivePlatforms.includes(p.id)
+            const summary = daySummary[p.id]
+            const calc = platformCalcs[p.id]
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelected(p.id)}
+                className={`flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors ${
+                  isSelected
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-background hover:bg-muted/50"
+                } ${isActive ? "" : "opacity-60"}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <PlatformLogo platform={p.id} size="sm" />
+                    <span className="text-xs font-semibold">{p.label}</span>
+                  </div>
+                  {isSelected && (
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-primary">
+                      Editando
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    Fat. diário
                   </span>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Faturamento (diário)
-                </p>
-                <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                  {fmtBRL(summary.faturamento)}
-                </p>
-              </div>
-            </div>
+                  <span className="text-xs font-bold tabular-nums">
+                    {fmtBRL(summary.faturamento)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    Total recebido (calc)
+                  </span>
+                  <span className="text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    {fmtBRL(calc.totalRecebido)}
+                  </span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
 
-            {/* Taxas */}
-            <div className="mt-4">
-              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+        {/* Per-platform inputs (todos no DOM, só o selecionado visível) */}
+        {PLATFORMS.map((p) => {
+          const inputs = platforms[p.id]
+          const calc = platformCalcs[p.id]
+          const summary = daySummary[p.id]
+          const isSelected = selected === p.id
+          return (
+            <div
+              key={p.id}
+              className={`mt-4 ${isSelected ? "" : "hidden"}`}
+              data-platform={p.id}
+            >
+              <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <PlatformLogo platform={p.id} size="sm" />
+                  <span className="text-sm font-semibold">{p.label}</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                    Faturamento (diário)
+                  </p>
+                  <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    {fmtBRL(summary.faturamento)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Taxas */}
+              <h4 className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
                 Taxas e Descontos (manual)
               </h4>
               <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -219,67 +272,69 @@ export function MonthlyTab({
                   label="Outros Descontos"
                   name={`${p.id}_outros_descontos`}
                   value={inputs.outrosDescontos}
-                  onChange={(n) => updatePlatform(p.id, "outrosDescontos", n)}
+                  onChange={(n) =>
+                    updatePlatform(p.id, "outrosDescontos", n)
+                  }
                 />
                 <Calculated
                   label="Subtotal Taxas"
-                  value={fmtBRL(calcs.totalTaxas)}
+                  value={fmtBRL(calc.totalTaxas)}
                   muted
                 />
               </div>
-            </div>
 
-            {/* VR + Cancelamentos */}
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <CurrencyField
-                label="VR Recebido"
-                name={`${p.id}_vr_recebido`}
-                value={inputs.vrRecebido}
-                onChange={(n) => updatePlatform(p.id, "vrRecebido", n)}
-              />
-              <Calculated
-                label="VR Taxa 8% (auto)"
-                value={fmtBRL(calcs.vrTaxa)}
-                muted
-              />
-              <Calculated
-                label="VR Líquido"
-                value={fmtBRL(calcs.vrLiquido)}
-                highlight
-              />
-              <CurrencyField
-                label="Cancelamentos/Reembolsos (+)"
-                name={`${p.id}_cancelamentos_reembolsos`}
-                value={inputs.cancelamentosReembolsos}
-                onChange={(n) =>
-                  updatePlatform(p.id, "cancelamentosReembolsos", n)
-                }
-              />
-            </div>
+              {/* VR + Cancelamentos */}
+              <h4 className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Vale Refeição e Cancelamentos
+              </h4>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <CurrencyField
+                  label="VR Recebido"
+                  name={`${p.id}_vr_recebido`}
+                  value={inputs.vrRecebido}
+                  onChange={(n) => updatePlatform(p.id, "vrRecebido", n)}
+                />
+                <Calculated
+                  label="VR Taxa 8% (auto)"
+                  value={fmtBRL(calc.vrTaxa)}
+                  muted
+                />
+                <Calculated
+                  label="VR Líquido"
+                  value={fmtBRL(calc.vrLiquido)}
+                  highlight
+                />
+                <CurrencyField
+                  label="Cancelamentos/Reembolsos (+)"
+                  name={`${p.id}_cancelamentos_reembolsos`}
+                  value={inputs.cancelamentosReembolsos}
+                  onChange={(n) =>
+                    updatePlatform(p.id, "cancelamentosReembolsos", n)
+                  }
+                />
+              </div>
 
-            {/* Resumo da plataforma */}
-            <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3 sm:grid-cols-4">
-              <Calculated
-                label="Faturamento Líquido"
-                value={fmtBRL(calcs.faturamentoLiquido)}
-              />
-              <Calculated
-                label="+ VR Líquido"
-                value={fmtBRL(calcs.vrLiquido)}
-              />
-              <Calculated
-                label="+ Cancelamentos"
-                value={fmtBRL(inputs.cancelamentosReembolsos)}
-              />
-              <Calculated
-                label="= Total recebido"
-                value={fmtBRL(calcs.totalRecebido)}
-                highlight
-              />
+              {/* Resumo desta plataforma */}
+              <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-emerald-50 p-3 sm:grid-cols-4 dark:bg-emerald-950/20">
+                <Calculated
+                  label="Faturamento Líquido"
+                  value={fmtBRL(calc.faturamentoLiquido)}
+                />
+                <Calculated label="+ VR Líquido" value={fmtBRL(calc.vrLiquido)} />
+                <Calculated
+                  label="+ Cancelamentos"
+                  value={fmtBRL(inputs.cancelamentosReembolsos)}
+                />
+                <Calculated
+                  label={`= Total recebido (${p.label})`}
+                  value={fmtBRL(calc.totalRecebido)}
+                  highlight
+                />
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
 
       {/* Custos (geral) */}
       <Section title="Custos da Indústria (geral)" tone="negative">
@@ -346,7 +401,7 @@ export function MonthlyTab({
       </Section>
 
       {/* Resultado */}
-      <Section title="Resultado do mês" tone="positive">
+      <Section title="Resultado do mês (consolidado)" tone="positive">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Calculated
             label="Faturamento Bruto"
