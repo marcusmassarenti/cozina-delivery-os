@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   Star,
   Store,
+  Users,
   Wallet,
 } from "lucide-react"
 
@@ -73,6 +74,13 @@ const navGroups: NavGroup[] = [
     label: "Integrações",
     defaultOpen: true,
     items: [{ label: "Conexões", href: "/conexoes", icon: Cable }],
+  },
+  {
+    label: "Administração",
+    defaultOpen: true,
+    items: [
+      { label: "Usuários", href: "/administracao/usuarios", icon: Users },
+    ],
   },
   {
     items: [
