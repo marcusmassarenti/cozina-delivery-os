@@ -5,6 +5,7 @@ import { Bell, Expand, Flame, LogOut, RefreshCw, Search } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { signOut } from "@/app/login/_actions"
 
 export function TopBar() {
   return (
@@ -54,9 +55,11 @@ export function TopBar() {
           <IconButton aria-label="Recarregar">
             <RefreshCw className="size-4" />
           </IconButton>
-          <IconButton aria-label="Sair">
-            <LogOut className="size-4" />
-          </IconButton>
+          <form action={signOut}>
+            <IconButton type="submit" aria-label="Sair">
+              <LogOut className="size-4" />
+            </IconButton>
+          </form>
         </div>
       </div>
     </header>

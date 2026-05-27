@@ -2,11 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
-import { TopBar } from "@/components/top-bar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -37,15 +33,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <TooltipProvider>
-            <SidebarProvider>
-              <AppSidebar />
-              <SidebarInset>
-                <TopBar />
-                {children}
-              </SidebarInset>
-            </SidebarProvider>
-          </TooltipProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>
