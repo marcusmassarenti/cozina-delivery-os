@@ -18,13 +18,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import {
-  fmtBRL,
-  fmtNum,
-  fmtPct,
-  units,
-  type UnitMonthly,
-} from "@/lib/sample-data"
+import { getUnitByCode, type Unit } from "@/lib/data/units"
+import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
+import type { UnitMonthly } from "@/lib/mock-monthly"
 
 export default async function UnidadeDetalhePage({
   params,
@@ -32,7 +28,7 @@ export default async function UnidadeDetalhePage({
   params: Promise<{ codigo: string }>
 }) {
   const { codigo } = await params
-  const unit = units.find((u) => u.code === codigo)
+  const unit = await getUnitByCode(codigo)
   if (!unit) notFound()
 
   const m = unit.monthly
@@ -69,7 +65,8 @@ export default async function UnidadeDetalhePage({
                 )}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {unit.city} · {unit.state} · CNPJ {unit.cnpj}
+                {[unit.city, unit.state].filter(Boolean).join(" · ")}
+                {unit.cnpj ? ` · CNPJ ${formatCnpj(unit.cnpj)}` : ""}
               </p>
             </div>
           </div>
@@ -179,7 +176,7 @@ function HeroKpis({ monthly: m }: { monthly: UnitMonthly }) {
 // Tabs
 //----------------------------------------------------------------
 
-function DetailTabs({ unit }: { unit: (typeof units)[number] }) {
+function DetailTabs({ unit }: { unit: Unit }) {
   const m = unit.monthly
   return (
     <Tabs defaultValue="resumo">
@@ -492,4 +489,10 @@ function Row({
 
 function Divider() {
   return <div className="my-2 h-px bg-border" />
+}
+
+function formatCnpj(c: string): string {
+  const d = c.replace(/\D/g, "")
+  if (d.length !== 14) return c
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
 }

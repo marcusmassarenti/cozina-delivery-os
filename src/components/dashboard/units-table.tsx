@@ -6,8 +6,8 @@ import { ChevronDown, ChevronRight } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
-import type { Unit } from "@/lib/sample-data"
-import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/sample-data"
+import type { Unit } from "@/lib/data/units"
+import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 export function UnitsTable({ units }: { units: Unit[] }) {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
