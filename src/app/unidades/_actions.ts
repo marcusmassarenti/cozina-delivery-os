@@ -127,6 +127,23 @@ export async function createUnit(
   }
 }
 
+export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
+  if (!unitId) return { ok: false, message: "ID da unidade ausente." }
+  try {
+    const supabase = createAdminClient()
+    const { error } = await supabase.from("units").delete().eq("id", unitId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/unidades")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}
+
 export async function updateUnit(
   _prevState: CreateUnitState,
   formData: FormData,

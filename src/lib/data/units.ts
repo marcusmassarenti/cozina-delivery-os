@@ -13,6 +13,7 @@ export type Unit = {
   cnpj: string | null
   active: boolean
   brand_id: string
+  platforms: PlatformId[]
   monthly: UnitMonthly
 }
 
@@ -27,18 +28,33 @@ type DbUnit = {
   brand_id: string
 }
 
-function attachMock(u: DbUnit): Unit {
-  return { ...u, monthly: mockMonthlyFor(u.code) }
+function attachMock(u: DbUnit, platforms: PlatformId[]): Unit {
+  return { ...u, platforms, monthly: mockMonthlyFor(u.code) }
 }
 
 export async function getUnits(): Promise<Unit[]> {
   const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("units")
-    .select("id, code, name, city, state, cnpj, active, brand_id")
-    .order("code")
-  if (error) throw new Error(`Falha ao buscar unidades: ${error.message}`)
-  return (data ?? []).map(attachMock)
+  const [unitsRes, platformsRes] = await Promise.all([
+    supabase
+      .from("units")
+      .select("id, code, name, city, state, cnpj, active, brand_id")
+      .order("code"),
+    supabase
+      .from("unit_platforms")
+      .select("unit_id, platform")
+      .eq("active", true),
+  ])
+  if (unitsRes.error)
+    throw new Error(`Falha ao buscar unidades: ${unitsRes.error.message}`)
+  const byUnit = new Map<string, PlatformId[]>()
+  for (const row of platformsRes.data ?? []) {
+    const arr = byUnit.get(row.unit_id) ?? []
+    arr.push(row.platform as PlatformId)
+    byUnit.set(row.unit_id, arr)
+  }
+  return (unitsRes.data ?? []).map((u) =>
+    attachMock(u, byUnit.get(u.id) ?? []),
+  )
 }
 
 export async function getUnitByCode(code: string): Promise<Unit | null> {
@@ -50,7 +66,8 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
     .maybeSingle()
   if (error) throw new Error(`Falha ao buscar unidade ${code}: ${error.message}`)
   if (!data) return null
-  return attachMock(data)
+  const platforms = await getUnitPlatforms(data.id)
+  return attachMock(data, platforms)
 }
 
 export async function getUnitPlatforms(

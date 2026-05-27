@@ -62,7 +62,13 @@ export type EditUnitInitial = {
   platforms: PlatformId[]
 }
 
-export function EditUnitDialog({ unit }: { unit: EditUnitInitial }) {
+export function EditUnitDialog({
+  unit,
+  inline,
+}: {
+  unit: EditUnitInitial
+  inline?: boolean
+}) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(updateUnit, initial)
   const [cnpj, setCnpj] = React.useState(unit.cnpj ? maskCnpj(unit.cnpj) : "")
@@ -76,19 +82,27 @@ export function EditUnitDialog({ unit }: { unit: EditUnitInitial }) {
     }
   }, [state, router])
 
+  const trigger = inline ? (
+    <button
+      type="button"
+      aria-label="Editar unidade"
+      className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      <Pencil className="size-3.5" />
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
+    >
+      <Pencil className="size-3.5" />
+      Editar
+    </button>
+  )
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <button
-            type="button"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
-          >
-            <Pencil className="size-3.5" />
-            Editar
-          </button>
-        }
-      />
+      <DialogTrigger render={trigger} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Editar unidade</DialogTitle>
