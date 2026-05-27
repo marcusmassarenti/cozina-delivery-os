@@ -572,53 +572,33 @@ export function MonthlyTab({
             />
           </div>
 
-          {/* Alerta de CMV alto */}
-          {(cmvCozinaPct > 40 || cmvLojaPct > 40 || cmvTotalPct > 40) && (
+          {/* Alerta de CMV Total alto (Cozina + Loja > 40%) */}
+          {cmvTotalPct > 40 && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div className="flex flex-col gap-1">
                 <p className="font-semibold">
-                  CMV alto — meta da rede é ≤ 40%
+                  CMV Total em {fmtPct(cmvTotalPct)} — acima da meta de 40%
                 </p>
-                <ul className="list-inside list-disc space-y-0.5 text-[11px] opacity-90">
-                  {cmvCozinaPct > 40 && (
-                    <li>
-                      <strong>CMV Cozina em {fmtPct(cmvCozinaPct)}</strong> —
-                      revise mix de produtos ou ticket médio
-                    </li>
-                  )}
-                  {cmvLojaPct > 40 && (
-                    <li>
-                      <strong>CMV Loja em {fmtPct(cmvLojaPct)}</strong> —
-                      compras de outros fornecedores estão pesando, considere
-                      renegociar
-                    </li>
-                  )}
-                  {cmvTotalPct > 40 &&
-                    cmvCozinaPct <= 40 &&
-                    cmvLojaPct <= 40 && (
-                      <li>
-                        <strong>
-                          CMV Total em {fmtPct(cmvTotalPct)}
-                        </strong>{" "}
-                        — soma dos custos passou da meta, conferir mix
-                      </li>
-                    )}
-                </ul>
+                <p className="text-[11px] opacity-90">
+                  Soma de <strong>Cozina ({fmtPct(cmvCozinaPct)})</strong> +{" "}
+                  <strong>Loja ({fmtPct(cmvLojaPct)})</strong> passou de 40% do
+                  faturamento. Avalie ticket médio, mix de produtos ou
+                  renegociar compras.
+                </p>
               </div>
             </div>
           )}
 
-          {/* Confirmação positiva quando CMV está saudável */}
+          {/* Confirmação positiva quando CMV Total está saudável */}
           {totalFaturamentoBruto > 0 &&
             totalCustos > 0 &&
-            cmvCozinaPct <= 30 &&
-            cmvLojaPct <= 30 &&
             cmvTotalPct <= 30 && (
               <div className="mt-3 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
                 <CheckCircle2 className="size-4 shrink-0" />
                 <span className="font-medium">
-                  CMV dentro da faixa saudável (≤ 30%). Bom controle de custos.
+                  CMV Total em {fmtPct(cmvTotalPct)} — dentro da faixa saudável
+                  (≤ 30%). Bom controle de custos.
                 </span>
               </div>
             )}
