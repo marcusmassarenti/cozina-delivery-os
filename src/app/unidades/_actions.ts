@@ -126,3 +126,72 @@ export async function createUnit(
     }
   }
 }
+
+export async function updateUnit(
+  _prevState: CreateUnitState,
+  formData: FormData,
+): Promise<CreateUnitState> {
+  const unitId = String(formData.get("unitId") ?? "").trim()
+  const name = String(formData.get("name") ?? "").trim()
+  const city = String(formData.get("city") ?? "").trim()
+  const state = String(formData.get("state") ?? "").trim().toUpperCase()
+  const cnpjRaw = String(formData.get("cnpj") ?? "").trim()
+  const active = formData.get("active") === "on"
+
+  const platformsRaw = formData.getAll("platforms").map(String)
+  const platforms: PlatformId[] = ALL_PLATFORMS.filter((p) =>
+    platformsRaw.includes(p),
+  )
+
+  if (!unitId) {
+    return { ok: false, message: "ID da unidade ausente." }
+  }
+
+  const fieldErrors: Record<string, string> = {}
+  if (!name) fieldErrors.name = "Nome obrigatório"
+  if (!city) fieldErrors.city = "Cidade obrigatória"
+  if (!state || state.length !== 2)
+    fieldErrors.state = "UF deve ter 2 letras"
+  if (cnpjRaw && !isValidCnpj(cnpjRaw)) fieldErrors.cnpj = "CNPJ inválido"
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
+  }
+
+  try {
+    const supabase = createAdminClient()
+
+    const { error: updErr } = await supabase
+      .from("units")
+      .update({
+        name,
+        city,
+        state,
+        cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
+        active,
+      })
+      .eq("id", unitId)
+
+    if (updErr) {
+      return { ok: false, message: updErr.message }
+    }
+
+    // Sync de plataformas: delete tudo + insert as marcadas
+    await supabase.from("unit_platforms").delete().eq("unit_id", unitId)
+    if (platforms.length > 0) {
+      await supabase.from("unit_platforms").insert(
+        platforms.map((p) => ({ unit_id: unitId, platform: p, active: true })),
+      )
+    }
+
+    revalidatePath("/unidades")
+    revalidatePath("/")
+    revalidatePath(`/unidades/[codigo]`, "page")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}

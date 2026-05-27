@@ -53,6 +53,22 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   return attachMock(data)
 }
 
+export async function getUnitPlatforms(
+  unitId: string,
+): Promise<PlatformId[]> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from("unit_platforms")
+    .select("platform")
+    .eq("unit_id", unitId)
+    .eq("active", true)
+  if (error) {
+    console.error("getUnitPlatforms:", error.message)
+    return []
+  }
+  return (data ?? []).map((r) => r.platform as PlatformId)
+}
+
 export async function getDefaultBrand(): Promise<{ id: string; name: string }> {
   const supabase = createAdminClient()
   const { data, error } = await supabase

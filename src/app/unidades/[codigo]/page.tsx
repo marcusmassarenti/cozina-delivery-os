@@ -18,9 +18,14 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { getUnitByCode, type Unit } from "@/lib/data/units"
+import {
+  getUnitByCode,
+  getUnitPlatforms,
+  type Unit,
+} from "@/lib/data/units"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
+import { EditUnitDialog } from "../_components/edit-unit-dialog"
 
 export default async function UnidadeDetalhePage({
   params,
@@ -31,6 +36,7 @@ export default async function UnidadeDetalhePage({
   const unit = await getUnitByCode(codigo)
   if (!unit) notFound()
 
+  const platforms = await getUnitPlatforms(unit.id)
   const m = unit.monthly
   const hasData = m.pedidos > 0
 
@@ -77,12 +83,18 @@ export default async function UnidadeDetalhePage({
             <option>Abril/2026</option>
             <option>Março/2026</option>
           </select>
-          <button
-            type="button"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
-          >
-            Comparar com mês anterior
-          </button>
+          <EditUnitDialog
+            unit={{
+              unitId: unit.id,
+              code: unit.code,
+              name: unit.name,
+              city: unit.city,
+              state: unit.state,
+              cnpj: unit.cnpj,
+              active: unit.active,
+              platforms,
+            }}
+          />
         </div>
       </div>
 
