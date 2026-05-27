@@ -56,9 +56,13 @@ export function TopBar() {
             <RefreshCw className="size-4" />
           </IconButton>
           <form action={signOut}>
-            <IconButton type="submit" aria-label="Sair">
+            <button
+              type="submit"
+              aria-label="Sair"
+              className="relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+            >
               <LogOut className="size-4" />
-            </IconButton>
+            </button>
           </form>
         </div>
       </div>
