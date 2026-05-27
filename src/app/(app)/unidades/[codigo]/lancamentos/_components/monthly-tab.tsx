@@ -167,8 +167,19 @@ export function MonthlyTab({
     totalFaturamentoBruto > 0
       ? (general.custoProdutosCozina / totalFaturamentoBruto) * 100
       : 0
+  const cmvLojaPct =
+    totalFaturamentoBruto > 0
+      ? (general.custoProdutosLoja / totalFaturamentoBruto) * 100
+      : 0
   const cmvTotalPct =
     totalFaturamentoBruto > 0 ? (totalCustos / totalFaturamentoBruto) * 100 : 0
+
+  function cmvTone(pct: number) {
+    if (pct === 0) return undefined
+    if (pct <= 30) return "ok" as const
+    if (pct <= 40) return "warning" as const
+    return "error" as const
+  }
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
@@ -512,7 +523,7 @@ export function MonthlyTab({
 
       {/* Resultado */}
       <Section title="Resultado do mês (consolidado)" tone="positive">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Calculated
             label="Faturamento Bruto"
             value={fmtBRL(totalFaturamentoBruto)}
@@ -523,22 +534,9 @@ export function MonthlyTab({
             highlight
           />
           <Calculated
-            label="(−) Custos Cozina/Loja"
+            label="(−) Custos Totais"
             value={fmtBRL(totalCustos)}
             muted
-          />
-          <Calculated
-            label="CMV Cozina"
-            value={fmtPct(cmvCozinaPct)}
-            tone={
-              cmvCozinaPct === 0
-                ? undefined
-                : cmvCozinaPct <= 30
-                  ? "ok"
-                  : cmvCozinaPct <= 40
-                    ? "warning"
-                    : "error"
-            }
           />
           <Calculated
             label="Margem de Lucro"
@@ -546,14 +544,34 @@ export function MonthlyTab({
             highlight
           />
         </div>
-        {totalFaturamentoBruto > 0 && (
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            <strong>CMV Cozina</strong> = compras da indústria ÷ faturamento bruto.
-            Inclui Custo Loja seria{" "}
-            <strong className="tabular-nums">{fmtPct(cmvTotalPct)}</strong>{" "}
-            (CMV Total).
-          </p>
-        )}
+
+        {/* Breakdown de CMV */}
+        <div className="mt-4 rounded-lg border bg-muted/30 p-4">
+          <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            CMV (Custo da Mercadoria sobre Faturamento Bruto)
+          </h4>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <CmvCard
+              label="CMV Cozina"
+              sublabel={`compras da indústria · ${fmtBRL(general.custoProdutosCozina)}`}
+              pct={cmvCozinaPct}
+              tone={cmvTone(cmvCozinaPct)}
+            />
+            <CmvCard
+              label="CMV Loja"
+              sublabel={`outros fornecedores · ${fmtBRL(general.custoProdutosLoja)}`}
+              pct={cmvLojaPct}
+              tone={cmvTone(cmvLojaPct)}
+            />
+            <CmvCard
+              label="CMV Total"
+              sublabel={`Cozina + Loja · ${fmtBRL(totalCustos)}`}
+              pct={cmvTotalPct}
+              tone={cmvTone(cmvTotalPct)}
+              bold
+            />
+          </div>
+        </div>
         {useReal ? (
           <p className="mt-3 text-[11px] text-muted-foreground">
             Margem calculada com base no <strong>Faturamento Real Recebido</strong>{" "}
@@ -583,6 +601,44 @@ export function MonthlyTab({
         <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function CmvCard({
+  label,
+  sublabel,
+  pct,
+  tone,
+  bold,
+}: {
+  label: string
+  sublabel: string
+  pct: number
+  tone?: "ok" | "warning" | "error"
+  bold?: boolean
+}) {
+  const toneClass =
+    tone === "ok"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400"
+        : tone === "error"
+          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400"
+          : "border-border bg-background text-muted-foreground"
+  return (
+    <div className={`flex flex-col gap-1 rounded-md border p-3 ${toneClass}`}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className={`text-xs ${bold ? "font-bold" : "font-medium"}`}>
+          {label}
+        </span>
+        <span
+          className={`tabular-nums ${bold ? "text-xl font-bold" : "text-lg font-bold"}`}
+        >
+          {fmtPct(pct)}
+        </span>
+      </div>
+      <span className="text-[10px] opacity-70">{sublabel}</span>
+    </div>
   )
 }
 
