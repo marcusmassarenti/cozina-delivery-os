@@ -196,7 +196,7 @@ export function UnitsListView({ units }: { units: Unit[] }) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="grid grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_108px] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <div></div>
             <div>Nome</div>
             <div className="text-center">Cidade</div>
@@ -221,7 +221,7 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                     router.push(`/unidades/${unit.code}`)
                   }
                 }}
-                className={`grid cursor-pointer grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
+                className={`grid cursor-pointer grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_108px] items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
                   idx < filtered.length - 1 ? "border-b" : ""
                 } ${!unit.active ? "opacity-60" : ""}`}
               >
