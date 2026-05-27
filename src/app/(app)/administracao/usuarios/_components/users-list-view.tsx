@@ -7,9 +7,9 @@ import { perfilBadge, perfilLabel } from "@/lib/perfis"
 import type { AppUser } from "../_actions"
 import { DeleteUserButton } from "./delete-user-button"
 import { EditUserDialog } from "./edit-user-dialog"
-import { NewUserDialog } from "./new-user-dialog"
+import { NewUserDialog, type UnitOption } from "./new-user-dialog"
 
-type Tab = "internos" | "clientes"
+type Tab = "internos" | "franqueados"
 
 function formatDate(iso: string | null): string {
   if (!iso) return "Nunca"
@@ -24,11 +24,17 @@ function formatDate(iso: string | null): string {
 export function UsersListView({
   users,
   currentUserId,
+  units,
 }: {
   users: AppUser[]
   currentUserId: string | null
+  units: UnitOption[]
 }) {
   const [tab, setTab] = React.useState<Tab>("internos")
+
+  const internos = users.filter((u) => u.perfil === "administrador")
+  const franqueados = users.filter((u) => u.perfil === "franqueado")
+  const filtered = tab === "internos" ? internos : franqueados
 
   return (
     <>
@@ -45,7 +51,7 @@ export function UsersListView({
             Cadastre, gerencie e atribua permissões aos usuários do sistema.
           </p>
         </div>
-        <NewUserDialog />
+        <NewUserDialog units={units} />
       </div>
 
       {/* Tabs */}
@@ -54,52 +60,48 @@ export function UsersListView({
           active={tab === "internos"}
           onClick={() => setTab("internos")}
           icon={<UserCog className="size-3.5" />}
-          label="Usuários internos"
-          count={users.length}
+          label="Equipe Cozina"
+          count={internos.length}
         />
         <TabButton
-          active={tab === "clientes"}
-          onClick={() => setTab("clientes")}
+          active={tab === "franqueados"}
+          onClick={() => setTab("franqueados")}
           icon={<Building2 className="size-3.5" />}
-          label="Clientes"
-          count={0}
+          label="Franqueados"
+          count={franqueados.length}
         />
       </div>
 
-      {/* Conteúdo */}
-      {tab === "clientes" ? (
+      {/* Tabela */}
+      {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-12 text-center">
-          <p className="text-sm font-medium">Em construção</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Quando integrarmos consultorias/franqueados externos, eles aparecem
-            aqui.
+          <p className="text-sm font-medium">
+            {tab === "internos"
+              ? "Nenhum usuário da equipe ainda"
+              : "Nenhum franqueado ainda"}
           </p>
-        </div>
-      ) : users.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card p-12 text-center">
-          <p className="text-sm font-medium">Nenhum usuário ainda</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Clique em &quot;+ Novo Usuário&quot; pra adicionar o primeiro.
+            Clique em &quot;+ Novo Usuário&quot; pra cadastrar.
           </p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_108px] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_108px] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <div>Nome</div>
             <div>Email</div>
             <div className="text-center">Perfil</div>
-            <div>Criado em</div>
+            <div>Criado</div>
             <div>Último acesso</div>
             <div></div>
           </div>
 
-          {users.map((u, idx) => {
+          {filtered.map((u, idx) => {
             const isSelf = currentUserId === u.id
             return (
               <div
                 key={u.id}
-                className={`grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_108px] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
-                  idx < users.length - 1 ? "border-b" : ""
+                className={`grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_108px] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
+                  idx < filtered.length - 1 ? "border-b" : ""
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-2">
@@ -115,7 +117,7 @@ export function UsersListView({
                 <div className="truncate text-xs text-muted-foreground">
                   {u.email}
                 </div>
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-0.5">
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${perfilBadge(
                       u.perfil,
@@ -123,6 +125,11 @@ export function UsersListView({
                   >
                     {perfilLabel(u.perfil)}
                   </span>
+                  {u.perfil === "franqueado" && u.unitCode && (
+                    <span className="text-[10px] text-muted-foreground">
+                      #{u.unitCode} · {u.unitName?.split(" — ")[1] ?? u.unitName}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {formatDate(u.createdAt)}
@@ -131,7 +138,7 @@ export function UsersListView({
                   {formatDate(u.lastSignInAt)}
                 </div>
                 <div className="flex items-center gap-0.5">
-                  <EditUserDialog user={u} />
+                  <EditUserDialog user={u} units={units} />
                   <DeleteUserButton
                     userId={u.id}
                     userName={u.fullName}

@@ -25,15 +25,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PERFIS } from "@/lib/perfis"
+import { PERFIS, perfilRequiresUnit, type PerfilId } from "@/lib/perfis"
 import { updateUser, type AppUser, type UserActionState } from "../_actions"
+import type { UnitOption } from "./new-user-dialog"
 
 const initial: UserActionState = { ok: false }
 
-export function EditUserDialog({ user }: { user: AppUser }) {
+export function EditUserDialog({
+  user,
+  units,
+}: {
+  user: AppUser
+  units: UnitOption[]
+}) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(updateUser, initial)
-  const [perfil, setPerfil] = React.useState(user.perfil)
+  const [perfil, setPerfil] = React.useState<PerfilId>(
+    user.perfil === "administrador" ? "administrador" : "franqueado",
+  )
+  const [unitId, setUnitId] = React.useState<string>(user.unitId ?? "")
   const router = useRouter()
 
   React.useEffect(() => {
@@ -42,6 +52,8 @@ export function EditUserDialog({ user }: { user: AppUser }) {
       router.refresh()
     }
   }, [state, router])
+
+  const showUnit = perfilRequiresUnit(perfil)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -105,7 +117,10 @@ export function EditUserDialog({ user }: { user: AppUser }) {
           </Field>
 
           <Field label="Perfil de Acesso">
-            <Select value={perfil} onValueChange={setPerfil}>
+            <Select
+              value={perfil}
+              onValueChange={(v) => setPerfil(v as PerfilId)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -118,7 +133,33 @@ export function EditUserDialog({ user }: { user: AppUser }) {
               </SelectContent>
             </Select>
             <input type="hidden" name="perfil" value={perfil} />
+            <p className="text-[10px] text-muted-foreground">
+              {perfil === "administrador"
+                ? "Acesso a toda a rede (equipe Cozina)."
+                : "Acesso somente à própria unidade (cliente)."}
+            </p>
           </Field>
+
+          {showUnit && (
+            <Field
+              label="Unidade vinculada"
+              error={state.fieldErrors?.unitId}
+            >
+              <Select value={unitId} onValueChange={setUnitId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a unidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      #{u.code} · {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input type="hidden" name="unitId" value={unitId} />
+            </Field>
+          )}
 
           {state.message && !state.ok && (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">

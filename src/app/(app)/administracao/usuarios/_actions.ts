@@ -3,12 +3,16 @@
 import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { perfilRequiresUnit } from "@/lib/perfis"
 
 export type AppUser = {
   id: string
   email: string
   fullName: string | null
   perfil: string
+  unitId: string | null
+  unitCode: string | null
+  unitName: string | null
   createdAt: string
   lastSignInAt: string | null
 }
@@ -19,34 +23,41 @@ export type UserActionState = {
   fieldErrors?: Record<string, string>
 }
 
-const initial: UserActionState = { ok: false }
-
 export async function listUsers(): Promise<AppUser[]> {
   const supabase = createAdminClient()
-  const [authRes, profilesRes] = await Promise.all([
+  const [authRes, profilesRes, accessRes, unitsRes] = await Promise.all([
     supabase.auth.admin.listUsers(),
     supabase.from("profiles").select("user_id, full_name, perfil"),
+    supabase
+      .from("user_unit_access")
+      .select("user_id, scope_type, scope_id")
+      .eq("scope_type", "unit"),
+    supabase.from("units").select("id, code, name"),
   ])
   if (authRes.error) throw new Error(authRes.error.message)
 
-  const profileByUserId = new Map<
-    string,
-    { full_name: string | null; perfil: string }
-  >()
-  for (const p of profilesRes.data ?? []) {
-    profileByUserId.set(p.user_id, {
-      full_name: p.full_name,
-      perfil: p.perfil ?? "viewer",
-    })
-  }
+  const profileByUserId = new Map(
+    (profilesRes.data ?? []).map((p) => [p.user_id, p]),
+  )
+  const accessByUserId = new Map(
+    (accessRes.data ?? []).map((a) => [a.user_id, a.scope_id]),
+  )
+  const unitById = new Map(
+    (unitsRes.data ?? []).map((u) => [u.id, u]),
+  )
 
   return authRes.data.users.map((u) => {
     const p = profileByUserId.get(u.id)
+    const unitId = accessByUserId.get(u.id) ?? null
+    const unit = unitId ? unitById.get(unitId) : null
     return {
       id: u.id,
       email: u.email ?? "—",
       fullName: p?.full_name ?? null,
-      perfil: p?.perfil ?? "viewer",
+      perfil: p?.perfil ?? "franqueado",
+      unitId,
+      unitCode: unit?.code ?? null,
+      unitName: unit?.name ?? null,
       createdAt: u.created_at,
       lastSignInAt: u.last_sign_in_at ?? null,
     }
@@ -58,6 +69,44 @@ function validatePassword(p: string): string | null {
   return null
 }
 
+/**
+ * Sincroniza user_unit_access com o perfil:
+ * - administrador → scope='holding', scope_id=cozina holding id
+ * - franqueado    → scope='unit', scope_id=unitId
+ */
+async function syncAccess(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  perfil: string,
+  unitId: string | null,
+) {
+  // Limpa rows antigas desse usuário
+  await supabase.from("user_unit_access").delete().eq("user_id", userId)
+
+  if (perfil === "administrador") {
+    const { data: holding } = await supabase
+      .from("holdings")
+      .select("id")
+      .eq("slug", "cozina-foods")
+      .maybeSingle()
+    if (holding) {
+      await supabase.from("user_unit_access").insert({
+        user_id: userId,
+        scope_type: "holding",
+        scope_id: holding.id,
+        role: "admin",
+      })
+    }
+  } else if (perfil === "franqueado" && unitId) {
+    await supabase.from("user_unit_access").insert({
+      user_id: userId,
+      scope_type: "unit",
+      scope_id: unitId,
+      role: "manager",
+    })
+  }
+}
+
 export async function createUser(
   _prev: UserActionState,
   formData: FormData,
@@ -65,13 +114,16 @@ export async function createUser(
   const fullName = String(formData.get("fullName") ?? "").trim()
   const email = String(formData.get("email") ?? "").trim().toLowerCase()
   const password = String(formData.get("password") ?? "")
-  const perfil = String(formData.get("perfil") ?? "viewer").trim()
+  const perfil = String(formData.get("perfil") ?? "franqueado").trim()
+  const unitId = String(formData.get("unitId") ?? "").trim() || null
 
   const fieldErrors: Record<string, string> = {}
   if (!fullName) fieldErrors.fullName = "Nome obrigatório"
   if (!email || !email.includes("@")) fieldErrors.email = "Email inválido"
   const pwErr = validatePassword(password)
   if (pwErr) fieldErrors.password = pwErr
+  if (perfilRequiresUnit(perfil) && !unitId)
+    fieldErrors.unitId = "Selecione a unidade do franqueado"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -92,12 +144,13 @@ export async function createUser(
       return { ok: false, message: msg }
     }
 
-    // O trigger já cria a row de profile. Atualizamos com nome e perfil.
     if (data.user) {
       await supabase
         .from("profiles")
         .update({ full_name: fullName, perfil })
         .eq("user_id", data.user.id)
+
+      await syncAccess(supabase, data.user.id, perfil, unitId)
     }
 
     revalidatePath("/administracao/usuarios")
@@ -117,15 +170,17 @@ export async function updateUser(
   const userId = String(formData.get("userId") ?? "").trim()
   const fullName = String(formData.get("fullName") ?? "").trim()
   const password = String(formData.get("password") ?? "")
-  const perfil = String(formData.get("perfil") ?? "viewer").trim()
+  const perfil = String(formData.get("perfil") ?? "franqueado").trim()
+  const unitId = String(formData.get("unitId") ?? "").trim() || null
 
   if (!userId) return { ok: false, message: "ID do usuário ausente." }
 
   const fieldErrors: Record<string, string> = {}
   if (!fullName) fieldErrors.fullName = "Nome obrigatório"
-  if (password && validatePassword(password)) {
+  if (password && validatePassword(password))
     fieldErrors.password = validatePassword(password)!
-  }
+  if (perfilRequiresUnit(perfil) && !unitId)
+    fieldErrors.unitId = "Selecione a unidade do franqueado"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -136,7 +191,11 @@ export async function updateUser(
 
     const { error: profileErr } = await supabase
       .from("profiles")
-      .update({ full_name: fullName, perfil, updated_at: new Date().toISOString() })
+      .update({
+        full_name: fullName,
+        perfil,
+        updated_at: new Date().toISOString(),
+      })
       .eq("user_id", userId)
     if (profileErr) return { ok: false, message: profileErr.message }
 
@@ -147,6 +206,8 @@ export async function updateUser(
       )
       if (pwErr) return { ok: false, message: pwErr.message }
     }
+
+    await syncAccess(supabase, userId, perfil, unitId)
 
     revalidatePath("/administracao/usuarios")
     return { ok: true }

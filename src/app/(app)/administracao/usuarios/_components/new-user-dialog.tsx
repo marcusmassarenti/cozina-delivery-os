@@ -25,24 +25,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PERFIS } from "@/lib/perfis"
+import { PERFIS, perfilRequiresUnit, type PerfilId } from "@/lib/perfis"
 import { createUser, type UserActionState } from "../_actions"
 
 const initial: UserActionState = { ok: false }
 
-export function NewUserDialog() {
+export type UnitOption = { id: string; code: string; name: string }
+
+export function NewUserDialog({ units }: { units: UnitOption[] }) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(createUser, initial)
-  const [perfil, setPerfil] = React.useState("viewer")
+  const [perfil, setPerfil] = React.useState<PerfilId>("franqueado")
+  const [unitId, setUnitId] = React.useState<string>("")
   const router = useRouter()
 
   React.useEffect(() => {
     if (state.ok) {
       setOpen(false)
-      setPerfil("viewer")
+      setPerfil("franqueado")
+      setUnitId("")
       router.refresh()
     }
   }, [state, router])
+
+  const showUnit = perfilRequiresUnit(perfil)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -70,7 +76,11 @@ export function NewUserDialog() {
 
         <form action={formAction} className="flex flex-col gap-4">
           <Field label="Nome" error={state.fieldErrors?.fullName}>
-            <Input name="fullName" placeholder="ex.: Marcus Massarenti" required />
+            <Input
+              name="fullName"
+              placeholder="ex.: Marcus Massarenti"
+              required
+            />
           </Field>
 
           <Field label="Email" error={state.fieldErrors?.email}>
@@ -93,7 +103,10 @@ export function NewUserDialog() {
           </Field>
 
           <Field label="Perfil de Acesso">
-            <Select value={perfil} onValueChange={setPerfil}>
+            <Select
+              value={perfil}
+              onValueChange={(v) => setPerfil(v as PerfilId)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -106,7 +119,33 @@ export function NewUserDialog() {
               </SelectContent>
             </Select>
             <input type="hidden" name="perfil" value={perfil} />
+            <p className="text-[10px] text-muted-foreground">
+              {perfil === "administrador"
+                ? "Acesso a toda a rede (equipe Cozina)."
+                : "Acesso somente à própria unidade (cliente)."}
+            </p>
           </Field>
+
+          {showUnit && (
+            <Field
+              label="Unidade vinculada"
+              error={state.fieldErrors?.unitId}
+            >
+              <Select value={unitId} onValueChange={setUnitId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a unidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      #{u.code} · {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input type="hidden" name="unitId" value={unitId} />
+            </Field>
+          )}
 
           {state.message && !state.ok && (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
