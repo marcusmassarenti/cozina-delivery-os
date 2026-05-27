@@ -162,6 +162,14 @@ export function MonthlyTab({
       ? (margemLiquida / totalFaturamentoBruto) * 100
       : 0
 
+  // CMV (Custo de Mercadoria Vendida) sobre o faturamento bruto
+  const cmvCozinaPct =
+    totalFaturamentoBruto > 0
+      ? (general.custoProdutosCozina / totalFaturamentoBruto) * 100
+      : 0
+  const cmvTotalPct =
+    totalFaturamentoBruto > 0 ? (totalCustos / totalFaturamentoBruto) * 100 : 0
+
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <input type="hidden" name="unitId" value={unitId} />
@@ -504,7 +512,7 @@ export function MonthlyTab({
 
       {/* Resultado */}
       <Section title="Resultado do mês (consolidado)" tone="positive">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <Calculated
             label="Faturamento Bruto"
             value={fmtBRL(totalFaturamentoBruto)}
@@ -520,11 +528,32 @@ export function MonthlyTab({
             muted
           />
           <Calculated
+            label="CMV Cozina"
+            value={fmtPct(cmvCozinaPct)}
+            tone={
+              cmvCozinaPct === 0
+                ? undefined
+                : cmvCozinaPct <= 30
+                  ? "ok"
+                  : cmvCozinaPct <= 40
+                    ? "warning"
+                    : "error"
+            }
+          />
+          <Calculated
             label="Margem de Lucro"
             value={`${fmtBRL(margemLiquida)} (${fmtPct(margemLucroPct)})`}
             highlight
           />
         </div>
+        {totalFaturamentoBruto > 0 && (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            <strong>CMV Cozina</strong> = compras da indústria ÷ faturamento bruto.
+            Inclui Custo Loja seria{" "}
+            <strong className="tabular-nums">{fmtPct(cmvTotalPct)}</strong>{" "}
+            (CMV Total).
+          </p>
+        )}
         {useReal ? (
           <p className="mt-3 text-[11px] text-muted-foreground">
             Margem calculada com base no <strong>Faturamento Real Recebido</strong>{" "}
