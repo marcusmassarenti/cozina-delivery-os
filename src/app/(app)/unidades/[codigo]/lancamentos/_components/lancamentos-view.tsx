@@ -10,10 +10,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import type { DailyAggregate, MonthlyEntry } from "@/lib/data/lancamentos"
+import type {
+  DailyAggregate,
+  MonthlyGeneral,
+  PlatformEntry,
+  PlatformSummary,
+} from "@/lib/data/lancamentos"
 import type { PlatformId } from "@/components/platform-logo"
 import { DiaryTab } from "./diary-tab"
-import { MonthlyTab, type MonthlySummary } from "./monthly-tab"
+import { MonthlyTab } from "./monthly-tab"
+import { PlatformKpis } from "./platform-kpis"
 
 const MESES = [
   "Janeiro",
@@ -35,16 +41,18 @@ export function LancamentosView({
   year,
   month,
   aggregates,
-  daySummary,
-  monthlyEntry,
+  platformSummary,
+  monthlyGeneral,
+  platformEntries,
   unitActivePlatforms,
 }: {
   unitId: string
   year: number
   month: number
   aggregates: DailyAggregate[]
-  daySummary: MonthlySummary
-  monthlyEntry: MonthlyEntry
+  platformSummary: Record<PlatformId, PlatformSummary>
+  monthlyGeneral: MonthlyGeneral
+  platformEntries: Record<PlatformId, PlatformEntry>
   unitActivePlatforms: PlatformId[]
 }) {
   const router = useRouter()
@@ -93,6 +101,9 @@ export function LancamentosView({
         </select>
       </div>
 
+      {/* KPIs por plataforma — sempre visível */}
+      <PlatformKpis summary={platformSummary} />
+
       <Tabs defaultValue="diario">
         <TabsList>
           <TabsTrigger value="diario">
@@ -120,8 +131,10 @@ export function LancamentosView({
             unitId={unitId}
             year={year}
             month={month}
-            daySummary={daySummary}
-            initial={monthlyEntry}
+            daySummary={platformSummary}
+            initial={monthlyGeneral}
+            platformEntries={platformEntries}
+            unitActivePlatforms={unitActivePlatforms}
           />
         </TabsContent>
       </Tabs>

@@ -6,84 +6,137 @@ import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Calculator, Save } from "lucide-react"
 
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import type {
+  MonthlyGeneral,
+  PlatformEntry,
+  PlatformSummary,
+} from "@/lib/data/lancamentos"
 import { fmtBRL, fmtPct } from "@/lib/format"
-import type { MonthlyEntry } from "@/lib/data/lancamentos"
+import { PlatformKpis } from "./platform-kpis"
 import { saveMonthlyEntry, type ActionState } from "../_actions"
 
 const initial: ActionState = { ok: false }
 
-export type MonthlySummary = {
-  totalPedidos: number
-  totalCancelados: number
-  totalFaturamento: number
-}
+const PLATFORMS: { id: PlatformId; label: string }[] = [
+  { id: "ifood", label: "iFood" },
+  { id: "99food", label: "99 Food" },
+  { id: "keeta", label: "Keeta" },
+]
+
+const VR_TAXA = 0.08
+
+type PlatformInputs = Record<PlatformId, PlatformEntry>
 
 export function MonthlyTab({
   unitId,
   year,
   month,
   daySummary,
-  initial: initialData,
+  initial: initialGeneral,
+  platformEntries: initialPlatformEntries,
+  unitActivePlatforms,
 }: {
   unitId: string
   year: number
   month: number
-  daySummary: MonthlySummary
-  initial: MonthlyEntry
+  daySummary: Record<PlatformId, PlatformSummary>
+  initial: MonthlyGeneral
+  platformEntries: PlatformInputs
+  unitActivePlatforms: PlatformId[]
 }) {
   const [state, formAction] = useActionState(saveMonthlyEntry, initial)
-  const [m, setM] = React.useState<MonthlyEntry>(initialData)
+  const [general, setGeneral] = React.useState<MonthlyGeneral>(initialGeneral)
+  const [platforms, setPlatforms] = React.useState<PlatformInputs>(
+    initialPlatformEntries,
+  )
   const router = useRouter()
 
   React.useEffect(() => {
-    setM(initialData)
-  }, [initialData])
+    setGeneral(initialGeneral)
+  }, [initialGeneral])
+  React.useEffect(() => {
+    setPlatforms(initialPlatformEntries)
+  }, [initialPlatformEntries])
 
   React.useEffect(() => {
-    if (state.ok) {
-      router.refresh()
-    }
+    if (state.ok) router.refresh()
   }, [state, router])
 
-  const update = <K extends keyof MonthlyEntry>(
+  const updateGeneral = <K extends keyof MonthlyGeneral>(
     key: K,
-    value: MonthlyEntry[K],
-  ) => setM((prev) => ({ ...prev, [key]: value }))
+    value: MonthlyGeneral[K],
+  ) => setGeneral((p) => ({ ...p, [key]: value }))
 
-  // Cálculos
-  const totalTaxasIfood =
-    m.taxaEntregaIfood +
-    m.promocoes +
-    m.taxaComissaoIfood +
-    m.servicosLogisticos +
-    m.outrosDescontosIfood
+  const updatePlatform = (
+    pid: PlatformId,
+    key: keyof PlatformEntry,
+    value: number,
+  ) =>
+    setPlatforms((p) => ({
+      ...p,
+      [pid]: { ...p[pid], [key]: value },
+    }))
 
-  const faturamentoLiquido = daySummary.totalFaturamento - totalTaxasIfood
+  // Cálculos por plataforma
+  const platformCalcs = PLATFORMS.reduce(
+    (acc, p) => {
+      const inputs = platforms[p.id]
+      const summary = daySummary[p.id]
+      const totalTaxas =
+        inputs.taxaEntrega +
+        inputs.promocoes +
+        inputs.taxaComissao +
+        inputs.servicosLogisticos +
+        inputs.outrosDescontos
+      const faturamentoLiquido = summary.faturamento - totalTaxas
+      const vrTaxa = inputs.vrRecebido * VR_TAXA
+      const vrLiquido = inputs.vrRecebido - vrTaxa
+      const totalRecebido =
+        faturamentoLiquido + vrLiquido + inputs.cancelamentosReembolsos
+      acc[p.id] = {
+        totalTaxas,
+        faturamentoLiquido,
+        vrTaxa,
+        vrLiquido,
+        totalRecebido,
+      }
+      return acc
+    },
+    {} as Record<
+      PlatformId,
+      {
+        totalTaxas: number
+        faturamentoLiquido: number
+        vrTaxa: number
+        vrLiquido: number
+        totalRecebido: number
+      }
+    >,
+  )
 
-  const totalLiquido =
-    faturamentoLiquido +
-    m.vrRecebido -
-    m.vrTaxaMedia8 -
-    m.cancelamentosReembolsos
-
-  const totalCustos = m.custoProdutosCozina + m.custoProdutosLoja
-  const margemLiquida = totalLiquido - totalCustos
+  // Totais gerais
+  const totalFaturamentoBruto = PLATFORMS.reduce(
+    (acc, p) => acc + daySummary[p.id].faturamento,
+    0,
+  )
+  const totalTaxas = PLATFORMS.reduce(
+    (acc, p) => acc + platformCalcs[p.id].totalTaxas,
+    0,
+  )
+  const totalFaturamentoLiquido = totalFaturamentoBruto - totalTaxas
+  const totalRecebidoLoja = PLATFORMS.reduce(
+    (acc, p) => acc + platformCalcs[p.id].totalRecebido,
+    0,
+  )
+  const totalCustos = general.custoProdutosCozina + general.custoProdutosLoja
+  const margemLiquida = totalRecebidoLoja - totalCustos
   const margemLucroPct =
-    daySummary.totalFaturamento > 0
-      ? (margemLiquida / daySummary.totalFaturamento) * 100
-      : 0
-
-  const ticketMedio =
-    daySummary.totalPedidos > 0
-      ? daySummary.totalFaturamento / daySummary.totalPedidos
-      : 0
-
-  const pctCancelamento =
-    daySummary.totalPedidos > 0
-      ? (daySummary.totalCancelados / daySummary.totalPedidos) * 100
+    totalFaturamentoBruto > 0
+      ? (margemLiquida / totalFaturamentoBruto) * 100
       : 0
 
   return (
@@ -92,127 +145,156 @@ export function MonthlyTab({
       <input type="hidden" name="year" value={year} />
       <input type="hidden" name="month" value={month} />
 
-      {/* Volume + Avaliação */}
-      <Section title="Volume do mês">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Calculated label="Pedidos Recebidos" value={String(daySummary.totalPedidos)} />
-          <Calculated
-            label="Pedidos Cancelados"
-            value={`${daySummary.totalCancelados} (${fmtPct(pctCancelamento)})`}
-          />
-          <Calculated label="Ticket Médio" value={fmtBRL(ticketMedio)} />
-          <Field label="Clientes Novos">
-            <Input
-              name="clientes_novos"
-              type="number"
-              min="0"
-              step="1"
-              value={m.clientesNovos === 0 ? "" : String(m.clientesNovos)}
-              onChange={(e) =>
-                update("clientesNovos", parseInt(e.target.value || "0", 10) || 0)
-              }
-              placeholder="0"
-            />
-          </Field>
-        </div>
+      {/* KPIs por plataforma (read-only, do diário) */}
+      <Section title="Volume por plataforma (do diário)">
+        <PlatformKpis summary={daySummary} />
       </Section>
 
-      {/* Receita */}
-      <Section title="Receita do mês" tone="positive">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Calculated
-            label="Faturamento Bruto"
-            value={fmtBRL(daySummary.totalFaturamento)}
-            highlight
-          />
-          <Calculated label="(−) Total descontos" value={fmtBRL(totalTaxasIfood)} muted />
-          <Calculated
-            label="= Faturamento Líquido"
-            value={fmtBRL(faturamentoLiquido)}
-            highlight
-          />
-        </div>
-      </Section>
+      {/* Por plataforma: taxas + VR + cancelamentos */}
+      {PLATFORMS.map((p) => {
+        const isActive = unitActivePlatforms.includes(p.id)
+        const inputs = platforms[p.id]
+        const calcs = platformCalcs[p.id]
+        const summary = daySummary[p.id]
+        return (
+          <div
+            key={p.id}
+            className={`rounded-xl border bg-card p-5 ${
+              isActive ? "" : "opacity-70"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 border-b pb-3">
+              <div className="flex items-center gap-2.5">
+                <PlatformLogo platform={p.id} size="md" />
+                <h3 className="text-sm font-semibold">{p.label}</h3>
+                {!isActive && (
+                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                    inativa
+                  </span>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Faturamento (diário)
+                </p>
+                <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {fmtBRL(summary.faturamento)}
+                </p>
+              </div>
+            </div>
 
-      {/* Taxas iFood */}
-      <Section title="Taxas iFood (manual)" tone="negative">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <CurrencyField
-            label="Taxa Entrega Parceira"
-            name="taxa_entrega_ifood"
-            value={m.taxaEntregaIfood}
-            onChange={(n) => update("taxaEntregaIfood", n)}
-          />
-          <CurrencyField
-            label="Taxa de Comissão"
-            name="taxa_comissao_ifood"
-            value={m.taxaComissaoIfood}
-            onChange={(n) => update("taxaComissaoIfood", n)}
-          />
-          <CurrencyField
-            label="Serviços Logísticos"
-            name="servicos_logisticos"
-            value={m.servicosLogisticos}
-            onChange={(n) => update("servicosLogisticos", n)}
-          />
-          <CurrencyField
-            label="Promoções"
-            name="promocoes"
-            value={m.promocoes}
-            onChange={(n) => update("promocoes", n)}
-          />
-          <CurrencyField
-            label="Outros Descontos"
-            name="outros_descontos_ifood"
-            value={m.outrosDescontosIfood}
-            onChange={(n) => update("outrosDescontosIfood", n)}
-          />
-          <Calculated
-            label="Subtotal Taxas iFood"
-            value={fmtBRL(totalTaxasIfood)}
-            muted
-          />
-        </div>
-      </Section>
+            {/* Taxas */}
+            <div className="mt-4">
+              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                Taxas e Descontos (manual)
+              </h4>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CurrencyField
+                  label="Taxa Entrega"
+                  name={`${p.id}_taxa_entrega`}
+                  value={inputs.taxaEntrega}
+                  onChange={(n) => updatePlatform(p.id, "taxaEntrega", n)}
+                />
+                <CurrencyField
+                  label="Taxa de Comissão"
+                  name={`${p.id}_taxa_comissao`}
+                  value={inputs.taxaComissao}
+                  onChange={(n) => updatePlatform(p.id, "taxaComissao", n)}
+                />
+                <CurrencyField
+                  label="Serviços Logísticos"
+                  name={`${p.id}_servicos_logisticos`}
+                  value={inputs.servicosLogisticos}
+                  onChange={(n) =>
+                    updatePlatform(p.id, "servicosLogisticos", n)
+                  }
+                />
+                <CurrencyField
+                  label="Promoções"
+                  name={`${p.id}_promocoes`}
+                  value={inputs.promocoes}
+                  onChange={(n) => updatePlatform(p.id, "promocoes", n)}
+                />
+                <CurrencyField
+                  label="Outros Descontos"
+                  name={`${p.id}_outros_descontos`}
+                  value={inputs.outrosDescontos}
+                  onChange={(n) => updatePlatform(p.id, "outrosDescontos", n)}
+                />
+                <Calculated
+                  label="Subtotal Taxas"
+                  value={fmtBRL(calcs.totalTaxas)}
+                  muted
+                />
+              </div>
+            </div>
 
-      {/* Vale Refeição (VR) */}
-      <Section title="Vale Refeição (VR)">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <CurrencyField
-            label="Total recebido via loja (VR)"
-            name="vr_recebido"
-            value={m.vrRecebido}
-            onChange={(n) => update("vrRecebido", n)}
-          />
-          <CurrencyField
-            label="(VR) − Taxa Média 8%"
-            name="vr_taxa_media_8"
-            value={m.vrTaxaMedia8}
-            onChange={(n) => update("vrTaxaMedia8", n)}
-          />
-          <CurrencyField
-            label="Cancelamentos/Reembolsos"
-            name="cancelamentos_reembolsos"
-            value={m.cancelamentosReembolsos}
-            onChange={(n) => update("cancelamentosReembolsos", n)}
-          />
-        </div>
-      </Section>
+            {/* VR + Cancelamentos */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <CurrencyField
+                label="VR Recebido"
+                name={`${p.id}_vr_recebido`}
+                value={inputs.vrRecebido}
+                onChange={(n) => updatePlatform(p.id, "vrRecebido", n)}
+              />
+              <Calculated
+                label="VR Taxa 8% (auto)"
+                value={fmtBRL(calcs.vrTaxa)}
+                muted
+              />
+              <Calculated
+                label="VR Líquido"
+                value={fmtBRL(calcs.vrLiquido)}
+                highlight
+              />
+              <CurrencyField
+                label="Cancelamentos/Reembolsos (+)"
+                name={`${p.id}_cancelamentos_reembolsos`}
+                value={inputs.cancelamentosReembolsos}
+                onChange={(n) =>
+                  updatePlatform(p.id, "cancelamentosReembolsos", n)
+                }
+              />
+            </div>
 
-      {/* Custos */}
-      <Section title="Custos da Indústria" tone="negative">
+            {/* Resumo da plataforma */}
+            <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3 sm:grid-cols-4">
+              <Calculated
+                label="Faturamento Líquido"
+                value={fmtBRL(calcs.faturamentoLiquido)}
+              />
+              <Calculated
+                label="+ VR Líquido"
+                value={fmtBRL(calcs.vrLiquido)}
+              />
+              <Calculated
+                label="+ Cancelamentos"
+                value={fmtBRL(inputs.cancelamentosReembolsos)}
+              />
+              <Calculated
+                label="= Total recebido"
+                value={fmtBRL(calcs.totalRecebido)}
+                highlight
+              />
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Custos (geral) */}
+      <Section title="Custos da Indústria (geral)" tone="negative">
         <div className="grid gap-4 sm:grid-cols-3">
           <CurrencyField
             label="Custo Produtos Cozina"
             name="custo_produtos_cozina"
-            value={m.custoProdutosCozina}
-            onChange={(n) => update("custoProdutosCozina", n)}
+            value={general.custoProdutosCozina}
+            onChange={(n) => updateGeneral("custoProdutosCozina", n)}
           />
           <CurrencyField
             label="Custo Produtos Loja"
             name="custo_produtos_loja"
-            value={m.custoProdutosLoja}
-            onChange={(n) => update("custoProdutosLoja", n)}
+            value={general.custoProdutosLoja}
+            onChange={(n) => updateGeneral("custoProdutosLoja", n)}
           />
           <Calculated
             label="Subtotal Custos"
@@ -222,22 +304,14 @@ export function MonthlyTab({
         </div>
       </Section>
 
-      {/* Resultado */}
-      <Section title="Resultado do mês" tone="positive">
-        <div className="grid gap-4 sm:grid-cols-4">
-          <Calculated
-            label="Total Líquido (entra na conta)"
-            value={fmtBRL(totalLiquido)}
-          />
-          <Calculated
-            label="Margem Líquida"
-            value={fmtBRL(margemLiquida)}
-            highlight
-          />
-          <Calculated
-            label="Margem de Lucro"
-            value={fmtPct(margemLucroPct)}
-            highlight
+      {/* Avaliação & Observações */}
+      <Section title="Avaliação e observações">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <NumberField
+            label="Clientes Novos"
+            name="clientes_novos"
+            value={general.clientesNovos}
+            onChange={(n) => updateGeneral("clientesNovos", n)}
           />
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Nota Média (estrelas)</Label>
@@ -247,26 +321,52 @@ export function MonthlyTab({
               step="0.1"
               min="0"
               max="5"
-              value={m.notaMedia === 0 ? "" : String(m.notaMedia)}
+              value={general.notaMedia === 0 ? "" : String(general.notaMedia)}
               onChange={(e) =>
-                update("notaMedia", parseFloat(e.target.value || "0") || 0)
+                updateGeneral(
+                  "notaMedia",
+                  parseFloat(e.target.value || "0") || 0,
+                )
               }
               placeholder="4.7"
             />
           </div>
         </div>
+        <div className="mt-4">
+          <Label className="text-xs font-medium">Observações</Label>
+          <textarea
+            name="observacoes"
+            value={general.observacoes}
+            onChange={(e) => updateGeneral("observacoes", e.target.value)}
+            placeholder="Anotações do mês — comentários, alertas, contexto…"
+            rows={3}
+            className="mt-1.5 min-h-24 w-full resize-y rounded-md border bg-background p-3 text-sm outline-none focus:border-ring"
+          />
+        </div>
       </Section>
 
-      {/* Observações */}
-      <Section title="Observações">
-        <textarea
-          name="observacoes"
-          value={m.observacoes}
-          onChange={(e) => update("observacoes", e.target.value)}
-          placeholder="Anotações do mês — comentários, alertas, contexto…"
-          rows={3}
-          className="min-h-24 w-full resize-y rounded-md border bg-background p-3 text-sm outline-none focus:border-ring"
-        />
+      {/* Resultado */}
+      <Section title="Resultado do mês" tone="positive">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Calculated
+            label="Faturamento Bruto"
+            value={fmtBRL(totalFaturamentoBruto)}
+          />
+          <Calculated
+            label="Faturamento Líquido"
+            value={fmtBRL(totalFaturamentoLiquido)}
+          />
+          <Calculated
+            label="Total recebido pela loja"
+            value={fmtBRL(totalRecebidoLoja)}
+            highlight
+          />
+          <Calculated
+            label="Margem de Lucro"
+            value={`${fmtBRL(margemLiquida)} (${fmtPct(margemLucroPct)})`}
+            highlight
+          />
+        </div>
       </Section>
 
       {state.message && !state.ok && (
@@ -313,21 +413,6 @@ function Section({
   )
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
-      {children}
-    </div>
-  )
-}
-
 function CurrencyField({
   label,
   name,
@@ -358,6 +443,34 @@ function CurrencyField({
           className="pl-8"
         />
       </div>
+    </div>
+  )
+}
+
+function NumberField({
+  label,
+  name,
+  value,
+  onChange,
+}: {
+  label: string
+  name: string
+  value: number
+  onChange: (n: number) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs font-medium">{label}</Label>
+      <Input
+        name={name}
+        type="number"
+        inputMode="numeric"
+        step="1"
+        min="0"
+        value={value === 0 ? "" : String(value)}
+        onChange={(e) => onChange(parseInt(e.target.value || "0", 10) || 0)}
+        placeholder="0"
+      />
     </div>
   )
 }

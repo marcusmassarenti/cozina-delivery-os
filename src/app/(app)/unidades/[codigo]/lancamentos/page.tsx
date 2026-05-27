@@ -7,8 +7,9 @@ import { getUnitByCode } from "@/lib/data/units"
 import {
   aggregateByDay,
   getDailyEntries,
-  getMonthlyEntry,
-  sumMonth,
+  getMonthlyGeneral,
+  getPlatformEntries,
+  summarizeByPlatform,
 } from "@/lib/data/lancamentos"
 import { LancamentosView } from "./_components/lancamentos-view"
 
@@ -29,17 +30,14 @@ export default async function LancamentosPage({
   const year = ano ? parseInt(ano, 10) : now.getFullYear()
   const month = mes ? parseInt(mes, 10) : now.getMonth() + 1
 
-  const [dailyEntries, monthlyEntry] = await Promise.all([
+  const [dailyEntries, monthlyGeneral, platformEntries] = await Promise.all([
     getDailyEntries(unit.id, year, month),
-    getMonthlyEntry(unit.id, year, month),
+    getMonthlyGeneral(unit.id, year, month),
+    getPlatformEntries(unit.id, year, month),
   ])
 
   const aggregates = aggregateByDay(dailyEntries)
-  const daySummary = {
-    totalPedidos: sumMonth(dailyEntries).pedidos,
-    totalCancelados: sumMonth(dailyEntries).cancelados,
-    totalFaturamento: sumMonth(dailyEntries).faturamento,
-  }
+  const platformSummary = summarizeByPlatform(dailyEntries)
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -63,9 +61,7 @@ export default async function LancamentosPage({
                 #{unit.code}
               </span>
             </div>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {unit.name}
-            </p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{unit.name}</p>
           </div>
         </div>
       </div>
@@ -75,8 +71,9 @@ export default async function LancamentosPage({
         year={year}
         month={month}
         aggregates={aggregates}
-        daySummary={daySummary}
-        monthlyEntry={monthlyEntry}
+        platformSummary={platformSummary}
+        monthlyGeneral={monthlyGeneral}
+        platformEntries={platformEntries}
         unitActivePlatforms={unit.platforms}
       />
     </div>

@@ -11,15 +11,17 @@ export type DailyEntry = {
   faturamento: number
 }
 
-export type MonthlyEntry = {
-  taxaEntregaIfood: number
+export type PlatformEntry = {
+  taxaEntrega: number
   promocoes: number
-  taxaComissaoIfood: number
+  taxaComissao: number
   servicosLogisticos: number
-  outrosDescontosIfood: number
+  outrosDescontos: number
   vrRecebido: number
-  vrTaxaMedia8: number
   cancelamentosReembolsos: number
+}
+
+export type MonthlyGeneral = {
   custoProdutosCozina: number
   custoProdutosLoja: number
   clientesNovos: number
@@ -27,15 +29,17 @@ export type MonthlyEntry = {
   observacoes: string
 }
 
-export const emptyMonthlyEntry: MonthlyEntry = {
-  taxaEntregaIfood: 0,
+export const emptyPlatformEntry: PlatformEntry = {
+  taxaEntrega: 0,
   promocoes: 0,
-  taxaComissaoIfood: 0,
+  taxaComissao: 0,
   servicosLogisticos: 0,
-  outrosDescontosIfood: 0,
+  outrosDescontos: 0,
   vrRecebido: 0,
-  vrTaxaMedia8: 0,
   cancelamentosReembolsos: 0,
+}
+
+export const emptyMonthlyGeneral: MonthlyGeneral = {
   custoProdutosCozina: 0,
   custoProdutosLoja: 0,
   clientesNovos: 0,
@@ -52,7 +56,6 @@ function firstDayOfMonth(year: number, month: number) {
 }
 
 function lastDayOfMonth(year: number, month: number) {
-  // month is 1-12. Date constructor with month 0-11.
   const d = new Date(year, month, 0)
   return `${year}-${pad2(month)}-${pad2(d.getDate())}`
 }
@@ -80,30 +83,24 @@ export async function getDailyEntries(
   }))
 }
 
-export async function getMonthlyEntry(
+export async function getMonthlyGeneral(
   unitId: string,
   year: number,
   month: number,
-): Promise<MonthlyEntry> {
+): Promise<MonthlyGeneral> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("monthly_entries")
-    .select("*")
+    .select(
+      "custo_produtos_cozina, custo_produtos_loja, clientes_novos, nota_media, observacoes",
+    )
     .eq("unit_id", unitId)
     .eq("year", year)
     .eq("month", month)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  if (!data) return emptyMonthlyEntry
+  if (!data) return emptyMonthlyGeneral
   return {
-    taxaEntregaIfood: Number(data.taxa_entrega_ifood),
-    promocoes: Number(data.promocoes),
-    taxaComissaoIfood: Number(data.taxa_comissao_ifood),
-    servicosLogisticos: Number(data.servicos_logisticos),
-    outrosDescontosIfood: Number(data.outros_descontos_ifood),
-    vrRecebido: Number(data.vr_recebido),
-    vrTaxaMedia8: Number(data.vr_taxa_media_8),
-    cancelamentosReembolsos: Number(data.cancelamentos_reembolsos),
     custoProdutosCozina: Number(data.custo_produtos_cozina),
     custoProdutosLoja: Number(data.custo_produtos_loja),
     clientesNovos: data.clientes_novos,
@@ -112,10 +109,44 @@ export async function getMonthlyEntry(
   }
 }
 
+export async function getPlatformEntries(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<Record<PlatformId, PlatformEntry>> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from("monthly_platform_entries")
+    .select("*")
+    .eq("unit_id", unitId)
+    .eq("year", year)
+    .eq("month", month)
+  if (error) throw new Error(error.message)
+
+  const result: Record<PlatformId, PlatformEntry> = {
+    ifood: { ...emptyPlatformEntry },
+    "99food": { ...emptyPlatformEntry },
+    keeta: { ...emptyPlatformEntry },
+  }
+  for (const row of data ?? []) {
+    const platform = row.platform as PlatformId
+    result[platform] = {
+      taxaEntrega: Number(row.taxa_entrega),
+      promocoes: Number(row.promocoes),
+      taxaComissao: Number(row.taxa_comissao),
+      servicosLogisticos: Number(row.servicos_logisticos),
+      outrosDescontos: Number(row.outros_descontos),
+      vrRecebido: Number(row.vr_recebido),
+      cancelamentosReembolsos: Number(row.cancelamentos_reembolsos),
+    }
+  }
+  return result
+}
+
 //---------- Agregação --------------------------------------------
 
 export type DailyAggregate = {
-  date: string // YYYY-MM-DD
+  date: string
   ifood: { pedidos: number; cancelados: number; faturamento: number }
   "99food": { pedidos: number; cancelados: number; faturamento: number }
   keeta: { pedidos: number; cancelados: number; faturamento: number }
@@ -150,6 +181,39 @@ export function aggregateByDay(entries: DailyEntry[]): DailyAggregate[] {
   return Array.from(byDate.values()).sort((a, b) =>
     a.date.localeCompare(b.date),
   )
+}
+
+export type PlatformSummary = {
+  pedidos: number
+  cancelados: number
+  faturamento: number
+  ticketMedio: number
+  pctCancelamento: number
+}
+
+export function summarizeByPlatform(
+  entries: DailyEntry[],
+): Record<PlatformId, PlatformSummary> {
+  const platforms: PlatformId[] = ["ifood", "99food", "keeta"]
+  const result = Object.fromEntries(
+    platforms.map((p) => [
+      p,
+      { pedidos: 0, cancelados: 0, faturamento: 0, ticketMedio: 0, pctCancelamento: 0 },
+    ]),
+  ) as Record<PlatformId, PlatformSummary>
+
+  for (const e of entries) {
+    const s = result[e.platform]
+    s.pedidos += e.pedidos
+    s.cancelados += e.cancelados
+    s.faturamento += e.faturamento
+  }
+  for (const p of platforms) {
+    const s = result[p]
+    s.ticketMedio = s.pedidos > 0 ? s.faturamento / s.pedidos : 0
+    s.pctCancelamento = s.pedidos > 0 ? (s.cancelados / s.pedidos) * 100 : 0
+  }
+  return result
 }
 
 export function sumMonth(entries: DailyEntry[]) {

@@ -9,12 +9,15 @@ export type ActionState = {
   message?: string
 }
 
-type PlatformEntry = {
+type PlatformDailyEntry = {
   platform: "ifood" | "99food" | "keeta"
   pedidos: number
   cancelados: number
   faturamento: number
 }
+
+const PLATFORMS = ["ifood", "99food", "keeta"] as const
+type Platform = (typeof PLATFORMS)[number]
 
 function parseNumber(v: FormDataEntryValue | null): number {
   const s = String(v ?? "").replace(/\./g, "").replace(",", ".").trim()
@@ -36,26 +39,12 @@ export async function saveDailyEntry(
   const date = String(formData.get("date") ?? "").trim()
   if (!unitId || !date) return { ok: false, message: "Dados inválidos." }
 
-  const platforms: PlatformEntry[] = [
-    {
-      platform: "ifood",
-      pedidos: parseInteger(formData.get("ifood_pedidos")),
-      cancelados: parseInteger(formData.get("ifood_cancelados")),
-      faturamento: parseNumber(formData.get("ifood_faturamento")),
-    },
-    {
-      platform: "99food",
-      pedidos: parseInteger(formData.get("99food_pedidos")),
-      cancelados: parseInteger(formData.get("99food_cancelados")),
-      faturamento: parseNumber(formData.get("99food_faturamento")),
-    },
-    {
-      platform: "keeta",
-      pedidos: parseInteger(formData.get("keeta_pedidos")),
-      cancelados: parseInteger(formData.get("keeta_cancelados")),
-      faturamento: parseNumber(formData.get("keeta_faturamento")),
-    },
-  ]
+  const platforms: PlatformDailyEntry[] = PLATFORMS.map((p) => ({
+    platform: p,
+    pedidos: parseInteger(formData.get(`${p}_pedidos`)),
+    cancelados: parseInteger(formData.get(`${p}_cancelados`)),
+    faturamento: parseNumber(formData.get(`${p}_faturamento`)),
+  }))
 
   try {
     const supabase = createAdminClient()
@@ -118,18 +107,11 @@ export async function saveMonthlyEntry(
   if (!unitId || !year || !month)
     return { ok: false, message: "Dados inválidos." }
 
-  const payload = {
+  // Geral
+  const general = {
     unit_id: unitId,
     year,
     month,
-    taxa_entrega_ifood: parseNumber(formData.get("taxa_entrega_ifood")),
-    promocoes: parseNumber(formData.get("promocoes")),
-    taxa_comissao_ifood: parseNumber(formData.get("taxa_comissao_ifood")),
-    servicos_logisticos: parseNumber(formData.get("servicos_logisticos")),
-    outros_descontos_ifood: parseNumber(formData.get("outros_descontos_ifood")),
-    vr_recebido: parseNumber(formData.get("vr_recebido")),
-    vr_taxa_media_8: parseNumber(formData.get("vr_taxa_media_8")),
-    cancelamentos_reembolsos: parseNumber(formData.get("cancelamentos_reembolsos")),
     custo_produtos_cozina: parseNumber(formData.get("custo_produtos_cozina")),
     custo_produtos_loja: parseNumber(formData.get("custo_produtos_loja")),
     clientes_novos: parseInteger(formData.get("clientes_novos")),
@@ -138,12 +120,37 @@ export async function saveMonthlyEntry(
     updated_at: new Date().toISOString(),
   }
 
+  // Por plataforma
+  const platformRows = PLATFORMS.map((p: Platform) => ({
+    unit_id: unitId,
+    year,
+    month,
+    platform: p,
+    taxa_entrega: parseNumber(formData.get(`${p}_taxa_entrega`)),
+    promocoes: parseNumber(formData.get(`${p}_promocoes`)),
+    taxa_comissao: parseNumber(formData.get(`${p}_taxa_comissao`)),
+    servicos_logisticos: parseNumber(formData.get(`${p}_servicos_logisticos`)),
+    outros_descontos: parseNumber(formData.get(`${p}_outros_descontos`)),
+    vr_recebido: parseNumber(formData.get(`${p}_vr_recebido`)),
+    cancelamentos_reembolsos: parseNumber(
+      formData.get(`${p}_cancelamentos_reembolsos`),
+    ),
+    updated_at: new Date().toISOString(),
+  }))
+
   try {
     const supabase = createAdminClient()
-    const { error } = await supabase
+
+    const { error: gErr } = await supabase
       .from("monthly_entries")
-      .upsert(payload, { onConflict: "unit_id,year,month" })
-    if (error) return { ok: false, message: error.message }
+      .upsert(general, { onConflict: "unit_id,year,month" })
+    if (gErr) return { ok: false, message: gErr.message }
+
+    const { error: pErr } = await supabase
+      .from("monthly_platform_entries")
+      .upsert(platformRows, { onConflict: "unit_id,year,month,platform" })
+    if (pErr) return { ok: false, message: pErr.message }
+
     revalidatePath("/unidades/[codigo]/lancamentos", "page")
     revalidatePath("/")
     return { ok: true }
