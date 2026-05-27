@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ChevronRight, Filter, Search, X } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
@@ -19,6 +20,7 @@ const ALL_PLATFORMS: { id: PlatformId; label: string }[] = [
 ]
 
 export function UnitsListView({ units }: { units: Unit[] }) {
+  const router = useRouter()
   const [search, setSearch] = React.useState("")
   const [cityFilter, setCityFilter] = React.useState<string>("")
   const [platformFilter, setPlatformFilter] = React.useState<PlatformId[]>([])
@@ -197,8 +199,8 @@ export function UnitsListView({ units }: { units: Unit[] }) {
           <div className="grid grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <div></div>
             <div>Nome</div>
-            <div>Cidade</div>
-            <div>Plataformas</div>
+            <div className="text-center">Cidade</div>
+            <div className="text-center">Plataformas</div>
             <div className="text-right">Faturamento</div>
             <div className="text-right">Margem</div>
             <div></div>
@@ -210,7 +212,16 @@ export function UnitsListView({ units }: { units: Unit[] }) {
             return (
               <div
                 key={unit.code}
-                className={`grid grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
+                onClick={() => router.push(`/unidades/${unit.code}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    router.push(`/unidades/${unit.code}`)
+                  }
+                }}
+                className={`grid cursor-pointer grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
                   idx < filtered.length - 1 ? "border-b" : ""
                 } ${!unit.active ? "opacity-60" : ""}`}
               >
@@ -228,10 +239,10 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                     </span>
                   )}
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
+                <div className="truncate text-center text-xs text-muted-foreground">
                   {unit.city ?? "—"}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center justify-center gap-1">
                   {unit.platforms.length === 0 ? (
                     <span className="text-[10px] text-muted-foreground">—</span>
                   ) : (
@@ -260,7 +271,11 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                     "—"
                   )}
                 </div>
-                <div className="flex items-center gap-0.5">
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="flex items-center gap-0.5"
+                >
                   <Link
                     href={`/unidades/${unit.code}`}
                     aria-label="Ver detalhe"
