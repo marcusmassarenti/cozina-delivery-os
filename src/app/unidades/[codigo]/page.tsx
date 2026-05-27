@@ -12,7 +12,6 @@ import {
 
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
-import { UnitMap } from "@/components/unit-map"
 import {
   Tabs,
   TabsContent,
@@ -113,8 +112,6 @@ export default async function UnidadeDetalhePage({
           </p>
         </div>
       )}
-
-      <UnitMap unitName={unit.name} city={unit.city} state={unit.state} />
     </div>
   )
 }
