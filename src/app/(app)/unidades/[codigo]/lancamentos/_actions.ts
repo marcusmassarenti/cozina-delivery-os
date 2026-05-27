@@ -117,6 +117,7 @@ export async function saveMonthlyEntry(
     clientes_novos: parseInteger(formData.get("clientes_novos")),
     nota_media: parseNumber(formData.get("nota_media")),
     observacoes: String(formData.get("observacoes") ?? "").trim(),
+    total_recebido_real: parseNumber(formData.get("total_recebido_real")),
     updated_at: new Date().toISOString(),
   }
 

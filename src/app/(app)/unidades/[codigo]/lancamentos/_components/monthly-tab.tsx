@@ -4,7 +4,7 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Calculator, Save } from "lucide-react"
+import { AlertTriangle, Calculator, CheckCircle2, Save } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
@@ -120,7 +120,7 @@ export function MonthlyTab({
     >,
   )
 
-  // Totais gerais
+  // Totais gerais (consolidação)
   const totalFaturamentoBruto = PLATFORMS.reduce(
     (acc, p) => acc + daySummary[p.id].faturamento,
     0,
@@ -130,12 +130,33 @@ export function MonthlyTab({
     0,
   )
   const totalFaturamentoLiquido = totalFaturamentoBruto - totalTaxas
-  const totalRecebidoLoja = PLATFORMS.reduce(
+  const totalVrRecebido = PLATFORMS.reduce(
+    (acc, p) => acc + platforms[p.id].vrRecebido,
+    0,
+  )
+  const totalVrTaxa = totalVrRecebido * VR_TAXA
+  const totalVrLiquido = totalVrRecebido - totalVrTaxa
+  const totalCancelamentos = PLATFORMS.reduce(
+    (acc, p) => acc + platforms[p.id].cancelamentosReembolsos,
+    0,
+  )
+  const totalRecebidoCalculado = PLATFORMS.reduce(
     (acc, p) => acc + platformCalcs[p.id].totalRecebido,
     0,
   )
+
+  // Real vs calculado
+  const totalRecebidoReal = general.totalRecebidoReal
+  const useReal = totalRecebidoReal > 0
+  const diferenca = totalRecebidoReal - totalRecebidoCalculado
+  const diferencaPct =
+    totalRecebidoCalculado > 0
+      ? (diferenca / totalRecebidoCalculado) * 100
+      : 0
+  const baseParaMargem = useReal ? totalRecebidoReal : totalRecebidoCalculado
+
   const totalCustos = general.custoProdutosCozina + general.custoProdutosLoja
-  const margemLiquida = totalRecebidoLoja - totalCustos
+  const margemLiquida = baseParaMargem - totalCustos
   const margemLucroPct =
     totalFaturamentoBruto > 0
       ? (margemLiquida / totalFaturamentoBruto) * 100
@@ -336,6 +357,77 @@ export function MonthlyTab({
         })}
       </div>
 
+      {/* Consolidação das 3 plataformas */}
+      <Section title="Consolidação das 3 plataformas">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Calculated
+            label="Faturamento Bruto (somado)"
+            value={fmtBRL(totalFaturamentoBruto)}
+          />
+          <Calculated label="Total Taxas" value={fmtBRL(totalTaxas)} muted />
+          <Calculated
+            label="Faturamento Líquido"
+            value={fmtBRL(totalFaturamentoLiquido)}
+          />
+          <Calculated label="VR Recebido (total)" value={fmtBRL(totalVrRecebido)} />
+          <Calculated
+            label="VR Taxa 8% (total)"
+            value={fmtBRL(totalVrTaxa)}
+            muted
+          />
+          <Calculated label="VR Líquido" value={fmtBRL(totalVrLiquido)} />
+          <Calculated
+            label="Cancelamentos (+)"
+            value={fmtBRL(totalCancelamentos)}
+          />
+          <Calculated
+            label="Total Recebido (calculado)"
+            value={fmtBRL(totalRecebidoCalculado)}
+            highlight
+          />
+          <div />
+        </div>
+
+        <div className="mt-5 rounded-lg border border-dashed bg-muted/30 p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <CurrencyField
+              label="Faturamento Real Recebido"
+              name="total_recebido_real"
+              value={general.totalRecebidoReal}
+              onChange={(n) => updateGeneral("totalRecebidoReal", n)}
+            />
+            <Calculated
+              label="Diferença (Real − Calculado)"
+              value={
+                useReal
+                  ? `${diferenca >= 0 ? "+" : ""}${fmtBRL(diferenca)} (${fmtPct(diferencaPct)})`
+                  : "—"
+              }
+              tone={
+                !useReal
+                  ? undefined
+                  : Math.abs(diferenca) < 1
+                    ? "ok"
+                    : Math.abs(diferencaPct) < 3
+                      ? "warning"
+                      : "error"
+              }
+            />
+            <div className="flex items-end">
+              <p className="text-[11px] text-muted-foreground">
+                {useReal
+                  ? Math.abs(diferenca) < 1
+                    ? "✓ Valores batem. Margem usa o real."
+                    : Math.abs(diferencaPct) < 3
+                      ? "⚠️ Pequena divergência (<3%). Margem usa o real."
+                      : "🔴 Divergência significativa (>3%). Conferir lançamentos."
+                  : "Deixe em branco se ainda não tem o real do banco. Margem usa o calculado."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Section>
+
       {/* Custos (geral) */}
       <Section title="Custos da Indústria (geral)" tone="negative">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -408,13 +500,14 @@ export function MonthlyTab({
             value={fmtBRL(totalFaturamentoBruto)}
           />
           <Calculated
-            label="Faturamento Líquido"
-            value={fmtBRL(totalFaturamentoLiquido)}
+            label={useReal ? "Total Recebido (real)" : "Total Recebido (calc)"}
+            value={fmtBRL(baseParaMargem)}
+            highlight
           />
           <Calculated
-            label="Total recebido pela loja"
-            value={fmtBRL(totalRecebidoLoja)}
-            highlight
+            label="(−) Custos Cozina/Loja"
+            value={fmtBRL(totalCustos)}
+            muted
           />
           <Calculated
             label="Margem de Lucro"
@@ -422,6 +515,17 @@ export function MonthlyTab({
             highlight
           />
         </div>
+        {useReal ? (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Margem calculada com base no <strong>Faturamento Real Recebido</strong>{" "}
+            ({fmtBRL(totalRecebidoReal)}).
+          </p>
+        ) : (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Margem calculada com base no <strong>Total Calculado</strong>. Preencha
+            o Faturamento Real Recebido pra usar o valor que efetivamente entrou.
+          </p>
+        )}
       </Section>
 
       {state.message && !state.ok && (
@@ -535,27 +639,46 @@ function Calculated({
   value,
   highlight,
   muted,
+  tone,
 }: {
   label: string
   value: string
   highlight?: boolean
   muted?: boolean
+  tone?: "ok" | "warning" | "error"
 }) {
+  const toneClass =
+    tone === "ok"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400"
+        : tone === "error"
+          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400"
+          : ""
+
+  const ToneIcon =
+    tone === "ok" ? CheckCircle2 : tone === "warning" || tone === "error" ? AlertTriangle : null
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
-        <Calculator className="size-3 text-muted-foreground" />
+        {ToneIcon ? (
+          <ToneIcon className="size-3 text-muted-foreground" />
+        ) : (
+          <Calculator className="size-3 text-muted-foreground" />
+        )}
         <Label className="text-xs font-medium text-muted-foreground">
           {label}
         </Label>
       </div>
       <div
-        className={`rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold tabular-nums ${
-          highlight
-            ? "text-emerald-700 dark:text-emerald-400"
+        className={`rounded-md border px-3 py-2 text-sm font-semibold tabular-nums ${
+          toneClass ||
+          (highlight
+            ? "bg-muted/30 text-emerald-700 dark:text-emerald-400"
             : muted
-              ? "text-muted-foreground"
-              : ""
+              ? "bg-muted/30 text-muted-foreground"
+              : "bg-muted/30")
         }`}
       >
         {value}

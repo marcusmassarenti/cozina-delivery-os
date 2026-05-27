@@ -27,6 +27,7 @@ export type MonthlyGeneral = {
   clientesNovos: number
   notaMedia: number
   observacoes: string
+  totalRecebidoReal: number
 }
 
 export const emptyPlatformEntry: PlatformEntry = {
@@ -45,6 +46,7 @@ export const emptyMonthlyGeneral: MonthlyGeneral = {
   clientesNovos: 0,
   notaMedia: 0,
   observacoes: "",
+  totalRecebidoReal: 0,
 }
 
 function pad2(n: number) {
@@ -92,7 +94,7 @@ export async function getMonthlyGeneral(
   const { data, error } = await supabase
     .from("monthly_entries")
     .select(
-      "custo_produtos_cozina, custo_produtos_loja, clientes_novos, nota_media, observacoes",
+      "custo_produtos_cozina, custo_produtos_loja, clientes_novos, nota_media, observacoes, total_recebido_real",
     )
     .eq("unit_id", unitId)
     .eq("year", year)
@@ -106,6 +108,7 @@ export async function getMonthlyGeneral(
     clientesNovos: data.clientes_novos,
     notaMedia: Number(data.nota_media),
     observacoes: data.observacoes,
+    totalRecebidoReal: Number(data.total_recebido_real ?? 0),
   }
 }
 
