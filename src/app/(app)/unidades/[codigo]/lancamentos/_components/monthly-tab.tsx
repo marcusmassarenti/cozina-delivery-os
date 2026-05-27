@@ -358,8 +358,18 @@ export function MonthlyTab({
       </div>
 
       {/* Consolidação das 3 plataformas */}
-      <Section title="Consolidação das 3 plataformas">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Consolidação das 3 plataformas
+          </h3>
+          <div className="flex items-center gap-1.5">
+            {PLATFORMS.map((p) => (
+              <PlatformLogo key={p.id} platform={p.id} size="sm" />
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Calculated
             label="Faturamento Bruto (somado)"
             value={fmtBRL(totalFaturamentoBruto)}
@@ -426,7 +436,7 @@ export function MonthlyTab({
             </div>
           </div>
         </div>
-      </Section>
+      </div>
 
       {/* Custos (geral) */}
       <Section title="Custos da Indústria (geral)" tone="negative">
