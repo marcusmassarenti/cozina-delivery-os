@@ -11,6 +11,9 @@ export type CreateUnitState = {
   fieldErrors?: Record<string, string>
 }
 
+const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
+type PlatformId = (typeof ALL_PLATFORMS)[number]
+
 function cleanCnpj(cnpj: string) {
   return cnpj.replace(/\D/g, "")
 }
@@ -33,25 +36,47 @@ function isValidCnpj(cnpj: string): boolean {
   return c[12] === String(d1) && c[13] === String(d2)
 }
 
+/**
+ * Gera o próximo código sequencial baseado nos códigos existentes
+ * que sejam numéricos puros. Códigos não-numéricos (ex.: "TST", "JK")
+ * são ignorados pra não conflitar.
+ */
+async function generateNextCode(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<string> {
+  const { data } = await supabase.from("units").select("code")
+  let max = 0
+  for (const row of data ?? []) {
+    const n = parseInt(row.code, 10)
+    if (!isNaN(n) && /^\d+$/.test(row.code)) {
+      max = Math.max(max, n)
+    }
+  }
+  return String(max + 1).padStart(2, "0")
+}
+
 export async function createUnit(
   _prevState: CreateUnitState,
   formData: FormData,
 ): Promise<CreateUnitState> {
-  const code = String(formData.get("code") ?? "").trim()
   const name = String(formData.get("name") ?? "").trim()
   const city = String(formData.get("city") ?? "").trim()
   const state = String(formData.get("state") ?? "").trim().toUpperCase()
   const cnpjRaw = String(formData.get("cnpj") ?? "").trim()
   const active = formData.get("active") === "on"
 
+  // Plataformas vêm como múltiplos checkboxes com nome="platforms"
+  const platformsRaw = formData.getAll("platforms").map(String)
+  const platforms: PlatformId[] = ALL_PLATFORMS.filter((p) =>
+    platformsRaw.includes(p),
+  )
+
   const fieldErrors: Record<string, string> = {}
-  if (!code) fieldErrors.code = "Código obrigatório"
   if (!name) fieldErrors.name = "Nome obrigatório"
   if (!city) fieldErrors.city = "Cidade obrigatória"
   if (!state || state.length !== 2)
     fieldErrors.state = "UF deve ter 2 letras"
-  if (cnpjRaw && !isValidCnpj(cnpjRaw))
-    fieldErrors.cnpj = "CNPJ inválido"
+  if (cnpjRaw && !isValidCnpj(cnpjRaw)) fieldErrors.cnpj = "CNPJ inválido"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -60,25 +85,37 @@ export async function createUnit(
   try {
     const brand = await getDefaultBrand()
     const supabase = createAdminClient()
-    const { error } = await supabase.from("units").insert({
-      brand_id: brand.id,
-      code,
-      name,
-      city,
-      state,
-      cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
-      active,
-    })
+    const code = await generateNextCode(supabase)
+
+    const { data: unit, error } = await supabase
+      .from("units")
+      .insert({
+        brand_id: brand.id,
+        code,
+        name,
+        city,
+        state,
+        cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
+        active,
+      })
+      .select("id")
+      .single()
+
     if (error) {
-      if (error.code === "23505") {
-        return {
-          ok: false,
-          fieldErrors: { code: "Já existe unidade com esse código" },
-          message: "Código duplicado.",
-        }
-      }
       return { ok: false, message: error.message }
     }
+
+    // Insere as plataformas selecionadas
+    if (platforms.length > 0 && unit) {
+      const { error: platErr } = await supabase.from("unit_platforms").insert(
+        platforms.map((p) => ({ unit_id: unit.id, platform: p, active: true })),
+      )
+      if (platErr) {
+        // Não impede o cadastro da unidade, só loga
+        console.error("Erro ao salvar plataformas:", platErr.message)
+      }
+    }
+
     revalidatePath("/unidades")
     revalidatePath("/")
     return { ok: true }

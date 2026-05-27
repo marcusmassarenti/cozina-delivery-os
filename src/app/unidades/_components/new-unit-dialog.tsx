@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,6 +32,12 @@ const UFs = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
   "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
   "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+]
+
+const PLATFORMS: { id: PlatformId; label: string }[] = [
+  { id: "ifood", label: "iFood" },
+  { id: "99food", label: "99 Food" },
+  { id: "keeta", label: "Keeta" },
 ]
 
 const initial: CreateUnitState = { ok: false }
@@ -77,20 +84,12 @@ export function NewUnitDialog() {
         <DialogHeader>
           <DialogTitle>Nova unidade</DialogTitle>
           <DialogDescription>
-            Cadastre uma franquia da rede Churrasco no Pote.
+            Cadastre uma franquia da rede Churrasco no Pote. O código é gerado
+            automaticamente.
           </DialogDescription>
         </DialogHeader>
 
         <form action={formAction} className="flex flex-col gap-4">
-          <Field label="Código" error={state.fieldErrors?.code}>
-            <Input
-              name="code"
-              placeholder="ex.: 01, JK, ICR"
-              maxLength={10}
-              required
-            />
-          </Field>
-
           <Field label="Nome" error={state.fieldErrors?.name}>
             <Input
               name="name"
@@ -107,7 +106,7 @@ export function NewUnitDialog() {
             </div>
             <div>
               <Field label="UF" error={state.fieldErrors?.state}>
-                <Select value={uf} onValueChange={setUf} name="state">
+                <Select value={uf} onValueChange={setUf}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -134,6 +133,18 @@ export function NewUnitDialog() {
             />
           </Field>
 
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium">Plataformas ativas</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {PLATFORMS.map((p) => (
+                <PlatformCheckbox key={p.id} platform={p} />
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Marque as plataformas onde essa loja opera. Pode mudar depois.
+            </p>
+          </div>
+
           <div className="flex items-center gap-2">
             <input
               id="active"
@@ -142,7 +153,10 @@ export function NewUnitDialog() {
               defaultChecked
               className="size-4 rounded border-border"
             />
-            <Label htmlFor="active" className="cursor-pointer text-sm font-normal">
+            <Label
+              htmlFor="active"
+              className="cursor-pointer text-sm font-normal"
+            >
               Unidade ativa (recebendo pedidos)
             </Label>
           </div>
@@ -166,6 +180,34 @@ export function NewUnitDialog() {
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PlatformCheckbox({
+  platform,
+}: {
+  platform: { id: PlatformId; label: string }
+}) {
+  const [checked, setChecked] = React.useState(true)
+  return (
+    <label
+      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-medium transition-colors ${
+        checked
+          ? "border-primary bg-primary/5"
+          : "border-border bg-card opacity-60 hover:opacity-100"
+      }`}
+    >
+      <input
+        type="checkbox"
+        name="platforms"
+        value={platform.id}
+        checked={checked}
+        onChange={(e) => setChecked(e.target.checked)}
+        className="size-3.5 rounded border-border"
+      />
+      <PlatformLogo platform={platform.id} size="sm" />
+      <span>{platform.label}</span>
+    </label>
   )
 }
 
