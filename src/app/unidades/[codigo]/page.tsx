@@ -10,6 +10,7 @@ import {
   TrendingUp,
 } from "lucide-react"
 
+import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
 import {
   Tabs,
@@ -51,24 +52,27 @@ export default async function UnidadeDetalhePage({
       {/* Header */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-              <span className="text-xs font-bold tabular-nums">
-                {unit.code}
-              </span>
+          <div className="flex items-center gap-3">
+            <BrandLogo size="lg" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-2xl font-semibold tracking-tight">
+                  {unit.name}
+                </h1>
+                <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-bold tabular-nums text-muted-foreground">
+                  #{unit.code}
+                </span>
+                {!unit.active && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Inativa
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {unit.city} · {unit.state} · CNPJ {unit.cnpj}
+              </p>
             </div>
-            <h1 className="truncate text-2xl font-semibold tracking-tight">
-              {unit.name}
-            </h1>
-            {!unit.active && (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Inativa
-              </span>
-            )}
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {unit.city} · {unit.state} · CNPJ {unit.cnpj}
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select className="h-9 rounded-md border bg-card px-3 text-xs font-medium outline-none">

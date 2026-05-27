@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ChevronRight, Plus, Search } from "lucide-react"
 
+import { BrandLogo } from "@/components/brand-logo"
 import {
   fmtBRL,
   fmtPct,
@@ -51,8 +52,8 @@ export default function UnidadesPage() {
 
       {/* Tabela */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div className="grid grid-cols-[60px_minmax(0,2.5fr)_minmax(0,1fr)_repeat(3,minmax(0,1fr))_auto] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <div>Código</div>
+        <div className="grid grid-cols-[44px_minmax(0,2.5fr)_minmax(0,1fr)_repeat(3,minmax(0,1fr))_auto] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div></div>
           <div>Nome</div>
           <div>Cidade</div>
           <div className="text-right">Pedidos</div>
@@ -68,17 +69,18 @@ export default function UnidadesPage() {
             <Link
               key={unit.code}
               href={`/unidades/${unit.code}`}
-              className={`grid grid-cols-[60px_minmax(0,2.5fr)_minmax(0,1fr)_repeat(3,minmax(0,1fr))_auto] items-center gap-4 px-5 py-4 text-sm transition-colors hover:bg-muted/50 ${
+              className={`grid grid-cols-[44px_minmax(0,2.5fr)_minmax(0,1fr)_repeat(3,minmax(0,1fr))_auto] items-center gap-4 px-5 py-4 text-sm transition-colors hover:bg-muted/50 ${
                 idx < units.length - 1 ? "border-b" : ""
               } ${!unit.active ? "opacity-60" : ""}`}
             >
-              <div className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                <span className="text-[11px] font-bold tabular-nums">
-                  {unit.code}
-                </span>
-              </div>
+              <BrandLogo size="md" />
               <div className="min-w-0">
-                <p className="truncate font-medium">{unit.name}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                    #{unit.code}
+                  </span>
+                  <p className="truncate font-medium">{unit.name}</p>
+                </div>
                 {!unit.active && (
                   <span className="text-[10px] text-muted-foreground">
                     Inativa

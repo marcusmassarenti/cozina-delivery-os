@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { ChevronDown, ChevronRight } from "lucide-react"
 
+import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
 import type { Unit } from "@/lib/sample-data"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/sample-data"
@@ -49,12 +50,11 @@ export function UnitsTable({ units }: { units: Unit[] }) {
               ) : (
                 <ChevronRight className="size-4 text-muted-foreground" />
               )}
-              <div className="flex items-center gap-3 text-left">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                  <span className="text-[11px] font-bold tabular-nums">
-                    {unit.code}
-                  </span>
-                </div>
+              <div className="flex min-w-0 items-center gap-3 text-left">
+                <BrandLogo size="md" />
+                <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                  #{unit.code}
+                </span>
                 <span className="truncate font-medium">{unit.name}</span>
               </div>
               <div className="text-right tabular-nums">
