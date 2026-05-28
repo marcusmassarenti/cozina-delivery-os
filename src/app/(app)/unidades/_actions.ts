@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import { requireAuth } from "@/lib/auth/guards"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -83,6 +84,7 @@ export async function createUnit(
   }
 
   try {
+    await requireAuth()
     const brand = await getDefaultBrand()
     const supabase = createAdminClient()
     const code = await generateNextCode(supabase)
@@ -130,6 +132,7 @@ export async function createUnit(
 export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
   try {
+    await requireAuth()
     const supabase = createAdminClient()
     const { error } = await supabase.from("units").delete().eq("id", unitId)
     if (error) return { ok: false, message: error.message }
@@ -160,6 +163,14 @@ export async function updateUnit(
     platformsRaw.includes(p),
   )
 
+  // IDs externos por plataforma (ifoodStoreId, _99foodStoreId, keetaStoreId)
+  const ifoodStoreId =
+    String(formData.get("ifoodStoreId") ?? "").trim() || null
+  const _99foodStoreId =
+    String(formData.get("_99foodStoreId") ?? "").trim() || null
+  const keetaStoreId =
+    String(formData.get("keetaStoreId") ?? "").trim() || null
+
   if (!unitId) {
     return { ok: false, message: "ID da unidade ausente." }
   }
@@ -176,6 +187,7 @@ export async function updateUnit(
   }
 
   try {
+    await requireAuth()
     const supabase = createAdminClient()
 
     const { error: updErr } = await supabase
@@ -193,16 +205,48 @@ export async function updateUnit(
       return { ok: false, message: updErr.message }
     }
 
-    // Sync de plataformas: delete tudo + insert as marcadas
+    // Sync de plataformas:
+    // - Mantém external_store_id já existente (a menos que o form sobrescreva)
+    // - Adiciona linhas pras plataformas marcadas
+    // - Remove linhas das plataformas desmarcadas
+    const externalIdByPlatform: Partial<Record<PlatformId, string | null>> = {
+      ifood: ifoodStoreId,
+      "99food": _99foodStoreId,
+      keeta: keetaStoreId,
+    }
+
+    // Pega os atuais (pra preservar external_store_id se o form não veio)
+    const { data: existingRows } = await supabase
+      .from("unit_platforms")
+      .select("platform, external_store_id")
+      .eq("unit_id", unitId)
+    const existingMap = new Map(
+      (existingRows ?? []).map((r) => [
+        r.platform as PlatformId,
+        r.external_store_id as string | null,
+      ]),
+    )
+
     await supabase.from("unit_platforms").delete().eq("unit_id", unitId)
     if (platforms.length > 0) {
       await supabase.from("unit_platforms").insert(
-        platforms.map((p) => ({ unit_id: unitId, platform: p, active: true })),
+        platforms.map((p) => ({
+          unit_id: unitId,
+          platform: p,
+          active: true,
+          // Preferência: o que veio no form > o que já tinha
+          external_store_id:
+            externalIdByPlatform[p] !== undefined &&
+            externalIdByPlatform[p] !== null
+              ? externalIdByPlatform[p]
+              : existingMap.get(p) ?? null,
+        })),
       )
     }
 
     revalidatePath("/unidades")
     revalidatePath("/")
+    revalidatePath("/importacao")
     revalidatePath(`/unidades/[codigo]`, "page")
     return { ok: true }
   } catch (err) {

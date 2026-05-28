@@ -4,7 +4,14 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, Calculator, CheckCircle2, Save } from "lucide-react"
+import {
+  AlertTriangle,
+  Calculator,
+  CheckCircle2,
+  FileSpreadsheet,
+  Save,
+  Sparkles,
+} from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
@@ -16,7 +23,11 @@ import type {
   PlatformSummary,
 } from "@/lib/data/lancamentos"
 import { fmtBRL, fmtPct } from "@/lib/format"
-import { saveMonthlyEntry, type ActionState } from "../_actions"
+import {
+  getIfoodMonthlySuggestion,
+  saveMonthlyEntry,
+  type ActionState,
+} from "../_actions"
 
 const initial: ActionState = { ok: false }
 
@@ -55,7 +66,35 @@ export function MonthlyTab({
   const [selected, setSelected] = React.useState<PlatformId>(
     unitActivePlatforms[0] ?? "ifood",
   )
+  // Marca quais plataformas foram auto-preenchidas via relatório
+  const [autoFilled, setAutoFilled] = React.useState<Set<PlatformId>>(new Set())
+  const [autoFillError, setAutoFillError] = React.useState<string | null>(null)
+  const [isAutoFilling, startAutoFill] = React.useTransition()
   const router = useRouter()
+
+  function handleAutoFillIfood() {
+    setAutoFillError(null)
+    startAutoFill(async () => {
+      const sug = await getIfoodMonthlySuggestion(unitId, year, month)
+      if (!sug.hasData) {
+        setAutoFillError(
+          "Nenhum Financeiro do iFood importado pra esse mês. Sobe o XLSX em /importacao.",
+        )
+        return
+      }
+      setPlatforms((prev) => ({
+        ...prev,
+        ifood: {
+          ...prev.ifood,
+          taxaEntrega: sug.taxaEntrega,
+          taxaComissao: sug.taxaComissao,
+          promocoes: sug.promocoes,
+          cancelamentosReembolsos: sug.cancelamentosReembolsos,
+        },
+      }))
+      setAutoFilled((prev) => new Set(prev).add("ifood"))
+    })
+  }
 
   React.useEffect(() => {
     setGeneral(initialGeneral)
@@ -266,20 +305,56 @@ export function MonthlyTab({
                 <div className="flex items-center gap-2">
                   <PlatformLogo platform={p.id} size="sm" />
                   <span className="text-sm font-semibold">{p.label}</span>
+                  {autoFilled.has(p.id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+                      <Sparkles className="size-3" />
+                      Auto-preenchido
+                    </span>
+                  )}
                 </div>
-                <div className="text-right">
-                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
-                    Faturamento (diário)
-                  </p>
-                  <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                    {fmtBRL(summary.faturamento)}
-                  </p>
+                <div className="flex items-center gap-3">
+                  {p.id === "ifood" && (
+                    <button
+                      type="button"
+                      onClick={handleAutoFillIfood}
+                      disabled={isAutoFilling}
+                      className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                      title="Preenche as taxas, comissão, promoção e cancelamentos a partir do Relatório de Conciliação importado"
+                    >
+                      <FileSpreadsheet className="size-3" />
+                      {isAutoFilling
+                        ? "Buscando..."
+                        : "Auto-preencher com relatório"}
+                    </button>
+                  )}
+                  <div className="text-right">
+                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                      Faturamento (diário)
+                    </p>
+                    <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {fmtBRL(summary.faturamento)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
+              {p.id === "ifood" && autoFillError && (
+                <div className="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{autoFillError}</span>
+                </div>
+              )}
+
               {/* Taxas */}
               <h4 className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                Taxas e Descontos (manual)
+                Taxas e Descontos{" "}
+                {autoFilled.has(p.id) ? (
+                  <span className="text-emerald-700 dark:text-emerald-400">
+                    · vindas do relatório
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">(manual)</span>
+                )}
               </h4>
               <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <CurrencyField

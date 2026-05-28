@@ -15,6 +15,8 @@ export type Unit = {
   active: boolean
   brand_id: string
   platforms: PlatformId[]
+  /** Por plataforma, o ID da loja no sistema externo (ex.: iFood 260777). */
+  externalStoreIds: Partial<Record<PlatformId, string | null>>
   monthly: UnitMonthly
 }
 
@@ -29,8 +31,13 @@ type DbUnit = {
   brand_id: string
 }
 
-function attach(u: DbUnit, platforms: PlatformId[], monthly: UnitMonthly): Unit {
-  return { ...u, platforms, monthly }
+function attach(
+  u: DbUnit,
+  platforms: PlatformId[],
+  externalStoreIds: Partial<Record<PlatformId, string | null>>,
+  monthly: UnitMonthly,
+): Unit {
+  return { ...u, platforms, externalStoreIds, monthly }
 }
 
 function currentYearMonth(): { year: number; month: number } {
@@ -47,16 +54,24 @@ export async function getUnits(): Promise<Unit[]> {
       .order("code"),
     supabase
       .from("unit_platforms")
-      .select("unit_id, platform")
+      .select("unit_id, platform, external_store_id")
       .eq("active", true),
   ])
   if (unitsRes.error)
     throw new Error(`Falha ao buscar unidades: ${unitsRes.error.message}`)
-  const byUnit = new Map<string, PlatformId[]>()
+  const platformsByUnit = new Map<string, PlatformId[]>()
+  const externalIdsByUnit = new Map<
+    string,
+    Partial<Record<PlatformId, string | null>>
+  >()
   for (const row of platformsRes.data ?? []) {
-    const arr = byUnit.get(row.unit_id) ?? []
-    arr.push(row.platform as PlatformId)
-    byUnit.set(row.unit_id, arr)
+    const platform = row.platform as PlatformId
+    const arr = platformsByUnit.get(row.unit_id) ?? []
+    arr.push(platform)
+    platformsByUnit.set(row.unit_id, arr)
+    const ids = externalIdsByUnit.get(row.unit_id) ?? {}
+    ids[platform] = row.external_store_id ?? null
+    externalIdsByUnit.set(row.unit_id, ids)
   }
   const units = unitsRes.data ?? []
   const unitIds = units.map((u) => u.id)
@@ -64,7 +79,12 @@ export async function getUnits(): Promise<Unit[]> {
   const monthlyByUnit = await getRealMonthlyForUnits(unitIds, year, month)
 
   return units.map((u) =>
-    attach(u, byUnit.get(u.id) ?? [], monthlyByUnit.get(u.id) ?? emptyMonthly),
+    attach(
+      u,
+      platformsByUnit.get(u.id) ?? [],
+      externalIdsByUnit.get(u.id) ?? {},
+      monthlyByUnit.get(u.id) ?? emptyMonthly,
+    ),
   )
 }
 
@@ -77,10 +97,39 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
     .maybeSingle()
   if (error) throw new Error(`Falha ao buscar unidade ${code}: ${error.message}`)
   if (!data) return null
-  const platforms = await getUnitPlatforms(data.id)
+  const platformsDetails = await getUnitPlatformDetails(data.id)
+  const platforms = platformsDetails.map((p) => p.platform)
+  const externalStoreIds: Partial<Record<PlatformId, string | null>> = {}
+  for (const p of platformsDetails) {
+    externalStoreIds[p.platform] = p.externalStoreId
+  }
   const { year, month } = currentYearMonth()
   const monthlyByUnit = await getRealMonthlyForUnits([data.id], year, month)
-  return attach(data, platforms, monthlyByUnit.get(data.id) ?? emptyMonthly)
+  return attach(
+    data,
+    platforms,
+    externalStoreIds,
+    monthlyByUnit.get(data.id) ?? emptyMonthly,
+  )
+}
+
+export async function getUnitPlatformDetails(
+  unitId: string,
+): Promise<Array<{ platform: PlatformId; externalStoreId: string | null }>> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from("unit_platforms")
+    .select("platform, external_store_id")
+    .eq("unit_id", unitId)
+    .eq("active", true)
+  if (error) {
+    console.error("getUnitPlatformDetails:", error.message)
+    return []
+  }
+  return (data ?? []).map((r) => ({
+    platform: r.platform as PlatformId,
+    externalStoreId: r.external_store_id ?? null,
+  }))
 }
 
 export async function getUnitPlatforms(

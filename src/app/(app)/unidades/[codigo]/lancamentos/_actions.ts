@@ -2,11 +2,63 @@
 
 import { revalidatePath } from "next/cache"
 
+import { requireAuth } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getFinanceiroResumoForMonth } from "@/lib/data/ifood-imported"
 
 export type ActionState = {
   ok: boolean
   message?: string
+}
+
+export type IfoodSuggestion = {
+  hasData: boolean
+  refYear: number
+  refMonth: number
+  taxaEntrega: number
+  taxaComissao: number
+  promocoes: number
+  cancelamentosReembolsos: number
+  totalTaxas: number
+  pedidosUnicos: number
+}
+
+/**
+ * Devolve sugestões pra preencher os campos do Mensal/iFood
+ * a partir do Financeiro importado (ifood_financeiro_lancamentos).
+ * Cliente chama isso ao clicar em "Auto-preencher com relatório".
+ */
+export async function getIfoodMonthlySuggestion(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<IfoodSuggestion> {
+  const r = await getFinanceiroResumoForMonth(unitId, year, month)
+  // Os valores do banco vêm com sinal (taxas negativas). Pros campos do
+  // Mensal a gente armazena positivos (input do usuário sempre digita positivo).
+  const taxaEntrega = Math.abs(r.taxaEntrega)
+  // Comissão (campo do Mensal) = comissão iFood + taxa transação + taxa serviço
+  const taxaComissao =
+    Math.abs(r.comissaoIfood) +
+    Math.abs(r.taxaTransacao) +
+    Math.abs(r.taxaServicoCliente)
+  const promocoes = Math.abs(r.promocaoLoja)
+  const cancelamentosReembolsos = Math.abs(r.perdaCancelamento)
+  return {
+    hasData: r.hasData,
+    refYear: year,
+    refMonth: month,
+    taxaEntrega: round(taxaEntrega),
+    taxaComissao: round(taxaComissao),
+    promocoes: round(promocoes),
+    cancelamentosReembolsos: round(cancelamentosReembolsos),
+    totalTaxas: round(taxaEntrega + taxaComissao),
+    pedidosUnicos: r.pedidosUnicos,
+  }
+}
+
+function round(n: number) {
+  return Math.round(n * 100) / 100
 }
 
 type PlatformDailyEntry = {
@@ -47,6 +99,7 @@ export async function saveDailyEntry(
   }))
 
   try {
+    await requireAuth()
     const supabase = createAdminClient()
     const rows = platforms.map((p) => ({
       unit_id: unitId,
@@ -79,6 +132,7 @@ export async function deleteDailyEntry(
 ): Promise<ActionState> {
   if (!unitId || !date) return { ok: false, message: "Dados inválidos." }
   try {
+    await requireAuth()
     const supabase = createAdminClient()
     const { error } = await supabase
       .from("daily_entries")
@@ -140,6 +194,7 @@ export async function saveMonthlyEntry(
   }))
 
   try {
+    await requireAuth()
     const supabase = createAdminClient()
 
     const { error: gErr } = await supabase
@@ -162,3 +217,4 @@ export async function saveMonthlyEntry(
     }
   }
 }
+

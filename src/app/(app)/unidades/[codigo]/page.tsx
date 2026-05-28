@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import {
@@ -6,6 +7,7 @@ import {
   DollarSign,
   Pencil,
   PiggyBank,
+  Sparkles,
   Star,
   TrendingDown,
   TrendingUp,
@@ -24,22 +26,63 @@ import {
   getUnitPlatforms,
   type Unit,
 } from "@/lib/data/units"
+import {
+  getAvailablePeriods,
+  getAvaliacoesResumoForMonth,
+  getFinanceiroResumoForMonth,
+} from "@/lib/data/ifood-imported"
+import {
+  getNinefoodResumoForMonth,
+  ninefoodHasAnyDataForMonth,
+} from "@/lib/data/ninefood-imported"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
+import { parsePeriodParam } from "@/lib/period"
+import { PeriodSelector } from "@/components/shared/period-selector"
+import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { EditUnitDialog } from "../_components/edit-unit-dialog"
+import { AvaliacoesTab } from "./_components/avaliacoes-tab"
+import { Avaliacoes99Tab } from "./_components/avaliacoes-99-tab"
+import { CardapioTab } from "./_components/cardapio-tab"
+import { Cardapio99Tab } from "./_components/cardapio-99-tab"
+import { CustosTab } from "./_components/custos-tab"
+import { FinanceiroTab } from "./_components/financeiro-tab"
+import { Financeiro99Tab } from "./_components/financeiro-99-tab"
 
 export default async function UnidadeDetalhePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ codigo: string }>
+  searchParams: Promise<{ periodo?: string }>
 }) {
   const { codigo } = await params
+  const sp = await searchParams
   const unit = await getUnitByCode(codigo)
   if (!unit) notFound()
 
-  const platforms = await getUnitPlatforms(unit.id)
-  const m = unit.monthly
-  const hasData = m.pedidos > 0
+  const { year, month } = parsePeriodParam(sp.periodo)
+  const [platforms, fin, nine, nine99HasAny, avalResumo, availablePeriods] =
+    await Promise.all([
+      getUnitPlatforms(unit.id),
+      getFinanceiroResumoForMonth(unit.id, year, month),
+      getNinefoodResumoForMonth(unit.id, year, month),
+      ninefoodHasAnyDataForMonth(unit.id, year, month),
+      getAvaliacoesResumoForMonth(unit.id, year, month),
+      getAvailablePeriods(),
+    ])
+
+  // m = monthly mesclado: soma plataformas importadas (iFood + 99 Food)
+  const m = mergeMonthly(unit.monthly, fin, nine)
+  // hasData inclui Cardápio 99 (item) — só Loja não cobre quando Marcus
+  // importou só o cardápio, sem o financeiro.
+  const hasData = m.pedidos > 0 || fin.hasData || nine.hasData || nine99HasAny
+  const usaIfood = fin.hasData
+  // "usa99" aqui significa "tem qualquer dado 99 Food" — Loja OU Item.
+  // Usado pelo PlatformSwitcher pra decidir se o chip aparece com dados
+  // ou com "sem dados". Considera os 2 tipos pra cobertura ficar coerente.
+  const usa99 = nine.hasData || nine99HasAny
+  const usaImportado = usaIfood || usa99
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -79,11 +122,10 @@ export default async function UnidadeDetalhePage({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="h-9 rounded-md border bg-card px-3 text-xs font-medium outline-none">
-            <option>Maio/2026</option>
-            <option>Abril/2026</option>
-            <option>Março/2026</option>
-          </select>
+          <PeriodSelector
+            current={{ year, month }}
+            options={availablePeriods}
+          />
           <Link
             href={`/unidades/${unit.code}/lancamentos`}
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
@@ -101,6 +143,7 @@ export default async function UnidadeDetalhePage({
               cnpj: unit.cnpj,
               active: unit.active,
               platforms,
+              externalStoreIds: unit.externalStoreIds,
             }}
           />
         </div>
@@ -108,8 +151,29 @@ export default async function UnidadeDetalhePage({
 
       {hasData ? (
         <>
-          <HeroKpis monthly={m} />
-          <DetailTabs unit={unit} />
+          {usaImportado && (
+            <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <Sparkles className="size-3" />
+              KPIs vindos de{" "}
+              {[usaIfood && "iFood", usa99 && "99 Food"]
+                .filter(Boolean)
+                .join(" + ")}{" "}
+              · {String(month).padStart(2, "0")}/{year}
+            </div>
+          )}
+          <HeroKpis
+            monthly={m}
+            notaMedia={avalResumo.notaMedia}
+            notasCount={avalResumo.total}
+          />
+          <DetailTabs
+            unit={unit}
+            monthlyMerged={m}
+            usaIfood={usaIfood}
+            usa99={usa99}
+            year={year}
+            month={month}
+          />
         </>
       ) : (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
@@ -128,33 +192,41 @@ export default async function UnidadeDetalhePage({
 // Hero (sempre visível)
 //----------------------------------------------------------------
 
-function HeroKpis({ monthly: m }: { monthly: UnitMonthly }) {
+function HeroKpis({
+  monthly: m,
+  notaMedia,
+  notasCount,
+}: {
+  monthly: UnitMonthly
+  notaMedia: number
+  notasCount: number
+}) {
   const heroes = [
     {
       label: "Faturamento Bruto",
       value: fmtBRL(m.faturamentoBruto),
-      trend: "↗ +12% vs mês ant.",
+      trend: `${fmtNum(m.pedidos)} pedidos no mês`,
       tone: "positive" as const,
       icon: DollarSign,
     },
     {
       label: "Margem Líquida",
       value: fmtBRL(m.margemLiquida),
-      trend: "↗ +R$ 8,2k vs mês ant.",
-      tone: "positive" as const,
+      trend: `${fmtBRL(m.totalLiquido)} líquido (entra na conta)`,
+      tone: m.margemLiquida >= 0 ? ("positive" as const) : ("neutral" as const),
       icon: PiggyBank,
     },
     {
       label: "Margem de Lucro",
       value: fmtPct(m.margemLucroPct),
-      trend: "↗ +2,3pp vs mês ant.",
-      tone: "positive" as const,
+      trend: `sobre R$ ${fmtNum(m.faturamentoBruto)} bruto`,
+      tone: m.margemLucroPct >= 0 ? ("positive" as const) : ("neutral" as const),
       icon: TrendingUp,
     },
     {
-      label: "Nota Média",
-      value: m.notaMedia > 0 ? `${m.notaMedia.toLocaleString("pt-BR")} ★` : "—",
-      trend: "= vs mês ant.",
+      label: "Nota Média (iFood)",
+      value: notaMedia > 0 ? `${notaMedia.toFixed(2)} ★` : "—",
+      trend: notasCount > 0 ? `${notasCount} avaliações` : "Sem avaliações",
       tone: "neutral" as const,
       icon: Star,
     },
@@ -196,16 +268,104 @@ function HeroKpis({ monthly: m }: { monthly: UnitMonthly }) {
 // Tabs
 //----------------------------------------------------------------
 
-function DetailTabs({ unit }: { unit: Unit }) {
-  const m = unit.monthly
+function DetailTabs({
+  unit,
+  monthlyMerged,
+  usaIfood,
+  usa99,
+  year,
+  month,
+}: {
+  unit: Unit
+  monthlyMerged: UnitMonthly
+  usaIfood: boolean
+  usa99: boolean
+  year: number
+  month: number
+}) {
+  const m = monthlyMerged
+  // Define os slots de plataforma pras tabs Cardápio e Financeiro.
+  // Aparece no chip mesmo sem dados (com aviso "sem dados") pra Marcus
+  // saber que a plataforma existe mas falta importar.
+  const cardapioSlots = [
+    {
+      platform: "ifood" as const,
+      empty: !usaIfood,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <CardapioTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+    {
+      platform: "99food" as const,
+      empty: !usa99,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <Cardapio99Tab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+  ]
+  const financeiroSlots = [
+    {
+      platform: "ifood" as const,
+      empty: !usaIfood,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <FinanceiroTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+    {
+      platform: "99food" as const,
+      empty: !usa99,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <Financeiro99Tab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+  ]
+  const avaliacoesSlots = [
+    {
+      platform: "ifood" as const,
+      empty: !usaIfood,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <AvaliacoesTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+    {
+      platform: "99food" as const,
+      empty: !usa99,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <Avaliacoes99Tab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+  ]
+
   return (
     <Tabs defaultValue="resumo">
       <TabsList>
         <TabsTrigger value="resumo">Resumo</TabsTrigger>
         <TabsTrigger value="receita">Receita</TabsTrigger>
+        <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
+        <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
         <TabsTrigger value="custos">Custos</TabsTrigger>
         <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
       </TabsList>
+
+      <TabsContent value="cardapio" className="mt-4">
+        <PlatformSwitcher slots={cardapioSlots} />
+      </TabsContent>
+
+      <TabsContent value="financeiro" className="mt-4">
+        <PlatformSwitcher slots={financeiroSlots} />
+      </TabsContent>
 
       {/* Tab: Resumo */}
       <TabsContent value="resumo" className="mt-4">
@@ -300,138 +460,41 @@ function DetailTabs({ unit }: { unit: Unit }) {
 
       {/* Tab: Custos */}
       <TabsContent value="custos" className="mt-4">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Taxas iFood (vindas da API)" tone="negative">
-            <Row label="Taxa Entrega Parceira" value={fmtBRL(m.taxaEntregaIfood)} />
-            <Row label="Taxa de Comissão" value={fmtBRL(m.taxaComissaoIfood)} />
-            <Row label="Serviços Logísticos" value={fmtBRL(m.servicosLogisticos)} />
-            <Row label="Promoções" value={fmtBRL(m.promocoes)} />
-            <Row label="Outros Descontos" value={fmtBRL(m.outrosDescontosIfood)} />
-            <Divider />
-            <Row
-              label="Subtotal Taxas iFood"
-              value={fmtBRL(
-                m.taxaEntregaIfood +
-                  m.promocoes +
-                  m.taxaComissaoIfood +
-                  m.servicosLogisticos +
-                  m.outrosDescontosIfood,
-              )}
-              bold
-            />
-          </Card>
-
-          <Card title="Custos da Indústria (manual mensal)" tone="negative">
-            <div className="flex items-center justify-between gap-2 py-1.5">
-              <span className="text-xs text-muted-foreground">
-                Custo Produtos Cozina
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm tabular-nums">
-                  {fmtBRL(m.custoProdutosCozina)}
-                </span>
-                <button
-                  type="button"
-                  className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Editar compras Cozina"
-                >
-                  <Pencil className="size-3" />
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 py-1.5">
-              <span className="text-xs text-muted-foreground">
-                Custo Produtos Loja
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm tabular-nums text-muted-foreground">
-                  {m.custoProdutosLoja !== null
-                    ? fmtBRL(m.custoProdutosLoja)
-                    : "—"}
-                </span>
-                <button
-                  type="button"
-                  className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Editar custos da loja"
-                >
-                  <Pencil className="size-3" />
-                </button>
-              </div>
-            </div>
-            <Divider />
-            <Row
-              label="Subtotal Custos"
-              value={fmtBRL(m.custoProdutosCozina + (m.custoProdutosLoja ?? 0))}
-              bold
-            />
-          </Card>
-
-          <Card title="Resultado do mês" className="lg:col-span-2">
-            <Row
-              label="Total Líquido (entra na conta)"
-              value={fmtBRL(m.totalLiquido)}
-              muted
-            />
-            <Row
-              label="Total de Custos"
-              value={`− ${fmtBRL(m.custoProdutosCozina + (m.custoProdutosLoja ?? 0))}`}
-              muted
-            />
-            <Divider />
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-sm font-semibold">Margem Líquida</span>
-              </div>
-              <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                {fmtBRL(m.margemLiquida)}
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                Margem de Lucro sobre Faturamento Bruto
-              </span>
-              <span className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                {fmtPct(m.margemLucroPct)}
-              </span>
-            </div>
-          </Card>
-        </div>
+        <Suspense fallback={<TabSkeleton />}>
+          <CustosTab
+            unitId={unit.id}
+            monthly={m}
+            year={year}
+            month={month}
+          />
+        </Suspense>
       </TabsContent>
 
       {/* Tab: Avaliações */}
       <TabsContent value="avaliacoes" className="mt-4">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Card title="Nota Média">
-            <div className="flex items-baseline gap-2 py-2">
-              <span className="text-4xl font-bold tabular-nums">
-                {m.notaMedia.toLocaleString("pt-BR")}
-              </span>
-              <Star className="size-5 fill-amber-400 stroke-amber-400" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              ≈ 0,1 acima da média da rede (4,7)
-            </p>
-          </Card>
-          <Card title="Volume" className="lg:col-span-2">
-            <Row label="Avaliações no mês" value="API iFood (em breve)" muted />
-            <Row label="5 estrelas" value="—" muted />
-            <Row label="4 estrelas" value="—" muted />
-            <Row label="3 estrelas" value="—" muted />
-            <Row label="2 estrelas" value="—" muted />
-            <Row label="1 estrela" value="—" muted />
-          </Card>
-          <Card title="Últimos comentários" className="lg:col-span-3">
-            <div className="flex h-32 items-center justify-center text-center text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <TrendingDown className="size-4" />
-                <span>Conecte a API do iFood para ver comentários reais.</span>
-              </div>
-            </div>
-          </Card>
-        </div>
+        <PlatformSwitcher slots={avaliacoesSlots} />
       </TabsContent>
     </Tabs>
+  )
+}
+
+function TabSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-xl border bg-card p-4 shadow-sm"
+          >
+            <div className="size-9 animate-pulse rounded-lg bg-muted" />
+            <div className="mt-3 h-3 w-20 animate-pulse rounded bg-muted/70" />
+            <div className="mt-2 h-5 w-28 animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+      </div>
+      <div className="h-40 w-full animate-pulse rounded-xl border bg-card" />
+    </div>
   )
 }
 
@@ -515,4 +578,92 @@ function formatCnpj(c: string): string {
   const d = c.replace(/\D/g, "")
   if (d.length !== 14) return c
   return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+}
+
+/**
+ * Quando há Financeiro importado pra esse mês (iFood e/ou 99 Food),
+ * sobrescreve os valores do monthly manual com a soma dos importados.
+ * Custos da indústria (Cozina/Loja) permanecem manuais.
+ */
+function mergeMonthly(
+  manual: UnitMonthly,
+  fin: Awaited<ReturnType<typeof getFinanceiroResumoForMonth>>,
+  nine: Awaited<ReturnType<typeof getNinefoodResumoForMonth>>,
+): UnitMonthly {
+  if (!fin.hasData && !nine.hasData) return manual
+
+  // Soma totais reais; quando uma plataforma não tem dado, usa o manual da
+  // própria plataforma (do array platforms) como fallback.
+  const ifoodBruto = fin.hasData
+    ? fin.bruto
+    : manual.platforms.find((p) => p.id === "ifood")?.bruto ?? 0
+  const ifoodLiquido = fin.hasData
+    ? fin.liquido
+    : manual.platforms.find((p) => p.id === "ifood")?.liquido ?? 0
+  const ifoodPedidos = fin.hasData ? fin.pedidosUnicos : 0
+  const ifoodCancel = fin.hasData
+    ? fin.cancelamentoTotalQtd + fin.cancelamentoParcialQtd
+    : 0
+
+  const nineBruto = nine.hasData
+    ? nine.bruto
+    : manual.platforms.find((p) => p.id === "99food")?.bruto ?? 0
+  const nineLiquido = nine.hasData
+    ? nine.liquido
+    : manual.platforms.find((p) => p.id === "99food")?.liquido ?? 0
+  const ninePedidos = nine.hasData ? nine.pedidos : 0
+  const nineCancel = nine.hasData ? nine.cancelamentosQtd : 0
+
+  const keetaBruto =
+    manual.platforms.find((p) => p.id === "keeta")?.bruto ?? 0
+  const keetaLiquido =
+    manual.platforms.find((p) => p.id === "keeta")?.liquido ?? 0
+
+  const bruto = ifoodBruto + nineBruto + keetaBruto
+  const liquido = ifoodLiquido + nineLiquido + keetaLiquido
+  const pedidos = ifoodPedidos + ninePedidos
+  const cancelados = ifoodCancel + nineCancel
+  const ticketMedio = pedidos > 0 ? bruto / pedidos : 0
+  const totalLiquido = liquido
+  const custoTotal = manual.custoProdutosCozina + (manual.custoProdutosLoja ?? 0)
+  const margemLiquida = totalLiquido - custoTotal
+  const margemLucroPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
+
+  // platforms[] atualizado pras 2 plataformas com dado real
+  const platforms = manual.platforms.map((p) => {
+    if (p.id === "ifood" && fin.hasData) {
+      const pctLoja = fin.bruto > 0 ? (fin.liquido / fin.bruto) * 100 : 0
+      return { ...p, bruto: fin.bruto, liquido: fin.liquido, pctLoja }
+    }
+    if (p.id === "99food" && nine.hasData) {
+      return { ...p, bruto: nine.bruto, liquido: nine.liquido, pctLoja: nine.pctLoja }
+    }
+    return p
+  })
+
+  return {
+    ...manual,
+    pedidos,
+    pedidosCancelados: cancelados,
+    ticketMedio,
+    faturamentoBruto: bruto,
+    faturamentoLiquido: liquido,
+    totalLiquido,
+    // Esses campos abaixo são herdados do iFood (não temos equivalente do 99
+    // Food granular por taxa). Pra Receita tab, 99 Food entra agregado.
+    cancelamentosReembolsos: fin.hasData ? Math.abs(fin.perdaCancelamento) : manual.cancelamentosReembolsos,
+    taxaEntregaIfood: fin.hasData ? Math.abs(fin.taxaEntrega) : manual.taxaEntregaIfood,
+    promocoes: fin.hasData ? Math.abs(fin.promocaoLoja) : manual.promocoes,
+    taxaComissaoIfood: fin.hasData
+      ? Math.abs(fin.comissaoIfood) +
+        Math.abs(fin.taxaTransacao) +
+        Math.abs(fin.taxaServicoCliente)
+      : manual.taxaComissaoIfood,
+    outrosDescontosIfood: fin.hasData
+      ? Math.abs(fin.pacoteAnuncios)
+      : manual.outrosDescontosIfood,
+    margemLiquida,
+    margemLucroPct,
+    platforms,
+  }
 }

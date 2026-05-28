@@ -8,7 +8,6 @@ import { ChevronRight, Filter, Search, X } from "lucide-react"
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { Unit } from "@/lib/data/units"
-import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { DeleteUnitButton } from "./delete-unit-button"
 import { EditUnitDialog } from "./edit-unit-dialog"
 import { NewUnitDialog } from "./new-unit-dialog"
@@ -88,7 +87,7 @@ export function UnitsListView({ units }: { units: Unit[] }) {
             )}
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Visão por loja · Maio/2026
+            Escolhe uma unidade pra ver detalhes do mês
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -174,7 +173,7 @@ export function UnitsListView({ units }: { units: Unit[] }) {
         </div>
       )}
 
-      {/* Tabela */}
+      {/* Grid de cards */}
       {units.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-12 text-center">
           <p className="text-sm font-medium">Nenhuma unidade cadastrada</p>
@@ -195,94 +194,31 @@ export function UnitsListView({ units }: { units: Unit[] }) {
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="grid grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_108px] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <div></div>
-            <div>Nome</div>
-            <div className="text-center">Cidade</div>
-            <div className="text-center">Plataformas</div>
-            <div className="text-right">Faturamento</div>
-            <div className="text-right">Margem</div>
-            <div></div>
-          </div>
-
-          {filtered.map((unit, idx) => {
-            const m = unit.monthly
-            const hasData = m.pedidos > 0
-            return (
-              <div
-                key={unit.code}
-                onClick={() => router.push(`/unidades/${unit.code}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    router.push(`/unidades/${unit.code}`)
-                  }
-                }}
-                className={`grid cursor-pointer grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_108px] items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
-                  idx < filtered.length - 1 ? "border-b" : ""
-                } ${!unit.active ? "opacity-60" : ""}`}
-              >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((unit) => (
+            <div
+              key={unit.code}
+              onClick={() => router.push(`/unidades/${unit.code}`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  router.push(`/unidades/${unit.code}`)
+                }
+              }}
+              className={`group relative flex cursor-pointer flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md ${
+                !unit.active ? "opacity-60" : ""
+              }`}
+            >
+              {/* Top: logo + ações */}
+              <div className="flex items-start justify-between">
                 <BrandLogo size="md" />
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
-                      #{unit.code}
-                    </span>
-                    <p className="truncate font-medium">{unit.name}</p>
-                  </div>
-                  {!unit.active && (
-                    <span className="text-[10px] text-muted-foreground">
-                      Inativa
-                    </span>
-                  )}
-                </div>
-                <div className="truncate text-center text-xs text-muted-foreground">
-                  {unit.city ?? "—"}
-                </div>
-                <div className="flex items-center justify-center gap-1">
-                  {unit.platforms.length === 0 ? (
-                    <span className="text-[10px] text-muted-foreground">—</span>
-                  ) : (
-                    unit.platforms.map((p) => (
-                      <PlatformLogo key={p} platform={p} size="sm" />
-                    ))
-                  )}
-                </div>
-                <div className="text-right tabular-nums font-semibold">
-                  {hasData ? fmtBRL(m.faturamentoBruto) : "—"}
-                </div>
-                <div className="text-right tabular-nums">
-                  {hasData ? (
-                    <span
-                      className={`font-semibold ${
-                        m.margemLucroPct >= 30
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : m.margemLucroPct >= 20
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-rose-600 dark:text-rose-400"
-                      }`}
-                    >
-                      {fmtPct(m.margemLucroPct)}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </div>
                 <div
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
-                  className="flex items-center gap-0.5"
+                  className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  <Link
-                    href={`/unidades/${unit.code}`}
-                    aria-label="Ver detalhe"
-                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <ChevronRight className="size-3.5" />
-                  </Link>
                   <EditUnitDialog
                     inline
                     unit={{
@@ -294,13 +230,51 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                       cnpj: unit.cnpj,
                       active: unit.active,
                       platforms: unit.platforms,
+                      externalStoreIds: unit.externalStoreIds,
                     }}
                   />
                   <DeleteUnitButton unitId={unit.id} unitName={unit.name} />
                 </div>
               </div>
-            )
-          })}
+
+              {/* Meio: código + nome + cidade/UF */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                    #{unit.code}
+                  </span>
+                  {!unit.active && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Inativa
+                    </span>
+                  )}
+                </div>
+                <p className="line-clamp-2 text-sm font-semibold leading-snug">
+                  {unit.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {unit.city ?? "—"}
+                  {unit.state ? ` · ${unit.state}` : ""}
+                </p>
+              </div>
+
+              {/* Bottom: plataformas + seta */}
+              <div className="mt-auto flex items-center justify-between border-t pt-3">
+                <div className="flex items-center gap-1">
+                  {unit.platforms.length === 0 ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      Nenhuma plataforma
+                    </span>
+                  ) : (
+                    unit.platforms.map((p) => (
+                      <PlatformLogo key={p} platform={p} size="sm" />
+                    ))
+                  )}
+                </div>
+                <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </>

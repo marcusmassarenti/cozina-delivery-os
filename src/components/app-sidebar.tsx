@@ -3,14 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  AlertTriangle,
   Cable,
   ChevronDown,
+  FileUp,
   Flame,
   LayoutDashboard,
   Package,
   Settings,
-  ShoppingBag,
   Star,
   Store,
   Users,
@@ -40,6 +39,8 @@ type NavItem = {
   href: string
   icon: React.ComponentType<{ className?: string }>
   badge?: string | number
+  /** Marca como "em breve": item visível mas desabilitado (não navega). */
+  comingSoon?: boolean
 }
 
 type NavGroup = {
@@ -50,30 +51,31 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Alertas", href: "/alertas", icon: AlertTriangle, badge: 1 },
-    ],
+    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
   },
   {
     label: "Operação",
     defaultOpen: true,
     items: [
       { label: "Unidades", href: "/unidades", icon: Store },
-      { label: "Plataformas", href: "/plataformas", icon: ShoppingBag },
-      { label: "Produtos", href: "/produtos", icon: Package },
-      { label: "Avaliações", href: "/avaliacoes", icon: Star },
+      { label: "Produtos", href: "/produtos", icon: Package, comingSoon: true },
+      { label: "Avaliações", href: "/avaliacoes", icon: Star, comingSoon: true },
     ],
   },
   {
     label: "Financeiro",
     defaultOpen: true,
-    items: [{ label: "Resultado", href: "/financeiro", icon: Wallet }],
+    items: [
+      { label: "Resultado", href: "/financeiro", icon: Wallet, comingSoon: true },
+    ],
   },
   {
     label: "Integrações",
     defaultOpen: true,
-    items: [{ label: "Conexões", href: "/conexoes", icon: Cable }],
+    items: [
+      { label: "Importação", href: "/importacao", icon: FileUp },
+      { label: "Conexões", href: "/conexoes", icon: Cable, comingSoon: true },
+    ],
   },
   {
     label: "Administração",
@@ -84,7 +86,12 @@ const navGroups: NavGroup[] = [
   },
   {
     items: [
-      { label: "Configurações", href: "/configuracoes", icon: Settings },
+      {
+        label: "Configurações",
+        href: "/configuracoes",
+        icon: Settings,
+        comingSoon: true,
+      },
     ],
   },
 ]
@@ -105,6 +112,24 @@ function MenuItems({
     <SidebarMenu>
       {items.map((item) => {
         const active = isItemActive(pathname, item.href)
+        // Itens "em breve": botão estático, sem Link, com badge cinza
+        if (item.comingSoon) {
+          return (
+            <SidebarMenuItem key={item.href}>
+              <SidebarMenuButton
+                tooltip={`${item.label} (em breve)`}
+                className="cursor-not-allowed opacity-50 hover:bg-transparent"
+                aria-disabled
+              >
+                <item.icon />
+                <span>{item.label}</span>
+                <span className="ml-auto rounded-full bg-muted-foreground/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground group-data-[collapsible=icon]:hidden">
+                  em breve
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )
+        }
         return (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton

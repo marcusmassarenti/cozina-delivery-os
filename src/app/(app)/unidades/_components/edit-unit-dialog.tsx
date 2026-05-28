@@ -60,6 +60,8 @@ export type EditUnitInitial = {
   cnpj: string | null
   active: boolean
   platforms: PlatformId[]
+  /** Mapeamento PlatformId → ID da loja na plataforma (iFood: 260777, etc.) */
+  externalStoreIds?: Partial<Record<PlatformId, string | null>>
 }
 
 export function EditUnitDialog({
@@ -175,6 +177,9 @@ export function EditUnitDialog({
                 />
               ))}
             </div>
+            <PlatformIdsBlock
+              externalStoreIds={unit.externalStoreIds ?? {}}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -212,6 +217,73 @@ export function EditUnitDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PlatformIdsBlock({
+  externalStoreIds,
+}: {
+  externalStoreIds: Partial<Record<PlatformId, string | null>>
+}) {
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/30 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        IDs das lojas nas plataformas
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <PlatformIdInput
+          name="ifoodStoreId"
+          label="iFood"
+          placeholder="ex.: 260777"
+          defaultValue={externalStoreIds.ifood ?? ""}
+        />
+        <PlatformIdInput
+          name="_99foodStoreId"
+          label="99 Food"
+          placeholder="ID da loja"
+          defaultValue={externalStoreIds["99food"] ?? ""}
+        />
+        <PlatformIdInput
+          name="keetaStoreId"
+          label="Keeta"
+          placeholder="ID da loja"
+          defaultValue={externalStoreIds.keeta ?? ""}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Necessário pra importação automática reconhecer a loja nos relatórios.
+      </p>
+    </div>
+  )
+}
+
+function PlatformIdInput({
+  name,
+  label,
+  placeholder,
+  defaultValue,
+}: {
+  name: string
+  label: string
+  placeholder: string
+  defaultValue: string
+}) {
+  // Controlled pra evitar warning do Base UI quando o defaultValue chega
+  // depois da 1ª render (vem do server). Inicializa com o valor já recebido.
+  const [value, setValue] = React.useState(defaultValue)
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-[10px] font-medium text-muted-foreground">
+        {label}
+      </Label>
+      <Input
+        name={name}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        className="h-8 text-xs"
+      />
+    </div>
   )
 }
 

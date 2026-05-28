@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdmin } from "@/lib/auth/guards"
 import { perfilRequiresUnit } from "@/lib/perfis"
 
 export type AppUser = {
@@ -24,7 +25,7 @@ export type UserActionState = {
 }
 
 export async function listUsers(): Promise<AppUser[]> {
-  const supabase = createAdminClient()
+  const { admin: supabase } = await requireAdmin()
   const [authRes, profilesRes, accessRes, unitsRes] = await Promise.all([
     supabase.auth.admin.listUsers(),
     supabase.from("profiles").select("user_id, full_name, perfil"),
@@ -130,7 +131,7 @@ export async function createUser(
   }
 
   try {
-    const supabase = createAdminClient()
+    const { admin: supabase } = await requireAdmin()
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -187,7 +188,7 @@ export async function updateUser(
   }
 
   try {
-    const supabase = createAdminClient()
+    const { admin: supabase, userId: callerId } = await requireAdmin()
 
     const { error: profileErr } = await supabase
       .from("profiles")
@@ -207,6 +208,15 @@ export async function updateUser(
       if (pwErr) return { ok: false, message: pwErr.message }
     }
 
+    // Bloqueia self-demote: admin não pode tirar o próprio perfil de admin
+    if (callerId === userId && perfil !== "administrador") {
+      return {
+        ok: false,
+        message:
+          "Você não pode tirar seu próprio perfil de administrador. Peça pra outro admin.",
+      }
+    }
+
     await syncAccess(supabase, userId, perfil, unitId)
 
     revalidatePath("/administracao/usuarios")
@@ -222,7 +232,14 @@ export async function updateUser(
 export async function deleteUser(userId: string): Promise<UserActionState> {
   if (!userId) return { ok: false, message: "ID do usuário ausente." }
   try {
-    const supabase = createAdminClient()
+    const { admin: supabase, userId: callerId } = await requireAdmin()
+    // Bloqueia self-delete
+    if (callerId === userId) {
+      return {
+        ok: false,
+        message: "Você não pode deletar a si mesmo.",
+      }
+    }
     const { error } = await supabase.auth.admin.deleteUser(userId)
     if (error) return { ok: false, message: error.message }
     revalidatePath("/administracao/usuarios")
