@@ -230,3 +230,224 @@ export function sumMonth(entries: DailyEntry[]) {
     { pedidos: 0, cancelados: 0, faturamento: 0 },
   )
 }
+
+//---------- Agregado por unidade (pro dashboard) -----------------
+
+import type { UnitMonthly } from "@/lib/mock-monthly"
+
+const VR_TAXA = 0.08
+
+/**
+ * Para cada unitId, calcula o snapshot mensal completo
+ * (compatível com UnitMonthly) a partir de:
+ *   - daily_entries (pedidos, cancelados, faturamento por plataforma)
+ *   - monthly_platform_entries (taxas, VR, cancelamentos por plataforma)
+ *   - monthly_entries (custos, nota, observações, total_recebido_real)
+ *
+ * Usa total_recebido_real quando preenchido pra calcular margem,
+ * senão usa o calculado das plataformas.
+ */
+export async function getRealMonthlyForUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, UnitMonthly>> {
+  const result = new Map<string, UnitMonthly>()
+  if (unitIds.length === 0) return result
+
+  const supabase = createAdminClient()
+  const firstDay = firstDayOfMonth(year, month)
+  const lastDay = lastDayOfMonth(year, month)
+
+  const [dailyRes, monthlyRes, platformRes] = await Promise.all([
+    supabase
+      .from("daily_entries")
+      .select("unit_id, platform, pedidos, cancelados, faturamento")
+      .in("unit_id", unitIds)
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+    supabase
+      .from("monthly_entries")
+      .select(
+        "unit_id, custo_produtos_cozina, custo_produtos_loja, clientes_novos, nota_media, observacoes, total_recebido_real",
+      )
+      .in("unit_id", unitIds)
+      .eq("year", year)
+      .eq("month", month),
+    supabase
+      .from("monthly_platform_entries")
+      .select("*")
+      .in("unit_id", unitIds)
+      .eq("year", year)
+      .eq("month", month),
+  ])
+
+  type Daily = {
+    unit_id: string
+    platform: string
+    pedidos: number
+    cancelados: number
+    faturamento: number | string
+  }
+  type Monthly = {
+    unit_id: string
+    custo_produtos_cozina: number | string
+    custo_produtos_loja: number | string
+    clientes_novos: number
+    nota_media: number | string
+    observacoes: string
+    total_recebido_real: number | string | null
+  }
+  type Plat = {
+    unit_id: string
+    platform: string
+    taxa_entrega: number | string
+    promocoes: number | string
+    taxa_comissao: number | string
+    servicos_logisticos: number | string
+    outros_descontos: number | string
+    vr_recebido: number | string
+    cancelamentos_reembolsos: number | string
+  }
+
+  const daily = (dailyRes.data ?? []) as Daily[]
+  const monthly = (monthlyRes.data ?? []) as Monthly[]
+  const platformRows = (platformRes.data ?? []) as Plat[]
+
+  for (const unitId of unitIds) {
+    const myDaily = daily.filter((d) => d.unit_id === unitId)
+    const myMonthly = monthly.find((m) => m.unit_id === unitId)
+    const myPlats = platformRows.filter((p) => p.unit_id === unitId)
+
+    // Faturamento bruto por plataforma (do diário)
+    const platFat: Record<PlatformId, { pedidos: number; cancelados: number; faturamento: number }> = {
+      ifood: { pedidos: 0, cancelados: 0, faturamento: 0 },
+      "99food": { pedidos: 0, cancelados: 0, faturamento: 0 },
+      keeta: { pedidos: 0, cancelados: 0, faturamento: 0 },
+    }
+    for (const d of myDaily) {
+      const pid = d.platform as PlatformId
+      if (!(pid in platFat)) continue
+      platFat[pid].pedidos += d.pedidos
+      platFat[pid].cancelados += d.cancelados
+      platFat[pid].faturamento += Number(d.faturamento)
+    }
+
+    // Calcula taxas/VR/líquido por plataforma
+    const platformsBreakdown = (
+      ["ifood", "99food", "keeta"] as PlatformId[]
+    ).map((pid) => {
+      const pe = myPlats.find((p) => p.platform === pid)
+      const taxas = pe
+        ? Number(pe.taxa_entrega) +
+          Number(pe.promocoes) +
+          Number(pe.taxa_comissao) +
+          Number(pe.servicos_logisticos) +
+          Number(pe.outros_descontos)
+        : 0
+      const vrRecebido = pe ? Number(pe.vr_recebido) : 0
+      const vrLiquido = vrRecebido * (1 - VR_TAXA)
+      const cancelamentos = pe ? Number(pe.cancelamentos_reembolsos) : 0
+      const bruto = platFat[pid].faturamento
+      const faturamentoLiquido = bruto - taxas
+      const totalRecebido = faturamentoLiquido + vrLiquido + cancelamentos
+      const pctLoja = bruto > 0 ? (totalRecebido / bruto) * 100 : 0
+      return {
+        id: pid,
+        name: pid === "ifood" ? "iFood" : pid === "99food" ? "99 Food" : "Keeta",
+        bruto,
+        liquido: totalRecebido,
+        pctLoja,
+      }
+    })
+
+    const totalPedidos = (Object.values(platFat) as { pedidos: number; cancelados: number; faturamento: number }[]).reduce(
+      (acc, p) => acc + p.pedidos,
+      0,
+    )
+    const totalCancelados = (Object.values(platFat) as { pedidos: number; cancelados: number; faturamento: number }[]).reduce(
+      (acc, p) => acc + p.cancelados,
+      0,
+    )
+    const totalFaturamento = (Object.values(platFat) as { pedidos: number; cancelados: number; faturamento: number }[]).reduce(
+      (acc, p) => acc + p.faturamento,
+      0,
+    )
+
+    const totalTaxas = myPlats.reduce(
+      (acc, p) =>
+        acc +
+        Number(p.taxa_entrega) +
+        Number(p.promocoes) +
+        Number(p.taxa_comissao) +
+        Number(p.servicos_logisticos) +
+        Number(p.outros_descontos),
+      0,
+    )
+    const totalVrRecebido = myPlats.reduce(
+      (acc, p) => acc + Number(p.vr_recebido),
+      0,
+    )
+    const totalVrTaxa = totalVrRecebido * VR_TAXA
+    const totalVrLiquido = totalVrRecebido - totalVrTaxa
+    const totalCancelamentos = myPlats.reduce(
+      (acc, p) => acc + Number(p.cancelamentos_reembolsos),
+      0,
+    )
+
+    const faturamentoLiquido = totalFaturamento - totalTaxas
+    const totalLiquidoCalc =
+      faturamentoLiquido + totalVrLiquido + totalCancelamentos
+    const ticketMedio = totalPedidos > 0 ? totalFaturamento / totalPedidos : 0
+
+    const custoCozina = myMonthly ? Number(myMonthly.custo_produtos_cozina) : 0
+    const custoLoja = myMonthly ? Number(myMonthly.custo_produtos_loja) : 0
+    const totalRecebidoReal = myMonthly
+      ? Number(myMonthly.total_recebido_real ?? 0)
+      : 0
+    const baseParaMargem =
+      totalRecebidoReal > 0 ? totalRecebidoReal : totalLiquidoCalc
+    const margemLiquida = baseParaMargem - custoCozina - custoLoja
+    const margemLucroPct =
+      totalFaturamento > 0 ? (margemLiquida / totalFaturamento) * 100 : 0
+
+    result.set(unitId, {
+      pedidos: totalPedidos,
+      pedidosCancelados: totalCancelados,
+      clientesNovos: myMonthly ? myMonthly.clientes_novos : null,
+      ticketMedio,
+      faturamentoBruto: totalFaturamento,
+      faturamentoLiquido,
+      totalLiquido: totalLiquidoCalc,
+      vrRecebido: totalVrRecebido,
+      vrTaxaMedia8: totalVrTaxa,
+      cancelamentosReembolsos: totalCancelamentos,
+      taxaEntregaIfood: myPlats.find((p) => p.platform === "ifood")
+        ? Number(myPlats.find((p) => p.platform === "ifood")!.taxa_entrega)
+        : 0,
+      promocoes: myPlats.find((p) => p.platform === "ifood")
+        ? Number(myPlats.find((p) => p.platform === "ifood")!.promocoes)
+        : 0,
+      taxaComissaoIfood: myPlats.find((p) => p.platform === "ifood")
+        ? Number(myPlats.find((p) => p.platform === "ifood")!.taxa_comissao)
+        : 0,
+      servicosLogisticos: myPlats.find((p) => p.platform === "ifood")
+        ? Number(
+            myPlats.find((p) => p.platform === "ifood")!.servicos_logisticos,
+          )
+        : 0,
+      outrosDescontosIfood: myPlats.find((p) => p.platform === "ifood")
+        ? Number(myPlats.find((p) => p.platform === "ifood")!.outros_descontos)
+        : 0,
+      custoProdutosCozina: custoCozina,
+      custoProdutosLoja: custoLoja > 0 ? custoLoja : null,
+      margemLiquida,
+      margemLucroPct,
+      notaMedia: myMonthly ? Number(myMonthly.nota_media) : 0,
+      observacoes: myMonthly ? myMonthly.observacoes : "",
+      platforms: platformsBreakdown,
+    })
+  }
+
+  return result
+}

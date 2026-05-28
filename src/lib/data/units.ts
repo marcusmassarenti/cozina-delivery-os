@@ -1,7 +1,8 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { mockMonthlyFor, type UnitMonthly } from "@/lib/mock-monthly"
+import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
+import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import type { PlatformId } from "@/components/platform-logo"
 
 export type Unit = {
@@ -28,8 +29,13 @@ type DbUnit = {
   brand_id: string
 }
 
-function attachMock(u: DbUnit, platforms: PlatformId[]): Unit {
-  return { ...u, platforms, monthly: mockMonthlyFor(u.code) }
+function attach(u: DbUnit, platforms: PlatformId[], monthly: UnitMonthly): Unit {
+  return { ...u, platforms, monthly }
+}
+
+function currentYearMonth(): { year: number; month: number } {
+  const now = new Date()
+  return { year: now.getFullYear(), month: now.getMonth() + 1 }
 }
 
 export async function getUnits(): Promise<Unit[]> {
@@ -52,8 +58,13 @@ export async function getUnits(): Promise<Unit[]> {
     arr.push(row.platform as PlatformId)
     byUnit.set(row.unit_id, arr)
   }
-  return (unitsRes.data ?? []).map((u) =>
-    attachMock(u, byUnit.get(u.id) ?? []),
+  const units = unitsRes.data ?? []
+  const unitIds = units.map((u) => u.id)
+  const { year, month } = currentYearMonth()
+  const monthlyByUnit = await getRealMonthlyForUnits(unitIds, year, month)
+
+  return units.map((u) =>
+    attach(u, byUnit.get(u.id) ?? [], monthlyByUnit.get(u.id) ?? emptyMonthly),
   )
 }
 
@@ -67,7 +78,9 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   if (error) throw new Error(`Falha ao buscar unidade ${code}: ${error.message}`)
   if (!data) return null
   const platforms = await getUnitPlatforms(data.id)
-  return attachMock(data, platforms)
+  const { year, month } = currentYearMonth()
+  const monthlyByUnit = await getRealMonthlyForUnits([data.id], year, month)
+  return attach(data, platforms, monthlyByUnit.get(data.id) ?? emptyMonthly)
 }
 
 export async function getUnitPlatforms(

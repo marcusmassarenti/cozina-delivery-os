@@ -26,7 +26,7 @@ async function checkSupabase() {
     if (error && error.message !== "Auth session missing!") {
       return { ok: false, message: error.message }
     }
-    return { ok: true, message: "Supabase conectado · dados de demonstração" }
+    return { ok: true, message: "Supabase conectado · dados reais do mês corrente" }
   } catch (err) {
     return {
       ok: false,
@@ -91,14 +91,14 @@ export default async function Home() {
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-foreground">
-              Demonstração
-            </span>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Visão geral · terça-feira, 26 de maio
+            Visão geral ·{" "}
+            {new Date().toLocaleDateString("pt-BR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
