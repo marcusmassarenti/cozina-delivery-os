@@ -131,7 +131,7 @@ export function NewUserDialog({ units }: { units: UnitOption[] }) {
               label="Unidade vinculada"
               error={state.fieldErrors?.unitId}
             >
-              <Select value={unitId} onValueChange={setUnitId}>
+              <Select value={unitId} onValueChange={(v) => setUnitId(v ?? "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a unidade" />
                 </SelectTrigger>

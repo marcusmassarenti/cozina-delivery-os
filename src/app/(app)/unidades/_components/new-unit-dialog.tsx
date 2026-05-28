@@ -106,7 +106,7 @@ export function NewUnitDialog() {
             </div>
             <div>
               <Field label="UF" error={state.fieldErrors?.state}>
-                <Select value={uf} onValueChange={setUf}>
+                <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
