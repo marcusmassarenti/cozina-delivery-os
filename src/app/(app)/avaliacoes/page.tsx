@@ -10,6 +10,12 @@ import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 import { AvaliacoesFilters } from "./_components/avaliacoes-filters"
 import { AvaliacoesNetworkDashboard } from "./_components/avaliacoes-network-dashboard"
 
+const PLATAFORMA_LABEL: Record<PlatformId, string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+}
+
 /**
  * Tela /avaliacoes — vê avaliações de uma unidade numa plataforma.
  *
@@ -74,7 +80,9 @@ export default async function AvaliacoesPage({
           <p className="mt-0.5 text-sm text-muted-foreground">
             {selectedUnit
               ? `#${selectedUnit.code} ${selectedUnit.name}`
-              : "Visão da rede · todas as plataformas"}{" "}
+              : `Visão da rede · ${
+                  plataformaParam ? PLATAFORMA_LABEL[plataformaParam] : "todas as plataformas"
+                }`}{" "}
             · {formatPeriodLabel({ year, month })}
           </p>
         </div>
@@ -89,12 +97,16 @@ export default async function AvaliacoesPage({
       <AvaliacoesFilters
         unitOptions={unitOptions}
         unidadeSelected={selectedUnit?.code ?? null}
-        plataformaSelected={plataforma}
+        plataformaSelected={selectedUnit ? plataforma : plataformaParam}
       />
 
       {/* Body */}
       {!selectedUnit ? (
-        <AvaliacoesNetworkDashboard year={year} month={month} />
+        <AvaliacoesNetworkDashboard
+          year={year}
+          month={month}
+          plataforma={plataformaParam}
+        />
       ) : availableForUnit.length === 0 ? (
         <NoPlatformsState unitName={selectedUnit.name} />
       ) : plataforma === "ifood" ? (

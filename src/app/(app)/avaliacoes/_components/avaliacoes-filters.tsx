@@ -66,9 +66,12 @@ export function AvaliacoesFilters({
     })
   }
 
-  function setPlataforma(p: PlatformId) {
+  function setPlataforma(p: PlatformId | null) {
     pushWith({ plataforma: p })
   }
+
+  // Plataformas com avaliação (filtro da visão de rede)
+  const NETWORK_PLATFORMS: PlatformId[] = ["ifood", "99food", "keeta"]
 
   const currentUnit =
     unitOptions.find((u) => u.code === unidadeSelected) ?? null
@@ -106,6 +109,44 @@ export function AvaliacoesFilters({
               plataformaSelected === p ||
               // Default: 1ª plataforma fica ativa quando nada está selecionado
               (!plataformaSelected && p === availablePlatforms[0])
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPlataforma(p)}
+                aria-pressed={isActive}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-primary/10 text-foreground"
+                    : "text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                <PlatformLogo platform={p} size="sm" />
+                {PLATFORM_LABEL[p]}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Filtro de plataforma da rede — aparece quando nenhuma unidade
+          está selecionada. "Todas" soma as 3; ou escolhe uma. */}
+      {!currentUnit && (
+        <div className="flex items-center gap-1.5 rounded-md border bg-card p-1">
+          <button
+            type="button"
+            onClick={() => setPlataforma(null)}
+            aria-pressed={!plataformaSelected}
+            className={`inline-flex items-center rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+              !plataformaSelected
+                ? "bg-primary/10 text-foreground"
+                : "text-muted-foreground hover:bg-muted/50"
+            }`}
+          >
+            Todas
+          </button>
+          {NETWORK_PLATFORMS.map((p) => {
+            const isActive = plataformaSelected === p
             return (
               <button
                 key={p}
