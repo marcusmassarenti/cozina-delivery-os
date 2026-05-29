@@ -72,7 +72,7 @@ const navGroups: NavGroup[] = [
         href: "/relatorio-diario",
         icon: CalendarRange,
       },
-      { label: "Resultado", href: "/financeiro", icon: Wallet, comingSoon: true },
+      { label: "Resultado", href: "/financeiro", icon: Wallet },
     ],
   },
   {
