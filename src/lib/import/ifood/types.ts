@@ -6,6 +6,7 @@ export type IfoodReportType =
   | "cardapio"
   | "financeiro"
   | "avaliacoes"
+  | "pedidos" // relatório de pedidos (forma de pagamento / VR)
   | "vendas" // futuro
   | "cancelamentos" // futuro
   | "unknown"
@@ -164,10 +165,48 @@ export type ParsedAvaliacoes = {
   }>
 }
 
+// ─── Pedidos (forma de pagamento / VR) ───────────────────────────────
+
+export type ParsedPedidoIfood = {
+  pedidoId: string
+  pedidoIdCurto: string | null
+  horario: Date | null
+  turno: string | null
+  statusFinal: string | null
+  valorItens: number | null
+  totalPagoCliente: number | null
+  taxaEntregaCliente: number | null
+  incentivoIfood: number | null
+  incentivoLoja: number | null
+  incentivoRede: number | null
+  taxaServico: number | null
+  taxasComissoes: number | null
+  valorLiquido: number | null
+  formaPagamento: string | null
+  /** Grupo normalizado: Crédito/PIX/Carteira/Débito/Vale-Refeição/Outros */
+  formaGrupo: string
+  /** Quando VR: SODEXO/ALELO/VR/TICKET/IFOOD/OUTROS. Senão null. */
+  bandeiraVr: string | null
+  tipoEntrega: string | null
+  produtoLogistico: string | null
+  canalVenda: string | null
+}
+
+export type ParsedPedidos = {
+  reportType: "pedidos"
+  /** Agrupado por loja (1 arquivo costuma ser de 1 loja, mas é defensivo) */
+  porLoja: Array<{
+    storeId: string
+    storeName: string | null
+    pedidos: ParsedPedidoIfood[]
+  }>
+}
+
 // ─── Resultado unificado ─────────────────────────────────────────────
 
 export type ParseResult =
   | ParsedCardapio
   | ParsedFinanceiro
   | ParsedAvaliacoes
+  | ParsedPedidos
   | { reportType: "unknown"; error: string }

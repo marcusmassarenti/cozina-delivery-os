@@ -36,6 +36,12 @@ export function detectIfoodReportType(workbook: XLSX.WorkBook): IfoodReportType 
           const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })]
           if (cell?.v != null) headers.push(String(cell.v))
         }
+        // Relatório de pedidos: tem "FORMA DE PAGAMENTO" + "ID COMPLETO DO PEDIDO"
+        const hasFormaPagamento = headers.includes("FORMA DE PAGAMENTO")
+        const hasIdPedido = headers.includes("ID COMPLETO DO PEDIDO")
+        if (hasFormaPagamento && hasIdPedido) {
+          return "pedidos"
+        }
         const hasNota = headers.includes("Nota")
         const hasComentario = headers.includes("Comentário")
         const hasDataAvaliacao = headers.includes("Data da avaliação")

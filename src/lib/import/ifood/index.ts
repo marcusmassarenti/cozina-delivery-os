@@ -11,6 +11,7 @@ import { openWorkbook } from "./detect"
 import { parseIfoodAvaliacoes } from "./parse-avaliacoes"
 import { parseIfoodCardapio } from "./parse-cardapio"
 import { parseIfoodFinanceiro } from "./parse-financeiro"
+import { parseIfoodPedidos } from "./parse-pedidos"
 import type { ParseResult } from "./types"
 
 export type * from "./types"
@@ -23,6 +24,7 @@ export function parseIfoodReport(buf: ArrayBuffer): ParseResult {
     if (reportType === "cardapio") return parseIfoodCardapio(workbook)
     if (reportType === "financeiro") return parseIfoodFinanceiro(workbook)
     if (reportType === "avaliacoes") return parseIfoodAvaliacoes(workbook)
+    if (reportType === "pedidos") return parseIfoodPedidos(workbook)
     return {
       reportType: "unknown",
       error: `Tipo de relatório não reconhecido. Abas: ${workbook.SheetNames.join(", ")}`,

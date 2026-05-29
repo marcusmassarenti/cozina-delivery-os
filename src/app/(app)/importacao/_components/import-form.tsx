@@ -818,6 +818,36 @@ function ResultSummary({ summary }: { summary: ImportSummary }) {
       </div>
     )
   }
+  if (summary.kind === "ifood_pedidos") {
+    return (
+      <div className="mt-1">
+        <p className="text-sm font-semibold">
+          Pedidos iFood · #{summary.unitCode} {summary.unitName} ·{" "}
+          {new Date(summary.periodoInicio + "T00:00:00").toLocaleDateString(
+            "pt-BR",
+          )}
+          {summary.periodoInicio !== summary.periodoFim && (
+            <>
+              {" → "}
+              {new Date(summary.periodoFim + "T00:00:00").toLocaleDateString(
+                "pt-BR",
+              )}
+            </>
+          )}
+          {summary.atualizados > 0 && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              {summary.novos} novo(s) · {summary.atualizados} atualizado(s)
+            </span>
+          )}
+        </p>
+        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-4">
+          <Stat label="Pedidos" value={summary.pedidos} />
+          <Stat label="Pedidos em VR" value={summary.pedidosVr} />
+          <Stat label="Valor VR" value={fmtBRL(summary.valorVr)} />
+        </div>
+      </div>
+    )
+  }
   // avaliacoes (último kind restante)
   const periodo = `${new Date(summary.periodoInicio + "T00:00:00").toLocaleDateString("pt-BR")} → ${new Date(summary.periodoFim + "T00:00:00").toLocaleDateString("pt-BR")}`
   return (

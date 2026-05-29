@@ -11,6 +11,7 @@ import type {
   ParsedAvaliacoes,
   ParsedCardapio,
   ParsedFinanceiro,
+  ParsedPedidos,
 } from "@/lib/import/ifood"
 import {
   isNinefoodWorkbook,
@@ -182,6 +183,19 @@ export type ImportSummary =
       avaliados: number
       notaMedia: number | null
       substituido: boolean
+    }
+  | {
+      kind: "ifood_pedidos"
+      unitCode: string
+      unitName: string
+      storeId: string
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      pedidos: number
+      pedidosVr: number
+      valorVr: number
+      novos: number
+      atualizados: number
     }
 
 export type ImportBatchState = {
@@ -444,6 +458,17 @@ async function processFile(
     )
   }
 
+  // Pedidos (forma de pagamento / VR) — agrupado por loja.
+  if (parsed.reportType === "pedidos") {
+    return await processPedidosMultiloja(
+      parsed,
+      storeMap,
+      file.name,
+      userId,
+      admin,
+    )
+  }
+
   // Cardápio NÃO diário (período) → multi-loja agregado
   if (parsed.reportType === "cardapio" && !parsed.isDaily) {
     return await processCardapioPeriodoMultiloja(
@@ -567,6 +592,175 @@ async function processAvaliacoesMultiloja(
     }
   }
   return results
+}
+
+/**
+ * Relatório de pedidos do iFood (forma de pagamento / VR), agrupado por loja.
+ * Cada loja vira um result. Lojas não mapeadas viram unmapped.
+ */
+async function processPedidosMultiloja(
+  parsed: ParsedPedidos,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push({
+        filename: `${filename} · loja ${grupo.storeName ?? grupo.storeId}`,
+        originalFilename: filename,
+        ok: false,
+        unmapped: {
+          storeId: grupo.storeId,
+          platform: "ifood",
+          cnpj: null,
+          suggestedName: grupo.storeName
+            ? formatStoreName(grupo.storeName)
+            : null,
+          suggestedCity: extractCityFromStoreName(grupo.storeName),
+          reportTypeLabel: "Pedidos iFood",
+        },
+      })
+      continue
+    }
+    try {
+      const summary = await savePedidosPorLoja(
+        grupo,
+        unit,
+        filename,
+        userId,
+        admin,
+      )
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: true,
+        summary,
+      })
+    } catch (e) {
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: false,
+        message:
+          e instanceof Error
+            ? e.message
+            : `Erro ao gravar pedidos da loja ${grupo.storeId}`,
+      })
+    }
+  }
+  return results
+}
+
+async function savePedidosPorLoja(
+  grupo: ParsedPedidos["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  // Só pedidos com data (a coluna data é NOT NULL)
+  const pedidos = grupo.pedidos.filter((p) => p.horario)
+  if (pedidos.length === 0) {
+    throw new Error("Nenhum pedido com data válida no relatório.")
+  }
+  const datas = pedidos.map((p) => p.horario as Date)
+  const minData = new Date(Math.min(...datas.map((d) => d.getTime())))
+  const maxData = new Date(Math.max(...datas.map((d) => d.getTime())))
+  const periodoInicio = formatDateOnly(minData)
+  const periodoFim = formatDateOnly(maxData)
+
+  // Quantos já existem no período (pra estimar novos vs atualizados)
+  const { count: existentes } = await admin
+    .from("ifood_pedidos")
+    .select("*", { count: "exact", head: true })
+    .eq("unit_id", unit.unitId)
+    .gte("data", periodoInicio)
+    .lte("data", periodoFim)
+
+  // Log de importação (ref = mês da última data)
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "ifood",
+      report_type: "pedidos",
+      cadencia: "mensal",
+      ref_year: maxData.getFullYear(),
+      ref_month: maxData.getMonth() + 1,
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: pedidos.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const rows = pedidos.map((p) => {
+    const d = p.horario as Date
+    return {
+      unit_id: unit.unitId,
+      pedido_id: p.pedidoId,
+      pedido_id_curto: p.pedidoIdCurto,
+      data: formatDateOnly(d),
+      horario: d.toISOString(),
+      ref_year: d.getFullYear(),
+      ref_month: d.getMonth() + 1,
+      turno: p.turno,
+      status_final: p.statusFinal,
+      valor_itens: p.valorItens,
+      total_pago_cliente: p.totalPagoCliente,
+      taxa_entrega_cliente: p.taxaEntregaCliente,
+      incentivo_ifood: p.incentivoIfood,
+      incentivo_loja: p.incentivoLoja,
+      incentivo_rede: p.incentivoRede,
+      taxa_servico: p.taxaServico,
+      taxas_comissoes: p.taxasComissoes,
+      valor_liquido: p.valorLiquido,
+      forma_pagamento: p.formaPagamento,
+      forma_grupo: p.formaGrupo,
+      bandeira_vr: p.bandeiraVr,
+      tipo_entrega: p.tipoEntrega,
+      produto_logistico: p.produtoLogistico,
+      canal_venda: p.canalVenda,
+      import_id: importLog.id,
+    }
+  })
+
+  // Upsert em lotes (idempotente por unit_id + pedido_id)
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("ifood_pedidos")
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: "unit_id,pedido_id" })
+    if (error) throw new Error(`Falha ao gravar pedidos: ${error.message}`)
+  }
+
+  const pedidosVr = pedidos.filter((p) => p.bandeiraVr).length
+  const valorVr = pedidos
+    .filter((p) => p.bandeiraVr)
+    .reduce((s, p) => s + (p.totalPagoCliente ?? 0), 0)
+  const existentesNum = existentes ?? 0
+  const novos = Math.max(0, pedidos.length - existentesNum)
+  const atualizados = Math.min(existentesNum, pedidos.length)
+
+  return {
+    kind: "ifood_pedidos",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    periodoInicio,
+    periodoFim,
+    pedidos: pedidos.length,
+    pedidosVr,
+    valorVr: Math.round(valorVr * 100) / 100,
+    novos,
+    atualizados,
+  }
 }
 
 /**
