@@ -121,12 +121,20 @@ export async function getNinefoodResumoByUnits(
   }
 
   for (const [unitId, acc] of accs) {
+    // Líquido DERIVADO = bruto − comissão − taxa de pagamento − ofertas.
+    // A coluna "Receita total" do 99 (acc.liquido) inclui taxa de entrega e
+    // outras receitas, então fica MAIOR que o bruto de vendas e dava repasse
+    // impossível (>100%). Derivamos o repasse real igual iFood/Keeta.
+    const liquidoDerivado = Math.max(
+      0,
+      acc.bruto - acc.comissao - acc.taxaPgto - acc.promo,
+    )
     const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
-    const pctLoja = acc.bruto > 0 ? (acc.liquido / acc.bruto) * 100 : 0
+    const pctLoja = acc.bruto > 0 ? (liquidoDerivado / acc.bruto) * 100 : 0
     out.set(unitId, {
       pedidos: acc.pedidos,
       bruto: acc.bruto,
-      liquido: acc.liquido,
+      liquido: liquidoDerivado,
       comissaoRs: acc.comissao,
       taxaCanalPagamentoRs: acc.taxaPgto,
       promocoesRs: acc.promo,
@@ -209,21 +217,29 @@ export async function getNinefoodDiasForMonth(
     console.error("getNinefoodDiasForMonth error:", error.message)
     return []
   }
-  return (data ?? []).map((r) => ({
+  return (data ?? []).map((r) => {
+    const bruto = Number(r.bruto ?? 0)
+    const comissao = Number(r.comissao_rs ?? 0)
+    const taxaPgto = Number(r.taxa_canal_pagamento_rs ?? 0)
+    const promo = Number(r.promocoes_rs ?? 0)
+    // Líquido derivado (mesma regra do resumo): bruto − despesas da loja.
+    const liquido = Math.max(0, bruto - comissao - taxaPgto - promo)
+    return {
     data: r.data as string,
     pedidos: r.pedidos ?? 0,
-    bruto: Number(r.bruto ?? 0),
-    liquido: Number(r.liquido ?? 0),
+    bruto,
+    liquido,
     ticketMedio: Number(r.ticket_medio ?? 0),
-    comissaoRs: Number(r.comissao_rs ?? 0),
-    taxaCanalPagamentoRs: Number(r.taxa_canal_pagamento_rs ?? 0),
-    promocoesRs: Number(r.promocoes_rs ?? 0),
+    comissaoRs: comissao,
+    taxaCanalPagamentoRs: taxaPgto,
+    promocoesRs: promo,
     avaliacaoLoja: r.avaliacao_loja != null ? Number(r.avaliacao_loja) : null,
     taxaAceitacaoPct:
       r.taxa_aceitacao_pct != null ? Number(r.taxa_aceitacao_pct) : null,
     cancelamentosQtd: r.cancelamentos_qtd ?? null,
     tempoMedioPreparoMin: r.tempo_medio_preparo_min ?? null,
-  }))
+    }
+  })
 }
 
 // ─── getNinefoodItensRankingForMonth: top itens vendidos ────────────
