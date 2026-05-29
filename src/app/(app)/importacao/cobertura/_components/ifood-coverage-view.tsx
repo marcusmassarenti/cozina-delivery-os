@@ -1,4 +1,4 @@
-import { Receipt, Star, UtensilsCrossed } from "lucide-react"
+import { Info, Receipt, Star, UtensilsCrossed } from "lucide-react"
 
 import type {
   CoverageCell,
@@ -66,6 +66,22 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
           color="emerald"
         />
       </div>
+
+      {/* Aviso: por que o Financeiro aparece "parcial" */}
+      {financeiroPartial > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <Info className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            <strong>Financeiro &quot;parcial&quot; quase sempre não é dado
+            faltando.</strong>{" "}
+            O relatório de repasse do iFood fecha os últimos dias do mês só no
+            relatório do mês seguinte (defasagem de liquidação). Por isso o dado
+            costuma ir só até meados do mês — nas lacunas abaixo aparece até que
+            dia cada loja tem importado. Pra completar, re-puxe o mês depois que
+            o iFood liquidar tudo.
+          </span>
+        </div>
+      )}
 
       {/* Matriz */}
       <div className="overflow-x-auto rounded-xl border bg-card">
@@ -191,8 +207,11 @@ function buildGapsByUnit(matrix: CoverageMatrix): UnitGap[] {
       if (c.financeiro.status === "empty") {
         items.push({ label: "Financeiro", severity: "missing" })
       } else if (c.financeiro.status === "partial") {
+        const ate = c.financeiro.lastData
+          ? ` · até ${formatDate(c.financeiro.lastData)}`
+          : ""
         items.push({
-          label: `Financeiro parcial (${c.financeiro.diasComVenda}/${c.financeiro.diasNoMes}d)`,
+          label: `Financeiro ${c.financeiro.diasComVenda}/${c.financeiro.diasNoMes}d${ate}`,
           severity: "partial",
         })
       }
