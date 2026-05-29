@@ -17,6 +17,7 @@ import {
 
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
 import { DashboardSection } from "@/components/dashboard/dashboard-section"
+import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { UnitsTable } from "@/components/dashboard/units-table"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -41,6 +42,7 @@ import {
   getNetworkNinefoodTopItemsForMonth,
   getNinefoodResumoByUnits,
 } from "@/lib/data/ninefood-imported"
+import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { parsePeriodParam, formatPeriodLabel } from "@/lib/period"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -115,6 +117,7 @@ export default async function Home({
     networkAvaliacoes99,
     finByUnit,
     ninefoodByUnit,
+    importCoverage,
   ] = await Promise.all([
     getNetworkFunnelForMonth(year, month, filterUnitIds),
     getNetworkCancelamentosPorMotivo(year, month, 5, filterUnitIds),
@@ -125,6 +128,7 @@ export default async function Home({
     getNetworkNinefoodAvaliacoesForMonth(year, month, filterUnitIds),
     getFinanceiroResumoByUnits(activeUnitIds, year, month),
     getNinefoodResumoByUnits(activeUnitIds, year, month),
+    getImportCoverageForMonth(year, month, filterUnitIds),
   ])
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
@@ -160,8 +164,6 @@ export default async function Home({
   const hasCancel99Data = networkCancels99.length > 0
   const hasTopItems99Data = networkTopItems99.length > 0
   const hasAvaliacoes99Data = networkAvaliacoes99.hasData
-  const isFiltered =
-    !!unidadesFilter || !!plataformaFilter || onlyComFaturamento
 
   // Plataformas que efetivamente alimentam os KPIs financeiros do topo.
   // Se filtro por plataforma estiver ativo, mostra só aquela.
@@ -270,26 +272,18 @@ export default async function Home({
         </div>
       </div>
 
-      <div
-        className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${
-          status.ok
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400"
-            : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400"
-        }`}
-      >
-        <span
-          className={`size-2 rounded-full ${
-            status.ok ? "bg-emerald-500" : "bg-rose-500"
-          }`}
+      {status.ok ? (
+        <ImportCoverageBanner
+          coverage={importCoverage}
+          month={month}
+          periodLabel={formatPeriodLabel({ year, month })}
         />
-        <span className="font-medium">
-          {status.ok
-            ? `Supabase conectado · ${unitsToShow.length} de ${allUnits.filter((u) => u.active).length} unidades · ${formatPeriodLabel({ year, month })}${
-                isFiltered ? " · filtros ativos" : ""
-              }`
-            : status.message}
-        </span>
-      </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+          <span className="size-2 rounded-full bg-rose-500" />
+          <span className="font-medium">{status.message}</span>
+        </div>
+      )}
 
       {allUnits.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">

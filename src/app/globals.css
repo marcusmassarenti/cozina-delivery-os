@@ -128,3 +128,71 @@
     @apply font-sans;
   }
 }
+
+/* ─── Impressão / Export PDF ──────────────────────────────────────────
+   Usado pelo botão "Exportar PDF" (window.print). Esconde o chrome do app,
+   força tema claro (pra não sair preto e gastar tinta), imprime as cores de
+   fundo dos gráficos e abre os <details> recolhidos. */
+@media print {
+  /* Esconde sidebar, topbar e qualquer elemento marcado */
+  [data-slot="sidebar"],
+  [data-slot="sidebar-rail"],
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  /* Conteúdo ocupa a folha inteira */
+  [data-slot="sidebar-inset"] {
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Força tema claro mesmo se o app estiver em dark mode */
+  .dark {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.45 0 0);
+    --accent: oklch(0.95 0.04 50);
+    --accent-foreground: oklch(0.5 0.2 35);
+    --border: oklch(0.9 0 0);
+  }
+
+  /* Imprime cores de fundo (barras, badges, etc.) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  /* Página do relatório sem padding/gap exagerado e fundo branco */
+  [data-print="page"] {
+    background: #fff !important;
+    padding: 0 !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Não quebra cada bloco (KPIs, gráfico, ranking, tabela) no meio da folha */
+  [data-print="page"] > * {
+    break-inside: avoid;
+  }
+
+  /* Abre os <details> recolhidos pra a tabela entrar no PDF */
+  details > :not(summary) {
+    display: block !important;
+  }
+
+  @page {
+    margin: 10mm;
+    size: A4 landscape;
+  }
+}

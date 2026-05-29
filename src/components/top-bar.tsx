@@ -18,7 +18,7 @@ export function TopBar({
   brandName: string
 }) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4 print:hidden">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-5" />
 

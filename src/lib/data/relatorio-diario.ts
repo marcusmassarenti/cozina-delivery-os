@@ -19,6 +19,66 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { ReportPlatform } from "@/lib/data/relatorio-diario-types"
 
+// ─── Cobertura de importação (pro banner do Dashboard) ───────────────
+
+export type PlatformCoverage = {
+  /** Dia-do-mês da última data com dado (1..31). null = sem dado no mês */
+  lastDay: number | null
+  /** ISO YYYY-MM-DD da última data com dado */
+  lastDate: string | null
+}
+
+export type ImportCoverage = {
+  ifood: PlatformCoverage
+  ninefood: PlatformCoverage
+}
+
+function parseDay(iso: string | null | undefined): PlatformCoverage {
+  if (!iso) return { lastDay: null, lastDate: null }
+  const m = /^(\d{4}-\d{2}-(\d{2}))/.exec(String(iso))
+  return m ? { lastDay: parseInt(m[2], 10), lastDate: m[1] } : { lastDay: null, lastDate: null }
+}
+
+/**
+ * Última data com dado importado por plataforma no mês. Queries baratas
+ * (order desc + limit 1) — leve o bastante pro Dashboard.
+ */
+export async function getImportCoverageForMonth(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+): Promise<ImportCoverage> {
+  const admin = createAdminClient()
+
+  let qi = admin
+    .from("ifood_financeiro_lancamentos")
+    .select("data_fato_gerador")
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .eq("fato_gerador", "Venda")
+    .eq("descricao_lancamento", "Entrada Financeira")
+    .not("data_fato_gerador", "is", null)
+    .order("data_fato_gerador", { ascending: false })
+    .limit(1)
+  if (filterUnitIds && filterUnitIds.length > 0) qi = qi.in("unit_id", filterUnitIds)
+
+  let qn = admin
+    .from("ninefood_daily_loja")
+    .select("data")
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .order("data", { ascending: false })
+    .limit(1)
+  if (filterUnitIds && filterUnitIds.length > 0) qn = qn.in("unit_id", filterUnitIds)
+
+  const [{ data: di }, { data: dn }] = await Promise.all([qi, qn])
+
+  return {
+    ifood: parseDay(di?.[0]?.data_fato_gerador as string | undefined),
+    ninefood: parseDay(dn?.[0]?.data as string | undefined),
+  }
+}
+
 export type UnitDailyRow = {
   unitId: string
   code: string

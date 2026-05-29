@@ -1,6 +1,7 @@
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { DailyMetric } from "@/lib/data/relatorio-diario-types"
 
-export type Bar = { day: number; value: number; label: string }
+export type Bar = { day: number; value: number; label: string; short: string }
 
 const METRIC_COLOR: Record<DailyMetric, string> = {
   faturamento: "bg-emerald-500",
@@ -15,21 +16,24 @@ const METRIC_COLOR_MAX: Record<DailyMetric, string> = {
 
 /**
  * Gráfico de barras do dia-a-dia da rede (CSS puro, sem lib).
- * Destaca o melhor dia. Tooltip nativo via `title`.
+ * Valor em cima de cada barra, melhor dia destacado, logos das
+ * plataformas ativas no cabeçalho.
  */
 export function DailyBarChart({
   bars,
   metric,
   metricLabel,
+  platforms,
 }: {
   bars: Bar[]
   metric: DailyMetric
   metricLabel: string
+  platforms: PlatformId[]
 }) {
   const max = Math.max(...bars.map((b) => b.value), 0)
   const maxDay = bars.reduce(
     (best, b) => (b.value > best.value ? b : best),
-    bars[0] ?? { day: 0, value: 0, label: "" },
+    bars[0] ?? { day: 0, value: 0, label: "", short: "" },
   )
   const color = METRIC_COLOR[metric]
   const colorMax = METRIC_COLOR_MAX[metric]
@@ -37,7 +41,14 @@ export function DailyBarChart({
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{metricLabel} por dia · rede</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold">{metricLabel} por dia · rede</h3>
+          <div className="flex items-center gap-0.5">
+            {platforms.map((p) => (
+              <PlatformLogo key={p} platform={p} size="sm" />
+            ))}
+          </div>
+        </div>
         {max > 0 && (
           <span className="text-[11px] text-muted-foreground">
             Melhor dia:{" "}
@@ -49,17 +60,22 @@ export function DailyBarChart({
         )}
       </div>
 
-      <div className="flex h-44 items-end gap-[3px]">
+      <div className="flex h-48 items-end gap-[3px]">
         {bars.map((b) => {
-          const h = max > 0 ? (b.value / max) * 100 : 0
+          // cap em 86% pra sobrar espaço pro rótulo em cima
+          const h = max > 0 ? (b.value / max) * 86 : 0
           const isMax = b.day === maxDay.day && b.value > 0
           return (
             <div
               key={b.day}
-              className="group relative flex flex-1 items-end"
-              style={{ height: "100%" }}
+              className="group flex h-full flex-1 flex-col items-center justify-end gap-0.5"
               title={`Dia ${String(b.day).padStart(2, "0")}: ${b.label}`}
             >
+              {b.value > 0 && (
+                <span className="text-[8px] font-medium tabular-nums leading-none text-muted-foreground">
+                  {b.short}
+                </span>
+              )}
               <div
                 className={`w-full rounded-t-sm transition-colors ${
                   b.value > 0 ? (isMax ? colorMax : color) : "bg-muted"

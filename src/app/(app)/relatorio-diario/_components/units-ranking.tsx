@@ -1,10 +1,14 @@
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { DailyMetric } from "@/lib/data/relatorio-diario-types"
+import { fmtPct } from "@/lib/format"
 
 export type RankingUnit = {
   code: string
   name: string
   value: number
   label: string
+  /** % que a loja representa do total da rede (null = não aplicável) */
+  share: number | null
   series: number[] // valor por dia (pro sparkline)
 }
 
@@ -21,26 +25,37 @@ const METRIC_SPARK: Record<DailyMetric, string> = {
 
 /**
  * Ranking de lojas por métrica: barra horizontal proporcional + mini
- * sparkline do dia-a-dia + valor total. Ordenado pelo valor (desc).
+ * sparkline + valor + % do total da rede. Ordenado pelo valor (desc).
  */
 export function UnitsRanking({
   units,
   metric,
   metricLabel,
+  platforms,
 }: {
   units: RankingUnit[]
   metric: DailyMetric
   metricLabel: string
+  platforms: PlatformId[]
 }) {
   const max = Math.max(...units.map((u) => u.value), 1)
   const barColor = METRIC_BAR[metric]
   const sparkColor = METRIC_SPARK[metric]
+  const shareLabel =
+    metric === "cancelamentos" ? "dos cancelamentos" : "do total"
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
-      <h3 className="mb-4 text-sm font-semibold">
-        Ranking por loja · {metricLabel}
-      </h3>
+      <div className="mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-semibold">
+          Ranking por loja · {metricLabel}
+        </h3>
+        <div className="flex items-center gap-0.5">
+          {platforms.map((p) => (
+            <PlatformLogo key={p} platform={p} size="sm" />
+          ))}
+        </div>
+      </div>
       <div className="space-y-3">
         {units.map((u) => {
           const seriesMax = Math.max(...u.series, 0)
@@ -81,10 +96,18 @@ export function UnitsRanking({
                 ))}
               </div>
 
-              {/* Valor */}
-              <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums">
-                {u.label}
-              </span>
+              {/* Valor + % */}
+              <div className="w-24 shrink-0 text-right">
+                <p className="text-xs font-semibold tabular-nums">{u.label}</p>
+                {u.share !== null && (
+                  <p
+                    className="text-[10px] tabular-nums text-muted-foreground"
+                    title={`${fmtPct(u.share)} ${shareLabel} da rede`}
+                  >
+                    {fmtPct(u.share)} {shareLabel}
+                  </p>
+                )}
+              </div>
             </div>
           )
         })}
