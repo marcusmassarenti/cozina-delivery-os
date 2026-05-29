@@ -5,6 +5,7 @@ import {
   PiggyBank,
   Receipt,
   Tag,
+  Ticket,
   Truck,
   XCircle,
 } from "lucide-react"
@@ -14,6 +15,7 @@ import {
   getFinanceiroResumoForMonth,
   listPedidosForMonth,
 } from "@/lib/data/ifood-imported"
+import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 export async function FinanceiroTab({
@@ -25,10 +27,11 @@ export async function FinanceiroTab({
   year: number
   month: number
 }) {
-  const [resumo, cancelMotivos, pedidos] = await Promise.all([
+  const [resumo, cancelMotivos, pedidos, pagamento] = await Promise.all([
     getFinanceiroResumoForMonth(unitId, year, month),
     getCancelamentosPorMotivo(unitId, year, month),
     listPedidosForMonth(unitId, year, month, { limit: 50 }),
+    getPagamentoResumoForMonth(unitId, year, month),
   ])
 
   if (!resumo.hasData) {
@@ -289,6 +292,45 @@ export async function FinanceiroTab({
           </table>
         </div>
       </div>
+
+      {/* Vale-Refeição por bandeira (do relatório de pedidos iFood) */}
+      {pagamento.hasData && pagamento.vrPedidos > 0 && (
+        <div className="rounded-xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Ticket className="size-4 text-violet-600" />
+            <h3 className="text-sm font-semibold">Vale-Refeição por bandeira</h3>
+            <a
+              href="/pedidos"
+              className="ml-auto text-[11px] text-muted-foreground underline"
+            >
+              ver em Pedidos
+            </a>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {pagamento.porBandeira.map((b) => (
+              <div
+                key={b.bandeira}
+                className="flex items-center justify-between rounded-lg border bg-card px-3 py-2"
+              >
+                <span className="text-xs font-medium">{b.bandeira}</span>
+                <div className="text-right">
+                  <p className="text-sm font-bold tabular-nums">
+                    {fmtBRL(b.valor)}
+                  </p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground">
+                    {fmtNum(b.pedidos)} ped
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {fmtNum(pagamento.vrPedidos)} pedidos em VR ·{" "}
+            {fmtBRL(pagamento.vrValor)} ({fmtPct(pagamento.vrPct)} do total pago).
+            Não entra no faturamento.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

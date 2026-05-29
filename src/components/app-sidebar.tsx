@@ -10,6 +10,7 @@ import {
   Flame,
   LayoutDashboard,
   Package,
+  Receipt,
   Settings,
   Star,
   Store,
@@ -60,6 +61,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Unidades", href: "/unidades", icon: Store },
       { label: "Produtos", href: "/produtos", icon: Package, comingSoon: true },
+      { label: "Pedidos", href: "/pedidos", icon: Receipt },
       { label: "Avaliações", href: "/avaliacoes", icon: Star },
     ],
   },

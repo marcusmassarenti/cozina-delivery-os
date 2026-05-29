@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Receipt,
   Star,
+  Ticket,
   UtensilsCrossed,
 } from "lucide-react"
 
@@ -77,6 +78,22 @@ const IFOOD_ENTRIES: GuideEntry[] = [
       "Nota média e distribuição de estrelas",
       "Top elogios e top reclamações (tags)",
       "Comentários reais dos clientes (com link pro pedido)",
+    ],
+  },
+  {
+    icon: Ticket,
+    title: "Pedidos (formas de pagamento / VR)",
+    badge: "Mensal",
+    badgeTone: "amber",
+    path: ["iFood Gestor", "Financeiro", "Pedidos"],
+    cadence:
+      "1 arquivo por loja, escolhendo o período (ex.: 01/05 - 31/05). Cada pedido vem com a forma de pagamento e o valor.",
+    download:
+      "Em \"Relatório de pedidos\" → escolhe a loja e o período → \"Exportar\" (XLSX). Repete pra cada loja.",
+    feeds: [
+      "Vale-Refeição por bandeira (Sodexo/Alelo/Ticket/VR/iFood) — tela Pedidos",
+      "Mix de formas de pagamento (Crédito/PIX/Carteira/VR)",
+      "VR consolidado no Resultado e no detalhe da loja",
     ],
   },
 ]
@@ -204,7 +221,7 @@ export function DownloadGuide() {
               Como baixar os relatórios — guia rápido
             </p>
             <p className="text-[11px] text-muted-foreground">
-              iFood (3), 99 Food (3) e Keeta (3 relatórios). Clica pra
+              iFood (4), 99 Food (3) e Keeta (3 relatórios). Clica pra
               expandir.
             </p>
           </div>

@@ -4,6 +4,7 @@ import {
   Info,
   Percent,
   PiggyBank,
+  Ticket,
   TrendingUp,
   Wallet,
 } from "lucide-react"
@@ -12,6 +13,7 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
+import { getNetworkPagamentoResumo } from "@/lib/data/ifood-pedidos"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
@@ -52,6 +54,15 @@ export default async function ResultadoPage({
     : { ifood: 0, ninefood: 0, keeta: 0, total: 0 }
   const entregaPctBruto =
     totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
+
+  // VR por bandeira (iFood) — surfa da tela Pedidos
+  const pagamento = hasData
+    ? await getNetworkPagamentoResumo(
+        year,
+        month,
+        rows.map((r) => r.unitId),
+      )
+    : null
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -235,6 +246,46 @@ export default async function ResultadoPage({
                 indisponível. Lance os custos em cada unidade no botão{" "}
                 <strong>Lançar dados</strong> pra calcular o lucro real.
               </span>
+            </div>
+          )}
+
+          {pagamento && pagamento.vrPedidos > 0 && (
+            <div className="rounded-xl border bg-card p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Ticket className="size-4 text-violet-600" />
+                <h2 className="text-sm font-semibold">
+                  Vale-Refeição por bandeira (iFood)
+                </h2>
+                <a
+                  href="/pedidos"
+                  className="ml-auto text-[11px] text-muted-foreground underline"
+                >
+                  ver em Pedidos
+                </a>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {pagamento.porBandeira.map((b) => (
+                  <div
+                    key={b.bandeira}
+                    className="flex items-center justify-between rounded-lg border bg-card px-3 py-2"
+                  >
+                    <span className="text-xs font-medium">{b.bandeira}</span>
+                    <div className="text-right">
+                      <p className="text-sm font-bold tabular-nums">
+                        {fmtBRL(b.valor)}
+                      </p>
+                      <p className="text-[10px] tabular-nums text-muted-foreground">
+                        {fmtNum(b.pedidos)} pedidos
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Total: {fmtNum(pagamento.vrPedidos)} pedidos ·{" "}
+                {fmtBRL(pagamento.vrValor)} ({fmtPct(pagamento.vrPct)} do pago) ·
+                valor = total pago pelo cliente
+              </p>
             </div>
           )}
 
