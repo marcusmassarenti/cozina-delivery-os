@@ -25,6 +25,7 @@ export function ImportCoverageBanner({
   const platforms: { id: PlatformId; cov: PlatformCoverage }[] = [
     { id: "ifood", cov: coverage.ifood },
     { id: "99food", cov: coverage.ninefood },
+    { id: "keeta", cov: coverage.keeta },
   ]
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
   const maxDay = withData.length

@@ -31,6 +31,7 @@ export type PlatformCoverage = {
 export type ImportCoverage = {
   ifood: PlatformCoverage
   ninefood: PlatformCoverage
+  keeta: PlatformCoverage
 }
 
 function parseDay(iso: string | null | undefined): PlatformCoverage {
@@ -71,11 +72,25 @@ export async function getImportCoverageForMonth(
     .limit(1)
   if (filterUnitIds && filterUnitIds.length > 0) qn = qn.in("unit_id", filterUnitIds)
 
-  const [{ data: di }, { data: dn }] = await Promise.all([qi, qn])
+  let qk = admin
+    .from("keeta_daily_loja")
+    .select("data")
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .order("data", { ascending: false })
+    .limit(1)
+  if (filterUnitIds && filterUnitIds.length > 0) qk = qk.in("unit_id", filterUnitIds)
+
+  const [{ data: di }, { data: dn }, { data: dk }] = await Promise.all([
+    qi,
+    qn,
+    qk,
+  ])
 
   return {
     ifood: parseDay(di?.[0]?.data_fato_gerador as string | undefined),
     ninefood: parseDay(dn?.[0]?.data as string | undefined),
+    keeta: parseDay(dk?.[0]?.data as string | undefined),
   }
 }
 
