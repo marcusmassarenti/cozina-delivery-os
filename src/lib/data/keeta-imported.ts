@@ -266,6 +266,112 @@ export async function getNetworkKeetaAvaliacoesForMonth(
   }
 }
 
+// ─── Network: Top itens + Cancelamentos Keeta (Dashboard seção 3) ────
+
+export type KeetaTopItem = {
+  nomeItem: string
+  qtdVendida: number
+  valorTotal: number
+}
+
+/**
+ * Top itens vendidos na rede no mês (Keeta). Soma keeta_daily_item por
+ * nome do item; receita = Σ(qtd × preço médio). Ordenado por receita DESC.
+ */
+export async function getNetworkKeetaTopItemsForMonth(
+  year: number,
+  month: number,
+  limit = 5,
+  filterUnitIds?: string[],
+): Promise<KeetaTopItem[]> {
+  const admin = createAdminClient()
+  const rows = await pageAll<{
+    nome_item: string
+    qtd_vendida: number | string
+    preco_medio: number | string
+  }>((a, b) => {
+    let q = admin
+      .from("keeta_daily_item")
+      .select("nome_item, qtd_vendida, preco_medio")
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .range(a, b)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  })
+
+  const acc = new Map<string, KeetaTopItem>()
+  for (const r of rows) {
+    if (!r.nome_item) continue
+    const cur = acc.get(r.nome_item) ?? {
+      nomeItem: r.nome_item,
+      qtdVendida: 0,
+      valorTotal: 0,
+    }
+    const qtd = Number(r.qtd_vendida) || 0
+    const preco = Number(r.preco_medio) || 0
+    cur.qtdVendida += qtd
+    cur.valorTotal += qtd * preco
+    acc.set(r.nome_item, cur)
+  }
+  return Array.from(acc.values())
+    .map((it) => ({ ...it, valorTotal: Math.round(it.valorTotal * 100) / 100 }))
+    .sort((a, b) => b.valorTotal - a.valorTotal)
+    .slice(0, limit)
+}
+
+export type KeetaCancelamentoMotivo = {
+  motivo: string
+  pedidos: number
+  /** Perda = soma das vendas de itens dos pedidos cancelados */
+  perdaFinanceira: number
+}
+
+/**
+ * Top motivos de cancelamento na rede (Keeta). O motivo vem como texto livre
+ * em `motivo_cancelamento`. Normaliza (lowercase + trim) pra agrupar.
+ */
+export async function getNetworkKeetaCancelamentosForMonth(
+  year: number,
+  month: number,
+  limit = 5,
+  filterUnitIds?: string[],
+): Promise<KeetaCancelamentoMotivo[]> {
+  const admin = createAdminClient()
+  const rows = await pageAll<{
+    motivo_cancelamento: string | null
+    vendas_itens: number | string | null
+  }>((a, b) => {
+    let q = admin
+      .from("keeta_pedidos")
+      .select("motivo_cancelamento, vendas_itens")
+      .not("motivo_cancelamento", "is", null)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .range(a, b)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  })
+
+  const acc = new Map<string, KeetaCancelamentoMotivo>()
+  for (const r of rows) {
+    const raw = r.motivo_cancelamento
+      ? String(r.motivo_cancelamento).trim()
+      : ""
+    if (!raw) continue
+    const key = raw.toLowerCase()
+    const cur = acc.get(key) ?? { motivo: raw, pedidos: 0, perdaFinanceira: 0 }
+    cur.pedidos += 1
+    cur.perdaFinanceira += Number(r.vendas_itens) || 0
+    acc.set(key, cur)
+  }
+  return Array.from(acc.values())
+    .sort((a, b) => b.pedidos - a.pedidos)
+    .slice(0, limit)
+}
+
 // ─── Avaliações por unidade (tab Avaliações da unidade / tela /avaliacoes) ──
 
 export type KeetaAvaliacoesResumo = {

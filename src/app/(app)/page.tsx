@@ -43,7 +43,12 @@ import {
   getNinefoodResumoByUnits,
 } from "@/lib/data/ninefood-imported"
 import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
-import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import {
+  getKeetaResumoByUnits,
+  getNetworkKeetaAvaliacoesForMonth,
+  getNetworkKeetaCancelamentosForMonth,
+  getNetworkKeetaTopItemsForMonth,
+} from "@/lib/data/keeta-imported"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { parsePeriodParam, formatPeriodLabel } from "@/lib/period"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -116,6 +121,9 @@ export default async function Home({
     networkCancels99,
     networkTopItems99,
     networkAvaliacoes99,
+    networkCancelsKeeta,
+    networkTopItemsKeeta,
+    networkAvaliacoesKeeta,
     finByUnit,
     ninefoodByUnit,
     keetaByUnit,
@@ -128,6 +136,9 @@ export default async function Home({
     getNetworkNinefoodCancelamentosForMonth(year, month, 5, filterUnitIds),
     getNetworkNinefoodTopItemsForMonth(year, month, 5, filterUnitIds),
     getNetworkNinefoodAvaliacoesForMonth(year, month, filterUnitIds),
+    getNetworkKeetaCancelamentosForMonth(year, month, 5, filterUnitIds),
+    getNetworkKeetaTopItemsForMonth(year, month, 5, filterUnitIds),
+    getNetworkKeetaAvaliacoesForMonth(year, month, filterUnitIds),
     getFinanceiroResumoByUnits(activeUnitIds, year, month),
     getNinefoodResumoByUnits(activeUnitIds, year, month),
     getKeetaResumoByUnits(activeUnitIds, year, month),
@@ -182,6 +193,9 @@ export default async function Home({
   const hasCancel99Data = networkCancels99.length > 0
   const hasTopItems99Data = networkTopItems99.length > 0
   const hasAvaliacoes99Data = networkAvaliacoes99.hasData
+  const hasCancelKeetaData = networkCancelsKeeta.length > 0
+  const hasTopItemsKeetaData = networkTopItemsKeeta.length > 0
+  const hasAvaliacoesKeetaData = networkAvaliacoesKeeta.hasData
 
   // Plataformas que efetivamente alimentam os KPIs financeiros do topo.
   // Se filtro por plataforma estiver ativo, mostra só aquela.
@@ -331,6 +345,13 @@ export default async function Home({
                     Food
                   </span>
                 )}
+                {unitsWithKeeta > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-100 px-2.5 py-1 text-[10px] font-semibold text-lime-800 dark:bg-lime-950/40 dark:text-lime-400">
+                    <Sparkles className="size-3" />
+                    {unitsWithKeeta}/{allUnits.filter((u) => u.active).length}{" "}
+                    Keeta
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -383,7 +404,9 @@ export default async function Home({
             hasCancelData ||
             hasTopItemsData ||
             hasCancel99Data ||
-            hasTopItems99Data) && (
+            hasTopItems99Data ||
+            hasCancelKeetaData ||
+            hasTopItemsKeetaData) && (
             <DashboardSection id="cardapio">
               <SectionDivider
                 number={3}
@@ -515,6 +538,25 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    ...(unitsWithKeeta > 0
+                      ? [
+                          {
+                            platform: "keeta" as const,
+                            empty: !hasCancelKeetaData,
+                            content: hasCancelKeetaData ? (
+                              <CancelList
+                                items={networkCancelsKeeta.map((c) => ({
+                                  motivo: c.motivo,
+                                  pedidos: c.pedidos,
+                                  perda: c.perdaFinanceira,
+                                }))}
+                              />
+                            ) : (
+                              <EmptyMsg text="Sem cancelamentos Keeta neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
 
@@ -553,13 +595,28 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    ...(unitsWithKeeta > 0
+                      ? [
+                          {
+                            platform: "keeta" as const,
+                            empty: !hasTopItemsKeetaData,
+                            content: hasTopItemsKeetaData ? (
+                              <TopItemsList items={networkTopItemsKeeta} />
+                            ) : (
+                              <EmptyMsg text="Sem Cardápio Keeta neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
             </DashboardSection>
           )}
 
-          {(hasAvaliacoesData || hasAvaliacoes99Data) && (
+          {(hasAvaliacoesData ||
+            hasAvaliacoes99Data ||
+            hasAvaliacoesKeetaData) && (
             <DashboardSection id="satisfacao">
               <SectionDivider
                 number={4}
@@ -595,6 +652,22 @@ export default async function Home({
                               />
                             ) : (
                               <EmptyMsg text="Sem avaliações 99 Food neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(unitsWithKeeta > 0
+                      ? [
+                          {
+                            platform: "keeta" as const,
+                            empty: !hasAvaliacoesKeetaData,
+                            content: hasAvaliacoesKeetaData ? (
+                              <NotasDistribuicao
+                                total={networkAvaliacoesKeeta.total}
+                                distribucao={networkAvaliacoesKeeta.distribucao}
+                              />
+                            ) : (
+                              <EmptyMsg text="Sem avaliações Keeta neste mês" />
                             ),
                           },
                         ]
@@ -641,6 +714,19 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    ...(unitsWithKeeta > 0
+                      ? [
+                          {
+                            platform: "keeta" as const,
+                            empty: !hasAvaliacoesKeetaData,
+                            content: hasAvaliacoesKeetaData ? (
+                              <EmptyMsg text="O Keeta não classifica avaliações por tags — veja as notas e os comentários." />
+                            ) : (
+                              <EmptyMsg text="Sem avaliações Keeta neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
 
@@ -683,6 +769,19 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    ...(unitsWithKeeta > 0
+                      ? [
+                          {
+                            platform: "keeta" as const,
+                            empty: !hasAvaliacoesKeetaData,
+                            content: hasAvaliacoesKeetaData ? (
+                              <EmptyMsg text="O Keeta não classifica avaliações por tags — veja as notas e os comentários." />
+                            ) : (
+                              <EmptyMsg text="Sem avaliações Keeta neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
@@ -720,6 +819,16 @@ export default async function Home({
                     data: c.data,
                     pedidoIdCurto: c.pedidoIdCurto,
                   })),
+                  ...networkAvaliacoesKeeta.ultimosComentarios.map((c) => ({
+                    id: c.id,
+                    platform: "keeta" as const,
+                    unitCode: c.unitCode,
+                    unitName: c.unitName,
+                    nota: c.nota,
+                    comentario: c.comentario,
+                    data: c.data,
+                    pedidoIdCurto: c.pedidoIdCurto,
+                  })),
                 ]
                   .sort((a, b) => (a.data > b.data ? -1 : 1))
                   .slice(0, 8)
@@ -732,7 +841,7 @@ export default async function Home({
                         Últimos comentários
                       </h3>
                       <span className="ml-auto text-[10px] text-muted-foreground">
-                        iFood + 99 Food, ordenado por data
+                        iFood + 99 Food + Keeta · ordenado por data
                       </span>
                     </div>
                     <div className="divide-y">
