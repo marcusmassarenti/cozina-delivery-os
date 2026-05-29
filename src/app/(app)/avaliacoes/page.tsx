@@ -32,6 +32,7 @@ export default async function AvaliacoesPage({
     unidade?: string
     plataforma?: string
     periodo?: string
+    notas?: string
   }>
 }) {
   const sp = await searchParams
@@ -42,6 +43,11 @@ export default async function AvaliacoesPage({
   )
     ? (sp.plataforma as PlatformId)
     : null
+  // Filtro de estrelas pros comentários (ex: "1,2" = só notas 1 e 2)
+  const notasFiltro = (sp.notas ?? "")
+    .split(",")
+    .map((s) => Number(s))
+    .filter((n) => n >= 1 && n <= 5)
 
   const [units, availablePeriods] = await Promise.all([
     getUnits(),
@@ -106,6 +112,7 @@ export default async function AvaliacoesPage({
           year={year}
           month={month}
           plataforma={plataformaParam}
+          notasFiltro={notasFiltro}
         />
       ) : availableForUnit.length === 0 ? (
         <NoPlatformsState unitName={selectedUnit.name} />
@@ -114,18 +121,21 @@ export default async function AvaliacoesPage({
           unitId={selectedUnit.id}
           year={year}
           month={month}
+          notasFiltro={notasFiltro}
         />
       ) : plataforma === "99food" ? (
         <Avaliacoes99Tab
           unitId={selectedUnit.id}
           year={year}
           month={month}
+          notasFiltro={notasFiltro}
         />
       ) : plataforma === "keeta" ? (
         <AvaliacoesKeetaTab
           unitId={selectedUnit.id}
           year={year}
           month={month}
+          notasFiltro={notasFiltro}
         />
       ) : null}
     </div>

@@ -962,7 +962,7 @@ export async function getNetworkNinefoodAvaliacoesForMonth(
       String(r.conteudo_avaliacao).trim().length > 0,
   )
   const unitIds = Array.from(
-    new Set(comentariosNaoVazios.slice(0, 10).map((r) => r.unit_id)),
+    new Set(comentariosNaoVazios.slice(0, 50).map((r) => r.unit_id)),
   )
   const unitMap = new Map<string, { code: string; name: string }>()
   if (unitIds.length > 0) {
@@ -974,7 +974,7 @@ export async function getNetworkNinefoodAvaliacoesForMonth(
       unitMap.set(u.id, { code: u.code, name: u.name })
     }
   }
-  const ultimosComentarios = comentariosNaoVazios.slice(0, 5).map((r) => {
+  const ultimosComentarios = comentariosNaoVazios.slice(0, 50).map((r) => {
     const pedidoIdStr = String(r.pedido_id ?? "")
     return {
       id: String(r.id),

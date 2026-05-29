@@ -15,15 +15,26 @@ export async function AvaliacoesKeetaTab({
   unitId,
   year,
   month,
+  notasFiltro = [],
 }: {
   unitId: string
   year: number
   month: number
+  /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
+  notasFiltro?: number[]
 }) {
   const [resumo, lista] = await Promise.all([
     getKeetaAvaliacoesResumoForMonth(unitId, year, month),
     listKeetaAvaliacoesForMonth(unitId, year, month, 50),
   ])
+  const listaFiltrada =
+    notasFiltro.length > 0
+      ? lista.filter((a) => notasFiltro.includes(a.nota))
+      : lista
+  const notasLabel =
+    notasFiltro.length > 0
+      ? `só notas ${[...notasFiltro].sort((a, b) => a - b).join(", ")}★`
+      : null
 
   if (!resumo.hasData) {
     return (
@@ -123,16 +134,28 @@ export async function AvaliacoesKeetaTab({
       </div>
 
       {/* Lista de avaliações */}
-      {lista.length > 0 && (
+      {(listaFiltrada.length > 0 || notasLabel) && (
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="flex items-center gap-2 border-b px-5 py-3">
             <MessageCircle className="size-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">
-              Últimas {lista.length} avaliações
+              {notasLabel
+                ? `${listaFiltrada.length} avaliações`
+                : `Últimas ${listaFiltrada.length} avaliações`}
             </h3>
+            {notasLabel && (
+              <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                {notasLabel}
+              </span>
+            )}
           </div>
+          {listaFiltrada.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              Nenhuma avaliação com {notasLabel} neste mês
+            </p>
+          ) : (
           <ul className="divide-y">
-            {lista.map((a) => (
+            {listaFiltrada.map((a) => (
               <li key={a.id} className="px-5 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -171,6 +194,7 @@ export async function AvaliacoesKeetaTab({
               </li>
             ))}
           </ul>
+          )}
         </div>
       )}
     </div>

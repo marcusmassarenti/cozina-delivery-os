@@ -230,7 +230,7 @@ export async function getNetworkKeetaAvaliacoesForMonth(
     (r) => r.conteudo_avaliacao && String(r.conteudo_avaliacao).trim().length > 0,
   )
   const unitIds = Array.from(
-    new Set(comentariosNaoVazios.slice(0, 10).map((r) => r.unit_id)),
+    new Set(comentariosNaoVazios.slice(0, 50).map((r) => r.unit_id)),
   )
   const unitMap = new Map<string, { code: string; name: string }>()
   if (unitIds.length > 0) {
@@ -240,7 +240,7 @@ export async function getNetworkKeetaAvaliacoesForMonth(
       .in("id", unitIds)
     for (const u of units ?? []) unitMap.set(u.id, { code: u.code, name: u.name })
   }
-  const ultimosComentarios = comentariosNaoVazios.slice(0, 5).map((r) => {
+  const ultimosComentarios = comentariosNaoVazios.slice(0, 50).map((r) => {
     const pid = String(r.pedido_id ?? "")
     return {
       id: "keeta-" + String(r.id),

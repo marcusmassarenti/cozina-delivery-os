@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { Star } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import {
@@ -72,6 +73,19 @@ export function AvaliacoesFilters({
 
   // Plataformas com avaliação (filtro da visão de rede)
   const NETWORK_PLATFORMS: PlatformId[] = ["ifood", "99food", "keeta"]
+
+  // Filtro de estrelas (notas) — filtra a lista de comentários
+  const notasSelected = (searchParams.get("notas") ?? "")
+    .split(",")
+    .map((s) => Number(s))
+    .filter((n) => n >= 1 && n <= 5)
+  function toggleNota(n: number) {
+    const set = new Set(notasSelected)
+    if (set.has(n)) set.delete(n)
+    else set.add(n)
+    const arr = [...set].sort((a, b) => a - b)
+    pushWith({ notas: arr.length ? arr.join(",") : null })
+  }
 
   const currentUnit =
     unitOptions.find((u) => u.code === unidadeSelected) ?? null
@@ -166,6 +180,48 @@ export function AvaliacoesFilters({
           })}
         </div>
       )}
+
+      {/* Filtro de estrelas — filtra a lista de comentários (todas as telas) */}
+      <div className="flex items-center gap-1 rounded-md border bg-card p-1">
+        <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Notas
+        </span>
+        {[1, 2, 3, 4, 5].map((n) => {
+          const active = notasSelected.includes(n)
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => toggleNota(n)}
+              aria-pressed={active}
+              title={`Comentários com nota ${n}`}
+              className={`inline-flex items-center gap-0.5 rounded px-1.5 py-1 text-xs font-medium tabular-nums transition-colors ${
+                active
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                  : "text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {n}
+              <Star
+                className={`size-3 ${
+                  active
+                    ? "fill-amber-400 stroke-amber-400"
+                    : "stroke-muted-foreground/50"
+                }`}
+              />
+            </button>
+          )
+        })}
+        {notasSelected.length > 0 && (
+          <button
+            type="button"
+            onClick={() => pushWith({ notas: null })}
+            className="ml-0.5 rounded px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/50"
+          >
+            limpar
+          </button>
+        )}
+      </div>
     </div>
   )
 }

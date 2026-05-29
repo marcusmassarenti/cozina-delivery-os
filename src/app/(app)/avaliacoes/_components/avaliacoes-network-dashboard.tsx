@@ -35,10 +35,13 @@ export async function AvaliacoesNetworkDashboard({
   year,
   month,
   plataforma = null,
+  notasFiltro = [],
 }: {
   year: number
   month: number
   plataforma?: PlatFiltro
+  /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
+  notasFiltro?: number[]
 }) {
   const [ifood, nine, keeta, byUnit] = await Promise.all([
     getNetworkAvaliacoesForMonth(year, month),
@@ -170,8 +173,9 @@ export async function AvaliacoesNetworkDashboard({
           })),
         ]
   )
+    .filter((c) => notasFiltro.length === 0 || notasFiltro.includes(c.nota))
     .sort((a, b) => (a.data > b.data ? -1 : 1))
-    .slice(0, 6)
+    .slice(0, notasFiltro.length > 0 ? 15 : 6)
 
   // Ranking por unidade — usa o total/nota da plataforma filtrada (ou geral)
   const rankRows = byUnit
@@ -197,9 +201,13 @@ export async function AvaliacoesNetworkDashboard({
     .filter((u) => u.viewTotal > 0)
     .sort((a, b) => b.viewTotal - a.viewTotal)
 
-  const comentariosLabel = plataforma
-    ? PLAT_LABEL[plataforma]
-    : "iFood + 99 Food + Keeta"
+  const notasLabel =
+    notasFiltro.length > 0
+      ? `só notas ${[...notasFiltro].sort((a, b) => a - b).join(", ")}★`
+      : null
+  const comentariosLabel =
+    notasLabel ??
+    (plataforma ? PLAT_LABEL[plataforma] : "iFood + 99 Food + Keeta")
   const unitHref = (code: string) =>
     plataforma
       ? `/avaliacoes?unidade=${code}&plataforma=${plataforma}`
@@ -379,7 +387,7 @@ export async function AvaliacoesNetworkDashboard({
       </div>
 
       {/* Últimos comentários */}
-      {comentarios.length > 0 && (
+      {(comentarios.length > 0 || notasFiltro.length > 0) && (
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="flex items-center gap-2 border-b px-5 py-3">
             <MessageCircle className="size-4 text-muted-foreground" />
@@ -390,6 +398,11 @@ export async function AvaliacoesNetworkDashboard({
               {comentariosLabel}
             </span>
           </div>
+          {comentarios.length === 0 ? (
+            <p className="px-5 py-6 text-center text-xs text-muted-foreground">
+              Nenhum comentário com {notasLabel} neste mês.
+            </p>
+          ) : (
           <div className="divide-y">
             {comentarios.map((c) => (
               <div key={c.id} className="px-5 py-3">
@@ -425,6 +438,7 @@ export async function AvaliacoesNetworkDashboard({
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
     </div>

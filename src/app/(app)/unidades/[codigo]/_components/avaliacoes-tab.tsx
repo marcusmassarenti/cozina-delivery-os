@@ -10,15 +10,26 @@ export async function AvaliacoesTab({
   unitId,
   year,
   month,
+  notasFiltro = [],
 }: {
   unitId: string
   year: number
   month: number
+  /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
+  notasFiltro?: number[]
 }) {
   const [resumo, lista] = await Promise.all([
     getAvaliacoesResumoForMonth(unitId, year, month),
     listAvaliacoesForMonth(unitId, year, month, { limit: 50 }),
   ])
+  const listaFiltrada =
+    notasFiltro.length > 0
+      ? lista.filter((a) => notasFiltro.includes(a.nota))
+      : lista
+  const notasLabel =
+    notasFiltro.length > 0
+      ? `só notas ${[...notasFiltro].sort((a, b) => a - b).join(", ")}★`
+      : null
 
   if (!resumo.hasData) {
     return (
@@ -142,16 +153,23 @@ export async function AvaliacoesTab({
         <div className="flex items-center gap-2 border-b px-5 py-3">
           <MessageCircle className="size-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">
-            Comentários ({lista.filter((a) => a.comentario).length})
+            Comentários ({listaFiltrada.filter((a) => a.comentario).length})
           </h3>
+          {notasLabel && (
+            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+              {notasLabel}
+            </span>
+          )}
         </div>
-        {lista.length === 0 ? (
+        {listaFiltrada.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">
-            Sem avaliações neste mês
+            {notasLabel
+              ? `Nenhuma avaliação com ${notasLabel} neste mês`
+              : "Sem avaliações neste mês"}
           </div>
         ) : (
           <div className="divide-y">
-            {lista.map((a) => (
+            {listaFiltrada.map((a) => (
               <AvaliacaoCard key={a.id} avaliacao={a} />
             ))}
           </div>

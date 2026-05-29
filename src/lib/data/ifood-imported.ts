@@ -1450,7 +1450,7 @@ export async function getNetworkAvaliacoesForMonth(
     (r) => r.comentario && String(r.comentario).trim().length > 0,
   )
   const unitIds = Array.from(
-    new Set(comentariosNaoVazios.slice(0, 10).map((r) => r.unit_id)),
+    new Set(comentariosNaoVazios.slice(0, 50).map((r) => r.unit_id)),
   )
   const unitMap = new Map<string, { code: string; name: string }>()
   if (unitIds.length > 0) {
@@ -1462,7 +1462,7 @@ export async function getNetworkAvaliacoesForMonth(
       unitMap.set(u.id, { code: u.code, name: u.name })
     }
   }
-  const ultimosComentarios = comentariosNaoVazios.slice(0, 5).map((r) => ({
+  const ultimosComentarios = comentariosNaoVazios.slice(0, 50).map((r) => ({
     id: r.id,
     unitId: r.unit_id,
     unitCode: unitMap.get(r.unit_id)?.code ?? "?",
