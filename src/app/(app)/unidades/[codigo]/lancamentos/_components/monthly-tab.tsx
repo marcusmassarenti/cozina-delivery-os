@@ -784,6 +784,15 @@ function CurrencyField({
   value: number
   onChange: (n: number) => void
 }) {
+  // Máscara de moeda: os dígitos preenchem da direita como centavos.
+  // Ex: digitar "12858388" vira R$ 128.583,88 (não 12.858.388).
+  const display =
+    value === 0
+      ? ""
+      : value.toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium">{label}</Label>
@@ -793,12 +802,14 @@ function CurrencyField({
         </span>
         <Input
           name={name}
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          value={value === 0 ? "" : String(value)}
-          onChange={(e) => onChange(parseFloat(e.target.value || "0") || 0)}
+          type="text"
+          inputMode="numeric"
+          value={display}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, "")
+            const cents = parseInt(digits || "0", 10)
+            onChange(cents / 100)
+          }}
           placeholder="0,00"
           className="pl-8"
         />
