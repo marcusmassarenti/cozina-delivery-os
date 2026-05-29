@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { getCoverageMatrix } from "@/lib/data/ifood-imported"
 import { getNinefoodCoverageMatrix } from "@/lib/data/ninefood-imported"
+import { getKeetaCoverageMatrix } from "@/lib/data/keeta-imported"
 
 import { IfoodCoverageView } from "./_components/ifood-coverage-view"
 import { NinefoodCoverageView } from "./_components/ninefood-coverage-view"
@@ -15,9 +16,10 @@ export default async function CoberturaPage() {
   const startYear = 2026
   const startMonth = 1
 
-  const [ifoodMatrix, ninefoodMatrix] = await Promise.all([
+  const [ifoodMatrix, ninefoodMatrix, keetaMatrix] = await Promise.all([
     getCoverageMatrix(startYear, startMonth, endYear, endMonth),
     getNinefoodCoverageMatrix(startYear, startMonth, endYear, endMonth),
+    getKeetaCoverageMatrix(startYear, startMonth, endYear, endMonth),
   ])
 
   const activeIfood = ifoodMatrix.units.filter((u) => u.active).length
@@ -35,6 +37,14 @@ export default async function CoberturaPage() {
         c.cardapio.status !== "empty" ||
         c.financeiro.status !== "empty" ||
         c.avaliacoes.status !== "empty",
+    ),
+  )
+  const keetaHasAnyData = keetaMatrix.units.some((u) =>
+    Object.values(u.cells).some(
+      (c) =>
+        c.loja.status !== "empty" ||
+        c.item.status !== "empty" ||
+        c.pedido.status !== "empty",
     ),
   )
 
@@ -75,6 +85,11 @@ export default async function CoberturaPage() {
             platform: "99food",
             empty: !ninefoodHasAnyData,
             content: <NinefoodCoverageView matrix={ninefoodMatrix} />,
+          },
+          {
+            platform: "keeta",
+            empty: !keetaHasAnyData,
+            content: <NinefoodCoverageView matrix={keetaMatrix} />,
           },
         ]}
       />
