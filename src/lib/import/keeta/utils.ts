@@ -2,9 +2,11 @@
  * Utilitários dos parsers do Keeta.
  *
  * Reaproveita helpers de DATA/STRING do 99 Food, mas tem parser de NÚMERO
- * próprio: o Keeta usa **ponto como decimal** (formato US, "70.99"), ao
- * contrário do 99 Food (vírgula decimal). Por isso NÃO dá pra reusar o
- * toNumber do 99 — ele removeria o ponto e inflaria tudo ~100×.
+ * próprio. O Keeta exporta em DOIS formatos de decimal dependendo da loja/
+ * configuração: umas com ponto ("113.69", formato US) e outras com vírgula
+ * ("113,69", formato BR). Por isso o parser detecta o separador decimal em
+ * cada valor, em vez de assumir um só (assumir ponto inflava as lojas BR ~100×,
+ * ex.: "113,69" → "11369").
  *
  * Outras especificidades:
  *  - Datas como inteiro YYYYMMDD ("20260527")
@@ -23,13 +25,46 @@ export {
 import { toStringOrNull } from "../ninefood/utils"
 
 /**
- * Número do Keeta: ponto = decimal, vírgula = milhar (formato US).
- * Aceita number puro, "70.99", "1,234.56", "3.76%", "-" e vazio.
+ * Normaliza um número que pode vir em formato US (ponto decimal) ou BR
+ * (vírgula decimal), devolvendo uma string parseável pelo Number().
+ *
+ * Regras:
+ *  - Tem ponto E vírgula → o ÚLTIMO separador é o decimal; o outro é milhar.
+ *      "1.234,56" → "1234.56"   |   "1,234.56" → "1234.56"
+ *  - Só vírgula → decimal quando vem 1-2 dígitos depois ("113,69" → "113.69");
+ *      3 dígitos ou várias vírgulas = milhar ("1,234" → "1234").
+ *  - Só ponto (ou nenhum separador) → mantém (ponto = decimal, formato US).
+ */
+function normalizeNumeric(raw: string): string {
+  let s = raw.trim().replace(/%$/, "").replace(/\s/g, "")
+  const hasDot = s.includes(".")
+  const hasComma = s.includes(",")
+  if (hasDot && hasComma) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", ".")
+    } else {
+      s = s.replace(/,/g, "")
+    }
+  } else if (hasComma) {
+    const parts = s.split(",")
+    const last = parts[parts.length - 1]
+    if (parts.length === 2 && last.length !== 3) {
+      s = s.replace(",", ".")
+    } else {
+      s = s.replace(/,/g, "")
+    }
+  }
+  return s
+}
+
+/**
+ * Número do Keeta. Detecta ponto OU vírgula como decimal (ver normalizeNumeric).
+ * Aceita number puro, "70.99", "113,69", "1.234,56", "3.76%", "-" e vazio.
  */
 export function toNumber(v: unknown, fallback = 0): number {
   if (v == null || v === "" || v === "-") return fallback
   if (typeof v === "number") return isNaN(v) ? fallback : v
-  const s = String(v).trim().replace(/%$/, "").replace(/,/g, "")
+  const s = normalizeNumeric(String(v))
   if (s === "" || s === "-") return fallback
   const n = Number(s)
   return isNaN(n) ? fallback : n
@@ -39,7 +74,7 @@ export function toNumber(v: unknown, fallback = 0): number {
 export function toNumberOrNull(v: unknown): number | null {
   if (v == null || v === "" || v === "-") return null
   if (typeof v === "number") return isNaN(v) ? null : v
-  const s = String(v).trim().replace(/%$/, "").replace(/,/g, "")
+  const s = normalizeNumeric(String(v))
   if (s === "" || s === "-") return null
   const n = Number(s)
   return isNaN(n) ? null : n
