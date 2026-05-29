@@ -27,7 +27,8 @@ export function UnitsTable({ units }: { units: Unit[] }) {
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <div className="grid grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* Cabeçalho da tabela — só desktop */}
+      <div className="hidden md:grid md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         <div></div>
         <div>Unidade</div>
         <div className="text-right">Pedidos</div>
@@ -56,10 +57,98 @@ export function UnitsTable({ units }: { units: Unit[] }) {
               : "text-rose-700 dark:text-rose-400"
         return (
           <React.Fragment key={unit.code}>
+            {/* ─── MOBILE: card vertical ─────────────────────────── */}
+            <div
+              className={`md:hidden ${
+                idx < sortedUnits.length - 1 && !isOpen ? "border-b" : ""
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => toggle(unit.code)}
+                className="flex w-full flex-col gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              >
+                <div className="flex items-center gap-2">
+                  {isOpen ? (
+                    <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <BrandLogo size="md" />
+                  <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                    #{unit.code}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {unit.name}
+                  </span>
+                  <Link
+                    href={`/unidades/${unit.code}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[11px] font-medium text-primary"
+                  >
+                    Detalhe
+                    <ChevronRight className="size-3" />
+                  </Link>
+                </div>
+                {hasData ? (
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pl-6 text-xs">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Pedidos
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {fmtNum(m.pedidos)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Ticket
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {fmtBRL(m.ticketMedio)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Bruto
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {fmtBRLShort(m.faturamentoBruto)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Líquido
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {fmtBRLShort(m.faturamentoLiquido)}
+                      </span>
+                    </div>
+                    <div className="col-span-2 flex items-baseline justify-between rounded-md bg-muted/50 px-2 py-1">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        % Loja
+                      </span>
+                      <span className={`text-sm font-bold ${pctTone}`}>
+                        {fmtPct(pctLoja)}
+                        <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                          (− {fmtBRLShort(taxas)})
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="pl-6 text-xs text-muted-foreground">
+                    Sem dados no mês
+                  </p>
+                )}
+              </button>
+            </div>
+
+            {/* ─── DESKTOP: linha de tabela ──────────────────────── */}
             <button
               type="button"
               onClick={() => toggle(unit.code)}
-              className={`grid w-full grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 px-5 py-4 text-sm transition-colors hover:bg-muted/50 ${
+              className={`hidden md:grid w-full md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 px-5 py-4 text-sm transition-colors hover:bg-muted/50 ${
                 idx < sortedUnits.length - 1 && !isOpen ? "border-b" : ""
               }`}
             >
@@ -116,16 +205,16 @@ export function UnitsTable({ units }: { units: Unit[] }) {
 
             {isOpen && (
               <div
-                className={`bg-muted/30 px-5 py-4 ${
+                className={`bg-muted/30 px-4 py-3 md:px-5 md:py-4 ${
                   idx < sortedUnits.length - 1 ? "border-b" : ""
                 }`}
               >
                 {hasData ? (
-                  <div className="ml-12 flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 md:ml-12">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Margem por Plataforma
                     </p>
-                    <div className="grid gap-2 md:grid-cols-3">
+                    <div className="grid gap-2 sm:grid-cols-3">
                       {m.platforms.map((p) => {
                         const taxas = p.bruto - p.liquido
                         const pctTaxas = Math.max(0, 100 - p.pctLoja)
@@ -192,7 +281,7 @@ export function UnitsTable({ units }: { units: Unit[] }) {
                     </div>
                   </div>
                 ) : (
-                  <p className="ml-12 text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground md:ml-12">
                     Sem dados de plataforma neste mês.
                   </p>
                 )}

@@ -276,7 +276,8 @@ export default async function ImportacaoPage({
             </p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 text-left font-medium">Data</th>
@@ -338,6 +339,7 @@ export default async function ImportacaoPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {recent.length > 0 && recentTotalPages > 1 && (
           <HistoricoPaginacao

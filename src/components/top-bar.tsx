@@ -7,7 +7,15 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { signOut } from "@/app/login/_actions"
 
-export function TopBar() {
+export function TopBar({
+  userName,
+  userInitials,
+  brandName,
+}: {
+  userName: string
+  userInitials: string
+  brandName: string
+}) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
       <SidebarTrigger className="-ml-1" />
@@ -28,9 +36,9 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-3">
         <div className="hidden items-center gap-2 sm:flex">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-            M
+            {userInitials}
           </div>
-          <span className="text-sm font-medium">Marcus Massarenti</span>
+          <span className="text-sm font-medium">{userName}</span>
         </div>
 
         <button
@@ -38,7 +46,7 @@ export function TopBar() {
           className="hidden items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 md:inline-flex"
         >
           <Flame className="size-3.5 text-[#ff4d1c]" />
-          Churrasco no Pote
+          {brandName}
         </button>
 
         <div className="flex items-center gap-0.5">

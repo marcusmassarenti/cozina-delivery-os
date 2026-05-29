@@ -211,7 +211,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarSeparator className="group-data-[collapsible=icon]:hidden" />
         <div className="px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
-          v0.1 · em construção
+          V2.2026
         </div>
       </SidebarFooter>
     </Sidebar>
