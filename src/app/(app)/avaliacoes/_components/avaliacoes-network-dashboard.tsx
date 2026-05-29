@@ -249,9 +249,19 @@ export async function AvaliacoesNetworkDashboard({
                 {u.totalIfood > 0 && <PlatformLogo platform="ifood" size="sm" />}
                 {u.total99 > 0 && <PlatformLogo platform="99food" size="sm" />}
               </div>
-              <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
-                {fmtNum(u.total)} aval.
-              </span>
+              <div className="w-20 shrink-0 text-right">
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {fmtNum(u.total)} aval.
+                </p>
+                {total > 0 && (
+                  <p
+                    className="text-[10px] tabular-nums text-muted-foreground/80"
+                    title={`${fmtPct((u.total / total) * 100)} das avaliações da rede`}
+                  >
+                    {fmtPct((u.total / total) * 100)} do total
+                  </p>
+                )}
+              </div>
               <span className="flex w-16 items-center justify-end gap-1 text-sm font-bold tabular-nums">
                 {u.notaMedia.toFixed(2)}
                 <Star className="size-3.5 fill-amber-400 stroke-amber-400" />
