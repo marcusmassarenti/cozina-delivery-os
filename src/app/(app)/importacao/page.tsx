@@ -6,11 +6,8 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
-import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getUnits } from "@/lib/data/units"
-import { fmtBRL } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { parsePeriodParam } from "@/lib/period"
 
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportForm } from "./_components/import-form"
@@ -71,69 +68,6 @@ async function getRecentImports(page: number): Promise<{
   }
 }
 
-async function getFinanceiroTotalsByMonth(
-  unitIds: string[],
-  year: number,
-  month: number,
-): Promise<Map<string, { bruto: number; liquido: number; pedidos: number }>> {
-  if (unitIds.length === 0) return new Map()
-  const admin = createAdminClient()
-  // Pagina pra não bater no limite de 1000 do Supabase
-  const allRows: Array<{
-    unit_id: string
-    valor: number
-    fato_gerador: string | null
-    descricao_lancamento: string | null
-    impacto_no_repasse: boolean | null
-    pedido_associado_ifood: string | null
-  }> = []
-  const PAGE = 1000
-  let from = 0
-  while (from < 200000) {
-    const { data, error } = await admin
-      .from("ifood_financeiro_lancamentos")
-      .select(
-        "unit_id, valor, fato_gerador, descricao_lancamento, impacto_no_repasse, pedido_associado_ifood",
-      )
-      .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .range(from, from + PAGE - 1)
-    if (error || !data || data.length === 0) break
-    allRows.push(...data)
-    if (data.length < PAGE) break
-    from += PAGE
-  }
-  const data = allRows
-
-  const out = new Map<
-    string,
-    { bruto: number; liquido: number; pedidos: Set<string> }
-  >()
-  for (const row of data ?? []) {
-    const cur = out.get(row.unit_id) ?? {
-      bruto: 0,
-      liquido: 0,
-      pedidos: new Set(),
-    }
-    if (
-      row.fato_gerador === "Venda" &&
-      row.descricao_lancamento === "Entrada Financeira"
-    ) {
-      cur.bruto += Number(row.valor)
-    }
-    if (row.impacto_no_repasse) cur.liquido += Number(row.valor)
-    if (row.pedido_associado_ifood) cur.pedidos.add(row.pedido_associado_ifood)
-    out.set(row.unit_id, cur)
-  }
-  return new Map(
-    Array.from(out.entries()).map(([k, v]) => [
-      k,
-      { bruto: v.bruto, liquido: v.liquido, pedidos: v.pedidos.size },
-    ]),
-  )
-}
-
 export default async function ImportacaoPage({
   searchParams,
 }: {
@@ -143,7 +77,6 @@ export default async function ImportacaoPage({
   const { year, month } = parsePeriodParam(sp.periodo)
   const histPage = Math.max(1, parseInt(sp.historico ?? "1", 10) || 1)
   const units = await getUnits()
-  const unitsWithIfood = units.filter((u) => u.platforms.includes("ifood"))
   const activeUnits = units.filter((u) => u.active)
   const availableUnitsLite = activeUnits.map((u) => ({
     id: u.id,
@@ -152,48 +85,11 @@ export default async function ImportacaoPage({
     platforms: u.platforms,
     externalStoreIds: u.externalStoreIds,
   }))
-  const activeUnitIds = activeUnits.map((u) => u.id)
-  const [recentResult, finTotals, nineTotals, keetaTotals, availablePeriods] =
-    await Promise.all([
-      getRecentImports(histPage),
-      getFinanceiroTotalsByMonth(unitsWithIfood.map((u) => u.id), year, month),
-      getNinefoodResumoByUnits(activeUnitIds, year, month),
-      getKeetaResumoByUnits(activeUnitIds, year, month),
-      getAvailablePeriods(),
-    ])
+  const [recentResult, availablePeriods] = await Promise.all([
+    getRecentImports(histPage),
+    getAvailablePeriods(),
+  ])
 
-  // Unidades que têm QUALQUER dado financeiro importado no mês (iFood, 99 ou
-  // Keeta), com o detalhe por plataforma.
-  const importedUnits = activeUnits
-    .map((u) => {
-      const ifood = finTotals.get(u.id)
-      const nine = nineTotals.get(u.id)
-      const keeta = keetaTotals.get(u.id)
-      const plats: Array<{
-        id: PlatformId
-        pedidos: number
-        bruto: number
-        liquido: number
-      }> = []
-      if (ifood && ifood.pedidos > 0)
-        plats.push({ id: "ifood", ...ifood })
-      if (nine?.hasData)
-        plats.push({
-          id: "99food",
-          pedidos: nine.pedidos,
-          bruto: nine.bruto,
-          liquido: nine.liquido,
-        })
-      if (keeta?.hasData)
-        plats.push({
-          id: "keeta",
-          pedidos: keeta.pedidos,
-          bruto: keeta.bruto,
-          liquido: keeta.liquido,
-        })
-      return { unit: u, plats }
-    })
-    .filter((x) => x.plats.length > 0)
   const recent = recentResult.items
   const recentTotal = recentResult.total
   const recentTotalPages = Math.max(
@@ -244,68 +140,7 @@ export default async function ImportacaoPage({
         )}
       </div>
 
-      {importedUnits.length > 0 && (
-        <>
-          <SectionDivider
-            number={2}
-            label={`Financeiro de ${formatPeriodLabel({ year, month })} (do que já está importado)`}
-          />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {importedUnits.map(({ unit, plats }) => (
-              <div key={unit.id} className="rounded-lg border bg-card p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                      {unit.name}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      #{unit.code}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    {plats.map((p) => (
-                      <PlatformLogo key={p.id} platform={p.id} size="sm" />
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-3 space-y-2.5">
-                  {plats.map((p) => (
-                    <div key={p.id} className="space-y-1 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <PlatformLogo platform={p.id} size="sm" />
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                          {p.id === "ifood"
-                            ? "iFood"
-                            : p.id === "99food"
-                              ? "99 Food"
-                              : "Keeta"}
-                        </span>
-                        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
-                          {p.pedidos} ped.
-                        </span>
-                      </div>
-                      <div className="flex justify-between pl-5">
-                        <span className="text-muted-foreground">Bruto</span>
-                        <span className="font-medium tabular-nums">
-                          {fmtBRL(p.bruto)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pl-5">
-                        <span className="text-muted-foreground">Líquido</span>
-                        <span className="font-semibold tabular-nums">
-                          {fmtBRL(p.liquido)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      <SectionDivider number={3} label="Histórico de importações" />
+      <SectionDivider number={2} label="Histórico de importações" />
       <div className="overflow-hidden rounded-xl border bg-card">
         {recent.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
