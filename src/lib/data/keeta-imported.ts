@@ -385,6 +385,246 @@ export async function listKeetaAvaliacoesForMonth(
   })
 }
 
+// ─── Cardápio: ranking de itens do mês (tab Cardápio da unidade) ─────
+
+export type KeetaItemRanking = {
+  nomeItem: string
+  qtdVendida: number
+  receita: number
+  precoMedio: number
+  diasComVenda: number
+  /** Média do Carrinho (%) — conversão visita→carrinho (0-100) */
+  conversaoMedia: number | null
+}
+
+/**
+ * Top itens vendidos no mês (Keeta). Agrega keeta_daily_item por nome_item:
+ * soma quantidade, receita = Σ(qtd × preço médio), dias com venda e a média
+ * de conversão de carrinho. Ordenado por receita DESC.
+ */
+export async function getKeetaItensRankingForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+  limit = 30,
+): Promise<KeetaItemRanking[]> {
+  const admin = createAdminClient()
+  const rows = await pageAll<{
+    nome_item: string
+    qtd_vendida: number | string
+    preco_medio: number | string
+    carrinho_pct: number | string | null
+    data: string
+  }>((a, b) =>
+    admin
+      .from("keeta_daily_item")
+      .select("nome_item, qtd_vendida, preco_medio, carrinho_pct, data")
+      .eq("unit_id", unitId)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .range(a, b),
+  )
+  if (rows.length === 0) return []
+
+  type Agg = {
+    qtd: number
+    receita: number
+    dias: Set<string>
+    convSoma: number
+    convCount: number
+  }
+  const byItem = new Map<string, Agg>()
+  for (const r of rows) {
+    const nome = r.nome_item
+    if (!nome) continue
+    let a = byItem.get(nome)
+    if (!a) {
+      a = { qtd: 0, receita: 0, dias: new Set(), convSoma: 0, convCount: 0 }
+      byItem.set(nome, a)
+    }
+    const qtd = Number(r.qtd_vendida) || 0
+    const preco = Number(r.preco_medio) || 0
+    a.qtd += qtd
+    a.receita += qtd * preco
+    if (r.data) a.dias.add(String(r.data))
+    if (r.carrinho_pct != null) {
+      a.convSoma += Number(r.carrinho_pct) || 0
+      a.convCount += 1
+    }
+  }
+
+  return Array.from(byItem.entries())
+    .map(([nomeItem, a]) => ({
+      nomeItem,
+      qtdVendida: a.qtd,
+      receita: Math.round(a.receita * 100) / 100,
+      precoMedio: a.qtd > 0 ? Math.round((a.receita / a.qtd) * 100) / 100 : 0,
+      diasComVenda: a.dias.size,
+      conversaoMedia:
+        a.convCount > 0
+          ? Math.round((a.convSoma / a.convCount) * 100) / 100
+          : null,
+    }))
+    .sort((x, y) => y.receita - x.receita)
+    .slice(0, limit)
+}
+
+// ─── Financeiro: agregado + dia a dia (tab Financeiro da unidade) ────
+
+export type KeetaDiaResumo = {
+  data: string
+  pedidos: number
+  pedidosValidos: number
+  bruto: number
+  liquido: number
+  cancelados: number
+  valorMedio: number
+  tempoPreparoMin: number | null
+}
+
+export type KeetaFinanceiroResumo = {
+  hasData: boolean
+  bruto: number
+  liquido: number
+  pctLoja: number
+  /** Descontos da plataforma = bruto − líquido (derivado, sempre consistente) */
+  descontos: number
+  pedidos: number
+  pedidosValidos: number
+  cancelamentosQtd: number
+  ticketMedio: number
+  tempoPreparoMedio: number | null
+  dias: KeetaDiaResumo[]
+}
+
+/**
+ * Financeiro do Keeta no mês: bruto (Loja diária) + líquido (ganhos líquidos
+ * dos Pedidos) + série diária. Os descontos são derivados (bruto − líquido)
+ * porque os campos de despesa por pedido do Keeta se sobrepõem (comissão /
+ * despesas da plataforma / taxa de entrega não somam de forma limpa).
+ */
+export async function getKeetaFinanceiroForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<KeetaFinanceiroResumo> {
+  const admin = createAdminClient()
+
+  const [loja, pedidos] = await Promise.all([
+    pageAll<{
+      data: string
+      vendas_itens: number | string
+      pedidos_validos: number | null
+      total_pedidos: number | null
+      pedidos_cancelados: number | null
+      valor_medio_pedido: number | string | null
+      tempo_preparo_min: number | string | null
+    }>((a, b) =>
+      admin
+        .from("keeta_daily_loja")
+        .select(
+          "data, vendas_itens, pedidos_validos, total_pedidos, pedidos_cancelados, valor_medio_pedido, tempo_preparo_min",
+        )
+        .eq("unit_id", unitId)
+        .eq("ref_year", year)
+        .eq("ref_month", month)
+        .range(a, b),
+    ),
+    pageAll<{
+      data: string
+      ganhos_liquidos: number | string | null
+    }>((a, b) =>
+      admin
+        .from("keeta_pedidos")
+        .select("data, ganhos_liquidos")
+        .eq("unit_id", unitId)
+        .eq("ref_year", year)
+        .eq("ref_month", month)
+        .range(a, b),
+    ),
+  ])
+
+  const empty: KeetaFinanceiroResumo = {
+    hasData: false,
+    bruto: 0,
+    liquido: 0,
+    pctLoja: 0,
+    descontos: 0,
+    pedidos: 0,
+    pedidosValidos: 0,
+    cancelamentosQtd: 0,
+    ticketMedio: 0,
+    tempoPreparoMedio: 0,
+    dias: [],
+  }
+  if (loja.length === 0 && pedidos.length === 0) return empty
+
+  // Líquido por dia (dos pedidos)
+  const liquidoPorDia = new Map<string, number>()
+  let liquidoTotal = 0
+  for (const p of pedidos) {
+    const d = String(p.data)
+    const liq = Number(p.ganhos_liquidos) || 0
+    liquidoPorDia.set(d, (liquidoPorDia.get(d) ?? 0) + liq)
+    liquidoTotal += liq
+  }
+
+  let bruto = 0
+  let pedidosCount = 0
+  let pedidosValidos = 0
+  let cancelamentosQtd = 0
+  let tempoSoma = 0
+  let tempoCount = 0
+  const dias: KeetaDiaResumo[] = []
+  for (const r of loja) {
+    const d = String(r.data)
+    const dBruto = Number(r.vendas_itens) || 0
+    const dPedidos = r.total_pedidos || 0
+    const dValidos = r.pedidos_validos || 0
+    const dCancel = r.pedidos_cancelados || 0
+    const tempo =
+      r.tempo_preparo_min != null ? Number(r.tempo_preparo_min) : null
+    bruto += dBruto
+    pedidosCount += dPedidos
+    pedidosValidos += dValidos
+    cancelamentosQtd += dCancel
+    if (tempo != null && tempo > 0) {
+      tempoSoma += tempo
+      tempoCount += 1
+    }
+    dias.push({
+      data: d,
+      pedidos: dPedidos,
+      pedidosValidos: dValidos,
+      bruto: dBruto,
+      liquido: liquidoPorDia.get(d) ?? 0,
+      cancelados: dCancel,
+      valorMedio: Number(r.valor_medio_pedido) || 0,
+      tempoPreparoMin: tempo,
+    })
+  }
+  dias.sort((a, b) => a.data.localeCompare(b.data))
+
+  // Fallbacks quando só veio Pedidos (sem Loja diária)
+  if (bruto === 0 && liquidoTotal > 0) bruto = liquidoTotal
+  const liquido = liquidoTotal > 0 ? liquidoTotal : bruto
+  if (pedidosCount === 0) pedidosCount = pedidos.length
+
+  return {
+    hasData: true,
+    bruto,
+    liquido,
+    pctLoja: bruto > 0 ? (liquido / bruto) * 100 : 0,
+    descontos: Math.max(0, bruto - liquido),
+    pedidos: pedidosCount,
+    pedidosValidos,
+    cancelamentosQtd,
+    ticketMedio: pedidosCount > 0 ? bruto / pedidosCount : 0,
+    tempoPreparoMedio: tempoCount > 0 ? tempoSoma / tempoCount : null,
+    dias,
+  }
+}
+
 // ─── Cobertura: matriz loja × mês (Loja diária / Itens / Pedidos) ────
 
 const KEETA_COMPLETE_RATIO = 0.6

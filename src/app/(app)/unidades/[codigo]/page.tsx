@@ -44,11 +44,14 @@ import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { EditUnitDialog } from "../_components/edit-unit-dialog"
 import { AvaliacoesTab } from "./_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "./_components/avaliacoes-99-tab"
+import { AvaliacoesKeetaTab } from "./_components/avaliacoes-keeta-tab"
 import { CardapioTab } from "./_components/cardapio-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
+import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { CustosTab } from "./_components/custos-tab"
 import { FinanceiroTab } from "./_components/financeiro-tab"
 import { Financeiro99Tab } from "./_components/financeiro-99-tab"
+import { FinanceiroKeetaTab } from "./_components/financeiro-keeta-tab"
 
 export default async function UnidadeDetalhePage({
   params,
@@ -186,6 +189,7 @@ export default async function UnidadeDetalhePage({
             monthlyMerged={m}
             usaIfood={usaIfood}
             usa99={usa99}
+            usaKeeta={usaKeeta}
             year={year}
             month={month}
           />
@@ -288,6 +292,7 @@ function DetailTabs({
   monthlyMerged,
   usaIfood,
   usa99,
+  usaKeeta,
   year,
   month,
 }: {
@@ -295,6 +300,7 @@ function DetailTabs({
   monthlyMerged: UnitMonthly
   usaIfood: boolean
   usa99: boolean
+  usaKeeta: boolean
   year: number
   month: number
 }) {
@@ -321,6 +327,15 @@ function DetailTabs({
         </Suspense>
       ),
     },
+    {
+      platform: "keeta" as const,
+      empty: !usaKeeta,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <CardapioKeetaTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
   ]
   const financeiroSlots = [
     {
@@ -341,6 +356,15 @@ function DetailTabs({
         </Suspense>
       ),
     },
+    {
+      platform: "keeta" as const,
+      empty: !usaKeeta,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <FinanceiroKeetaTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
   ]
   const avaliacoesSlots = [
     {
@@ -358,6 +382,15 @@ function DetailTabs({
       content: (
         <Suspense fallback={<TabSkeleton />}>
           <Avaliacoes99Tab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+    {
+      platform: "keeta" as const,
+      empty: !usaKeeta,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <AvaliacoesKeetaTab unitId={unit.id} year={year} month={month} />
         </Suspense>
       ),
     },
