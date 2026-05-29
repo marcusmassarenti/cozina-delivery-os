@@ -751,6 +751,262 @@ export async function getNinefoodCoverageMatrix(
   }
 }
 
+// ─── Network: Top itens 99 Food ──────────────────────────────────────
+
+/**
+ * Mesmo formato/shape do iFood `ItemRanking` pra simplificar o card no
+ * dashboard que troca via switcher.
+ */
+export type NinefoodTopItem = {
+  nomeItem: string
+  qtdVendida: number
+  valorTotal: number
+}
+
+export async function getNetworkNinefoodTopItemsForMonth(
+  year: number,
+  month: number,
+  limit = 5,
+  filterUnitIds?: string[],
+): Promise<NinefoodTopItem[]> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const startIso = `${year}-${monthStr}-01`
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+
+  let q = admin
+    .from("ninefood_daily_item")
+    .select("nome_item, receita, qtd_vendida")
+    .gte("data", startIso)
+    .lt("data", endExcl)
+    .limit(50000)
+  if (filterUnitIds && filterUnitIds.length > 0)
+    q = q.in("unit_id", filterUnitIds)
+  const { data } = await q
+
+  const acc = new Map<string, NinefoodTopItem>()
+  for (const r of data ?? []) {
+    if (!r.nome_item) continue
+    const cur = acc.get(r.nome_item) ?? {
+      nomeItem: r.nome_item,
+      qtdVendida: 0,
+      valorTotal: 0,
+    }
+    cur.qtdVendida += r.qtd_vendida ?? 0
+    cur.valorTotal += Number(r.receita ?? 0)
+    acc.set(r.nome_item, cur)
+  }
+  return Array.from(acc.values())
+    .sort((a, b) => b.valorTotal - a.valorTotal)
+    .slice(0, limit)
+}
+
+// ─── Network: Cancelamentos por motivo 99 Food ──────────────────────
+
+/**
+ * O 99 Food não tem códigos numéricos como o iFood (411, 412). O motivo
+ * vem como texto livre em `motivos_cancelamento_comerciante`. Normalizamos
+ * pra agrupar variações comuns (lowercase + trim).
+ */
+export type NinefoodCancelamentoMotivo = {
+  motivo: string
+  pedidos: number
+  /** No 99 não temos perda direta — somamos o `valor_total_pedido` quando vier */
+  perdaFinanceira: number
+}
+
+export async function getNetworkNinefoodCancelamentosForMonth(
+  year: number,
+  month: number,
+  limit = 5,
+  filterUnitIds?: string[],
+): Promise<NinefoodCancelamentoMotivo[]> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const startIso = `${year}-${monthStr}-01`
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+
+  let q = admin
+    .from("ninefood_pedidos")
+    .select(
+      "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, valor_total_pedido",
+    )
+    .not("horario_cancelamento", "is", null)
+    .gte("horario_pedido", startIso)
+    .lt("horario_pedido", endExcl)
+    .limit(50000)
+  if (filterUnitIds && filterUnitIds.length > 0)
+    q = q.in("unit_id", filterUnitIds)
+  const { data } = await q
+
+  const acc = new Map<string, NinefoodCancelamentoMotivo>()
+  for (const r of data ?? []) {
+    const raw = r.motivos_cancelamento_comerciante
+      ? String(r.motivos_cancelamento_comerciante).trim()
+      : ""
+    if (!raw) continue
+    // Normaliza pra agrupar variações
+    const key = raw.toLowerCase()
+    const cur = acc.get(key) ?? {
+      motivo: raw, // mantém a 1ª capitalização vista
+      pedidos: 0,
+      perdaFinanceira: 0,
+    }
+    cur.pedidos += 1
+    cur.perdaFinanceira += Number(r.valor_total_pedido ?? 0)
+    acc.set(key, cur)
+  }
+  return Array.from(acc.values())
+    .sort((a, b) => b.pedidos - a.pedidos)
+    .slice(0, limit)
+}
+
+// ─── Network: Avaliações 99 Food ─────────────────────────────────────
+
+export type NetworkNinefoodAvaliacoes = {
+  total: number
+  notaMedia: number
+  distribucao: Record<1 | 2 | 3 | 4 | 5, number>
+  comComentario: number
+  topTagsPositivas: Array<{ tag: string; count: number }>
+  topTagsNegativas: Array<{ tag: string; count: number }>
+  ultimosComentarios: Array<{
+    id: string
+    unitId: string
+    unitCode: string
+    unitName: string
+    nota: number
+    comentario: string
+    data: string
+    pedidoIdCurto: string | null
+  }>
+  hasData: boolean
+}
+
+export async function getNetworkNinefoodAvaliacoesForMonth(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+): Promise<NetworkNinefoodAvaliacoes> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const startIso = `${year}-${monthStr}-01`
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+
+  let q = admin
+    .from("ninefood_pedidos")
+    .select(
+      "id, unit_id, pedido_id, nivel_avaliacao, conteudo_avaliacao, tag_avaliacao, data_avaliacao",
+    )
+    .not("nivel_avaliacao", "is", null)
+    .gte("data_avaliacao", startIso)
+    .lt("data_avaliacao", endExcl)
+    .order("data_avaliacao", { ascending: false })
+    .limit(50000)
+  if (filterUnitIds && filterUnitIds.length > 0)
+    q = q.in("unit_id", filterUnitIds)
+  const { data } = await q
+
+  const rows = data ?? []
+  if (rows.length === 0) {
+    return {
+      total: 0,
+      notaMedia: 0,
+      distribucao: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      comComentario: 0,
+      topTagsPositivas: [],
+      topTagsNegativas: [],
+      ultimosComentarios: [],
+      hasData: false,
+    }
+  }
+
+  const dist: Record<1 | 2 | 3 | 4 | 5, number> = {
+    1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
+  }
+  let soma = 0
+  let comComentario = 0
+  const tagPos = new Map<string, number>()
+  const tagNeg = new Map<string, number>()
+  for (const r of rows) {
+    const nota = Number(r.nivel_avaliacao) as 1 | 2 | 3 | 4 | 5
+    if (nota >= 1 && nota <= 5) {
+      dist[nota] += 1
+      soma += nota
+    }
+    if (r.conteudo_avaliacao && String(r.conteudo_avaliacao).trim().length > 0) {
+      comComentario++
+    }
+    if (r.tag_avaliacao) {
+      const tags = String(r.tag_avaliacao)
+        .split(/[,;]/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+      const target = nota >= 4 ? tagPos : nota <= 2 ? tagNeg : null
+      if (target) {
+        for (const t of tags) target.set(t, (target.get(t) ?? 0) + 1)
+      }
+    }
+  }
+
+  // Últimos 5 comentários
+  const comentariosNaoVazios = rows.filter(
+    (r) =>
+      r.conteudo_avaliacao &&
+      String(r.conteudo_avaliacao).trim().length > 0,
+  )
+  const unitIds = Array.from(
+    new Set(comentariosNaoVazios.slice(0, 10).map((r) => r.unit_id)),
+  )
+  const unitMap = new Map<string, { code: string; name: string }>()
+  if (unitIds.length > 0) {
+    const { data: units } = await admin
+      .from("units")
+      .select("id, code, name")
+      .in("id", unitIds)
+    for (const u of units ?? []) {
+      unitMap.set(u.id, { code: u.code, name: u.name })
+    }
+  }
+  const ultimosComentarios = comentariosNaoVazios.slice(0, 5).map((r) => {
+    const pedidoIdStr = String(r.pedido_id ?? "")
+    return {
+      id: String(r.id),
+      unitId: r.unit_id,
+      unitCode: unitMap.get(r.unit_id)?.code ?? "?",
+      unitName: unitMap.get(r.unit_id)?.name ?? "(unidade)",
+      nota: Number(r.nivel_avaliacao),
+      comentario: String(r.conteudo_avaliacao),
+      data: String(r.data_avaliacao),
+      pedidoIdCurto:
+        pedidoIdStr.length > 6 ? "…" + pedidoIdStr.slice(-6) : pedidoIdStr || null,
+    }
+  })
+
+  return {
+    total: rows.length,
+    notaMedia: Math.round((soma / rows.length) * 100) / 100,
+    distribucao: dist,
+    comComentario,
+    topTagsPositivas: Array.from(tagPos.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([tag, count]) => ({ tag, count })),
+    topTagsNegativas: Array.from(tagNeg.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([tag, count]) => ({ tag, count })),
+    ultimosComentarios,
+    hasData: true,
+  }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 function mean(values: number[]): number | null {

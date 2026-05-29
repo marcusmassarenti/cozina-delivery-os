@@ -4,6 +4,7 @@ import {
   DollarSign,
   Filter,
   MessageCircle,
+  Package,
   Percent,
   Receipt,
   Sparkles,
@@ -15,8 +16,10 @@ import {
 } from "lucide-react"
 
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
+import { DashboardSection } from "@/components/dashboard/dashboard-section"
+import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { UnitsTable } from "@/components/dashboard/units-table"
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
 import { SectionDivider } from "@/components/shared/section-divider"
 import {
@@ -30,8 +33,14 @@ import {
   getNetworkAvaliacoesForMonth,
   getNetworkCancelamentosPorMotivo,
   getNetworkFunnelForMonth,
+  getNetworkTopItemsForMonth,
 } from "@/lib/data/ifood-imported"
-import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
+import {
+  getNetworkNinefoodAvaliacoesForMonth,
+  getNetworkNinefoodCancelamentosForMonth,
+  getNetworkNinefoodTopItemsForMonth,
+  getNinefoodResumoByUnits,
+} from "@/lib/data/ninefood-imported"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { parsePeriodParam, formatPeriodLabel } from "@/lib/period"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -99,13 +108,21 @@ export default async function Home({
   const [
     networkFunnel,
     networkCancels,
+    networkTopItems,
     networkAvaliacoes,
+    networkCancels99,
+    networkTopItems99,
+    networkAvaliacoes99,
     finByUnit,
     ninefoodByUnit,
   ] = await Promise.all([
     getNetworkFunnelForMonth(year, month, filterUnitIds),
     getNetworkCancelamentosPorMotivo(year, month, 5, filterUnitIds),
+    getNetworkTopItemsForMonth(year, month, 5, filterUnitIds),
     getNetworkAvaliacoesForMonth(year, month, filterUnitIds),
+    getNetworkNinefoodCancelamentosForMonth(year, month, 5, filterUnitIds),
+    getNetworkNinefoodTopItemsForMonth(year, month, 5, filterUnitIds),
+    getNetworkNinefoodAvaliacoesForMonth(year, month, filterUnitIds),
     getFinanceiroResumoByUnits(activeUnitIds, year, month),
     getNinefoodResumoByUnits(activeUnitIds, year, month),
   ])
@@ -138,9 +155,23 @@ export default async function Home({
   const hasAnyImported = unitsWithImported > 0 || unitsWith99 > 0
   const hasFunnelData = networkFunnel.totals.visitas > 0
   const hasCancelData = networkCancels.length > 0
+  const hasTopItemsData = networkTopItems.length > 0
   const hasAvaliacoesData = networkAvaliacoes.hasData
+  const hasCancel99Data = networkCancels99.length > 0
+  const hasTopItems99Data = networkTopItems99.length > 0
+  const hasAvaliacoes99Data = networkAvaliacoes99.hasData
   const isFiltered =
     !!unidadesFilter || !!plataformaFilter || onlyComFaturamento
+
+  // Plataformas que efetivamente alimentam os KPIs financeiros do topo.
+  // Se filtro por plataforma estiver ativo, mostra só aquela.
+  const finPlatforms: PlatformId[] = []
+  if (plataformaFilter) {
+    finPlatforms.push(plataformaFilter)
+  } else {
+    if (unitsWithImported > 0) finPlatforms.push("ifood")
+    if (unitsWith99 > 0) finPlatforms.push("99food")
+  }
 
   const kpis: Kpi[] = [
     {
@@ -149,6 +180,7 @@ export default async function Home({
       trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: CalendarDays,
+      platforms: finPlatforms,
     },
     {
       label: "Média Pedidos/Dia",
@@ -156,6 +188,7 @@ export default async function Home({
       trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: CalendarDays,
+      platforms: finPlatforms,
     },
     {
       label: "Ticket Médio",
@@ -163,6 +196,7 @@ export default async function Home({
       trend: "+5,2% vs mês ant.",
       tone: "positive",
       icon: Receipt,
+      platforms: finPlatforms,
     },
     {
       label: "Total Bruto",
@@ -170,6 +204,7 @@ export default async function Home({
       trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: DollarSign,
+      platforms: finPlatforms,
     },
     {
       label: "Total Líquido",
@@ -177,6 +212,7 @@ export default async function Home({
       trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: DollarSign,
+      platforms: finPlatforms,
     },
     {
       label: "Taxa de Repasse",
@@ -184,6 +220,7 @@ export default async function Home({
       trend: "Acima da média do setor (~62%)",
       tone: "positive",
       icon: Percent,
+      platforms: finPlatforms,
     },
   ]
 
@@ -193,11 +230,12 @@ export default async function Home({
         networkAvaliacoes.total) *
       100
     kpis.push({
-      label: "Nota Média (iFood)",
+      label: "Nota Média",
       value: `${networkAvaliacoes.notaMedia.toFixed(2)} ★`,
       trend: `${networkAvaliacoes.total} avaliações · ${negativasPct.toFixed(1)}% negativas`,
       tone: networkAvaliacoes.notaMedia >= 4.5 ? "positive" : "neutral",
       icon: Star,
+      platforms: ["ifood"],
     })
   }
 
@@ -263,6 +301,7 @@ export default async function Home({
         </div>
       ) : (
         <>
+          <DashboardSection id="kpis">
           <div className="flex items-center justify-between gap-3">
             <SectionDivider number={1} label="Performance da Operação" />
             {hasAnyImported && (
@@ -283,7 +322,7 @@ export default async function Home({
             )}
           </div>
           <div
-            className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${
+            className={`grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 ${
               kpis.length === 7 ? "xl:grid-cols-7" : "xl:grid-cols-6"
             }`}
           >
@@ -291,7 +330,9 @@ export default async function Home({
               <KpiCard key={kpi.label} kpi={kpi} />
             ))}
           </div>
+          </DashboardSection>
 
+          <DashboardSection id="plataformas">
           <SectionDivider
             number={2}
             label={`Visão Geral por Plataforma (${scopeLabel})`}
@@ -323,338 +364,422 @@ export default async function Home({
               </div>
             ))}
           </div>
+          </DashboardSection>
 
-          {(hasFunnelData || hasCancelData) && (
-            <>
+          {(hasFunnelData ||
+            hasCancelData ||
+            hasTopItemsData ||
+            hasCancel99Data ||
+            hasTopItems99Data) && (
+            <DashboardSection id="cardapio">
               <SectionDivider
                 number={3}
-                label={`Cardápio & Cancelamentos (${scopeLabel} iFood)`}
+                label={`Cardápio & Cancelamentos (${scopeLabel})`}
               />
-              <div className="grid gap-4 lg:grid-cols-2">
-                {/* Funil da rede */}
-                <div className="rounded-xl border bg-card p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                      Funil de conversão · {scopeLabel}
-                    </h3>
-                    <PlatformLogo platform="ifood" size="sm" />
-                  </div>
-                  {hasFunnelData ? (
-                    <>
-                      <div className="space-y-2">
-                        <FunnelBar
-                          label="Visitas"
-                          value={networkFunnel.totals.visitas}
-                          base={networkFunnel.totals.visitas}
-                          color="bg-blue-500"
-                        />
-                        <FunnelBar
-                          label="Visualizações"
-                          value={networkFunnel.totals.visualizacoes}
-                          base={networkFunnel.totals.visitas}
-                          color="bg-indigo-500"
-                        />
-                        <FunnelBar
-                          label="Sacola"
-                          value={networkFunnel.totals.sacola}
-                          base={networkFunnel.totals.visitas}
-                          color="bg-violet-500"
-                        />
-                        <FunnelBar
-                          label="Concluídos"
-                          value={networkFunnel.totals.concluidos}
-                          base={networkFunnel.totals.visitas}
-                          color="bg-emerald-500"
-                          emphasis
-                        />
-                      </div>
-                      <div className="mt-3 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-                        <span className="text-xs font-medium text-emerald-900 dark:text-emerald-300">
-                          Conversão {unidadesFilter ? "filtrada" : "da rede"}
-                        </span>
-                        <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                          {fmtPct(networkFunnel.totals.conversaoPct)}
-                        </span>
-                      </div>
-                      {networkFunnel.topUnits.length > 1 && (
-                        <div className="mt-3 border-t pt-3">
-                          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Por unidade (concluídos)
-                          </p>
-                          <div className="space-y-1">
-                            {networkFunnel.topUnits.slice(0, 5).map((u) => (
-                              <div
-                                key={u.unitId}
-                                className="flex items-center justify-between text-xs"
-                              >
-                                <span className="truncate">
-                                  #{u.code} {u.name}
-                                </span>
-                                <div className="flex items-center gap-2 tabular-nums">
-                                  <span className="font-semibold">
-                                    {fmtNum(u.concluidos)}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    ({fmtPct(u.conversaoPct)})
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+              <div className="grid gap-4 lg:grid-cols-3">
+                {/* Funil — iFood-only */}
+                <PlatformTabbedCard
+                  title={`Funil de conversão · ${scopeLabel}`}
+                  slots={[
+                    {
+                      platform: "ifood",
+                      empty: !hasFunnelData,
+                      content: hasFunnelData ? (
+                        <>
+                          <div className="space-y-2">
+                            <FunnelBar
+                              label="Visitas"
+                              value={networkFunnel.totals.visitas}
+                              base={networkFunnel.totals.visitas}
+                              color="bg-blue-500"
+                            />
+                            <FunnelBar
+                              label="Visualizações"
+                              value={networkFunnel.totals.visualizacoes}
+                              base={networkFunnel.totals.visitas}
+                              color="bg-indigo-500"
+                            />
+                            <FunnelBar
+                              label="Sacola"
+                              value={networkFunnel.totals.sacola}
+                              base={networkFunnel.totals.visitas}
+                              color="bg-violet-500"
+                            />
+                            <FunnelBar
+                              label="Concluídos"
+                              value={networkFunnel.totals.concluidos}
+                              base={networkFunnel.totals.visitas}
+                              color="bg-emerald-500"
+                              emphasis
+                            />
                           </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="py-6 text-center text-xs text-muted-foreground">
-                      Sem Cardápio importado neste mês
-                    </p>
-                  )}
-                </div>
-
-                {/* Cancelamentos */}
-                <div className="rounded-xl border bg-card p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="size-4 text-amber-600" />
-                      <h3 className="text-sm font-semibold">
-                        Top cancelamentos · {scopeLabel}
-                      </h3>
-                    </div>
-                    <PlatformLogo platform="ifood" size="sm" />
-                  </div>
-                  {hasCancelData ? (
-                    <div className="space-y-2">
-                      {networkCancels.map((c) => (
-                        <div
-                          key={c.motivo}
-                          className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="line-clamp-1 text-xs font-medium">
-                              {c.motivo}
-                            </p>
-                            <p className="text-[10px] text-rose-700 tabular-nums dark:text-rose-400">
-                              perda {fmtBRL(c.perdaFinanceira)}
-                            </p>
-                          </div>
-                          <div className="ml-3 flex items-center gap-1.5">
-                            <XCircle className="size-3.5 text-rose-600" />
-                            <span className="text-sm font-bold tabular-nums">
-                              {fmtNum(c.pedidos)}
+                          <div className="mt-3 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+                            <span className="text-xs font-medium text-emerald-900 dark:text-emerald-300">
+                              Conversão{" "}
+                              {unidadesFilter ? "filtrada" : "da rede"}
+                            </span>
+                            <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {fmtPct(networkFunnel.totals.conversaoPct)}
                             </span>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="py-6 text-center text-xs text-muted-foreground">
-                      Sem Financeiro importado neste mês
-                    </p>
-                  )}
-                </div>
+                          {networkFunnel.topUnits.length > 1 && (
+                            <div className="mt-3 border-t pt-3">
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                Por unidade (concluídos)
+                              </p>
+                              <div className="space-y-1">
+                                {networkFunnel.topUnits
+                                  .slice(0, 5)
+                                  .map((u) => (
+                                    <div
+                                      key={u.unitId}
+                                      className="flex items-center justify-between text-xs"
+                                    >
+                                      <span className="truncate">
+                                        #{u.code} {u.name}
+                                      </span>
+                                      <div className="flex items-center gap-2 tabular-nums">
+                                        <span className="font-semibold">
+                                          {fmtNum(u.concluidos)}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          ({fmtPct(u.conversaoPct)})
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="py-6 text-center text-xs text-muted-foreground">
+                          Sem Cardápio iFood neste mês
+                        </p>
+                      ),
+                    },
+                  ]}
+                />
+
+                {/* Top cancelamentos — iFood + 99 com switcher */}
+                <PlatformTabbedCard
+                  title={`Top cancelamentos · ${scopeLabel}`}
+                  icon={
+                    <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+                  }
+                  slots={[
+                    {
+                      platform: "ifood",
+                      empty: !hasCancelData,
+                      content: hasCancelData ? (
+                        <CancelList
+                          items={networkCancels.map((c) => ({
+                            motivo: c.motivo,
+                            pedidos: c.pedidos,
+                            perda: c.perdaFinanceira,
+                          }))}
+                        />
+                      ) : (
+                        <EmptyMsg text="Sem Financeiro iFood neste mês" />
+                      ),
+                    },
+                    ...(unitsWith99 > 0
+                      ? [
+                          {
+                            platform: "99food" as const,
+                            empty: !hasCancel99Data,
+                            content: hasCancel99Data ? (
+                              <CancelList
+                                items={networkCancels99.map((c) => ({
+                                  motivo: c.motivo,
+                                  pedidos: c.pedidos,
+                                  perda: c.perdaFinanceira,
+                                }))}
+                              />
+                            ) : (
+                              <EmptyMsg text="Sem cancelamentos 99 Food neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+
+                {/* Top produtos — iFood + 99 com switcher */}
+                <PlatformTabbedCard
+                  title={`Top produtos · ${scopeLabel}`}
+                  icon={
+                    <Package className="size-4 shrink-0 text-emerald-600" />
+                  }
+                  slots={[
+                    {
+                      platform: "ifood",
+                      empty: !hasTopItemsData,
+                      content: hasTopItemsData ? (
+                        <TopItemsList
+                          items={networkTopItems.map((it) => ({
+                            nomeItem: it.nomeItem,
+                            qtdVendida: it.qtdVendida,
+                            valorTotal: it.valorTotal,
+                          }))}
+                        />
+                      ) : (
+                        <EmptyMsg text="Sem Cardápio iFood neste mês" />
+                      ),
+                    },
+                    ...(unitsWith99 > 0
+                      ? [
+                          {
+                            platform: "99food" as const,
+                            empty: !hasTopItems99Data,
+                            content: hasTopItems99Data ? (
+                              <TopItemsList items={networkTopItems99} />
+                            ) : (
+                              <EmptyMsg text="Sem Cardápio 99 Food neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
               </div>
-            </>
+            </DashboardSection>
           )}
 
-          {hasAvaliacoesData && (
-            <>
+          {(hasAvaliacoesData || hasAvaliacoes99Data) && (
+            <DashboardSection id="satisfacao">
               <SectionDivider
                 number={4}
-                label={`Satisfação dos clientes (${scopeLabel} iFood)`}
+                label={`Satisfação dos clientes (${scopeLabel})`}
               />
               <div className="grid gap-4 lg:grid-cols-3">
                 {/* Distribuição das notas */}
-                <div className="rounded-xl border bg-card p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                      Distribuição das notas
-                    </h3>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {networkAvaliacoes.total} no mês
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {([5, 4, 3, 2, 1] as const).map((n) => {
-                      const count = networkAvaliacoes.distribucao[n]
-                      const pct =
-                        networkAvaliacoes.total > 0
-                          ? (count / networkAvaliacoes.total) * 100
-                          : 0
-                      const color =
-                        n >= 4
-                          ? "bg-emerald-500"
-                          : n === 3
-                            ? "bg-amber-500"
-                            : "bg-rose-500"
-                      return (
-                        <div key={n} className="flex items-center gap-2">
-                          <div className="flex w-10 items-center gap-0.5 text-xs font-semibold tabular-nums">
-                            {n}
-                            <Star className="size-3 fill-amber-400 stroke-amber-400" />
-                          </div>
-                          <div className="flex-1 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={`h-2 ${color}`}
-                              style={{ width: `${Math.max(2, pct)}%` }}
-                            />
-                          </div>
-                          <span className="w-16 text-right text-xs tabular-nums">
-                            <span className="font-semibold">
-                              {fmtNum(count)}
-                            </span>
-                            <span className="ml-1 text-[10px] text-muted-foreground">
-                              ({pct.toFixed(0)}%)
-                            </span>
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Top elogios */}
-                <div className="rounded-xl border bg-card p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <ThumbsUp className="size-4 text-emerald-600" />
-                    <h3 className="text-sm font-semibold">O que elogiam</h3>
-                  </div>
-                  {networkAvaliacoes.topTagsPositivas.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-muted-foreground">
-                      Sem tags positivas registradas
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {networkAvaliacoes.topTagsPositivas.map((t) => {
-                        const pct =
-                          networkAvaliacoes.total > 0
-                            ? (t.count / networkAvaliacoes.total) * 100
-                            : 0
-                        return (
-                          <div
-                            key={t.tag}
-                            className="flex items-center gap-2"
-                          >
-                            <span className="flex-1 truncate text-xs">
-                              {t.tag}
-                            </span>
-                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className="h-full bg-emerald-500"
-                                style={{ width: `${pct}%` }}
+                {/* Distribuição das notas */}
+                <PlatformTabbedCard
+                  title="Distribuição das notas"
+                  slots={[
+                    {
+                      platform: "ifood",
+                      empty: !hasAvaliacoesData,
+                      content: hasAvaliacoesData ? (
+                        <NotasDistribuicao
+                          total={networkAvaliacoes.total}
+                          distribucao={networkAvaliacoes.distribucao}
+                        />
+                      ) : (
+                        <EmptyMsg text="Sem avaliações iFood neste mês" />
+                      ),
+                    },
+                    ...(unitsWith99 > 0
+                      ? [
+                          {
+                            platform: "99food" as const,
+                            empty: !hasAvaliacoes99Data,
+                            content: hasAvaliacoes99Data ? (
+                              <NotasDistribuicao
+                                total={networkAvaliacoes99.total}
+                                distribucao={networkAvaliacoes99.distribucao}
                               />
-                            </div>
-                            <span className="w-6 text-right text-xs font-semibold tabular-nums">
-                              {t.count}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
+                            ) : (
+                              <EmptyMsg text="Sem avaliações 99 Food neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
 
-                {/* Top reclamações */}
-                <div className="rounded-xl border bg-card p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <ThumbsDown className="size-4 text-rose-600" />
-                    <h3 className="text-sm font-semibold">O que reclamam</h3>
-                  </div>
-                  {networkAvaliacoes.topTagsNegativas.length === 0 ? (
-                    <p className="py-6 text-center text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                      🎉 Nenhuma reclamação no mês
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {networkAvaliacoes.topTagsNegativas.map((t) => {
-                        const pct =
-                          networkAvaliacoes.total > 0
-                            ? (t.count / networkAvaliacoes.total) * 100
-                            : 0
-                        return (
-                          <div
-                            key={t.tag}
-                            className="flex items-center gap-2"
-                          >
-                            <span className="flex-1 truncate text-xs">
-                              {t.tag}
-                            </span>
-                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className="h-full bg-rose-500"
-                                style={{ width: `${pct}%` }}
+                {/* O que elogiam */}
+                <PlatformTabbedCard
+                  title="O que elogiam"
+                  icon={
+                    <ThumbsUp className="size-4 shrink-0 text-emerald-600" />
+                  }
+                  slots={[
+                    {
+                      platform: "ifood",
+                      empty: !hasAvaliacoesData,
+                      content: hasAvaliacoesData ? (
+                        <TagsList
+                          tags={networkAvaliacoes.topTagsPositivas}
+                          total={networkAvaliacoes.total}
+                          color="emerald"
+                          emptyText="Sem tags positivas registradas"
+                        />
+                      ) : (
+                        <EmptyMsg text="Sem avaliações iFood neste mês" />
+                      ),
+                    },
+                    ...(unitsWith99 > 0
+                      ? [
+                          {
+                            platform: "99food" as const,
+                            empty: !hasAvaliacoes99Data,
+                            content: hasAvaliacoes99Data ? (
+                              <TagsList
+                                tags={networkAvaliacoes99.topTagsPositivas}
+                                total={networkAvaliacoes99.total}
+                                color="emerald"
+                                emptyText="Sem tags positivas registradas"
                               />
-                            </div>
-                            <span className="w-6 text-right text-xs font-semibold tabular-nums">
-                              {t.count}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
+                            ) : (
+                              <EmptyMsg text="Sem avaliações 99 Food neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+
+                {/* O que reclamam */}
+                <PlatformTabbedCard
+                  title="O que reclamam"
+                  icon={
+                    <ThumbsDown className="size-4 shrink-0 text-rose-600" />
+                  }
+                  slots={[
+                    {
+                      platform: "ifood",
+                      empty: !hasAvaliacoesData,
+                      content: hasAvaliacoesData ? (
+                        <TagsList
+                          tags={networkAvaliacoes.topTagsNegativas}
+                          total={networkAvaliacoes.total}
+                          color="rose"
+                          emptyText="🎉 Nenhuma reclamação no mês"
+                        />
+                      ) : (
+                        <EmptyMsg text="Sem avaliações iFood neste mês" />
+                      ),
+                    },
+                    ...(unitsWith99 > 0
+                      ? [
+                          {
+                            platform: "99food" as const,
+                            empty: !hasAvaliacoes99Data,
+                            content: hasAvaliacoes99Data ? (
+                              <TagsList
+                                tags={networkAvaliacoes99.topTagsNegativas}
+                                total={networkAvaliacoes99.total}
+                                color="rose"
+                                emptyText="🎉 Nenhuma reclamação no mês"
+                              />
+                            ) : (
+                              <EmptyMsg text="Sem avaliações 99 Food neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
               </div>
 
-              {/* Últimos comentários */}
-              {networkAvaliacoes.ultimosComentarios.length > 0 && (
-                <div className="rounded-xl border bg-card overflow-hidden">
-                  <div className="flex items-center gap-2 border-b px-5 py-3">
-                    <MessageCircle className="size-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold">
-                      Últimos comentários
-                    </h3>
-                  </div>
-                  <div className="divide-y">
-                    {networkAvaliacoes.ultimosComentarios.map((c) => (
-                      <div key={c.id} className="px-5 py-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((i) => (
-                                <Star
-                                  key={i}
-                                  className={`size-3 ${
-                                    i <= c.nota
-                                      ? "fill-amber-400 stroke-amber-400"
-                                      : "stroke-muted-foreground/40"
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-[11px] font-medium text-muted-foreground">
-                              #{c.unitCode} {c.unitName}
-                            </span>
-                            {c.pedidoIdCurto && (
-                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                                #{c.pedidoIdCurto}
+              {/* Últimos comentários — merged iFood + 99 ordenado por data */}
+              {(() => {
+                type ComentarioMerged = {
+                  id: string
+                  platform: PlatformId
+                  unitCode: string
+                  unitName: string
+                  nota: number
+                  comentario: string
+                  data: string
+                  pedidoIdCurto: string | null
+                }
+                const merged: ComentarioMerged[] = [
+                  ...networkAvaliacoes.ultimosComentarios.map((c) => ({
+                    id: "ifood-" + c.id,
+                    platform: "ifood" as const,
+                    unitCode: c.unitCode,
+                    unitName: c.unitName,
+                    nota: c.nota,
+                    comentario: c.comentario,
+                    data: c.data,
+                    pedidoIdCurto: c.pedidoIdCurto,
+                  })),
+                  ...networkAvaliacoes99.ultimosComentarios.map((c) => ({
+                    id: "99food-" + c.id,
+                    platform: "99food" as const,
+                    unitCode: c.unitCode,
+                    unitName: c.unitName,
+                    nota: c.nota,
+                    comentario: c.comentario,
+                    data: c.data,
+                    pedidoIdCurto: c.pedidoIdCurto,
+                  })),
+                ]
+                  .sort((a, b) => (a.data > b.data ? -1 : 1))
+                  .slice(0, 8)
+                if (merged.length === 0) return null
+                return (
+                  <div className="rounded-xl border bg-card overflow-hidden">
+                    <div className="flex items-center gap-2 border-b px-5 py-3">
+                      <MessageCircle className="size-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold">
+                        Últimos comentários
+                      </h3>
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        iFood + 99 Food, ordenado por data
+                      </span>
+                    </div>
+                    <div className="divide-y">
+                      {merged.map((c) => (
+                        <div key={c.id} className="px-5 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <PlatformLogo
+                                platform={c.platform}
+                                size="sm"
+                              />
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                  <Star
+                                    key={i}
+                                    className={`size-3 ${
+                                      i <= c.nota
+                                        ? "fill-amber-400 stroke-amber-400"
+                                        : "stroke-muted-foreground/40"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-[11px] font-medium text-muted-foreground">
+                                #{c.unitCode} {c.unitName}
                               </span>
-                            )}
+                              {c.pedidoIdCurto && (
+                                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                  #{c.pedidoIdCurto}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground tabular-nums">
+                              {new Date(
+                                c.data + "T00:00:00",
+                              ).toLocaleDateString("pt-BR", {
+                                day: "2-digit",
+                                month: "short",
+                              })}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {new Date(
-                              c.data + "T00:00:00",
-                            ).toLocaleDateString("pt-BR", {
-                              day: "2-digit",
-                              month: "short",
-                            })}
-                          </span>
+                          <p className="mt-1 text-sm italic text-foreground/90 line-clamp-2">
+                            &ldquo;{c.comentario}&rdquo;
+                          </p>
                         </div>
-                        <p className="mt-1 text-sm italic text-foreground/90 line-clamp-2">
-                          &ldquo;{c.comentario}&rdquo;
-                        </p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </>
+                )
+              })()}
+            </DashboardSection>
           )}
 
-          <SectionDivider
-            number={hasAvaliacoesData ? 5 : 4}
-            label="Detalhamento por Unidade"
-          />
-          <UnitsTable units={unitsToShow} />
+          <DashboardSection id="unidades">
+            <SectionDivider
+              number={hasAvaliacoesData ? 5 : 4}
+              label="Detalhamento por Unidade"
+            />
+            <UnitsTable units={unitsToShow} />
+          </DashboardSection>
         </>
       )}
     </div>
@@ -937,6 +1062,173 @@ function FunnelBar({
           style={{ width: `${Math.min(100, pct)}%` }}
         />
       </div>
+    </div>
+  )
+}
+
+/** Mensagem de empty state padronizada (centralizada + pequena) */
+function EmptyMsg({ text }: { text: string }) {
+  return (
+    <p className="py-6 text-center text-xs text-muted-foreground">{text}</p>
+  )
+}
+
+/** Lista compartilhada de cancelamentos (iFood ou 99 Food).
+ *  Mesmo formato pra uniformidade visual entre as plataformas. */
+function CancelList({
+  items,
+}: {
+  items: Array<{ motivo: string; pedidos: number; perda: number }>
+}) {
+  return (
+    <div className="space-y-2">
+      {items.map((c) => (
+        <div
+          key={c.motivo}
+          className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-1 text-xs font-medium">{c.motivo}</p>
+            <p className="text-[10px] text-rose-700 tabular-nums dark:text-rose-400">
+              perda {fmtBRL(c.perda)}
+            </p>
+          </div>
+          <div className="ml-3 flex items-center gap-1.5">
+            <XCircle className="size-3.5 text-rose-600" />
+            <span className="text-sm font-bold tabular-nums">
+              {fmtNum(c.pedidos)}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Distribuição das notas 1-5 com barras coloridas */
+function NotasDistribuicao({
+  total,
+  distribucao,
+}: {
+  total: number
+  distribucao: Record<1 | 2 | 3 | 4 | 5, number>
+}) {
+  return (
+    <div className="space-y-2">
+      {([5, 4, 3, 2, 1] as const).map((n) => {
+        const count = distribucao[n]
+        const pct = total > 0 ? (count / total) * 100 : 0
+        const color =
+          n >= 4
+            ? "bg-emerald-500"
+            : n === 3
+              ? "bg-amber-500"
+              : "bg-rose-500"
+        return (
+          <div key={n} className="flex items-center gap-2">
+            <div className="flex w-10 items-center gap-0.5 text-xs font-semibold tabular-nums">
+              {n}
+              <Star className="size-3 fill-amber-400 stroke-amber-400" />
+            </div>
+            <div className="flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-2 ${color}`}
+                style={{ width: `${Math.max(2, pct)}%` }}
+              />
+            </div>
+            <span className="w-16 text-right text-xs tabular-nums">
+              <span className="font-semibold">{fmtNum(count)}</span>
+              <span className="ml-1 text-[10px] text-muted-foreground">
+                ({pct.toFixed(0)}%)
+              </span>
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Lista de tags (positivas ou negativas) com barrinha */
+function TagsList({
+  tags,
+  total,
+  color,
+  emptyText,
+}: {
+  tags: Array<{ tag: string; count: number }>
+  total: number
+  color: "emerald" | "rose"
+  emptyText: React.ReactNode
+}) {
+  if (tags.length === 0) {
+    return (
+      <p
+        className={`py-6 text-center text-xs ${
+          color === "rose"
+            ? "font-medium text-emerald-700 dark:text-emerald-400"
+            : "text-muted-foreground"
+        }`}
+      >
+        {emptyText}
+      </p>
+    )
+  }
+  const barColor = color === "emerald" ? "bg-emerald-500" : "bg-rose-500"
+  return (
+    <div className="space-y-1.5">
+      {tags.map((t) => {
+        const pct = total > 0 ? (t.count / total) * 100 : 0
+        return (
+          <div key={t.tag} className="flex items-center gap-2">
+            <span className="flex-1 truncate text-xs">{t.tag}</span>
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full ${barColor}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="w-6 text-right text-xs font-semibold tabular-nums">
+              {t.count}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Lista compartilhada de top produtos (iFood ou 99 Food). */
+function TopItemsList({
+  items,
+}: {
+  items: Array<{ nomeItem: string; qtdVendida: number; valorTotal: number }>
+}) {
+  return (
+    <div className="space-y-2">
+      {items.map((it, idx) => (
+        <div
+          key={it.nomeItem}
+          className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold tabular-nums text-muted-foreground">
+              {idx + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-1 text-xs font-medium">{it.nomeItem}</p>
+              <p className="text-[10px] tabular-nums text-muted-foreground">
+                {fmtNum(it.qtdVendida)} vendidos
+              </p>
+            </div>
+          </div>
+          <div className="ml-3 text-right">
+            <p className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+              {fmtBRLShort(it.valorTotal)}
+            </p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

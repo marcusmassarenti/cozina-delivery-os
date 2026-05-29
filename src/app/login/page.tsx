@@ -18,19 +18,25 @@ export default async function LoginPage() {
       <div className="grid min-h-screen lg:grid-cols-2">
         {/* Hero panel */}
         <div className="relative hidden overflow-hidden lg:block">
-          {/* Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
+          {/* Background base preto */}
+          <div className="absolute inset-0 bg-zinc-950" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/login-hero.jpg"
+            src="/cnp.jpg"
             alt=""
             aria-hidden
-            className="absolute inset-0 size-full object-cover opacity-60"
+            className="absolute inset-0 size-full object-cover opacity-55 [object-position:55%_55%]"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+          {/* Overlay leve na esquerda pra dar contraste no texto sem
+              esmagar o logo CNP que precisa ficar em evidência. */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+          {/* Vinheta pra escurecer só os extremos — meio fica respirando
+              pra ver o fogo do CNP. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/95" />
 
-          {/* Foreground content */}
-          <div className="relative z-10 flex h-full flex-col justify-between p-12">
+          {/* Foreground content — header em cima, texto principal+slogan
+              empurrados pro pé da página pra dar respiro ao logo CNP */}
+          <div className="relative z-10 flex h-full flex-col p-12">
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -43,19 +49,20 @@ export default async function LoginPage() {
               </span>
             </div>
 
-            <div className="max-w-xl">
-              <h1 className="text-5xl font-bold leading-[1.1] text-white">
-                Transformando vidas{" "}
-                <span className="text-[#ff4d1c]">com comida de qualidade</span>
+            {/* mt-auto empurra esse bloco pro final, mostrando o logo CNP
+                (com o fogo) limpo na parte superior */}
+            <div className="mt-auto max-w-2xl">
+              <h1 className="text-[1.75rem] font-bold leading-[1.2] text-white drop-shadow-lg xl:text-[2.25rem]">
+                Transformando vidas
+                <br />
+                <span className="whitespace-nowrap text-[#ff4d1c]">
+                  com comida de qualidade
+                </span>
               </h1>
-              <p className="mt-6 text-base text-white/70">
-                Sistema operacional da rede no canal delivery.
+              <p className="mt-8 text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">
+                Fazendo Churrasco desde 2021
               </p>
             </div>
-
-            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/40">
-              O melhor churrasco é feito na Cozina
-            </p>
           </div>
         </div>
 

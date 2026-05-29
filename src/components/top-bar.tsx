@@ -1,7 +1,8 @@
 "use client"
 
-import { Bell, Expand, Flame, LogOut, RefreshCw, Search } from "lucide-react"
+import { Flame, LogOut, RefreshCw, Search } from "lucide-react"
 
+import { DashboardCustomizeButton } from "@/components/dashboard/dashboard-customize-button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -50,16 +51,8 @@ export function TopBar({
         </button>
 
         <div className="flex items-center gap-0.5">
-          <IconButton aria-label="Tela cheia">
-            <Expand className="size-4" />
-          </IconButton>
+          <DashboardCustomizeButton />
           <ThemeToggle />
-          <IconButton aria-label="Notificações">
-            <Bell className="size-4" />
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
-              9
-            </span>
-          </IconButton>
           <IconButton aria-label="Recarregar">
             <RefreshCw className="size-4" />
           </IconButton>

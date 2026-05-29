@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Fundo arredondado preto -->
+  <rect width="32" height="32" rx="7" fill="#0a0a0a"/>
+  <!-- Chama (Flame do Lucide, estilizada e preenchida em laranja) -->
+  <path
+    d="M11.2 19.4a3.4 3.4 0 0 0 3.4-3.4c0-1.88-.68-2.72-1.36-4.08-1.46-2.92-.3-5.52 2.72-8.16.68 3.4 2.72 6.67 5.44 8.84 2.72 2.18 4.08 4.76 4.08 7.48a9.52 9.52 0 1 1-19.04 0c0-1.57.59-3.12 1.36-4.08a3.4 3.4 0 0 0 3.4 3.4z"
+    fill="#ff4d1c"
+    stroke="#ff4d1c"
+    stroke-width="1"
+    stroke-linejoin="round"
+  />
+</svg>

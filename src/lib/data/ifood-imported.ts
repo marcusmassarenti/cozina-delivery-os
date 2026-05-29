@@ -766,6 +766,125 @@ export async function getComplementosRankingForMonth(
     .slice(0, limit)
 }
 
+// ─── Top itens (rede) ────────────────────────────────────────────────
+
+/**
+ * Agrega os top itens vendidos somando todas as unidades (ou só as
+ * filtradas). Prioriza dados do PERIODO (XLSX agregado) e cai pra agregado
+ * do diário quando não tem.
+ *
+ * Retorna ranking por valor total vendido (faturamento bruto do produto).
+ */
+export async function getNetworkTopItemsForMonth(
+  year: number,
+  month: number,
+  limit = 10,
+  filterUnitIds?: string[],
+): Promise<ItemRanking[]> {
+  const admin = createAdminClient()
+  const { start, end } = monthRange(year, month)
+
+  // 1ª tentativa: ITEMS do PERÍODO da rede inteira
+  let qPer = admin
+    .from("ifood_cardapio_periodo_items")
+    .select(
+      "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+    )
+    .gte("period_end", start)
+    .lte("period_end", end)
+    .limit(50000)
+  if (filterUnitIds && filterUnitIds.length > 0)
+    qPer = qPer.in("unit_id", filterUnitIds)
+  const { data: periodoItems } = await qPer
+
+  if (periodoItems && periodoItems.length > 0) {
+    const acc = new Map<
+      string,
+      ItemRanking & { _convSum: number; _convN: number }
+    >()
+    for (const r of periodoItems) {
+      const cur = acc.get(r.nome_item) ?? {
+        nomeItem: r.nome_item,
+        categoria: r.categoria,
+        qtdVendida: 0,
+        pedidos: 0,
+        visitas: 0,
+        valorTotal: 0,
+        conversaoPctMedia: 0,
+        qtdComPromocao: 0,
+        _convSum: 0,
+        _convN: 0,
+      }
+      cur.qtdVendida += r.qtd_vendida || 0
+      cur.pedidos += r.pedidos || 0
+      cur.visitas += r.visitas || 0
+      cur.valorTotal += Number(r.valor_total) || 0
+      cur.qtdComPromocao += r.qtd_com_promocao || 0
+      if (r.conversao_pct != null) {
+        cur._convSum += Number(r.conversao_pct)
+        cur._convN += 1
+      }
+      acc.set(r.nome_item, cur)
+    }
+    return Array.from(acc.values())
+      .map(({ _convSum, _convN, ...rest }) => ({
+        ...rest,
+        conversaoPctMedia: _convN > 0 ? _convSum / _convN : 0,
+      }))
+      .sort((a, b) => b.valorTotal - a.valorTotal)
+      .slice(0, limit)
+  }
+
+  // Fallback: agrega do DIÁRIO da rede inteira
+  let qDay = admin
+    .from("ifood_daily_items")
+    .select(
+      "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+    )
+    .gte("date", start)
+    .lte("date", end)
+    .limit(200000)
+  if (filterUnitIds && filterUnitIds.length > 0)
+    qDay = qDay.in("unit_id", filterUnitIds)
+  const { data } = await qDay
+
+  const acc = new Map<
+    string,
+    ItemRanking & { _convSum: number; _convN: number }
+  >()
+  for (const r of data ?? []) {
+    const cur = acc.get(r.nome_item) ?? {
+      nomeItem: r.nome_item,
+      categoria: r.categoria,
+      qtdVendida: 0,
+      pedidos: 0,
+      visitas: 0,
+      valorTotal: 0,
+      conversaoPctMedia: 0,
+      qtdComPromocao: 0,
+      _convSum: 0,
+      _convN: 0,
+    }
+    cur.qtdVendida += r.qtd_vendida || 0
+    cur.pedidos += r.pedidos || 0
+    cur.visitas += r.visitas || 0
+    cur.valorTotal += Number(r.valor_total) || 0
+    cur.qtdComPromocao += r.qtd_com_promocao || 0
+    if (r.conversao_pct != null) {
+      cur._convSum += Number(r.conversao_pct)
+      cur._convN += 1
+    }
+    acc.set(r.nome_item, cur)
+  }
+  return Array.from(acc.values())
+    .map(({ _convSum, _convN, ...rest }) => ({
+      ...rest,
+      conversaoPctMedia: _convN > 0 ? _convSum / _convN : 0,
+    }))
+    .sort((a, b) => b.valorTotal - a.valorTotal)
+    .slice(0, limit)
+}
+
 // ─── Financeiro ──────────────────────────────────────────────────────
 
 /**
