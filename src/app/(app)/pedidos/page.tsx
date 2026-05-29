@@ -169,6 +169,116 @@ export default async function PedidosPage({
             </div>
           </div>
 
+          {/* Operação + Promoções + Taxas */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="mb-3 text-sm font-semibold">Operação do mês</h3>
+              <div className="space-y-1.5">
+                <LinhaInfo
+                  label="Concluídos"
+                  value={fmtNum(resumo.concluidos)}
+                  tone="emerald"
+                />
+                <LinhaInfo
+                  label="Cancelados"
+                  value={fmtNum(resumo.cancelados)}
+                  tone={resumo.cancelados > 0 ? "rose" : undefined}
+                />
+                <LinhaInfo
+                  label="Ticket médio"
+                  value={fmtBRL(resumo.ticketMedio)}
+                />
+                <LinhaInfo
+                  label="Valor de itens"
+                  value={fmtBRL(resumo.valorItens)}
+                />
+              </div>
+              {resumo.porTurno.length > 0 && (
+                <div className="mt-3 border-t pt-3">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Por turno
+                  </p>
+                  <div className="space-y-1.5">
+                    {resumo.porTurno.map((t) => (
+                      <BarrinhaInfo
+                        key={t.chave}
+                        label={t.chave}
+                        pedidos={t.pedidos}
+                        total={resumo.totalPedidos}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="mb-3 text-sm font-semibold">
+                Promoções (incentivos)
+              </h3>
+              <div className="space-y-1.5">
+                <LinhaInfo
+                  label="Custeado pelo iFood"
+                  value={fmtBRL(resumo.incentivoIfood)}
+                  tone="emerald"
+                />
+                <LinhaInfo
+                  label="Custeado pela loja"
+                  value={fmtBRL(resumo.incentivoLoja)}
+                  tone={resumo.incentivoLoja > 0 ? "rose" : undefined}
+                />
+                <LinhaInfo
+                  label="Custeado pela rede"
+                  value={fmtBRL(resumo.incentivoRede)}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                O da loja é custo seu; o do iFood/rede é subsídio da plataforma.
+              </p>
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="mb-3 text-sm font-semibold">Taxas do iFood</h3>
+              <div className="space-y-1.5">
+                <LinhaInfo
+                  label="Taxas e comissões"
+                  value={fmtBRL(resumo.taxasComissoes)}
+                  tone="rose"
+                />
+                <LinhaInfo
+                  label="Taxa de serviço"
+                  value={fmtBRL(resumo.taxaServico)}
+                />
+                <LinhaInfo
+                  label="Taxa de entrega (cliente)"
+                  value={fmtBRL(resumo.taxaEntregaCliente)}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Por pedido. O repasse oficial vem da conciliação (Resultado).
+              </p>
+            </div>
+          </div>
+
+          {/* Logística de entrega */}
+          {resumo.porEntrega.length > 0 && (
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="mb-3 text-sm font-semibold">
+                Logística de entrega
+              </h3>
+              <div className="space-y-2">
+                {resumo.porEntrega.map((e) => (
+                  <BarrinhaInfo
+                    key={e.chave}
+                    label={e.chave}
+                    pedidos={e.pedidos}
+                    total={resumo.totalPedidos}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* VR por unidade */}
           {vrByUnit.length > 0 && (
             <div className="overflow-hidden rounded-xl border bg-card">
@@ -280,6 +390,62 @@ function BandeiraRow({
         <span className="font-semibold">{fmtBRL(valor)}</span>
         <span className="ml-1 text-[10px] text-muted-foreground">
           ({pedidos} ped)
+        </span>
+      </span>
+    </div>
+  )
+}
+
+function LinhaInfo({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone?: "emerald" | "rose"
+}) {
+  const color =
+    tone === "emerald"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : tone === "rose"
+        ? "text-rose-700 dark:text-rose-400"
+        : "text-foreground"
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={`text-sm font-semibold tabular-nums ${color}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function BarrinhaInfo({
+  label,
+  pedidos,
+  total,
+}: {
+  label: string
+  pedidos: number
+  total: number
+}) {
+  const pct = total > 0 ? (pedidos / total) * 100 : 0
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-32 truncate text-xs" title={label}>
+        {label}
+      </span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full bg-emerald-500"
+          style={{ width: `${Math.max(2, pct)}%` }}
+        />
+      </div>
+      <span className="w-16 text-right text-xs tabular-nums">
+        <span className="font-semibold">{fmtNum(pedidos)}</span>
+        <span className="ml-1 text-[10px] text-muted-foreground">
+          ({pct.toFixed(0)}%)
         </span>
       </span>
     </div>

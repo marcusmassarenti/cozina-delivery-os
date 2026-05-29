@@ -33,15 +33,35 @@ export const FORMA_GRUPOS = [
 
 export type VrPorBandeira = { bandeira: string; pedidos: number; valor: number }
 export type MixForma = { grupo: string; pedidos: number; valor: number }
+export type PorChave = { chave: string; pedidos: number; valor: number }
 
 export type PagamentoResumo = {
   totalPedidos: number
+  /** Total pago pelos clientes (soma) */
   totalValor: number
+  /** Soma do valor dos itens (sem entrega) */
+  valorItens: number
+  ticketMedio: number
+  concluidos: number
+  cancelados: number
+  // Pagamento / VR
   vrPedidos: number
   vrValor: number
   vrPct: number // % do valor que foi em VR
   porBandeira: VrPorBandeira[]
   mix: MixForma[]
+  // Promoções / incentivos (somas)
+  incentivoIfood: number
+  incentivoLoja: number
+  incentivoRede: number
+  // Taxas que o iFood cobra (somas)
+  taxaServico: number
+  taxasComissoes: number
+  taxaEntregaCliente: number
+  valorLiquido: number
+  // Distribuições
+  porTurno: PorChave[]
+  porEntrega: PorChave[]
   hasData: boolean
 }
 
@@ -49,11 +69,24 @@ function emptyResumo(): PagamentoResumo {
   return {
     totalPedidos: 0,
     totalValor: 0,
+    valorItens: 0,
+    ticketMedio: 0,
+    concluidos: 0,
+    cancelados: 0,
     vrPedidos: 0,
     vrValor: 0,
     vrPct: 0,
     porBandeira: [],
     mix: [],
+    incentivoIfood: 0,
+    incentivoLoja: 0,
+    incentivoRede: 0,
+    taxaServico: 0,
+    taxasComissoes: 0,
+    taxaEntregaCliente: 0,
+    valorLiquido: 0,
+    porTurno: [],
+    porEntrega: [],
     hasData: false,
   }
 }
@@ -85,44 +118,93 @@ async function pageAll<T>(
 type Row = {
   unit_id: string
   total_pago_cliente: number | string | null
+  valor_itens: number | string | null
   forma_grupo: string | null
   bandeira_vr: string | null
+  status_final: string | null
+  turno: string | null
+  incentivo_ifood: number | string | null
+  incentivo_loja: number | string | null
+  incentivo_rede: number | string | null
+  taxa_servico: number | string | null
+  taxas_comissoes: number | string | null
+  taxa_entrega_cliente: number | string | null
+  valor_liquido: number | string | null
+  produto_logistico: string | null
 }
+
+const SELECT_COLS =
+  "unit_id, total_pago_cliente, valor_itens, forma_grupo, bandeira_vr, status_final, turno, incentivo_ifood, incentivo_loja, incentivo_rede, taxa_servico, taxas_comissoes, taxa_entrega_cliente, valor_liquido, produto_logistico"
 
 function aggregate(rows: Row[]): PagamentoResumo {
   if (rows.length === 0) return emptyResumo()
-  const val = (r: Row) => Number(r.total_pago_cliente) || 0
+  const num = (v: number | string | null) => Number(v) || 0
 
   const byBandeira = new Map<string, { pedidos: number; valor: number }>()
   const byGrupo = new Map<string, { pedidos: number; valor: number }>()
+  const byTurno = new Map<string, { pedidos: number; valor: number }>()
+  const byEntrega = new Map<string, { pedidos: number; valor: number }>()
   let totalValor = 0
+  let valorItens = 0
   let vrPedidos = 0
   let vrValor = 0
+  let concluidos = 0
+  let cancelados = 0
+  let incentivoIfood = 0
+  let incentivoLoja = 0
+  let incentivoRede = 0
+  let taxaServico = 0
+  let taxasComissoes = 0
+  let taxaEntregaCliente = 0
+  let valorLiquido = 0
+
+  const bump = (
+    m: Map<string, { pedidos: number; valor: number }>,
+    key: string,
+    v: number,
+  ) => {
+    const e = m.get(key) ?? { pedidos: 0, valor: 0 }
+    e.pedidos += 1
+    e.valor += v
+    m.set(key, e)
+  }
 
   for (const r of rows) {
-    const v = val(r)
+    const v = num(r.total_pago_cliente)
     totalValor += v
-    const grupo = r.forma_grupo || "Outros"
-    const g = byGrupo.get(grupo) ?? { pedidos: 0, valor: 0 }
-    g.pedidos += 1
-    g.valor += v
-    byGrupo.set(grupo, g)
+    valorItens += num(r.valor_itens)
+    incentivoIfood += num(r.incentivo_ifood)
+    incentivoLoja += num(r.incentivo_loja)
+    incentivoRede += num(r.incentivo_rede)
+    taxaServico += Math.abs(num(r.taxa_servico))
+    taxasComissoes += Math.abs(num(r.taxas_comissoes))
+    taxaEntregaCliente += num(r.taxa_entrega_cliente)
+    valorLiquido += num(r.valor_liquido)
+
+    const status = (r.status_final || "").toUpperCase()
+    if (status.includes("CONCLU")) concluidos += 1
+    else if (status.includes("CANCEL")) cancelados += 1
+
+    bump(byGrupo, r.forma_grupo || "Outros", v)
+    bump(byTurno, r.turno || "—", v)
+    bump(byEntrega, r.produto_logistico || "—", v)
     if (r.bandeira_vr) {
       vrPedidos += 1
       vrValor += v
-      const b = byBandeira.get(r.bandeira_vr) ?? { pedidos: 0, valor: 0 }
-      b.pedidos += 1
-      b.valor += v
-      byBandeira.set(r.bandeira_vr, b)
+      bump(byBandeira, r.bandeira_vr, v)
     }
   }
 
   const round = (n: number) => Math.round(n * 100) / 100
+  const toList = (m: Map<string, { pedidos: number; valor: number }>): PorChave[] =>
+    Array.from(m.entries())
+      .map(([chave, e]) => ({ chave, pedidos: e.pedidos, valor: round(e.valor) }))
+      .sort((a, b) => b.pedidos - a.pedidos)
+
   const porBandeira: VrPorBandeira[] = VR_BANDEIRAS.map((bandeira) => {
     const b = byBandeira.get(bandeira) ?? { pedidos: 0, valor: 0 }
     return { bandeira, pedidos: b.pedidos, valor: round(b.valor) }
   }).filter((b) => b.pedidos > 0)
-  // bandeiras fora do conjunto conhecido (raro)
   for (const [bandeira, b] of byBandeira) {
     if (!VR_BANDEIRAS.includes(bandeira as VrBandeira)) {
       porBandeira.push({ bandeira, pedidos: b.pedidos, valor: round(b.valor) })
@@ -138,11 +220,24 @@ function aggregate(rows: Row[]): PagamentoResumo {
   return {
     totalPedidos: rows.length,
     totalValor: round(totalValor),
+    valorItens: round(valorItens),
+    ticketMedio: rows.length > 0 ? round(totalValor / rows.length) : 0,
+    concluidos,
+    cancelados,
     vrPedidos,
     vrValor: round(vrValor),
     vrPct: totalValor > 0 ? (vrValor / totalValor) * 100 : 0,
     porBandeira,
     mix,
+    incentivoIfood: round(incentivoIfood),
+    incentivoLoja: round(incentivoLoja),
+    incentivoRede: round(incentivoRede),
+    taxaServico: round(taxaServico),
+    taxasComissoes: round(taxasComissoes),
+    taxaEntregaCliente: round(taxaEntregaCliente),
+    valorLiquido: round(valorLiquido),
+    porTurno: toList(byTurno),
+    porEntrega: toList(byEntrega),
     hasData: true,
   }
 }
@@ -157,7 +252,7 @@ export async function getPagamentoResumoForMonth(
   const rows = await pageAll<Row>((a, b) =>
     admin
       .from("ifood_pedidos")
-      .select("unit_id, total_pago_cliente, forma_grupo, bandeira_vr")
+      .select(SELECT_COLS)
       .eq("unit_id", unitId)
       .eq("ref_year", year)
       .eq("ref_month", month)
@@ -176,7 +271,7 @@ export async function getNetworkPagamentoResumo(
   const rows = await pageAll<Row>((a, b) => {
     let q = admin
       .from("ifood_pedidos")
-      .select("unit_id, total_pago_cliente, forma_grupo, bandeira_vr")
+      .select(SELECT_COLS)
       .eq("ref_year", year)
       .eq("ref_month", month)
       .range(a, b)
@@ -207,7 +302,7 @@ export async function getVrByUnits(
   const rows = await pageAll<Row & { bandeira_vr: string | null }>((a, b) => {
     let q = admin
       .from("ifood_pedidos")
-      .select("unit_id, total_pago_cliente, forma_grupo, bandeira_vr")
+      .select(SELECT_COLS)
       .eq("ref_year", year)
       .eq("ref_month", month)
       .range(a, b)
