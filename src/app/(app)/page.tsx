@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Bike,
   CalendarDays,
   DollarSign,
   Filter,
@@ -43,6 +44,7 @@ import {
   getNinefoodResumoByUnits,
 } from "@/lib/data/ninefood-imported"
 import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
+import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import {
   getKeetaResumoByUnits,
   getNetworkKeetaAvaliacoesForMonth,
@@ -128,6 +130,7 @@ export default async function Home({
     ninefoodByUnit,
     keetaByUnit,
     importCoverage,
+    deliveryFee,
   ] = await Promise.all([
     getNetworkFunnelForMonth(year, month, filterUnitIds),
     getNetworkCancelamentosPorMotivo(year, month, 5, filterUnitIds),
@@ -143,6 +146,7 @@ export default async function Home({
     getNinefoodResumoByUnits(activeUnitIds, year, month),
     getKeetaResumoByUnits(activeUnitIds, year, month),
     getImportCoverageForMonth(year, month, filterUnitIds),
+    getNetworkDeliveryFee(activeUnitIds, year, month),
   ])
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
@@ -208,6 +212,19 @@ export default async function Home({
     if (unitsWithKeeta > 0) finPlatforms.push("keeta")
   }
 
+  // Custo de entrega — total ou só da plataforma filtrada
+  const taxaEntregaValor = plataformaFilter
+    ? plataformaFilter === "ifood"
+      ? deliveryFee.ifood
+      : plataformaFilter === "99food"
+        ? deliveryFee.ninefood
+        : deliveryFee.keeta
+    : deliveryFee.total
+  const taxaEntregaPctBruto =
+    network.faturamentoBruto > 0
+      ? (taxaEntregaValor / network.faturamentoBruto) * 100
+      : 0
+
   const kpis: Kpi[] = [
     {
       label: "Pedidos Totais",
@@ -255,6 +272,17 @@ export default async function Home({
       trend: "Acima da média do setor (~62%)",
       tone: "positive",
       icon: Percent,
+      platforms: finPlatforms,
+    },
+    {
+      label: "Custo de Entrega",
+      value: fmtBRLShort(taxaEntregaValor),
+      trend:
+        taxaEntregaValor > 0
+          ? `${fmtPct(taxaEntregaPctBruto)} do faturamento bruto`
+          : "sem dado de entrega no mês",
+      tone: "neutral",
+      icon: Bike,
       platforms: finPlatforms,
     },
   ]
@@ -357,7 +385,11 @@ export default async function Home({
           </div>
           <div
             className={`grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 ${
-              kpis.length === 7 ? "xl:grid-cols-7" : "xl:grid-cols-6"
+              kpis.length >= 8
+                ? "xl:grid-cols-4"
+                : kpis.length === 7
+                  ? "xl:grid-cols-7"
+                  : "xl:grid-cols-6"
             }`}
           >
             {kpis.map((kpi) => (

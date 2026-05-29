@@ -5,6 +5,7 @@
  */
 import {
   AlertTriangle,
+  Bike,
   CheckCircle2,
   Clock,
   DollarSign,
@@ -17,6 +18,7 @@ import {
   getNinefoodDiasForMonth,
   getNinefoodResumoForMonth,
 } from "@/lib/data/ninefood-imported"
+import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 export async function Financeiro99Tab({
@@ -28,9 +30,10 @@ export async function Financeiro99Tab({
   year: number
   month: number
 }) {
-  const [resumo, dias] = await Promise.all([
+  const [resumo, dias, deliveryFee] = await Promise.all([
     getNinefoodResumoForMonth(unitId, year, month),
     getNinefoodDiasForMonth(unitId, year, month),
+    getDeliveryFeeForMonth(unitId, year, month),
   ])
 
   if (!resumo.hasData) {
@@ -132,6 +135,11 @@ export async function Financeiro99Tab({
                 <CheckCircle2 className="size-3.5 text-emerald-600" />
               )
             }
+          />
+          <Row
+            label="Custo de entrega (logística)"
+            value={fmtBRL(deliveryFee.ninefood)}
+            icon={<Bike className="size-3.5 text-muted-foreground" />}
           />
         </Card>
       </div>

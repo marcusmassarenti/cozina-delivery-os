@@ -1,4 +1,5 @@
 import {
+  Bike,
   DollarSign,
   Info,
   Percent,
@@ -10,6 +11,7 @@ import {
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
+import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
@@ -40,6 +42,17 @@ export default async function ResultadoPage({
   const hasData = rows.length > 0
   const semCusto = hasData && unitsComCusto === 0
 
+  // Custo de entrega das lojas com faturamento (parte das taxas das plataformas)
+  const deliveryFee = hasData
+    ? await getNetworkDeliveryFee(
+        rows.map((r) => r.unitId),
+        year,
+        month,
+      )
+    : { ifood: 0, ninefood: 0, keeta: 0, total: 0 }
+  const entregaPctBruto =
+    totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
+
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -69,7 +82,7 @@ export default async function ResultadoPage({
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <Kpi
               icon={<DollarSign className="size-4" />}
               label="Faturamento Bruto"
@@ -88,6 +101,17 @@ export default async function ResultadoPage({
               label="Taxas das plataformas"
               value={fmtBRLShort(totals.taxasPlataforma)}
               hint={`${fmtPct(100 - totals.repassePct)} do bruto`}
+              tone="warn"
+            />
+            <Kpi
+              icon={<Bike className="size-4" />}
+              label="Custo de Entrega"
+              value={fmtBRLShort(deliveryFee.total)}
+              hint={
+                deliveryFee.total > 0
+                  ? `${fmtPct(entregaPctBruto)} do bruto · dentro das taxas`
+                  : "sem dado de entrega"
+              }
               tone="warn"
             />
             <Kpi
@@ -118,6 +142,15 @@ export default async function ResultadoPage({
                 value={`− ${fmtBRL(totals.taxasPlataforma)}`}
                 muted
               />
+              {deliveryFee.total > 0 && (
+                <p className="-mt-1 pl-3 text-[11px] text-muted-foreground">
+                  ↳ dos quais{" "}
+                  <span className="font-medium">
+                    {fmtBRL(deliveryFee.total)}
+                  </span>{" "}
+                  são taxa de entrega ({fmtPct(entregaPctBruto)} do bruto)
+                </p>
+              )}
               <Divider />
               <DreRow
                 label="= Líquido das plataformas"

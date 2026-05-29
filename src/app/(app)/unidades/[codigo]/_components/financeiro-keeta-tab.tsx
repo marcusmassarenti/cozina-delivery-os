@@ -6,6 +6,7 @@
  */
 import {
   AlertTriangle,
+  Bike,
   CheckCircle2,
   Clock,
   DollarSign,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react"
 
 import { getKeetaFinanceiroForMonth } from "@/lib/data/keeta-imported"
+import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 export async function FinanceiroKeetaTab({
@@ -25,7 +27,10 @@ export async function FinanceiroKeetaTab({
   year: number
   month: number
 }) {
-  const resumo = await getKeetaFinanceiroForMonth(unitId, year, month)
+  const [resumo, deliveryFee] = await Promise.all([
+    getKeetaFinanceiroForMonth(unitId, year, month),
+    getDeliveryFeeForMonth(unitId, year, month),
+  ])
 
   if (!resumo.hasData) {
     return (
@@ -118,6 +123,11 @@ export async function FinanceiroKeetaTab({
             label="Ticket médio"
             value={fmtBRL(resumo.ticketMedio)}
             icon={<DollarSign className="size-3.5 text-muted-foreground" />}
+          />
+          <Row
+            label="Taxa de entrega"
+            value={fmtBRL(deliveryFee.keeta)}
+            icon={<Bike className="size-3.5 text-muted-foreground" />}
           />
           <Row
             label="Tempo médio de preparo"
