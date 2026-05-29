@@ -59,7 +59,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Unidades", href: "/unidades", icon: Store },
       { label: "Produtos", href: "/produtos", icon: Package, comingSoon: true },
-      { label: "Avaliações", href: "/avaliacoes", icon: Star, comingSoon: true },
+      { label: "Avaliações", href: "/avaliacoes", icon: Star },
     ],
   },
   {
