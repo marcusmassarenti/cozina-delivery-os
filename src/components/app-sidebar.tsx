@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   Cable,
+  CalendarRange,
   ChevronDown,
   FileUp,
   Flame,
@@ -66,6 +67,11 @@ const navGroups: NavGroup[] = [
     label: "Financeiro",
     defaultOpen: true,
     items: [
+      {
+        label: "Relatório Diário",
+        href: "/relatorio-diario",
+        icon: CalendarRange,
+      },
       { label: "Resultado", href: "/financeiro", icon: Wallet, comingSoon: true },
     ],
   },
