@@ -6,6 +6,8 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
+import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getUnits } from "@/lib/data/units"
 import { fmtBRL } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
@@ -150,11 +152,48 @@ export default async function ImportacaoPage({
     platforms: u.platforms,
     externalStoreIds: u.externalStoreIds,
   }))
-  const [recentResult, finTotals, availablePeriods] = await Promise.all([
-    getRecentImports(histPage),
-    getFinanceiroTotalsByMonth(unitsWithIfood.map((u) => u.id), year, month),
-    getAvailablePeriods(),
-  ])
+  const activeUnitIds = activeUnits.map((u) => u.id)
+  const [recentResult, finTotals, nineTotals, keetaTotals, availablePeriods] =
+    await Promise.all([
+      getRecentImports(histPage),
+      getFinanceiroTotalsByMonth(unitsWithIfood.map((u) => u.id), year, month),
+      getNinefoodResumoByUnits(activeUnitIds, year, month),
+      getKeetaResumoByUnits(activeUnitIds, year, month),
+      getAvailablePeriods(),
+    ])
+
+  // Unidades que têm QUALQUER dado financeiro importado no mês (iFood, 99 ou
+  // Keeta), com o detalhe por plataforma.
+  const importedUnits = activeUnits
+    .map((u) => {
+      const ifood = finTotals.get(u.id)
+      const nine = nineTotals.get(u.id)
+      const keeta = keetaTotals.get(u.id)
+      const plats: Array<{
+        id: PlatformId
+        pedidos: number
+        bruto: number
+        liquido: number
+      }> = []
+      if (ifood && ifood.pedidos > 0)
+        plats.push({ id: "ifood", ...ifood })
+      if (nine?.hasData)
+        plats.push({
+          id: "99food",
+          pedidos: nine.pedidos,
+          bruto: nine.bruto,
+          liquido: nine.liquido,
+        })
+      if (keeta?.hasData)
+        plats.push({
+          id: "keeta",
+          pedidos: keeta.pedidos,
+          bruto: keeta.bruto,
+          liquido: keeta.liquido,
+        })
+      return { unit: u, plats }
+    })
+    .filter((x) => x.plats.length > 0)
   const recent = recentResult.items
   const recentTotal = recentResult.total
   const recentTotalPages = Math.max(
@@ -170,9 +209,9 @@ export default async function ImportacaoPage({
             Importação de relatórios
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Sobe os XLSX do iFood (Cardápio / Financeiro / Avaliações) ou do
-            99 Food (Dados da loja / Dados do item) e o sistema converte em
-            lançamentos.
+            Sobe os XLSX do iFood (Cardápio / Financeiro / Avaliações), do 99
+            Food (Dados da loja / item / pedido) ou do Keeta (Loja diária /
+            Itens / Pedidos) e o sistema converte em lançamentos.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -205,59 +244,63 @@ export default async function ImportacaoPage({
         )}
       </div>
 
-      {unitsWithIfood.length > 0 && (
+      {importedUnits.length > 0 && (
         <>
           <SectionDivider
             number={2}
             label={`Financeiro de ${formatPeriodLabel({ year, month })} (do que já está importado)`}
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {unitsWithIfood.map((u) => {
-              const tot = finTotals.get(u.id)
-              const isImported = !!tot && tot.pedidos > 0
-              return (
-                <div
-                  key={u.id}
-                  className="rounded-lg border bg-card p-4"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{u.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        #{u.code}
-                      </p>
-                    </div>
-                    <PlatformLogo platform="ifood" size="sm" />
+            {importedUnits.map(({ unit, plats }) => (
+              <div key={unit.id} className="rounded-lg border bg-card p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {unit.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      #{unit.code}
+                    </p>
                   </div>
-                  {isImported ? (
-                    <div className="mt-3 space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Pedidos</span>
-                        <span className="font-medium tabular-nums">
-                          {tot.pedidos}
+                  <div className="flex items-center gap-0.5">
+                    {plats.map((p) => (
+                      <PlatformLogo key={p.id} platform={p.id} size="sm" />
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2.5">
+                  {plats.map((p) => (
+                    <div key={p.id} className="space-y-1 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <PlatformLogo platform={p.id} size="sm" />
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          {p.id === "ifood"
+                            ? "iFood"
+                            : p.id === "99food"
+                              ? "99 Food"
+                              : "Keeta"}
+                        </span>
+                        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
+                          {p.pedidos} ped.
                         </span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between pl-5">
                         <span className="text-muted-foreground">Bruto</span>
                         <span className="font-medium tabular-nums">
-                          {fmtBRL(tot.bruto)}
+                          {fmtBRL(p.bruto)}
                         </span>
                       </div>
-                      <div className="flex justify-between border-t pt-1">
+                      <div className="flex justify-between pl-5">
                         <span className="text-muted-foreground">Líquido</span>
                         <span className="font-semibold tabular-nums">
-                          {fmtBRL(tot.liquido)}
+                          {fmtBRL(p.liquido)}
                         </span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="mt-3 rounded-md bg-muted/50 px-2 py-2 text-[11px] text-muted-foreground">
-                      Sem importação financeira no mês corrente
-                    </div>
-                  )}
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         </>
       )}

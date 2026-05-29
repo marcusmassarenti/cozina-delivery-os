@@ -4,12 +4,13 @@
  */
 
 export type DailyMetric = "faturamento" | "pedidos" | "cancelamentos"
-export type ReportPlatform = "ifood" | "99food" | "todas"
+export type ReportPlatform = "ifood" | "99food" | "keeta" | "todas"
 
 export const PLATFORM_OPTIONS: { id: ReportPlatform; label: string }[] = [
   { id: "todas", label: "Todas" },
   { id: "ifood", label: "iFood" },
   { id: "99food", label: "99 Food" },
+  { id: "keeta", label: "Keeta" },
 ]
 
 export const METRIC_OPTIONS: { id: DailyMetric; label: string }[] = [

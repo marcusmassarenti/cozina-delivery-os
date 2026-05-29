@@ -21,6 +21,12 @@ import type {
   ParsedNinefoodDadosItem,
   ParsedNinefoodDadosPedido,
 } from "@/lib/import/ninefood"
+import { isKeetaWorkbook, parseKeetaReport } from "@/lib/import/keeta"
+import type {
+  ParsedKeetaLoja,
+  ParsedKeetaItem,
+  ParsedKeetaPedidos,
+} from "@/lib/import/keeta"
 
 export type ImportFileResult = {
   filename: string
@@ -34,7 +40,7 @@ export type ImportFileResult = {
    *  O cliente abre modal "Criar e importar" pré-preenchido com isso. */
   unmapped?: {
     storeId: string
-    platform: "ifood" | "99food"
+    platform: "ifood" | "99food" | "keeta"
     cnpj: string | null
     suggestedName: string | null
     suggestedCity: string | null
@@ -138,6 +144,45 @@ export type ImportSummary =
       clientesRecorrentes: number
       substituido: boolean
     }
+  | {
+      kind: "keeta_loja"
+      unitCode: string
+      unitName: string
+      storeId: string
+      diasImportados: number
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      pedidos: number
+      bruto: number
+      cancelados: number
+      substituido: boolean
+    }
+  | {
+      kind: "keeta_item"
+      unitCode: string
+      unitName: string
+      storeId: string
+      diasImportados: number
+      itensCount: number
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      receitaTotal: number
+      substituido: boolean
+    }
+  | {
+      kind: "keeta_pedido"
+      unitCode: string
+      unitName: string
+      storeId: string
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      pedidos: number
+      bruto: number
+      liquido: number
+      avaliados: number
+      notaMedia: number | null
+      substituido: boolean
+    }
 
 export type ImportBatchState = {
   ok: boolean
@@ -208,11 +253,11 @@ export async function importIfoodReports(
 // ─── Mapeamento storeId → unidade ────────────────────────────────────
 
 type StoreMap = Map<string, { unitId: string; code: string; name: string }>
-type StoreMaps = { ifood: StoreMap; "99food": StoreMap }
+type StoreMaps = { ifood: StoreMap; "99food": StoreMap; keeta: StoreMap }
 
 async function loadStoreMap(
   admin: ReturnType<typeof createAdminClient>,
-  platform: "ifood" | "99food" = "ifood",
+  platform: "ifood" | "99food" | "keeta" = "ifood",
 ): Promise<StoreMap> {
   const map: StoreMap = new Map()
   const { data, error } = await admin
@@ -240,11 +285,12 @@ async function loadStoreMap(
 async function loadAllStoreMaps(
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<StoreMaps> {
-  const [ifood, ninefood] = await Promise.all([
+  const [ifood, ninefood, keeta] = await Promise.all([
     loadStoreMap(admin, "ifood"),
     loadStoreMap(admin, "99food"),
+    loadStoreMap(admin, "keeta"),
   ])
-  return { ifood, "99food": ninefood }
+  return { ifood, "99food": ninefood, keeta }
 }
 
 // ─── Processa 1 arquivo ──────────────────────────────────────────────
@@ -275,15 +321,56 @@ async function processFile(
   }
 
   // ─── ROTEAMENTO POR PLATAFORMA ─────────────────────────────────────
-  // O 99 Food tem header bem distinto (Nome do signatário / ID do loja).
-  // Tentamos detectar 99 Food primeiro; se não for, assumimos iFood.
-  let platform: "ifood" | "99food" = "ifood"
+  // Cada plataforma tem header distinto:
+  //  - Keeta: "ID do restaurante" + "Nome da loja"
+  //  - 99 Food: "Nome do estabelecimento" + "ID do loja"
+  //  - iFood: fallback
+  let platform: "ifood" | "99food" | "keeta" = "ifood"
   try {
     const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: false })
-    if (isNinefoodWorkbook(wb)) platform = "99food"
+    if (isKeetaWorkbook(wb)) platform = "keeta"
+    else if (isNinefoodWorkbook(wb)) platform = "99food"
   } catch {
-    // Ignora erro aqui — parseIfoodReport/parseNinefoodReport vão dar
-    // mensagem melhor.
+    // Ignora erro aqui — os parsers darão uma mensagem melhor.
+  }
+
+  // ─── KEETA ──────────────────────────────────────────────────────────
+  if (platform === "keeta") {
+    const parsed = parseKeetaReport(buf)
+    if (parsed.reportType === "unknown") {
+      return {
+        filename: file.name,
+        ok: false,
+        message: `Keeta: ${parsed.error}`,
+      }
+    }
+    if (parsed.reportType === "loja") {
+      return await processKeetaLoja(
+        parsed,
+        storeMaps.keeta,
+        file.name,
+        userId,
+        admin,
+      )
+    }
+    if (parsed.reportType === "item") {
+      return await processKeetaItens(
+        parsed,
+        storeMaps.keeta,
+        file.name,
+        userId,
+        admin,
+      )
+    }
+    if (parsed.reportType === "pedido") {
+      return await processKeetaPedidos(
+        parsed,
+        storeMaps.keeta,
+        file.name,
+        userId,
+        admin,
+      )
+    }
   }
 
   // ─── 99 FOOD ────────────────────────────────────────────────────────
@@ -1326,6 +1413,460 @@ async function saveNinefoodDadosPedido(
   }
 }
 
+// ─── Keeta: Loja diária ──────────────────────────────────────────────
+
+async function processKeetaLoja(
+  parsed: ParsedKeetaLoja,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  const isMulti = parsed.porLoja.length > 1
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push(
+        keetaUnmapped(grupo, filename, isMulti, "Keeta — Loja diária"),
+      )
+      continue
+    }
+    try {
+      const summary = await saveKeetaLoja(grupo, unit, filename, userId, admin)
+      results.push(keetaOk(unit, filename, isMulti, summary))
+    } catch (e) {
+      results.push(keetaErr(unit, filename, isMulti, e, "Loja diária"))
+    }
+  }
+  return results
+}
+
+async function saveKeetaLoja(
+  grupo: ParsedKeetaLoja["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  if (grupo.dias.length === 0) throw new Error("Nenhum dia válido nessa loja.")
+
+  const sortedTs = grupo.dias.map((d) => d.data.getTime()).sort((a, b) => a - b)
+  const periodoInicio = new Date(sortedTs[0])
+  const periodoFim = new Date(sortedTs[sortedTs.length - 1])
+  const isoDatas = grupo.dias.map((d) => formatDateOnly(d.data))
+
+  const { count: existingCount } = await admin
+    .from("keeta_daily_loja")
+    .select("id", { count: "exact", head: true })
+    .eq("unit_id", unit.unitId)
+    .in("data", isoDatas)
+  const substituido = (existingCount ?? 0) > 0
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "keeta",
+      report_type: "financeiro",
+      cadencia: "diario",
+      ref_date: formatDateOnly(periodoFim),
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: grupo.dias.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  if (substituido) {
+    await admin
+      .from("keeta_daily_loja")
+      .delete()
+      .eq("unit_id", unit.unitId)
+      .in("data", isoDatas)
+  }
+
+  const rows = grupo.dias.map((d) => ({
+    unit_id: unit.unitId,
+    data: formatDateOnly(d.data),
+    ref_year: d.data.getFullYear(),
+    ref_month: d.data.getMonth() + 1,
+    vendas_itens: d.vendasItens,
+    pedidos_validos: d.pedidosValidos,
+    total_pedidos: d.totalPedidos,
+    pedidos_cancelados: d.pedidosCancelados,
+    valor_medio_pedido: d.valorMedioPedido,
+    alcance_clientes: d.alcanceClientes,
+    visitantes: d.visitantes,
+    add_carrinho: d.addCarrinho,
+    clientes_finalizados: d.clientesFinalizados,
+    taxa_conv_exposicao_visita: d.taxaConvExposicaoVisita,
+    taxa_conv_visita_carrinho: d.taxaConvVisitaCarrinho,
+    vendas_promocao: d.vendasPromocao,
+    num_campanhas: d.numCampanhas,
+    despesa_unidade: d.despesaUnidade,
+    tempo_aberto_h: d.tempoAbertoH,
+    tempo_preparo_min: d.tempoPreparoMin,
+    import_id: importLog.id,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("keeta_daily_loja")
+      .insert(rows.slice(i, i + CHUNK))
+    if (error)
+      throw new Error(
+        `Falha ao gravar Loja diária (chunk ${i / CHUNK + 1}): ${error.message}`,
+      )
+  }
+
+  let pedidos = 0
+  let bruto = 0
+  let cancelados = 0
+  for (const d of grupo.dias) {
+    pedidos += d.totalPedidos
+    bruto += d.vendasItens
+    cancelados += d.pedidosCancelados
+  }
+
+  return {
+    kind: "keeta_loja",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    diasImportados: grupo.dias.length,
+    periodoInicio: formatDateOnly(periodoInicio),
+    periodoFim: formatDateOnly(periodoFim),
+    pedidos,
+    bruto,
+    cancelados,
+    substituido,
+  }
+}
+
+// ─── Keeta: Itens diário ─────────────────────────────────────────────
+
+async function processKeetaItens(
+  parsed: ParsedKeetaItem,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  const isMulti = parsed.porLoja.length > 1
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push(
+        keetaUnmapped(grupo, filename, isMulti, "Keeta — Itens diário"),
+      )
+      continue
+    }
+    try {
+      const summary = await saveKeetaItens(grupo, unit, filename, userId, admin)
+      results.push(keetaOk(unit, filename, isMulti, summary))
+    } catch (e) {
+      results.push(keetaErr(unit, filename, isMulti, e, "Itens diário"))
+    }
+  }
+  return results
+}
+
+async function saveKeetaItens(
+  grupo: ParsedKeetaItem["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  if (grupo.itens.length === 0) throw new Error("Nenhum item válido nessa loja.")
+
+  const sortedTs = grupo.itens.map((it) => it.data.getTime()).sort((a, b) => a - b)
+  const periodoInicio = new Date(sortedTs[0])
+  const periodoFim = new Date(sortedTs[sortedTs.length - 1])
+  const isoDatas = Array.from(
+    new Set(grupo.itens.map((it) => formatDateOnly(it.data))),
+  )
+
+  const { count: existingCount } = await admin
+    .from("keeta_daily_item")
+    .select("id", { count: "exact", head: true })
+    .eq("unit_id", unit.unitId)
+    .in("data", isoDatas)
+  const substituido = (existingCount ?? 0) > 0
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "keeta",
+      report_type: "cardapio",
+      cadencia: "diario",
+      ref_date: formatDateOnly(periodoFim),
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: grupo.itens.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  if (substituido) {
+    await admin
+      .from("keeta_daily_item")
+      .delete()
+      .eq("unit_id", unit.unitId)
+      .in("data", isoDatas)
+  }
+
+  const rows = grupo.itens.map((it) => ({
+    unit_id: unit.unitId,
+    data: formatDateOnly(it.data),
+    ref_year: it.data.getFullYear(),
+    ref_month: it.data.getMonth() + 1,
+    item_id: it.itemId,
+    nome_item: it.nomeItem,
+    qtd_vendida: it.qtdVendida,
+    preco_medio: it.precoMedio,
+    alcance: it.alcance,
+    add_carrinho: it.addCarrinho,
+    carrinho_pct: it.carrinhoPct,
+    import_id: importLog.id,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("keeta_daily_item")
+      .insert(rows.slice(i, i + CHUNK))
+    if (error)
+      throw new Error(
+        `Falha ao gravar Itens diário (chunk ${i / CHUNK + 1}): ${error.message}`,
+      )
+  }
+
+  const receitaTotal = grupo.itens.reduce(
+    (s, it) => s + it.qtdVendida * it.precoMedio,
+    0,
+  )
+
+  return {
+    kind: "keeta_item",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    diasImportados: isoDatas.length,
+    itensCount: grupo.itens.length,
+    periodoInicio: formatDateOnly(periodoInicio),
+    periodoFim: formatDateOnly(periodoFim),
+    receitaTotal,
+    substituido,
+  }
+}
+
+// ─── Keeta: Pedidos ──────────────────────────────────────────────────
+
+async function processKeetaPedidos(
+  parsed: ParsedKeetaPedidos,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  const isMulti = parsed.porLoja.length > 1
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push(keetaUnmapped(grupo, filename, isMulti, "Keeta — Pedidos"))
+      continue
+    }
+    try {
+      const summary = await saveKeetaPedidos(
+        grupo,
+        unit,
+        filename,
+        userId,
+        admin,
+      )
+      results.push(keetaOk(unit, filename, isMulti, summary))
+    } catch (e) {
+      results.push(keetaErr(unit, filename, isMulti, e, "Pedidos"))
+    }
+  }
+  return results
+}
+
+async function saveKeetaPedidos(
+  grupo: ParsedKeetaPedidos["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  if (grupo.pedidos.length === 0)
+    throw new Error("Nenhum pedido válido nessa loja.")
+
+  const sortedTs = grupo.pedidos
+    .map((p) => p.data.getTime())
+    .sort((a, b) => a - b)
+  const periodoInicio = new Date(sortedTs[0])
+  const periodoFim = new Date(sortedTs[sortedTs.length - 1])
+
+  const pedidoIds = grupo.pedidos.map((p) => p.pedidoId)
+  const { count: existingCount } = await admin
+    .from("keeta_pedidos")
+    .select("id", { count: "exact", head: true })
+    .eq("unit_id", unit.unitId)
+    .in("pedido_id", pedidoIds)
+  const substituido = (existingCount ?? 0) > 0
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "keeta",
+      report_type: "vendas",
+      cadencia: "diario",
+      ref_date: formatDateOnly(periodoFim),
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: grupo.pedidos.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const rows = grupo.pedidos.map((p) => ({
+    unit_id: unit.unitId,
+    pedido_id: p.pedidoId,
+    data: formatDateOnly(p.data),
+    ref_year: p.data.getFullYear(),
+    ref_month: p.data.getMonth() + 1,
+    tipo_pedido: p.tipoPedido,
+    horario_pedido: p.horarioPedido?.toISOString() ?? null,
+    horario_conclusao: p.horarioConclusao?.toISOString() ?? null,
+    status_pedido: p.statusPedido,
+    tipo_cancelamento: p.tipoCancelamento,
+    motivo_cancelamento: p.motivoCancelamento,
+    ganhos_liquidos: p.ganhosLiquidos,
+    vendas_itens: p.vendasItens,
+    outros_ganhos: p.outrosGanhos,
+    despesa: p.despesa,
+    despesas_plataforma: p.despesasPlataforma,
+    comissao: p.comissao,
+    outras_despesas: p.outrasDespesas,
+    taxa_entrega: p.taxaEntrega,
+    detalhe_item: p.detalheItem,
+    tempo_preparo_min: p.tempoPreparoMin,
+    data_avaliacao: p.dataAvaliacao ? formatDateOnly(p.dataAvaliacao) : null,
+    pontuacao_avaliacao: p.pontuacaoAvaliacao,
+    conteudo_avaliacao: p.conteudoAvaliacao,
+    resposta_avaliacao: p.respostaAvaliacao,
+    import_id: importLog.id,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("keeta_pedidos")
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: "unit_id,pedido_id" })
+    if (error)
+      throw new Error(
+        `Falha ao gravar Pedidos (chunk ${i / CHUNK + 1}): ${error.message}`,
+      )
+  }
+
+  let bruto = 0
+  let liquido = 0
+  let avaliados = 0
+  let somaNotas = 0
+  for (const p of grupo.pedidos) {
+    bruto += p.vendasItens ?? 0
+    liquido += p.ganhosLiquidos ?? 0
+    if (p.pontuacaoAvaliacao != null) {
+      avaliados++
+      somaNotas += p.pontuacaoAvaliacao
+    }
+  }
+
+  return {
+    kind: "keeta_pedido",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    periodoInicio: formatDateOnly(periodoInicio),
+    periodoFim: formatDateOnly(periodoFim),
+    pedidos: grupo.pedidos.length,
+    bruto,
+    liquido,
+    avaliados,
+    notaMedia:
+      avaliados > 0 ? Math.round((somaNotas / avaliados) * 100) / 100 : null,
+    substituido,
+  }
+}
+
+// ─── Keeta: helpers de result (reduzem boilerplate) ──────────────────
+
+function keetaUnmapped(
+  grupo: { storeId: string; storeName: string | null },
+  filename: string,
+  isMulti: boolean,
+  reportTypeLabel: string,
+): ImportFileResult {
+  return {
+    filename: isMulti
+      ? `${filename} · loja ${grupo.storeName ?? grupo.storeId}`
+      : filename,
+    originalFilename: isMulti ? filename : undefined,
+    ok: false,
+    unmapped: {
+      storeId: grupo.storeId,
+      platform: "keeta",
+      cnpj: null,
+      suggestedName: grupo.storeName ? formatStoreName(grupo.storeName) : null,
+      suggestedCity: extractCityFromStoreName(grupo.storeName),
+      reportTypeLabel,
+    },
+  }
+}
+
+function keetaOk(
+  unit: { code: string; name: string },
+  filename: string,
+  isMulti: boolean,
+  summary: ImportSummary,
+): ImportFileResult {
+  return {
+    filename: isMulti ? `${filename} · ${unit.code} ${unit.name}` : filename,
+    originalFilename: isMulti ? filename : undefined,
+    ok: true,
+    summary,
+  }
+}
+
+function keetaErr(
+  unit: { code: string; name: string },
+  filename: string,
+  isMulti: boolean,
+  e: unknown,
+  label: string,
+): ImportFileResult {
+  return {
+    filename: isMulti ? `${filename} · ${unit.code} ${unit.name}` : filename,
+    originalFilename: isMulti ? filename : undefined,
+    ok: false,
+    message: e instanceof Error ? e.message : `Erro ao gravar ${label} Keeta`,
+  }
+}
+
 // ─── Persistência: Cardápio ──────────────────────────────────────────
 
 async function saveCardapio(
@@ -1720,8 +2261,12 @@ export async function createUnitAndImport(
     formData.get("storeId") ?? formData.get("ifoodStoreId") ?? "",
   ).trim()
   const detectedPlatform = String(formData.get("platform") ?? "ifood").trim()
-  const sourcePlatform: "ifood" | "99food" =
-    detectedPlatform === "99food" ? "99food" : "ifood"
+  const sourcePlatform: "ifood" | "99food" | "keeta" =
+    detectedPlatform === "99food"
+      ? "99food"
+      : detectedPlatform === "keeta"
+        ? "keeta"
+        : "ifood"
   const active = formData.get("active") === "on"
   const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
   type PlatformId = (typeof ALL_PLATFORMS)[number]
@@ -1736,7 +2281,12 @@ export async function createUnitAndImport(
   if (!city) return { ok: false, message: "Cidade obrigatória." }
   if (!stateUf || stateUf.length !== 2)
     return { ok: false, message: "UF deve ter 2 letras (ex.: SP)." }
-  const platformLabel = sourcePlatform === "ifood" ? "iFood" : "99 Food"
+  const platformLabel =
+    sourcePlatform === "ifood"
+      ? "iFood"
+      : sourcePlatform === "keeta"
+        ? "Keeta"
+        : "99 Food"
   if (!storeId)
     return { ok: false, message: `ID ${platformLabel} obrigatório.` }
 
@@ -1950,13 +2500,18 @@ export async function linkUnitAndImport(
   const unitId = String(formData.get("unitId") ?? "").trim()
   const storeId = String(formData.get("storeId") ?? "").trim()
   const detectedPlatform = String(formData.get("platform") ?? "ifood").trim()
-  const platform: "ifood" | "99food" =
-    detectedPlatform === "99food" ? "99food" : "ifood"
+  const platform: "ifood" | "99food" | "keeta" =
+    detectedPlatform === "99food"
+      ? "99food"
+      : detectedPlatform === "keeta"
+        ? "keeta"
+        : "ifood"
 
   if (!unitId) return { ok: false, message: "Escolhe a unidade." }
   if (!storeId) return { ok: false, message: "ID da loja não recebido." }
 
-  const platformLabel = platform === "ifood" ? "iFood" : "99 Food"
+  const platformLabel =
+    platform === "ifood" ? "iFood" : platform === "keeta" ? "Keeta" : "99 Food"
   const admin = createAdminClient()
 
   // Verifica se o storeId já está vinculado a OUTRA unidade nessa plataforma

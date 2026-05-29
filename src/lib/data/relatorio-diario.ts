@@ -293,11 +293,48 @@ async function loadNinefood(
   return b
 }
 
-function mergeBuckets(a: Buckets, b: Buckets): Buckets {
+/** Keeta: agrega da Loja diária já consolidada (keeta_daily_loja). */
+async function loadKeeta(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Buckets> {
+  const b = emptyBuckets()
+  if (unitIds.length === 0) return b
+  const admin = createAdminClient()
+
+  type LojaRow = {
+    unit_id: string
+    data: string
+    vendas_itens: number | string
+    total_pedidos: number | null
+    pedidos_cancelados: number | null
+  }
+  const data = await fetchAllPages<LojaRow>((from, to) =>
+    admin
+      .from("keeta_daily_loja")
+      .select("unit_id, data, vendas_itens, total_pedidos, pedidos_cancelados")
+      .in("unit_id", unitIds)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .range(from, to),
+  )
+
+  for (const r of data) {
+    const day = dateStrDay(String(r.data))
+    if (!day) continue
+    add(b.faturamento, r.unit_id, day, Number(r.vendas_itens) || 0)
+    add(b.pedidos, r.unit_id, day, r.total_pedidos || 0)
+    add(b.cancelamentos, r.unit_id, day, r.pedidos_cancelados || 0)
+  }
+  return b
+}
+
+function mergeBuckets(...all: Buckets[]): Buckets {
   const out = emptyBuckets()
   for (const metric of ["faturamento", "pedidos", "cancelamentos"] as const) {
-    for (const src of [a[metric], b[metric]]) {
-      for (const [unitId, byDay] of src) {
+    for (const bk of all) {
+      for (const [unitId, byDay] of bk[metric]) {
         for (const [dayStr, val] of Object.entries(byDay)) {
           add(out[metric], unitId, parseInt(dayStr, 10), val)
         }
@@ -327,12 +364,15 @@ export async function getDailyReportMatrix(
     buckets = await loadIfood(unitIds, year, month)
   } else if (platform === "99food") {
     buckets = await loadNinefood(unitIds, year, month)
+  } else if (platform === "keeta") {
+    buckets = await loadKeeta(unitIds, year, month)
   } else {
-    const [a, b] = await Promise.all([
+    const [a, b, c] = await Promise.all([
       loadIfood(unitIds, year, month),
       loadNinefood(unitIds, year, month),
+      loadKeeta(unitIds, year, month),
     ])
-    buckets = mergeBuckets(a, b)
+    buckets = mergeBuckets(a, b, c)
   }
 
   const networkByDay = {

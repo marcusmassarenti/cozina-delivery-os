@@ -27,10 +27,11 @@ const PLATFORM_LABEL: Record<ReportPlatform, string> = {
   todas: "Todas as plataformas",
   ifood: "iFood",
   "99food": "99 Food",
+  keeta: "Keeta",
 }
 
 const VALID_METRICS: DailyMetric[] = ["faturamento", "pedidos", "cancelamentos"]
-const VALID_PLATFORMS: ReportPlatform[] = ["todas", "ifood", "99food"]
+const VALID_PLATFORMS: ReportPlatform[] = ["todas", "ifood", "99food", "keeta"]
 
 export default async function RelatorioDiarioPage({
   searchParams,

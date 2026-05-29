@@ -35,6 +35,7 @@ import {
   getNinefoodResumoForMonth,
   ninefoodHasAnyDataForMonth,
 } from "@/lib/data/ninefood-imported"
+import { getKeetaResumoForMonth } from "@/lib/data/keeta-imported"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 import { parsePeriodParam } from "@/lib/period"
@@ -62,27 +63,41 @@ export default async function UnidadeDetalhePage({
   if (!unit) notFound()
 
   const { year, month } = parsePeriodParam(sp.periodo)
-  const [platforms, fin, nine, nine99HasAny, avalResumo, availablePeriods] =
-    await Promise.all([
-      getUnitPlatforms(unit.id),
-      getFinanceiroResumoForMonth(unit.id, year, month),
-      getNinefoodResumoForMonth(unit.id, year, month),
-      ninefoodHasAnyDataForMonth(unit.id, year, month),
-      getAvaliacoesResumoForMonth(unit.id, year, month),
-      getAvailablePeriods(),
-    ])
+  const [
+    platforms,
+    fin,
+    nine,
+    keeta,
+    nine99HasAny,
+    avalResumo,
+    availablePeriods,
+  ] = await Promise.all([
+    getUnitPlatforms(unit.id),
+    getFinanceiroResumoForMonth(unit.id, year, month),
+    getNinefoodResumoForMonth(unit.id, year, month),
+    getKeetaResumoForMonth(unit.id, year, month),
+    ninefoodHasAnyDataForMonth(unit.id, year, month),
+    getAvaliacoesResumoForMonth(unit.id, year, month),
+    getAvailablePeriods(),
+  ])
 
-  // m = monthly mesclado: soma plataformas importadas (iFood + 99 Food)
-  const m = mergeMonthly(unit.monthly, fin, nine)
+  // m = monthly mesclado: soma plataformas importadas (iFood + 99 + Keeta)
+  const m = mergeMonthly(unit.monthly, fin, nine, keeta)
   // hasData inclui Cardápio 99 (item) — só Loja não cobre quando Marcus
   // importou só o cardápio, sem o financeiro.
-  const hasData = m.pedidos > 0 || fin.hasData || nine.hasData || nine99HasAny
+  const hasData =
+    m.pedidos > 0 ||
+    fin.hasData ||
+    nine.hasData ||
+    keeta.hasData ||
+    nine99HasAny
   const usaIfood = fin.hasData
   // "usa99" aqui significa "tem qualquer dado 99 Food" — Loja OU Item.
   // Usado pelo PlatformSwitcher pra decidir se o chip aparece com dados
   // ou com "sem dados". Considera os 2 tipos pra cobertura ficar coerente.
   const usa99 = nine.hasData || nine99HasAny
-  const usaImportado = usaIfood || usa99
+  const usaKeeta = keeta.hasData
+  const usaImportado = usaIfood || usa99 || usaKeeta
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -155,7 +170,7 @@ export default async function UnidadeDetalhePage({
             <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
               <Sparkles className="size-3" />
               KPIs vindos de{" "}
-              {[usaIfood && "iFood", usa99 && "99 Food"]
+              {[usaIfood && "iFood", usa99 && "99 Food", usaKeeta && "Keeta"]
                 .filter(Boolean)
                 .join(" + ")}{" "}
               · {String(month).padStart(2, "0")}/{year}
@@ -589,8 +604,9 @@ function mergeMonthly(
   manual: UnitMonthly,
   fin: Awaited<ReturnType<typeof getFinanceiroResumoForMonth>>,
   nine: Awaited<ReturnType<typeof getNinefoodResumoForMonth>>,
+  keeta: Awaited<ReturnType<typeof getKeetaResumoForMonth>>,
 ): UnitMonthly {
-  if (!fin.hasData && !nine.hasData) return manual
+  if (!fin.hasData && !nine.hasData && !keeta.hasData) return manual
 
   // Soma totais reais; quando uma plataforma não tem dado, usa o manual da
   // própria plataforma (do array platforms) como fallback.
@@ -614,15 +630,19 @@ function mergeMonthly(
   const ninePedidos = nine.hasData ? nine.pedidos : 0
   const nineCancel = nine.hasData ? nine.cancelamentosQtd : 0
 
-  const keetaBruto =
-    manual.platforms.find((p) => p.id === "keeta")?.bruto ?? 0
-  const keetaLiquido =
-    manual.platforms.find((p) => p.id === "keeta")?.liquido ?? 0
+  const keetaBruto = keeta.hasData
+    ? keeta.bruto
+    : manual.platforms.find((p) => p.id === "keeta")?.bruto ?? 0
+  const keetaLiquido = keeta.hasData
+    ? keeta.liquido
+    : manual.platforms.find((p) => p.id === "keeta")?.liquido ?? 0
+  const keetaPedidos = keeta.hasData ? keeta.pedidos : 0
+  const keetaCancel = keeta.hasData ? keeta.cancelamentosQtd : 0
 
   const bruto = ifoodBruto + nineBruto + keetaBruto
   const liquido = ifoodLiquido + nineLiquido + keetaLiquido
-  const pedidos = ifoodPedidos + ninePedidos
-  const cancelados = ifoodCancel + nineCancel
+  const pedidos = ifoodPedidos + ninePedidos + keetaPedidos
+  const cancelados = ifoodCancel + nineCancel + keetaCancel
   const ticketMedio = pedidos > 0 ? bruto / pedidos : 0
   const totalLiquido = liquido
   const custoTotal = manual.custoProdutosCozina + (manual.custoProdutosLoja ?? 0)
@@ -637,6 +657,14 @@ function mergeMonthly(
     }
     if (p.id === "99food" && nine.hasData) {
       return { ...p, bruto: nine.bruto, liquido: nine.liquido, pctLoja: nine.pctLoja }
+    }
+    if (p.id === "keeta" && keeta.hasData) {
+      return {
+        ...p,
+        bruto: keeta.bruto,
+        liquido: keeta.liquido,
+        pctLoja: keeta.pctLoja,
+      }
     }
     return p
   })

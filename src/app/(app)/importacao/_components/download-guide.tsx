@@ -133,6 +133,56 @@ const NINEFOOD_ENTRIES: GuideEntry[] = [
   },
 ]
 
+const KEETA_ENTRIES: GuideEntry[] = [
+  {
+    icon: Receipt,
+    title: "Dados do restaurante (Loja diária)",
+    badge: "Diário (agregado)",
+    badgeTone: "amber",
+    path: ["Keeta Merchant", "Relatórios", "Configuração de dados"],
+    cadence:
+      "1 arquivo por período. Cada linha é 1 loja × 1 dia (agregado): vendas, pedidos, cancelados, funil e tempo de preparo.",
+    download:
+      'Aba "Configuração de dados" → chip "Dados do restaurante" → "Selecionar todos os restaurantes" → escolhe o período → "Selecionar todos os dados". Depois vai na aba "Downloads" e baixa o XLSX gerado.',
+    feeds: [
+      "Faturamento bruto e pedidos no Dashboard e Relatório Diário",
+      "Pedidos cancelados por dia",
+      "Funil (visitantes → carrinho → conversão)",
+    ],
+  },
+  {
+    icon: Star,
+    title: "Dados do pedido (Pedidos)",
+    badge: "Por período",
+    badgeTone: "emerald",
+    path: ["Keeta Merchant", "Relatórios", "Configuração de dados"],
+    cadence:
+      "1 arquivo por período. 1 linha = 1 pedido. Traz o financeiro (ganhos líquidos, comissão, taxa de entrega), o cancelamento e a avaliação juntos.",
+    download:
+      'Chip "Dados do pedido" → "Selecionar todos os restaurantes" → período → "Selecionar todos os dados" → baixa em "Downloads".',
+    feeds: [
+      "Faturamento líquido (ganhos líquidos)",
+      "Motivos de cancelamento",
+      "Notas e comentários dos clientes",
+    ],
+  },
+  {
+    icon: UtensilsCrossed,
+    title: "Dados do item (Itens)",
+    badge: "Diário",
+    badgeTone: "blue",
+    path: ["Keeta Merchant", "Relatórios", "Configuração de dados"],
+    cadence:
+      "1 arquivo por período. 1 linha = 1 loja × 1 dia × 1 item. Qtd vendida, preço médio e alcance por produto.",
+    download:
+      'Chip "Dados do item" → "Selecionar todos os restaurantes" → período → "Selecionar todos os dados" → baixa em "Downloads".',
+    feeds: [
+      "Top produtos vendidos por loja",
+      "Preço médio e alcance por item",
+    ],
+  },
+]
+
 const toneClass: Record<GuideEntry["badgeTone"], string> = {
   amber:
     "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
@@ -154,7 +204,7 @@ export function DownloadGuide() {
               Como baixar os relatórios — guia rápido
             </p>
             <p className="text-[11px] text-muted-foreground">
-              iFood (3 relatórios) e 99 Food (2 relatórios). Clica pra
+              iFood (3), 99 Food (3) e Keeta (3 relatórios). Clica pra
               expandir.
             </p>
           </div>
@@ -173,6 +223,11 @@ export function DownloadGuide() {
             platform="99food"
             label="99 Food"
             entries={NINEFOOD_ENTRIES}
+          />
+          <PlatformSection
+            platform="keeta"
+            label="Keeta"
+            entries={KEETA_ENTRIES}
           />
         </div>
 

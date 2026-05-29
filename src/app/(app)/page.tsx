@@ -43,6 +43,7 @@ import {
   getNinefoodResumoByUnits,
 } from "@/lib/data/ninefood-imported"
 import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
+import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { parsePeriodParam, formatPeriodLabel } from "@/lib/period"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -117,6 +118,7 @@ export default async function Home({
     networkAvaliacoes99,
     finByUnit,
     ninefoodByUnit,
+    keetaByUnit,
     importCoverage,
   ] = await Promise.all([
     getNetworkFunnelForMonth(year, month, filterUnitIds),
@@ -128,13 +130,19 @@ export default async function Home({
     getNetworkNinefoodAvaliacoesForMonth(year, month, filterUnitIds),
     getFinanceiroResumoByUnits(activeUnitIds, year, month),
     getNinefoodResumoByUnits(activeUnitIds, year, month),
+    getKeetaResumoByUnits(activeUnitIds, year, month),
     getImportCoverageForMonth(year, month, filterUnitIds),
   ])
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
   // a UnitsTable mostra dados reais sem precisar de prop nova.
   const unitsMerged = units.map((u) =>
-    mergeUnitMonthlyForDashboard(u, finByUnit.get(u.id), ninefoodByUnit.get(u.id)),
+    mergeUnitMonthlyForDashboard(
+      u,
+      finByUnit.get(u.id),
+      ninefoodByUnit.get(u.id),
+      keetaByUnit.get(u.id),
+    ),
   )
 
   // Aplica filtro "com faturamento" (precisa de dados de unitsMerged já calculado)
@@ -147,16 +155,26 @@ export default async function Home({
     unitsToShow,
     finByUnit,
     ninefoodByUnit,
+    keetaByUnit,
     plataformaFilter,
   )
-  const platforms = platformTotalsMerged(unitsToShow, finByUnit, ninefoodByUnit)
+  const platforms = platformTotalsMerged(
+    unitsToShow,
+    finByUnit,
+    ninefoodByUnit,
+    keetaByUnit,
+  )
   const unitsWithImported = Array.from(finByUnit.values()).filter(
     (f) => f.hasData,
   ).length
   const unitsWith99 = Array.from(ninefoodByUnit.values()).filter(
     (f) => f.hasData,
   ).length
-  const hasAnyImported = unitsWithImported > 0 || unitsWith99 > 0
+  const unitsWithKeeta = Array.from(keetaByUnit.values()).filter(
+    (f) => f.hasData,
+  ).length
+  const hasAnyImported =
+    unitsWithImported > 0 || unitsWith99 > 0 || unitsWithKeeta > 0
   const hasFunnelData = networkFunnel.totals.visitas > 0
   const hasCancelData = networkCancels.length > 0
   const hasTopItemsData = networkTopItems.length > 0
@@ -173,6 +191,7 @@ export default async function Home({
   } else {
     if (unitsWithImported > 0) finPlatforms.push("ifood")
     if (unitsWith99 > 0) finPlatforms.push("99food")
+    if (unitsWithKeeta > 0) finPlatforms.push("keeta")
   }
 
   const kpis: Kpi[] = [
@@ -794,10 +813,17 @@ type NinefoodResumoT = ReturnType<
   ? T
   : never
 
+type KeetaResumoT = ReturnType<
+  typeof getKeetaResumoByUnits
+> extends Promise<Map<string, infer T>>
+  ? T
+  : never
+
 function networkTotalsMerged(
   units: Awaited<ReturnType<typeof getUnits>>,
   finByUnit: Map<string, FinResumo>,
   ninefoodByUnit: Map<string, NinefoodResumoT>,
+  keetaByUnit: Map<string, KeetaResumoT>,
   platformFilter?: "ifood" | "99food" | "keeta" | null,
 ) {
   const active = units.filter((u) => u.active)
@@ -841,17 +867,28 @@ function networkTotalsMerged(
         }
         continue
       }
-      // Keeta (ainda só mock)
-      const p = u.monthly.platforms.find((p) => p.id === platformFilter)
-      if (p) {
-        bruto += p.bruto
-        liquido += p.liquido
+      // Keeta: prefere importado se houver
+      if (platformFilter === "keeta") {
+        const imp = keetaByUnit.get(u.id)
+        if (imp?.hasData) {
+          pedidos += imp.pedidos
+          bruto += imp.bruto
+          liquido += imp.liquido
+          cancelados += imp.cancelamentosQtd
+        } else {
+          const p = u.monthly.platforms.find((p) => p.id === "keeta")
+          if (p) {
+            bruto += p.bruto
+            liquido += p.liquido
+          }
+        }
       }
       continue
     }
-    // Sem filtro de plataforma → soma iFood + 99 Food + (Keeta manual)
+    // Sem filtro de plataforma → soma iFood + 99 Food + Keeta
     const ifoodImp = finByUnit.get(u.id)
     const nineImp = ninefoodByUnit.get(u.id)
+    const keetaImp = keetaByUnit.get(u.id)
 
     if (ifoodImp?.hasData) {
       pedidos += ifoodImp.pedidosUnicos
@@ -865,8 +902,14 @@ function networkTotalsMerged(
       liquido += nineImp.liquido
       cancelados += nineImp.cancelamentosQtd
     }
+    if (keetaImp?.hasData) {
+      pedidos += keetaImp.pedidos
+      bruto += keetaImp.bruto
+      liquido += keetaImp.liquido
+      cancelados += keetaImp.cancelamentosQtd
+    }
     // Fallback pro monthly manual SE nenhuma plataforma trouxe dados
-    if (!ifoodImp?.hasData && !nineImp?.hasData) {
+    if (!ifoodImp?.hasData && !nineImp?.hasData && !keetaImp?.hasData) {
       pedidos += u.monthly.pedidos
       bruto += u.monthly.faturamentoBruto
       liquido += u.monthly.faturamentoLiquido
@@ -897,10 +940,12 @@ function mergeUnitMonthlyForDashboard(
   u: Awaited<ReturnType<typeof getUnits>>[number],
   fin: FinResumo | undefined,
   nine: NinefoodResumoT | undefined,
+  keeta: KeetaResumoT | undefined,
 ): Awaited<ReturnType<typeof getUnits>>[number] {
   const hasIfood = fin?.hasData ?? false
   const has99 = nine?.hasData ?? false
-  if (!hasIfood && !has99) return u
+  const hasKeeta = keeta?.hasData ?? false
+  if (!hasIfood && !has99 && !hasKeeta) return u
 
   // Constrói novos valores por plataforma
   const platforms = u.monthly.platforms.map((p) => {
@@ -919,6 +964,14 @@ function mergeUnitMonthlyForDashboard(
         bruto: nine!.bruto,
         liquido: nine!.liquido,
         pctLoja: nine!.pctLoja,
+      }
+    }
+    if (p.id === "keeta" && hasKeeta) {
+      return {
+        ...p,
+        bruto: keeta!.bruto,
+        liquido: keeta!.liquido,
+        pctLoja: keeta!.pctLoja,
       }
     }
     return p
@@ -953,11 +1006,17 @@ function mergeUnitMonthlyForDashboard(
       totalLiquido += p.liquido
     }
   }
-  // Keeta sempre do manual
-  const pKeeta = u.monthly.platforms.find((p) => p.id === "keeta")
-  if (pKeeta) {
-    totalBruto += pKeeta.bruto
-    totalLiquido += pKeeta.liquido
+  if (hasKeeta) {
+    totalPedidos += keeta!.pedidos
+    totalBruto += keeta!.bruto
+    totalLiquido += keeta!.liquido
+    totalCancelados += keeta!.cancelamentosQtd
+  } else {
+    const pKeeta = u.monthly.platforms.find((p) => p.id === "keeta")
+    if (pKeeta) {
+      totalBruto += pKeeta.bruto
+      totalLiquido += pKeeta.liquido
+    }
   }
 
   const ticket = totalPedidos > 0 ? totalBruto / totalPedidos : 0
@@ -980,6 +1039,7 @@ function platformTotalsMerged(
   units: Awaited<ReturnType<typeof getUnits>>,
   finByUnit: Map<string, FinResumo>,
   ninefoodByUnit: Map<string, NinefoodResumoT>,
+  keetaByUnit: Map<string, KeetaResumoT>,
 ) {
   const ids = ["ifood", "99food", "keeta"] as const
   return ids.map((id) => {
@@ -1011,10 +1071,16 @@ function platformTotalsMerged(
         }
         continue
       }
-      // Keeta: só manual
-      const p = u.monthly.platforms.find((p) => p.id === id)
-      bruto += p?.bruto ?? 0
-      liquido += p?.liquido ?? 0
+      // Keeta: prefere importado se houver
+      const imp = keetaByUnit.get(u.id)
+      if (imp?.hasData) {
+        bruto += imp.bruto
+        liquido += imp.liquido
+      } else {
+        const p = u.monthly.platforms.find((p) => p.id === id)
+        bruto += p?.bruto ?? 0
+        liquido += p?.liquido ?? 0
+      }
     }
     const pctLoja = bruto > 0 ? (liquido / bruto) * 100 : 0
     return { id, name, bruto, liquido, pctLoja }

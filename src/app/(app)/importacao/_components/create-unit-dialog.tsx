@@ -109,6 +109,37 @@ export function CreateUnitDialog({
   )
 }
 
+/** Normaliza string pra match (minúsculo, sem acento). */
+function normalizeStr(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+}
+
+/**
+ * Adivinha qual unidade casa com a loja do relatório, pelo nome/cidade
+ * sugeridos (ex: "Churrasco no Pote — Brooklin" → unidade "Brooklin").
+ * Cai pra primeira elegível se não achar.
+ */
+function guessUnitId(
+  units: AvailableUnit[],
+  unmapped: NonNullable<ImportFileResult["unmapped"]>,
+): string {
+  const hay = normalizeStr(
+    `${unmapped.suggestedName ?? ""} ${unmapped.suggestedCity ?? ""}`,
+  )
+  if (hay) {
+    const match = units.find((u) => {
+      const n = normalizeStr(u.name)
+      return n.length >= 3 && hay.includes(n)
+    })
+    if (match) return match.id
+  }
+  return units[0]?.id ?? ""
+}
+
 function DialogInner({
   unmapped,
   file,
@@ -134,7 +165,12 @@ function DialogInner({
   const [mode, setMode] = React.useState<"link" | "create">(
     eligibleUnits.length > 0 ? "link" : "create",
   )
-  const platformLabel = unmapped.platform === "ifood" ? "iFood" : "99 Food"
+  const platformLabel =
+    unmapped.platform === "ifood"
+      ? "iFood"
+      : unmapped.platform === "keeta"
+        ? "Keeta"
+        : "99 Food"
 
   return (
     <>
@@ -156,6 +192,19 @@ function DialogInner({
           detectada no relatório de {unmapped.reportTypeLabel}, mas o ID ainda
           não está vinculado a nenhuma unidade.
         </DialogDescription>
+        {unmapped.suggestedName && (
+          <div className="mt-1 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/40 dark:bg-amber-950/30">
+            <Store className="size-3.5 shrink-0 text-amber-600" />
+            <span className="text-amber-900 dark:text-amber-300">
+              Loja no relatório:{" "}
+              <strong className="font-semibold">{unmapped.suggestedName}</strong>
+              {unmapped.suggestedCity &&
+                unmapped.suggestedCity !== unmapped.suggestedName && (
+                  <> · {unmapped.suggestedCity}</>
+                )}
+            </span>
+          </div>
+        )}
       </DialogHeader>
 
       {/* Tabs */}
@@ -257,8 +306,15 @@ function LinkForm({
   onCancel: () => void
 }) {
   const [state, formAction] = useActionState(linkUnitAndImport, linkInitial)
-  const [unitId, setUnitId] = React.useState(eligibleUnits[0]?.id ?? "")
-  const platformLabel = unmapped.platform === "ifood" ? "iFood" : "99 Food"
+  const [unitId, setUnitId] = React.useState(() =>
+    guessUnitId(eligibleUnits, unmapped),
+  )
+  const platformLabel =
+    unmapped.platform === "ifood"
+      ? "iFood"
+      : unmapped.platform === "keeta"
+        ? "Keeta"
+        : "99 Food"
   const selectedUnit = eligibleUnits.find((u) => u.id === unitId)
   const selectedLabel = selectedUnit
     ? `#${selectedUnit.code} ${selectedUnit.name}`
@@ -396,7 +452,12 @@ function CreateForm({
     }
   }, [state, onSuccess])
 
-  const platformLabel = unmapped.platform === "ifood" ? "iFood" : "99 Food"
+  const platformLabel =
+    unmapped.platform === "ifood"
+      ? "iFood"
+      : unmapped.platform === "keeta"
+        ? "Keeta"
+        : "99 Food"
 
   return (
     <form

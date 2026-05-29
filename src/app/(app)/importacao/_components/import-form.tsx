@@ -56,16 +56,60 @@ export function ImportForm({
   }, [state, router])
 
   function startWizardAt(storeId: string) {
-    const queue = localResults.filter((r) => r.unmapped && !r.ok)
+    // Fila por LOJA ÚNICA (dedup) — a mesma loja aparece em vários
+    // arquivos, mas mapear 1 vez resolve todos.
+    const queue = dedupeUnmapped(localResults).filter(
+      (r) => r.unmapped && !r.ok,
+    )
     const idx = queue.findIndex((r) => r.unmapped?.storeId === storeId)
     if (idx === -1) return
     setWizardQueue(queue)
     setWizardIdx(idx)
   }
 
-  function handleWizardSuccess(updated: ImportFileResult) {
+  /**
+   * Depois que uma loja é vinculada, o mapping existe no banco — então
+   * reimporta TODOS os outros arquivos dessa mesma loja (os "irmãos" que
+   * ficaram escondidos na dedup), pra os 3 relatórios entrarem.
+   */
+  async function rescanStore(storeId: string) {
+    const siblings = localResults.filter(
+      (r) => !r.ok && r.unmapped?.storeId === storeId,
+    )
+    for (const sib of siblings) {
+      const file = files.find(
+        (f) => f.name === (sib.originalFilename ?? sib.filename),
+      )
+      if (!file) continue
+      const fd = new FormData()
+      fd.set("file", file)
+      fd.set("storeId", storeId)
+      const res = await recheckAndImport({ ok: false }, fd)
+      if (res.result) {
+        const updated = res.result
+        setLocalResults((prev) =>
+          prev.map((r) => (slotKeyOf(r) === slotKeyOf(updated) ? updated : r)),
+        )
+      }
+    }
+    router.refresh()
+  }
+
+  function handleResultUpdated(updated: ImportFileResult) {
     setLocalResults((prev) =>
-      prev.map((r) => (r.filename === updated.filename ? updated : r)),
+      prev.map((r) => (slotKeyOf(r) === slotKeyOf(updated) ? updated : r)),
+    )
+    const sid =
+      updated.ok && updated.summary && "storeId" in updated.summary
+        ? updated.summary.storeId
+        : undefined
+    if (sid) void rescanStore(sid)
+  }
+
+  function handleWizardSuccess(updated: ImportFileResult) {
+    const storeId = currentWizardResult?.unmapped?.storeId
+    setLocalResults((prev) =>
+      prev.map((r) => (slotKeyOf(r) === slotKeyOf(updated) ? updated : r)),
     )
     // Avança pro próximo idx da fila
     setWizardIdx((curr) => {
@@ -73,7 +117,8 @@ export function ImportForm({
       const next = curr + 1
       return next < wizardQueue.length ? next : null
     })
-    router.refresh()
+    if (storeId) void rescanStore(storeId)
+    else router.refresh()
   }
 
   function handleWizardClose(open: boolean) {
@@ -150,8 +195,9 @@ export function ImportForm({
         </div>
         <p className="text-sm font-medium">Arrasta XLSX aqui ou clica</p>
         <p className="text-xs text-muted-foreground">
-          Vários ao mesmo tempo · iFood (Cardápio · Financeiro · Avaliações) e
-          99 Food (Dados da loja · Dados do item)
+          Vários ao mesmo tempo · iFood (Cardápio · Financeiro · Avaliações),
+          99 Food (Dados da loja · item · pedido) e Keeta (Loja diária · Itens ·
+          Pedidos)
         </p>
         <p className="text-[10px] text-muted-foreground">
           A plataforma e a unidade são detectadas automaticamente pelo arquivo
@@ -224,16 +270,10 @@ export function ImportForm({
 
       {localResults.length > 0 && (
         <ResultsList
-          results={localResults}
+          results={dedupeUnmapped(localResults)}
           files={files}
           onCreateUnit={startWizardAt}
-          onResultUpdated={(updated) =>
-            setLocalResults((prev) =>
-              prev.map((r) =>
-                r.filename === updated.filename ? updated : r,
-              ),
-            )
-          }
+          onResultUpdated={handleResultUpdated}
         />
       )}
 
@@ -262,6 +302,39 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       {pending ? "Importando..." : "Importar todos"}
     </Button>
   )
+}
+
+/**
+ * Chave do "slot" de um resultado = (arquivo original + storeId). Robusta
+ * pra casar a mesma linha quando ela muda de unmapped → ok (o filename
+ * troca de "· loja X" pra "· código X", mas o arquivo + storeId não mudam).
+ */
+function slotKeyOf(r: ImportFileResult): string {
+  const file = r.originalFilename ?? r.filename
+  const sid =
+    r.unmapped?.storeId ??
+    (r.summary && "storeId" in r.summary ? r.summary.storeId : "")
+  return `${file}|${sid}`
+}
+
+/**
+ * Deduplica os resultados não-mapeados pela loja (platform + storeId).
+ * A mesma loja aparece em vários arquivos (Loja/Itens/Pedidos), mas pro
+ * usuário deve aparecer 1 card por loja — mapear 1 vez resolve todos.
+ * Resultados ok e de erro são mantidos como estão.
+ */
+function dedupeUnmapped(results: ImportFileResult[]): ImportFileResult[] {
+  const seen = new Set<string>()
+  const out: ImportFileResult[] = []
+  for (const r of results) {
+    if (r.unmapped && !r.ok) {
+      const key = `${r.unmapped.platform}|${r.unmapped.storeId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+    }
+    out.push(r)
+  }
+  return out
 }
 
 function ResultsList({
@@ -382,7 +455,12 @@ function UnmappedResult({
     <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex-1">
         <p className="text-sm font-semibold">
-          Loja {unmapped.platform === "ifood" ? "iFood" : "99 Food"}{" "}
+          Loja{" "}
+          {unmapped.platform === "ifood"
+            ? "iFood"
+            : unmapped.platform === "keeta"
+              ? "Keeta"
+              : "99 Food"}{" "}
           <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
             #{unmapped.storeId}
           </span>{" "}
@@ -637,6 +715,105 @@ function ResultSummary({ summary }: { summary: ImportSummary }) {
           <Stat label="Dias" value={summary.diasImportados} />
           <Stat label="Linhas (item·dia)" value={summary.itensCount} />
           <Stat label="Receita total" value={fmtBRL(summary.receitaTotal)} />
+        </div>
+      </div>
+    )
+  }
+  if (summary.kind === "keeta_loja") {
+    return (
+      <div className="mt-1">
+        <p className="text-sm font-semibold">
+          Keeta (loja) · #{summary.unitCode} {summary.unitName} ·{" "}
+          {new Date(summary.periodoInicio + "T00:00:00").toLocaleDateString(
+            "pt-BR",
+          )}
+          {summary.periodoInicio !== summary.periodoFim && (
+            <>
+              {" → "}
+              {new Date(summary.periodoFim + "T00:00:00").toLocaleDateString(
+                "pt-BR",
+              )}
+            </>
+          )}
+          {summary.substituido && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              substituído
+            </span>
+          )}
+        </p>
+        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-4">
+          <Stat label="Dias" value={summary.diasImportados} />
+          <Stat label="Pedidos" value={summary.pedidos} />
+          <Stat label="Bruto" value={fmtBRL(summary.bruto)} />
+          <Stat label="Cancelados" value={summary.cancelados} />
+        </div>
+      </div>
+    )
+  }
+  if (summary.kind === "keeta_item") {
+    return (
+      <div className="mt-1">
+        <p className="text-sm font-semibold">
+          Keeta (cardápio) · #{summary.unitCode} {summary.unitName} ·{" "}
+          {new Date(summary.periodoInicio + "T00:00:00").toLocaleDateString(
+            "pt-BR",
+          )}
+          {summary.periodoInicio !== summary.periodoFim && (
+            <>
+              {" → "}
+              {new Date(summary.periodoFim + "T00:00:00").toLocaleDateString(
+                "pt-BR",
+              )}
+            </>
+          )}
+          {summary.substituido && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              substituído
+            </span>
+          )}
+        </p>
+        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-4">
+          <Stat label="Dias" value={summary.diasImportados} />
+          <Stat label="Linhas (item·dia)" value={summary.itensCount} />
+          <Stat label="Receita total" value={fmtBRL(summary.receitaTotal)} />
+        </div>
+      </div>
+    )
+  }
+  if (summary.kind === "keeta_pedido") {
+    return (
+      <div className="mt-1">
+        <p className="text-sm font-semibold">
+          Keeta (pedidos) · #{summary.unitCode} {summary.unitName} ·{" "}
+          {new Date(summary.periodoInicio + "T00:00:00").toLocaleDateString(
+            "pt-BR",
+          )}
+          {summary.periodoInicio !== summary.periodoFim && (
+            <>
+              {" → "}
+              {new Date(summary.periodoFim + "T00:00:00").toLocaleDateString(
+                "pt-BR",
+              )}
+            </>
+          )}
+          {summary.substituido && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              substituído
+            </span>
+          )}
+        </p>
+        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-4">
+          <Stat label="Pedidos" value={summary.pedidos} />
+          <Stat label="Bruto" value={fmtBRL(summary.bruto)} />
+          <Stat label="Líquido" value={fmtBRL(summary.liquido)} />
+          <Stat
+            label="Nota média"
+            value={
+              summary.notaMedia != null
+                ? `${summary.notaMedia.toFixed(2)} ★`
+                : "—"
+            }
+          />
         </div>
       </div>
     )
