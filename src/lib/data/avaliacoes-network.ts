@@ -1,10 +1,10 @@
 /**
- * Agregador de avaliações combinando iFood + 99 Food, por unidade.
+ * Agregador de avaliações combinando iFood + 99 Food + Keeta, por unidade.
  *
  * Usado pelo dashboard da tela /avaliacoes (visão de rede, quando nenhuma
  * unidade está selecionada). As funções por-plataforma já existem em
- * ifood-imported.ts e ninefood-imported.ts; aqui juntamos as duas fontes
- * num breakdown por unidade pra montar o ranking clicável.
+ * ifood/ninefood/keeta-imported.ts; aqui juntamos as fontes num breakdown
+ * por unidade pra montar o ranking clicável.
  */
 
 import "server-only"
@@ -21,7 +21,7 @@ export type UnitAvaliacaoRow = {
   unitId: string
   unitCode: string
   unitName: string
-  /** Total combinado (iFood + 99) */
+  /** Total combinado (iFood + 99 + Keeta) */
   total: number
   /** Nota média combinada (ponderada pela contagem) */
   notaMedia: number
@@ -29,8 +29,10 @@ export type UnitAvaliacaoRow = {
   dist: Dist
   totalIfood: number
   total99: number
+  totalKeeta: number
   notaMediaIfood: number | null
   notaMedia99: number | null
+  notaMediaKeeta: number | null
 }
 
 /**
@@ -73,15 +75,33 @@ export async function getAvaliacoesByUnitForMonth(
   if (filterUnitIds && filterUnitIds.length > 0)
     q99 = q99.in("unit_id", filterUnitIds)
 
-  const [ifoodRes, ninefoodRes] = await Promise.all([qIfood, q99])
+  // Keeta: avaliação em keeta_pedidos (pontuacao_avaliacao + data_avaliacao DATE)
+  let qKeeta = admin
+    .from("keeta_pedidos")
+    .select("unit_id, pontuacao_avaliacao")
+    .not("pontuacao_avaliacao", "is", null)
+    .gte("data_avaliacao", startIso)
+    .lte("data_avaliacao", endIncl)
+    .limit(50000)
+  if (filterUnitIds && filterUnitIds.length > 0)
+    qKeeta = qKeeta.in("unit_id", filterUnitIds)
+
+  const [ifoodRes, ninefoodRes, keetaRes] = await Promise.all([
+    qIfood,
+    q99,
+    qKeeta,
+  ])
 
   type Agg = {
     distIfood: Dist
     dist99: Dist
+    distKeeta: Dist
     somaIfood: number
     soma99: number
+    somaKeeta: number
     totalIfood: number
     total99: number
+    totalKeeta: number
   }
   const byUnit = new Map<string, Agg>()
   const ensure = (id: string): Agg => {
@@ -90,10 +110,13 @@ export async function getAvaliacoesByUnitForMonth(
       a = {
         distIfood: emptyDist(),
         dist99: emptyDist(),
+        distKeeta: emptyDist(),
         somaIfood: 0,
         soma99: 0,
+        somaKeeta: 0,
         totalIfood: 0,
         total99: 0,
+        totalKeeta: 0,
       }
       byUnit.set(id, a)
     }
@@ -116,6 +139,14 @@ export async function getAvaliacoesByUnitForMonth(
     a.soma99 += n
     a.total99 += 1
   }
+  for (const r of keetaRes.data ?? []) {
+    const n = Number(r.pontuacao_avaliacao) as 1 | 2 | 3 | 4 | 5
+    if (n < 1 || n > 5) continue
+    const a = ensure(r.unit_id)
+    a.distKeeta[n] += 1
+    a.somaKeeta += n
+    a.totalKeeta += 1
+  }
 
   const unitIds = Array.from(byUnit.keys())
   if (unitIds.length === 0) return []
@@ -131,14 +162,14 @@ export async function getAvaliacoesByUnitForMonth(
   const rows: UnitAvaliacaoRow[] = unitIds.map((id) => {
     const a = byUnit.get(id)!
     const dist: Dist = {
-      1: a.distIfood[1] + a.dist99[1],
-      2: a.distIfood[2] + a.dist99[2],
-      3: a.distIfood[3] + a.dist99[3],
-      4: a.distIfood[4] + a.dist99[4],
-      5: a.distIfood[5] + a.dist99[5],
+      1: a.distIfood[1] + a.dist99[1] + a.distKeeta[1],
+      2: a.distIfood[2] + a.dist99[2] + a.distKeeta[2],
+      3: a.distIfood[3] + a.dist99[3] + a.distKeeta[3],
+      4: a.distIfood[4] + a.dist99[4] + a.distKeeta[4],
+      5: a.distIfood[5] + a.dist99[5] + a.distKeeta[5],
     }
-    const total = a.totalIfood + a.total99
-    const soma = a.somaIfood + a.soma99
+    const total = a.totalIfood + a.total99 + a.totalKeeta
+    const soma = a.somaIfood + a.soma99 + a.somaKeeta
     return {
       unitId: id,
       unitCode: nameMap.get(id)?.code ?? "?",
@@ -148,6 +179,7 @@ export async function getAvaliacoesByUnitForMonth(
       dist,
       totalIfood: a.totalIfood,
       total99: a.total99,
+      totalKeeta: a.totalKeeta,
       notaMediaIfood:
         a.totalIfood > 0
           ? Math.round((a.somaIfood / a.totalIfood) * 100) / 100
@@ -155,6 +187,10 @@ export async function getAvaliacoesByUnitForMonth(
       notaMedia99:
         a.total99 > 0
           ? Math.round((a.soma99 / a.total99) * 100) / 100
+          : null,
+      notaMediaKeeta:
+        a.totalKeeta > 0
+          ? Math.round((a.somaKeeta / a.totalKeeta) * 100) / 100
           : null,
     }
   })

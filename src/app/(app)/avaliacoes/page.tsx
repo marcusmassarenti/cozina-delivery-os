@@ -2,6 +2,7 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { AvaliacoesTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-99-tab"
+import { AvaliacoesKeetaTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-keeta-tab"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getUnits } from "@/lib/data/units"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
@@ -14,9 +15,9 @@ import { AvaliacoesNetworkDashboard } from "./_components/avaliacoes-network-das
  *
  * Filtros: ?unidade=01&plataforma=ifood&periodo=2026-05
  *
- * Body: reaproveita AvaliacoesTab (iFood) ou Avaliacoes99Tab (99 Food) que
- * já existem na tela de detalhe da unidade. Cada um já trata seu próprio
- * empty state quando não tem dado importado no mês.
+ * Body: reaproveita AvaliacoesTab (iFood), Avaliacoes99Tab (99 Food) ou
+ * AvaliacoesKeetaTab (Keeta) que já existem na tela de detalhe da unidade.
+ * Cada um já trata seu próprio empty state quando não tem dado no mês.
  */
 export default async function AvaliacoesPage({
   searchParams,
@@ -45,9 +46,9 @@ export default async function AvaliacoesPage({
   const unitOptions = activeUnits.map((u) => ({
     code: u.code,
     name: u.name,
-    // Avaliações só fazem sentido pra iFood e 99 (Keeta não exporta avaliação)
+    // As 3 plataformas exportam avaliação (iFood, 99 Food e Keeta)
     platforms: u.platforms.filter(
-      (p) => p === "ifood" || p === "99food",
+      (p) => p === "ifood" || p === "99food" || p === "keeta",
     ),
   }))
 
@@ -56,7 +57,8 @@ export default async function AvaliacoesPage({
     : null
   const availableForUnit: PlatformId[] =
     selectedUnit?.platforms.filter(
-      (p): p is "ifood" | "99food" => p === "ifood" || p === "99food",
+      (p): p is "ifood" | "99food" | "keeta" =>
+        p === "ifood" || p === "99food" || p === "keeta",
     ) ?? []
   // Plataforma efetiva = a do query, ou a 1ª disponível na unidade
   const plataforma: PlatformId | null =
@@ -107,6 +109,12 @@ export default async function AvaliacoesPage({
           year={year}
           month={month}
         />
+      ) : plataforma === "keeta" ? (
+        <AvaliacoesKeetaTab
+          unitId={selectedUnit.id}
+          year={year}
+          month={month}
+        />
       ) : null}
     </div>
   )
@@ -119,13 +127,14 @@ function NoPlatformsState({ unitName }: { unitName: string }) {
         {unitName} não tem plataformas com avaliações
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Avaliações só vêm do iFood e do 99 Food. Cadastre uma dessas
+        Avaliações vêm do iFood, do 99 Food e do Keeta. Cadastre uma dessas
         plataformas em <a href="/unidades" className="underline">/unidades</a>{" "}
         pra começar.
       </p>
       <div className="mt-3 flex items-center justify-center gap-2">
         <PlatformLogo platform="ifood" size="sm" />
         <PlatformLogo platform="99food" size="sm" />
+        <PlatformLogo platform="keeta" size="sm" />
       </div>
     </div>
   )

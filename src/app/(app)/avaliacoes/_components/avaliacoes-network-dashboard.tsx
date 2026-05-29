@@ -12,12 +12,15 @@ import {
   getNetworkAvaliacoesForMonth,
 } from "@/lib/data/ifood-imported"
 import { getNetworkNinefoodAvaliacoesForMonth } from "@/lib/data/ninefood-imported"
-import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
+import {
+  getAvaliacoesByUnitForMonth,
+} from "@/lib/data/avaliacoes-network"
+import { getNetworkKeetaAvaliacoesForMonth } from "@/lib/data/keeta-imported"
 import { fmtNum, fmtPct } from "@/lib/format"
 
 /**
  * Dashboard de rede da tela /avaliacoes — visão padrão quando nenhuma
- * unidade está selecionada. Soma iFood + 99 Food de todas as unidades.
+ * unidade está selecionada. Soma iFood + 99 Food + Keeta de todas as lojas.
  */
 export async function AvaliacoesNetworkDashboard({
   year,
@@ -26,21 +29,22 @@ export async function AvaliacoesNetworkDashboard({
   year: number
   month: number
 }) {
-  const [ifood, nine, byUnit] = await Promise.all([
+  const [ifood, nine, keeta, byUnit] = await Promise.all([
     getNetworkAvaliacoesForMonth(year, month),
     getNetworkNinefoodAvaliacoesForMonth(year, month),
+    getNetworkKeetaAvaliacoesForMonth(year, month),
     getAvaliacoesByUnitForMonth(year, month),
   ])
 
-  // ─── Combina as 2 plataformas ────────────────────────────────────
+  // ─── Combina as 3 plataformas ────────────────────────────────────
   const dist = {
-    1: ifood.distribucao[1] + nine.distribucao[1],
-    2: ifood.distribucao[2] + nine.distribucao[2],
-    3: ifood.distribucao[3] + nine.distribucao[3],
-    4: ifood.distribucao[4] + nine.distribucao[4],
-    5: ifood.distribucao[5] + nine.distribucao[5],
+    1: ifood.distribucao[1] + nine.distribucao[1] + keeta.distribucao[1],
+    2: ifood.distribucao[2] + nine.distribucao[2] + keeta.distribucao[2],
+    3: ifood.distribucao[3] + nine.distribucao[3] + keeta.distribucao[3],
+    4: ifood.distribucao[4] + nine.distribucao[4] + keeta.distribucao[4],
+    5: ifood.distribucao[5] + nine.distribucao[5] + keeta.distribucao[5],
   }
-  const total = ifood.total + nine.total
+  const total = ifood.total + nine.total + keeta.total
 
   if (total === 0) {
     return (
@@ -52,7 +56,7 @@ export async function AvaliacoesNetworkDashboard({
           Sem avaliações importadas neste mês
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Sobe os relatórios de avaliação do iFood e/ou 99 Food em{" "}
+          Sobe os relatórios de avaliação do iFood, 99 Food ou Keeta em{" "}
           <a href="/importacao" className="underline">
             /importacao
           </a>{" "}
@@ -64,7 +68,8 @@ export async function AvaliacoesNetworkDashboard({
 
   const soma = 1 * dist[1] + 2 * dist[2] + 3 * dist[3] + 4 * dist[4] + 5 * dist[5]
   const notaMedia = total > 0 ? soma / total : 0
-  const comComentario = ifood.comComentario + nine.comComentario
+  const comComentario =
+    ifood.comComentario + nine.comComentario + keeta.comComentario
   const pct = (n: 1 | 2 | 3 | 4 | 5) => (total > 0 ? (dist[n] / total) * 100 : 0)
   const negPct = pct(1) + pct(2)
 
@@ -106,6 +111,15 @@ export async function AvaliacoesNetworkDashboard({
     ...nine.ultimosComentarios.map((c) => ({
       id: "99food-" + c.id,
       platform: "99food" as const,
+      unitCode: c.unitCode,
+      unitName: c.unitName,
+      nota: c.nota,
+      comentario: c.comentario,
+      data: c.data,
+    })),
+    ...keeta.ultimosComentarios.map((c) => ({
+      id: c.id,
+      platform: "keeta" as const,
       unitCode: c.unitCode,
       unitName: c.unitName,
       nota: c.nota,
@@ -174,6 +188,11 @@ export async function AvaliacoesNetworkDashboard({
               platform="99food"
               total={nine.total}
               notaMedia={nine.notaMedia}
+            />
+            <PlatformStat
+              platform="keeta"
+              total={keeta.total}
+              notaMedia={keeta.notaMedia}
             />
           </div>
         </div>
@@ -248,6 +267,9 @@ export async function AvaliacoesNetworkDashboard({
               <div className="hidden items-center gap-1 sm:flex">
                 {u.totalIfood > 0 && <PlatformLogo platform="ifood" size="sm" />}
                 {u.total99 > 0 && <PlatformLogo platform="99food" size="sm" />}
+                {u.totalKeeta > 0 && (
+                  <PlatformLogo platform="keeta" size="sm" />
+                )}
               </div>
               <div className="w-20 shrink-0 text-right">
                 <p className="text-xs tabular-nums text-muted-foreground">
@@ -426,7 +448,11 @@ function PlatformStat({
       <PlatformLogo platform={platform} size="md" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold">
-          {platform === "ifood" ? "iFood" : "99 Food"}
+          {platform === "ifood"
+            ? "iFood"
+            : platform === "keeta"
+              ? "Keeta"
+              : "99 Food"}
         </p>
         <p className="text-[10px] text-muted-foreground tabular-nums">
           {fmtNum(total)} avaliações

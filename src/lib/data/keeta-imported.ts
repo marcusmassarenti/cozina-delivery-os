@@ -155,6 +155,236 @@ export async function getKeetaResumoForMonth(
   return map.get(unitId) ?? emptyKeeta()
 }
 
+// ─── Network: Avaliações Keeta ───────────────────────────────────────
+
+export type NetworkKeetaAvaliacoes = {
+  total: number
+  notaMedia: number
+  distribucao: Record<1 | 2 | 3 | 4 | 5, number>
+  comComentario: number
+  // Keeta não tem tags — mantém arrays vazios pra compatibilidade
+  topTagsPositivas: Array<{ tag: string; count: number }>
+  topTagsNegativas: Array<{ tag: string; count: number }>
+  ultimosComentarios: Array<{
+    id: string
+    unitId: string
+    unitCode: string
+    unitName: string
+    nota: number
+    comentario: string
+    data: string
+    pedidoIdCurto: string | null
+  }>
+  hasData: boolean
+}
+
+export async function getNetworkKeetaAvaliacoesForMonth(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+): Promise<NetworkKeetaAvaliacoes> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const startIso = `${year}-${monthStr}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
+
+  let q = admin
+    .from("keeta_pedidos")
+    .select("id, unit_id, pedido_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao")
+    .not("pontuacao_avaliacao", "is", null)
+    .gte("data_avaliacao", startIso)
+    .lte("data_avaliacao", endIncl)
+    .order("data_avaliacao", { ascending: false })
+    .limit(50000)
+  if (filterUnitIds && filterUnitIds.length > 0) q = q.in("unit_id", filterUnitIds)
+  const { data } = await q
+
+  const rows = data ?? []
+  const empty: NetworkKeetaAvaliacoes = {
+    total: 0,
+    notaMedia: 0,
+    distribucao: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    comComentario: 0,
+    topTagsPositivas: [],
+    topTagsNegativas: [],
+    ultimosComentarios: [],
+    hasData: false,
+  }
+  if (rows.length === 0) return empty
+
+  const dist: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  let soma = 0
+  let comComentario = 0
+  for (const r of rows) {
+    const n = Number(r.pontuacao_avaliacao) as 1 | 2 | 3 | 4 | 5
+    if (n >= 1 && n <= 5) {
+      dist[n] += 1
+      soma += n
+    }
+    if (r.conteudo_avaliacao && String(r.conteudo_avaliacao).trim().length > 0)
+      comComentario++
+  }
+
+  const comentariosNaoVazios = rows.filter(
+    (r) => r.conteudo_avaliacao && String(r.conteudo_avaliacao).trim().length > 0,
+  )
+  const unitIds = Array.from(
+    new Set(comentariosNaoVazios.slice(0, 10).map((r) => r.unit_id)),
+  )
+  const unitMap = new Map<string, { code: string; name: string }>()
+  if (unitIds.length > 0) {
+    const { data: units } = await admin
+      .from("units")
+      .select("id, code, name")
+      .in("id", unitIds)
+    for (const u of units ?? []) unitMap.set(u.id, { code: u.code, name: u.name })
+  }
+  const ultimosComentarios = comentariosNaoVazios.slice(0, 5).map((r) => {
+    const pid = String(r.pedido_id ?? "")
+    return {
+      id: "keeta-" + String(r.id),
+      unitId: r.unit_id,
+      unitCode: unitMap.get(r.unit_id)?.code ?? "?",
+      unitName: unitMap.get(r.unit_id)?.name ?? "(unidade)",
+      nota: Number(r.pontuacao_avaliacao),
+      comentario: String(r.conteudo_avaliacao),
+      data: String(r.data_avaliacao),
+      pedidoIdCurto: pid.length > 6 ? "…" + pid.slice(-6) : pid || null,
+    }
+  })
+
+  return {
+    total: rows.length,
+    notaMedia: Math.round((soma / rows.length) * 100) / 100,
+    distribucao: dist,
+    comComentario,
+    topTagsPositivas: [],
+    topTagsNegativas: [],
+    ultimosComentarios,
+    hasData: true,
+  }
+}
+
+// ─── Avaliações por unidade (tab Avaliações da unidade / tela /avaliacoes) ──
+
+export type KeetaAvaliacoesResumo = {
+  total: number
+  notaMedia: number
+  distribucao: Record<1 | 2 | 3 | 4 | 5, number>
+  comComentario: number
+  hasData: boolean
+}
+
+export type KeetaAvaliacaoListItem = {
+  id: string
+  pedidoIdCurto: string | null
+  dataAvaliacao: string
+  dataPedido: string | null
+  nota: number
+  comentario: string | null
+}
+
+/**
+ * Resumo de avaliações Keeta de UMA unidade no mês.
+ * Keeta não exporta tags — só nota (1-5) + comentário livre.
+ */
+export async function getKeetaAvaliacoesResumoForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<KeetaAvaliacoesResumo> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const startIso = `${year}-${monthStr}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
+
+  const { data } = await admin
+    .from("keeta_pedidos")
+    .select("pontuacao_avaliacao, conteudo_avaliacao")
+    .eq("unit_id", unitId)
+    .not("pontuacao_avaliacao", "is", null)
+    .gte("data_avaliacao", startIso)
+    .lte("data_avaliacao", endIncl)
+    .limit(50000)
+
+  const rows = data ?? []
+  if (rows.length === 0) {
+    return {
+      total: 0,
+      notaMedia: 0,
+      distribucao: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      comComentario: 0,
+      hasData: false,
+    }
+  }
+
+  const dist: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  let soma = 0
+  let comComentario = 0
+  for (const r of rows) {
+    const n = Number(r.pontuacao_avaliacao) as 1 | 2 | 3 | 4 | 5
+    if (n >= 1 && n <= 5) {
+      dist[n] += 1
+      soma += n
+    }
+    if (r.conteudo_avaliacao && String(r.conteudo_avaliacao).trim().length > 0)
+      comComentario++
+  }
+  return {
+    total: rows.length,
+    notaMedia: Math.round((soma / rows.length) * 100) / 100,
+    distribucao: dist,
+    comComentario,
+    hasData: true,
+  }
+}
+
+/**
+ * Lista de avaliações Keeta do mês (pra tab Avaliações da unidade).
+ * Sem tags — Keeta só dá nota + comentário.
+ */
+export async function listKeetaAvaliacoesForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+  limit = 100,
+): Promise<KeetaAvaliacaoListItem[]> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const startIso = `${year}-${monthStr}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
+
+  const { data } = await admin
+    .from("keeta_pedidos")
+    .select(
+      "id, pedido_id, data_avaliacao, horario_pedido, pontuacao_avaliacao, conteudo_avaliacao",
+    )
+    .eq("unit_id", unitId)
+    .not("pontuacao_avaliacao", "is", null)
+    .gte("data_avaliacao", startIso)
+    .lte("data_avaliacao", endIncl)
+    .order("data_avaliacao", { ascending: false })
+    .limit(limit)
+
+  return (data ?? []).map((r) => {
+    const pedidoIdStr = String(r.pedido_id ?? "")
+    return {
+      id: String(r.id),
+      pedidoIdCurto:
+        pedidoIdStr.length > 6 ? "…" + pedidoIdStr.slice(-6) : pedidoIdStr,
+      dataAvaliacao: String(r.data_avaliacao ?? ""),
+      dataPedido: r.horario_pedido
+        ? String(r.horario_pedido).slice(0, 10)
+        : null,
+      nota: Number(r.pontuacao_avaliacao ?? 0),
+      comentario: r.conteudo_avaliacao ? String(r.conteudo_avaliacao) : null,
+    }
+  })
+}
+
 // ─── Cobertura: matriz loja × mês (Loja diária / Itens / Pedidos) ────
 
 const KEETA_COMPLETE_RATIO = 0.6
