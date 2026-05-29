@@ -2,12 +2,9 @@ import Link from "next/link"
 import { ChevronLeft, ChevronRight, LayoutGrid, Upload } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
-import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getUnits } from "@/lib/data/units"
-import { parsePeriodParam } from "@/lib/period"
 
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportForm } from "./_components/import-form"
@@ -74,7 +71,6 @@ export default async function ImportacaoPage({
   searchParams: Promise<{ periodo?: string; historico?: string }>
 }) {
   const sp = await searchParams
-  const { year, month } = parsePeriodParam(sp.periodo)
   const histPage = Math.max(1, parseInt(sp.historico ?? "1", 10) || 1)
   const units = await getUnits()
   const activeUnits = units.filter((u) => u.active)
@@ -85,10 +81,7 @@ export default async function ImportacaoPage({
     platforms: u.platforms,
     externalStoreIds: u.externalStoreIds,
   }))
-  const [recentResult, availablePeriods] = await Promise.all([
-    getRecentImports(histPage),
-    getAvailablePeriods(),
-  ])
+  const recentResult = await getRecentImports(histPage)
 
   const recent = recentResult.items
   const recentTotal = recentResult.total
@@ -110,19 +103,13 @@ export default async function ImportacaoPage({
             Itens / Pedidos) e o sistema converte em lançamentos.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/importacao/cobertura"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
-          >
-            <LayoutGrid className="size-3.5" />
-            Ver cobertura
-          </Link>
-          <PeriodSelector
-            current={{ year, month }}
-            options={availablePeriods}
-          />
-        </div>
+        <Link
+          href="/importacao/cobertura"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
+        >
+          <LayoutGrid className="size-3.5" />
+          Ver cobertura
+        </Link>
       </div>
 
       <DownloadGuide />
