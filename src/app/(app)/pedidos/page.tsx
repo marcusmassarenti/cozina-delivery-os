@@ -7,6 +7,7 @@ import {
   getVrByUnits,
 } from "@/lib/data/ifood-pedidos"
 import {
+  getKeetaPedidoPorLoja,
   getKeetaPedidoUnitsWithData,
   getNetworkKeetaPedidoResumo,
   getKeetaPedidoResumoForMonth,
@@ -64,13 +65,16 @@ export default async function PedidosPage({
   const keeta =
     plataforma === "keeta"
       ? await (async () => {
-          const [resumo, unitsWithData] = await Promise.all([
+          const [resumo, unitsWithData, porLoja] = await Promise.all([
             selectedUnit
               ? getKeetaPedidoResumoForMonth(selectedUnit.id, year, month)
               : getNetworkKeetaPedidoResumo(ids, year, month),
             getKeetaPedidoUnitsWithData(year, month),
+            selectedUnit
+              ? Promise.resolve([])
+              : getKeetaPedidoPorLoja(ids, year, month),
           ])
-          return { resumo, unitsWithData }
+          return { resumo, unitsWithData, porLoja }
         })()
       : null
 
@@ -113,7 +117,11 @@ export default async function PedidosPage({
       </div>
 
       {plataforma === "keeta" ? (
-        <PedidosKeetaView resumo={keeta!.resumo} />
+        <PedidosKeetaView
+          resumo={keeta!.resumo}
+          porLoja={selectedUnit ? undefined : keeta!.porLoja}
+          periodoParam={periodoParam}
+        />
       ) : (
         <PedidosIfoodView
           resumo={ifood!.resumo}

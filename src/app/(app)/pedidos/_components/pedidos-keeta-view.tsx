@@ -1,5 +1,7 @@
+import Link from "next/link"
 import {
   BadgePercent,
+  ChevronRight,
   Megaphone,
   Receipt,
   Tag,
@@ -7,7 +9,10 @@ import {
   XCircle,
 } from "lucide-react"
 
-import type { KeetaPedidoResumo } from "@/lib/data/keeta-pedidos"
+import type {
+  KeetaPedidoResumo,
+  KeetaPedidoUnitRow,
+} from "@/lib/data/keeta-pedidos"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 /**
@@ -16,8 +21,18 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
  * promoções (Keeta × loja), taxas granulares, mix de campanhas, turnos e
  * detalhe de cancelamento.
  */
-export function PedidosKeetaView({ resumo }: { resumo: KeetaPedidoResumo }) {
+export function PedidosKeetaView({
+  resumo,
+  porLoja,
+  periodoParam,
+}: {
+  resumo: KeetaPedidoResumo
+  porLoja?: KeetaPedidoUnitRow[]
+  periodoParam?: string
+}) {
   const r = resumo
+  const unitHref = (code: string) =>
+    `/unidades/${code}${periodoParam ? `?periodo=${periodoParam}` : ""}`
   if (!r.hasData) {
     return (
       <div className="rounded-xl border border-dashed bg-card p-10 text-center">
@@ -207,6 +222,52 @@ export function PedidosKeetaView({ resumo }: { resumo: KeetaPedidoResumo }) {
           )}
         </div>
       </div>
+
+      {/* Vendas por loja (só no consolidado) */}
+      {porLoja && porLoja.length > 0 && (
+        <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="flex items-center justify-between border-b px-5 py-3">
+            <h3 className="text-sm font-semibold">
+              Vendas por loja{" "}
+              <span className="font-normal text-muted-foreground">
+                ({porLoja.length})
+              </span>
+            </h3>
+            <span className="text-[10px] text-muted-foreground">
+              clique pra ver a loja
+            </span>
+          </div>
+          <div className="divide-y">
+            {porLoja.map((u) => (
+              <Link
+                key={u.unitId}
+                href={unitHref(u.unitCode)}
+                className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-muted/50"
+              >
+                <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                  #{u.unitCode}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{u.unitName}</p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground">
+                    subsídio loja {fmtBRLShort(u.promoLoja)}
+                    {u.cancelados > 0 && ` · ${fmtNum(u.cancelados)} canc.`}
+                  </p>
+                </div>
+                <div className="w-28 shrink-0 text-right">
+                  <p className="text-sm font-bold tabular-nums">
+                    {fmtBRL(u.valorPago)}
+                  </p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground">
+                    {fmtNum(u.pedidos)} pedidos
+                  </p>
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <p className="text-[11px] text-muted-foreground">
         Fonte: relatório &quot;Pedidos recentes&quot; da Keeta. A Keeta não

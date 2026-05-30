@@ -258,6 +258,97 @@ export async function getNetworkKeetaPedidoResumo(
   return aggregate(rows)
 }
 
+export type KeetaPedidoUnitRow = {
+  unitId: string
+  unitCode: string
+  unitName: string
+  pedidos: number
+  cancelados: number
+  valorPago: number
+  promoKeeta: number
+  promoLoja: number
+}
+
+/** Resumo por loja (pra lista "Vendas por loja" no consolidado da rede). */
+export async function getKeetaPedidoPorLoja(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<KeetaPedidoUnitRow[]> {
+  if (unitIds.length === 0) return []
+  const admin = createAdminClient()
+  type PorLojaRow = {
+    unit_id: string
+    status_pedido: string | null
+    valor_pago_cliente: number | string | null
+    promo_keeta: number | string | null
+    promo_loja: number | string | null
+  }
+  const rows: PorLojaRow[] = []
+  let from = 0
+  const pageSize = 1000
+  for (let i = 0; i < 300; i++) {
+    const { data, error } = await admin
+      .from("keeta_pedidos_recentes")
+      .select("unit_id, status_pedido, valor_pago_cliente, promo_keeta, promo_loja")
+      .in("unit_id", unitIds)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .order("id")
+      .range(from, from + pageSize - 1)
+    if (error) {
+      console.error("getKeetaPedidoPorLoja:", error.message)
+      break
+    }
+    if (!data || data.length === 0) break
+    rows.push(...(data as PorLojaRow[]))
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  if (rows.length === 0) return []
+
+  const byUnit = new Map<string, KeetaPedidoUnitRow>()
+  for (const r of rows) {
+    let u = byUnit.get(r.unit_id)
+    if (!u) {
+      u = {
+        unitId: r.unit_id,
+        unitCode: "?",
+        unitName: "(unidade)",
+        pedidos: 0,
+        cancelados: 0,
+        valorPago: 0,
+        promoKeeta: 0,
+        promoLoja: 0,
+      }
+      byUnit.set(r.unit_id, u)
+    }
+    u.pedidos++
+    if (r.status_pedido === "Cancelado") u.cancelados++
+    u.valorPago += num(r.valor_pago_cliente)
+    u.promoKeeta += num(r.promo_keeta)
+    u.promoLoja += num(r.promo_loja)
+  }
+
+  const ids = Array.from(byUnit.keys())
+  const { data: units } = await admin
+    .from("units")
+    .select("id, code, name")
+    .in("id", ids)
+  const nameMap = new Map(
+    (units ?? []).map((u) => [u.id, { code: u.code, name: u.name }]),
+  )
+  const out = Array.from(byUnit.values()).map((u) => ({
+    ...u,
+    unitCode: nameMap.get(u.unitId)?.code ?? "?",
+    unitName: nameMap.get(u.unitId)?.name ?? "(unidade)",
+    valorPago: round(u.valorPago),
+    promoKeeta: round(u.promoKeeta),
+    promoLoja: round(u.promoLoja),
+  }))
+  return out.sort((a, b) => b.valorPago - a.valorPago)
+}
+
 /** Unidades que têm dados de Pedidos recentes Keeta no mês (pra cobertura). */
 export async function getKeetaPedidoUnitsWithData(
   year: number,

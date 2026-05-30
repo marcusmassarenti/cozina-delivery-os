@@ -273,11 +273,16 @@ export function PedidosIfoodView({
             </div>
           )}
 
-          {/* VR por unidade (só no consolidado) */}
+          {/* Vendas por loja (só no consolidado) */}
           {showVrByUnit && (
             <div className="overflow-hidden rounded-xl border bg-card">
               <div className="flex items-center justify-between border-b px-5 py-3">
-                <h3 className="text-sm font-semibold">VR por unidade</h3>
+                <h3 className="text-sm font-semibold">
+                  Vendas por loja{" "}
+                  <span className="font-normal text-muted-foreground">
+                    ({vrByUnit.length})
+                  </span>
+                </h3>
                 <span className="text-[10px] text-muted-foreground">
                   clique pra ver a loja
                 </span>
@@ -287,26 +292,27 @@ export function PedidosIfoodView({
                   <Link
                     key={u.unitId}
                     href={unitHref(u.unitCode)}
-                    className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/50"
+                    className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-muted/50"
                   >
                     <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                       #{u.unitCode}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {u.unitName}
-                    </span>
-                    <span className="hidden text-[11px] text-muted-foreground sm:block">
-                      {u.porBandeira
-                        .slice(0, 3)
-                        .map((b) => `${b.bandeira} ${fmtBRLShort(b.valor)}`)
-                        .join(" · ")}
-                    </span>
-                    <div className="w-28 shrink-0 text-right">
-                      <p className="text-sm font-bold tabular-nums">
-                        {fmtBRL(u.vrValor)}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {u.unitName}
                       </p>
                       <p className="text-[10px] tabular-nums text-muted-foreground">
-                        {fmtNum(u.vrPedidos)} pedidos em VR
+                        {u.vrValor > 0
+                          ? `VR ${fmtBRLShort(u.vrValor)} · ${fmtNum(u.vrPedidos)} ped`
+                          : "sem VR"}
+                      </p>
+                    </div>
+                    <div className="w-28 shrink-0 text-right">
+                      <p className="text-sm font-bold tabular-nums">
+                        {fmtBRL(u.totalValor)}
+                      </p>
+                      <p className="text-[10px] tabular-nums text-muted-foreground">
+                        {fmtNum(u.totalPedidos)} pedidos
                       </p>
                     </div>
                     <ChevronRight className="size-4 shrink-0 text-muted-foreground" />

@@ -291,6 +291,7 @@ export type VrPorUnidade = {
   vrPedidos: number
   vrValor: number
   totalPedidos: number
+  totalValor: number
   porBandeira: VrPorBandeira[]
 }
 
@@ -339,8 +340,9 @@ export async function getVrByUnits(
       vrPedidos: ag.vrPedidos,
       vrValor: ag.vrValor,
       totalPedidos: ag.totalPedidos,
+      totalValor: ag.totalValor,
       porBandeira: ag.porBandeira,
     }
   })
-  return out.sort((a, b) => b.vrValor - a.vrValor)
+  return out.sort((a, b) => b.totalValor - a.totalValor)
 }
