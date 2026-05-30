@@ -20,7 +20,7 @@ import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 import { ResultadoTable } from "./_components/resultado-table"
 
 /**
- * Tela /financeiro ("Resultado") — DRE consolidado da rede no mês.
+ * Tela /financeiro ("DRE Grupo") — DRE consolidado da rede no mês.
  *
  * Junta faturamento importado (iFood + 99 + Keeta) com custos/VR dos
  * lançamentos manuais. Mostra KPIs, o DRE em cascata da rede e a tabela
@@ -68,7 +68,7 @@ export default async function ResultadoPage({
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Resultado</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">DRE Grupo</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             DRE consolidado da rede · {formatPeriodLabel({ year, month })}
             {hasData

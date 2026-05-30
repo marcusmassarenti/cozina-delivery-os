@@ -74,7 +74,7 @@ const navGroups: NavGroup[] = [
         href: "/relatorio-diario",
         icon: CalendarRange,
       },
-      { label: "Resultado", href: "/financeiro", icon: Wallet },
+      { label: "DRE Grupo", href: "/financeiro", icon: Wallet },
     ],
   },
   {
