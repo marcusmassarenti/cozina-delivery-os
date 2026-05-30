@@ -1,4 +1,5 @@
 import {
+  Bike,
   CalendarDays,
   Megaphone,
   PieChart,
@@ -8,6 +9,7 @@ import {
   Wallet,
 } from "lucide-react"
 
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
@@ -77,11 +79,6 @@ export async function FinanceiroLojaTab({
             value={`− ${fmtBRL(taxas)}`}
             muted
           />
-          {deliveryFee.total > 0 && (
-            <p className="-mt-1 pl-3 text-[11px] text-muted-foreground">
-              ↳ dos quais {fmtBRL(deliveryFee.total)} é custo logístico (entrega)
-            </p>
-          )}
           <Divider />
           <DreRow
             label="= Líquido (entra na conta)"
@@ -156,6 +153,28 @@ export async function FinanceiroLojaTab({
           </p>
         </div>
       </div>
+
+      {/* Custo de entrega (logístico) — por plataforma */}
+      {deliveryFee.total > 0 && (
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Bike className="size-4 text-amber-600" />
+            <h3 className="text-sm font-semibold">Custo de entrega (logístico)</h3>
+            <span className="ml-auto text-base font-bold tabular-nums text-rose-700 dark:text-rose-400">
+              − {fmtBRL(deliveryFee.total)}
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <DeliveryItem platform="ifood" value={deliveryFee.ifood} />
+            <DeliveryItem platform="99food" value={deliveryFee.ninefood} />
+            <DeliveryItem platform="keeta" value={deliveryFee.keeta} />
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {fmtPct(bruto > 0 ? (deliveryFee.total / bruto) * 100 : 0)} do bruto ·
+            já está dentro das taxas das plataformas (no DRE acima).
+          </p>
+        </div>
+      )}
 
       {/* Gráficos: composição do bruto + faturamento dia-a-dia */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -355,6 +374,27 @@ function MiniRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline justify-between gap-2 py-1">
       <span className="truncate text-xs text-muted-foreground">{label}</span>
       <span className="shrink-0 text-xs font-medium tabular-nums">{value}</span>
+    </div>
+  )
+}
+
+function DeliveryItem({
+  platform,
+  value,
+}: {
+  platform: PlatformId
+  value: number
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
+      <PlatformLogo platform={platform} size="sm" />
+      <span
+        className={`text-sm font-semibold tabular-nums ${
+          value > 0 ? "" : "text-muted-foreground/50"
+        }`}
+      >
+        {value > 0 ? fmtBRL(value) : "—"}
+      </span>
     </div>
   )
 }
