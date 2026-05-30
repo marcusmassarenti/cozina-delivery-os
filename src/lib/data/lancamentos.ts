@@ -237,18 +237,44 @@ export function sumMonth(entries: DailyEntry[]) {
 //---------- Agregado por unidade (pro dashboard) -----------------
 
 import type { UnitMonthly } from "@/lib/mock-monthly"
+import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
+import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
+import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import { getVrByUnits } from "@/lib/data/ifood-pedidos"
+import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
 
 const VR_TAXA = 0.08
 
+function platformBreakdown(
+  id: PlatformId,
+  name: string,
+  bruto: number,
+  liquido: number,
+) {
+  return {
+    id,
+    name,
+    bruto,
+    liquido,
+    pctLoja: bruto > 0 ? (liquido / bruto) * 100 : 0,
+  }
+}
+
 /**
- * Para cada unitId, calcula o snapshot mensal completo
- * (compatível com UnitMonthly) a partir de:
- *   - daily_entries (pedidos, cancelados, faturamento por plataforma)
- *   - monthly_platform_entries (taxas, VR, cancelamentos por plataforma)
- *   - monthly_entries (custos, nota, observações, total_recebido_real)
+ * Snapshot mensal por unidade (UnitMonthly) montado DOS DADOS IMPORTADOS —
+ * é a fonte única que alimenta getUnits() e, por consequência, Dashboard,
+ * Unidades, DRE e Avaliações. Loja nova aparece sozinha assim que importa.
  *
- * Usa total_recebido_real quando preenchido pra calcular margem,
- * senão usa o calculado das plataformas.
+ * Faturamento/pedidos por plataforma:
+ *   - iFood : Conciliação (ifood_financeiro). Sem ela → VALOR DOS ITENS do
+ *             relatório de Pedidos (fallback).
+ *   - 99    : Loja diária (ninefood_daily_loja).
+ *   - Keeta : Loja diária (keeta_daily_loja). Sem venda → preço de tabela do
+ *             Pedidos recentes (fallback).
+ * Custos (Cozina/operação) e nota continuam do monthly_entries (manual).
+ *
+ * Perf: os fallbacks de pedidos só são buscados pras lojas que não têm o
+ * relatório principal — na rede 100% onboardada, não custam nada.
  */
 export async function getRealMonthlyForUnits(
   unitIds: string[],
@@ -259,16 +285,11 @@ export async function getRealMonthlyForUnits(
   if (unitIds.length === 0) return result
 
   const supabase = createAdminClient()
-  const firstDay = firstDayOfMonth(year, month)
-  const lastDay = lastDayOfMonth(year, month)
 
-  const [dailyRes, monthlyRes, platformRes] = await Promise.all([
-    supabase
-      .from("daily_entries")
-      .select("unit_id, platform, pedidos, cancelados, faturamento")
-      .in("unit_id", unitIds)
-      .gte("date", firstDay)
-      .lte("date", lastDay),
+  const [finMap, nineMap, keetaMap, monthlyRes] = await Promise.all([
+    getFinanceiroResumoByUnits(unitIds, year, month),
+    getNinefoodResumoByUnits(unitIds, year, month),
+    getKeetaResumoByUnits(unitIds, year, month),
     supabase
       .from("monthly_entries")
       .select(
@@ -277,22 +298,9 @@ export async function getRealMonthlyForUnits(
       .in("unit_id", unitIds)
       .eq("year", year)
       .eq("month", month),
-    supabase
-      .from("monthly_platform_entries")
-      .select("*")
-      .in("unit_id", unitIds)
-      .eq("year", year)
-      .eq("month", month),
   ])
 
-  type Daily = {
-    unit_id: string
-    platform: string
-    pedidos: number
-    cancelados: number
-    faturamento: number | string
-  }
-  type Monthly = {
+  type MonthlyRow = {
     unit_id: string
     custo_produtos_cozina: number | string
     custo_produtos_loja: number | string
@@ -302,156 +310,122 @@ export async function getRealMonthlyForUnits(
     observacoes: string
     total_recebido_real: number | string | null
   }
-  type Plat = {
-    unit_id: string
-    platform: string
-    taxa_entrega: number | string
-    promocoes: number | string
-    taxa_comissao: number | string
-    servicos_logisticos: number | string
-    outros_descontos: number | string
-    vr_recebido: number | string
-    cancelamentos_reembolsos: number | string
-  }
+  const monthlyByUnit = new Map<string, MonthlyRow>(
+    ((monthlyRes.data ?? []) as MonthlyRow[]).map((m) => [m.unit_id, m]),
+  )
 
-  const daily = (dailyRes.data ?? []) as Daily[]
-  const monthly = (monthlyRes.data ?? []) as Monthly[]
-  const platformRows = (platformRes.data ?? []) as Plat[]
+  // Fallbacks só pras lojas SEM o relatório principal.
+  const ifoodFbIds = unitIds.filter((id) => !(finMap.get(id)?.hasData ?? false))
+  const keetaFbIds = unitIds.filter((id) => !(keetaMap.get(id)?.hasData ?? false))
+
+  const [vrRows, keetaPorLoja] = await Promise.all([
+    ifoodFbIds.length > 0
+      ? getVrByUnits(year, month, ifoodFbIds)
+      : Promise.resolve([]),
+    keetaFbIds.length > 0
+      ? getKeetaPedidoPorLoja(keetaFbIds, year, month)
+      : Promise.resolve([]),
+  ])
+  const ifoodFb = new Map(
+    vrRows.map((v) => [
+      v.unitId,
+      {
+        valorItens: v.valorItens,
+        valorLiquido: v.valorLiquido,
+        pedidos: v.totalPedidos,
+      },
+    ]),
+  )
+  const keetaFb = new Map(
+    keetaPorLoja.map((k) => [
+      k.unitId,
+      { preco: k.precoOriginal, pedidos: k.pedidos, cancelados: k.cancelados },
+    ]),
+  )
 
   for (const unitId of unitIds) {
-    const myDaily = daily.filter((d) => d.unit_id === unitId)
-    const myMonthly = monthly.find((m) => m.unit_id === unitId)
-    const myPlats = platformRows.filter((p) => p.unit_id === unitId)
+    const fin = finMap.get(unitId)
+    const nine = nineMap.get(unitId)
+    const keeta = keetaMap.get(unitId)
+    const m = monthlyByUnit.get(unitId)
 
-    // Faturamento bruto por plataforma (do diário)
-    const platFat: Record<PlatformId, { pedidos: number; cancelados: number; faturamento: number }> = {
-      ifood: { pedidos: 0, cancelados: 0, faturamento: 0 },
-      "99food": { pedidos: 0, cancelados: 0, faturamento: 0 },
-      keeta: { pedidos: 0, cancelados: 0, faturamento: 0 },
-    }
-    for (const d of myDaily) {
-      const pid = d.platform as PlatformId
-      if (!(pid in platFat)) continue
-      platFat[pid].pedidos += d.pedidos
-      platFat[pid].cancelados += d.cancelados
-      platFat[pid].faturamento += Number(d.faturamento)
-    }
-
-    // Calcula taxas/VR/líquido por plataforma
-    const platformsBreakdown = (
-      ["ifood", "99food", "keeta"] as PlatformId[]
-    ).map((pid) => {
-      const pe = myPlats.find((p) => p.platform === pid)
-      const taxas = pe
-        ? Number(pe.taxa_entrega) +
-          Number(pe.promocoes) +
-          Number(pe.taxa_comissao) +
-          Number(pe.servicos_logisticos) +
-          Number(pe.outros_descontos)
-        : 0
-      const vrRecebido = pe ? Number(pe.vr_recebido) : 0
-      const vrLiquido = vrRecebido * (1 - VR_TAXA)
-      const cancelamentos = pe ? Number(pe.cancelamentos_reembolsos) : 0
-      const bruto = platFat[pid].faturamento
-      const faturamentoLiquido = bruto - taxas
-      const totalRecebido = faturamentoLiquido + vrLiquido + cancelamentos
-      const pctLoja = bruto > 0 ? (totalRecebido / bruto) * 100 : 0
-      return {
-        id: pid,
-        name: pid === "ifood" ? "iFood" : pid === "99food" ? "99 Food" : "Keeta",
-        bruto,
-        liquido: totalRecebido,
-        pctLoja,
-      }
-    })
-
-    const totalPedidos = (Object.values(platFat) as { pedidos: number; cancelados: number; faturamento: number }[]).reduce(
-      (acc, p) => acc + p.pedidos,
-      0,
-    )
-    const totalCancelados = (Object.values(platFat) as { pedidos: number; cancelados: number; faturamento: number }[]).reduce(
-      (acc, p) => acc + p.cancelados,
-      0,
-    )
-    const totalFaturamento = (Object.values(platFat) as { pedidos: number; cancelados: number; faturamento: number }[]).reduce(
-      (acc, p) => acc + p.faturamento,
-      0,
-    )
-
-    const totalTaxas = myPlats.reduce(
-      (acc, p) =>
-        acc +
-        Number(p.taxa_entrega) +
-        Number(p.promocoes) +
-        Number(p.taxa_comissao) +
-        Number(p.servicos_logisticos) +
-        Number(p.outros_descontos),
-      0,
-    )
-    const totalVrRecebido = myPlats.reduce(
-      (acc, p) => acc + Number(p.vr_recebido),
-      0,
-    )
-    const totalVrTaxa = totalVrRecebido * VR_TAXA
-    const totalVrLiquido = totalVrRecebido - totalVrTaxa
-    const totalCancelamentos = myPlats.reduce(
-      (acc, p) => acc + Number(p.cancelamentos_reembolsos),
-      0,
-    )
-
-    const faturamentoLiquido = totalFaturamento - totalTaxas
-    const totalLiquidoCalc =
-      faturamentoLiquido + totalVrLiquido + totalCancelamentos
-    const ticketMedio = totalPedidos > 0 ? totalFaturamento / totalPedidos : 0
-
-    const custoCozina = myMonthly ? Number(myMonthly.custo_produtos_cozina) : 0
-    const custoLoja = myMonthly ? Number(myMonthly.custo_produtos_loja) : 0
-    const custoOperacao = myMonthly ? Number(myMonthly.custo_operacao ?? 0) : 0
-    const totalRecebidoReal = myMonthly
-      ? Number(myMonthly.total_recebido_real ?? 0)
+    // iFood: Conciliação, fallback no VALOR DOS ITENS do Pedidos
+    const ifoodHas = fin?.hasData ?? false
+    const ifFb = ifoodFb.get(unitId)
+    const ifoodBruto = ifoodHas ? fin!.bruto : ifFb?.valorItens ?? 0
+    // Fallback de líquido = VALOR LIQUIDO do relatório de pedidos (≤ bruto).
+    const ifoodLiquido = ifoodHas
+      ? fin!.liquido
+      : Math.min(ifFb?.valorLiquido ?? 0, ifFb?.valorItens ?? 0)
+    const ifoodPedidos = ifoodHas ? fin!.pedidosUnicos : ifFb?.pedidos ?? 0
+    const ifoodCancel = ifoodHas
+      ? fin!.cancelamentoTotalQtd + fin!.cancelamentoParcialQtd
       : 0
-    const baseParaMargem =
-      totalRecebidoReal > 0 ? totalRecebidoReal : totalLiquidoCalc
-    const margemLiquida = baseParaMargem - custoCozina - custoLoja
-    const margemLucroPct =
-      totalFaturamento > 0 ? (margemLiquida / totalFaturamento) * 100 : 0
+
+    // 99 Food: Loja diária
+    const nineBruto = nine?.bruto ?? 0
+    const nineLiquido = nine?.liquido ?? 0
+    const ninePedidos = nine?.pedidos ?? 0
+    const nineCancel = nine?.cancelamentosQtd ?? 0
+
+    // Keeta: Loja diária, fallback no preço de tabela do Pedidos recentes
+    const keetaHas = keeta?.hasData ?? false
+    const keFb = keetaFb.get(unitId)
+    const keetaBruto = keetaHas ? keeta!.bruto : keFb?.preco ?? 0
+    const keetaLiquido = keetaHas ? keeta!.liquido : keFb?.preco ?? 0
+    const keetaPedidos = keetaHas ? keeta!.pedidos : keFb?.pedidos ?? 0
+    const keetaCancel = keetaHas ? keeta!.cancelamentosQtd : keFb?.cancelados ?? 0
+
+    const platforms = [
+      platformBreakdown("ifood", "iFood", ifoodBruto, ifoodLiquido),
+      platformBreakdown("99food", "99 Food", nineBruto, nineLiquido),
+      platformBreakdown("keeta", "Keeta", keetaBruto, keetaLiquido),
+    ]
+
+    const totalBruto = ifoodBruto + nineBruto + keetaBruto
+    const totalLiquido = ifoodLiquido + nineLiquido + keetaLiquido
+    const totalPedidos = ifoodPedidos + ninePedidos + keetaPedidos
+    const totalCancelados = ifoodCancel + nineCancel + keetaCancel
+    const ticketMedio = totalPedidos > 0 ? totalBruto / totalPedidos : 0
+
+    // VR não é populado aqui (vive na tela de Pedidos). Deixar 0 evita
+    // duplicar o VR no DRE (que soma vrLíquido por cima do líquido).
+    const vrRecebido = 0
+    const vrTaxa = 0
+
+    // Custos (manuais)
+    const custoCozina = m ? Number(m.custo_produtos_cozina) : 0
+    const custoLoja = m ? Number(m.custo_produtos_loja) : 0
+    const custoOperacao = m ? Number(m.custo_operacao ?? 0) : 0
+    const totalRecebidoReal = m ? Number(m.total_recebido_real ?? 0) : 0
+    const baseMargem = totalRecebidoReal > 0 ? totalRecebidoReal : totalLiquido
+    const margemLiquida = baseMargem - custoCozina - custoLoja
+    const margemLucroPct = totalBruto > 0 ? (margemLiquida / totalBruto) * 100 : 0
 
     result.set(unitId, {
       pedidos: totalPedidos,
       pedidosCancelados: totalCancelados,
-      clientesNovos: myMonthly ? myMonthly.clientes_novos : null,
+      clientesNovos: m ? m.clientes_novos : null,
       ticketMedio,
-      faturamentoBruto: totalFaturamento,
-      faturamentoLiquido,
-      totalLiquido: totalLiquidoCalc,
-      vrRecebido: totalVrRecebido,
-      vrTaxaMedia8: totalVrTaxa,
-      cancelamentosReembolsos: totalCancelamentos,
-      taxaEntregaIfood: myPlats.find((p) => p.platform === "ifood")
-        ? Number(myPlats.find((p) => p.platform === "ifood")!.taxa_entrega)
-        : 0,
-      promocoes: myPlats.find((p) => p.platform === "ifood")
-        ? Number(myPlats.find((p) => p.platform === "ifood")!.promocoes)
-        : 0,
-      taxaComissaoIfood: myPlats.find((p) => p.platform === "ifood")
-        ? Number(myPlats.find((p) => p.platform === "ifood")!.taxa_comissao)
-        : 0,
-      servicosLogisticos: myPlats.find((p) => p.platform === "ifood")
-        ? Number(
-            myPlats.find((p) => p.platform === "ifood")!.servicos_logisticos,
-          )
-        : 0,
-      outrosDescontosIfood: myPlats.find((p) => p.platform === "ifood")
-        ? Number(myPlats.find((p) => p.platform === "ifood")!.outros_descontos)
-        : 0,
+      faturamentoBruto: totalBruto,
+      faturamentoLiquido: totalLiquido,
+      totalLiquido,
+      vrRecebido,
+      vrTaxaMedia8: vrTaxa,
+      cancelamentosReembolsos: 0,
+      taxaEntregaIfood: ifoodHas ? Math.abs(fin!.taxaEntrega) : 0,
+      promocoes: ifoodHas ? Math.abs(fin!.promocaoLoja) : 0,
+      taxaComissaoIfood: ifoodHas ? Math.abs(fin!.comissaoIfood) : 0,
+      servicosLogisticos: 0,
+      outrosDescontosIfood: 0,
       custoProdutosCozina: custoCozina,
       custoProdutosLoja: custoLoja > 0 ? custoLoja : null,
       custoOperacao,
       margemLiquida,
       margemLucroPct,
-      notaMedia: myMonthly ? Number(myMonthly.nota_media) : 0,
-      observacoes: myMonthly ? myMonthly.observacoes : "",
-      platforms: platformsBreakdown,
+      notaMedia: m ? Number(m.nota_media) : 0,
+      observacoes: m ? m.observacoes : "",
+      platforms,
     })
   }
 

@@ -96,7 +96,7 @@ async function getUnitsUncached(): Promise<Unit[]> {
   )
 }
 
-export const getUnits = unstable_cache(getUnitsUncached, ["units-monthly-v1"], {
+export const getUnits = unstable_cache(getUnitsUncached, ["units-monthly-v2"], {
   revalidate: 60,
   tags: ["units", "reports"],
 })

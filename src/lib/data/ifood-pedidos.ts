@@ -294,6 +294,8 @@ export type VrPorUnidade = {
   totalValor: number
   /** Soma de "VALOR DOS ITENS" — fallback de faturamento se não há conciliação. */
   valorItens: number
+  /** Soma de "VALOR LIQUIDO" — fallback de líquido se não há conciliação. */
+  valorLiquido: number
   /** Faturamento (bruto da conciliação) — preenchido fora, na página. */
   faturamento: number
   porBandeira: VrPorBandeira[]
@@ -346,6 +348,7 @@ export async function getVrByUnits(
       totalPedidos: ag.totalPedidos,
       totalValor: ag.totalValor,
       valorItens: ag.valorItens,
+      valorLiquido: ag.valorLiquido,
       faturamento: 0, // preenchido na página com a conciliação
       porBandeira: ag.porBandeira,
     }
