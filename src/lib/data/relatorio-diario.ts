@@ -188,8 +188,51 @@ function add(
   map.set(unitId, cur)
 }
 
-/** iFood: agrega bruto/pedidos/cancelamentos por (unit, dia) */
+/**
+ * iFood: agrega bruto/pedidos/cancelamentos por (unit, dia).
+ * Caminho rápido = RPC ifood_financeiro_diario_by_units (agrega no Postgres).
+ * Se a função ainda não existir no banco (migration 0020 não rodada), cai
+ * no fallback paginado antigo — sem quebrar a tela.
+ */
 async function loadIfood(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Buckets> {
+  const b = emptyBuckets()
+  if (unitIds.length === 0) return b
+  const admin = createAdminClient()
+
+  const { data, error } = await admin.rpc("ifood_financeiro_diario_by_units", {
+    p_unit_ids: unitIds,
+    p_year: year,
+    p_month: month,
+  })
+
+  if (error) {
+    // Função ainda não existe → usa o caminho antigo (lento, mas correto)
+    console.error("loadIfood rpc, usando fallback:", error.message)
+    return loadIfoodPaginated(unitIds, year, month)
+  }
+
+  for (const r of (data ?? []) as Array<{
+    unit_id: string
+    dia: number
+    bruto: number | string
+    pedidos: number
+    cancelados: number
+  }>) {
+    const day = Number(r.dia)
+    if (!day) continue
+    add(b.faturamento, r.unit_id, day, Number(r.bruto) || 0)
+    add(b.pedidos, r.unit_id, day, Number(r.pedidos) || 0)
+    add(b.cancelamentos, r.unit_id, day, Number(r.cancelados) || 0)
+  }
+  return b
+}
+
+/** Fallback antigo: pagina ifood_financeiro_lancamentos e agrega em JS. */
+async function loadIfoodPaginated(
   unitIds: string[],
   year: number,
   month: number,

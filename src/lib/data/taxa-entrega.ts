@@ -53,8 +53,69 @@ async function pageAll<T>(
 /**
  * Custo de entrega por unidade no mês, separado por plataforma.
  * Retorna só unidades com algum custo.
+ *
+ * Caminho rápido: 3 RPCs agregados no Postgres (em paralelo). Se as funções
+ * ainda não existirem (migration 0020 não rodada), cai no fallback paginado.
  */
 export async function getDeliveryFeeByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, DeliveryFee>> {
+  const out = new Map<string, DeliveryFee>()
+  if (unitIds.length === 0) return out
+  const admin = createAdminClient()
+  const ensureFee = (id: string) => {
+    let f = out.get(id)
+    if (!f) {
+      f = emptyFee()
+      out.set(id, f)
+    }
+    return f
+  }
+
+  const [ifoodRes, nineRes, keetaRes] = await Promise.all([
+    admin.rpc("ifood_taxa_entrega_by_units", {
+      p_unit_ids: unitIds,
+      p_year: year,
+      p_month: month,
+    }),
+    admin.rpc("ninefood_custo_entrega_by_units", {
+      p_unit_ids: unitIds,
+      p_year: year,
+      p_month: month,
+    }),
+    admin.rpc("keeta_taxa_entrega_by_units", {
+      p_unit_ids: unitIds,
+      p_year: year,
+      p_month: month,
+    }),
+  ])
+
+  if (ifoodRes.error || nineRes.error || keetaRes.error) {
+    console.error(
+      "getDeliveryFeeByUnits rpc, usando fallback:",
+      ifoodRes.error?.message ?? nineRes.error?.message ?? keetaRes.error?.message,
+    )
+    return getDeliveryFeeByUnitsPaginated(unitIds, year, month)
+  }
+
+  type FeeRow = { unit_id: string; taxa: number | string }
+  for (const r of (ifoodRes.data ?? []) as FeeRow[])
+    ensureFee(r.unit_id).ifood = Number(r.taxa) || 0
+  for (const r of (nineRes.data ?? []) as FeeRow[])
+    ensureFee(r.unit_id).ninefood = Number(r.taxa) || 0
+  for (const r of (keetaRes.data ?? []) as FeeRow[])
+    ensureFee(r.unit_id).keeta = Number(r.taxa) || 0
+
+  for (const f of out.values()) {
+    f.total = Math.round((f.ifood + f.ninefood + f.keeta) * 100) / 100
+  }
+  return out
+}
+
+/** Fallback antigo: pagina as 3 tabelas e soma em JS. */
+async function getDeliveryFeeByUnitsPaginated(
   unitIds: string[],
   year: number,
   month: number,
