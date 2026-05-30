@@ -28,6 +28,8 @@ export type ResultadoUnitRow = {
   bruto: number
   /** Taxas retidas pelas plataformas = bruto − líquido das plataformas */
   taxasPlataforma: number
+  /** Promoções/descontos que a LOJA bancou (já dentro das taxas — itemizado) */
+  promocoesLoja: number
   /** O que a plataforma repassa pra loja (soma dos líquidos importados) */
   liquidoPlataformas: number
   /** VR líquido (manual): vr_recebido − vr_taxa_8% */
@@ -58,6 +60,7 @@ export type ResultadoTotals = {
   pedidos: number
   bruto: number
   taxasPlataforma: number
+  promocoesLoja: number
   liquidoPlataformas: number
   vrLiquido: number
   totalLiquido: number
@@ -147,6 +150,11 @@ export async function getNetworkResultadoForMonth(
       : 0
 
     const taxasPlataforma = Math.max(0, bruto - liquidoPlataformas)
+    // Promoções/descontos que a loja bancou (já dentro das taxas, itemizado)
+    // — iFood + 99 Food. Keeta não quebra promo no resumo (fica 0).
+    const promocoesLoja =
+      (hasIfood ? Math.abs(fin!.promocaoLoja) : 0) +
+      (has99 ? Math.abs(nine!.promocoesRs) : 0)
     const totalLiquido = liquidoPlataformas + vrLiquido
     const margemLiquida = totalLiquido - cmvTotal
     const margemPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
@@ -164,6 +172,7 @@ export async function getNetworkResultadoForMonth(
       pedidos,
       bruto,
       taxasPlataforma,
+      promocoesLoja,
       liquidoPlataformas,
       vrLiquido,
       totalLiquido,
@@ -189,6 +198,7 @@ export async function getNetworkResultadoForMonth(
       acc.pedidos += r.pedidos
       acc.bruto += r.bruto
       acc.taxasPlataforma += r.taxasPlataforma
+      acc.promocoesLoja += r.promocoesLoja
       acc.liquidoPlataformas += r.liquidoPlataformas
       acc.vrLiquido += r.vrLiquido
       acc.totalLiquido += r.totalLiquido
@@ -202,6 +212,7 @@ export async function getNetworkResultadoForMonth(
       pedidos: 0,
       bruto: 0,
       taxasPlataforma: 0,
+      promocoesLoja: 0,
       liquidoPlataformas: 0,
       vrLiquido: 0,
       totalLiquido: 0,

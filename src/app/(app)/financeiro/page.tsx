@@ -162,6 +162,21 @@ export default async function ResultadoPage({
                   são taxa de entrega ({fmtPct(entregaPctBruto)} do bruto)
                 </p>
               )}
+              {totals.promocoesLoja > 0 && (
+                <p className="-mt-1 pl-3 text-[11px] text-muted-foreground">
+                  ↳ e{" "}
+                  <span className="font-medium">
+                    {fmtBRL(totals.promocoesLoja)}
+                  </span>{" "}
+                  em promoções/descontos que a loja bancou (
+                  {fmtPct(
+                    totals.bruto > 0
+                      ? (totals.promocoesLoja / totals.bruto) * 100
+                      : 0,
+                  )}{" "}
+                  do bruto)
+                </p>
+              )}
               <Divider />
               <DreRow
                 label="= Líquido das plataformas"

@@ -235,6 +235,17 @@ export default async function Home({
       platforms: finPlatforms,
     },
     {
+      label: "Pedidos Cancelados",
+      value: fmtNum(network.cancelados),
+      trend:
+        network.pedidos > 0
+          ? `${((network.cancelados / network.pedidos) * 100).toFixed(1)}% dos pedidos`
+          : "sem pedidos no mês",
+      tone: "neutral",
+      icon: XCircle,
+      platforms: finPlatforms,
+    },
+    {
       label: "Média Pedidos/Dia",
       value: fmtNum(network.mediaDia),
       trend: "+100,0% vs mês ant.",
