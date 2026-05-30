@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 
 import { requireAuth } from "@/lib/auth/guards"
 import { getDefaultBrand } from "@/lib/data/units"
@@ -118,6 +118,8 @@ export async function createUnit(
       }
     }
 
+    revalidateTag("units", "max")
+    revalidateTag("reports", "max")
     revalidatePath("/unidades")
     revalidatePath("/")
     return { ok: true }
@@ -136,6 +138,8 @@ export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
     const supabase = createAdminClient()
     const { error } = await supabase.from("units").delete().eq("id", unitId)
     if (error) return { ok: false, message: error.message }
+    revalidateTag("units", "max")
+    revalidateTag("reports", "max")
     revalidatePath("/unidades")
     revalidatePath("/")
     return { ok: true }
@@ -244,6 +248,8 @@ export async function updateUnit(
       )
     }
 
+    revalidateTag("units", "max")
+    revalidateTag("reports", "max")
     revalidatePath("/unidades")
     revalidatePath("/")
     revalidatePath("/importacao")

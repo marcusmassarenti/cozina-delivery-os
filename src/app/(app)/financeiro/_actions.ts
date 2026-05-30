@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 
 import { requireAuth } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -54,6 +54,7 @@ export async function saveUnitCosts(input: {
     )
     if (error) return { ok: false, message: error.message }
 
+    revalidateTag("reports", "max")
     revalidatePath("/financeiro")
     revalidatePath("/unidades/[codigo]", "page")
     revalidatePath("/")

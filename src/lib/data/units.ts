@@ -1,5 +1,7 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -45,7 +47,13 @@ function currentYearMonth(): { year: number; month: number } {
   return { year: now.getFullYear(), month: now.getMonth() + 1 }
 }
 
-export async function getUnits(): Promise<Unit[]> {
+/**
+ * Lista de unidades + agregado mensal. É chamada em quase toda tela, então
+ * cacheamos (TTL 60s + tags). Invalida na hora via revalidateTag("units")
+ * (CRUD de unidade) e revalidateTag("reports") (import / custos). No pior
+ * caso de cache não invalidado, o dado fica no máx. 60s velho.
+ */
+async function getUnitsUncached(): Promise<Unit[]> {
   const supabase = createAdminClient()
   const [unitsRes, platformsRes] = await Promise.all([
     supabase
@@ -87,6 +95,11 @@ export async function getUnits(): Promise<Unit[]> {
     ),
   )
 }
+
+export const getUnits = unstable_cache(getUnitsUncached, ["units-monthly-v1"], {
+  revalidate: 60,
+  tags: ["units", "reports"],
+})
 
 export async function getUnitByCode(code: string): Promise<Unit | null> {
   const supabase = createAdminClient()

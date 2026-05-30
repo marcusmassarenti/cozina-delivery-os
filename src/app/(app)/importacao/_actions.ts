@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 
 import * as XLSX from "xlsx"
 
@@ -254,6 +254,8 @@ export async function importIfoodReports(
 
   const anySuccess = results.some((r) => r.ok)
   if (anySuccess) {
+    revalidateTag("reports", "max")
+    revalidateTag("units", "max")
     revalidatePath("/importacao")
     revalidatePath("/")
   }
@@ -2584,6 +2586,8 @@ export async function createUnitAndImport(
       message: "Nenhum resultado retornado.",
     }
 
+  revalidateTag("reports", "max")
+  revalidateTag("units", "max")
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   revalidatePath("/")
@@ -2648,6 +2652,8 @@ export async function recheckAndImport(
   }
 
   if (matched.ok) {
+    revalidateTag("reports", "max")
+    revalidateTag("units", "max")
     revalidatePath("/importacao")
     revalidatePath("/unidades")
     revalidatePath("/")
@@ -2778,6 +2784,8 @@ export async function linkUnitAndImport(
       message: "Nenhum resultado retornado.",
     }
 
+  revalidateTag("reports", "max")
+  revalidateTag("units", "max")
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   revalidatePath("/")

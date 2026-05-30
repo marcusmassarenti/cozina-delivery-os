@@ -17,6 +17,8 @@
 
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { ReportPlatform } from "@/lib/data/relatorio-diario-types"
 
@@ -412,7 +414,7 @@ function mergeBuckets(...all: Buckets[]): Buckets {
  *
  * @param units lista de unidades (code, name, id) já filtrada/ativa
  */
-export async function getDailyReportMatrix(
+async function getDailyReportMatrixUncached(
   year: number,
   month: number,
   platform: ReportPlatform,
@@ -500,3 +502,13 @@ export async function getDailyReportMatrix(
     hasData: totalFaturamento > 0 || totalPedidos > 0,
   }
 }
+
+/**
+ * Versão cacheada (TTL 60s + tag "reports"). O retorno é serializável, então
+ * o cache do Next preserva a matriz inteira. Invalida na hora no import.
+ */
+export const getDailyReportMatrix = unstable_cache(
+  getDailyReportMatrixUncached,
+  ["daily-report-matrix-v1"],
+  { revalidate: 60, tags: ["reports"] },
+)
