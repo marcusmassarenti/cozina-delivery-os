@@ -18,6 +18,7 @@ import { getUnits, type Unit } from "@/lib/data/units"
 import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 
 export type ResultadoUnitRow = {
@@ -99,12 +100,18 @@ export async function getNetworkResultadoForMonth(
   }
   const unitIds = active.map((u) => u.id)
 
-  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit] = await Promise.all([
-    getFinanceiroResumoByUnits(unitIds, year, month),
-    getNinefoodResumoByUnits(unitIds, year, month),
-    getKeetaResumoByUnits(unitIds, year, month),
-    getRealMonthlyForUnits(unitIds, year, month),
-  ])
+  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit, keetaPorLoja] =
+    await Promise.all([
+      getFinanceiroResumoByUnits(unitIds, year, month),
+      getNinefoodResumoByUnits(unitIds, year, month),
+      getKeetaResumoByUnits(unitIds, year, month),
+      getRealMonthlyForUnits(unitIds, year, month),
+      getKeetaPedidoPorLoja(unitIds, year, month),
+    ])
+  // Promoção custeada pela loja na Keeta (vem do "Pedidos recentes").
+  const keetaPromoLojaByUnit = new Map(
+    keetaPorLoja.map((k) => [k.unitId, k.promoLoja]),
+  )
 
   const platBruto = (u: Unit, id: "ifood" | "99food" | "keeta") =>
     u.monthly.platforms.find((p) => p.id === id)?.bruto ?? 0
@@ -151,10 +158,11 @@ export async function getNetworkResultadoForMonth(
 
     const taxasPlataforma = Math.max(0, bruto - liquidoPlataformas)
     // Promoções/descontos que a loja bancou (já dentro das taxas, itemizado)
-    // — iFood + 99 Food. Keeta não quebra promo no resumo (fica 0).
+    // — iFood + 99 Food + Keeta ("Promoção financiada pela loja").
     const promocoesLoja =
       (hasIfood ? Math.abs(fin!.promocaoLoja) : 0) +
-      (has99 ? Math.abs(nine!.promocoesRs) : 0)
+      (has99 ? Math.abs(nine!.promocoesRs) : 0) +
+      (keetaPromoLojaByUnit.get(u.id) ?? 0)
     const totalLiquido = liquidoPlataformas + vrLiquido
     const margemLiquida = totalLiquido - cmvTotal
     const margemPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
