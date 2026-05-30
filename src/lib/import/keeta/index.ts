@@ -10,6 +10,7 @@ import { openKeetaWorkbook } from "./detect"
 import { parseKeetaLoja } from "./parse-loja"
 import { parseKeetaItens } from "./parse-itens"
 import { parseKeetaPedidos } from "./parse-pedidos"
+import { parseKeetaPedidosRecentes } from "./parse-pedidos-recentes"
 import type { KeetaParseResult } from "./types"
 
 export type * from "./types"
@@ -25,10 +26,12 @@ export function parseKeetaReport(buf: ArrayBuffer): KeetaParseResult {
     if (reportType === "loja") return parseKeetaLoja(workbook)
     if (reportType === "item") return parseKeetaItens(workbook)
     if (reportType === "pedido") return parseKeetaPedidos(workbook)
+    if (reportType === "pedido_recente")
+      return parseKeetaPedidosRecentes(workbook)
     return {
       reportType: "unknown",
       error:
-        `Não reconheci como "Loja diária", "Itens diário" ou "Pedidos" do Keeta. ` +
+        `Não reconheci como "Loja diária", "Itens diário", "Pedidos" ou "Pedidos recentes" do Keeta. ` +
         `Colunas esperadas não foram encontradas.`,
     }
   } catch (e) {

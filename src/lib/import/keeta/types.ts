@@ -9,6 +9,7 @@ export type KeetaReportType =
   | "loja" // "Loja diária" — agregado operacional + funil
   | "item" // "Itens diário" — 1 linha por item por dia
   | "pedido" // "Pedidos" — 1 linha por pedido (financeiro + cancel + avaliação)
+  | "pedido_recente" // "Pedidos recentes" — 1 linha por pedido (promoção Keeta×loja + taxas granulares + campanha)
   | "unknown"
 
 // ─── Loja diária ─────────────────────────────────────────────────────
@@ -103,8 +104,55 @@ export type ParsedKeetaPedidos = {
   }>
 }
 
+// ─── Pedidos recentes ────────────────────────────────────────────────
+
+export type ParsedKeetaPedidoRecente = {
+  numeroPedido: string
+  numeroPedidoCurto: string | null
+  data: Date
+  horarioPedido: Date | null
+  horarioConclusao: Date | null
+  horarioCancelamento: Date | null
+  turno: string | null
+
+  statusPedido: string | null
+  tipoReembolso: string | null
+  motivoCancelamento: string | null
+  quemCancelou: string | null
+  responsabilidade: string | null
+  motivoDecisao: string | null
+
+  itens: string | null
+  tipoCampanha: string | null
+
+  ganhos: number | null
+  valorPagoCliente: number | null
+  precoOriginal: number | null
+  ressarcimentoPlataforma: number | null
+
+  comissaoBasica: number | null
+  taxaDistancia: number | null
+  taxaSaqueAntecipado: number | null
+  taxaPagamentoOnline: number | null
+  diferencaPaga: number | null
+
+  descontoKeeta: number | null
+  promoKeeta: number | null
+  promoLoja: number | null
+}
+
+export type ParsedKeetaPedidosRecentes = {
+  reportType: "pedido_recente"
+  porLoja: Array<{
+    storeId: string
+    storeName: string | null
+    pedidos: ParsedKeetaPedidoRecente[]
+  }>
+}
+
 export type KeetaParseResult =
   | ParsedKeetaLoja
   | ParsedKeetaItem
   | ParsedKeetaPedidos
+  | ParsedKeetaPedidosRecentes
   | { reportType: "unknown"; error: string }

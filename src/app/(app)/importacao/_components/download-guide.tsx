@@ -146,6 +146,18 @@ const KEETA_ENTRIES: GuideEntry[] = [
       'Chip "Dados do item" → todos → período → todos os dados → "Downloads".',
     feeds: "Top produtos, preço médio, alcance por item.",
   },
+  {
+    icon: Ticket,
+    title: "Pedidos recentes",
+    badge: "Por período",
+    badgeTone: "emerald",
+    scope: "1 da rede",
+    path: ["Keeta Merchant", "Pedidos", "Pedidos recentes"],
+    steps:
+      'Em "Pedidos recentes" → escolhe o período → "Exportar" (XLSX). 1 arquivo cobre todas as lojas.',
+    feeds:
+      "Subsídio Keeta×loja, taxas granulares e campanhas — alimenta a tela de Pedidos.",
+  },
 ]
 
 const toneClass: Record<GuideEntry["badgeTone"], string> = {

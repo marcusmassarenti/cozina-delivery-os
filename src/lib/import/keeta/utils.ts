@@ -124,6 +124,40 @@ export function parseKeetaDateTime(v: unknown): Date | null {
   return null
 }
 
+/**
+ * Moeda do "Pedidos recentes" do Keeta: vem como "R$ 66,46", "-R$ 7,48",
+ * "R$ 0,00". Tira o "R$", preserva o sinal e reaproveita o toNumber (que
+ * já lida com vírgula/ponto decimal). "-" e vazio → null.
+ */
+export function toKeetaMoneyOrNull(v: unknown): number | null {
+  if (v == null || v === "" || v === "-") return null
+  if (typeof v === "number") return isNaN(v) ? null : v
+  const s = String(v).replace(/R\$/gi, "").trim()
+  if (s === "" || s === "-") return null
+  return toNumberOrNull(s)
+}
+
+/**
+ * Timestamp do "Pedidos recentes": formato BR "29/05/2026 19:43" (DD/MM/YYYY
+ * HH:MM, segundos opcionais). Aceita só a data também. Vazio/"-"/"/" → null.
+ */
+export function parseKeetaBrDateTime(v: unknown): Date | null {
+  const s = toStringOrNull(v)
+  if (!s || s === "-" || s === "/") return null
+  const m = s.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/,
+  )
+  if (!m) return null
+  return new Date(
+    Number(m[3]),
+    Number(m[2]) - 1,
+    Number(m[1]),
+    m[4] ? Number(m[4]) : 0,
+    m[5] ? Number(m[5]) : 0,
+    m[6] ? Number(m[6]) : 0,
+  )
+}
+
 /** Pontuação de avaliação Keeta: "-" → null, número 1..5. */
 export function parseRating(v: unknown): number | null {
   const s = toStringOrNull(v)

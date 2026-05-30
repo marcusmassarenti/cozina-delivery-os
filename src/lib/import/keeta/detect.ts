@@ -54,6 +54,8 @@ export function detectKeetaReportType(
   const set = new Set(readHeader(sheet))
 
   // Colunas exclusivas de cada relatório
+  if (set.has("Número do pedido") && set.has("Promoção financiada pela Keeta"))
+    return "pedido_recente"
   if (set.has("ID do pedido") && set.has("Ganhos líquidos")) return "pedido"
   if (set.has("Total de pedidos") && set.has("Pedidos válidos")) return "loja"
   if (set.has("Nome do item") && set.has("Preço médio do item")) return "item"
@@ -62,7 +64,9 @@ export function detectKeetaReportType(
 
 /**
  * Detecta SE é um workbook do Keeta (sem decidir o tipo). Usado pelo router
- * global. Keeta sempre tem "ID do restaurante" + "Nome da loja" + "Data".
+ * global. Os relatórios diários têm "Data" + "ID do restaurante" + "Nome da
+ * loja"; o "Pedidos recentes" não tem "Data" — identificamos pelo par
+ * "ID do restaurante" + "Número do pedido" + "Promoção financiada pela Keeta".
  */
 export function isKeetaWorkbook(workbook: XLSX.WorkBook): boolean {
   const sheetName = workbook.SheetNames[0]
@@ -71,11 +75,15 @@ export function isKeetaWorkbook(workbook: XLSX.WorkBook): boolean {
   if (!sheet) return false
   fixSheetRange(sheet)
   const set = new Set(readHeader(sheet))
-  return (
+  const diario =
     set.has("Data") &&
     set.has("ID do restaurante") &&
     set.has("Nome da loja")
-  )
+  const pedidoRecente =
+    set.has("ID do restaurante") &&
+    set.has("Número do pedido") &&
+    set.has("Promoção financiada pela Keeta")
+  return diario || pedidoRecente
 }
 
 export function openKeetaWorkbook(buf: ArrayBuffer): {

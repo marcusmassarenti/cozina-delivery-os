@@ -27,6 +27,7 @@ import type {
   ParsedKeetaLoja,
   ParsedKeetaItem,
   ParsedKeetaPedidos,
+  ParsedKeetaPedidosRecentes,
 } from "@/lib/import/keeta"
 
 export type ImportFileResult = {
@@ -183,6 +184,21 @@ export type ImportSummary =
       avaliados: number
       notaMedia: number | null
       substituido: boolean
+    }
+  | {
+      kind: "keeta_pedido_recente"
+      unitCode: string
+      unitName: string
+      storeId: string
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      pedidos: number
+      concluidos: number
+      cancelados: number
+      promoKeeta: number
+      promoLoja: number
+      novos: number
+      atualizados: number
     }
   | {
       kind: "ifood_pedidos"
@@ -380,6 +396,15 @@ async function processFile(
     }
     if (parsed.reportType === "pedido") {
       return await processKeetaPedidos(
+        parsed,
+        storeMaps.keeta,
+        file.name,
+        userId,
+        admin,
+      )
+    }
+    if (parsed.reportType === "pedido_recente") {
+      return await processKeetaPedidosRecentes(
         parsed,
         storeMaps.keeta,
         file.name,
@@ -2006,6 +2031,158 @@ async function saveKeetaPedidos(
     notaMedia:
       avaliados > 0 ? Math.round((somaNotas / avaliados) * 100) / 100 : null,
     substituido,
+  }
+}
+
+// ─── Keeta: Pedidos recentes (promoção Keeta×loja + taxas granulares) ─
+
+async function processKeetaPedidosRecentes(
+  parsed: ParsedKeetaPedidosRecentes,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  const isMulti = parsed.porLoja.length > 1
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push(
+        keetaUnmapped(grupo, filename, isMulti, "Keeta — Pedidos recentes"),
+      )
+      continue
+    }
+    try {
+      const summary = await saveKeetaPedidosRecentes(
+        grupo,
+        unit,
+        filename,
+        userId,
+        admin,
+      )
+      results.push(keetaOk(unit, filename, isMulti, summary))
+    } catch (e) {
+      results.push(keetaErr(unit, filename, isMulti, e, "Pedidos recentes"))
+    }
+  }
+  return results
+}
+
+async function saveKeetaPedidosRecentes(
+  grupo: ParsedKeetaPedidosRecentes["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  if (grupo.pedidos.length === 0)
+    throw new Error("Nenhum pedido válido nessa loja.")
+
+  const sortedTs = grupo.pedidos
+    .map((p) => p.data.getTime())
+    .sort((a, b) => a - b)
+  const periodoInicio = new Date(sortedTs[0])
+  const periodoFim = new Date(sortedTs[sortedTs.length - 1])
+
+  const numeros = grupo.pedidos.map((p) => p.numeroPedido)
+  const { count: existingCount } = await admin
+    .from("keeta_pedidos_recentes")
+    .select("id", { count: "exact", head: true })
+    .eq("unit_id", unit.unitId)
+    .in("numero_pedido", numeros)
+  const atualizados = existingCount ?? 0
+  const novos = grupo.pedidos.length - atualizados
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "keeta",
+      report_type: "vendas",
+      cadencia: "diario",
+      ref_date: formatDateOnly(periodoFim),
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: grupo.pedidos.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const rows = grupo.pedidos.map((p) => ({
+    unit_id: unit.unitId,
+    numero_pedido: p.numeroPedido,
+    numero_pedido_curto: p.numeroPedidoCurto,
+    data: formatDateOnly(p.data),
+    ref_year: p.data.getFullYear(),
+    ref_month: p.data.getMonth() + 1,
+    horario_pedido: p.horarioPedido?.toISOString() ?? null,
+    horario_conclusao: p.horarioConclusao?.toISOString() ?? null,
+    horario_cancelamento: p.horarioCancelamento?.toISOString() ?? null,
+    turno: p.turno,
+    status_pedido: p.statusPedido,
+    tipo_reembolso: p.tipoReembolso,
+    motivo_cancelamento: p.motivoCancelamento,
+    quem_cancelou: p.quemCancelou,
+    responsabilidade: p.responsabilidade,
+    motivo_decisao: p.motivoDecisao,
+    itens: p.itens,
+    tipo_campanha: p.tipoCampanha,
+    ganhos: p.ganhos,
+    valor_pago_cliente: p.valorPagoCliente,
+    preco_original: p.precoOriginal,
+    ressarcimento_plataforma: p.ressarcimentoPlataforma,
+    comissao_basica: p.comissaoBasica,
+    taxa_distancia: p.taxaDistancia,
+    taxa_saque_antecipado: p.taxaSaqueAntecipado,
+    taxa_pagamento_online: p.taxaPagamentoOnline,
+    diferenca_paga: p.diferencaPaga,
+    desconto_keeta: p.descontoKeeta,
+    promo_keeta: p.promoKeeta,
+    promo_loja: p.promoLoja,
+    import_id: importLog.id,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("keeta_pedidos_recentes")
+      .upsert(rows.slice(i, i + CHUNK), {
+        onConflict: "unit_id,numero_pedido",
+      })
+    if (error)
+      throw new Error(
+        `Falha ao gravar Pedidos recentes (chunk ${i / CHUNK + 1}): ${error.message}`,
+      )
+  }
+
+  let concluidos = 0
+  let cancelados = 0
+  let promoKeeta = 0
+  let promoLoja = 0
+  for (const p of grupo.pedidos) {
+    if (p.statusPedido === "Concluído") concluidos++
+    else if (p.statusPedido === "Cancelado") cancelados++
+    promoKeeta += p.promoKeeta ?? 0
+    promoLoja += Math.abs(p.promoLoja ?? 0)
+  }
+
+  return {
+    kind: "keeta_pedido_recente",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    periodoInicio: formatDateOnly(periodoInicio),
+    periodoFim: formatDateOnly(periodoFim),
+    pedidos: grupo.pedidos.length,
+    concluidos,
+    cancelados,
+    promoKeeta: Math.round(promoKeeta * 100) / 100,
+    promoLoja: Math.round(promoLoja * 100) / 100,
+    novos,
+    atualizados,
   }
 }
 
