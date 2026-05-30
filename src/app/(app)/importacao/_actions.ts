@@ -689,8 +689,12 @@ async function savePedidosPorLoja(
   userId: string | null,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<ImportSummary> {
-  // Só pedidos com data (a coluna data é NOT NULL)
-  const pedidos = grupo.pedidos.filter((p) => p.horario)
+  // Só pedidos com data (a coluna data é NOT NULL) e SEM data no futuro
+  // (erro de parse) — não existe venda futura; +1 dia de folga de fuso.
+  const limiteFuturo = Date.now() + 86_400_000
+  const pedidos = grupo.pedidos.filter(
+    (p) => p.horario && (p.horario as Date).getTime() <= limiteFuturo,
+  )
   if (pedidos.length === 0) {
     throw new Error("Nenhum pedido com data válida no relatório.")
   }

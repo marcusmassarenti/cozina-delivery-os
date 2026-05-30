@@ -457,6 +457,9 @@ export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
     } else {
       continue
     }
+    // Ignora período no futuro (não existe venda futura): blinda contra ref
+    // bogus no log — ex.: data outlier que jogou o ref pra dezembro.
+    if (year > curYear || (year === curYear && month > curMonth)) continue
     const key = `${year}-${month}`
     const cur = map.get(key) ?? {
       year,
