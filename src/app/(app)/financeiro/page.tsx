@@ -199,8 +199,37 @@ export default async function ResultadoPage({
                   </span>
                 }
                 bold
-                highlight
+                highlight={totals.custoOperacao <= 0}
               />
+              {totals.custoOperacao > 0 && (
+                <>
+                  <DreRow
+                    label="(−) Custo da operação"
+                    value={`− ${fmtBRL(totals.custoOperacao)}`}
+                    muted
+                  />
+                  <Divider />
+                  <DreRow
+                    label="= Resultado operacional"
+                    value={
+                      <span className="flex items-baseline gap-2">
+                        {fmtBRL(totals.resultadoOperacional)}
+                        <span
+                          className={`text-xs font-semibold ${
+                            totals.resultadoOperacional >= 0
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-rose-700 dark:text-rose-400"
+                          }`}
+                        >
+                          ({fmtPct(totals.resultadoPct)})
+                        </span>
+                      </span>
+                    }
+                    bold
+                    highlight
+                  />
+                </>
+              )}
             </div>
 
             {/* Composição por etapa (visual) */}
@@ -226,10 +255,27 @@ export default async function ResultadoPage({
                   color="bg-amber-500"
                 />
               )}
+              {totals.custoOperacao > 0 && (
+                <CompBar
+                  label="Custo da operação"
+                  value={totals.custoOperacao}
+                  base={totals.bruto}
+                  color="bg-orange-500"
+                />
+              )}
               {!semCusto && (
                 <CompBar
-                  label="Margem líquida"
-                  value={Math.max(0, totals.margemLiquida)}
+                  label={
+                    totals.custoOperacao > 0
+                      ? "Resultado operacional"
+                      : "Margem líquida"
+                  }
+                  value={Math.max(
+                    0,
+                    totals.custoOperacao > 0
+                      ? totals.resultadoOperacional
+                      : totals.margemLiquida,
+                  )}
                   base={totals.bruto}
                   color="bg-blue-500"
                   emphasis
@@ -243,8 +289,8 @@ export default async function ResultadoPage({
               <Info className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 Nenhuma loja tem custos (CMV) lançados neste mês — a margem fica
-                indisponível. Lance os custos em cada unidade no botão{" "}
-                <strong>Lançar dados</strong> pra calcular o lucro real.
+                indisponível. Edite o <strong>Custo Cozina</strong> de cada loja
+                direto na tabela abaixo pra calcular o lucro real.
               </span>
             </div>
           )}
@@ -289,7 +335,13 @@ export default async function ResultadoPage({
             </div>
           )}
 
-          <ResultadoTable rows={rows} totals={totals} periodo={periodoParam} />
+          <ResultadoTable
+            rows={rows}
+            totals={totals}
+            periodo={periodoParam}
+            year={year}
+            month={month}
+          />
         </>
       )}
     </div>

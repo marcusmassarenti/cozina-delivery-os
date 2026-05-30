@@ -37,13 +37,20 @@ export type ResultadoUnitRow = {
   cmvCozina: number
   cmvLoja: number
   cmvTotal: number
-  /** Margem líquida = total líquido − CMV */
+  /** Margem líquida = total líquido − CMV (antes do custo de operação) */
   margemLiquida: number
   /** Margem de lucro % sobre o bruto */
   margemPct: number
+  /** Custo da operação (manual, opcional): aluguel, folha, etc. */
+  custoOperacao: number
+  /** Resultado operacional = margem líquida − custo de operação (lucro) */
+  resultadoOperacional: number
+  /** Resultado operacional % sobre o bruto */
+  resultadoPct: number
   /** Taxa de repasse % = líquido plataformas / bruto */
   repassePct: number
   temCusto: boolean
+  temOperacao: boolean
   temImport: boolean
 }
 
@@ -57,6 +64,9 @@ export type ResultadoTotals = {
   cmvTotal: number
   margemLiquida: number
   margemPct: number
+  custoOperacao: number
+  resultadoOperacional: number
+  resultadoPct: number
   repassePct: number
 }
 
@@ -131,6 +141,7 @@ export async function getNetworkResultadoForMonth(
     const cmvCozina = manual?.custoProdutosCozina ?? 0
     const cmvLoja = manual?.custoProdutosLoja ?? 0
     const cmvTotal = cmvCozina + (cmvLoja ?? 0)
+    const custoOperacao = manual?.custoOperacao ?? 0
     const vrLiquido = manual
       ? Math.max(0, manual.vrRecebido - manual.vrTaxaMedia8)
       : 0
@@ -139,6 +150,8 @@ export async function getNetworkResultadoForMonth(
     const totalLiquido = liquidoPlataformas + vrLiquido
     const margemLiquida = totalLiquido - cmvTotal
     const margemPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
+    const resultadoOperacional = margemLiquida - custoOperacao
+    const resultadoPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
     const repassePct = bruto > 0 ? (liquidoPlataformas / bruto) * 100 : 0
 
     // Só entra no DRE quem tem faturamento (import ou manual)
@@ -159,8 +172,12 @@ export async function getNetworkResultadoForMonth(
       cmvTotal,
       margemLiquida,
       margemPct,
+      custoOperacao,
+      resultadoOperacional,
+      resultadoPct,
       repassePct,
       temCusto: cmvTotal > 0,
+      temOperacao: custoOperacao > 0,
       temImport,
     })
   }
@@ -177,6 +194,8 @@ export async function getNetworkResultadoForMonth(
       acc.totalLiquido += r.totalLiquido
       acc.cmvTotal += r.cmvTotal
       acc.margemLiquida += r.margemLiquida
+      acc.custoOperacao += r.custoOperacao
+      acc.resultadoOperacional += r.resultadoOperacional
       return acc
     },
     {
@@ -189,10 +208,15 @@ export async function getNetworkResultadoForMonth(
       cmvTotal: 0,
       margemLiquida: 0,
       margemPct: 0,
+      custoOperacao: 0,
+      resultadoOperacional: 0,
+      resultadoPct: 0,
       repassePct: 0,
     },
   )
   totals.margemPct = totals.bruto > 0 ? (totals.margemLiquida / totals.bruto) * 100 : 0
+  totals.resultadoPct =
+    totals.bruto > 0 ? (totals.resultadoOperacional / totals.bruto) * 100 : 0
   totals.repassePct =
     totals.bruto > 0 ? (totals.liquidoPlataformas / totals.bruto) * 100 : 0
 

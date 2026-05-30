@@ -26,6 +26,8 @@ export type UnitMonthly = {
   outrosDescontosIfood: number
   custoProdutosCozina: number
   custoProdutosLoja: number | null
+  /** Custo da operação (aluguel, folha, etc.) — opcional, manual */
+  custoOperacao: number
   margemLiquida: number
   margemLucroPct: number
   notaMedia: number
@@ -51,6 +53,7 @@ export const emptyMonthly: UnitMonthly = {
   outrosDescontosIfood: 0,
   custoProdutosCozina: 0,
   custoProdutosLoja: null,
+  custoOperacao: 0,
   margemLiquida: 0,
   margemLucroPct: 0,
   notaMedia: 0,
@@ -116,6 +119,7 @@ export function mockMonthlyFor(code: string): UnitMonthly {
     outrosDescontosIfood: Math.round(totalTaxas * 0.09),
     custoProdutosCozina,
     custoProdutosLoja: null,
+    custoOperacao: 0,
     margemLiquida,
     margemLucroPct,
     notaMedia: Number((4.4 + seed * 0.4).toFixed(1)),

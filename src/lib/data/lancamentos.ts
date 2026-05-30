@@ -24,6 +24,7 @@ export type PlatformEntry = {
 export type MonthlyGeneral = {
   custoProdutosCozina: number
   custoProdutosLoja: number
+  custoOperacao: number
   clientesNovos: number
   notaMedia: number
   observacoes: string
@@ -43,6 +44,7 @@ export const emptyPlatformEntry: PlatformEntry = {
 export const emptyMonthlyGeneral: MonthlyGeneral = {
   custoProdutosCozina: 0,
   custoProdutosLoja: 0,
+  custoOperacao: 0,
   clientesNovos: 0,
   notaMedia: 0,
   observacoes: "",
@@ -94,7 +96,7 @@ export async function getMonthlyGeneral(
   const { data, error } = await supabase
     .from("monthly_entries")
     .select(
-      "custo_produtos_cozina, custo_produtos_loja, clientes_novos, nota_media, observacoes, total_recebido_real",
+      "custo_produtos_cozina, custo_produtos_loja, custo_operacao, clientes_novos, nota_media, observacoes, total_recebido_real",
     )
     .eq("unit_id", unitId)
     .eq("year", year)
@@ -105,6 +107,7 @@ export async function getMonthlyGeneral(
   return {
     custoProdutosCozina: Number(data.custo_produtos_cozina),
     custoProdutosLoja: Number(data.custo_produtos_loja),
+    custoOperacao: Number(data.custo_operacao ?? 0),
     clientesNovos: data.clientes_novos,
     notaMedia: Number(data.nota_media),
     observacoes: data.observacoes,
@@ -269,7 +272,7 @@ export async function getRealMonthlyForUnits(
     supabase
       .from("monthly_entries")
       .select(
-        "unit_id, custo_produtos_cozina, custo_produtos_loja, clientes_novos, nota_media, observacoes, total_recebido_real",
+        "unit_id, custo_produtos_cozina, custo_produtos_loja, custo_operacao, clientes_novos, nota_media, observacoes, total_recebido_real",
       )
       .in("unit_id", unitIds)
       .eq("year", year)
@@ -293,6 +296,7 @@ export async function getRealMonthlyForUnits(
     unit_id: string
     custo_produtos_cozina: number | string
     custo_produtos_loja: number | string
+    custo_operacao: number | string | null
     clientes_novos: number
     nota_media: number | string
     observacoes: string
@@ -402,6 +406,7 @@ export async function getRealMonthlyForUnits(
 
     const custoCozina = myMonthly ? Number(myMonthly.custo_produtos_cozina) : 0
     const custoLoja = myMonthly ? Number(myMonthly.custo_produtos_loja) : 0
+    const custoOperacao = myMonthly ? Number(myMonthly.custo_operacao ?? 0) : 0
     const totalRecebidoReal = myMonthly
       ? Number(myMonthly.total_recebido_real ?? 0)
       : 0
@@ -441,6 +446,7 @@ export async function getRealMonthlyForUnits(
         : 0,
       custoProdutosCozina: custoCozina,
       custoProdutosLoja: custoLoja > 0 ? custoLoja : null,
+      custoOperacao,
       margemLiquida,
       margemLucroPct,
       notaMedia: myMonthly ? Number(myMonthly.nota_media) : 0,
