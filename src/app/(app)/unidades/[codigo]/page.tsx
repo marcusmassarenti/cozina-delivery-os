@@ -429,57 +429,12 @@ function DetailTabs({
   ]
 
   return (
-    <Tabs defaultValue="visao">
+    <Tabs defaultValue="financeiro">
       <TabsList>
-        <TabsTrigger value="visao">Visão geral</TabsTrigger>
         <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
         <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
         <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
       </TabsList>
-
-      {/* Visão geral */}
-      <TabsContent value="visao" className="mt-4">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Volume do mês">
-            <Row label="Pedidos Recebidos" value={fmtNum(m.pedidos)} />
-            <Row
-              label="Pedidos Cancelados"
-              value={`${fmtNum(m.pedidosCancelados)} (${fmtPct((m.pedidosCancelados / m.pedidos) * 100)})`}
-            />
-            <Row label="Ticket Médio" value={fmtBRL(m.ticketMedio)} />
-            <Row
-              label="Clientes Novos"
-              value={m.clientesNovos !== null ? fmtNum(m.clientesNovos) : "—"}
-            />
-          </Card>
-          <Card title="Plataformas (mês)">
-            {m.platforms.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 py-2">
-                <PlatformLogo platform={p.id} size="sm" />
-                <div className="flex flex-1 items-baseline justify-between">
-                  <span className="text-sm">{p.name}</span>
-                  <span className="text-sm font-semibold tabular-nums">
-                    {fmtBRL(p.bruto)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </Card>
-          <Card title="Observações" className="lg:col-span-2">
-            <textarea
-              defaultValue={m.observacoes}
-              placeholder="Anotações do mês — comentários, alertas, contexto..."
-              className="min-h-24 w-full resize-y rounded-md border bg-background p-3 text-sm outline-none focus:border-ring"
-            />
-            <button
-              type="button"
-              className="mt-2 inline-flex h-8 items-center gap-1.5 self-end rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
-            >
-              Salvar observações
-            </button>
-          </Card>
-        </div>
-      </TabsContent>
 
       {/* Financeiro = DRE completo da loja (Receita + Financeiro + Custos) */}
       <TabsContent value="financeiro" className="mt-4">

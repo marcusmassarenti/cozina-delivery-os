@@ -14,6 +14,7 @@ import {
   listNinefoodAvaliacoesForMonth,
 } from "@/lib/data/ninefood-imported"
 import { fmtNum, fmtPct } from "@/lib/format"
+import { PaginatedList } from "@/components/shared/paginated-list"
 
 export async function Avaliacoes99Tab({
   unitId,
@@ -225,8 +226,11 @@ export async function Avaliacoes99Tab({
               Nenhuma avaliação com {notasLabel} neste mês
             </p>
           ) : (
-          <ul className="divide-y">
-            {listaFiltrada.map((a) => (
+          <PaginatedList
+            as="ul"
+            className="divide-y"
+            pageSize={10}
+            items={listaFiltrada.map((a) => (
               <li key={a.id} className="px-5 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -290,7 +294,7 @@ export async function Avaliacoes99Tab({
                 )}
               </li>
             ))}
-          </ul>
+          />
           )}
         </div>
       )}

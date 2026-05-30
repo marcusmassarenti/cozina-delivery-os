@@ -1,8 +1,18 @@
-import { Megaphone, Receipt, Ticket, Truck, Wallet } from "lucide-react"
+import {
+  CalendarDays,
+  Megaphone,
+  PieChart,
+  Receipt,
+  Ticket,
+  Truck,
+  Wallet,
+} from "lucide-react"
 
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
+import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
+import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
 import type { UnitMonthly } from "@/lib/mock-monthly"
-import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
+import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 import { UnitCostsEditor } from "./unit-costs-editor"
 
@@ -25,7 +35,14 @@ export async function FinanceiroLojaTab({
   month: number
 }) {
   const m = monthly
-  const pagamento = await getPagamentoResumoForMonth(unitId, year, month)
+  const [pagamento, deliveryFee, daily] = await Promise.all([
+    getPagamentoResumoForMonth(unitId, year, month),
+    getDeliveryFeeForMonth(unitId, year, month),
+    getDailyReportMatrix(year, month, "todas", [
+      { id: unitId, code: "", name: "" },
+    ]),
+  ])
+  const dailyFat = daily.units[0]?.faturamento ?? {}
 
   const bruto = m.faturamentoBruto
   const liquido = m.totalLiquido
@@ -60,6 +77,11 @@ export async function FinanceiroLojaTab({
             value={`− ${fmtBRL(taxas)}`}
             muted
           />
+          {deliveryFee.total > 0 && (
+            <p className="-mt-1 pl-3 text-[11px] text-muted-foreground">
+              ↳ dos quais {fmtBRL(deliveryFee.total)} é custo logístico (entrega)
+            </p>
+          )}
           <Divider />
           <DreRow
             label="= Líquido (entra na conta)"
@@ -132,6 +154,60 @@ export async function FinanceiroLojaTab({
           <p className="mt-3 text-[11px] text-muted-foreground">
             O bruto/líquido vêm dos relatórios; CMV e operação você lança aqui.
           </p>
+        </div>
+      </div>
+
+      {/* Gráficos: composição do bruto + faturamento dia-a-dia */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <PieChart className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Para onde vai o bruto</h3>
+          </div>
+          <CompBar
+            label="Líquido pra loja"
+            value={liquido}
+            base={bruto}
+            color="bg-emerald-500"
+          />
+          <CompBar
+            label="Taxas das plataformas"
+            value={taxas}
+            base={bruto}
+            color="bg-rose-500"
+          />
+          {cmv > 0 && (
+            <CompBar
+              label="CMV (produtos)"
+              value={cmv}
+              base={bruto}
+              color="bg-amber-500"
+            />
+          )}
+          {operacao > 0 && (
+            <CompBar
+              label="Custo da operação"
+              value={operacao}
+              base={bruto}
+              color="bg-orange-500"
+            />
+          )}
+          {cmv > 0 && (
+            <CompBar
+              label={operacao > 0 ? "Resultado operacional" : "Margem líquida"}
+              value={Math.max(0, operacao > 0 ? resultado : margem)}
+              base={bruto}
+              color="bg-blue-500"
+              emphasis
+            />
+          )}
+        </div>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <CalendarDays className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Faturamento por dia</h3>
+          </div>
+          <DailyChart dias={daily.days} valores={dailyFat} />
         </div>
       </div>
 
@@ -279,6 +355,86 @@ function MiniRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline justify-between gap-2 py-1">
       <span className="truncate text-xs text-muted-foreground">{label}</span>
       <span className="shrink-0 text-xs font-medium tabular-nums">{value}</span>
+    </div>
+  )
+}
+
+function CompBar({
+  label,
+  value,
+  base,
+  color,
+  emphasis,
+}: {
+  label: string
+  value: number
+  base: number
+  color: string
+  emphasis?: boolean
+}) {
+  const pct = base > 0 ? (value / base) * 100 : 0
+  return (
+    <div className="mb-2.5">
+      <div className="mb-0.5 flex items-baseline justify-between">
+        <span
+          className={`text-xs ${emphasis ? "font-semibold" : "text-muted-foreground"}`}
+        >
+          {label}
+        </span>
+        <div className="flex items-baseline gap-2 tabular-nums">
+          <span className="text-xs font-semibold">{fmtBRLShort(value)}</span>
+          <span className="text-[10px] text-muted-foreground">
+            {pct.toFixed(0)}%
+          </span>
+        </div>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full ${color}`}
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function DailyChart({
+  dias,
+  valores,
+}: {
+  dias: number[]
+  valores: Record<number, number>
+}) {
+  const max = Math.max(...dias.map((d) => valores[d] ?? 0), 1)
+  const total = dias.reduce((a, d) => a + (valores[d] ?? 0), 0)
+  if (total <= 0) {
+    return (
+      <p className="text-xs text-muted-foreground">Sem dado diário no mês.</p>
+    )
+  }
+  return (
+    <div>
+      <div className="flex h-28 items-end gap-px">
+        {dias.map((d) => {
+          const v = valores[d] ?? 0
+          const h = v > 0 ? Math.max(3, (v / max) * 100) : 0
+          return (
+            <div
+              key={d}
+              className="flex-1 rounded-t bg-emerald-500/70 transition-colors hover:bg-emerald-500"
+              style={{ height: `${h}%` }}
+              title={`Dia ${String(d).padStart(2, "0")}: ${fmtBRL(v)}`}
+            />
+          )
+        })}
+      </div>
+      <div className="mt-1 flex justify-between text-[9px] text-muted-foreground">
+        <span>dia 01</span>
+        <span>
+          {fmtBRLShort(total)} no mês · pico {fmtBRLShort(max)}
+        </span>
+        <span>dia {dias.length}</span>
+      </div>
     </div>
   )
 }

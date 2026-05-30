@@ -10,6 +10,7 @@ import {
   listKeetaAvaliacoesForMonth,
 } from "@/lib/data/keeta-imported"
 import { fmtNum, fmtPct } from "@/lib/format"
+import { PaginatedList } from "@/components/shared/paginated-list"
 
 export async function AvaliacoesKeetaTab({
   unitId,
@@ -154,8 +155,11 @@ export async function AvaliacoesKeetaTab({
               Nenhuma avaliação com {notasLabel} neste mês
             </p>
           ) : (
-          <ul className="divide-y">
-            {listaFiltrada.map((a) => (
+          <PaginatedList
+            as="ul"
+            className="divide-y"
+            pageSize={10}
+            items={listaFiltrada.map((a) => (
               <li key={a.id} className="px-5 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -193,7 +197,7 @@ export async function AvaliacoesKeetaTab({
                 )}
               </li>
             ))}
-          </ul>
+          />
           )}
         </div>
       )}

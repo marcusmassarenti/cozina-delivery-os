@@ -5,6 +5,7 @@ import {
   listAvaliacoesForMonth,
 } from "@/lib/data/ifood-imported"
 import { fmtNum, fmtPct } from "@/lib/format"
+import { PaginatedList } from "@/components/shared/paginated-list"
 
 export async function AvaliacoesTab({
   unitId,
@@ -168,11 +169,13 @@ export async function AvaliacoesTab({
               : "Sem avaliações neste mês"}
           </div>
         ) : (
-          <div className="divide-y">
-            {listaFiltrada.map((a) => (
+          <PaginatedList
+            items={listaFiltrada.map((a) => (
               <AvaliacaoCard key={a.id} avaliacao={a} />
             ))}
-          </div>
+            pageSize={10}
+            className="divide-y"
+          />
         )}
       </div>
     </div>
