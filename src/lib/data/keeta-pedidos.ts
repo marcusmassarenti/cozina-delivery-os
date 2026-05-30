@@ -266,6 +266,8 @@ export type KeetaPedidoUnitRow = {
   cancelados: number
   /** Faturamento (vendas de itens) — vem da Loja diária; preenchido fora. */
   faturamento: number
+  /** Preço de tabela — fallback de faturamento se não há Loja diária. */
+  precoOriginal: number
   valorPago: number
   promoKeeta: number
   promoLoja: number
@@ -283,6 +285,7 @@ export async function getKeetaPedidoPorLoja(
     unit_id: string
     status_pedido: string | null
     valor_pago_cliente: number | string | null
+    preco_original: number | string | null
     promo_keeta: number | string | null
     promo_loja: number | string | null
   }
@@ -292,7 +295,9 @@ export async function getKeetaPedidoPorLoja(
   for (let i = 0; i < 300; i++) {
     const { data, error } = await admin
       .from("keeta_pedidos_recentes")
-      .select("unit_id, status_pedido, valor_pago_cliente, promo_keeta, promo_loja")
+      .select(
+        "unit_id, status_pedido, valor_pago_cliente, preco_original, promo_keeta, promo_loja",
+      )
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
@@ -320,6 +325,7 @@ export async function getKeetaPedidoPorLoja(
         pedidos: 0,
         cancelados: 0,
         faturamento: 0,
+        precoOriginal: 0,
         valorPago: 0,
         promoKeeta: 0,
         promoLoja: 0,
@@ -329,6 +335,7 @@ export async function getKeetaPedidoPorLoja(
     u.pedidos++
     if (r.status_pedido === "Cancelado") u.cancelados++
     u.valorPago += num(r.valor_pago_cliente)
+    u.precoOriginal += num(r.preco_original)
     u.promoKeeta += num(r.promo_keeta)
     u.promoLoja += num(r.promo_loja)
   }
@@ -345,6 +352,7 @@ export async function getKeetaPedidoPorLoja(
     ...u,
     unitCode: nameMap.get(u.unitId)?.code ?? "?",
     unitName: nameMap.get(u.unitId)?.name ?? "(unidade)",
+    precoOriginal: round(u.precoOriginal),
     valorPago: round(u.valorPago),
     promoKeeta: round(u.promoKeeta),
     promoLoja: round(u.promoLoja),

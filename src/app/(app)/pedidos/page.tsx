@@ -66,11 +66,12 @@ export default async function PedidosPage({
               ? Promise.resolve(null)
               : getFinanceiroResumoByUnits(ids, year, month),
           ])
-          // Enriquece com o faturamento (bruto da conciliação) por loja.
+          // Faturamento = bruto da conciliação; sem conciliação, cai no
+          // VALOR DOS ITENS do próprio relatório de pedidos (fallback).
           const enriched = vrByUnit
             .map((u) => ({
               ...u,
-              faturamento: fatMap?.get(u.unitId)?.bruto ?? 0,
+              faturamento: fatMap?.get(u.unitId)?.bruto || u.valorItens,
             }))
             .sort((a, b) => b.faturamento - a.faturamento)
           return { vrByUnit: enriched, resumo }
@@ -91,11 +92,12 @@ export default async function PedidosPage({
               ? Promise.resolve(null)
               : getKeetaResumoByUnits(ids, year, month),
           ])
-          // Enriquece com o faturamento (vendas de itens) por loja.
+          // Faturamento = vendas de itens da Loja diária; sem ela, cai no
+          // preço de tabela do próprio Pedidos recentes (fallback).
           const enriched = porLoja
             .map((u) => ({
               ...u,
-              faturamento: fatMap?.get(u.unitId)?.bruto ?? 0,
+              faturamento: fatMap?.get(u.unitId)?.bruto || u.precoOriginal,
             }))
             .sort((a, b) => b.faturamento - a.faturamento)
           return { resumo, unitsWithData, porLoja: enriched }
