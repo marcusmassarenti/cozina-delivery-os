@@ -6,10 +6,14 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import {
   getNetworkPagamentoResumo,
+  getPagamentoResumoForMonth,
   getVrByUnits,
 } from "@/lib/data/ifood-pedidos"
+import { getUnits } from "@/lib/data/units"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+
+import { PedidosUnitFilter } from "./_components/pedidos-unit-filter"
 
 /**
  * Tela /pedidos — hub do "Relatório de pedidos" do iFood.
@@ -19,17 +23,36 @@ import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 export default async function PedidosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; loja?: string }>
 }) {
   const sp = await searchParams
   const { year, month } = parsePeriodParam(sp.periodo)
   const periodoParam = sp.periodo
+  const lojaParam = sp.loja ?? null
 
-  const [resumo, vrByUnit, availablePeriods] = await Promise.all([
-    getNetworkPagamentoResumo(year, month),
+  const [allUnits, vrByUnit, availablePeriods] = await Promise.all([
+    getUnits(),
     getVrByUnits(year, month),
     getAvailablePeriods(),
   ])
+  const activeUnits = allUnits.filter((u) => u.active)
+  const dataCodes = new Set(vrByUnit.map((u) => u.unitCode))
+  const selectedUnit = lojaParam
+    ? activeUnits.find((u) => u.code === lojaParam) ?? null
+    : null
+
+  // Consolidado (Todas) ou só a loja selecionada.
+  const resumo = selectedUnit
+    ? await getPagamentoResumoForMonth(selectedUnit.id, year, month)
+    : await getNetworkPagamentoResumo(year, month)
+
+  const unitOptions = activeUnits.map((u) => ({
+    code: u.code,
+    name: u.name,
+    hasData: dataCodes.has(u.code),
+  }))
+  // A tabela "VR por unidade" só faz sentido no consolidado.
+  const showVrByUnit = !selectedUnit && vrByUnit.length > 0
 
   const unitHref = (code: string) =>
     `/unidades/${code}${periodoParam ? `?periodo=${periodoParam}` : ""}`
@@ -43,12 +66,31 @@ export default async function PedidosPage({
             <PlatformLogo platform="ifood" size="sm" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Formas de pagamento e Vale-Refeição por bandeira ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {selectedUnit
+              ? `#${selectedUnit.code} ${selectedUnit.name}`
+              : `Todas as lojas · ${dataCodes.size} com dados`}{" "}
+            · {formatPeriodLabel({ year, month })}
           </p>
         </div>
-        <PeriodSelector current={{ year, month }} options={availablePeriods} />
+        <div className="flex items-center gap-2">
+          <PedidosUnitFilter units={unitOptions} current={lojaParam} />
+          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+        </div>
       </div>
+
+      {/* Cobertura — deixa claro que o "geral" só cobre as lojas importadas */}
+      {!selectedUnit && dataCodes.size > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <span className="font-semibold">
+            Consolidado de {dataCodes.size} de {activeUnits.length} lojas
+          </span>
+          <span>· com Relatório de Pedidos importado:</span>
+          <span className="font-medium">
+            {vrByUnit.map((u) => `#${u.unitCode}`).join(", ")}
+          </span>
+          <span>· as demais ainda não foram importadas.</span>
+        </div>
+      )}
 
       {!resumo.hasData ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
@@ -279,8 +321,8 @@ export default async function PedidosPage({
             </div>
           )}
 
-          {/* VR por unidade */}
-          {vrByUnit.length > 0 && (
+          {/* VR por unidade (só no consolidado) */}
+          {showVrByUnit && (
             <div className="overflow-hidden rounded-xl border bg-card">
               <div className="flex items-center justify-between border-b px-5 py-3">
                 <h3 className="text-sm font-semibold">VR por unidade</h3>
