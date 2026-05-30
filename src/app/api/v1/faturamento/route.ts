@@ -17,6 +17,11 @@ function parseIntParam(v: string | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** Arredonda pra 2 casas (centavos) — evita ruído de ponto flutuante no JSON. */
+function r2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 export async function GET(req: Request) {
   const auth = await verifyApiKey(req, "read")
   if (!auth.ok) return apiError(auth.status, auth.error)
@@ -41,25 +46,25 @@ export async function GET(req: Request) {
     moeda: "BRL",
     totals: {
       pedidos: r.totals.pedidos,
-      faturamentoBruto: r.totals.bruto,
-      taxasPlataforma: r.totals.taxasPlataforma,
-      liquido: r.totals.totalLiquido,
-      cmv: r.totals.cmvTotal,
-      custoOperacao: r.totals.custoOperacao,
-      margemLiquida: r.totals.margemLiquida,
-      resultadoOperacional: r.totals.resultadoOperacional,
+      faturamentoBruto: r2(r.totals.bruto),
+      taxasPlataforma: r2(r.totals.taxasPlataforma),
+      liquido: r2(r.totals.totalLiquido),
+      cmv: r2(r.totals.cmvTotal),
+      custoOperacao: r2(r.totals.custoOperacao),
+      margemLiquida: r2(r.totals.margemLiquida),
+      resultadoOperacional: r2(r.totals.resultadoOperacional),
     },
     units: r.rows.map((u) => ({
       code: u.unitCode,
       name: u.unitName,
       pedidos: u.pedidos,
-      faturamentoBruto: u.bruto,
-      taxasPlataforma: u.taxasPlataforma,
-      liquido: u.totalLiquido,
-      cmv: u.cmvTotal,
-      custoOperacao: u.custoOperacao,
-      margemLiquida: u.margemLiquida,
-      resultadoOperacional: u.resultadoOperacional,
+      faturamentoBruto: r2(u.bruto),
+      taxasPlataforma: r2(u.taxasPlataforma),
+      liquido: r2(u.totalLiquido),
+      cmv: r2(u.cmvTotal),
+      custoOperacao: r2(u.custoOperacao),
+      margemLiquida: r2(u.margemLiquida),
+      resultadoOperacional: r2(u.resultadoOperacional),
     })),
   })
 }

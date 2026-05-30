@@ -82,7 +82,7 @@ const navGroups: NavGroup[] = [
     defaultOpen: true,
     items: [
       { label: "Importação", href: "/importacao", icon: FileUp },
-      { label: "Conexões", href: "/conexoes", icon: Cable, comingSoon: true },
+      { label: "Conexões", href: "/conexoes", icon: Cable },
     ],
   },
   {
