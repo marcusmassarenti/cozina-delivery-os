@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, LayoutGrid, Upload } from "lucide-react"
 
@@ -7,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getUnits } from "@/lib/data/units"
 
 import { DownloadGuide } from "./_components/download-guide"
+import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
 
 type ImportRow = {
@@ -114,6 +116,16 @@ export default async function ImportacaoPage({
       </div>
 
       <DownloadGuide />
+
+      <Suspense
+        fallback={
+          <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">
+            Carregando checklist do mês…
+          </div>
+        }
+      >
+        <ImportChecklist />
+      </Suspense>
 
       <SectionDivider number={1} label="Subir relatório" />
       <div className="rounded-xl border bg-card p-5">
