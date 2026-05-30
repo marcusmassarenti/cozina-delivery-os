@@ -3,7 +3,6 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import {
   ArrowLeft,
-  ClipboardEdit,
   DollarSign,
   Pencil,
   PiggyBank,
@@ -144,13 +143,6 @@ export default async function UnidadeDetalhePage({
             current={{ year, month }}
             options={availablePeriods}
           />
-          <Link
-            href={`/unidades/${unit.code}/lancamentos`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <ClipboardEdit className="size-3.5" />
-            Lançar dados
-          </Link>
           <EditUnitDialog
             unit={{
               unitId: unit.id,
