@@ -13,6 +13,37 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
+/**
+ * Pagina uma query do Supabase via .range() em loop. O hard-cap de 1000
+ * linhas do Supabase IGNORA .limit() acima de 1000 — então sem paginar a
+ * agregação trunca silenciosamente (subconta). A query passada precisa ter
+ * um .order() ESTÁVEL (ex.: .order("id")), senão linhas repetem/somem entre
+ * páginas.
+ */
+async function pageAll<T>(
+  build: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000,
+  maxRows = 300000,
+): Promise<T[]> {
+  const all: T[] = []
+  let from = 0
+  while (from < maxRows) {
+    const { data, error } = await build(from, from + pageSize - 1)
+    if (error) {
+      console.error("ninefood-imported pageAll error:", error.message)
+      break
+    }
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return all
+}
+
 // ─── Tipos ───────────────────────────────────────────────────────────
 
 export type NinefoodResumo = {
@@ -268,17 +299,25 @@ export async function getNinefoodItensRankingForMonth(
   const nextYear = month === 12 ? year + 1 : year
   const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
 
-  const { data, error } = await admin
-    .from("ninefood_daily_item")
-    .select("nome_item, receita, qtd_vendida, preco_medio, alcance, conversao_pct")
-    .eq("unit_id", unitId)
-    .gte("data", startIso)
-    .lt("data", endExcl)
-
-  if (error) {
-    console.error("getNinefoodItensRankingForMonth error:", error.message)
-    return []
-  }
+  const data = await pageAll<{
+    nome_item: string | null
+    receita: number | string | null
+    qtd_vendida: number | null
+    preco_medio: number | string | null
+    alcance: number | null
+    conversao_pct: number | string | null
+  }>((from, to) =>
+    admin
+      .from("ninefood_daily_item")
+      .select(
+        "nome_item, receita, qtd_vendida, preco_medio, alcance, conversao_pct",
+      )
+      .eq("unit_id", unitId)
+      .gte("data", startIso)
+      .lt("data", endExcl)
+      .order("id")
+      .range(from, to),
+  )
 
   // Agrega em JS por nome_item
   type Acc = {
@@ -414,16 +453,21 @@ export async function getNinefoodAvaliacoesResumoForMonth(
   const nextYear = month === 12 ? year + 1 : year
   const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
 
-  const { data } = await admin
-    .from("ninefood_pedidos")
-    .select("nivel_avaliacao, conteudo_avaliacao, tag_avaliacao")
-    .eq("unit_id", unitId)
-    .not("nivel_avaliacao", "is", null)
-    .gte("data_avaliacao", startIso)
-    .lt("data_avaliacao", endExcl)
-    .limit(50000)
-
-  const rows = data ?? []
+  const rows = await pageAll<{
+    nivel_avaliacao: number | string | null
+    conteudo_avaliacao: string | null
+    tag_avaliacao: string | null
+  }>((from, to) =>
+    admin
+      .from("ninefood_pedidos")
+      .select("nivel_avaliacao, conteudo_avaliacao, tag_avaliacao")
+      .eq("unit_id", unitId)
+      .not("nivel_avaliacao", "is", null)
+      .gte("data_avaliacao", startIso)
+      .lt("data_avaliacao", endExcl)
+      .order("id")
+      .range(from, to),
+  )
   if (rows.length === 0) {
     return {
       total: 0,
@@ -627,13 +671,21 @@ export async function getNinefoodCoverageMatrix(
   // Como ninefood_daily_loja tem UNIQUE (unit_id, data), basta contar rows.
   const lojaByUnitMonth = new Map<string, Map<string, number>>()
   if (unitIds.length > 0) {
-    const { data } = await admin
-      .from("ninefood_daily_loja")
-      .select("unit_id, data, ref_year, ref_month")
-      .in("unit_id", unitIds)
-      .gte("data", rangeStart)
-      .lte("data", rangeEnd)
-      .limit(50000)
+    const data = await pageAll<{
+      unit_id: string
+      data: string
+      ref_year: number | null
+      ref_month: number | null
+    }>((from, to) =>
+      admin
+        .from("ninefood_daily_loja")
+        .select("unit_id, data, ref_year, ref_month")
+        .in("unit_id", unitIds)
+        .gte("data", rangeStart)
+        .lte("data", rangeEnd)
+        .order("id")
+        .range(from, to),
+    )
     for (const r of data ?? []) {
       const k =
         r.ref_year != null && r.ref_month != null
@@ -650,13 +702,17 @@ export async function getNinefoodCoverageMatrix(
   // usamos Set pra contar dias únicos.
   const itemByUnitMonth = new Map<string, Map<string, Set<string>>>()
   if (unitIds.length > 0) {
-    const { data } = await admin
-      .from("ninefood_daily_item")
-      .select("unit_id, data")
-      .in("unit_id", unitIds)
-      .gte("data", rangeStart)
-      .lte("data", rangeEnd)
-      .limit(100000)
+    const data = await pageAll<{ unit_id: string; data: string }>(
+      (from, to) =>
+        admin
+          .from("ninefood_daily_item")
+          .select("unit_id, data")
+          .in("unit_id", unitIds)
+          .gte("data", rangeStart)
+          .lte("data", rangeEnd)
+          .order("id")
+          .range(from, to),
+    )
     for (const r of data ?? []) {
       const dateStr = r.data as string
       const k = dateToKey(dateStr)
@@ -675,13 +731,21 @@ export async function getNinefoodCoverageMatrix(
     Map<string, { total: number; dias: Set<string> }>
   >()
   if (unitIds.length > 0) {
-    const { data } = await admin
-      .from("ninefood_pedidos")
-      .select("unit_id, data, ref_year, ref_month")
-      .in("unit_id", unitIds)
-      .gte("data", rangeStart)
-      .lte("data", rangeEnd)
-      .limit(200000)
+    const data = await pageAll<{
+      unit_id: string
+      data: string
+      ref_year: number | null
+      ref_month: number | null
+    }>((from, to) =>
+      admin
+        .from("ninefood_pedidos")
+        .select("unit_id, data, ref_year, ref_month")
+        .in("unit_id", unitIds)
+        .gte("data", rangeStart)
+        .lte("data", rangeEnd)
+        .order("id")
+        .range(from, to),
+    )
     for (const r of data ?? []) {
       const k =
         r.ref_year != null && r.ref_month != null
@@ -792,15 +856,22 @@ export async function getNetworkNinefoodTopItemsForMonth(
   const nextYear = month === 12 ? year + 1 : year
   const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
 
-  let q = admin
-    .from("ninefood_daily_item")
-    .select("nome_item, receita, qtd_vendida")
-    .gte("data", startIso)
-    .lt("data", endExcl)
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q = q.in("unit_id", filterUnitIds)
-  const { data } = await q
+  const data = await pageAll<{
+    nome_item: string | null
+    receita: number | string | null
+    qtd_vendida: number | null
+  }>((from, to) => {
+    let q = admin
+      .from("ninefood_daily_item")
+      .select("nome_item, receita, qtd_vendida")
+      .gte("data", startIso)
+      .lt("data", endExcl)
+      .order("id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  })
 
   const acc = new Map<string, NinefoodTopItem>()
   for (const r of data ?? []) {
@@ -846,18 +917,25 @@ export async function getNetworkNinefoodCancelamentosForMonth(
   const nextYear = month === 12 ? year + 1 : year
   const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
 
-  let q = admin
-    .from("ninefood_pedidos")
-    .select(
-      "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, valor_total_pedido",
-    )
-    .not("horario_cancelamento", "is", null)
-    .gte("horario_pedido", startIso)
-    .lt("horario_pedido", endExcl)
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q = q.in("unit_id", filterUnitIds)
-  const { data } = await q
+  const data = await pageAll<{
+    motivos_cancelamento_comerciante: string | null
+    parte_responsavel_cancelamento: string | null
+    valor_total_pedido: number | string | null
+  }>((from, to) => {
+    let q = admin
+      .from("ninefood_pedidos")
+      .select(
+        "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, valor_total_pedido",
+      )
+      .not("horario_cancelamento", "is", null)
+      .gte("horario_pedido", startIso)
+      .lt("horario_pedido", endExcl)
+      .order("id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  })
 
   const acc = new Map<string, NinefoodCancelamentoMotivo>()
   for (const r of data ?? []) {
@@ -915,21 +993,30 @@ export async function getNetworkNinefoodAvaliacoesForMonth(
   const nextYear = month === 12 ? year + 1 : year
   const endExcl = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
 
-  let q = admin
-    .from("ninefood_pedidos")
-    .select(
-      "id, unit_id, pedido_id, nivel_avaliacao, conteudo_avaliacao, tag_avaliacao, data_avaliacao",
-    )
-    .not("nivel_avaliacao", "is", null)
-    .gte("data_avaliacao", startIso)
-    .lt("data_avaliacao", endExcl)
-    .order("data_avaliacao", { ascending: false })
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q = q.in("unit_id", filterUnitIds)
-  const { data } = await q
-
-  const rows = data ?? []
+  const rows = await pageAll<{
+    id: string
+    unit_id: string
+    pedido_id: string | number | null
+    nivel_avaliacao: number | string | null
+    conteudo_avaliacao: string | null
+    tag_avaliacao: string | null
+    data_avaliacao: string | null
+  }>((from, to) => {
+    let q = admin
+      .from("ninefood_pedidos")
+      .select(
+        "id, unit_id, pedido_id, nivel_avaliacao, conteudo_avaliacao, tag_avaliacao, data_avaliacao",
+      )
+      .not("nivel_avaliacao", "is", null)
+      .gte("data_avaliacao", startIso)
+      .lt("data_avaliacao", endExcl)
+      .order("data_avaliacao", { ascending: false })
+      .order("id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  })
   if (rows.length === 0) {
     return {
       total: 0,
