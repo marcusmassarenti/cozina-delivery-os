@@ -1,16 +1,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import {
-  ArrowLeft,
-  DollarSign,
-  Pencil,
-  PiggyBank,
-  Sparkles,
-  Star,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react"
+import { ArrowLeft, Sparkles } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
@@ -51,10 +42,7 @@ import { AvaliacoesKeetaTab } from "./_components/avaliacoes-keeta-tab"
 import { CardapioTab } from "./_components/cardapio-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
-import { CustosTab } from "./_components/custos-tab"
-import { FinanceiroTab } from "./_components/financeiro-tab"
-import { Financeiro99Tab } from "./_components/financeiro-99-tab"
-import { FinanceiroKeetaTab } from "./_components/financeiro-keeta-tab"
+import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
 
 export default async function UnidadeDetalhePage({
   params,
@@ -228,6 +216,12 @@ export default async function UnidadeDetalhePage({
 // Hero (sempre visível)
 //----------------------------------------------------------------
 
+const PLAT_BAR_COLOR: Record<string, string> = {
+  ifood: "bg-red-500",
+  "99food": "bg-yellow-400",
+  keeta: "bg-teal-500",
+}
+
 function HeroKpis({
   monthly: m,
   notaMedia,
@@ -239,68 +233,113 @@ function HeroKpis({
   notasCount: number
   notaFonte: string
 }) {
-  const heroes = [
+  const cancelPct =
+    m.pedidos > 0 ? (m.pedidosCancelados / m.pedidos) * 100 : 0
+  const repassePct =
+    m.faturamentoBruto > 0 ? (m.totalLiquido / m.faturamentoBruto) * 100 : 0
+
+  const stats: {
+    label: string
+    value: string
+    sub?: string
+    tone?: "pos" | "neg" | "warn"
+  }[] = [
     {
-      label: "Faturamento Bruto",
+      label: "Bruto",
       value: fmtBRL(m.faturamentoBruto),
-      trend: `${fmtNum(m.pedidos)} pedidos no mês`,
-      tone: "positive" as const,
-      icon: DollarSign,
+      sub: `${fmtNum(m.pedidos)} pedidos`,
     },
     {
-      label: "Margem Líquida",
+      label: "Líquido",
+      value: fmtBRL(m.totalLiquido),
+      sub: `${fmtPct(repassePct)} repasse`,
+      tone: "pos",
+    },
+    {
+      label: "Margem",
       value: fmtBRL(m.margemLiquida),
-      trend: `${fmtBRL(m.totalLiquido)} líquido (entra na conta)`,
-      tone: m.margemLiquida >= 0 ? ("positive" as const) : ("neutral" as const),
-      icon: PiggyBank,
+      sub: m.custoProdutosCozina > 0 ? fmtPct(m.margemLucroPct) : "lance o CMV",
+      tone: m.margemLiquida >= 0 ? "pos" : "neg",
+    },
+    { label: "Ticket médio", value: fmtBRL(m.ticketMedio) },
+    {
+      label: "Cancelamento",
+      value: fmtPct(cancelPct),
+      sub: `${fmtNum(m.pedidosCancelados)} ped`,
+      tone: cancelPct > 5 ? "warn" : undefined,
     },
     {
-      label: "Margem de Lucro",
-      value: fmtPct(m.margemLucroPct),
-      trend: `sobre R$ ${fmtNum(m.faturamentoBruto)} bruto`,
-      tone: m.margemLucroPct >= 0 ? ("positive" as const) : ("neutral" as const),
-      icon: TrendingUp,
-    },
-    {
-      label: "Nota Média",
+      label: "Nota média",
       value: notaMedia > 0 ? `${notaMedia.toFixed(2)} ★` : "—",
-      trend:
-        notasCount > 0
-          ? `${notasCount} avaliações · ${notaFonte}`
-          : "Sem avaliações",
-      tone: "neutral" as const,
-      icon: Star,
+      sub: notasCount > 0 ? `${fmtNum(notasCount)} · ${notaFonte}` : "sem aval.",
     },
   ]
 
+  const totalBruto = m.platforms.reduce((a, p) => a + p.bruto, 0)
+  const plats = m.platforms.filter((p) => p.bruto > 0)
+
+  const toneCls = (t?: "pos" | "neg" | "warn") =>
+    t === "pos"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : t === "neg"
+        ? "text-rose-600 dark:text-rose-400"
+        : t === "warn"
+          ? "text-amber-600 dark:text-amber-400"
+          : ""
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {heroes.map((h) => {
-        const Icon = h.icon
-        const toneClass =
-          h.tone === "positive"
-            ? "text-emerald-600 dark:text-emerald-400"
-            : "text-muted-foreground"
-        return (
-          <div
-            key={h.label}
-            className="rounded-xl border bg-card p-5 shadow-sm"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-              <Icon className="size-4" />
-            </div>
-            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {h.label}
+    <div className="space-y-3">
+      {/* Faixa de KPIs densa */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3 lg:grid-cols-6">
+        {stats.map((s) => (
+          <div key={s.label} className="bg-card px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {s.label}
             </p>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight">
-              {h.value}
+            <p
+              className={`mt-0.5 text-lg font-bold tracking-tight tabular-nums ${toneCls(s.tone)}`}
+            >
+              {s.value}
             </p>
-            <p className={`mt-1 text-[11px] font-medium ${toneClass}`}>
-              {h.trend}
-            </p>
+            {s.sub && (
+              <p className="truncate text-[10px] text-muted-foreground">
+                {s.sub}
+              </p>
+            )}
           </div>
-        )
-      })}
+        ))}
+      </div>
+
+      {/* Barra de plataformas */}
+      {totalBruto > 0 && (
+        <div className="rounded-xl border bg-card px-4 py-3">
+          <div className="mb-2 flex h-2 overflow-hidden rounded-full bg-muted">
+            {plats.map((p) => (
+              <div
+                key={p.id}
+                className={PLAT_BAR_COLOR[p.id] ?? "bg-muted-foreground"}
+                style={{ width: `${(p.bruto / totalBruto) * 100}%` }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+            {plats.map((p) => (
+              <span
+                key={p.id}
+                className="inline-flex items-center gap-1.5 text-[11px]"
+              >
+                <PlatformLogo platform={p.id} size="sm" />
+                <span className="font-semibold tabular-nums">
+                  {fmtBRL(p.bruto)}
+                </span>
+                <span className="text-muted-foreground">
+                  {((p.bruto / totalBruto) * 100).toFixed(0)}%
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -359,35 +398,6 @@ function DetailTabs({
       ),
     },
   ]
-  const financeiroSlots = [
-    {
-      platform: "ifood" as const,
-      empty: !usaIfood,
-      content: (
-        <Suspense fallback={<TabSkeleton />}>
-          <FinanceiroTab unitId={unit.id} year={year} month={month} />
-        </Suspense>
-      ),
-    },
-    {
-      platform: "99food" as const,
-      empty: !usa99,
-      content: (
-        <Suspense fallback={<TabSkeleton />}>
-          <Financeiro99Tab unitId={unit.id} year={year} month={month} />
-        </Suspense>
-      ),
-    },
-    {
-      platform: "keeta" as const,
-      empty: !usaKeeta,
-      content: (
-        <Suspense fallback={<TabSkeleton />}>
-          <FinanceiroKeetaTab unitId={unit.id} year={year} month={month} />
-        </Suspense>
-      ),
-    },
-  ]
   const avaliacoesSlots = [
     {
       platform: "ifood" as const,
@@ -419,26 +429,16 @@ function DetailTabs({
   ]
 
   return (
-    <Tabs defaultValue="resumo">
+    <Tabs defaultValue="visao">
       <TabsList>
-        <TabsTrigger value="resumo">Resumo</TabsTrigger>
-        <TabsTrigger value="receita">Receita</TabsTrigger>
-        <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
+        <TabsTrigger value="visao">Visão geral</TabsTrigger>
         <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
-        <TabsTrigger value="custos">Custos</TabsTrigger>
+        <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
         <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="cardapio" className="mt-4">
-        <PlatformSwitcher slots={cardapioSlots} />
-      </TabsContent>
-
-      <TabsContent value="financeiro" className="mt-4">
-        <PlatformSwitcher slots={financeiroSlots} />
-      </TabsContent>
-
-      {/* Tab: Resumo */}
-      <TabsContent value="resumo" className="mt-4">
+      {/* Visão geral */}
+      <TabsContent value="visao" className="mt-4">
         <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Volume do mês">
             <Row label="Pedidos Recebidos" value={fmtNum(m.pedidos)} />
@@ -481,57 +481,10 @@ function DetailTabs({
         </div>
       </TabsContent>
 
-      {/* Tab: Receita */}
-      <TabsContent value="receita" className="mt-4">
-        <Card title="Receita (mês)" tone="positive">
-          <Row
-            label="Faturamento Bruto"
-            value={fmtBRL(m.faturamentoBruto)}
-            bold
-          />
-          <Row
-            label="(−) Total de descontos e taxas"
-            value={`− ${fmtBRL(
-              m.taxaEntregaIfood +
-                m.promocoes +
-                m.taxaComissaoIfood +
-                m.servicosLogisticos +
-                m.outrosDescontosIfood,
-            )}`}
-            muted
-          />
-          <Row
-            label="= Faturamento Líquido"
-            value={fmtBRL(m.faturamentoLiquido)}
-            bold
-            highlight
-          />
-          <Divider />
-          <Row label="(+) VR Recebido via loja" value={fmtBRL(m.vrRecebido)} />
-          <Row
-            label="(−) VR Taxa Média 8%"
-            value={`− ${fmtBRL(m.vrTaxaMedia8)}`}
-            muted
-          />
-          <Row
-            label="(−) Cancelamentos/Reembolsos"
-            value={`− ${fmtBRL(m.cancelamentosReembolsos)}`}
-            muted
-          />
-          <Divider />
-          <Row
-            label="= Total Líquido (entra na conta)"
-            value={fmtBRL(m.totalLiquido)}
-            bold
-            highlight
-          />
-        </Card>
-      </TabsContent>
-
-      {/* Tab: Custos */}
-      <TabsContent value="custos" className="mt-4">
+      {/* Financeiro = DRE completo da loja (Receita + Financeiro + Custos) */}
+      <TabsContent value="financeiro" className="mt-4">
         <Suspense fallback={<TabSkeleton />}>
-          <CustosTab
+          <FinanceiroLojaTab
             unitId={unit.id}
             monthly={m}
             year={year}
@@ -540,7 +493,12 @@ function DetailTabs({
         </Suspense>
       </TabsContent>
 
-      {/* Tab: Avaliações */}
+      {/* Cardápio */}
+      <TabsContent value="cardapio" className="mt-4">
+        <PlatformSwitcher slots={cardapioSlots} />
+      </TabsContent>
+
+      {/* Avaliações */}
       <TabsContent value="avaliacoes" className="mt-4">
         <PlatformSwitcher slots={avaliacoesSlots} />
       </TabsContent>
@@ -638,10 +596,6 @@ function Row({
       </span>
     </div>
   )
-}
-
-function Divider() {
-  return <div className="my-2 h-px bg-border" />
 }
 
 function formatCnpj(c: string): string {
