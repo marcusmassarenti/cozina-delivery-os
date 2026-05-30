@@ -264,6 +264,8 @@ export type KeetaPedidoUnitRow = {
   unitName: string
   pedidos: number
   cancelados: number
+  /** Faturamento (vendas de itens) — vem da Loja diária; preenchido fora. */
+  faturamento: number
   valorPago: number
   promoKeeta: number
   promoLoja: number
@@ -317,6 +319,7 @@ export async function getKeetaPedidoPorLoja(
         unitName: "(unidade)",
         pedidos: 0,
         cancelados: 0,
+        faturamento: 0,
         valorPago: 0,
         promoKeeta: 0,
         promoLoja: 0,

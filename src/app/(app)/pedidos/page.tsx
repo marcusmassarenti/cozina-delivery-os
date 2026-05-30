@@ -1,11 +1,15 @@
 import { PlatformLogo } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import {
+  getAvailablePeriods,
+  getFinanceiroResumoByUnits,
+} from "@/lib/data/ifood-imported"
 import {
   getNetworkPagamentoResumo,
   getPagamentoResumoForMonth,
   getVrByUnits,
 } from "@/lib/data/ifood-pedidos"
+import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import {
   getKeetaPedidoPorLoja,
   getKeetaPedidoUnitsWithData,
@@ -53,19 +57,29 @@ export default async function PedidosPage({
   const ifood =
     plataforma === "ifood"
       ? await (async () => {
-          const [vrByUnit, resumo] = await Promise.all([
+          const [vrByUnit, resumo, fatMap] = await Promise.all([
             getVrByUnits(year, month),
             selectedUnit
               ? getPagamentoResumoForMonth(selectedUnit.id, year, month)
               : getNetworkPagamentoResumo(year, month),
+            selectedUnit
+              ? Promise.resolve(null)
+              : getFinanceiroResumoByUnits(ids, year, month),
           ])
-          return { vrByUnit, resumo }
+          // Enriquece com o faturamento (bruto da conciliação) por loja.
+          const enriched = vrByUnit
+            .map((u) => ({
+              ...u,
+              faturamento: fatMap?.get(u.unitId)?.bruto ?? 0,
+            }))
+            .sort((a, b) => b.faturamento - a.faturamento)
+          return { vrByUnit: enriched, resumo }
         })()
       : null
   const keeta =
     plataforma === "keeta"
       ? await (async () => {
-          const [resumo, unitsWithData, porLoja] = await Promise.all([
+          const [resumo, unitsWithData, porLoja, fatMap] = await Promise.all([
             selectedUnit
               ? getKeetaPedidoResumoForMonth(selectedUnit.id, year, month)
               : getNetworkKeetaPedidoResumo(ids, year, month),
@@ -73,8 +87,18 @@ export default async function PedidosPage({
             selectedUnit
               ? Promise.resolve([])
               : getKeetaPedidoPorLoja(ids, year, month),
+            selectedUnit
+              ? Promise.resolve(null)
+              : getKeetaResumoByUnits(ids, year, month),
           ])
-          return { resumo, unitsWithData, porLoja }
+          // Enriquece com o faturamento (vendas de itens) por loja.
+          const enriched = porLoja
+            .map((u) => ({
+              ...u,
+              faturamento: fatMap?.get(u.unitId)?.bruto ?? 0,
+            }))
+            .sort((a, b) => b.faturamento - a.faturamento)
+          return { resumo, unitsWithData, porLoja: enriched }
         })()
       : null
 

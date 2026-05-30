@@ -278,13 +278,13 @@ export function PedidosIfoodView({
             <div className="overflow-hidden rounded-xl border bg-card">
               <div className="flex items-center justify-between border-b px-5 py-3">
                 <h3 className="text-sm font-semibold">
-                  Valor pago por loja{" "}
+                  Valor vendido por loja{" "}
                   <span className="font-normal text-muted-foreground">
                     ({vrByUnit.length})
                   </span>
                 </h3>
                 <span className="text-[10px] text-muted-foreground">
-                  total pago pelo cliente · não é o faturamento
+                  faturamento · pago e VR embaixo
                 </span>
               </div>
               <div className="divide-y">
@@ -302,14 +302,14 @@ export function PedidosIfoodView({
                         {u.unitName}
                       </p>
                       <p className="text-[10px] tabular-nums text-muted-foreground">
-                        {u.vrValor > 0
-                          ? `VR ${fmtBRLShort(u.vrValor)} · ${fmtNum(u.vrPedidos)} ped`
-                          : "sem VR"}
+                        pago {fmtBRLShort(u.totalValor)}
+                        {u.vrValor > 0 &&
+                          ` · VR ${fmtBRLShort(u.vrValor)} (${fmtNum(u.vrPedidos)})`}
                       </p>
                     </div>
                     <div className="w-28 shrink-0 text-right">
                       <p className="text-sm font-bold tabular-nums">
-                        {fmtBRL(u.totalValor)}
+                        {u.faturamento > 0 ? fmtBRL(u.faturamento) : "—"}
                       </p>
                       <p className="text-[10px] tabular-nums text-muted-foreground">
                         {fmtNum(u.totalPedidos)} pedidos

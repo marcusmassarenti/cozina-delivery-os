@@ -228,13 +228,13 @@ export function PedidosKeetaView({
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="flex items-center justify-between border-b px-5 py-3">
             <h3 className="text-sm font-semibold">
-              Valor pago por loja{" "}
+              Valor vendido por loja{" "}
               <span className="font-normal text-muted-foreground">
                 ({porLoja.length})
               </span>
             </h3>
             <span className="text-[10px] text-muted-foreground">
-              líquido de desconto · não é o faturamento
+              faturamento · valor pago e subsídio embaixo
             </span>
           </div>
           <div className="divide-y">
@@ -250,13 +250,14 @@ export function PedidosKeetaView({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{u.unitName}</p>
                   <p className="text-[10px] tabular-nums text-muted-foreground">
-                    subsídio loja {fmtBRLShort(u.promoLoja)}
+                    pago {fmtBRLShort(u.valorPago)} · subsídio loja{" "}
+                    {fmtBRLShort(u.promoLoja)}
                     {u.cancelados > 0 && ` · ${fmtNum(u.cancelados)} canc.`}
                   </p>
                 </div>
                 <div className="w-28 shrink-0 text-right">
                   <p className="text-sm font-bold tabular-nums">
-                    {fmtBRL(u.valorPago)}
+                    {u.faturamento > 0 ? fmtBRL(u.faturamento) : "—"}
                   </p>
                   <p className="text-[10px] tabular-nums text-muted-foreground">
                     {fmtNum(u.pedidos)} pedidos
@@ -270,11 +271,11 @@ export function PedidosKeetaView({
       )}
 
       <p className="text-[11px] text-muted-foreground">
-        Fonte: relatório &quot;Pedidos recentes&quot; da Keeta. A Keeta não
-        reporta forma de pagamento/VR — por isso aqui o foco é subsídio, taxas e
-        campanhas. Os valores são o que o cliente <strong>pagou</strong>{" "}
-        (líquido de desconto); o <strong>faturamento</strong> da loja (valor de
-        venda dos itens) está na unidade e no Dashboard.
+        Fonte: relatório &quot;Pedidos recentes&quot; da Keeta (subsídio, taxas
+        e campanhas) + Loja diária (faturamento). O{" "}
+        <strong>valor vendido</strong> é o faturamento (vendas de itens, igual à
+        unidade); o <strong>valor pago</strong> é o que o cliente desembolsou,
+        já abatido o desconto.
       </p>
     </>
   )
