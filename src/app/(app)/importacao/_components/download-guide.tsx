@@ -156,7 +156,16 @@ const toneClass: Record<GuideEntry["badgeTone"], string> = {
     "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400",
 }
 
+const PLATFORMS: { id: PlatformId; label: string; entries: GuideEntry[] }[] = [
+  { id: "ifood", label: "iFood", entries: IFOOD_ENTRIES },
+  { id: "99food", label: "99 Food", entries: NINEFOOD_ENTRIES },
+  { id: "keeta", label: "Keeta", entries: KEETA_ENTRIES },
+]
+
 export function DownloadGuide() {
+  const [active, setActive] = React.useState<PlatformId>("ifood")
+  const current = PLATFORMS.find((p) => p.id === active) ?? PLATFORMS[0]
+
   return (
     <Collapsible className="group/guide rounded-xl border bg-card">
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/40">
@@ -169,7 +178,7 @@ export function DownloadGuide() {
               Como baixar os relatórios — guia rápido
             </p>
             <p className="text-[11px] text-muted-foreground">
-              iFood (4), 99 Food (3) e Keeta (3 relatórios). Clica pra
+              Escolhe a plataforma pra ver os relatórios dela. Clica pra
               expandir.
             </p>
           </div>
@@ -178,22 +187,44 @@ export function DownloadGuide() {
       </CollapsibleTrigger>
 
       <CollapsibleContent>
-        <div className="space-y-5 border-t p-4">
-          <PlatformSection
-            platform="ifood"
-            label="iFood"
-            entries={IFOOD_ENTRIES}
-          />
-          <PlatformSection
-            platform="99food"
-            label="99 Food"
-            entries={NINEFOOD_ENTRIES}
-          />
-          <PlatformSection
-            platform="keeta"
-            label="Keeta"
-            entries={KEETA_ENTRIES}
-          />
+        <div className="border-t p-4">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {PLATFORMS.map((p) => {
+              const isActive = p.id === active
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setActive(p.id)}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "bg-card text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <PlatformLogo platform={p.id} size="sm" />
+                  {p.label}
+                  <span
+                    className={`rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${
+                      isActive ? "bg-primary/20" : "bg-muted"
+                    }`}
+                  >
+                    {p.entries.length}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div
+            className={`grid gap-3 ${
+              current.entries.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"
+            }`}
+          >
+            {current.entries.map((e) => (
+              <EntryCard key={e.title} entry={e} />
+            ))}
+          </div>
         </div>
 
         <div className="border-t bg-muted/30 px-5 py-3">
@@ -205,37 +236,6 @@ export function DownloadGuide() {
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
-}
-
-function PlatformSection({
-  platform,
-  label,
-  entries,
-}: {
-  platform: PlatformId
-  label: string
-  entries: GuideEntry[]
-}) {
-  return (
-    <div>
-      <div className="mb-2.5 flex items-center gap-2">
-        <PlatformLogo platform={platform} size="sm" />
-        <span className="text-sm font-semibold">{label}</span>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          {entries.length} relatório{entries.length > 1 ? "s" : ""}
-        </span>
-      </div>
-      <div
-        className={`grid gap-3 ${
-          entries.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"
-        }`}
-      >
-        {entries.map((e) => (
-          <EntryCard key={e.title} entry={e} />
-        ))}
-      </div>
-    </div>
   )
 }
 
