@@ -228,13 +228,13 @@ export function PedidosKeetaView({
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="flex items-center justify-between border-b px-5 py-3">
             <h3 className="text-sm font-semibold">
-              Vendas por loja{" "}
+              Valor pago por loja{" "}
               <span className="font-normal text-muted-foreground">
                 ({porLoja.length})
               </span>
             </h3>
             <span className="text-[10px] text-muted-foreground">
-              clique pra ver a loja
+              líquido de desconto · não é o faturamento
             </span>
           </div>
           <div className="divide-y">
@@ -272,7 +272,9 @@ export function PedidosKeetaView({
       <p className="text-[11px] text-muted-foreground">
         Fonte: relatório &quot;Pedidos recentes&quot; da Keeta. A Keeta não
         reporta forma de pagamento/VR — por isso aqui o foco é subsídio, taxas e
-        campanhas.
+        campanhas. Os valores são o que o cliente <strong>pagou</strong>{" "}
+        (líquido de desconto); o <strong>faturamento</strong> da loja (valor de
+        venda dos itens) está na unidade e no Dashboard.
       </p>
     </>
   )

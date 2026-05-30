@@ -278,13 +278,13 @@ export function PedidosIfoodView({
             <div className="overflow-hidden rounded-xl border bg-card">
               <div className="flex items-center justify-between border-b px-5 py-3">
                 <h3 className="text-sm font-semibold">
-                  Vendas por loja{" "}
+                  Valor pago por loja{" "}
                   <span className="font-normal text-muted-foreground">
                     ({vrByUnit.length})
                   </span>
                 </h3>
                 <span className="text-[10px] text-muted-foreground">
-                  clique pra ver a loja
+                  total pago pelo cliente · não é o faturamento
                 </span>
               </div>
               <div className="divide-y">
