@@ -287,18 +287,33 @@ export default async function Home({
     },
   ]
 
-  if (hasAvaliacoesData) {
-    const negativasPct =
-      ((networkAvaliacoes.distribucao[1] + networkAvaliacoes.distribucao[2]) /
-        networkAvaliacoes.total) *
-      100
+  // Nota Média da rede = média ponderada (por nº de avaliações) das 3
+  // plataformas com dado. Antes era só iFood, escondendo 99 e Keeta.
+  let avalTotal = 0
+  let avalSomaNotas = 0
+  let avalNegativas = 0
+  const avalPlatforms: PlatformId[] = []
+  for (const [plat, a, has] of [
+    ["ifood", networkAvaliacoes, hasAvaliacoesData],
+    ["99food", networkAvaliacoes99, hasAvaliacoes99Data],
+    ["keeta", networkAvaliacoesKeeta, hasAvaliacoesKeetaData],
+  ] as const) {
+    if (!has || a.total <= 0) continue
+    avalTotal += a.total
+    avalSomaNotas += a.notaMedia * a.total
+    avalNegativas += a.distribucao[1] + a.distribucao[2]
+    avalPlatforms.push(plat)
+  }
+  if (avalTotal > 0) {
+    const avalNotaMedia = avalSomaNotas / avalTotal
+    const negativasPct = (avalNegativas / avalTotal) * 100
     kpis.push({
       label: "Nota Média",
-      value: `${networkAvaliacoes.notaMedia.toFixed(2)} ★`,
-      trend: `${networkAvaliacoes.total} avaliações · ${negativasPct.toFixed(1)}% negativas`,
-      tone: networkAvaliacoes.notaMedia >= 4.5 ? "positive" : "neutral",
+      value: `${avalNotaMedia.toFixed(2)} ★`,
+      trend: `${avalTotal} avaliações · ${negativasPct.toFixed(1)}% negativas`,
+      tone: avalNotaMedia >= 4.5 ? "positive" : "neutral",
       icon: Star,
-      platforms: ["ifood"],
+      platforms: avalPlatforms,
     })
   }
 

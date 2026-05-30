@@ -31,10 +31,14 @@ import {
   getFinanceiroResumoForMonth,
 } from "@/lib/data/ifood-imported"
 import {
+  getNinefoodAvaliacoesResumoForMonth,
   getNinefoodResumoForMonth,
   ninefoodHasAnyDataForMonth,
 } from "@/lib/data/ninefood-imported"
-import { getKeetaResumoForMonth } from "@/lib/data/keeta-imported"
+import {
+  getKeetaAvaliacoesResumoForMonth,
+  getKeetaResumoForMonth,
+} from "@/lib/data/keeta-imported"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 import { parsePeriodParam } from "@/lib/period"
@@ -72,6 +76,8 @@ export default async function UnidadeDetalhePage({
     keeta,
     nine99HasAny,
     avalResumo,
+    avalNine,
+    avalKeeta,
     availablePeriods,
   ] = await Promise.all([
     getUnitPlatforms(unit.id),
@@ -80,8 +86,26 @@ export default async function UnidadeDetalhePage({
     getKeetaResumoForMonth(unit.id, year, month),
     ninefoodHasAnyDataForMonth(unit.id, year, month),
     getAvaliacoesResumoForMonth(unit.id, year, month),
+    getNinefoodAvaliacoesResumoForMonth(unit.id, year, month),
+    getKeetaAvaliacoesResumoForMonth(unit.id, year, month),
     getAvailablePeriods(),
   ])
+
+  // Nota média da loja = média ponderada (por nº de avaliações) das 3
+  // plataformas com dado — antes o Hero mostrava só iFood.
+  const notaParts: Array<{ plat: string; total: number; nota: number }> = []
+  if (avalResumo.total > 0)
+    notaParts.push({ plat: "iFood", total: avalResumo.total, nota: avalResumo.notaMedia })
+  if (avalNine.total > 0)
+    notaParts.push({ plat: "99 Food", total: avalNine.total, nota: avalNine.notaMedia })
+  if (avalKeeta.total > 0)
+    notaParts.push({ plat: "Keeta", total: avalKeeta.total, nota: avalKeeta.notaMedia })
+  const notasTotal = notaParts.reduce((acc, p) => acc + p.total, 0)
+  const notaMediaMerged =
+    notasTotal > 0
+      ? notaParts.reduce((acc, p) => acc + p.nota * p.total, 0) / notasTotal
+      : 0
+  const notaFonte = notaParts.map((p) => p.plat).join(" + ")
 
   // m = monthly mesclado: soma plataformas importadas (iFood + 99 + Keeta)
   const m = mergeMonthly(unit.monthly, fin, nine, keeta)
@@ -173,8 +197,9 @@ export default async function UnidadeDetalhePage({
           )}
           <HeroKpis
             monthly={m}
-            notaMedia={avalResumo.notaMedia}
-            notasCount={avalResumo.total}
+            notaMedia={notaMediaMerged}
+            notasCount={notasTotal}
+            notaFonte={notaFonte}
           />
           <DetailTabs
             unit={unit}
@@ -207,10 +232,12 @@ function HeroKpis({
   monthly: m,
   notaMedia,
   notasCount,
+  notaFonte,
 }: {
   monthly: UnitMonthly
   notaMedia: number
   notasCount: number
+  notaFonte: string
 }) {
   const heroes = [
     {
@@ -235,9 +262,12 @@ function HeroKpis({
       icon: TrendingUp,
     },
     {
-      label: "Nota Média (iFood)",
+      label: "Nota Média",
       value: notaMedia > 0 ? `${notaMedia.toFixed(2)} ★` : "—",
-      trend: notasCount > 0 ? `${notasCount} avaliações` : "Sem avaliações",
+      trend:
+        notasCount > 0
+          ? `${notasCount} avaliações · ${notaFonte}`
+          : "Sem avaliações",
       tone: "neutral" as const,
       icon: Star,
     },

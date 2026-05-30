@@ -54,11 +54,14 @@ export async function CustosTab({
   const subtotalCustos =
     monthly.custoProdutosCozina + (monthly.custoProdutosLoja ?? 0)
 
-  // Resultado
-  // Líquido: prioriza o do Financeiro (mais preciso)
-  const totalLiquido = useImported ? fin.liquido : monthly.totalLiquido
+  // Resultado do mês = TODAS as plataformas (iFood + 99 + Keeta), pra bater
+  // com o Hero/DRE da loja. Antes usava só fin.liquido (iFood), o que fazia
+  // a margem divergir do topo da página numa loja multi-plataforma.
+  // A "Taxas iFood" acima segue sendo o detalhe específico do iFood.
+  const faturamentoBruto = monthly.faturamentoBruto
+  const totalLiquido = monthly.totalLiquido
+  const totalTaxasPlataformas = Math.max(0, faturamentoBruto - totalLiquido)
   const margemLiquida = totalLiquido - subtotalCustos
-  const faturamentoBruto = useImported ? fin.bruto : monthly.faturamentoBruto
   const margemLucroPct =
     faturamentoBruto > 0 ? (margemLiquida / faturamentoBruto) * 100 : 0
 
@@ -133,13 +136,13 @@ export async function CustosTab({
 
       <Card title="Resultado do mês" className="lg:col-span-2">
         <Row
-          label={`Faturamento Bruto ${useImported ? "(relatório)" : "(manual)"}`}
+          label="Faturamento Bruto (todas plataformas)"
           value={fmtBRL(faturamentoBruto)}
           muted
         />
         <Row
-          label="(−) Total taxas iFood"
-          value={`− ${fmtBRL(subtotalTaxas)}`}
+          label="(−) Taxas das plataformas"
+          value={`− ${fmtBRL(totalTaxasPlataformas)}`}
           muted
         />
         <Row

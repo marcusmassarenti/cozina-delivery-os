@@ -66,9 +66,9 @@ export default async function RelatorioDiarioPage({
   const metricLabel =
     METRIC_OPTIONS.find((m) => m.id === metric)?.label ?? "Faturamento Bruto"
 
-  // Plataformas ativas (pros logos nos cabeçalhos). "todas" = iFood + 99.
+  // Plataformas ativas (pros logos nos cabeçalhos). "todas" = as 3.
   const activePlatforms: PlatformId[] =
-    platform === "todas" ? ["ifood", "99food"] : [platform]
+    platform === "todas" ? ["ifood", "99food", "keeta"] : [platform]
 
   // ─── Helpers de valor/format conforme a métrica ──────────────────
   const fmt = (v: number) =>
