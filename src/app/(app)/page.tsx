@@ -229,7 +229,6 @@ export default async function Home({
     {
       label: "Pedidos Totais",
       value: fmtNum(network.pedidos),
-      trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: CalendarDays,
       platforms: finPlatforms,
@@ -248,7 +247,6 @@ export default async function Home({
     {
       label: "Média Pedidos/Dia",
       value: fmtNum(network.mediaDia),
-      trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: CalendarDays,
       platforms: finPlatforms,
@@ -256,7 +254,6 @@ export default async function Home({
     {
       label: "Ticket Médio",
       value: fmtBRL(network.mediaTicket || 0),
-      trend: "+5,2% vs mês ant.",
       tone: "positive",
       icon: Receipt,
       platforms: finPlatforms,
@@ -264,7 +261,6 @@ export default async function Home({
     {
       label: "Total Bruto",
       value: fmtBRLShort(network.faturamentoBruto),
-      trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
@@ -272,7 +268,6 @@ export default async function Home({
     {
       label: "Total Líquido",
       value: fmtBRLShort(network.faturamentoLiquido),
-      trend: "+100,0% vs mês ant.",
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,

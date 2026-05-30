@@ -332,6 +332,12 @@ export async function AvaliacoesNetworkDashboard({
           )}
         </div>
       </div>
+      {!active && (
+        <p className="-mt-2 text-[11px] text-muted-foreground">
+          As tags vêm de iFood + 99 Food. O Keeta não classifica avaliações por
+          tags.
+        </p>
+      )}
 
       {/* Ranking por unidade — clicável */}
       <div className="rounded-xl border bg-card overflow-hidden">

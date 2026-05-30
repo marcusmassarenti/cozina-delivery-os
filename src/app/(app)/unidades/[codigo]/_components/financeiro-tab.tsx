@@ -331,6 +331,78 @@ export async function FinanceiroTab({
           </p>
         </div>
       )}
+
+      {/* Operação do mês — do relatório de pedidos iFood (mix, turnos, etc.) */}
+      {pagamento.hasData && pagamento.totalPedidos > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border bg-card p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <CircleDollarSign className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Mix de pagamento</h3>
+            </div>
+            {pagamento.mix.map((mx) => {
+              const pct =
+                pagamento.totalValor > 0
+                  ? (mx.valor / pagamento.totalValor) * 100
+                  : 0
+              return (
+                <MiniRow
+                  key={mx.grupo}
+                  label={mx.grupo}
+                  value={`${fmtBRL(mx.valor)} · ${pct.toFixed(0)}%`}
+                />
+              )
+            })}
+          </div>
+
+          <div className="rounded-xl border bg-card p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Megaphone className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Promoções (quem bancou)</h3>
+            </div>
+            <MiniRow label="iFood" value={fmtBRL(pagamento.incentivoIfood)} />
+            <MiniRow label="Loja" value={fmtBRL(pagamento.incentivoLoja)} />
+            <MiniRow label="Rede" value={fmtBRL(pagamento.incentivoRede)} />
+          </div>
+
+          <div className="rounded-xl border bg-card p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Receipt className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Por turno</h3>
+            </div>
+            {pagamento.porTurno.map((tn) => (
+              <MiniRow
+                key={tn.chave}
+                label={tn.chave}
+                value={`${fmtNum(tn.pedidos)} ped`}
+              />
+            ))}
+          </div>
+
+          <div className="rounded-xl border bg-card p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Truck className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Logística de entrega</h3>
+            </div>
+            {pagamento.porEntrega.map((en) => (
+              <MiniRow
+                key={en.chave}
+                label={en.chave}
+                value={`${fmtNum(en.pedidos)} ped`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MiniRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-1">
+      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-xs font-medium tabular-nums">{value}</span>
     </div>
   )
 }
