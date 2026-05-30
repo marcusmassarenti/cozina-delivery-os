@@ -5,7 +5,6 @@ import {
   BookOpen,
   Calendar,
   ChevronDown,
-  FileSpreadsheet,
   Receipt,
   Star,
   Ticket,
@@ -24,10 +23,11 @@ type GuideEntry = {
   title: string
   badge: string
   badgeTone: "amber" | "blue" | "emerald"
+  /** "1 por loja" | "1 da rede" — o ponto de confusão nº1 do time */
+  scope: string
   path: string[]
-  cadence: string
-  download: string
-  feeds: string[]
+  steps: string
+  feeds: string
 }
 
 const IFOOD_ENTRIES: GuideEntry[] = [
@@ -36,167 +36,115 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     title: "Cardápio",
     badge: "Diário ou Mensal",
     badgeTone: "blue",
-    path: ["iFood Gestor de Pedidos", "Operação", "Cardápio"],
-    cadence:
-      "Diário: 1 arquivo por dia, com período = 1 dia (ex.: 27/05 - 27/05). Mensal: 1 arquivo da rede inteira com período do mês (ex.: 01/05 - 31/05).",
-    download:
-      "Após escolher período e loja, clique em \"Exportar dados\" → seleciona XLSX. Sobe direto em /importacao.",
-    feeds: [
-      "Funil de conversão (Visitas → Pedidos)",
-      "Top itens vendidos",
-      "Top complementos mais escolhidos",
-    ],
+    scope: "1 por dia ou rede",
+    path: ["iFood Gestor", "Operação", "Cardápio"],
+    steps:
+      'Escolhe período e loja → "Exportar dados" → XLSX. Diário = 1 dia; mensal = rede inteira.',
+    feeds: "Funil de conversão, top itens, top complementos.",
   },
   {
     icon: Receipt,
-    title: "Conciliação / Repasse Financeiro",
+    title: "Conciliação / Repasse",
     badge: "Mensal",
     badgeTone: "amber",
+    scope: "1 por loja",
     path: ["iFood Gestor", "Financeiro", "Conciliação"],
-    cadence:
-      "1 arquivo por loja, no início do mês seguinte (depois que o iFood fechou a apuração). Cada arquivo cobre 1 competência (ex.: 2026-05).",
-    download:
-      "Filtra a loja → escolhe a competência → \"Baixar relatório completo\" (XLSX). Repete pra cada loja da rede.",
-    feeds: [
-      "Faturamento bruto, líquido e taxa de repasse no Dashboard",
-      "Quebra de taxas (comissão, entrega, transação)",
-      "Cancelamentos com motivo + perda financeira",
-      "Auto-preenchimento da aba Mensal (taxas iFood)",
-    ],
+    steps:
+      'Filtra loja → competência → "Baixar relatório completo" (XLSX). Repete por loja.',
+    feeds: "Faturamento bruto/líquido, quebra de taxas, cancelamentos.",
   },
   {
     icon: Star,
-    title: "Avaliações (comentários)",
+    title: "Avaliações",
     badge: "Semanal ou Mensal",
     badgeTone: "emerald",
+    scope: "1 da rede",
     path: ["iFood Gestor", "Operação", "Avaliações"],
-    cadence:
-      "1 arquivo da rede inteira por período (semana ou mês). Já vem com todas as lojas misturadas — sistema separa automaticamente.",
-    download:
-      "Em \"Comentários e avaliações\" → escolhe período → \"Exportar\" (XLSX). 1 arquivo cobre todas as 10 lojas.",
-    feeds: [
-      "Nota média e distribuição de estrelas",
-      "Top elogios e top reclamações (tags)",
-      "Comentários reais dos clientes (com link pro pedido)",
-    ],
+    steps:
+      '"Comentários e avaliações" → período → "Exportar" (XLSX). 1 arquivo cobre as 10 lojas.',
+    feeds: "Nota média, top elogios/reclamações, comentários.",
   },
   {
     icon: Ticket,
-    title: "Pedidos (formas de pagamento / VR)",
+    title: "Pedidos (VR)",
     badge: "Mensal",
     badgeTone: "amber",
+    scope: "1 por loja",
     path: ["iFood Gestor", "Financeiro", "Pedidos"],
-    cadence:
-      "1 arquivo por loja, escolhendo o período (ex.: 01/05 - 31/05). Cada pedido vem com a forma de pagamento e o valor.",
-    download:
-      "Em \"Relatório de pedidos\" → escolhe a loja e o período → \"Exportar\" (XLSX). Repete pra cada loja.",
-    feeds: [
-      "Vale-Refeição por bandeira (Sodexo/Alelo/Ticket/VR/iFood) — tela Pedidos",
-      "Mix de formas de pagamento (Crédito/PIX/Carteira/VR)",
-      "VR consolidado no Resultado e no detalhe da loja",
-    ],
+    steps:
+      '"Relatório de pedidos" → loja + período → "Exportar" (XLSX). Repete por loja.',
+    feeds: "Vale-Refeição por bandeira, mix de pagamento, VR no Resultado.",
   },
 ]
 
 const NINEFOOD_ENTRIES: GuideEntry[] = [
   {
     icon: Receipt,
-    title: "Dados da loja (Financeiro)",
+    title: "Dados da loja",
     badge: "Diário (agregado)",
     badgeTone: "amber",
+    scope: "1 da rede",
     path: ["99 Food Merchant", "Baixar dados", "Dados da loja"],
-    cadence:
-      "1 arquivo por período. Cada linha é 1 loja × 1 dia (agregado). Pode marcar várias lojas e período largo — o sistema separa por unidade automaticamente.",
-    download:
-      "Em \"Configuração do relatório\" → marca \"Dados da loja\" → escolhe lojas + datas + métricas (Total de vendas, Receita total de vendas, Receita total, Despesas de comissão, Taxa de canal de pagamento, Avaliação da loja, TA, Cancelamentos, Tempo médio de preparo).",
-    feeds: [
-      "Faturamento bruto e líquido no Dashboard",
-      "Taxa de comissão e taxa de canal pagamento",
-      "Avaliação média, Taxa de Aceitação e tempo de preparo",
-    ],
+    steps:
+      "Marca lojas + datas + métricas → exporta. O sistema separa por loja.",
+    feeds: "Faturamento, comissão, avaliação, taxa de aceitação, preparo.",
   },
   {
     icon: UtensilsCrossed,
-    title: "Dados do item (Cardápio)",
+    title: "Dados do item",
     badge: "Diário",
     badgeTone: "blue",
+    scope: "1 da rede",
     path: ["99 Food Merchant", "Baixar dados", "Dados do item"],
-    cadence:
-      "1 arquivo por período. 1 linha = 1 loja × 1 dia × 1 item. Mostra receita e qtd vendida por produto.",
-    download:
-      "Marca \"Dados do item\" → lojas + datas. Métricas vêm padrão (Receita do item, Volume, Média de preço, Alcance, Conversão).",
-    feeds: [
-      "Top itens vendidos por loja",
-      "Funil de adição ao carrinho por produto",
-      "Comparação de preço médio do item entre lojas",
-    ],
+    steps: 'Marca "Dados do item" → lojas + datas. As métricas vêm padrão.',
+    feeds: "Top itens, funil de carrinho, preço médio por loja.",
   },
   {
     icon: Star,
-    title: "Dados do pedido (Avaliações)",
+    title: "Dados do pedido",
     badge: "Por período",
     badgeTone: "emerald",
+    scope: "1 da rede",
     path: ["99 Food Merchant", "Baixar dados", "Dados do pedido"],
-    cadence:
-      "1 arquivo por período. 1 linha = 1 pedido. Inclui avaliações com comentário + tags + dados do cliente (novo vs recorrente).",
-    download:
-      "Marca \"Dados do pedido\" → lojas + período. Marca \"Nível de avaliação do cliente\", \"Conteúdo de avaliação\", \"Tag de avaliação\", \"Quantidade de pedidos anteriores do cliente\".",
-    feeds: [
-      "Distribuição de notas e nota média",
-      "Top elogios e top reclamações (tags)",
-      "Comentários reais dos clientes",
-      "% de clientes novos vs recorrentes",
-    ],
+    steps:
+      'Marca "Dados do pedido" → lojas + período. Inclui avaliação e cliente novo/recorrente.',
+    feeds: "Notas, top tags, comentários, % clientes novos.",
   },
 ]
 
 const KEETA_ENTRIES: GuideEntry[] = [
   {
     icon: Receipt,
-    title: "Dados do restaurante (Loja diária)",
+    title: "Dados do restaurante",
     badge: "Diário (agregado)",
     badgeTone: "amber",
-    path: ["Keeta Merchant", "Relatórios", "Configuração de dados"],
-    cadence:
-      "1 arquivo por período. Cada linha é 1 loja × 1 dia (agregado): vendas, pedidos, cancelados, funil e tempo de preparo.",
-    download:
-      'Aba "Configuração de dados" → chip "Dados do restaurante" → "Selecionar todos os restaurantes" → escolhe o período → "Selecionar todos os dados". Depois vai na aba "Downloads" e baixa o XLSX gerado.',
-    feeds: [
-      "Faturamento bruto e pedidos no Dashboard e Relatório Diário",
-      "Pedidos cancelados por dia",
-      "Funil (visitantes → carrinho → conversão)",
-    ],
+    scope: "1 da rede",
+    path: ["Keeta Merchant", "Relatórios", "Config. de dados"],
+    steps:
+      'Chip "Dados do restaurante" → todos os restaurantes → período → "Selecionar todos os dados". Baixa na aba "Downloads".',
+    feeds: "Faturamento, pedidos, cancelados, funil, preparo.",
   },
   {
     icon: Star,
-    title: "Dados do pedido (Pedidos)",
+    title: "Dados do pedido",
     badge: "Por período",
     badgeTone: "emerald",
-    path: ["Keeta Merchant", "Relatórios", "Configuração de dados"],
-    cadence:
-      "1 arquivo por período. 1 linha = 1 pedido. Traz o financeiro (ganhos líquidos, comissão, taxa de entrega), o cancelamento e a avaliação juntos.",
-    download:
-      'Chip "Dados do pedido" → "Selecionar todos os restaurantes" → período → "Selecionar todos os dados" → baixa em "Downloads".',
-    feeds: [
-      "Faturamento líquido (ganhos líquidos)",
-      "Motivos de cancelamento",
-      "Notas e comentários dos clientes",
-    ],
+    scope: "1 da rede",
+    path: ["Keeta Merchant", "Relatórios", "Config. de dados"],
+    steps:
+      'Chip "Dados do pedido" → todos → período → todos os dados → "Downloads".',
+    feeds: "Faturamento líquido, cancelamentos, notas e comentários.",
   },
   {
     icon: UtensilsCrossed,
-    title: "Dados do item (Itens)",
+    title: "Dados do item",
     badge: "Diário",
     badgeTone: "blue",
-    path: ["Keeta Merchant", "Relatórios", "Configuração de dados"],
-    cadence:
-      "1 arquivo por período. 1 linha = 1 loja × 1 dia × 1 item. Qtd vendida, preço médio e alcance por produto.",
-    download:
-      'Chip "Dados do item" → "Selecionar todos os restaurantes" → período → "Selecionar todos os dados" → baixa em "Downloads".',
-    feeds: [
-      "Top produtos vendidos por loja",
-      "Preço médio e alcance por item",
-    ],
+    scope: "1 da rede",
+    path: ["Keeta Merchant", "Relatórios", "Config. de dados"],
+    steps:
+      'Chip "Dados do item" → todos → período → todos os dados → "Downloads".',
+    feeds: "Top produtos, preço médio, alcance por item.",
   },
 ]
 
@@ -250,10 +198,9 @@ export function DownloadGuide() {
 
         <div className="border-t bg-muted/30 px-5 py-3">
           <p className="text-[11px] text-muted-foreground">
-            <strong className="text-foreground">Dica:</strong> Pode arrastar
-            vários XLSX (de qualquer plataforma) ao mesmo tempo na zona de
-            upload abaixo. O sistema identifica plataforma, tipo de relatório
-            e loja automaticamente — basta esperar processar.
+            <strong className="text-foreground">Dica:</strong> arrasta vários
+            XLSX (de qualquer plataforma) de uma vez na zona de upload — o
+            sistema identifica plataforma, relatório e loja sozinho.
           </p>
         </div>
       </CollapsibleContent>
@@ -294,10 +241,13 @@ function PlatformSection({
 
 function EntryCard({ entry: e }: { entry: GuideEntry }) {
   return (
-    <div className="flex flex-col gap-2.5 rounded-lg border bg-background p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex size-8 items-center justify-center rounded-md bg-muted">
-          <e.icon className="size-4 text-foreground" />
+    <div className="flex flex-col gap-2 rounded-lg border bg-background p-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-md bg-muted">
+            <e.icon className="size-3.5 text-foreground" />
+          </div>
+          <p className="text-sm font-bold">{e.title}</p>
         </div>
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${toneClass[e.badgeTone]}`}
@@ -307,41 +257,22 @@ function EntryCard({ entry: e }: { entry: GuideEntry }) {
         </span>
       </div>
 
-      <div>
-        <p className="text-sm font-bold">{e.title}</p>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground">Onde achar: </span>
-          {e.path.join(" → ")}
-        </p>
-      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        <span className="mr-1 rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+          {e.scope}
+        </span>
+        {e.path.join(" → ")}
+      </p>
 
-      <div className="space-y-2 text-[11px] leading-relaxed">
-        <div>
-          <p className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
-            Cadência
-          </p>
-          <p className="mt-0.5">{e.cadence}</p>
-        </div>
-        <div>
-          <p className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
-            Como baixar
-          </p>
-          <p className="mt-0.5">{e.download}</p>
-        </div>
-        <div>
-          <p className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
-            Alimenta no sistema
-          </p>
-          <ul className="mt-1 space-y-0.5">
-            {e.feeds.map((f) => (
-              <li key={f} className="flex items-start gap-1.5">
-                <FileSpreadsheet className="mt-0.5 size-2.5 shrink-0 text-emerald-600" />
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      <p className="text-[11px] leading-relaxed">
+        <span className="font-semibold">Baixar: </span>
+        {e.steps}
+      </p>
+
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        <span className="font-medium text-foreground/80">Alimenta: </span>
+        {e.feeds}
+      </p>
     </div>
   )
 }
