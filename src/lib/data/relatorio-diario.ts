@@ -10,8 +10,9 @@
  *    cancelamentos = pedidos únicos de Cancelamento Total/Parcial. Agrupado
  *    por dia de `data_fato_gerador` (convertido pro fuso BR).
  *  - 99 Food: ninefood_daily_loja (já agregado por dia).
+ *  - Keeta: keeta_daily_loja (vendas_itens / total_pedidos / cancelados).
  *
- * Plataforma "todas" soma iFood + 99 por (loja, dia).
+ * Plataforma "todas" soma iFood + 99 + Keeta por (loja, dia).
  */
 
 import "server-only"
@@ -214,6 +215,7 @@ async function loadIfood(
       .eq("ref_month", month)
       .eq("fato_gerador", "Venda")
       .eq("descricao_lancamento", "Entrada Financeira")
+      .order("id")
       .range(from, to),
   )
 
@@ -250,6 +252,7 @@ async function loadIfood(
       .eq("ref_year", year)
       .eq("ref_month", month)
       .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
+      .order("id")
       .range(from, to),
   )
 
@@ -295,6 +298,7 @@ async function loadNinefood(
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(from, to),
   )
 
@@ -332,6 +336,7 @@ async function loadKeeta(
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(from, to),
   )
 

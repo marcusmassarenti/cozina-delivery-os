@@ -81,6 +81,7 @@ export async function getDeliveryFeeByUnits(
         .eq("ref_year", year)
         .eq("ref_month", month)
         .eq("descricao_lancamento", "Taxa entrega iFood")
+        .order("id")
         .range(a, b),
   )
   for (const r of ifood) {
@@ -99,6 +100,7 @@ export async function getDeliveryFeeByUnits(
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b),
   )
   for (const r of nine) {
@@ -118,6 +120,7 @@ export async function getDeliveryFeeByUnits(
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b),
   )
   for (const r of keeta) {

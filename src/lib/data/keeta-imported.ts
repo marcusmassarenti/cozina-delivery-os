@@ -89,6 +89,7 @@ export async function getKeetaResumoByUnits(
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b),
   )
   for (const r of loja) {
@@ -111,6 +112,7 @@ export async function getKeetaResumoByUnits(
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b),
   )
   const brutoFromPedidos = new Map<string, number>()
@@ -295,6 +297,7 @@ export async function getNetworkKeetaTopItemsForMonth(
       .select("nome_item, qtd_vendida, preco_medio")
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b)
     if (filterUnitIds && filterUnitIds.length > 0)
       q = q.in("unit_id", filterUnitIds)
@@ -349,6 +352,7 @@ export async function getNetworkKeetaCancelamentosForMonth(
       .not("motivo_cancelamento", "is", null)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b)
     if (filterUnitIds && filterUnitIds.length > 0)
       q = q.in("unit_id", filterUnitIds)
@@ -528,6 +532,7 @@ export async function getKeetaItensRankingForMonth(
       .eq("unit_id", unitId)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b),
   )
   if (rows.length === 0) return []
@@ -634,6 +639,7 @@ export async function getKeetaFinanceiroForMonth(
         .eq("unit_id", unitId)
         .eq("ref_year", year)
         .eq("ref_month", month)
+        .order("id")
         .range(a, b),
     ),
     pageAll<{
@@ -646,6 +652,7 @@ export async function getKeetaFinanceiroForMonth(
         .eq("unit_id", unitId)
         .eq("ref_year", year)
         .eq("ref_month", month)
+        .order("id")
         .range(a, b),
     ),
   ])

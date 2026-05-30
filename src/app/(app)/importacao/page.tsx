@@ -40,6 +40,7 @@ async function getRecentImports(page: number): Promise<{
       { count: "exact" },
     )
     .order("imported_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(offset, offset + HISTORICO_PAGE_SIZE - 1)
 
   if (!imports || imports.length === 0) {

@@ -256,6 +256,7 @@ export async function getPagamentoResumoForMonth(
       .eq("unit_id", unitId)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b),
   )
   return aggregate(rows)
@@ -274,6 +275,7 @@ export async function getNetworkPagamentoResumo(
       .select(SELECT_COLS)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b)
     if (filterUnitIds && filterUnitIds.length > 0)
       q = q.in("unit_id", filterUnitIds)
@@ -305,6 +307,7 @@ export async function getVrByUnits(
       .select(SELECT_COLS)
       .eq("ref_year", year)
       .eq("ref_month", month)
+      .order("id")
       .range(a, b)
     if (filterUnitIds && filterUnitIds.length > 0)
       q = q.in("unit_id", filterUnitIds)
