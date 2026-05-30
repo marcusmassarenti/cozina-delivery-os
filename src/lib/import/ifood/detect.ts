@@ -65,12 +65,78 @@ export function openWorkbook(buf: ArrayBuffer): {
 } {
   let workbook: XLSX.WorkBook
   try {
-    workbook = XLSX.read(buf, { type: "array", cellDates: true })
+    workbook = isBinarySpreadsheet(buf)
+      ? XLSX.read(buf, { type: "array", cellDates: true })
+      : readCsvWorkbook(buf)
   } catch (e) {
     throw new Error(
-      `Não foi possível abrir o arquivo como XLSX: ${e instanceof Error ? e.message : "erro desconhecido"}`,
+      `Não foi possível abrir o arquivo: ${e instanceof Error ? e.message : "erro desconhecido"}`,
     )
   }
   const reportType = detectIfoodReportType(workbook)
   return { workbook, reportType }
+}
+
+/** XLSX começa com "PK" (ZIP); .xls antigo com 0xD0CF. Senão, é texto/CSV. */
+function isBinarySpreadsheet(buf: ArrayBuffer): boolean {
+  const b = new Uint8Array(buf)
+  if (b.length < 2) return false
+  const pk = b[0] === 0x50 && b[1] === 0x4b // PK → xlsx
+  const ole = b[0] === 0xd0 && b[1] === 0xcf // .xls
+  return pk || ole
+}
+
+/**
+ * Lê o "Relatório de pedidos" do iFood quando vem em CSV.
+ *
+ * Por que não usar XLSX.read no CSV: o SheetJS coage o decimal BR de forma
+ * INCONSISTENTE — em algumas linhas mantém "28,89" string, em outras vira
+ * 2889 (tira a vírgula como se fosse milhar), inflando o valor ~100×.
+ * Aqui montamos a planilha com TODAS as células como string (o toNumberOrNull
+ * dos parsers converte "28,89" → 28.89). Decodifica latin1/Windows-1252 pra
+ * o "Ç" de "TAXA DE SERVIÇO" não virar mojibake e a coluna casar.
+ */
+function readCsvWorkbook(buf: ArrayBuffer): XLSX.WorkBook {
+  const text = new TextDecoder("windows-1252").decode(buf)
+  const lines = text.split(/\r?\n/).filter((l) => l.length > 0)
+  if (lines.length === 0) throw new Error("CSV vazio.")
+  // Delimitador: ; (padrão BR do iFood) ou , — usa o que mais aparece no header.
+  const header = lines[0]
+  const delim = header.split(";").length >= header.split(",").length ? ";" : ","
+  const aoa = lines.map((l) => splitCsvLine(l, delim))
+  const sheet = XLSX.utils.aoa_to_sheet(aoa) // valores string → células de texto
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, sheet, "Página 1")
+  return wb
+}
+
+/** Split de uma linha CSV respeitando aspas duplas e "" escapado. */
+function splitCsvLine(line: string, delim: string): string[] {
+  const out: string[] = []
+  let cur = ""
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        cur += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === delim) {
+      out.push(cur)
+      cur = ""
+    } else {
+      cur += ch
+    }
+  }
+  out.push(cur)
+  return out
 }
