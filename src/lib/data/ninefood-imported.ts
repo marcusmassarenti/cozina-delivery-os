@@ -900,7 +900,7 @@ export async function getNetworkNinefoodTopItemsForMonth(
 export type NinefoodCancelamentoMotivo = {
   motivo: string
   pedidos: number
-  /** No 99 não temos perda direta — somamos o `valor_total_pedido` quando vier */
+  /** No 99 não temos perda direta — somamos o `receita_vendas` quando vier */
   perdaFinanceira: number
 }
 
@@ -920,12 +920,12 @@ export async function getNetworkNinefoodCancelamentosForMonth(
   const data = await pageAll<{
     motivos_cancelamento_comerciante: string | null
     parte_responsavel_cancelamento: string | null
-    valor_total_pedido: number | string | null
+    receita_vendas: number | string | null
   }>((from, to) => {
     let q = admin
       .from("ninefood_pedidos")
       .select(
-        "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, valor_total_pedido",
+        "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, receita_vendas",
       )
       .not("horario_cancelamento", "is", null)
       .gte("horario_pedido", startIso)
@@ -951,7 +951,7 @@ export async function getNetworkNinefoodCancelamentosForMonth(
       perdaFinanceira: 0,
     }
     cur.pedidos += 1
-    cur.perdaFinanceira += Number(r.valor_total_pedido ?? 0)
+    cur.perdaFinanceira += Number(r.receita_vendas ?? 0)
     acc.set(key, cur)
   }
   return Array.from(acc.values())
