@@ -117,13 +117,7 @@ export default async function ImportacaoPage({
 
       <DownloadGuide />
 
-      <Suspense
-        fallback={
-          <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">
-            Carregando checklist do mês…
-          </div>
-        }
-      >
+      <Suspense fallback={<ChecklistSkeleton />}>
         <ImportChecklist />
       </Suspense>
 
@@ -307,6 +301,35 @@ function HistoricoPaginacao({
             <ChevronRight className="size-3.5" />
           </span>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** Esqueleto do checklist enquanto o Server Component carrega (Suspense). */
+function ChecklistSkeleton() {
+  return (
+    <div className="rounded-xl border bg-card">
+      <div className="flex items-center gap-2.5 border-b px-5 py-3">
+        <div className="size-8 animate-pulse rounded-md bg-muted" />
+        <div className="flex-1 space-y-1.5">
+          <div className="h-3.5 w-44 animate-pulse rounded bg-muted" />
+          <div className="h-2.5 w-60 animate-pulse rounded bg-muted" />
+        </div>
+        <div className="h-6 w-12 animate-pulse rounded-full bg-muted" />
+      </div>
+      <div className="grid gap-4 p-4 md:grid-cols-3">
+        {[0, 1, 2].map((c) => (
+          <div key={c} className="space-y-1.5">
+            <div className="mb-2 h-4 w-20 animate-pulse rounded bg-muted" />
+            {[0, 1, 2, 3].map((r) => (
+              <div
+                key={r}
+                className="h-9 animate-pulse rounded-lg border bg-muted/40"
+              />
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   )
