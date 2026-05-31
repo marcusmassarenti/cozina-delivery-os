@@ -12,12 +12,12 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 export function PedidosPlataformaSwitcher({
   current,
 }: {
-  current: "ifood" | "keeta"
+  current: "ifood" | "99food" | "keeta"
 }) {
   const router = useRouter()
   const sp = useSearchParams()
 
-  const go = (p: "ifood" | "keeta") => {
+  const go = (p: "ifood" | "99food" | "keeta") => {
     const params = new URLSearchParams(sp.toString())
     if (p === "ifood") params.delete("plataforma")
     else params.set("plataforma", p)
@@ -25,8 +25,9 @@ export function PedidosPlataformaSwitcher({
     router.push(qs ? `/pedidos?${qs}` : "/pedidos")
   }
 
-  const opts: { id: PlatformId & ("ifood" | "keeta"); label: string }[] = [
+  const opts: { id: PlatformId; label: string }[] = [
     { id: "ifood", label: "iFood" },
+    { id: "99food", label: "99 Food" },
     { id: "keeta", label: "Keeta" },
   ]
 
