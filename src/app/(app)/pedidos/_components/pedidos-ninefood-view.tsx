@@ -1,5 +1,6 @@
 import Link from "next/link"
 import {
+  Bike,
   ChevronRight,
   CreditCard,
   Receipt,
@@ -13,6 +14,12 @@ import type {
   NinefoodPedidoUnitRow,
 } from "@/lib/data/ninefood-pedidos"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
+
+/** Segundos → "X s" (curto) ou "Y,Z min" (a partir de 90s). */
+function fmtSeg(s: number): string {
+  if (s <= 0) return "—"
+  return s >= 90 ? `${(s / 60).toFixed(1)} min` : `${Math.round(s)} s`
+}
 
 /**
  * Corpo da tela de Pedidos quando a plataforma é 99 Food. O 99 não tem VR por
@@ -109,6 +116,13 @@ export function PedidosNinefoodView({
               tone="emerald"
             />
             <LinhaInfo label="Repasse" value={fmtPct(repassePct)} />
+            {r.precoOriginal > 0 && (
+              <LinhaInfo
+                label="Desconto médio (vs tabela)"
+                value={fmtPct(r.descontoPct)}
+                tone={r.descontoPct > 0 ? "rose" : undefined}
+              />
+            )}
             <LinhaInfo
               label="Promoção custeada pela loja"
               value={fmtBRL(r.promoLoja)}
@@ -116,7 +130,8 @@ export function PedidosNinefoodView({
             />
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            A promoção da loja é custo seu (oferta bancada pela unidade).
+            A promoção da loja é custo seu (oferta bancada pela unidade). Desconto
+            médio = quanto a venda fica abaixo do preço de tabela.
           </p>
         </div>
 
@@ -151,7 +166,7 @@ export function PedidosNinefoodView({
         </div>
       </div>
 
-      {/* Clientes + Pagamento + Qualidade */}
+      {/* Clientes + Pagamento + Método de entrega */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border bg-card p-5">
           <div className="mb-3 flex items-center gap-2">
@@ -190,6 +205,30 @@ export function PedidosNinefoodView({
         </div>
 
         <div className="rounded-xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Bike className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Método de entrega</h3>
+          </div>
+          {r.metodoEntrega.length === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">—</p>
+          ) : (
+            <div className="space-y-1.5">
+              {r.metodoEntrega.slice(0, 5).map((m) => (
+                <Barrinha
+                  key={m.label}
+                  label={m.label}
+                  pedidos={m.pedidos}
+                  total={r.totalPedidos}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Qualidade & tempos + Cancelamento */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border bg-card p-5">
           <h3 className="mb-3 text-sm font-semibold">Qualidade & tempos</h3>
           <div className="space-y-1.5">
             <LinhaInfo
@@ -201,12 +240,25 @@ export function PedidosNinefoodView({
               }
             />
             <LinhaInfo
+              label="Preparação atrasada"
+              value={fmtPct(r.preparacaoAtrasadaPct)}
+              tone={r.preparacaoAtrasadaPct > 10 ? "rose" : undefined}
+            />
+            <LinhaInfo
+              label="Tempo de aceitação"
+              value={fmtSeg(r.tempoAceitacaoMedioSeg)}
+            />
+            <LinhaInfo
               label="Tempo de preparo"
               value={
                 r.tempoPreparoMedioMin > 0
                   ? `${r.tempoPreparoMedioMin.toFixed(1)} min`
                   : "—"
               }
+            />
+            <LinhaInfo
+              label="Espera do entregador"
+              value={fmtSeg(r.tempoEsperaRetiradaMedioSeg)}
             />
             <LinhaInfo
               label="Duração da entrega"
@@ -217,6 +269,60 @@ export function PedidosNinefoodView({
               }
             />
           </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <XCircle className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Cancelamento</h3>
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              {fmtNum(r.cancelados)}
+              {r.totalPedidos > 0 &&
+                ` · ${fmtPct((r.cancelados / r.totalPedidos) * 100)}`}
+            </span>
+          </div>
+          {r.cancelados === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              Nenhum cancelamento no período
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {r.cancelPorResponsavel.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Por responsável
+                  </p>
+                  <div className="space-y-1.5">
+                    {r.cancelPorResponsavel.slice(0, 4).map((m) => (
+                      <Barrinha
+                        key={m.label}
+                        label={m.label}
+                        pedidos={m.pedidos}
+                        total={r.cancelados}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {r.cancelMotivos.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Principais motivos (comerciante)
+                  </p>
+                  <div className="space-y-1.5">
+                    {r.cancelMotivos.slice(0, 4).map((m) => (
+                      <Barrinha
+                        key={m.label}
+                        label={m.label}
+                        pedidos={m.pedidos}
+                        total={r.cancelados}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

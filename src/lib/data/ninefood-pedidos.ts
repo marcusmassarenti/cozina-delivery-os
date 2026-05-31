@@ -13,6 +13,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type FormaMix = { forma: string; pedidos: number }
+export type MixItem = { label: string; pedidos: number }
 
 export type NinefoodPedidoResumo = {
   totalPedidos: number
@@ -23,6 +24,7 @@ export type NinefoodPedidoResumo = {
   receitaRealLoja: number // líquido pra loja
   precoOriginal: number
   ticketMedio: number
+  descontoPct: number // 1 − receita/preço de tabela
   // Taxas / custos (positivos)
   promoLoja: number
   comissao: number
@@ -33,13 +35,19 @@ export type NinefoodPedidoResumo = {
   // Clientes
   clientesNovos: number
   clientesRecorrentes: number
-  // Qualidade
+  // Qualidade & operação
   notaMedia: number
   avaliados: number
   tempoPreparoMedioMin: number
   duracaoEntregaMediaMin: number
-  // Distribuição
+  tempoAceitacaoMedioSeg: number
+  tempoEsperaRetiradaMedioSeg: number
+  preparacaoAtrasadaPct: number
+  // Distribuições
   formaPagamento: FormaMix[]
+  metodoEntrega: MixItem[]
+  cancelPorResponsavel: MixItem[]
+  cancelMotivos: MixItem[]
   hasData: boolean
 }
 
@@ -52,6 +60,7 @@ function emptyResumo(): NinefoodPedidoResumo {
     receitaRealLoja: 0,
     precoOriginal: 0,
     ticketMedio: 0,
+    descontoPct: 0,
     promoLoja: 0,
     comissao: 0,
     taxaCanalPagamento: 0,
@@ -64,7 +73,13 @@ function emptyResumo(): NinefoodPedidoResumo {
     avaliados: 0,
     tempoPreparoMedioMin: 0,
     duracaoEntregaMediaMin: 0,
+    tempoAceitacaoMedioSeg: 0,
+    tempoEsperaRetiradaMedioSeg: 0,
+    preparacaoAtrasadaPct: 0,
     formaPagamento: [],
+    metodoEntrega: [],
+    cancelPorResponsavel: [],
+    cancelMotivos: [],
     hasData: false,
   }
 }
@@ -84,10 +99,16 @@ type Row = {
   duracao_entrega_seg: number | null
   forma_pagamento: string | null
   horario_cancelamento: string | null
+  metodo_entrega: string | null
+  parte_responsavel_cancelamento: string | null
+  motivos_cancelamento_comerciante: string | null
+  preparacao_atrasada: boolean | null
+  tempo_aceitacao_seg: number | null
+  tempo_espera_retirada_seg: number | null
 }
 
 const SELECT =
-  "receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, horario_cancelamento"
+  "receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg"
 
 const num = (v: number | string | null) => Math.abs(Number(v) || 0)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -121,14 +142,43 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   r.totalPedidos = rows.length
 
   const formas = new Map<string, number>()
+  const metodos = new Map<string, number>()
+  const cancResp = new Map<string, number>()
+  const cancMot = new Map<string, number>()
   let somaNotas = 0
   let somaPreparo = 0
   let nPreparo = 0
   let somaEntrega = 0
   let nEntrega = 0
+  let somaAceitacao = 0
+  let nAceitacao = 0
+  let somaEspera = 0
+  let nEspera = 0
+  let atrasados = 0
 
   for (const row of rows) {
-    if (row.horario_cancelamento) r.cancelados++
+    if (row.horario_cancelamento) {
+      r.cancelados++
+      const resp =
+        (row.parte_responsavel_cancelamento ?? "").trim() || "Não informado"
+      cancResp.set(resp, (cancResp.get(resp) ?? 0) + 1)
+      const mot = (row.motivos_cancelamento_comerciante ?? "").trim()
+      if (mot) cancMot.set(mot, (cancMot.get(mot) ?? 0) + 1)
+    }
+    if (row.preparacao_atrasada === true) atrasados++
+    if (row.tempo_aceitacao_seg != null && row.tempo_aceitacao_seg >= 0) {
+      somaAceitacao += row.tempo_aceitacao_seg
+      nAceitacao++
+    }
+    if (
+      row.tempo_espera_retirada_seg != null &&
+      row.tempo_espera_retirada_seg >= 0
+    ) {
+      somaEspera += row.tempo_espera_retirada_seg
+      nEspera++
+    }
+    const metodo = (row.metodo_entrega ?? "").trim() || "Outros"
+    metodos.set(metodo, (metodos.get(metodo) ?? 0) + 1)
 
     r.receitaVendas += Number(row.receita_vendas) || 0
     r.receitaRealLoja += Number(row.receita_real_loja) || 0
@@ -164,9 +214,15 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   r.taxasTotal =
     r.comissao + r.taxaCanalPagamento + r.custosLogisticos + r.custoFreteGratis
   r.ticketMedio = r.totalPedidos > 0 ? r.receitaVendas / r.totalPedidos : 0
+  r.descontoPct =
+    r.precoOriginal > 0 ? (1 - r.receitaVendas / r.precoOriginal) * 100 : 0
   r.notaMedia = r.avaliados > 0 ? somaNotas / r.avaliados : 0
   r.tempoPreparoMedioMin = nPreparo > 0 ? somaPreparo / nPreparo : 0
   r.duracaoEntregaMediaMin = nEntrega > 0 ? somaEntrega / nEntrega / 60 : 0
+  r.tempoAceitacaoMedioSeg = nAceitacao > 0 ? somaAceitacao / nAceitacao : 0
+  r.tempoEsperaRetiradaMedioSeg = nEspera > 0 ? somaEspera / nEspera : 0
+  r.preparacaoAtrasadaPct =
+    r.totalPedidos > 0 ? (atrasados / r.totalPedidos) * 100 : 0
 
   for (const k of [
     "receitaVendas",
@@ -185,10 +241,22 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   r.notaMedia = Math.round(r.notaMedia * 100) / 100
   r.tempoPreparoMedioMin = Math.round(r.tempoPreparoMedioMin * 10) / 10
   r.duracaoEntregaMediaMin = Math.round(r.duracaoEntregaMediaMin * 10) / 10
+  r.tempoAceitacaoMedioSeg = Math.round(r.tempoAceitacaoMedioSeg)
+  r.tempoEsperaRetiradaMedioSeg = Math.round(r.tempoEsperaRetiradaMedioSeg)
+  r.descontoPct = Math.round(r.descontoPct * 10) / 10
+  r.preparacaoAtrasadaPct = Math.round(r.preparacaoAtrasadaPct * 10) / 10
+
+  const toMix = (m: Map<string, number>) =>
+    Array.from(m.entries())
+      .map(([label, pedidos]) => ({ label, pedidos }))
+      .sort((a, b) => b.pedidos - a.pedidos)
 
   r.formaPagamento = Array.from(formas.entries())
     .map(([forma, pedidos]) => ({ forma, pedidos }))
     .sort((a, b) => b.pedidos - a.pedidos)
+  r.metodoEntrega = toMix(metodos)
+  r.cancelPorResponsavel = toMix(cancResp)
+  r.cancelMotivos = toMix(cancMot)
 
   r.hasData = true
   return r
