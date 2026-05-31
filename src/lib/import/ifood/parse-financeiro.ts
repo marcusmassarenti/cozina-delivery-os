@@ -73,7 +73,15 @@ export function parseIfoodFinanceiro(workbook: XLSX.WorkBook): ParsedFinanceiro 
       competencia: comp,
       refYear: parsed.year,
       refMonth: parsed.month,
-      dataFatoGerador: parseIsoDateMaybe(row["data_fato_gerador"]),
+      // O iFood mudou o layout: relatórios novos não trazem mais a coluna
+      // "data_fato_gerador". Sem ela, a Cobertura e o Relatório Diário (que
+      // contam por dia do fato gerador) zeravam o mês. Caímos na data de
+      // criação do pedido (a data real da venda) e, em último caso, no
+      // faturamento — ambos representam o dia do fato gerador da Venda.
+      dataFatoGerador:
+        parseIsoDateMaybe(row["data_fato_gerador"]) ??
+        parseIsoDateMaybe(row["data_criacao_pedido_associado"]) ??
+        parseIsoDateMaybe(row["data_faturamento"]),
       fatoGerador: toStringOrNull(row["fato_gerador"]),
       tipoLancamento: toStringOrNull(row["tipo_lancamento"]),
       descricaoLancamento: toStringOrNull(row["descricao_lancamento"]),
