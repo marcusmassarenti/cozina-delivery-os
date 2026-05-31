@@ -357,6 +357,7 @@ export default async function Home({
       {status.ok ? (
         <ImportCoverageBanner
           coverage={importCoverage}
+          year={year}
           month={month}
           periodLabel={formatPeriodLabel({ year, month })}
         />

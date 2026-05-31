@@ -8,34 +8,57 @@ const MES_ABREV = [
   "jul", "ago", "set", "out", "nov", "dez",
 ]
 
+/** Quantos dias atrás do alvo é considerado atrasado (D-1 + 2 dias de folga). */
+const ATRASO_TOLERANCIA_DIAS = 2
+
+function parseYmd(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number)
+  return new Date(y, m - 1, d)
+}
+
 /**
- * Banner de cobertura de importação no Dashboard. Mostra, por plataforma,
- * até que dia tem dado importado no mês. Marca em amarelo a plataforma que
- * está atrasada em relação à mais recente (pega lacuna de importação).
+ * Banner de cobertura de importação no Dashboard. Mostra, por plataforma, até
+ * que dia tem dado no mês. Cada plataforma é julgada contra um ALVO ABSOLUTO
+ * de frescor (último dia do mês OU ontem, o que for menor) — não comparando as
+ * plataformas entre si. Atrasado = dado mais de 2 dias atrás do alvo.
  */
 export function ImportCoverageBanner({
   coverage,
+  year,
   month,
   periodLabel,
 }: {
   coverage: ImportCoverage
+  year: number
   month: number
   periodLabel: string
 }) {
+  // Alvo: menor entre fim do mês e ontem (D-1).
+  const monthEnd = new Date(year, month, 0)
+  const now = new Date()
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  const target = yesterday < monthEnd ? yesterday : monthEnd
+
+  const lagDays = (cov: PlatformCoverage): number | null => {
+    if (!cov.lastDate) return null
+    return Math.max(
+      0,
+      Math.round((target.getTime() - parseYmd(cov.lastDate).getTime()) / 86_400_000),
+    )
+  }
+  const isBehind = (cov: PlatformCoverage) => {
+    const lag = lagDays(cov)
+    return lag !== null && lag > ATRASO_TOLERANCIA_DIAS
+  }
+
   const platforms: { id: PlatformId; cov: PlatformCoverage }[] = [
     { id: "ifood", cov: coverage.ifood },
     { id: "99food", cov: coverage.ninefood },
     { id: "keeta", cov: coverage.keeta },
   ]
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
-  const maxDay = withData.length
-    ? Math.max(...withData.map((p) => p.cov.lastDay as number))
-    : 0
-  const isBehind = (cov: PlatformCoverage) =>
-    cov.lastDay !== null && maxDay - cov.lastDay > 1
-
-  const anyBehind = platforms.some((p) => isBehind(p.cov))
   const noData = withData.length === 0
+  const anyBehind = platforms.some((p) => isBehind(p.cov))
 
   const tone = noData
     ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400"
@@ -48,9 +71,7 @@ export function ImportCoverageBanner({
       className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2 text-xs ${tone}`}
     >
       <span className="inline-flex items-center gap-1.5 font-medium">
-        {noData ? (
-          <AlertTriangle className="size-3.5" />
-        ) : anyBehind ? (
+        {noData || anyBehind ? (
           <AlertTriangle className="size-3.5" />
         ) : (
           <CircleCheck className="size-3.5" />
@@ -64,9 +85,17 @@ export function ImportCoverageBanner({
         <div className="flex flex-wrap items-center gap-2">
           {platforms.map((p) => {
             const behind = isBehind(p.cov)
+            const lag = lagDays(p.cov)
             return (
               <span
                 key={p.id}
+                title={
+                  p.cov.lastDay === null
+                    ? "Sem dados neste mês"
+                    : behind
+                      ? `Atrasado ${lag} dia${lag === 1 ? "" : "s"} em relação a ontem`
+                      : "Em dia"
+                }
                 className={`inline-flex items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-[11px] font-medium ${
                   behind
                     ? "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400"
