@@ -241,14 +241,24 @@ export async function getCoverageMatrix(
   const units = unitsRows ?? []
   const unitIds = units.map((u) => u.id)
 
-  // Lojas vinculadas ao iFood — quem não está, vira N/A nessa aba (não usa
-  // a plataforma, então não é lacuna).
+  // Lojas vinculadas ao iFood + inauguração/encerramento por plataforma.
+  // Quem não está vinculado vira N/A nessa aba. A data da plataforma manda;
+  // se null, cai na data da unidade (0023).
   const { data: platRows } = await admin
     .from("unit_platforms")
-    .select("unit_id")
+    .select("unit_id, data_inauguracao, data_encerramento")
     .eq("platform", "ifood")
     .eq("active", true)
-  const linkedToPlatform = new Set((platRows ?? []).map((r) => r.unit_id))
+  const platOpByUnit = new Map<
+    string,
+    { inaug: string | null; encer: string | null }
+  >()
+  for (const r of platRows ?? [])
+    platOpByUnit.set(r.unit_id, {
+      inaug: r.data_inauguracao,
+      encer: r.data_encerramento,
+    })
+  const linkedToPlatform = new Set(platOpByUnit.keys())
 
   // Helpers
   const yKey = (year: number, month: number) =>
@@ -376,11 +386,14 @@ export async function getCoverageMatrix(
   return {
     months,
     units: units.map((u) => {
+      const platOp = platOpByUnit.get(u.id)
       const op = {
-        dataInauguracao: (u as { data_inauguracao: string | null })
-          .data_inauguracao,
-        dataEncerramento: (u as { data_encerramento: string | null })
-          .data_encerramento,
+        dataInauguracao:
+          platOp?.inaug ??
+          (u as { data_inauguracao: string | null }).data_inauguracao,
+        dataEncerramento:
+          platOp?.encer ??
+          (u as { data_encerramento: string | null }).data_encerramento,
       }
       const isLinked = linkedToPlatform.has(u.id)
       const cells: Record<string, CoverageCell> = {}

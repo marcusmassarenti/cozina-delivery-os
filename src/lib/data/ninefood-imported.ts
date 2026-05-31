@@ -673,13 +673,22 @@ export async function getNinefoodCoverageMatrix(
     .order("code")
   const units = unitsRows ?? []
 
-  // Lojas vinculadas ao 99 Food — quem não está vira N/A nessa aba.
+  // Lojas vinculadas ao 99 Food + datas por plataforma (fallback: unidade).
   const { data: platRows } = await admin
     .from("unit_platforms")
-    .select("unit_id")
+    .select("unit_id, data_inauguracao, data_encerramento")
     .eq("platform", "99food")
     .eq("active", true)
-  const linkedToPlatform = new Set((platRows ?? []).map((r) => r.unit_id))
+  const platOpByUnit = new Map<
+    string,
+    { inaug: string | null; encer: string | null }
+  >()
+  for (const r of platRows ?? [])
+    platOpByUnit.set(r.unit_id, {
+      inaug: r.data_inauguracao,
+      encer: r.data_encerramento,
+    })
+  const linkedToPlatform = new Set(platOpByUnit.keys())
   const unitIds = units.map((u) => u.id)
 
   const dateToKey = (d: string) => d.slice(0, 7)
@@ -787,11 +796,14 @@ export async function getNinefoodCoverageMatrix(
   return {
     months,
     units: units.map((u) => {
+      const platOp = platOpByUnit.get(u.id)
       const op = {
-        dataInauguracao: (u as { data_inauguracao: string | null })
-          .data_inauguracao,
-        dataEncerramento: (u as { data_encerramento: string | null })
-          .data_encerramento,
+        dataInauguracao:
+          platOp?.inaug ??
+          (u as { data_inauguracao: string | null }).data_inauguracao,
+        dataEncerramento:
+          platOp?.encer ??
+          (u as { data_encerramento: string | null }).data_encerramento,
       }
       const isLinked = linkedToPlatform.has(u.id)
       const cells: Record<string, NinefoodCoverageCell> = {}

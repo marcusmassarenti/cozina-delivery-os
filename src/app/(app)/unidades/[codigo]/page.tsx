@@ -168,6 +168,7 @@ export default async function UnidadeDetalhePage({
               dataEncerramento: unit.data_encerramento,
               platforms,
               externalStoreIds: unit.externalStoreIds,
+              platformInauguracoes: unit.platformInauguracoes,
             }}
           />
         </div>

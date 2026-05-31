@@ -64,6 +64,8 @@ export type EditUnitInitial = {
   platforms: PlatformId[]
   /** Mapeamento PlatformId → ID da loja na plataforma (iFood: 260777, etc.) */
   externalStoreIds?: Partial<Record<PlatformId, string | null>>
+  /** Inauguração por plataforma (override da data da unidade). */
+  platformInauguracoes?: Partial<Record<PlatformId, string | null>>
 }
 
 export function EditUnitDialog({
@@ -202,6 +204,7 @@ export function EditUnitDialog({
             </div>
             <PlatformIdsBlock
               externalStoreIds={unit.externalStoreIds ?? {}}
+              platformInauguracoes={unit.platformInauguracoes ?? {}}
             />
           </div>
 
@@ -245,8 +248,10 @@ export function EditUnitDialog({
 
 function PlatformIdsBlock({
   externalStoreIds,
+  platformInauguracoes,
 }: {
   externalStoreIds: Partial<Record<PlatformId, string | null>>
+  platformInauguracoes: Partial<Record<PlatformId, string | null>>
 }) {
   return (
     <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/30 px-3 py-2.5">
@@ -273,9 +278,56 @@ function PlatformIdsBlock({
           defaultValue={externalStoreIds.keeta ?? ""}
         />
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        Necessário pra importação automática reconhecer a loja nos relatórios.
+      <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        Inauguração por plataforma (se diferente da loja)
       </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <PlatformDateInput
+          name="ifoodInauguracao"
+          label="iFood"
+          defaultValue={platformInauguracoes.ifood ?? ""}
+        />
+        <PlatformDateInput
+          name="_99foodInauguracao"
+          label="99 Food"
+          defaultValue={platformInauguracoes["99food"] ?? ""}
+        />
+        <PlatformDateInput
+          name="keetaInauguracao"
+          label="Keeta"
+          defaultValue={platformInauguracoes.keeta ?? ""}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        ID = importação automática reconhecer a loja. Inauguração = a Cobertura
+        ignora meses antes da loja entrar naquela plataforma.
+      </p>
+    </div>
+  )
+}
+
+function PlatformDateInput({
+  name,
+  label,
+  defaultValue,
+}: {
+  name: string
+  label: string
+  defaultValue: string
+}) {
+  const [value, setValue] = React.useState(defaultValue)
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-[10px] font-medium text-muted-foreground">
+        {label}
+      </Label>
+      <Input
+        name={name}
+        type="date"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-8 text-xs"
+      />
     </div>
   )
 }

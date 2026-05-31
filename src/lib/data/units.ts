@@ -21,6 +21,8 @@ export type Unit = {
   platforms: PlatformId[]
   /** Por plataforma, o ID da loja no sistema externo (ex.: iFood 260777). */
   externalStoreIds: Partial<Record<PlatformId, string | null>>
+  /** Por plataforma, a data de inauguração na plataforma (override da unidade). */
+  platformInauguracoes: Partial<Record<PlatformId, string | null>>
   monthly: UnitMonthly
 }
 
@@ -41,9 +43,10 @@ function attach(
   u: DbUnit,
   platforms: PlatformId[],
   externalStoreIds: Partial<Record<PlatformId, string | null>>,
+  platformInauguracoes: Partial<Record<PlatformId, string | null>>,
   monthly: UnitMonthly,
 ): Unit {
-  return { ...u, platforms, externalStoreIds, monthly }
+  return { ...u, platforms, externalStoreIds, platformInauguracoes, monthly }
 }
 
 function currentYearMonth(): { year: number; month: number } {
@@ -68,13 +71,17 @@ async function getUnitsUncached(): Promise<Unit[]> {
       .order("code"),
     supabase
       .from("unit_platforms")
-      .select("unit_id, platform, external_store_id")
+      .select("unit_id, platform, external_store_id, data_inauguracao")
       .eq("active", true),
   ])
   if (unitsRes.error)
     throw new Error(`Falha ao buscar unidades: ${unitsRes.error.message}`)
   const platformsByUnit = new Map<string, PlatformId[]>()
   const externalIdsByUnit = new Map<
+    string,
+    Partial<Record<PlatformId, string | null>>
+  >()
+  const inaugByUnit = new Map<
     string,
     Partial<Record<PlatformId, string | null>>
   >()
@@ -86,6 +93,10 @@ async function getUnitsUncached(): Promise<Unit[]> {
     const ids = externalIdsByUnit.get(row.unit_id) ?? {}
     ids[platform] = row.external_store_id ?? null
     externalIdsByUnit.set(row.unit_id, ids)
+    const inaug = inaugByUnit.get(row.unit_id) ?? {}
+    inaug[platform] =
+      (row as { data_inauguracao: string | null }).data_inauguracao ?? null
+    inaugByUnit.set(row.unit_id, inaug)
   }
   const units = unitsRes.data ?? []
   const unitIds = units.map((u) => u.id)
@@ -97,6 +108,7 @@ async function getUnitsUncached(): Promise<Unit[]> {
       u,
       platformsByUnit.get(u.id) ?? [],
       externalIdsByUnit.get(u.id) ?? {},
+      inaugByUnit.get(u.id) ?? {},
       monthlyByUnit.get(u.id) ?? emptyMonthly,
     ),
   )
@@ -121,8 +133,10 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   const platformsDetails = await getUnitPlatformDetails(data.id)
   const platforms = platformsDetails.map((p) => p.platform)
   const externalStoreIds: Partial<Record<PlatformId, string | null>> = {}
+  const platformInauguracoes: Partial<Record<PlatformId, string | null>> = {}
   for (const p of platformsDetails) {
     externalStoreIds[p.platform] = p.externalStoreId
+    platformInauguracoes[p.platform] = p.dataInauguracao
   }
   const { year, month } = currentYearMonth()
   const monthlyByUnit = await getRealMonthlyForUnits([data.id], year, month)
@@ -130,17 +144,24 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
     data,
     platforms,
     externalStoreIds,
+    platformInauguracoes,
     monthlyByUnit.get(data.id) ?? emptyMonthly,
   )
 }
 
 export async function getUnitPlatformDetails(
   unitId: string,
-): Promise<Array<{ platform: PlatformId; externalStoreId: string | null }>> {
+): Promise<
+  Array<{
+    platform: PlatformId
+    externalStoreId: string | null
+    dataInauguracao: string | null
+  }>
+> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("unit_platforms")
-    .select("platform, external_store_id")
+    .select("platform, external_store_id, data_inauguracao")
     .eq("unit_id", unitId)
     .eq("active", true)
   if (error) {
@@ -150,6 +171,8 @@ export async function getUnitPlatformDetails(
   return (data ?? []).map((r) => ({
     platform: r.platform as PlatformId,
     externalStoreId: r.external_store_id ?? null,
+    dataInauguracao:
+      (r as { data_inauguracao: string | null }).data_inauguracao ?? null,
   }))
 }
 

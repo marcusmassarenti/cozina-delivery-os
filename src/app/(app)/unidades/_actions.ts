@@ -186,6 +186,11 @@ export async function updateUnit(
     String(formData.get("_99foodStoreId") ?? "").trim() || null
   const keetaStoreId =
     String(formData.get("keetaStoreId") ?? "").trim() || null
+  const inaugByPlatform: Partial<Record<PlatformId, string | null>> = {
+    ifood: dateOrNull(formData.get("ifoodInauguracao")),
+    "99food": dateOrNull(formData.get("_99foodInauguracao")),
+    keeta: dateOrNull(formData.get("keetaInauguracao")),
+  }
 
   if (!unitId) {
     return { ok: false, message: "ID da unidade ausente." }
@@ -258,6 +263,8 @@ export async function updateUnit(
             externalIdByPlatform[p] !== null
               ? externalIdByPlatform[p]
               : existingMap.get(p) ?? null,
+          // Inauguração por plataforma (o form vem pré-preenchido).
+          data_inauguracao: inaugByPlatform[p] ?? null,
         })),
       )
     }

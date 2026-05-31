@@ -233,6 +233,7 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                       dataEncerramento: unit.data_encerramento,
                       platforms: unit.platforms,
                       externalStoreIds: unit.externalStoreIds,
+                      platformInauguracoes: unit.platformInauguracoes,
                     }}
                   />
                   <DeleteUnitButton unitId={unit.id} unitName={unit.name} />
