@@ -36,6 +36,15 @@ export function detectIfoodReportType(workbook: XLSX.WorkBook): IfoodReportType 
           const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })]
           if (cell?.v != null) headers.push(String(cell.v))
         }
+        // Financeiro em CSV: o iFood exporta sem a aba "Relatório de Conciliação"
+        // (vira "Página 1"), então detectamos pelas colunas exclusivas.
+        const hasCompetencia = headers.includes("competencia")
+        const hasFatoGerador = headers.includes("fato_gerador")
+        const hasLojaId =
+          headers.includes("loja_id_curto") || headers.includes("loja_id")
+        if (hasCompetencia && hasFatoGerador && hasLojaId) {
+          return "financeiro"
+        }
         // Relatório de pedidos: tem "FORMA DE PAGAMENTO" + "ID COMPLETO DO PEDIDO"
         const hasFormaPagamento = headers.includes("FORMA DE PAGAMENTO")
         const hasIdPedido = headers.includes("ID COMPLETO DO PEDIDO")

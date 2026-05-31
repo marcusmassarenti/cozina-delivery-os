@@ -33,7 +33,10 @@ import {
 export function parseIfoodFinanceiro(workbook: XLSX.WorkBook): ParsedFinanceiro {
   const sheetName =
     workbook.SheetNames.find((n) => n === "Relatório de Conciliação") ??
-    workbook.SheetNames.find((n) => n === "Relatorio de Conciliacao")
+    workbook.SheetNames.find((n) => n === "Relatorio de Conciliacao") ??
+    // CSV exportado pelo iFood não traz a aba nomeada — vira "Página 1".
+    // O detect já garantiu que é financeiro (colunas competencia/fato_gerador).
+    workbook.SheetNames[0]
   if (!sheetName) {
     throw new Error("Aba 'Relatório de Conciliação' não encontrada")
   }

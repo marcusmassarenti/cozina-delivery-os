@@ -75,12 +75,27 @@ function excelSerialToDate(serial: number): Date {
   return new Date(epoch.getTime() + serial * 86400000)
 }
 
+/**
+ * Converte string numérica BR pra number. Lida com o que o iFood manda no CSV:
+ * "R$ 1.234,56", "-R$ 25,00", "0,0%", "28,89" e também o formato US "1234.56".
+ * Regra: se tem vírgula, ela é o decimal (ponto vira milhar e some); sem
+ * vírgula, o ponto já é decimal. Retorna NaN se não sobrar número.
+ */
+function parseBrNumber(s: string): number {
+  const t = s.replace(/[^\d,.-]/g, "") // tira R$, %, espaços, etc.
+  if (t === "" || t === "-" || t === "." || t === ",") return NaN
+  const normalized = t.includes(",")
+    ? t.replace(/\./g, "").replace(",", ".")
+    : t
+  return Number(normalized)
+}
+
 /** Force-coerce pra number, retornando fallback se NaN/null */
 export function toNumber(v: unknown, fallback = 0): number {
   if (v == null || v === "") return fallback
   if (typeof v === "number") return isNaN(v) ? fallback : v
   if (typeof v === "string") {
-    const n = Number(v.replace(",", "."))
+    const n = parseBrNumber(v)
     return isNaN(n) ? fallback : n
   }
   return fallback
@@ -91,7 +106,7 @@ export function toNumberOrNull(v: unknown): number | null {
   if (v == null || v === "") return null
   if (typeof v === "number") return isNaN(v) ? null : v
   if (typeof v === "string") {
-    const n = Number(v.replace(",", "."))
+    const n = parseBrNumber(v)
     return isNaN(n) ? null : n
   }
   return null
