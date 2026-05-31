@@ -141,7 +141,7 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
                       <td key={m.key} className="px-2 py-2 text-center">
                         <span
                           className="text-[10px] text-muted-foreground/40"
-                          title="Loja não operava nesse mês (fora do período de inauguração/encerramento)"
+                          title="Não se aplica: loja não usa essa plataforma, ou está fora do período de operação (inauguração/encerramento)."
                         >
                           N/A
                         </span>

@@ -241,6 +241,15 @@ export async function getCoverageMatrix(
   const units = unitsRows ?? []
   const unitIds = units.map((u) => u.id)
 
+  // Lojas vinculadas ao iFood — quem não está, vira N/A nessa aba (não usa
+  // a plataforma, então não é lacuna).
+  const { data: platRows } = await admin
+    .from("unit_platforms")
+    .select("unit_id")
+    .eq("platform", "ifood")
+    .eq("active", true)
+  const linkedToPlatform = new Set((platRows ?? []).map((r) => r.unit_id))
+
   // Helpers
   const yKey = (year: number, month: number) =>
     `${year}-${String(month).padStart(2, "0")}`
@@ -373,6 +382,7 @@ export async function getCoverageMatrix(
         dataEncerramento: (u as { data_encerramento: string | null })
           .data_encerramento,
       }
+      const isLinked = linkedToPlatform.has(u.id)
       const cells: Record<string, CoverageCell> = {}
       for (const month of months) {
         const win = monthOperationWindow(month.year, month.month, op)
@@ -439,7 +449,7 @@ export async function getCoverageMatrix(
               : "empty") as CoverageStatus,
             imported: pedidosByUnitMonth.get(u.id)?.has(month.key) ?? false,
           },
-          applicable: win.applicable,
+          applicable: isLinked && win.applicable,
         }
       }
       return {

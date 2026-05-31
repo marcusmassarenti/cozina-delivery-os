@@ -672,6 +672,14 @@ export async function getNinefoodCoverageMatrix(
     .select("id, code, name, active, data_inauguracao, data_encerramento")
     .order("code")
   const units = unitsRows ?? []
+
+  // Lojas vinculadas ao 99 Food — quem não está vira N/A nessa aba.
+  const { data: platRows } = await admin
+    .from("unit_platforms")
+    .select("unit_id")
+    .eq("platform", "99food")
+    .eq("active", true)
+  const linkedToPlatform = new Set((platRows ?? []).map((r) => r.unit_id))
   const unitIds = units.map((u) => u.id)
 
   const dateToKey = (d: string) => d.slice(0, 7)
@@ -785,6 +793,7 @@ export async function getNinefoodCoverageMatrix(
         dataEncerramento: (u as { data_encerramento: string | null })
           .data_encerramento,
       }
+      const isLinked = linkedToPlatform.has(u.id)
       const cells: Record<string, NinefoodCoverageCell> = {}
       for (const month of months) {
         const win = monthOperationWindow(month.year, month.month, op)
@@ -834,7 +843,7 @@ export async function getNinefoodCoverageMatrix(
             diasComPedido: pedDias,
             diasNoMes,
           },
-          applicable: win.applicable,
+          applicable: isLinked && win.applicable,
         }
       }
       return {
