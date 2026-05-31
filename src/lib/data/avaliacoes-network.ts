@@ -10,6 +10,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
 
 type Dist = Record<1 | 2 | 3 | 4 | 5, number>
 
@@ -56,40 +57,58 @@ export async function getAvaliacoesByUnitForMonth(
   const lastDay = new Date(year, month, 0).getDate()
   const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
 
-  let qIfood = admin
-    .from("ifood_avaliacoes")
-    .select("unit_id, nota")
-    .gte("data_avaliacao", startIso)
-    .lte("data_avaliacao", endIncl)
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    qIfood = qIfood.in("unit_id", filterUnitIds)
-
-  let q99 = admin
-    .from("ninefood_pedidos")
-    .select("unit_id, nivel_avaliacao")
-    .not("nivel_avaliacao", "is", null)
-    .gte("data_avaliacao", startIso)
-    .lt("data_avaliacao", endExcl)
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q99 = q99.in("unit_id", filterUnitIds)
-
-  // Keeta: avaliação em keeta_pedidos (pontuacao_avaliacao + data_avaliacao DATE)
-  let qKeeta = admin
-    .from("keeta_pedidos")
-    .select("unit_id, pontuacao_avaliacao")
-    .not("pontuacao_avaliacao", "is", null)
-    .gte("data_avaliacao", startIso)
-    .lte("data_avaliacao", endIncl)
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    qKeeta = qKeeta.in("unit_id", filterUnitIds)
-
-  const [ifoodRes, ninefoodRes, keetaRes] = await Promise.all([
-    qIfood,
-    q99,
-    qKeeta,
+  const [ifoodRows, ninefoodRows, keetaRows] = await Promise.all([
+    fetchAllRows<{ unit_id: string; nota: number | string | null }>(
+      (from, to) => {
+        let qIfood = admin
+          .from("ifood_avaliacoes")
+          .select("unit_id, nota")
+          .gte("data_avaliacao", startIso)
+          .lte("data_avaliacao", endIncl)
+          .order("id")
+          .range(from, to)
+        if (filterUnitIds && filterUnitIds.length > 0)
+          qIfood = qIfood.in("unit_id", filterUnitIds)
+        return qIfood
+      },
+      "ifood_avaliacoes por unidade",
+    ),
+    fetchAllRows<{ unit_id: string; nivel_avaliacao: number | string | null }>(
+      (from, to) => {
+        let q99 = admin
+          .from("ninefood_pedidos")
+          .select("unit_id, nivel_avaliacao")
+          .not("nivel_avaliacao", "is", null)
+          .gte("data_avaliacao", startIso)
+          .lt("data_avaliacao", endExcl)
+          .order("id")
+          .range(from, to)
+        if (filterUnitIds && filterUnitIds.length > 0)
+          q99 = q99.in("unit_id", filterUnitIds)
+        return q99
+      },
+      "ninefood_pedidos avaliacoes por unidade",
+    ),
+    // Keeta: avaliação em keeta_pedidos (pontuacao_avaliacao + data_avaliacao DATE)
+    fetchAllRows<{
+      unit_id: string
+      pontuacao_avaliacao: number | string | null
+    }>(
+      (from, to) => {
+        let qKeeta = admin
+          .from("keeta_pedidos")
+          .select("unit_id, pontuacao_avaliacao")
+          .not("pontuacao_avaliacao", "is", null)
+          .gte("data_avaliacao", startIso)
+          .lte("data_avaliacao", endIncl)
+          .order("id")
+          .range(from, to)
+        if (filterUnitIds && filterUnitIds.length > 0)
+          qKeeta = qKeeta.in("unit_id", filterUnitIds)
+        return qKeeta
+      },
+      "keeta_pedidos avaliacoes por unidade",
+    ),
   ])
 
   type Agg = {
@@ -123,7 +142,7 @@ export async function getAvaliacoesByUnitForMonth(
     return a
   }
 
-  for (const r of ifoodRes.data ?? []) {
+  for (const r of ifoodRows) {
     const n = Number(r.nota) as 1 | 2 | 3 | 4 | 5
     if (n < 1 || n > 5) continue
     const a = ensure(r.unit_id)
@@ -131,7 +150,7 @@ export async function getAvaliacoesByUnitForMonth(
     a.somaIfood += n
     a.totalIfood += 1
   }
-  for (const r of ninefoodRes.data ?? []) {
+  for (const r of ninefoodRows) {
     const n = Number(r.nivel_avaliacao) as 1 | 2 | 3 | 4 | 5
     if (n < 1 || n > 5) continue
     const a = ensure(r.unit_id)
@@ -139,7 +158,7 @@ export async function getAvaliacoesByUnitForMonth(
     a.soma99 += n
     a.total99 += 1
   }
-  for (const r of keetaRes.data ?? []) {
+  for (const r of keetaRows) {
     const n = Number(r.pontuacao_avaliacao) as 1 | 2 | 3 | 4 | 5
     if (n < 1 || n > 5) continue
     const a = ensure(r.unit_id)

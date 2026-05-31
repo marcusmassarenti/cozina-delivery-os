@@ -193,18 +193,35 @@ export async function getNetworkKeetaAvaliacoesForMonth(
   const lastDay = new Date(year, month, 0).getDate()
   const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
 
-  let q = admin
-    .from("keeta_pedidos")
-    .select("id, unit_id, pedido_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao")
-    .not("pontuacao_avaliacao", "is", null)
-    .gte("data_avaliacao", startIso)
-    .lte("data_avaliacao", endIncl)
-    .order("data_avaliacao", { ascending: false })
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0) q = q.in("unit_id", filterUnitIds)
-  const { data } = await q
+  const rows = await fetchAllRows<{
+    id: string | number
+    unit_id: string
+    pedido_id: string | number | null
+    pontuacao_avaliacao: number | string | null
+    conteudo_avaliacao: string | null
+    data_avaliacao: string | null
+  }>((f, t) => {
+    let q = admin
+      .from("keeta_pedidos")
+      .select(
+        "id, unit_id, pedido_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao",
+      )
+      .not("pontuacao_avaliacao", "is", null)
+      .gte("data_avaliacao", startIso)
+      .lte("data_avaliacao", endIncl)
+      .order("id")
+      .range(f, t)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  }, "keeta_pedidos avaliacoes rede")
 
-  const rows = data ?? []
+  // Paginação ordena por id; reordena por data_avaliacao DESC pra os
+  // "últimos comentários" (a ordem do .order() na query se perde).
+  rows.sort((a, b) =>
+    String(b.data_avaliacao ?? "").localeCompare(String(a.data_avaliacao ?? "")),
+  )
+
   const empty: NetworkKeetaAvaliacoes = {
     total: 0,
     notaMedia: 0,
@@ -412,16 +429,23 @@ export async function getKeetaAvaliacoesResumoForMonth(
   const lastDay = new Date(year, month, 0).getDate()
   const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
 
-  const { data } = await admin
-    .from("keeta_pedidos")
-    .select("pontuacao_avaliacao, conteudo_avaliacao")
-    .eq("unit_id", unitId)
-    .not("pontuacao_avaliacao", "is", null)
-    .gte("data_avaliacao", startIso)
-    .lte("data_avaliacao", endIncl)
-    .limit(50000)
+  const rows = await fetchAllRows<{
+    pontuacao_avaliacao: number | string | null
+    conteudo_avaliacao: string | null
+  }>(
+    (f, t) =>
+      admin
+        .from("keeta_pedidos")
+        .select("pontuacao_avaliacao, conteudo_avaliacao")
+        .eq("unit_id", unitId)
+        .not("pontuacao_avaliacao", "is", null)
+        .gte("data_avaliacao", startIso)
+        .lte("data_avaliacao", endIncl)
+        .order("id")
+        .range(f, t),
+    "keeta_pedidos avaliacoes unidade",
+  )
 
-  const rows = data ?? []
   if (rows.length === 0) {
     return {
       total: 0,

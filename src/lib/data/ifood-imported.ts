@@ -10,6 +10,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 
 // ─── Tipos ───────────────────────────────────────────────────────────
@@ -114,40 +115,6 @@ function monthRange(year: number, month: number) {
       d.getDate(),
     ).padStart(2, "0")}`
   return { start: fmt(startDate), end: fmt(endDate) }
-}
-
-/**
- * Pagina automaticamente uma query do Supabase usando .range().
- * Supabase tem um hard-cap (db-max-rows, default 1000) que ignora
- * .limit() acima desse valor. Por isso paginamos via Range.
- *
- * Uso:
- *   const rows = await fetchAllPages<MyRowType>((from, to) =>
- *     admin.from("foo").select("*").eq("bar", "baz").range(from, to)
- *   )
- */
-async function fetchAllPages<T>(
-  buildQuery: (from: number, to: number) => PromiseLike<{
-    data: T[] | null
-    error: { message: string } | null
-  }>,
-  pageSize = 1000,
-  maxRows = 200000, // safety net
-): Promise<T[]> {
-  const all: T[] = []
-  let from = 0
-  while (from < maxRows) {
-    const { data, error } = await buildQuery(from, from + pageSize - 1)
-    if (error) {
-      console.error("fetchAllPages error:", error.message)
-      break
-    }
-    if (!data || data.length === 0) break
-    all.push(...data)
-    if (data.length < pageSize) break
-    from += pageSize
-  }
-  return all
 }
 
 // ─── Cobertura: o que cada loja tem importado em cada mês ────────────
@@ -271,14 +238,20 @@ export async function getCoverageMatrix(
   // 1) Cardápio DIÁRIO — agrupa por (unit, year-month)
   const dailyByUnitMonth = new Map<string, Map<string, number>>()
   if (unitIds.length > 0) {
-    const { data: dailyRows } = await admin
-      .from("ifood_daily_funnel")
-      .select("unit_id, date")
-      .in("unit_id", unitIds)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd)
-      .limit(50000)
-    for (const r of dailyRows ?? []) {
+    const dailyRows = await fetchAllRows<{ unit_id: string; date: string }>(
+      (from, to) =>
+        admin
+          .from("ifood_daily_funnel")
+          .select("unit_id, date")
+          .in("unit_id", unitIds)
+          .gte("date", rangeStart)
+          .lte("date", rangeEnd)
+          .order("date")
+          .order("unit_id")
+          .range(from, to),
+      "ifood_daily_funnel cobertura",
+    )
+    for (const r of dailyRows) {
       const inner = dailyByUnitMonth.get(r.unit_id) ?? new Map<string, number>()
       const k = dateToKey(r.date)
       inner.set(k, (inner.get(k) ?? 0) + 1)
@@ -289,14 +262,22 @@ export async function getCoverageMatrix(
   // 2) Cardápio PERÍODO — pega snapshots cujo período_end cai em algum mês do range
   const periodoByUnitMonth = new Map<string, Set<string>>()
   if (unitIds.length > 0) {
-    const { data: periodoRows } = await admin
-      .from("ifood_cardapio_periodo")
-      .select("unit_id, period_end")
-      .in("unit_id", unitIds)
-      .gte("period_end", rangeStart)
-      .lte("period_end", rangeEnd)
-      .limit(10000)
-    for (const r of periodoRows ?? []) {
+    const periodoRows = await fetchAllRows<{
+      unit_id: string
+      period_end: string
+    }>(
+      (from, to) =>
+        admin
+          .from("ifood_cardapio_periodo")
+          .select("unit_id, period_end")
+          .in("unit_id", unitIds)
+          .gte("period_end", rangeStart)
+          .lte("period_end", rangeEnd)
+          .order("id")
+          .range(from, to),
+      "ifood_cardapio_periodo cobertura",
+    )
+    for (const r of periodoRows) {
       const inner = periodoByUnitMonth.get(r.unit_id) ?? new Set<string>()
       inner.add(dateToKey(r.period_end))
       periodoByUnitMonth.set(r.unit_id, inner)
@@ -337,14 +318,22 @@ export async function getCoverageMatrix(
   // 4) Avaliações — count por (unit, year-month da data_avaliacao)
   const avaliacoesByUnitMonth = new Map<string, Map<string, number>>()
   if (unitIds.length > 0) {
-    const { data: avalRows } = await admin
-      .from("ifood_avaliacoes")
-      .select("unit_id, data_avaliacao")
-      .in("unit_id", unitIds)
-      .gte("data_avaliacao", rangeStart)
-      .lte("data_avaliacao", rangeEnd)
-      .limit(50000)
-    for (const r of avalRows ?? []) {
+    const avalRows = await fetchAllRows<{
+      unit_id: string
+      data_avaliacao: string
+    }>(
+      (from, to) =>
+        admin
+          .from("ifood_avaliacoes")
+          .select("unit_id, data_avaliacao")
+          .in("unit_id", unitIds)
+          .gte("data_avaliacao", rangeStart)
+          .lte("data_avaliacao", rangeEnd)
+          .order("id")
+          .range(from, to),
+      "ifood_avaliacoes cobertura",
+    )
+    for (const r of avalRows) {
       const inner =
         avaliacoesByUnitMonth.get(r.unit_id) ?? new Map<string, number>()
       const k = dateToKey(r.data_avaliacao)
@@ -358,16 +347,25 @@ export async function getCoverageMatrix(
   // ref_month. O relatório é mensal: presença = importado.
   const pedidosByUnitMonth = new Map<string, Set<string>>()
   if (unitIds.length > 0) {
-    const { data: pedRows } = await admin
-      .from("platform_imports")
-      .select("unit_id, ref_year, ref_month")
-      .eq("platform", "ifood")
-      .eq("report_type", "pedidos")
-      .eq("status", "success")
-      .in("unit_id", unitIds)
-      .not("ref_year", "is", null)
-      .limit(50000)
-    for (const r of pedRows ?? []) {
+    const pedRows = await fetchAllRows<{
+      unit_id: string
+      ref_year: number | null
+      ref_month: number | null
+    }>(
+      (from, to) =>
+        admin
+          .from("platform_imports")
+          .select("unit_id, ref_year, ref_month")
+          .eq("platform", "ifood")
+          .eq("report_type", "pedidos")
+          .eq("status", "success")
+          .in("unit_id", unitIds)
+          .not("ref_year", "is", null)
+          .order("id")
+          .range(from, to),
+      "platform_imports pedidos cobertura",
+    )
+    for (const r of pedRows) {
       if (r.ref_year == null || r.ref_month == null) continue
       const k = yKey(r.ref_year, r.ref_month)
       const set = pedidosByUnitMonth.get(r.unit_id) ?? new Set<string>()
@@ -493,11 +491,20 @@ export type AvailablePeriod = {
  */
 export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
   const admin = createAdminClient()
-  const { data } = await admin
-    .from("platform_imports")
-    .select("report_type, ref_year, ref_month, ref_date")
-    .order("imported_at", { ascending: false })
-    .limit(5000)
+  const data = await fetchAllRows<{
+    report_type: string
+    ref_year: number | null
+    ref_month: number | null
+    ref_date: string | null
+  }>(
+    (from, to) =>
+      admin
+        .from("platform_imports")
+        .select("report_type, ref_year, ref_month, ref_date")
+        .order("id")
+        .range(from, to),
+    "platform_imports periodos",
+  )
 
   const map = new Map<string, AvailablePeriod>()
   // Sempre inclui o mês corrente (mesmo sem dados)
@@ -513,7 +520,7 @@ export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
     hasAvaliacoes: false,
   })
 
-  for (const row of data ?? []) {
+  for (const row of data) {
     let year: number
     let month: number
     if (row.ref_year && row.ref_month) {
@@ -699,16 +706,29 @@ export async function getItemsRankingForMonth(
   const { start, end } = monthRange(year, month)
 
   // 1ª tentativa: ITEMS do PERÍODO (XLSX agregado, mais confiável quando existe)
-  const { data: periodoItems } = await admin
-    .from("ifood_cardapio_periodo_items")
-    .select(
-      "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
-    )
-    .eq("unit_id", unitId)
-    .gte("period_end", start)
-    .lte("period_end", end)
-    .order("period_end", { ascending: false })
-    .limit(5000)
+  const periodoItems = await fetchAllRows<{
+    nome_item: string
+    categoria: string | null
+    visitas: number | null
+    pedidos: number | null
+    conversao_pct: number | string | null
+    qtd_vendida: number | null
+    qtd_com_promocao: number | null
+    valor_total: number | string | null
+  }>(
+    (from, to) =>
+      admin
+        .from("ifood_cardapio_periodo_items")
+        .select(
+          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+        )
+        .eq("unit_id", unitId)
+        .gte("period_end", start)
+        .lte("period_end", end)
+        .order("id")
+        .range(from, to),
+    "ifood_cardapio_periodo_items unidade",
+  )
 
   if (periodoItems && periodoItems.length > 0) {
     return periodoItems
@@ -727,19 +747,34 @@ export async function getItemsRankingForMonth(
   }
 
   // Fallback: agrega do DIÁRIO
-  const { data } = await admin
-    .from("ifood_daily_items")
-    .select(
-      "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
-    )
-    .eq("unit_id", unitId)
-    .gte("date", start)
-    .lte("date", end)
-    .limit(50000)
+  const data = await fetchAllRows<{
+    nome_item: string
+    categoria: string | null
+    visitas: number | null
+    pedidos: number | null
+    conversao_pct: number | string | null
+    qtd_vendida: number | null
+    qtd_com_promocao: number | null
+    valor_total: number | string | null
+  }>(
+    (from, to) =>
+      admin
+        .from("ifood_daily_items")
+        .select(
+          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+        )
+        .eq("unit_id", unitId)
+        .gte("date", start)
+        .lte("date", end)
+        .order("date")
+        .order("unit_id")
+        .range(from, to),
+    "ifood_daily_items unidade",
+  )
 
   // Agrega por nome_item
   const acc = new Map<string, ItemRanking & { _convSum: number; _convN: number }>()
-  for (const r of data ?? []) {
+  for (const r of data) {
     const cur = acc.get(r.nome_item) ?? {
       nomeItem: r.nome_item,
       categoria: r.categoria,
@@ -784,16 +819,26 @@ export async function getComplementosRankingForMonth(
   const { start, end } = monthRange(year, month)
 
   // 1ª tentativa: COMPLEMENTOS do PERÍODO
-  const { data: periodoComps } = await admin
-    .from("ifood_cardapio_periodo_complementos")
-    .select(
-      "nome_complemento, classificacao, pedidos, qtd_vendida, valor_total",
-    )
-    .eq("unit_id", unitId)
-    .gte("period_end", start)
-    .lte("period_end", end)
-    .order("period_end", { ascending: false })
-    .limit(5000)
+  const periodoComps = await fetchAllRows<{
+    nome_complemento: string
+    classificacao: string | null
+    pedidos: number | null
+    qtd_vendida: number | null
+    valor_total: number | string | null
+  }>(
+    (from, to) =>
+      admin
+        .from("ifood_cardapio_periodo_complementos")
+        .select(
+          "nome_complemento, classificacao, pedidos, qtd_vendida, valor_total",
+        )
+        .eq("unit_id", unitId)
+        .gte("period_end", start)
+        .lte("period_end", end)
+        .order("id")
+        .range(from, to),
+    "ifood_cardapio_periodo_complementos unidade",
+  )
 
   if (periodoComps && periodoComps.length > 0) {
     return periodoComps
@@ -809,18 +854,29 @@ export async function getComplementosRankingForMonth(
   }
 
   // Fallback: DIÁRIO
-  const { data } = await admin
-    .from("ifood_daily_complementos")
-    .select(
-      "nome_complemento, classificacao, pedidos, qtd_vendida, valor_total",
-    )
-    .eq("unit_id", unitId)
-    .gte("date", start)
-    .lte("date", end)
-    .limit(50000)
+  const data = await fetchAllRows<{
+    nome_complemento: string
+    classificacao: string | null
+    pedidos: number | null
+    qtd_vendida: number | null
+    valor_total: number | string | null
+  }>(
+    (from, to) =>
+      admin
+        .from("ifood_daily_complementos")
+        .select(
+          "nome_complemento, classificacao, pedidos, qtd_vendida, valor_total",
+        )
+        .eq("unit_id", unitId)
+        .gte("date", start)
+        .lte("date", end)
+        .order("id")
+        .range(from, to),
+    "ifood_daily_complementos unidade",
+  )
 
   const acc = new Map<string, ComplementoRanking>()
-  for (const r of data ?? []) {
+  for (const r of data) {
     const cur = acc.get(r.nome_complemento) ?? {
       nomeComplemento: r.nome_complemento,
       classificacao: r.classificacao,
@@ -857,17 +913,30 @@ export async function getNetworkTopItemsForMonth(
   const { start, end } = monthRange(year, month)
 
   // 1ª tentativa: ITEMS do PERÍODO da rede inteira
-  let qPer = admin
-    .from("ifood_cardapio_periodo_items")
-    .select(
-      "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
-    )
-    .gte("period_end", start)
-    .lte("period_end", end)
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    qPer = qPer.in("unit_id", filterUnitIds)
-  const { data: periodoItems } = await qPer
+  const periodoItems = await fetchAllRows<{
+    unit_id: string
+    nome_item: string
+    categoria: string | null
+    visitas: number | null
+    pedidos: number | null
+    conversao_pct: number | string | null
+    qtd_vendida: number | null
+    qtd_com_promocao: number | null
+    valor_total: number | string | null
+  }>((from, to) => {
+    let qPer = admin
+      .from("ifood_cardapio_periodo_items")
+      .select(
+        "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+      )
+      .gte("period_end", start)
+      .lte("period_end", end)
+      .order("id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      qPer = qPer.in("unit_id", filterUnitIds)
+    return qPer
+  }, "ifood_cardapio_periodo_items rede")
 
   if (periodoItems && periodoItems.length > 0) {
     const acc = new Map<
@@ -908,23 +977,36 @@ export async function getNetworkTopItemsForMonth(
   }
 
   // Fallback: agrega do DIÁRIO da rede inteira
-  let qDay = admin
-    .from("ifood_daily_items")
-    .select(
-      "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
-    )
-    .gte("date", start)
-    .lte("date", end)
-    .limit(200000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    qDay = qDay.in("unit_id", filterUnitIds)
-  const { data } = await qDay
+  const data = await fetchAllRows<{
+    nome_item: string
+    categoria: string | null
+    visitas: number | null
+    pedidos: number | null
+    conversao_pct: number | string | null
+    qtd_vendida: number | null
+    qtd_com_promocao: number | null
+    valor_total: number | string | null
+  }>((from, to) => {
+    let qDay = admin
+      .from("ifood_daily_items")
+      .select(
+        "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+      )
+      .gte("date", start)
+      .lte("date", end)
+      .order("date")
+      .order("unit_id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      qDay = qDay.in("unit_id", filterUnitIds)
+    return qDay
+  }, "ifood_daily_items rede")
 
   const acc = new Map<
     string,
     ItemRanking & { _convSum: number; _convN: number }
   >()
-  for (const r of data ?? []) {
+  for (const r of data) {
     const cur = acc.get(r.nome_item) ?? {
       nomeItem: r.nome_item,
       categoria: r.categoria,
@@ -1061,22 +1143,33 @@ export async function getCancelamentosPorMotivo(
   month: number,
 ): Promise<CancelamentoMotivo[]> {
   const admin = createAdminClient()
-  const { data } = await admin
-    .from("ifood_financeiro_lancamentos")
-    .select(
-      "motivo_cancelamento, valor, pedido_associado_ifood, fato_gerador, impacto_no_repasse",
-    )
-    .eq("unit_id", unitId)
-    .eq("ref_year", year)
-    .eq("ref_month", month)
-    .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
-    .limit(50000)
+  const data = await fetchAllRows<{
+    motivo_cancelamento: string | null
+    valor: number | string | null
+    pedido_associado_ifood: string | null
+    fato_gerador: string | null
+    impacto_no_repasse: boolean | null
+  }>(
+    (from, to) =>
+      admin
+        .from("ifood_financeiro_lancamentos")
+        .select(
+          "motivo_cancelamento, valor, pedido_associado_ifood, fato_gerador, impacto_no_repasse",
+        )
+        .eq("unit_id", unitId)
+        .eq("ref_year", year)
+        .eq("ref_month", month)
+        .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
+        .order("id")
+        .range(from, to),
+    "ifood_financeiro_lancamentos cancelamentos unidade",
+  )
 
   const acc = new Map<
     string,
     { pedidos: Set<string>; perdaFinanceira: number }
   >()
-  for (const r of data ?? []) {
+  for (const r of data) {
     const motivo = (r.motivo_cancelamento ?? "Sem motivo informado").toString()
     const cur = acc.get(motivo) ?? {
       pedidos: new Set<string>(),
@@ -1104,29 +1197,42 @@ export async function listPedidosForMonth(
   opts: { search?: string; cancelado?: boolean; limit?: number } = {},
 ): Promise<PedidoResumo[]> {
   const admin = createAdminClient()
-  let query = admin
-    .from("ifood_financeiro_lancamentos")
-    .select(
-      "pedido_associado_ifood, pedido_associado_ifood_curto, data_criacao_pedido, valor_transacao, valor, fato_gerador, descricao_lancamento, motivo_cancelamento",
-    )
-    .eq("unit_id", unitId)
-    .eq("ref_year", year)
-    .eq("ref_month", month)
-    .not("pedido_associado_ifood", "is", null)
-    .limit(200000) // 1 pedido = ~7 linhas; pra resumo precisa ler tudo
-
-  if (opts.search) {
-    const s = opts.search.trim()
-    if (s) {
-      query = query.or(
-        `pedido_associado_ifood_curto.ilike.%${s}%,pedido_associado_ifood.ilike.%${s}%`,
+  // 1 pedido = ~7 linhas; pra resumo precisa ler tudo (paginado)
+  const data = await fetchAllRows<{
+    pedido_associado_ifood: string | null
+    pedido_associado_ifood_curto: string | null
+    data_criacao_pedido: string | null
+    valor_transacao: number | string | null
+    valor: number | string | null
+    fato_gerador: string | null
+    descricao_lancamento: string | null
+    motivo_cancelamento: string | null
+  }>((from, to) => {
+    let query = admin
+      .from("ifood_financeiro_lancamentos")
+      .select(
+        "pedido_associado_ifood, pedido_associado_ifood_curto, data_criacao_pedido, valor_transacao, valor, fato_gerador, descricao_lancamento, motivo_cancelamento",
       )
-    }
-  }
+      .eq("unit_id", unitId)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .not("pedido_associado_ifood", "is", null)
+      .order("id")
+      .range(from, to)
 
-  const { data } = await query
+    if (opts.search) {
+      const s = opts.search.trim()
+      if (s) {
+        query = query.or(
+          `pedido_associado_ifood_curto.ilike.%${s}%,pedido_associado_ifood.ilike.%${s}%`,
+        )
+      }
+    }
+    return query
+  }, "ifood_financeiro_lancamentos pedidos unidade")
+
   const acc = new Map<string, PedidoResumo>()
-  for (const r of data ?? []) {
+  for (const r of data) {
     const id = r.pedido_associado_ifood as string
     if (!id) continue
     const cur = acc.get(id) ?? {
@@ -1261,24 +1367,35 @@ export async function getNetworkFunnelForMonth(
 ): Promise<NetworkFunnel> {
   const admin = createAdminClient()
   const { start, end } = monthRange(year, month)
-  let q = admin
-    .from("ifood_daily_funnel")
-    .select(
-      "unit_id, visitas, visualizacoes, sacola, revisao, concluidos",
-    )
-    .limit(50000)
-    .gte("date", start)
-    .lte("date", end)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q = q.in("unit_id", filterUnitIds)
-  const { data: funnel } = await q
+  const funnel = await fetchAllRows<{
+    unit_id: string
+    visitas: number
+    visualizacoes: number
+    sacola: number
+    revisao: number
+    concluidos: number
+  }>((from, to) => {
+    let q = admin
+      .from("ifood_daily_funnel")
+      .select(
+        "unit_id, visitas, visualizacoes, sacola, revisao, concluidos",
+      )
+      .gte("date", start)
+      .lte("date", end)
+      .order("date")
+      .order("unit_id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  }, "ifood_daily_funnel rede")
 
   // Agrega por unidade
   const byUnit = new Map<
     string,
     { visitas: number; visualizacoes: number; sacola: number; revisao: number; concluidos: number }
   >()
-  for (const r of funnel ?? []) {
+  for (const r of funnel) {
     const cur = byUnit.get(r.unit_id) ?? {
       visitas: 0,
       visualizacoes: 0,
@@ -1353,15 +1470,24 @@ export async function getAvaliacoesResumoForMonth(
 ): Promise<AvaliacoesResumo> {
   const admin = createAdminClient()
   const { start, end } = monthRange(year, month)
-  const { data } = await admin
-    .from("ifood_avaliacoes")
-    .select("nota, comentario, tags_positivas, tags_negativas")
-    .eq("unit_id", unitId)
-    .gte("data_avaliacao", start)
-    .lte("data_avaliacao", end)
-    .limit(50000)
+  const rows = await fetchAllRows<{
+    nota: number
+    comentario: string | null
+    tags_positivas: string[] | null
+    tags_negativas: string[] | null
+  }>(
+    (from, to) =>
+      admin
+        .from("ifood_avaliacoes")
+        .select("nota, comentario, tags_positivas, tags_negativas")
+        .eq("unit_id", unitId)
+        .gte("data_avaliacao", start)
+        .lte("data_avaliacao", end)
+        .order("id")
+        .range(from, to),
+    "ifood_avaliacoes resumo unidade",
+  )
 
-  const rows = data ?? []
   if (rows.length === 0) {
     return {
       total: 0,
@@ -1474,20 +1600,36 @@ export async function getNetworkAvaliacoesForMonth(
 ): Promise<NetworkAvaliacoes> {
   const admin = createAdminClient()
   const { start, end } = monthRange(year, month)
-  let q = admin
-    .from("ifood_avaliacoes")
-    .select(
-      "id, unit_id, nota, comentario, tags_positivas, tags_negativas, data_avaliacao, pedido_id_curto",
-    )
-    .gte("data_avaliacao", start)
-    .lte("data_avaliacao", end)
-    .order("data_avaliacao", { ascending: false })
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q = q.in("unit_id", filterUnitIds)
-  const { data } = await q
+  const rows = await fetchAllRows<{
+    id: string
+    unit_id: string
+    nota: number
+    comentario: string | null
+    tags_positivas: string[] | null
+    tags_negativas: string[] | null
+    data_avaliacao: string
+    pedido_id_curto: string | null
+  }>((from, to) => {
+    let q = admin
+      .from("ifood_avaliacoes")
+      .select(
+        "id, unit_id, nota, comentario, tags_positivas, tags_negativas, data_avaliacao, pedido_id_curto",
+      )
+      .gte("data_avaliacao", start)
+      .lte("data_avaliacao", end)
+      .order("id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  }, "ifood_avaliacoes rede")
 
-  const rows = data ?? []
+  // Paginação ordena por id; pra "últimos comentários" precisamos reordenar
+  // por data_avaliacao DESC em JS (a ordem do .order() na query se perde).
+  rows.sort((a, b) =>
+    String(b.data_avaliacao).localeCompare(String(a.data_avaliacao)),
+  )
+
   if (rows.length === 0) {
     return {
       total: 0,
@@ -1570,24 +1712,33 @@ export async function getNetworkCancelamentosPorMotivo(
   filterUnitIds?: string[],
 ): Promise<CancelamentoMotivo[]> {
   const admin = createAdminClient()
-  let q = admin
-    .from("ifood_financeiro_lancamentos")
-    .select(
-      "motivo_cancelamento, valor, pedido_associado_ifood, fato_gerador, impacto_no_repasse",
-    )
-    .eq("ref_year", year)
-    .eq("ref_month", month)
-    .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
-    .limit(50000)
-  if (filterUnitIds && filterUnitIds.length > 0)
-    q = q.in("unit_id", filterUnitIds)
-  const { data } = await q
+  const data = await fetchAllRows<{
+    motivo_cancelamento: string | null
+    valor: number | string | null
+    pedido_associado_ifood: string | null
+    fato_gerador: string | null
+    impacto_no_repasse: boolean | null
+  }>((from, to) => {
+    let q = admin
+      .from("ifood_financeiro_lancamentos")
+      .select(
+        "motivo_cancelamento, valor, pedido_associado_ifood, fato_gerador, impacto_no_repasse",
+      )
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
+      .order("id")
+      .range(from, to)
+    if (filterUnitIds && filterUnitIds.length > 0)
+      q = q.in("unit_id", filterUnitIds)
+    return q
+  }, "ifood_financeiro_lancamentos cancelamentos rede")
 
   const acc = new Map<
     string,
     { pedidos: Set<string>; perdaFinanceira: number }
   >()
-  for (const r of data ?? []) {
+  for (const r of data) {
     const motivo = (r.motivo_cancelamento ?? "Sem motivo informado").toString()
     const cur = acc.get(motivo) ?? {
       pedidos: new Set<string>(),
