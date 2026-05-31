@@ -170,6 +170,11 @@ export type CoverageCell = {
     status: CoverageStatus
     count: number
   }
+  pedidos: {
+    // "Relatório de pedidos" do iFood (forma de pagamento / VR por bandeira)
+    status: CoverageStatus
+    imported: boolean
+  }
 }
 
 export type CoverageMatrix = {
@@ -326,6 +331,29 @@ export async function getCoverageMatrix(
     }
   }
 
+  // 5) Pedidos (VR/forma de pagamento) — presença por (unit, mês) a partir
+  // do log de importação (platform_imports), que é leve e já traz ref_year/
+  // ref_month. O relatório é mensal: presença = importado.
+  const pedidosByUnitMonth = new Map<string, Set<string>>()
+  if (unitIds.length > 0) {
+    const { data: pedRows } = await admin
+      .from("platform_imports")
+      .select("unit_id, ref_year, ref_month")
+      .eq("platform", "ifood")
+      .eq("report_type", "pedidos")
+      .eq("status", "success")
+      .in("unit_id", unitIds)
+      .not("ref_year", "is", null)
+      .limit(50000)
+    for (const r of pedRows ?? []) {
+      if (r.ref_year == null || r.ref_month == null) continue
+      const k = yKey(r.ref_year, r.ref_month)
+      const set = pedidosByUnitMonth.get(r.unit_id) ?? new Set<string>()
+      set.add(k)
+      pedidosByUnitMonth.set(r.unit_id, set)
+    }
+  }
+
   // Mês corrente — pra ele, qualquer dado já é "completo" (não dá pra
   // exigir mais até o mês acabar)
   const todayLocal = new Date()
@@ -393,6 +421,12 @@ export async function getCoverageMatrix(
           avaliacoes: {
             status: avaliacoesStatus,
             count: avalCount,
+          },
+          pedidos: {
+            status: (pedidosByUnitMonth.get(u.id)?.has(month.key)
+              ? "complete"
+              : "empty") as CoverageStatus,
+            imported: pedidosByUnitMonth.get(u.id)?.has(month.key) ?? false,
           },
         }
       }

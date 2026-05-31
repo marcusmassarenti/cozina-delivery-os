@@ -11,6 +11,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
 import type {
   NinefoodCoverageCell,
   NinefoodCoverageMatrix,
@@ -795,33 +796,68 @@ export async function getKeetaCoverageMatrix(
     string,
     Map<string, { total: number; dias: Set<string> }>
   >()
+  // 4) Pedidos recentes: total por (unit, mês) — tabela keeta_pedidos_recentes
+  const recentesByUnitMonth = new Map<string, Map<string, number>>()
 
   if (unitIds.length > 0) {
-    const [lojaRes, itemRes, pedRes] = await Promise.all([
-      admin
-        .from("keeta_daily_loja")
-        .select("unit_id, data, ref_year, ref_month")
-        .in("unit_id", unitIds)
-        .gte("data", rangeStart)
-        .lte("data", rangeEnd)
-        .limit(50000),
-      admin
-        .from("keeta_daily_item")
-        .select("unit_id, data")
-        .in("unit_id", unitIds)
-        .gte("data", rangeStart)
-        .lte("data", rangeEnd)
-        .limit(200000),
-      admin
-        .from("keeta_pedidos")
-        .select("unit_id, data, ref_year, ref_month")
-        .in("unit_id", unitIds)
-        .gte("data", rangeStart)
-        .lte("data", rangeEnd)
-        .limit(200000),
+    type CobRow = {
+      unit_id: string
+      data: string
+      ref_year: number | null
+      ref_month: number | null
+    }
+    const [lojaRes, itemRes, pedRes, recRes] = await Promise.all([
+      fetchAllRows<CobRow>(
+        (f, t) =>
+          admin
+            .from("keeta_daily_loja")
+            .select("unit_id, data, ref_year, ref_month")
+            .in("unit_id", unitIds)
+            .gte("data", rangeStart)
+            .lte("data", rangeEnd)
+            .order("id")
+            .range(f, t),
+        "keeta_daily_loja cobertura",
+      ),
+      fetchAllRows<{ unit_id: string; data: string }>(
+        (f, t) =>
+          admin
+            .from("keeta_daily_item")
+            .select("unit_id, data")
+            .in("unit_id", unitIds)
+            .gte("data", rangeStart)
+            .lte("data", rangeEnd)
+            .order("id")
+            .range(f, t),
+        "keeta_daily_item cobertura",
+      ),
+      fetchAllRows<CobRow>(
+        (f, t) =>
+          admin
+            .from("keeta_pedidos")
+            .select("unit_id, data, ref_year, ref_month")
+            .in("unit_id", unitIds)
+            .gte("data", rangeStart)
+            .lte("data", rangeEnd)
+            .order("id")
+            .range(f, t),
+        "keeta_pedidos cobertura",
+      ),
+      fetchAllRows<CobRow>(
+        (f, t) =>
+          admin
+            .from("keeta_pedidos_recentes")
+            .select("unit_id, data, ref_year, ref_month")
+            .in("unit_id", unitIds)
+            .gte("data", rangeStart)
+            .lte("data", rangeEnd)
+            .order("id")
+            .range(f, t),
+        "keeta_pedidos_recentes cobertura",
+      ),
     ])
 
-    for (const r of lojaRes.data ?? []) {
+    for (const r of lojaRes) {
       const k =
         r.ref_year != null && r.ref_month != null
           ? `${r.ref_year}-${String(r.ref_month).padStart(2, "0")}`
@@ -830,7 +866,7 @@ export async function getKeetaCoverageMatrix(
       inner.set(k, (inner.get(k) ?? 0) + 1)
       lojaByUnitMonth.set(r.unit_id, inner)
     }
-    for (const r of itemRes.data ?? []) {
+    for (const r of itemRes) {
       const dateStr = r.data as string
       const k = dateToKey(dateStr)
       const inner =
@@ -840,7 +876,7 @@ export async function getKeetaCoverageMatrix(
       inner.set(k, set)
       itemByUnitMonth.set(r.unit_id, inner)
     }
-    for (const r of pedRes.data ?? []) {
+    for (const r of pedRes) {
       const k =
         r.ref_year != null && r.ref_month != null
           ? `${r.ref_year}-${String(r.ref_month).padStart(2, "0")}`
@@ -853,6 +889,15 @@ export async function getKeetaCoverageMatrix(
       cur.dias.add(r.data as string)
       inner.set(k, cur)
       pedidoByUnitMonth.set(r.unit_id, inner)
+    }
+    for (const r of recRes) {
+      const k =
+        r.ref_year != null && r.ref_month != null
+          ? `${r.ref_year}-${String(r.ref_month).padStart(2, "0")}`
+          : dateToKey(r.data as string)
+      const inner = recentesByUnitMonth.get(r.unit_id) ?? new Map<string, number>()
+      inner.set(k, (inner.get(k) ?? 0) + 1)
+      recentesByUnitMonth.set(r.unit_id, inner)
     }
   }
 
@@ -887,6 +932,10 @@ export async function getKeetaCoverageMatrix(
         const pedidoStatus: NinefoodCoverageStatus =
           pedDias >= minComplete ? "complete" : pedDias > 0 ? "partial" : "empty"
 
+        const recTotal = recentesByUnitMonth.get(u.id)?.get(month.key) ?? 0
+        const recentesStatus: NinefoodCoverageStatus =
+          recTotal > 0 ? "complete" : "empty"
+
         cells[month.key] = {
           loja: { status: lojaStatus, diasImportados: lojaDias, diasNoMes },
           item: { status: itemStatus, diasImportados: itemDias },
@@ -896,6 +945,7 @@ export async function getKeetaCoverageMatrix(
             diasComPedido: pedDias,
             diasNoMes,
           },
+          recentes: { status: recentesStatus, totalPedidos: recTotal },
         }
       }
       return {

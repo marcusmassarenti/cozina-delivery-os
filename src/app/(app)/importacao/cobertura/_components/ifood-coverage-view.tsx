@@ -1,4 +1,4 @@
-import { Info, Receipt, Star, UtensilsCrossed } from "lucide-react"
+import { CreditCard, Info, Receipt, Star, UtensilsCrossed } from "lucide-react"
 
 import type {
   CoverageCell,
@@ -26,6 +26,7 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
   let financeiroComplete = 0
   let financeiroPartial = 0
   let avaliacoesComplete = 0
+  let pedidosComplete = 0
   for (const u of activeUnits) {
     for (const m of matrix.months) {
       const c = u.cells[m.key]
@@ -34,13 +35,14 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
       if (c.financeiro.status === "complete") financeiroComplete++
       if (c.financeiro.status === "partial") financeiroPartial++
       if (c.avaliacoes.status === "complete") avaliacoesComplete++
+      if (c.pedidos.status === "complete") pedidosComplete++
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
       {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={UtensilsCrossed}
           label="Cardápio"
@@ -64,6 +66,14 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
           partial={0}
           total={totalCells}
           color="emerald"
+        />
+        <StatCard
+          icon={CreditCard}
+          label="Pedidos (VR)"
+          complete={pedidosComplete}
+          partial={0}
+          total={totalCells}
+          color="violet"
         />
       </div>
 
@@ -147,6 +157,16 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
                               : "Sem Avaliações"
                           }
                         />
+                        <CoverageBadge
+                          status={c.pedidos.status}
+                          label="P"
+                          tone="violet"
+                          tooltip={
+                            c.pedidos.imported
+                              ? "Relatório de pedidos (VR/forma de pagamento) importado"
+                              : "Sem Relatório de pedidos (VR)"
+                          }
+                        />
                       </div>
                     </td>
                   )
@@ -166,6 +186,7 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
           <LegendItem label="C" name="Cardápio" />
           <LegendItem label="F" name="Financeiro" />
           <LegendItem label="A" name="Avaliações" />
+          <LegendItem label="P" name="Pedidos (VR)" />
         </div>
         <div className="flex items-center gap-3 border-l pl-4">
           <span className="font-semibold uppercase tracking-wider text-muted-foreground">
@@ -217,6 +238,9 @@ function buildGapsByUnit(matrix: CoverageMatrix): UnitGap[] {
       }
       if (c.avaliacoes.status === "empty") {
         items.push({ label: "Avaliações", severity: "missing" })
+      }
+      if (c.pedidos.status === "empty") {
+        items.push({ label: "Pedidos (VR)", severity: "missing" })
       }
       if (items.length === 0) continue
       for (const it of items) {

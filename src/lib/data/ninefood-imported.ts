@@ -604,6 +604,12 @@ export type NinefoodCoverageCell = {
     diasComPedido: number
     diasNoMes: number
   }
+  // Opcional — só a Keeta usa (relatório "Pedidos recentes", tabela própria).
+  // O 99 Food deixa undefined e a coluna não é renderizada.
+  recentes?: {
+    status: NinefoodCoverageStatus
+    totalPedidos: number
+  }
 }
 
 export type NinefoodCoverageMatrix = {

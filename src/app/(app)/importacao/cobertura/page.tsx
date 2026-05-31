@@ -44,7 +44,8 @@ export default async function CoberturaPage() {
       (c) =>
         c.loja.status !== "empty" ||
         c.item.status !== "empty" ||
-        c.pedido.status !== "empty",
+        c.pedido.status !== "empty" ||
+        c.recentes?.status === "complete",
     ),
   )
 
@@ -89,7 +90,7 @@ export default async function CoberturaPage() {
           {
             platform: "keeta",
             empty: !keetaHasAnyData,
-            content: <NinefoodCoverageView matrix={keetaMatrix} />,
+            content: <NinefoodCoverageView matrix={keetaMatrix} showRecentes />,
           },
         ]}
       />

@@ -1,4 +1,4 @@
-import { Receipt, Star, UtensilsCrossed } from "lucide-react"
+import { CreditCard, Receipt, Star, UtensilsCrossed } from "lucide-react"
 
 import type {
   NinefoodCoverageCell,
@@ -21,8 +21,11 @@ import {
  */
 export function NinefoodCoverageView({
   matrix,
+  showRecentes = false,
 }: {
   matrix: NinefoodCoverageMatrix
+  /** Keeta: renderiza a 4ª coluna "Pedidos recentes" (R). 99 Food deixa false. */
+  showRecentes?: boolean
 }) {
   const activeUnits = matrix.units.filter((u) => u.active)
   const totalCells = activeUnits.length * matrix.months.length
@@ -32,6 +35,7 @@ export function NinefoodCoverageView({
   let itemPartial = 0
   let pedidoComplete = 0
   let pedidoPartial = 0
+  let recentesComplete = 0
   for (const u of activeUnits) {
     for (const m of matrix.months) {
       const c = u.cells[m.key]
@@ -41,13 +45,14 @@ export function NinefoodCoverageView({
       if (c.item.status === "partial") itemPartial++
       if (c.pedido.status === "complete") pedidoComplete++
       if (c.pedido.status === "partial") pedidoPartial++
+      if (c.recentes?.status === "complete") recentesComplete++
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
       {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={`grid gap-3 sm:grid-cols-2 ${showRecentes ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         <StatCard
           icon={Receipt}
           label="Dados da loja"
@@ -72,6 +77,16 @@ export function NinefoodCoverageView({
           total={totalCells}
           color="emerald"
         />
+        {showRecentes && (
+          <StatCard
+            icon={CreditCard}
+            label="Pedidos recentes"
+            complete={recentesComplete}
+            partial={0}
+            total={totalCells}
+            color="violet"
+          />
+        )}
       </div>
 
       {/* Matriz */}
@@ -134,6 +149,18 @@ export function NinefoodCoverageView({
                           tone="emerald"
                           tooltip={pedidoTooltip(c)}
                         />
+                        {showRecentes && (
+                          <CoverageBadge
+                            status={c.recentes?.status ?? "empty"}
+                            label="R"
+                            tone="violet"
+                            tooltip={
+                              (c.recentes?.totalPedidos ?? 0) > 0
+                                ? `Pedidos recentes: ${c.recentes!.totalPedidos} pedidos`
+                                : "Sem Pedidos recentes importado"
+                            }
+                          />
+                        )}
                       </div>
                     </td>
                   )
@@ -153,6 +180,7 @@ export function NinefoodCoverageView({
           <LegendItem label="L" name="Loja (financeiro)" />
           <LegendItem label="I" name="Item (cardápio)" />
           <LegendItem label="P" name="Pedido (avaliação)" />
+          {showRecentes && <LegendItem label="R" name="Pedidos recentes" />}
         </div>
         <div className="flex items-center gap-3 border-l pl-4">
           <span className="font-semibold uppercase tracking-wider text-muted-foreground">
@@ -168,12 +196,15 @@ export function NinefoodCoverageView({
       </div>
 
       {/* Lacunas */}
-      <GapsByUnit gaps={buildGapsByUnit(matrix)} />
+      <GapsByUnit gaps={buildGapsByUnit(matrix, showRecentes)} />
     </div>
   )
 }
 
-function buildGapsByUnit(matrix: NinefoodCoverageMatrix): UnitGap[] {
+function buildGapsByUnit(
+  matrix: NinefoodCoverageMatrix,
+  showRecentes: boolean,
+): UnitGap[] {
   const out: UnitGap[] = []
   for (const u of matrix.units) {
     if (!u.active) continue
@@ -209,6 +240,10 @@ function buildGapsByUnit(matrix: NinefoodCoverageMatrix): UnitGap[] {
           label: `Pedido parcial (${c.pedido.diasComPedido}/${c.pedido.diasNoMes}d)`,
           severity: "partial",
         })
+      }
+      // Pedidos recentes (só Keeta)
+      if (showRecentes && c.recentes?.status === "empty") {
+        items.push({ label: "Pedidos recentes", severity: "missing" })
       }
       if (items.length === 0) continue
       for (const it of items) {
