@@ -229,6 +229,8 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                       state: unit.state,
                       cnpj: unit.cnpj,
                       active: unit.active,
+                      dataInauguracao: unit.data_inauguracao,
+                      dataEncerramento: unit.data_encerramento,
                       platforms: unit.platforms,
                       externalStoreIds: unit.externalStoreIds,
                     }}

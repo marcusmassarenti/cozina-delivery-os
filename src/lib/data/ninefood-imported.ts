@@ -12,6 +12,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { monthOperationWindow } from "@/lib/data/operation-window"
 
 /**
  * Pagina uma query do Supabase via .range() em loop. O hard-cap de 1000
@@ -610,6 +611,8 @@ export type NinefoodCoverageCell = {
     status: NinefoodCoverageStatus
     totalPedidos: number
   }
+  /** A loja operou nesse mês? false = N/A (antes de inaugurar / após fechar). */
+  applicable: boolean
 }
 
 export type NinefoodCoverageMatrix = {
@@ -666,7 +669,7 @@ export async function getNinefoodCoverageMatrix(
   // Todas unidades
   const { data: unitsRows } = await admin
     .from("units")
-    .select("id, code, name, active")
+    .select("id, code, name, active, data_inauguracao, data_encerramento")
     .order("code")
   const units = unitsRows ?? []
   const unitIds = units.map((u) => u.id)
@@ -776,14 +779,21 @@ export async function getNinefoodCoverageMatrix(
   return {
     months,
     units: units.map((u) => {
+      const op = {
+        dataInauguracao: (u as { data_inauguracao: string | null })
+          .data_inauguracao,
+        dataEncerramento: (u as { data_encerramento: string | null })
+          .data_encerramento,
+      }
       const cells: Record<string, NinefoodCoverageCell> = {}
       for (const month of months) {
-        const diasNoMes = new Date(month.year, month.month, 0).getDate()
+        const win = monthOperationWindow(month.year, month.month, op)
+        const diasNoMes = win.operatingDays
         const isCurrentMonth =
           month.year === currentYear && month.month === currentMonth
         const minComplete = isCurrentMonth
           ? 1
-          : Math.ceil(diasNoMes * NINEFOOD_COMPLETE_RATIO)
+          : Math.max(1, Math.ceil(diasNoMes * NINEFOOD_COMPLETE_RATIO))
 
         // Loja
         const lojaDias = lojaByUnitMonth.get(u.id)?.get(month.key) ?? 0
@@ -824,6 +834,7 @@ export async function getNinefoodCoverageMatrix(
             diasComPedido: pedDias,
             diasNoMes,
           },
+          applicable: win.applicable,
         }
       }
       return {

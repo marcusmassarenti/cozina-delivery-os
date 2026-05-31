@@ -10,6 +10,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { monthOperationWindow } from "@/lib/data/operation-window"
 
 // ─── Tipos ───────────────────────────────────────────────────────────
 
@@ -175,6 +176,8 @@ export type CoverageCell = {
     status: CoverageStatus
     imported: boolean
   }
+  /** A loja operou nesse mês? false = N/A (antes de inaugurar / após fechar). */
+  applicable: boolean
 }
 
 export type CoverageMatrix = {
@@ -233,7 +236,7 @@ export async function getCoverageMatrix(
   // Busca todas as unidades (ativas e inativas)
   const { data: unitsRows } = await admin
     .from("units")
-    .select("id, code, name, active")
+    .select("id, code, name, active, data_inauguracao, data_encerramento")
     .order("code")
   const units = unitsRows ?? []
   const unitIds = units.map((u) => u.id)
@@ -364,16 +367,24 @@ export async function getCoverageMatrix(
   return {
     months,
     units: units.map((u) => {
+      const op = {
+        dataInauguracao: (u as { data_inauguracao: string | null })
+          .data_inauguracao,
+        dataEncerramento: (u as { data_encerramento: string | null })
+          .data_encerramento,
+      }
       const cells: Record<string, CoverageCell> = {}
       for (const month of months) {
-        const diasNoMes = new Date(month.year, month.month, 0).getDate()
+        const win = monthOperationWindow(month.year, month.month, op)
+        // "Dias esperados" = dias em que a loja operou na janela (não 30/31).
+        const diasNoMes = win.operatingDays
         const isCurrentMonth =
           month.year === currentYear && month.month === currentMonth
         // Pra mês corrente: qualquer dado conta como completo (1 dia basta).
-        // Pra meses passados: precisa de 60%+ pra ser completo.
+        // Pra meses passados: precisa de 60%+ dos dias de operação.
         const minComplete = isCurrentMonth
           ? 1
-          : Math.ceil(diasNoMes * COMPLETE_MIN_DAYS_RATIO)
+          : Math.max(1, Math.ceil(diasNoMes * COMPLETE_MIN_DAYS_RATIO))
 
         // Cardápio
         const dailyDays = dailyByUnitMonth.get(u.id)?.get(month.key) ?? 0
@@ -428,6 +439,7 @@ export async function getCoverageMatrix(
               : "empty") as CoverageStatus,
             imported: pedidosByUnitMonth.get(u.id)?.has(month.key) ?? false,
           },
+          applicable: win.applicable,
         }
       }
       return {

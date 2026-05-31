@@ -20,7 +20,9 @@ import {
  */
 export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
   const activeUnits = matrix.units.filter((u) => u.active)
-  const totalCells = activeUnits.length * matrix.months.length
+  // Denominador = só células aplicáveis (meses em que a loja operou). Meses
+  // antes de inaugurar / após fechar são N/A e não entram na conta.
+  let totalCells = 0
   let cardapioComplete = 0
   let cardapioPartial = 0
   let financeiroComplete = 0
@@ -30,6 +32,8 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
   for (const u of activeUnits) {
     for (const m of matrix.months) {
       const c = u.cells[m.key]
+      if (!c.applicable) continue
+      totalCells++
       if (c.cardapio.status === "complete") cardapioComplete++
       if (c.cardapio.status === "partial") cardapioPartial++
       if (c.financeiro.status === "complete") financeiroComplete++
@@ -132,6 +136,18 @@ export function IfoodCoverageView({ matrix }: { matrix: CoverageMatrix }) {
                 </td>
                 {matrix.months.map((m) => {
                   const c = u.cells[m.key]
+                  if (!c.applicable) {
+                    return (
+                      <td key={m.key} className="px-2 py-2 text-center">
+                        <span
+                          className="text-[10px] text-muted-foreground/40"
+                          title="Loja não operava nesse mês (fora do período de inauguração/encerramento)"
+                        >
+                          N/A
+                        </span>
+                      </td>
+                    )
+                  }
                   return (
                     <td key={m.key} className="px-2 py-2 text-center">
                       <div className="flex items-center justify-center gap-0.5">
@@ -216,6 +232,7 @@ function buildGapsByUnit(matrix: CoverageMatrix): UnitGap[] {
     let totalPartial = 0
     for (const m of matrix.months) {
       const c = u.cells[m.key]
+      if (!c.applicable) continue // mês fora de operação → não é lacuna
       const items: UnitGap["months"][number]["items"] = []
       if (c.cardapio.status === "empty") {
         items.push({ label: "Cardápio", severity: "missing" })

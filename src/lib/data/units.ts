@@ -16,6 +16,8 @@ export type Unit = {
   cnpj: string | null
   active: boolean
   brand_id: string
+  data_inauguracao: string | null // "YYYY-MM-DD"
+  data_encerramento: string | null
   platforms: PlatformId[]
   /** Por plataforma, o ID da loja no sistema externo (ex.: iFood 260777). */
   externalStoreIds: Partial<Record<PlatformId, string | null>>
@@ -31,6 +33,8 @@ type DbUnit = {
   cnpj: string | null
   active: boolean
   brand_id: string
+  data_inauguracao: string | null
+  data_encerramento: string | null
 }
 
 function attach(
@@ -58,7 +62,9 @@ async function getUnitsUncached(): Promise<Unit[]> {
   const [unitsRes, platformsRes] = await Promise.all([
     supabase
       .from("units")
-      .select("id, code, name, city, state, cnpj, active, brand_id")
+      .select(
+        "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento",
+      )
       .order("code"),
     supabase
       .from("unit_platforms")
@@ -105,7 +111,9 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("units")
-    .select("id, code, name, city, state, cnpj, active, brand_id")
+    .select(
+      "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento",
+    )
     .eq("code", code)
     .maybeSingle()
   if (error) throw new Error(`Falha ao buscar unidade ${code}: ${error.message}`)

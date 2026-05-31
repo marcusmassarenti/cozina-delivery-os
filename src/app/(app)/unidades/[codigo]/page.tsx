@@ -164,6 +164,8 @@ export default async function UnidadeDetalhePage({
               state: unit.state,
               cnpj: unit.cnpj,
               active: unit.active,
+              dataInauguracao: unit.data_inauguracao,
+              dataEncerramento: unit.data_encerramento,
               platforms,
               externalStoreIds: unit.externalStoreIds,
             }}

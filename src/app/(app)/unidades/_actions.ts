@@ -19,6 +19,12 @@ function cleanCnpj(cnpj: string) {
   return cnpj.replace(/\D/g, "")
 }
 
+/** "YYYY-MM-DD" válido → mantém; vazio/ inválido → null. */
+function dateOrNull(v: FormDataEntryValue | null): string | null {
+  const s = String(v ?? "").trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null
+}
+
 function isValidCnpj(cnpj: string): boolean {
   const c = cleanCnpj(cnpj)
   if (c.length !== 14) return false
@@ -65,6 +71,8 @@ export async function createUnit(
   const state = String(formData.get("state") ?? "").trim().toUpperCase()
   const cnpjRaw = String(formData.get("cnpj") ?? "").trim()
   const active = formData.get("active") === "on"
+  const dataInauguracao = dateOrNull(formData.get("data_inauguracao"))
+  const dataEncerramento = dateOrNull(formData.get("data_encerramento"))
 
   // Plataformas vêm como múltiplos checkboxes com nome="platforms"
   const platformsRaw = formData.getAll("platforms").map(String)
@@ -99,6 +107,8 @@ export async function createUnit(
         state,
         cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
         active,
+        data_inauguracao: dataInauguracao,
+        data_encerramento: dataEncerramento,
       })
       .select("id")
       .single()
@@ -161,6 +171,8 @@ export async function updateUnit(
   const state = String(formData.get("state") ?? "").trim().toUpperCase()
   const cnpjRaw = String(formData.get("cnpj") ?? "").trim()
   const active = formData.get("active") === "on"
+  const dataInauguracao = dateOrNull(formData.get("data_inauguracao"))
+  const dataEncerramento = dateOrNull(formData.get("data_encerramento"))
 
   const platformsRaw = formData.getAll("platforms").map(String)
   const platforms: PlatformId[] = ALL_PLATFORMS.filter((p) =>
@@ -202,6 +214,8 @@ export async function updateUnit(
         state,
         cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
         active,
+        data_inauguracao: dataInauguracao,
+        data_encerramento: dataEncerramento,
       })
       .eq("id", unitId)
 

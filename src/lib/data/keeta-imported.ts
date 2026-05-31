@@ -12,6 +12,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
+import { monthOperationWindow } from "@/lib/data/operation-window"
 import type {
   NinefoodCoverageCell,
   NinefoodCoverageMatrix,
@@ -781,7 +782,7 @@ export async function getKeetaCoverageMatrix(
 
   const { data: unitsRows } = await admin
     .from("units")
-    .select("id, code, name, active")
+    .select("id, code, name, active, data_inauguracao, data_encerramento")
     .order("code")
   const units = unitsRows ?? []
   const unitIds = units.map((u) => u.id)
@@ -908,14 +909,21 @@ export async function getKeetaCoverageMatrix(
   return {
     months,
     units: units.map((u) => {
+      const op = {
+        dataInauguracao: (u as { data_inauguracao: string | null })
+          .data_inauguracao,
+        dataEncerramento: (u as { data_encerramento: string | null })
+          .data_encerramento,
+      }
       const cells: Record<string, NinefoodCoverageCell> = {}
       for (const month of months) {
-        const diasNoMes = new Date(month.year, month.month, 0).getDate()
+        const win = monthOperationWindow(month.year, month.month, op)
+        const diasNoMes = win.operatingDays
         const isCurrentMonth =
           month.year === currentYear && month.month === currentMonth
         const minComplete = isCurrentMonth
           ? 1
-          : Math.ceil(diasNoMes * KEETA_COMPLETE_RATIO)
+          : Math.max(1, Math.ceil(diasNoMes * KEETA_COMPLETE_RATIO))
 
         const lojaDias = lojaByUnitMonth.get(u.id)?.get(month.key) ?? 0
         const lojaStatus: NinefoodCoverageStatus =
@@ -946,6 +954,7 @@ export async function getKeetaCoverageMatrix(
             diasNoMes,
           },
           recentes: { status: recentesStatus, totalPedidos: recTotal },
+          applicable: win.applicable,
         }
       }
       return {

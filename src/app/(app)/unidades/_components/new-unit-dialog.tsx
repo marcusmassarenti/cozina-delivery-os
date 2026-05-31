@@ -133,6 +133,15 @@ export function NewUnitDialog() {
             />
           </Field>
 
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Inauguração">
+              <Input name="data_inauguracao" type="date" />
+            </Field>
+            <Field label="Encerramento (se fechou)">
+              <Input name="data_encerramento" type="date" />
+            </Field>
+          </div>
+
           <div className="flex flex-col gap-2">
             <Label className="text-xs font-medium">Plataformas ativas</Label>
             <div className="grid grid-cols-3 gap-2">

@@ -28,7 +28,8 @@ export function NinefoodCoverageView({
   showRecentes?: boolean
 }) {
   const activeUnits = matrix.units.filter((u) => u.active)
-  const totalCells = activeUnits.length * matrix.months.length
+  // Denominador = só meses em que a loja operou (N/A não conta).
+  let totalCells = 0
   let lojaComplete = 0
   let lojaPartial = 0
   let itemComplete = 0
@@ -39,6 +40,8 @@ export function NinefoodCoverageView({
   for (const u of activeUnits) {
     for (const m of matrix.months) {
       const c = u.cells[m.key]
+      if (!c.applicable) continue
+      totalCells++
       if (c.loja.status === "complete") lojaComplete++
       if (c.loja.status === "partial") lojaPartial++
       if (c.item.status === "complete") itemComplete++
@@ -128,6 +131,18 @@ export function NinefoodCoverageView({
                 </td>
                 {matrix.months.map((m) => {
                   const c = u.cells[m.key]
+                  if (!c.applicable) {
+                    return (
+                      <td key={m.key} className="px-2 py-2 text-center">
+                        <span
+                          className="text-[10px] text-muted-foreground/40"
+                          title="Loja não operava nesse mês (fora do período de inauguração/encerramento)"
+                        >
+                          N/A
+                        </span>
+                      </td>
+                    )
+                  }
                   return (
                     <td key={m.key} className="px-2 py-2 text-center">
                       <div className="flex items-center justify-center gap-0.5">
@@ -213,6 +228,7 @@ function buildGapsByUnit(
     let totalPartial = 0
     for (const m of matrix.months) {
       const c = u.cells[m.key]
+      if (!c.applicable) continue // mês fora de operação → não é lacuna
       const items: UnitGap["months"][number]["items"] = []
       // Loja
       if (c.loja.status === "empty") {

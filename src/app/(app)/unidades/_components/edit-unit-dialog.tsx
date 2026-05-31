@@ -59,6 +59,8 @@ export type EditUnitInitial = {
   state: string | null
   cnpj: string | null
   active: boolean
+  dataInauguracao: string | null
+  dataEncerramento: string | null
   platforms: PlatformId[]
   /** Mapeamento PlatformId → ID da loja na plataforma (iFood: 260777, etc.) */
   externalStoreIds?: Partial<Record<PlatformId, string | null>>
@@ -165,6 +167,27 @@ export function EditUnitDialog({
               maxLength={18}
             />
           </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Inauguração">
+              <Input
+                name="data_inauguracao"
+                type="date"
+                defaultValue={unit.dataInauguracao ?? ""}
+              />
+            </Field>
+            <Field label="Encerramento (se fechou)">
+              <Input
+                name="data_encerramento"
+                type="date"
+                defaultValue={unit.dataEncerramento ?? ""}
+              />
+            </Field>
+          </div>
+          <p className="-mt-2 text-[11px] text-muted-foreground">
+            A inauguração faz a Cobertura ignorar meses antes da loja existir
+            (não cobra dado que não tinha como ter).
+          </p>
 
           <div className="flex flex-col gap-2">
             <Label className="text-xs font-medium">Plataformas ativas</Label>
