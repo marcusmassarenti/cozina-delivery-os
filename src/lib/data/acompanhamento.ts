@@ -135,17 +135,20 @@ export async function getAcompanhamentoVendas(
     }
   })
 
-  // Agrupa por marca — só lojas COM faturamento no mês (total > 0). Marca que
-  // ficar sem nenhuma loja não aparece.
+  // Agrupa TODAS as lojas por marca (não derruba marca nenhuma).
   const brandMap = new Map<string, AcompUnit[]>()
   for (const { brandId, unit } of unitsBuilt) {
-    if (unit.total <= 0) continue
     const arr = brandMap.get(brandId) ?? []
     arr.push(unit)
     brandMap.set(brandId, arr)
   }
 
-  const brands: AcompBrand[] = [...brandMap.entries()].map(([brandId, units]) => {
+  const brands: AcompBrand[] = [...brandMap.entries()].map(([brandId, all]) => {
+    const brandTotal = all.reduce((s, u) => s + u.total, 0)
+    // Se a marca vendeu no mês, esconde as lojas zeradas. Se a marca inteira
+    // está zerada (ex: vendas ainda não importadas), mantém as lojas pra a
+    // marca continuar aparecendo.
+    const units = brandTotal > 0 ? all.filter((u) => u.total > 0) : all
     units.sort((a, b) => b.total - a.total)
     const diaria = units.reduce((s, u) => s + u.diaria, 0)
     const total = units.reduce((s, u) => s + u.total, 0)
