@@ -14,7 +14,11 @@ import {
   type MetricFormat,
 } from "@/lib/data/comparativo-metrics"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
-import { formatPeriodKey, formatPeriodLabel } from "@/lib/period"
+import {
+  currentPeriod,
+  formatPeriodKey,
+  formatPeriodLabel,
+} from "@/lib/period"
 
 const ALL_PLAT: PlatformId[] = ["ifood", "99food", "keeta"]
 
@@ -67,7 +71,12 @@ export default async function ComparativoPage({
       : allUnits
   const selectedIds = selectedUnits.map((u) => u.id)
 
-  const defaultMesA = periodOptions[0]?.key ?? null
+  // Default: mês mais recente com dado, pulando o mês corrente (geralmente vazio).
+  const currentKey = formatPeriodKey(currentPeriod())
+  let defaultMesA = periodOptions[0]?.key ?? null
+  if (defaultMesA === currentKey && periodOptions.length > 1) {
+    defaultMesA = periodOptions[1].key
+  }
   const mesA =
     sp.mesA && /^\d{4}-\d{2}$/.test(sp.mesA) ? sp.mesA : defaultMesA
   const mesB =

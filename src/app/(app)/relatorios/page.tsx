@@ -75,20 +75,20 @@ const CATEGORIAS: Categoria[] = [
     reports: [
       {
         title: "Top produtos",
-        desc: "Itens mais vendidos da rede ou por loja.",
+        desc: "Itens mais vendidos por plataforma, na rede ou por loja, por qtd ou faturamento.",
         icon: Package,
-        soon: true,
+        href: "/relatorios/produtos",
+      },
+      {
+        title: "Produtos em alta / queda",
+        desc: "O que subiu ou caiu vs outro mês — compara dois meses por produto.",
+        icon: TrendingUp,
+        href: "/relatorios/produtos",
       },
       {
         title: "Comparativo de produtos",
         desc: "Mesmo produto entre lojas diferentes.",
         icon: GitCompareArrows,
-        soon: true,
-      },
-      {
-        title: "Produtos em alta / queda",
-        desc: "O que subiu ou caiu vs o mês anterior.",
-        icon: TrendingUp,
         soon: true,
       },
     ],
