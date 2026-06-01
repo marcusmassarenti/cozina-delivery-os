@@ -13,6 +13,7 @@ import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getUserRole, roleCan, type AppRole, type RoleCaps } from "@/lib/auth/roles"
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -90,6 +91,27 @@ export async function requireAdmin(): Promise<{
   throw new ForbiddenError(
     "Apenas administradores podem fazer essa operação.",
   )
+}
+
+/**
+ * Exige usuário logado E com a capacidade pedida (canEdit / canDelete /
+ * canManageUsers) conforme o papel (admin / gerente / franqueado).
+ *
+ * @throws AuthError se não houver sessão
+ * @throws ForbiddenError se o papel não tem a capacidade
+ */
+export async function requireCapability(cap: keyof RoleCaps): Promise<{
+  userId: string
+  email: string | null
+  role: AppRole
+  admin: ReturnType<typeof createAdminClient>
+}> {
+  const { userId, email } = await requireAuth()
+  const role = await getUserRole()
+  if (!roleCan(role, cap)) {
+    throw new ForbiddenError("Seu perfil não tem permissão pra essa ação.")
+  }
+  return { userId, email, role, admin: createAdminClient() }
 }
 
 /**

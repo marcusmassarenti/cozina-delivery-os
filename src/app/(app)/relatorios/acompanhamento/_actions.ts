@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireAuth } from "@/lib/auth/guards"
+import { requireCapability } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type SaveMetaState = { ok: boolean; message?: string }
@@ -24,7 +24,7 @@ export async function saveMetaFaturamento(input: {
   const meta = Number.isFinite(input.meta) ? Math.max(0, input.meta) : 0
 
   try {
-    await requireAuth()
+    await requireCapability("canEdit")
     const supabase = createAdminClient()
     const { error } = await supabase.from("monthly_entries").upsert(
       {

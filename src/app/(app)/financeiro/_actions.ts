@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireAuth } from "@/lib/auth/guards"
+import { requireCapability } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type SaveCostsState = {
@@ -39,7 +39,7 @@ export async function saveUnitCosts(input: {
     : 0
 
   try {
-    await requireAuth()
+    await requireCapability("canEdit")
     const supabase = createAdminClient()
     const { error } = await supabase.from("monthly_entries").upsert(
       {
