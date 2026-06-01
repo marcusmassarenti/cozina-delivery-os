@@ -212,20 +212,20 @@
   .acomp-print tr.plat-row {
     display: none !important;
   }
-  /* tabela compacta */
+  /* tabela com fonte confortável (sobra espaço com só o nível loja) */
   .acomp-print table {
-    font-size: 9px !important;
-    line-height: 1.15 !important;
+    font-size: 13px !important;
+    line-height: 1.3 !important;
   }
   .acomp-print thead {
-    font-size: 7.5px !important;
+    font-size: 10px !important;
   }
   .acomp-print th,
   .acomp-print td {
-    padding: 1.5px 6px !important;
+    padding: 3px 8px !important;
   }
   .acomp-print input {
-    font-size: 9px !important;
+    font-size: 13px !important;
     padding: 0 2px !important;
     height: auto !important;
   }
