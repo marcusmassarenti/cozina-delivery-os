@@ -51,9 +51,9 @@ const CATEGORIAS: Categoria[] = [
       },
       {
         title: "Evolução / crescimento",
-        desc: "Linha do tempo de faturamento e pedidos, com Δ% mês a mês.",
+        desc: "Linha do tempo dos indicadores, com Δ% mês a mês e crescimento do período.",
         icon: LineChart,
-        soon: true,
+        href: "/relatorios/evolucao",
       },
       {
         title: "Ranking de lojas",

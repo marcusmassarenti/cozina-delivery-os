@@ -14,6 +14,12 @@ import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import type { UnitMetrics } from "@/lib/data/comparativo-metrics"
 
+export type EvolucaoPonto = {
+  year: number
+  month: number
+  metrics: UnitMetrics
+}
+
 /**
  * Métricas por unidade no mês, somando só as plataformas pedidas.
  * Retorna um Map keyed por unitId (mesmas chaves de `unitIds`).
@@ -82,4 +88,41 @@ export async function getUnitMetricsForMonth(
     })
   }
   return out
+}
+
+/**
+ * Série temporal: para cada mês pedido, agrega as métricas das lojas escolhidas
+ * (somadas) nas plataformas escolhidas. Devolve em ordem cronológica.
+ */
+export async function getEvolucaoSeries(
+  unitIds: string[],
+  platforms: PlatformId[],
+  periods: { year: number; month: number }[],
+): Promise<EvolucaoPonto[]> {
+  const maps = await Promise.all(
+    periods.map((p) =>
+      getUnitMetricsForMonth(unitIds, platforms, p.year, p.month),
+    ),
+  )
+  return periods.map((p, i) => {
+    let bruto = 0
+    let liquido = 0
+    let pedidos = 0
+    let cancelados = 0
+    let hasData = false
+    for (const m of maps[i].values()) {
+      bruto += m.bruto
+      liquido += m.liquido
+      pedidos += m.pedidos
+      cancelados += m.cancelados
+      if (m.hasData) hasData = true
+    }
+    const ticket = pedidos > 0 ? bruto / pedidos : 0
+    const repasse = bruto > 0 ? (liquido / bruto) * 100 : 0
+    return {
+      year: p.year,
+      month: p.month,
+      metrics: { bruto, liquido, pedidos, ticket, repasse, cancelados, hasData },
+    }
+  })
 }
