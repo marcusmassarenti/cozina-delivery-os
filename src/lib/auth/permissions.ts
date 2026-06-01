@@ -31,17 +31,24 @@ export const getAuthUser = cache(
   },
 )
 
-/** Catálogo de módulos (linhas da matriz de permissões). */
+/**
+ * Catálogo de módulos (linhas da matriz). Todo módulo expõe as 3 ações
+ * (ver/editar/apagar) pra dar controle total na tela — mesmo que hoje algumas
+ * ações ainda não tenham efeito num módulo só de leitura (ex.: editar no
+ * Dashboard). O servidor só checa o par (módulo, ação) onde há server action.
+ */
+const ALL_ACTIONS = ["view", "edit", "delete"] as const
+
 export const MODULES = [
-  { key: "dashboard", label: "Dashboard", actions: ["view"] },
-  { key: "relatorios", label: "Relatórios", actions: ["view", "edit"] },
-  { key: "avaliacoes", label: "Avaliações", actions: ["view"] },
-  { key: "pedidos", label: "Pedidos", actions: ["view"] },
-  { key: "unidades", label: "Unidades", actions: ["view", "edit", "delete"] },
-  { key: "financeiro", label: "Financeiro", actions: ["view", "edit"] },
-  { key: "importacao", label: "Importação", actions: ["view", "edit"] },
-  { key: "usuarios", label: "Usuários", actions: ["view", "edit", "delete"] },
-  { key: "conexoes", label: "Conexões", actions: ["view", "edit"] },
+  { key: "dashboard", label: "Dashboard", actions: ALL_ACTIONS },
+  { key: "relatorios", label: "Relatórios", actions: ALL_ACTIONS },
+  { key: "avaliacoes", label: "Avaliações", actions: ALL_ACTIONS },
+  { key: "pedidos", label: "Pedidos", actions: ALL_ACTIONS },
+  { key: "unidades", label: "Unidades", actions: ALL_ACTIONS },
+  { key: "financeiro", label: "Financeiro", actions: ALL_ACTIONS },
+  { key: "importacao", label: "Importação", actions: ALL_ACTIONS },
+  { key: "usuarios", label: "Usuários", actions: ALL_ACTIONS },
+  { key: "conexoes", label: "Conexões", actions: ALL_ACTIONS },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]["key"]
