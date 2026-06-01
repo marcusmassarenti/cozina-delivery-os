@@ -116,7 +116,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Comparativo de nota",
         desc: "Nota média loja × loja, por plataforma.",
         icon: GitCompareArrows,
-        soon: true,
+        href: "/relatorios/avaliacoes-comparativo",
       },
       {
         title: "Comentários negativos",
