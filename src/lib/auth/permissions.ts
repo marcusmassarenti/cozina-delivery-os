@@ -13,6 +13,7 @@ import "server-only"
 
 import { cache } from "react"
 import { unstable_cache } from "next/cache"
+import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -189,6 +190,11 @@ export async function userCan(
 ): Promise<boolean> {
   const role = await getCurrentRole()
   return role.perms[module]?.[action] ?? false
+}
+
+/** Guard de página (Server Component): 404 se o perfil não pode ver o módulo. */
+export async function assertCanView(module: ModuleKey): Promise<void> {
+  if (!(await userCan(module, "view"))) notFound()
 }
 
 /**

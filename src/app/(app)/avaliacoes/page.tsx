@@ -5,6 +5,7 @@ import { Avaliacoes99Tab } from "@/app/(app)/unidades/[codigo]/_components/avali
 import { AvaliacoesKeetaTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-keeta-tab"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
@@ -37,6 +38,7 @@ export default async function AvaliacoesPage({
   }>
 }) {
   const sp = await searchParams
+  await assertCanView("avaliacoes")
   const { year, month } = parsePeriodParam(sp.periodo)
   const unidadeCode = sp.unidade ?? null
   const plataformaParam = ["ifood", "99food", "keeta"].includes(

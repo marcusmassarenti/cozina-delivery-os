@@ -5,6 +5,7 @@ import { TopBar } from "@/components/top-bar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
+import { MODULES, userCan } from "@/lib/auth/permissions"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({
@@ -20,10 +21,19 @@ export default async function AppLayout({
 
   const userContext = await getCurrentUserContext()
 
+  // Módulos que o perfil do usuário pode "Ver" — alimenta o filtro do menu.
+  const moduleChecks = await Promise.all(
+    MODULES.map(async (m) => ({
+      key: m.key,
+      ok: await userCan(m.key, "view"),
+    })),
+  )
+  const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
+
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <AppSidebar />
+        <AppSidebar allowedModules={allowedModules} />
         <SidebarInset>
           <TopBar
             userName={userContext.fullName}

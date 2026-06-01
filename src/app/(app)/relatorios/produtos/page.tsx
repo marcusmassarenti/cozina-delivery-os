@@ -4,6 +4,7 @@ import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getTopProdutos, type ProdutoRanking } from "@/lib/data/produtos"
 import { deltaPct } from "@/lib/data/comparativo-metrics"
@@ -47,6 +48,7 @@ export default async function ProdutosPage({
   }>
 }) {
   const sp = await searchParams
+  await assertCanView("relatorios")
 
   const [allUnitsRaw, periodsRaw] = await Promise.all([
     getVisibleUnits(),

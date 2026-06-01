@@ -6,6 +6,7 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
@@ -74,6 +75,7 @@ export default async function ImportacaoPage({
   searchParams: Promise<{ periodo?: string; historico?: string }>
 }) {
   const sp = await searchParams
+  await assertCanView("importacao")
   const histPage = Math.max(1, parseInt(sp.historico ?? "1", 10) || 1)
   const units = await getVisibleUnits()
   const activeUnits = units.filter((u) => u.active)

@@ -5,6 +5,7 @@ import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { ComparativoFilters } from "../_components/comparativo-filters"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
 import {
@@ -45,6 +46,7 @@ export default async function ComparativoPage({
   }>
 }) {
   const sp = await searchParams
+  await assertCanView("relatorios")
 
   const [allUnitsRaw, periodsRaw] = await Promise.all([
     getVisibleUnits(),

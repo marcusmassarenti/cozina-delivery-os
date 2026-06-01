@@ -19,6 +19,8 @@ import {
   Wallet,
 } from "lucide-react"
 
+import { assertCanView } from "@/lib/auth/permissions"
+
 type ReportItem = {
   title: string
   desc: string
@@ -150,7 +152,8 @@ const CATEGORIAS: Categoria[] = [
   },
 ]
 
-export default function RelatoriosHubPage() {
+export default async function RelatoriosHubPage() {
+  await assertCanView("relatorios")
   return (
     <div className="flex flex-1 flex-col gap-7 bg-muted/30 p-6">
       <div>

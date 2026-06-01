@@ -22,6 +22,7 @@ import {
   getNetworkNinefoodPedidoResumo,
 } from "@/lib/data/ninefood-pedidos"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
 import { PedidosIfoodView } from "./_components/pedidos-ifood-view"
@@ -46,6 +47,7 @@ export default async function PedidosPage({
   }>
 }) {
   const sp = await searchParams
+  await assertCanView("pedidos")
   const { year, month } = parsePeriodParam(sp.periodo)
   const periodoParam = sp.periodo
   const plataforma: "ifood" | "99food" | "keeta" =

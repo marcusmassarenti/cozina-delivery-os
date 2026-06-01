@@ -1,7 +1,9 @@
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { UnitsListView } from "./_components/units-list-view"
 
 export default async function UnidadesPage() {
+  await assertCanView("unidades")
   const units = await getVisibleUnits()
 
   return (

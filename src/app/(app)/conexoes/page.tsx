@@ -3,6 +3,7 @@ import { Cable, Plug, Webhook } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { listApiClients } from "@/lib/data/api-clients"
+import { assertCanView } from "@/lib/auth/permissions"
 
 import { ApiKeysManager } from "./_components/api-keys-manager"
 
@@ -12,6 +13,7 @@ import { ApiKeysManager } from "./_components/api-keys-manager"
  *  2) Plataformas de delivery (entrada): iFood / 99 / Keeta — em breve.
  */
 export default async function ConexoesPage() {
+  await assertCanView("conexoes")
   const [clients, h] = await Promise.all([listApiClients(), headers()])
   const host =
     h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"

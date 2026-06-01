@@ -20,6 +20,7 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkReportForMonth } from "@/lib/data/relatorio-rede"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
@@ -37,6 +38,7 @@ export default async function RelatoriosPage({
   searchParams: Promise<{ periodo?: string; lojas?: string }>
 }) {
   const sp = await searchParams
+  await assertCanView("relatorios")
   const period = parsePeriodParam(sp.periodo)
   const { year, month } = period
   const periodKey = formatPeriodKey(period)

@@ -99,11 +99,21 @@ function MenuItems({
   )
 }
 
-export function AppSidebar() {
+export function AppSidebar({
+  allowedModules,
+}: {
+  allowedModules: string[]
+}) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
 
-  const favItems = NAV_ITEMS.filter((i) => isFav(i.href))
+  const allowed = new Set(allowedModules)
+  // Item visível se: é "em breve" (mostra desabilitado), não tem módulo, ou
+  // o perfil pode "Ver" aquele módulo.
+  const canSee = (item: { module?: string; comingSoon?: boolean }) =>
+    !!item.comingSoon || !item.module || allowed.has(item.module)
+
+  const favItems = NAV_ITEMS.filter((i) => isFav(i.href) && canSee(i))
 
   return (
     <Sidebar collapsible="icon" className="dark">
@@ -144,12 +154,14 @@ export function AppSidebar() {
         )}
 
         {NAV_GROUPS.map((group, idx) => {
+          const items = group.items.filter(canSee)
+          if (items.length === 0) return null
           if (!group.label) {
             return (
               <SidebarGroup key={`group-${idx}`}>
                 <SidebarGroupContent>
                   <MenuItems
-                    items={group.items}
+                    items={items}
                     pathname={pathname}
                     isFav={isFav}
                     onToggleFav={toggle}
@@ -172,7 +184,7 @@ export function AppSidebar() {
                 <CollapsibleContent>
                   <SidebarGroupContent className="mt-1">
                     <MenuItems
-                      items={group.items}
+                      items={items}
                       pathname={pathname}
                       isFav={isFav}
                       onToggleFav={toggle}

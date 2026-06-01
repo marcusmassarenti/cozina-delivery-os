@@ -13,6 +13,7 @@ import {
   type ReportPlatform,
 } from "@/lib/data/relatorio-diario-types"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
@@ -46,6 +47,7 @@ export default async function RelatorioDiarioPage({
   }>
 }) {
   const sp = await searchParams
+  await assertCanView("relatorios")
   const { year, month } = parsePeriodParam(sp.periodo)
   const metric: DailyMetric = VALID_METRICS.includes(sp.metrica as DailyMetric)
     ? (sp.metrica as DailyMetric)

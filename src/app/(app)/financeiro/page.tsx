@@ -13,6 +13,7 @@ import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
+import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
@@ -35,6 +36,7 @@ export default async function ResultadoPage({
   searchParams: Promise<{ periodo?: string; lojas?: string }>
 }) {
   const sp = await searchParams
+  await assertCanView("financeiro")
   const { year, month } = parsePeriodParam(sp.periodo)
   const periodoParam = sp.periodo
 
