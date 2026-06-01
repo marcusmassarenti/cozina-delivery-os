@@ -28,7 +28,6 @@ export default async function AppLayout({
           <TopBar
             userName={userContext.fullName}
             userInitials={userContext.initials}
-            brandName={userContext.brandName}
           />
           {children}
         </SidebarInset>

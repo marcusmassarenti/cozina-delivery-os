@@ -2,22 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import {
-  Cable,
-  CalendarRange,
-  ChevronDown,
-  ClipboardList,
-  FileUp,
-  Flame,
-  LayoutDashboard,
-  Package,
-  Receipt,
-  Settings,
-  Star,
-  Store,
-  Users,
-  Wallet,
-} from "lucide-react"
+import { ChevronDown, Flame, Star } from "lucide-react"
 
 import {
   Collapsible,
@@ -36,79 +21,8 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-
-type NavItem = {
-  label: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  badge?: string | number
-  /** Marca como "em breve": item visível mas desabilitado (não navega). */
-  comingSoon?: boolean
-}
-
-type NavGroup = {
-  label?: string
-  defaultOpen?: boolean
-  items: NavItem[]
-}
-
-const navGroups: NavGroup[] = [
-  {
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
-  },
-  {
-    label: "Operação",
-    defaultOpen: true,
-    items: [
-      { label: "Unidades", href: "/unidades", icon: Store },
-      { label: "Produtos", href: "/produtos", icon: Package, comingSoon: true },
-      { label: "Pedidos", href: "/pedidos", icon: Receipt },
-      { label: "Avaliações", href: "/avaliacoes", icon: Star },
-    ],
-  },
-  {
-    label: "Financeiro",
-    defaultOpen: true,
-    items: [
-      {
-        label: "Hub de Relatórios",
-        href: "/relatorios",
-        icon: ClipboardList,
-      },
-      {
-        label: "Relatório Diário",
-        href: "/relatorio-diario",
-        icon: CalendarRange,
-      },
-      { label: "DRE Grupo", href: "/financeiro", icon: Wallet },
-    ],
-  },
-  {
-    label: "Integrações",
-    defaultOpen: true,
-    items: [
-      { label: "Importação", href: "/importacao", icon: FileUp },
-      { label: "Conexões", href: "/conexoes", icon: Cable },
-    ],
-  },
-  {
-    label: "Administração",
-    defaultOpen: true,
-    items: [
-      { label: "Usuários", href: "/administracao/usuarios", icon: Users },
-    ],
-  },
-  {
-    items: [
-      {
-        label: "Configurações",
-        href: "/configuracoes",
-        icon: Settings,
-        comingSoon: true,
-      },
-    ],
-  },
-]
+import { useFavorites } from "@/hooks/use-favorites"
+import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "@/lib/nav"
 
 function isItemActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/"
@@ -118,15 +32,19 @@ function isItemActive(pathname: string, href: string) {
 function MenuItems({
   items,
   pathname,
+  isFav,
+  onToggleFav,
 }: {
   items: NavItem[]
   pathname: string
+  isFav: (href: string) => boolean
+  onToggleFav: (href: string) => void
 }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
         const active = isItemActive(pathname, item.href)
-        // Itens "em breve": botão estático, sem Link, com badge cinza
+        // Itens "em breve": botão estático, sem Link nem estrela.
         if (item.comingSoon) {
           return (
             <SidebarMenuItem key={item.href}>
@@ -144,8 +62,9 @@ function MenuItems({
             </SidebarMenuItem>
           )
         }
+        const fav = isFav(item.href)
         return (
-          <SidebarMenuItem key={item.href}>
+          <SidebarMenuItem key={item.href} className="relative">
             <SidebarMenuButton
               render={<Link href={item.href} />}
               isActive={active}
@@ -153,12 +72,26 @@ function MenuItems({
             >
               <item.icon />
               <span>{item.label}</span>
-              {item.badge !== undefined && (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
-                  {item.badge}
-                </span>
-              )}
             </SidebarMenuButton>
+            {/* Estrela de favorito (só na sidebar expandida) */}
+            <button
+              type="button"
+              aria-label={fav ? "Desfavoritar" : "Favoritar"}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onToggleFav(item.href)
+              }}
+              className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded p-0.5 transition-colors group-data-[collapsible=icon]:hidden"
+            >
+              <Star
+                className={`size-3.5 transition-colors ${
+                  fav
+                    ? "fill-amber-400 text-amber-400"
+                    : "text-sidebar-foreground/30 hover:text-sidebar-foreground/70"
+                }`}
+              />
+            </button>
           </SidebarMenuItem>
         )
       })}
@@ -168,17 +101,16 @@ function MenuItems({
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { isFav, toggle, ready } = useFavorites()
+
+  const favItems = NAV_ITEMS.filter((i) => isFav(i.href))
 
   return (
     <Sidebar collapsible="icon" className="dark">
       <SidebarHeader className="gap-1.5 px-3 py-3">
         <div className="group-data-[collapsible=icon]:hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/cozina-logo.png"
-            alt="Cozina"
-            className="h-9 w-auto"
-          />
+          <img src="/cozina-logo.png" alt="Cozina" className="h-9 w-auto" />
         </div>
         <Flame
           className="hidden size-5 text-[#ff4d1c] group-data-[collapsible=icon]:block"
@@ -189,12 +121,39 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {navGroups.map((group, idx) => {
+        {/* Favoritos (só aparece depois de montar, com itens favoritados) */}
+        {ready && favItems.length > 0 && (
+          <SidebarGroup>
+            <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/80 group-data-[collapsible=icon]:hidden">
+              <Star className="size-3.5 fill-amber-400 text-amber-400" />
+              <span>Favoritos</span>
+            </div>
+            <SidebarGroupContent>
+              <MenuItems
+                items={favItems.map((i) => ({
+                  label: i.label,
+                  href: i.href,
+                  icon: i.icon,
+                }))}
+                pathname={pathname}
+                isFav={isFav}
+                onToggleFav={toggle}
+              />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {NAV_GROUPS.map((group, idx) => {
           if (!group.label) {
             return (
               <SidebarGroup key={`group-${idx}`}>
                 <SidebarGroupContent>
-                  <MenuItems items={group.items} pathname={pathname} />
+                  <MenuItems
+                    items={group.items}
+                    pathname={pathname}
+                    isFav={isFav}
+                    onToggleFav={toggle}
+                  />
                 </SidebarGroupContent>
               </SidebarGroup>
             )
@@ -206,15 +165,18 @@ export function AppSidebar() {
               className="group/collapsible"
             >
               <SidebarGroup>
-                <CollapsibleTrigger
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/80 outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
-                >
+                <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/80 outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden">
                   <ChevronDown className="size-3.5 shrink-0 transition-transform duration-200 group-data-[closed]/collapsible:-rotate-90" />
                   <span>{group.label}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <SidebarGroupContent className="mt-1">
-                    <MenuItems items={group.items} pathname={pathname} />
+                    <MenuItems
+                      items={group.items}
+                      pathname={pathname}
+                      isFav={isFav}
+                      onToggleFav={toggle}
+                    />
                   </SidebarGroupContent>
                 </CollapsibleContent>
               </SidebarGroup>
