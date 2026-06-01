@@ -131,6 +131,7 @@ export default async function AcompanhamentoPage({
           Sem vendas nesse mês.
         </div>
       ) : (
+        <>
         <div className="overflow-hidden rounded-xl border bg-card">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -203,8 +204,51 @@ export default async function AcompanhamentoPage({
                   ))}
                 </BrandBlock>
               ))}
+            </tbody>
+          </table>
+        </div>
 
-              {/* Total do grupo */}
+        {/* Totais por marca (como o quadro lateral da planilha) */}
+        <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="border-b px-5 py-3">
+            <p className="text-sm font-semibold">
+              Totais por marca · {periodLabel}
+            </p>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold">Marca</th>
+                <th className="px-3 py-2 text-right font-semibold">
+                  Diária ({diariaLabel})
+                </th>
+                <th className="px-3 py-2 text-right font-semibold">
+                  Total ({periodLabel})
+                </th>
+                <th className="px-3 py-2 text-right font-semibold">Meta</th>
+                <th className="px-3 py-2 text-right font-semibold">Falta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {acomp.brands.map((b) => (
+                <tr key={b.brandId} className="border-t">
+                  <td className="px-3 py-2 font-medium">
+                    TOTAL {b.brandName}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {num(b.diaria)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {num(b.total)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {num(b.meta)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {b.meta > 0 ? fmtBRL(b.falta) : "—"}
+                  </td>
+                </tr>
+              ))}
               <tr className="border-t-2 border-primary/40 bg-primary/5 font-bold">
                 <td className="px-3 py-2">TOTAL GRUPOS</td>
                 <td className="px-3 py-2 text-right tabular-nums">
@@ -223,6 +267,7 @@ export default async function AcompanhamentoPage({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   )
