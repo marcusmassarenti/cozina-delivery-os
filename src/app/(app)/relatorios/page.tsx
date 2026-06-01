@@ -13,6 +13,7 @@ import {
   Package,
   Receipt,
   Star,
+  Target,
   TrendingUp,
   Trophy,
   Wallet,
@@ -48,6 +49,12 @@ const CATEGORIAS: Categoria[] = [
         desc: "Consolidado da rede no mês — KPIs e DRE em cascata, do bruto ao resultado operacional.",
         icon: Wallet,
         href: "/relatorios/resultado",
+      },
+      {
+        title: "Infos Diária Venda (metas)",
+        desc: "Venda diária por loja × plataforma, total do mês, meta e falta — agrupado por marca, pronto pra imprimir.",
+        icon: Target,
+        href: "/relatorios/acompanhamento",
       },
       {
         title: "Evolução / crescimento",
