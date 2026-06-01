@@ -13,7 +13,7 @@ import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
-import { assertCanView } from "@/lib/auth/permissions"
+import { assertCanView, userCan } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
@@ -37,6 +37,7 @@ export default async function ResultadoPage({
 }) {
   const sp = await searchParams
   await assertCanView("financeiro")
+  const canEditFin = await userCan("financeiro", "edit")
   const { year, month } = parsePeriodParam(sp.periodo)
   const periodoParam = sp.periodo
 
@@ -379,6 +380,7 @@ export default async function ResultadoPage({
             periodo={periodoParam}
             year={year}
             month={month}
+            canEdit={canEditFin}
           />
         </>
       )}

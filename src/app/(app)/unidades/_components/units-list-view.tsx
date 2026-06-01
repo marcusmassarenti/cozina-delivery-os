@@ -18,7 +18,15 @@ const ALL_PLATFORMS: { id: PlatformId; label: string }[] = [
   { id: "keeta", label: "Keeta" },
 ]
 
-export function UnitsListView({ units }: { units: Unit[] }) {
+export function UnitsListView({
+  units,
+  canEdit = false,
+  canDelete = false,
+}: {
+  units: Unit[]
+  canEdit?: boolean
+  canDelete?: boolean
+}) {
   const router = useRouter()
   const [search, setSearch] = React.useState("")
   const [cityFilter, setCityFilter] = React.useState<string>("")
@@ -101,7 +109,7 @@ export function UnitsListView({ units }: { units: Unit[] }) {
               className="h-9 w-48 rounded-md border bg-card pl-8 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
           </div>
-          <NewUnitDialog />
+          {canEdit && <NewUnitDialog />}
         </div>
       </div>
 
@@ -219,24 +227,28 @@ export function UnitsListView({ units }: { units: Unit[] }) {
                   onKeyDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  <EditUnitDialog
-                    inline
-                    unit={{
-                      unitId: unit.id,
-                      code: unit.code,
-                      name: unit.name,
-                      city: unit.city,
-                      state: unit.state,
-                      cnpj: unit.cnpj,
-                      active: unit.active,
-                      dataInauguracao: unit.data_inauguracao,
-                      dataEncerramento: unit.data_encerramento,
-                      platforms: unit.platforms,
-                      externalStoreIds: unit.externalStoreIds,
-                      platformInauguracoes: unit.platformInauguracoes,
-                    }}
-                  />
-                  <DeleteUnitButton unitId={unit.id} unitName={unit.name} />
+                  {canEdit && (
+                    <EditUnitDialog
+                      inline
+                      unit={{
+                        unitId: unit.id,
+                        code: unit.code,
+                        name: unit.name,
+                        city: unit.city,
+                        state: unit.state,
+                        cnpj: unit.cnpj,
+                        active: unit.active,
+                        dataInauguracao: unit.data_inauguracao,
+                        dataEncerramento: unit.data_encerramento,
+                        platforms: unit.platforms,
+                        externalStoreIds: unit.externalStoreIds,
+                        platformInauguracoes: unit.platformInauguracoes,
+                      }}
+                    />
+                  )}
+                  {canDelete && (
+                    <DeleteUnitButton unitId={unit.id} unitName={unit.name} />
+                  )}
                 </div>
               </div>
 

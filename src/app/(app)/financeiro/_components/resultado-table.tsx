@@ -27,12 +27,14 @@ export function ResultadoTable({
   periodo,
   year,
   month,
+  canEdit = true,
 }: {
   rows: ResultadoUnitRow[]
   totals: ResultadoTotals
   periodo?: string
   year: number
   month: number
+  canEdit?: boolean
 }) {
   const router = useRouter()
   const href = (code: string) =>
@@ -157,11 +159,13 @@ export function ResultadoTable({
                     value={v.cozina}
                     onChange={(n) => setVal(r, "cozina", n)}
                     onCommit={() => save(r)}
+                    readOnly={!canEdit}
                   />
                   <CostCell
                     value={v.operacao}
                     onChange={(n) => setVal(r, "operacao", n)}
                     onCommit={() => save(r)}
+                    readOnly={!canEdit}
                   />
                   <td
                     className={`px-3 py-2 text-right font-semibold tabular-nums ${
@@ -240,10 +244,12 @@ function CostCell({
   value,
   onChange,
   onCommit,
+  readOnly = false,
 }: {
   value: number
   onChange: (n: number) => void
   onCommit: () => void
+  readOnly?: boolean
 }) {
   const display =
     value === 0
@@ -252,6 +258,13 @@ function CostCell({
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         })
+  if (readOnly) {
+    return (
+      <td className="px-3 py-2 text-right tabular-nums">
+        {display || "—"}
+      </td>
+    )
+  }
   return (
     <td
       className="px-1.5 py-1 text-right"

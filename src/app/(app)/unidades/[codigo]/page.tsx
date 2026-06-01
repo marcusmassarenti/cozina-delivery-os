@@ -31,6 +31,7 @@ import {
   getKeetaResumoForMonth,
 } from "@/lib/data/keeta-imported"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
+import { userCan } from "@/lib/auth/permissions"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 import { parsePeriodParam } from "@/lib/period"
@@ -61,6 +62,8 @@ export default async function UnidadeDetalhePage({
   // admin/gerente (vê tudo). Loja fora do escopo → 404 (não revela que existe).
   const accessibleIds = await getAccessibleUnitIds()
   if (accessibleIds !== null && !accessibleIds.includes(unit.id)) notFound()
+
+  const canEditUnit = await userCan("unidades", "edit")
 
   const { year, month } = parsePeriodParam(sp.periodo)
   const [
@@ -161,22 +164,24 @@ export default async function UnidadeDetalhePage({
             current={{ year, month }}
             options={availablePeriods}
           />
-          <EditUnitDialog
-            unit={{
-              unitId: unit.id,
-              code: unit.code,
-              name: unit.name,
-              city: unit.city,
-              state: unit.state,
-              cnpj: unit.cnpj,
-              active: unit.active,
-              dataInauguracao: unit.data_inauguracao,
-              dataEncerramento: unit.data_encerramento,
-              platforms,
-              externalStoreIds: unit.externalStoreIds,
-              platformInauguracoes: unit.platformInauguracoes,
-            }}
-          />
+          {canEditUnit && (
+            <EditUnitDialog
+              unit={{
+                unitId: unit.id,
+                code: unit.code,
+                name: unit.name,
+                city: unit.city,
+                state: unit.state,
+                cnpj: unit.cnpj,
+                active: unit.active,
+                dataInauguracao: unit.data_inauguracao,
+                dataEncerramento: unit.data_encerramento,
+                platforms,
+                externalStoreIds: unit.externalStoreIds,
+                platformInauguracoes: unit.platformInauguracoes,
+              }}
+            />
+          )}
         </div>
       </div>
 
