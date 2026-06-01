@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireCapability } from "@/lib/auth/guards"
+import { requireModulePermission } from "@/lib/auth/guards"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -92,7 +92,7 @@ export async function createUnit(
   }
 
   try {
-    await requireCapability("canEdit")
+    await requireModulePermission("unidades", "edit")
     const brand = await getDefaultBrand()
     const supabase = createAdminClient()
     const code = await generateNextCode(supabase)
@@ -144,7 +144,7 @@ export async function createUnit(
 export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
   try {
-    await requireCapability("canDelete")
+    await requireModulePermission("unidades", "delete")
     const supabase = createAdminClient()
     const { error } = await supabase.from("units").delete().eq("id", unitId)
     if (error) return { ok: false, message: error.message }
@@ -208,7 +208,7 @@ export async function updateUnit(
   }
 
   try {
-    await requireCapability("canEdit")
+    await requireModulePermission("unidades", "edit")
     const supabase = createAdminClient()
 
     const { error: updErr } = await supabase

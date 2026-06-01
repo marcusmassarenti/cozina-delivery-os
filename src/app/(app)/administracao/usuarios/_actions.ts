@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { requireAdmin } from "@/lib/auth/guards"
+import { requireModulePermission } from "@/lib/auth/guards"
 import { perfilRequiresUnit } from "@/lib/perfis"
 
 export type AppUser = {
@@ -25,7 +25,7 @@ export type UserActionState = {
 }
 
 export async function listUsers(): Promise<AppUser[]> {
-  const { admin: supabase } = await requireAdmin()
+  const { admin: supabase } = await requireModulePermission("usuarios", "view")
   const [authRes, profilesRes, accessRes, unitsRes] = await Promise.all([
     supabase.auth.admin.listUsers(),
     supabase.from("profiles").select("user_id, full_name, perfil"),
@@ -131,7 +131,7 @@ export async function createUser(
   }
 
   try {
-    const { admin: supabase } = await requireAdmin()
+    const { admin: supabase } = await requireModulePermission("usuarios", "edit")
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -188,7 +188,10 @@ export async function updateUser(
   }
 
   try {
-    const { admin: supabase, userId: callerId } = await requireAdmin()
+    const { admin: supabase, userId: callerId } = await requireModulePermission(
+      "usuarios",
+      "edit",
+    )
 
     const { error: profileErr } = await supabase
       .from("profiles")
@@ -232,7 +235,10 @@ export async function updateUser(
 export async function deleteUser(userId: string): Promise<UserActionState> {
   if (!userId) return { ok: false, message: "ID do usuário ausente." }
   try {
-    const { admin: supabase, userId: callerId } = await requireAdmin()
+    const { admin: supabase, userId: callerId } = await requireModulePermission(
+      "usuarios",
+      "delete",
+    )
     // Bloqueia self-delete
     if (callerId === userId) {
       return {

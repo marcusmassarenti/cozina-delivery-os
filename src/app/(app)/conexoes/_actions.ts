@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto"
 
 import { revalidatePath } from "next/cache"
 
-import { requireAdmin } from "@/lib/auth/guards"
+import { requireModulePermission } from "@/lib/auth/guards"
 
 export type CreateKeyState = {
   ok: boolean
@@ -22,7 +22,7 @@ export async function createApiKey(
   formData: FormData,
 ): Promise<CreateKeyState> {
   try {
-    const { admin } = await requireAdmin()
+    const { admin } = await requireModulePermission("conexoes", "edit")
     const name = String(formData.get("name") ?? "").trim()
     const scope = String(formData.get("scope") ?? "read").trim()
     if (!name) return { ok: false, message: "Dê um nome pra chave." }
@@ -59,7 +59,7 @@ export async function revokeApiKey(
   id: string,
 ): Promise<{ ok: boolean; message?: string }> {
   try {
-    const { admin } = await requireAdmin()
+    const { admin } = await requireModulePermission("conexoes", "edit")
     if (!id) return { ok: false, message: "Chave inválida." }
     const { error } = await admin
       .from("api_clients")

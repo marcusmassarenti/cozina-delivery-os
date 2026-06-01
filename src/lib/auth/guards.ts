@@ -11,9 +11,13 @@
 
 import "server-only"
 
-import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getUserRole, roleCan, type AppRole, type RoleCaps } from "@/lib/auth/roles"
+import {
+  getAuthUser,
+  userCan,
+  type ModuleKey,
+  type PermAction,
+} from "@/lib/auth/permissions"
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -39,12 +43,11 @@ export async function requireAuth(): Promise<{
   userId: string
   email: string | null
 }> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.auth.getUser()
-  if (error || !data?.user) {
+  const user = await getAuthUser()
+  if (!user) {
     throw new AuthError("Sessão expirada. Faça login novamente.")
   }
-  return { userId: data.user.id, email: data.user.email ?? null }
+  return { userId: user.id, email: user.email }
 }
 
 /**
@@ -94,24 +97,26 @@ export async function requireAdmin(): Promise<{
 }
 
 /**
- * Exige usuário logado E com a capacidade pedida (canEdit / canDelete /
- * canManageUsers) conforme o papel (admin / gerente / franqueado).
+ * Exige usuário logado E com permissão pra `action` (view/edit/delete) no
+ * `module` (dashboard, unidades, financeiro, ...), conforme a matriz de
+ * permissões do perfil (tabela role_module_perms, editável na tela).
  *
  * @throws AuthError se não houver sessão
- * @throws ForbiddenError se o papel não tem a capacidade
+ * @throws ForbiddenError se o perfil não tem a permissão
  */
-export async function requireCapability(cap: keyof RoleCaps): Promise<{
+export async function requireModulePermission(
+  module: ModuleKey,
+  action: PermAction,
+): Promise<{
   userId: string
   email: string | null
-  role: AppRole
   admin: ReturnType<typeof createAdminClient>
 }> {
   const { userId, email } = await requireAuth()
-  const role = await getUserRole()
-  if (!roleCan(role, cap)) {
+  if (!(await userCan(module, action))) {
     throw new ForbiddenError("Seu perfil não tem permissão pra essa ação.")
   }
-  return { userId, email, role, admin: createAdminClient() }
+  return { userId, email, admin: createAdminClient() }
 }
 
 /**

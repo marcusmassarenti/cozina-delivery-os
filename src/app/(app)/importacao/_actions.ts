@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 
 import * as XLSX from "xlsx"
 
-import { requireCapability } from "@/lib/auth/guards"
+import { requireModulePermission } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { parseIfoodReport } from "@/lib/import/ifood"
 import type {
@@ -237,7 +237,7 @@ export async function importIfoodReports(
 ): Promise<ImportBatchState> {
   let userId: string
   try {
-    ;({ userId } = await requireCapability("canEdit"))
+    ;({ userId } = await requireModulePermission("importacao", "edit"))
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
@@ -2619,7 +2619,7 @@ export async function createUnitAndImport(
 ): Promise<CreateUnitAndImportState> {
   let userId: string
   try {
-    ;({ userId } = await requireCapability("canEdit"))
+    ;({ userId } = await requireModulePermission("importacao", "edit"))
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
@@ -2798,7 +2798,7 @@ export async function recheckAndImport(
 ): Promise<RecheckAndImportState> {
   let userId: string
   try {
-    ;({ userId } = await requireCapability("canEdit"))
+    ;({ userId } = await requireModulePermission("importacao", "edit"))
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
@@ -2870,7 +2870,7 @@ export async function linkUnitAndImport(
 ): Promise<LinkUnitAndImportState> {
   let userId: string
   try {
-    ;({ userId } = await requireCapability("canEdit"))
+    ;({ userId } = await requireModulePermission("importacao", "edit"))
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
