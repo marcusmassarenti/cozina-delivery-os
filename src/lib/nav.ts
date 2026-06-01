@@ -8,6 +8,7 @@ import {
   Package,
   Receipt,
   Settings,
+  ShieldCheck,
   Star,
   Store,
   Users,
@@ -74,6 +75,11 @@ export const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       { label: "Usuários", href: "/administracao/usuarios", icon: Users },
+      {
+        label: "Permissões",
+        href: "/administracao/permissoes",
+        icon: ShieldCheck,
+      },
     ],
   },
   {
