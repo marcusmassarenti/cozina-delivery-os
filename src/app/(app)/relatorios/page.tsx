@@ -68,7 +68,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Ranking de lojas",
         desc: "Lojas ordenadas por faturamento, ticket ou margem no período.",
         icon: Trophy,
-        soon: true,
+        href: "/relatorios/ranking",
       },
       {
         title: "Faturamento por plataforma",
