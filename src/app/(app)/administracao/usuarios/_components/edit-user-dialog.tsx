@@ -150,7 +150,12 @@ export function EditUserDialog({
             >
               <Select value={unitId} onValueChange={(v) => setUnitId(v ?? "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a unidade" />
+                  <SelectValue placeholder="Selecione a unidade">
+                    {(v) => {
+                      const u = units.find((x) => x.id === v)
+                      return u ? `#${u.code} · ${u.name}` : "Selecione a unidade"
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {units.map((u) => (
