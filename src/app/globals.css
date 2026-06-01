@@ -207,27 +207,19 @@
   .acomp-print > div:first-child img {
     height: 26px !important;
   }
-  /* no PDF mostra só o nível loja (cabe em 1 página); a tela mantém o
-     breakdown por plataforma */
-  .acomp-print tr.plat-row {
-    display: none !important;
-  }
-  /* tabela com fonte confortável (sobra espaço com só o nível loja) */
+  /* PDF mostra loja + plataformas; ícones somem (data-print=hide), meta vira
+     texto (MetaInput) e a fonte/linha encolhem pra caber numa página */
   .acomp-print table {
-    font-size: 13px !important;
-    line-height: 1.3 !important;
+    font-size: 8px !important;
+    line-height: 1.05 !important;
   }
   .acomp-print thead {
-    font-size: 10px !important;
+    font-size: 7px !important;
   }
   .acomp-print th,
   .acomp-print td {
-    padding: 3px 8px !important;
-  }
-  .acomp-print input {
-    font-size: 13px !important;
-    padding: 0 2px !important;
-    height: auto !important;
+    padding: 0.5px 5px !important;
+    line-height: 1.05 !important;
   }
   /* tira borda/arredondado do card pra ganhar espaço */
   .acomp-print .rounded-xl {

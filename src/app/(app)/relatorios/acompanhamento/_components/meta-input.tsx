@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 
+import { fmtBRL } from "@/lib/format"
 import { saveMetaFaturamento } from "../_actions"
 
 function parseBr(s: string): number {
@@ -43,19 +44,28 @@ export function MetaInput({
     }
   }
 
+  const numeric = parseBr(value)
+
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={value}
-      disabled={saving}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-      }}
-      placeholder="—"
-      className="w-24 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-xs tabular-nums hover:border-input focus:border-primary focus:outline-none disabled:opacity-50 print:border-none"
-    />
+    <>
+      {/* Editável na tela */}
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        disabled={saving}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+        }}
+        placeholder="—"
+        className="w-24 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-xs tabular-nums hover:border-input focus:border-primary focus:outline-none disabled:opacity-50 print:hidden"
+      />
+      {/* Só texto no PDF (sem a caixa do input, pra a linha ficar baixa) */}
+      <span className="hidden tabular-nums print:inline">
+        {numeric > 0 ? fmtBRL(numeric) : "—"}
+      </span>
+    </>
   )
 }

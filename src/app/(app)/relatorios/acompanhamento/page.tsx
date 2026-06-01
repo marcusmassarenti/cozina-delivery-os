@@ -3,7 +3,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
-import { type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getAcompanhamentoVendas } from "@/lib/data/acompanhamento"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { fmtBRL } from "@/lib/format"
@@ -179,7 +179,15 @@ export default async function AcompanhamentoPage({
                           className="plat-row text-xs text-muted-foreground"
                         >
                           <td className="py-1 pl-8 pr-3">
-                            {PLAT_LABEL[p.platform]}
+                            <span className="inline-flex items-center gap-1.5">
+                              <span data-print="hide">
+                                <PlatformLogo
+                                  platform={p.platform}
+                                  size="sm"
+                                />
+                              </span>
+                              {PLAT_LABEL[p.platform]}
+                            </span>
                           </td>
                           <td className="px-3 py-1 text-right tabular-nums">
                             {num(p.diaria)}
