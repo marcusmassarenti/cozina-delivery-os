@@ -39,18 +39,21 @@ export type NetworkReport = {
 export async function getNetworkReportForMonth(
   year: number,
   month: number,
+  filterUnitIds?: string[],
 ): Promise<NetworkReport> {
   const units = await getUnits()
-  const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
+  const allActiveIds = units.filter((u) => u.active).map((u) => u.id)
+  const activeUnitIds =
+    filterUnitIds && filterUnitIds.length > 0 ? filterUnitIds : allActiveIds
 
   const [resultado, avalIfood, avalNine, avalKeeta, entrega, coverage] =
     await Promise.all([
-      getNetworkResultadoForMonth(year, month),
-      getNetworkAvaliacoesForMonth(year, month),
-      getNetworkNinefoodAvaliacoesForMonth(year, month),
-      getNetworkKeetaAvaliacoesForMonth(year, month),
+      getNetworkResultadoForMonth(year, month, filterUnitIds),
+      getNetworkAvaliacoesForMonth(year, month, filterUnitIds),
+      getNetworkNinefoodAvaliacoesForMonth(year, month, filterUnitIds),
+      getNetworkKeetaAvaliacoesForMonth(year, month, filterUnitIds),
       getNetworkDeliveryFee(activeUnitIds, year, month),
-      getImportCoverageForMonth(year, month),
+      getImportCoverageForMonth(year, month, filterUnitIds),
     ])
 
   const totals = resultado.totals

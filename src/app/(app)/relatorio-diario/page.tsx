@@ -16,6 +16,8 @@ import { getUnits } from "@/lib/data/units"
 import { fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
+import { LojaFilter } from "@/components/shared/loja-filter"
+
 import { RelatorioFilters } from "./_components/relatorio-filters"
 import { RelatorioKpis } from "./_components/relatorio-kpis"
 import { DailyBarChart, type Bar } from "./_components/daily-bar-chart"
@@ -40,6 +42,7 @@ export default async function RelatorioDiarioPage({
     periodo?: string
     metrica?: string
     plataforma?: string
+    lojas?: string
   }>
 }) {
   const sp = await searchParams
@@ -60,8 +63,18 @@ export default async function RelatorioDiarioPage({
   const activeUnits = allUnits
     .filter((u) => u.active)
     .map((u) => ({ id: u.id, code: u.code, name: u.name }))
+  const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
+  const unitsForMatrix =
+    lojaCodes.length > 0
+      ? activeUnits.filter((u) => lojaCodes.includes(u.code))
+      : activeUnits
 
-  const matrix = await getDailyReportMatrix(year, month, platform, activeUnits)
+  const matrix = await getDailyReportMatrix(
+    year,
+    month,
+    platform,
+    unitsForMatrix,
+  )
 
   const metricLabel =
     METRIC_OPTIONS.find((m) => m.id === metric)?.label ?? "Faturamento Bruto"
@@ -164,7 +177,8 @@ export default async function RelatorioDiarioPage({
             {metricLabel} · {PLATFORM_LABEL[platform]}
           </p>
         </div>
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <LojaFilter units={activeUnits} />
           <ExportPdfButton />
           <PeriodSelector
             current={{ year, month }}

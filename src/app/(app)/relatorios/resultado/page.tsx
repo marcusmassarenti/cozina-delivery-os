@@ -15,9 +15,11 @@ import {
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
+import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { getUnits } from "@/lib/data/units"
 import { getNetworkReportForMonth } from "@/lib/data/relatorio-rede"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import {
@@ -31,7 +33,7 @@ const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
 export default async function RelatoriosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   const period = parsePeriodParam(sp.periodo)
@@ -39,8 +41,17 @@ export default async function RelatoriosPage({
   const periodKey = formatPeriodKey(period)
   const periodLabel = formatPeriodLabel(period)
 
+  const allUnits = (await getUnits())
+    .filter((u) => u.active)
+    .map((u) => ({ id: u.id, code: u.code, name: u.name }))
+  const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
+  const filterIds =
+    lojaCodes.length > 0
+      ? allUnits.filter((u) => lojaCodes.includes(u.code)).map((u) => u.id)
+      : undefined
+
   const [report, availablePeriods] = await Promise.all([
-    getNetworkReportForMonth(year, month),
+    getNetworkReportForMonth(year, month, filterIds),
     getAvailablePeriods(),
   ])
   const t = report.totals
@@ -200,7 +211,11 @@ export default async function RelatoriosPage({
             {report.unitsTotal === 1 ? "" : "s"} com faturamento
           </p>
         </div>
-        <div className="flex items-center gap-2" data-print="hide">
+        <div
+          className="flex flex-wrap items-center gap-2"
+          data-print="hide"
+        >
+          <LojaFilter units={allUnits} />
           <PeriodSelector current={period} options={availablePeriods} />
           <ExportPdfButton />
         </div>

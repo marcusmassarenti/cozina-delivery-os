@@ -9,8 +9,10 @@ import {
   Wallet,
 } from "lucide-react"
 
+import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { getUnits } from "@/lib/data/units"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import { getNetworkPagamentoResumo } from "@/lib/data/ifood-pedidos"
@@ -29,14 +31,23 @@ import { ResultadoTable } from "./_components/resultado-table"
 export default async function ResultadoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   const { year, month } = parsePeriodParam(sp.periodo)
   const periodoParam = sp.periodo
 
+  const allUnits = (await getUnits())
+    .filter((u) => u.active)
+    .map((u) => ({ id: u.id, code: u.code, name: u.name }))
+  const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
+  const filterIds =
+    lojaCodes.length > 0
+      ? allUnits.filter((u) => lojaCodes.includes(u.code)).map((u) => u.id)
+      : undefined
+
   const [resultado, availablePeriods] = await Promise.all([
-    getNetworkResultadoForMonth(year, month),
+    getNetworkResultadoForMonth(year, month, filterIds),
     getAvailablePeriods(),
   ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
@@ -76,7 +87,13 @@ export default async function ResultadoPage({
               : ""}
           </p>
         </div>
-        <PeriodSelector current={{ year, month }} options={availablePeriods} />
+        <div className="flex flex-wrap items-center gap-2">
+          <LojaFilter units={allUnits} />
+          <PeriodSelector
+            current={{ year, month }}
+            options={availablePeriods}
+          />
+        </div>
       </div>
 
       {!hasData ? (
