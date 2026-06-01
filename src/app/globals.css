@@ -191,8 +191,57 @@
     display: block !important;
   }
 
+  /* ── "Infos Diária Venda": cabe em 1 página A4 paisagem ── */
+  .acomp-print {
+    display: block !important;
+    gap: 0 !important;
+  }
+  /* deixa a tabela FLUIR (evita 1ª página em branco do break-inside global) */
+  [data-print="page"].acomp-print > * {
+    break-inside: auto !important;
+  }
+  .acomp-print > * + * {
+    margin-top: 0.35rem;
+  }
+  /* logo do topo enxuto */
+  .acomp-print > div:first-child img {
+    height: 26px !important;
+  }
+  /* no PDF mostra só o nível loja (cabe em 1 página); a tela mantém o
+     breakdown por plataforma */
+  .acomp-print tr.plat-row {
+    display: none !important;
+  }
+  /* tabela compacta */
+  .acomp-print table {
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+  }
+  .acomp-print thead {
+    font-size: 7.5px !important;
+  }
+  .acomp-print th,
+  .acomp-print td {
+    padding: 1.5px 6px !important;
+  }
+  .acomp-print input {
+    font-size: 9px !important;
+    padding: 0 2px !important;
+    height: auto !important;
+  }
+  /* tira borda/arredondado do card pra ganhar espaço */
+  .acomp-print .rounded-xl {
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+  /* não deixa uma loja (cabeçalho + plataformas) quebrar no meio */
+  .acomp-print tbody tr {
+    break-inside: avoid;
+  }
+
   @page {
-    margin: 10mm;
+    margin: 8mm;
     size: A4 landscape;
   }
 }

@@ -91,7 +91,10 @@ export default async function AcompanhamentoPage({
   }
 
   return (
-    <div data-print="page" className="flex flex-1 flex-col gap-4 bg-muted/30 p-6">
+    <div
+      data-print="page"
+      className="acomp-print flex flex-1 flex-col gap-4 bg-muted/30 p-6"
+    >
       {/* Cabeçalho com logo */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-center gap-3">
@@ -173,7 +176,7 @@ export default async function AcompanhamentoPage({
                       {u.platforms.map((p) => (
                         <tr
                           key={`${u.unitId}-${p.platform}`}
-                          className="text-xs text-muted-foreground"
+                          className="plat-row text-xs text-muted-foreground"
                         >
                           <td className="py-1 pl-8 pr-3">
                             <span className="inline-flex items-center gap-1.5">
