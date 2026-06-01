@@ -158,7 +158,15 @@ export async function getAcompanhamentoVendas(
       falta: meta - total,
     }
   })
-  brands.sort((a, b) => b.total - a.total)
+  // Ordem fixa das marcas, como na planilha (Pote → Pão → Popular); demais por total.
+  const BRAND_ORDER = ["Churrasco no Pote", "Churrasco no Pão", "Churras Popular"]
+  const brandRank = (name: string) => {
+    const i = BRAND_ORDER.indexOf(name)
+    return i === -1 ? 99 : i
+  }
+  brands.sort(
+    (a, b) => brandRank(a.brandName) - brandRank(b.brandName) || b.total - a.total,
+  )
 
   const grupoDiaria = brands.reduce((s, b) => s + b.diaria, 0)
   const grupoTotal = brands.reduce((s, b) => s + b.total, 0)
