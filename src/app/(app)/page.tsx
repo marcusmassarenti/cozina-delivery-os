@@ -225,6 +225,10 @@ export default async function Home({
       ? (taxaEntregaValor / network.faturamentoBruto) * 100
       : 0
 
+  const periodQ = sp.periodo ? `?periodo=${sp.periodo}` : ""
+  const cancelQ = sp.periodo
+    ? `?metrica=cancelamentos&periodo=${sp.periodo}`
+    : "?metrica=cancelamentos"
   const kpis: Kpi[] = [
     {
       label: "Pedidos Totais",
@@ -232,6 +236,7 @@ export default async function Home({
       tone: "positive",
       icon: CalendarDays,
       platforms: finPlatforms,
+      href: `/pedidos${periodQ}`,
     },
     {
       label: "Pedidos Cancelados",
@@ -243,6 +248,7 @@ export default async function Home({
       tone: "neutral",
       icon: XCircle,
       platforms: finPlatforms,
+      href: `/relatorio-diario${cancelQ}`,
     },
     {
       label: "Média Pedidos/Dia",
@@ -250,6 +256,7 @@ export default async function Home({
       tone: "positive",
       icon: CalendarDays,
       platforms: finPlatforms,
+      href: `/relatorio-diario${periodQ}`,
     },
     {
       label: "Ticket Médio",
@@ -257,6 +264,7 @@ export default async function Home({
       tone: "positive",
       icon: Receipt,
       platforms: finPlatforms,
+      href: `/financeiro${periodQ}`,
     },
     {
       label: "Total Bruto",
@@ -264,6 +272,7 @@ export default async function Home({
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
+      href: `/financeiro${periodQ}`,
     },
     {
       label: "Total Líquido",
@@ -271,6 +280,7 @@ export default async function Home({
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
+      href: `/financeiro${periodQ}`,
     },
     {
       label: "Taxa de Repasse",
@@ -279,6 +289,7 @@ export default async function Home({
       tone: "positive",
       icon: Percent,
       platforms: finPlatforms,
+      href: `/financeiro${periodQ}`,
     },
     {
       label: "Custo de Entrega",
@@ -290,6 +301,7 @@ export default async function Home({
       tone: "neutral",
       icon: Bike,
       platforms: finPlatforms,
+      href: `/financeiro${periodQ}`,
     },
   ]
 
@@ -320,6 +332,7 @@ export default async function Home({
       tone: avalNotaMedia >= 4.5 ? "positive" : "neutral",
       icon: Star,
       platforms: avalPlatforms,
+      href: `/avaliacoes${periodQ}`,
     })
   }
 
