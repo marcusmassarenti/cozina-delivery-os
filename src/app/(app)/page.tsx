@@ -25,10 +25,11 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
 import { SectionDivider } from "@/components/shared/section-divider"
 import {
-  getUnits,
+  getVisibleUnits,
   networkTotalsFromUnits,
   platformTotalsFromUnits,
 } from "@/lib/data/units"
+import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import {
   getAvailablePeriods,
   getFinanceiroResumoByUnits,
@@ -96,23 +97,39 @@ export default async function Home({
 
   // Fase 1: precisa de allUnits pra resolver unidadesFilter ANTES de chamar
   // as queries de rede (que agora respeitam o filtro de unidades)
-  const [status, allUnits, availablePeriods] = await Promise.all([
+  const [status, allUnits, availablePeriods, accessibleIds] = await Promise.all([
     checkSupabase(),
-    getUnits(),
+    getVisibleUnits(),
     getAvailablePeriods(),
+    getAccessibleUnitIds(),
   ])
+  // accessibleIds === null → admin/gerente (vê a rede toda).
+  // accessibleIds !== null → franqueado (só as lojas dele; allUnits já vem
+  // pré-filtrado por getVisibleUnits).
+  const isScoped = accessibleIds !== null
   const units = unidadesFilter
     ? allUnits.filter((u) => unidadesFilter.has(u.code))
     : allUnits
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
   // Texto curto que descreve o escopo dos cards (rede vs lojas filtradas)
   const activeCount = activeUnitIds.length
-  const scopeLabel = unidadesFilter
-    ? `${activeCount} loja${activeCount !== 1 ? "s" : ""}`
-    : "rede"
-  // Quando filtro NÃO está ativo, passa undefined pras network functions
-  // (= rede inteira). Quando está, passa os IDs selecionados.
-  const filterUnitIds = unidadesFilter ? activeUnitIds : undefined
+  const scopeLabel =
+    isScoped || unidadesFilter
+      ? `${activeCount} loja${activeCount !== 1 ? "s" : ""}`
+      : "rede"
+  // Sentinela: as network functions tratam [] como "rede inteira". Pro
+  // franqueado SEM lojas visíveis, isso vazaria a rede — então mando um ID
+  // impossível pra forçar resultado vazio (fail-closed).
+  const NO_UNITS = ["00000000-0000-0000-0000-000000000000"]
+  // - admin/gerente: filtro só quando ?unidades ativo; senão undefined (=rede).
+  // - franqueado: SEMPRE restringe às lojas dele (com sentinela se vazio).
+  const filterUnitIds = isScoped
+    ? activeUnitIds.length > 0
+      ? activeUnitIds
+      : NO_UNITS
+    : unidadesFilter
+      ? activeUnitIds
+      : undefined
 
   // Fase 2: queries de rede + financeiro em paralelo, respeitando filtro
   const [
@@ -996,7 +1013,7 @@ type KeetaResumoT = ReturnType<
   : never
 
 function networkTotalsMerged(
-  units: Awaited<ReturnType<typeof getUnits>>,
+  units: Awaited<ReturnType<typeof getVisibleUnits>>,
   finByUnit: Map<string, FinResumo>,
   ninefoodByUnit: Map<string, NinefoodResumoT>,
   keetaByUnit: Map<string, KeetaResumoT>,
@@ -1113,11 +1130,11 @@ function networkTotalsMerged(
  * mostra o certo sem trocar a API.
  */
 function mergeUnitMonthlyForDashboard(
-  u: Awaited<ReturnType<typeof getUnits>>[number],
+  u: Awaited<ReturnType<typeof getVisibleUnits>>[number],
   fin: FinResumo | undefined,
   nine: NinefoodResumoT | undefined,
   keeta: KeetaResumoT | undefined,
-): Awaited<ReturnType<typeof getUnits>>[number] {
+): Awaited<ReturnType<typeof getVisibleUnits>>[number] {
   const hasIfood = fin?.hasData ?? false
   const has99 = nine?.hasData ?? false
   const hasKeeta = keeta?.hasData ?? false
@@ -1212,7 +1229,7 @@ function mergeUnitMonthlyForDashboard(
 }
 
 function platformTotalsMerged(
-  units: Awaited<ReturnType<typeof getUnits>>,
+  units: Awaited<ReturnType<typeof getVisibleUnits>>,
   finByUnit: Map<string, FinResumo>,
   ninefoodByUnit: Map<string, NinefoodResumoT>,
   keetaByUnit: Map<string, KeetaResumoT>,

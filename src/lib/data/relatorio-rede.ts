@@ -44,7 +44,7 @@ export async function getNetworkReportForMonth(
   const units = await getUnits()
   const allActiveIds = units.filter((u) => u.active).map((u) => u.id)
   const activeUnitIds =
-    filterUnitIds && filterUnitIds.length > 0 ? filterUnitIds : allActiveIds
+    filterUnitIds ? filterUnitIds : allActiveIds
 
   const [resultado, avalIfood, avalNine, avalKeeta, entrega, coverage] =
     await Promise.all([

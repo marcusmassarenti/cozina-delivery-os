@@ -64,7 +64,7 @@ export async function getImportCoverageForMonth(
     .not("data_fato_gerador", "is", null)
     .order("data_fato_gerador", { ascending: false })
     .limit(1)
-  if (filterUnitIds && filterUnitIds.length > 0) qi = qi.in("unit_id", filterUnitIds)
+  if (filterUnitIds) qi = qi.in("unit_id", filterUnitIds)
 
   let qn = admin
     .from("ninefood_daily_loja")
@@ -73,7 +73,7 @@ export async function getImportCoverageForMonth(
     .eq("ref_month", month)
     .order("data", { ascending: false })
     .limit(1)
-  if (filterUnitIds && filterUnitIds.length > 0) qn = qn.in("unit_id", filterUnitIds)
+  if (filterUnitIds) qn = qn.in("unit_id", filterUnitIds)
 
   let qk = admin
     .from("keeta_daily_loja")
@@ -82,7 +82,7 @@ export async function getImportCoverageForMonth(
     .eq("ref_month", month)
     .order("data", { ascending: false })
     .limit(1)
-  if (filterUnitIds && filterUnitIds.length > 0) qk = qk.in("unit_id", filterUnitIds)
+  if (filterUnitIds) qk = qk.in("unit_id", filterUnitIds)
 
   const [{ data: di }, { data: dn }, { data: dk }] = await Promise.all([
     qi,

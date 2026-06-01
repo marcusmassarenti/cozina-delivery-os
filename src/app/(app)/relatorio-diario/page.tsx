@@ -12,7 +12,7 @@ import {
   type DailyMetric,
   type ReportPlatform,
 } from "@/lib/data/relatorio-diario-types"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
 import { fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
@@ -57,7 +57,7 @@ export default async function RelatorioDiarioPage({
     : "todas"
 
   const [allUnits, availablePeriods] = await Promise.all([
-    getUnits(),
+    getVisibleUnits(),
     getAvailablePeriods(),
   ])
   const activeUnits = allUnits

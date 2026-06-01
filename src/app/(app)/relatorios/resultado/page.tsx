@@ -19,7 +19,8 @@ import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
+import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkReportForMonth } from "@/lib/data/relatorio-rede"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import {
@@ -41,14 +42,17 @@ export default async function RelatoriosPage({
   const periodKey = formatPeriodKey(period)
   const periodLabel = formatPeriodLabel(period)
 
-  const allUnits = (await getUnits())
+  const allUnits = (await getVisibleUnits())
     .filter((u) => u.active)
     .map((u) => ({ id: u.id, code: u.code, name: u.name }))
   const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
+  const accessibleIds = await getAccessibleUnitIds()
   const filterIds =
     lojaCodes.length > 0
       ? allUnits.filter((u) => lojaCodes.includes(u.code)).map((u) => u.id)
-      : undefined
+      : accessibleIds === null
+        ? undefined // admin/gerente: rede inteira
+        : allUnits.map((u) => u.id) // franqueado: só as lojas dele
 
   const [report, availablePeriods] = await Promise.all([
     getNetworkReportForMonth(year, month, filterIds),

@@ -36,18 +36,21 @@ export async function AvaliacoesNetworkDashboard({
   month,
   plataforma = null,
   notasFiltro = [],
+  unitIds,
 }: {
   year: number
   month: number
   plataforma?: PlatFiltro
   /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
   notasFiltro?: number[]
+  /** Escopo de lojas. undefined = rede inteira (admin); array = só essas. */
+  unitIds?: string[]
 }) {
   const [ifood, nine, keeta, byUnit] = await Promise.all([
-    getNetworkAvaliacoesForMonth(year, month),
-    getNetworkNinefoodAvaliacoesForMonth(year, month),
-    getNetworkKeetaAvaliacoesForMonth(year, month),
-    getAvaliacoesByUnitForMonth(year, month),
+    getNetworkAvaliacoesForMonth(year, month, unitIds),
+    getNetworkNinefoodAvaliacoesForMonth(year, month, unitIds),
+    getNetworkKeetaAvaliacoesForMonth(year, month, unitIds),
+    getAvaliacoesByUnitForMonth(year, month, unitIds),
   ])
 
   // Plataforma "ativa" do filtro (null = rede combinada)

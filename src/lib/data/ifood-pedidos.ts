@@ -277,7 +277,7 @@ export async function getNetworkPagamentoResumo(
       .eq("ref_month", month)
       .order("id")
       .range(a, b)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })
@@ -316,7 +316,7 @@ export async function getVrByUnits(
       .eq("ref_month", month)
       .order("id")
       .range(a, b)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })

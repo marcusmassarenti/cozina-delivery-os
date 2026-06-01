@@ -94,7 +94,7 @@ export async function getNetworkResultadoForMonth(
 ): Promise<NetworkResultado> {
   const allUnits = await getUnits()
   let active = allUnits.filter((u) => u.active)
-  if (filterUnitIds && filterUnitIds.length > 0) {
+  if (filterUnitIds) {
     const set = new Set(filterUnitIds)
     active = active.filter((u) => set.has(u.id))
   }

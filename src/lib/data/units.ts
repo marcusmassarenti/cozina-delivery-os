@@ -3,6 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import type { PlatformId } from "@/components/platform-logo"
@@ -118,6 +119,24 @@ export const getUnits = unstable_cache(getUnitsUncached, ["units-monthly-v2"], {
   revalidate: 60,
   tags: ["units", "reports"],
 })
+
+/**
+ * Unidades VISÍVEIS pro usuário logado (escopo de papel).
+ *
+ *  - admin / gerente → todas (getAccessibleUnitIds devolve null)
+ *  - franqueado      → só as units vinculadas a ele
+ *
+ * NÃO é cacheado globalmente (o filtro é por-usuário); reaproveita o cache
+ * global de getUnits() e só cruza com os IDs acessíveis. Use nas PÁGINAS no
+ * lugar de getUnits(); as funções de rede então recebem só os unitIds certos.
+ */
+export async function getVisibleUnits(): Promise<Unit[]> {
+  const all = await getUnits()
+  const allowed = await getAccessibleUnitIds()
+  if (allowed === null) return all
+  const set = new Set(allowed)
+  return all.filter((u) => set.has(u.id))
+}
 
 export async function getUnitByCode(code: string): Promise<Unit | null> {
   const supabase = createAdminClient()

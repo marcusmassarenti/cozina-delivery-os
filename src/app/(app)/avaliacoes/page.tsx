@@ -4,7 +4,8 @@ import { AvaliacoesTab } from "@/app/(app)/unidades/[codigo]/_components/avaliac
 import { Avaliacoes99Tab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-keeta-tab"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
+import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
 import { AvaliacoesFilters } from "./_components/avaliacoes-filters"
@@ -49,12 +50,17 @@ export default async function AvaliacoesPage({
     .map((s) => Number(s))
     .filter((n) => n >= 1 && n <= 5)
 
-  const [units, availablePeriods] = await Promise.all([
-    getUnits(),
+  const [units, availablePeriods, accessibleIds] = await Promise.all([
+    getVisibleUnits(),
     getAvailablePeriods(),
+    getAccessibleUnitIds(),
   ])
 
   const activeUnits = units.filter((u) => u.active)
+  // Escopo da visão de rede: admin/gerente (null) → undefined = rede inteira;
+  // franqueado → só as lojas visíveis dele.
+  const networkUnitIds =
+    accessibleIds === null ? undefined : activeUnits.map((u) => u.id)
   const unitOptions = activeUnits.map((u) => ({
     code: u.code,
     name: u.name,
@@ -113,6 +119,7 @@ export default async function AvaliacoesPage({
           month={month}
           plataforma={plataformaParam}
           notasFiltro={notasFiltro}
+          unitIds={networkUnitIds}
         />
       ) : availableForUnit.length === 0 ? (
         <NoPlatformsState unitName={selectedUnit.name} />

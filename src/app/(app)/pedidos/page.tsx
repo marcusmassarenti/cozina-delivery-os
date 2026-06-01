@@ -21,7 +21,7 @@ import {
   getNinefoodPedidoUnitsWithData,
   getNetworkNinefoodPedidoResumo,
 } from "@/lib/data/ninefood-pedidos"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
 import { PedidosIfoodView } from "./_components/pedidos-ifood-view"
@@ -56,7 +56,7 @@ export default async function PedidosPage({
         : "ifood"
 
   const [allUnits, availablePeriods] = await Promise.all([
-    getUnits(),
+    getVisibleUnits(),
     getAvailablePeriods(),
   ])
   const activeUnits = allUnits.filter((u) => u.active)

@@ -3,7 +3,7 @@ import { ArrowLeft, Minus, TrendingDown, TrendingUp } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getEvolucaoSeries } from "@/lib/data/comparativo"
 import {
@@ -50,7 +50,7 @@ export default async function EvolucaoPage({
   const sp = await searchParams
 
   const [allUnitsRaw, periodsRaw] = await Promise.all([
-    getUnits(),
+    getVisibleUnits(),
     getAvailablePeriods(),
   ])
   const allUnits = allUnitsRaw

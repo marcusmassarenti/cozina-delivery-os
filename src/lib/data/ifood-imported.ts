@@ -933,7 +933,7 @@ export async function getNetworkTopItemsForMonth(
       .lte("period_end", end)
       .order("id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       qPer = qPer.in("unit_id", filterUnitIds)
     return qPer
   }, "ifood_cardapio_periodo_items rede")
@@ -997,7 +997,7 @@ export async function getNetworkTopItemsForMonth(
       .order("date")
       .order("unit_id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       qDay = qDay.in("unit_id", filterUnitIds)
     return qDay
   }, "ifood_daily_items rede")
@@ -1385,7 +1385,7 @@ export async function getNetworkFunnelForMonth(
       .order("date")
       .order("unit_id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   }, "ifood_daily_funnel rede")
@@ -1619,7 +1619,7 @@ export async function getNetworkAvaliacoesForMonth(
       .lte("data_avaliacao", end)
       .order("id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   }, "ifood_avaliacoes rede")
@@ -1729,7 +1729,7 @@ export async function getNetworkCancelamentosPorMotivo(
       .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
       .order("id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   }, "ifood_financeiro_lancamentos cancelamentos rede")

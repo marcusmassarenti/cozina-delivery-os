@@ -212,7 +212,7 @@ export async function getNetworkKeetaAvaliacoesForMonth(
       .lte("data_avaliacao", endIncl)
       .order("id")
       .range(f, t)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   }, "keeta_pedidos avaliacoes rede")
@@ -319,7 +319,7 @@ export async function getNetworkKeetaTopItemsForMonth(
       .eq("ref_month", month)
       .order("id")
       .range(a, b)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })
@@ -374,7 +374,7 @@ export async function getNetworkKeetaCancelamentosForMonth(
       .eq("ref_month", month)
       .order("id")
       .range(a, b)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })

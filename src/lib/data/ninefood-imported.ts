@@ -906,7 +906,7 @@ export async function getNetworkNinefoodTopItemsForMonth(
       .lt("data", endExcl)
       .order("id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })
@@ -970,7 +970,7 @@ export async function getNetworkNinefoodCancelamentosForMonth(
       .lt("horario_pedido", endExcl)
       .order("id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })
@@ -1051,7 +1051,7 @@ export async function getNetworkNinefoodAvaliacoesForMonth(
       .order("data_avaliacao", { ascending: false })
       .order("id")
       .range(from, to)
-    if (filterUnitIds && filterUnitIds.length > 0)
+    if (filterUnitIds)
       q = q.in("unit_id", filterUnitIds)
     return q
   })

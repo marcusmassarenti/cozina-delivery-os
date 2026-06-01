@@ -67,7 +67,7 @@ export async function getAvaliacoesByUnitForMonth(
           .lte("data_avaliacao", endIncl)
           .order("id")
           .range(from, to)
-        if (filterUnitIds && filterUnitIds.length > 0)
+        if (filterUnitIds)
           qIfood = qIfood.in("unit_id", filterUnitIds)
         return qIfood
       },
@@ -83,7 +83,7 @@ export async function getAvaliacoesByUnitForMonth(
           .lt("data_avaliacao", endExcl)
           .order("id")
           .range(from, to)
-        if (filterUnitIds && filterUnitIds.length > 0)
+        if (filterUnitIds)
           q99 = q99.in("unit_id", filterUnitIds)
         return q99
       },
@@ -103,7 +103,7 @@ export async function getAvaliacoesByUnitForMonth(
           .lte("data_avaliacao", endIncl)
           .order("id")
           .range(from, to)
-        if (filterUnitIds && filterUnitIds.length > 0)
+        if (filterUnitIds)
           qKeeta = qKeeta.in("unit_id", filterUnitIds)
         return qKeeta
       },

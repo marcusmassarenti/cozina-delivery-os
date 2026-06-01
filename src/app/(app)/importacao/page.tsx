@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, LayoutGrid, Upload } from "lucide-react"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
 
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
@@ -75,7 +75,7 @@ export default async function ImportacaoPage({
 }) {
   const sp = await searchParams
   const histPage = Math.max(1, parseInt(sp.historico ?? "1", 10) || 1)
-  const units = await getUnits()
+  const units = await getVisibleUnits()
   const activeUnits = units.filter((u) => u.active)
   const availableUnitsLite = activeUnits.map((u) => ({
     id: u.id,

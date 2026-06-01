@@ -30,6 +30,7 @@ import {
   getKeetaAvaliacoesResumoForMonth,
   getKeetaResumoForMonth,
 } from "@/lib/data/keeta-imported"
+import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 import { parsePeriodParam } from "@/lib/period"
@@ -55,6 +56,11 @@ export default async function UnidadeDetalhePage({
   const sp = await searchParams
   const unit = await getUnitByCode(codigo)
   if (!unit) notFound()
+
+  // Escopo: franqueado só abre a própria loja. accessibleIds === null =
+  // admin/gerente (vê tudo). Loja fora do escopo → 404 (não revela que existe).
+  const accessibleIds = await getAccessibleUnitIds()
+  if (accessibleIds !== null && !accessibleIds.includes(unit.id)) notFound()
 
   const { year, month } = parsePeriodParam(sp.periodo)
   const [
