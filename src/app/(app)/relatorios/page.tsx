@@ -110,7 +110,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Evolução da nota",
         desc: "Crescimento ou queda da nota média ao longo dos meses.",
         icon: LineChart,
-        soon: true,
+        href: "/relatorios/avaliacoes-evolucao",
       },
       {
         title: "Comparativo de nota",
@@ -122,7 +122,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Comentários negativos",
         desc: "Avaliações ruins por loja, pra agir rápido.",
         icon: MessageSquare,
-        soon: true,
+        href: "/relatorios/avaliacoes-negativos",
       },
     ],
   },
