@@ -74,7 +74,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Faturamento por plataforma",
         desc: "Quanto cada plataforma representa do faturamento da rede.",
         icon: Layers,
-        soon: true,
+        href: "/relatorios/plataformas",
       },
     ],
   },
