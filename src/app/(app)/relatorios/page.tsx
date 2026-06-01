@@ -1,322 +1,227 @@
 import Link from "next/link"
 import {
   ArrowRight,
+  BarChart3,
+  Ban,
   Bike,
-  CalendarRange,
-  DollarSign,
+  GitCompareArrows,
+  Layers,
   LayoutGrid,
-  Percent,
+  LineChart,
+  type LucideIcon,
+  MessageSquare,
+  Package,
   Receipt,
-  ShoppingBag,
   Star,
+  TrendingUp,
+  Trophy,
   Wallet,
 } from "lucide-react"
 
-import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
-import { ExportPdfButton } from "@/components/shared/export-pdf-button"
-import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
-import { PeriodSelector } from "@/components/shared/period-selector"
-import { SectionDivider } from "@/components/shared/section-divider"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getNetworkReportForMonth } from "@/lib/data/relatorio-rede"
-import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
-import {
-  formatPeriodKey,
-  formatPeriodLabel,
-  parsePeriodParam,
-} from "@/lib/period"
+type ReportItem = {
+  title: string
+  desc: string
+  icon: LucideIcon
+  href?: string
+  soon?: boolean
+}
 
-const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
+type Categoria = {
+  label: string
+  icon: LucideIcon
+  reports: ReportItem[]
+}
 
-export default async function RelatoriosPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ periodo?: string }>
-}) {
-  const sp = await searchParams
-  const period = parsePeriodParam(sp.periodo)
-  const { year, month } = period
-  const periodKey = formatPeriodKey(period)
-  const periodLabel = formatPeriodLabel(period)
+const CATEGORIAS: Categoria[] = [
+  {
+    label: "Faturamento & Resultado",
+    icon: TrendingUp,
+    reports: [
+      {
+        title: "Comparativo loja × loja",
+        desc: "Compara lojas lado a lado nos indicadores que você escolher, com crescimento entre meses.",
+        icon: GitCompareArrows,
+        href: "/relatorios/comparativo",
+      },
+      {
+        title: "Resultado da rede",
+        desc: "Consolidado da rede no mês — KPIs e DRE em cascata, do bruto ao resultado operacional.",
+        icon: Wallet,
+        href: "/relatorios/resultado",
+      },
+      {
+        title: "Evolução / crescimento",
+        desc: "Linha do tempo de faturamento e pedidos, com Δ% mês a mês.",
+        icon: LineChart,
+        soon: true,
+      },
+      {
+        title: "Ranking de lojas",
+        desc: "Lojas ordenadas por faturamento, ticket ou margem no período.",
+        icon: Trophy,
+        soon: true,
+      },
+      {
+        title: "Faturamento por plataforma",
+        desc: "Quanto cada plataforma representa do faturamento da rede.",
+        icon: Layers,
+        soon: true,
+      },
+    ],
+  },
+  {
+    label: "Produtos",
+    icon: Package,
+    reports: [
+      {
+        title: "Top produtos",
+        desc: "Itens mais vendidos da rede ou por loja.",
+        icon: Package,
+        soon: true,
+      },
+      {
+        title: "Comparativo de produtos",
+        desc: "Mesmo produto entre lojas diferentes.",
+        icon: GitCompareArrows,
+        soon: true,
+      },
+      {
+        title: "Produtos em alta / queda",
+        desc: "O que subiu ou caiu vs o mês anterior.",
+        icon: TrendingUp,
+        soon: true,
+      },
+    ],
+  },
+  {
+    label: "Avaliações",
+    icon: Star,
+    reports: [
+      {
+        title: "Evolução da nota",
+        desc: "Crescimento ou queda da nota média ao longo dos meses.",
+        icon: LineChart,
+        soon: true,
+      },
+      {
+        title: "Comparativo de nota",
+        desc: "Nota média loja × loja, por plataforma.",
+        icon: GitCompareArrows,
+        soon: true,
+      },
+      {
+        title: "Comentários negativos",
+        desc: "Avaliações ruins por loja, pra agir rápido.",
+        icon: MessageSquare,
+        soon: true,
+      },
+    ],
+  },
+  {
+    label: "Operação",
+    icon: BarChart3,
+    reports: [
+      {
+        title: "Cancelamentos",
+        desc: "Pedidos cancelados por loja e plataforma.",
+        icon: Ban,
+        soon: true,
+      },
+      {
+        title: "Ticket médio comparativo",
+        desc: "Ticket médio entre lojas e plataformas.",
+        icon: Receipt,
+        soon: true,
+      },
+      {
+        title: "Cobertura de importação",
+        desc: "O que cada loja já tem importado, mês a mês.",
+        icon: LayoutGrid,
+        href: "/importacao/cobertura",
+      },
+    ],
+  },
+]
 
-  const [report, availablePeriods] = await Promise.all([
-    getNetworkReportForMonth(year, month),
-    getAvailablePeriods(),
-  ])
-  const t = report.totals
+export default function RelatoriosHubPage() {
+  return (
+    <div className="flex flex-1 flex-col gap-7 bg-muted/30 p-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Hub de Relatórios
+        </h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Relatórios da rede por categoria. Escolha lojas, plataformas e período
+          dentro de cada um.
+        </p>
+      </div>
 
-  const custoEntregaPct =
-    t.bruto > 0 ? (report.custoEntrega / t.bruto) * 100 : 0
+      {CATEGORIAS.map((cat) => {
+        const CatIcon = cat.icon
+        return (
+          <section key={cat.label} className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <CatIcon className="size-4 text-muted-foreground" />
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {cat.label}
+              </h2>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {cat.reports.map((r) => (
+                <ReportCard key={r.title} report={r} />
+              ))}
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
 
-  const kpis: Kpi[] = [
-    {
-      label: "Pedidos totais",
-      value: fmtNum(t.pedidos),
-      icon: ShoppingBag,
-      platforms: [...ALL_PLATFORMS],
-    },
-    {
-      label: "Média pedidos/dia",
-      value: fmtNum(report.mediaPedidosDia),
-      trend: `${report.diasConsiderados} dia${report.diasConsiderados === 1 ? "" : "s"} no período`,
-      icon: CalendarRange,
-    },
-    {
-      label: "Ticket médio",
-      value: fmtBRL(report.ticketMedio),
-      icon: Receipt,
-    },
-    {
-      label: "Total bruto",
-      value: fmtBRL(t.bruto),
-      icon: DollarSign,
-      platforms: [...ALL_PLATFORMS],
-    },
-    {
-      label: "Total líquido",
-      value: fmtBRL(t.totalLiquido),
-      trend: `${fmtPct(t.repassePct)} de repasse`,
-      tone: "positive",
-      icon: Wallet,
-    },
-    {
-      label: "Resultado operacional",
-      value: fmtBRL(t.resultadoOperacional),
-      trend: `${fmtPct(t.resultadoPct)} do bruto`,
-      tone: t.resultadoOperacional >= 0 ? "positive" : "warning",
-      icon: Percent,
-    },
-    {
-      label: "Custo de entrega",
-      value: fmtBRL(report.custoEntrega),
-      trend: `${fmtPct(custoEntregaPct)} do bruto`,
-      icon: Bike,
-    },
-    {
-      label: "Nota média",
-      value: report.notaMedia != null ? `${report.notaMedia.toFixed(2)} ★` : "—",
-      trend:
-        report.totalAvaliacoes > 0
-          ? `${fmtNum(report.totalAvaliacoes)} avaliações`
-          : "sem avaliações",
-      tone: "neutral",
-      icon: Star,
-    },
-  ]
+function ReportCard({ report }: { report: ReportItem }) {
+  const Icon = report.icon
+  const inner = (
+    <>
+      <div
+        className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
+          report.soon
+            ? "bg-muted text-muted-foreground"
+            : "bg-accent text-accent-foreground"
+        }`}
+      >
+        <Icon className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          {report.title}
+          {report.soon ? (
+            <span className="rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              em breve
+            </span>
+          ) : (
+            <ArrowRight className="size-3.5 -translate-x-1 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+          )}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{report.desc}</p>
+      </div>
+    </>
+  )
 
-  // Cascata do DRE (consistente: bruto − taxas = líquido; etc.).
-  const dre: Array<{
-    label: string
-    value: number
-    kind: "base" | "minus" | "plus" | "sum"
-    pct?: number
-    note?: string
-    strong?: boolean
-  }> = [
-    { label: "Receita bruta", value: t.bruto, kind: "base" },
-    {
-      label: "Taxas das plataformas",
-      value: -t.taxasPlataforma,
-      kind: "minus",
-      note:
-        t.promocoesLoja > 0
-          ? `inclui ${fmtBRL(t.promocoesLoja)} de promoções da loja`
-          : undefined,
-    },
-    {
-      label: "Líquido das plataformas",
-      value: t.liquidoPlataformas,
-      kind: "sum",
-    },
-    { label: "VR líquido", value: t.vrLiquido, kind: "plus" },
-    { label: "Total líquido", value: t.totalLiquido, kind: "sum", strong: true },
-    { label: "CMV (Cozina + Loja)", value: -t.cmvTotal, kind: "minus" },
-    {
-      label: "Margem líquida",
-      value: t.margemLiquida,
-      kind: "sum",
-      pct: t.margemPct,
-    },
-    { label: "Custo de operação", value: -t.custoOperacao, kind: "minus" },
-    {
-      label: "Resultado operacional",
-      value: t.resultadoOperacional,
-      kind: "sum",
-      pct: t.resultadoPct,
-      strong: true,
-    },
-  ]
-
-  const atalhos: Array<{
-    href: string
-    icon: typeof CalendarRange
-    title: string
-    desc: string
-  }> = [
-    {
-      href: `/relatorio-diario?periodo=${periodKey}`,
-      icon: CalendarRange,
-      title: "Relatório Diário",
-      desc: "Faturamento, pedidos e cancelados loja × dia, com gráfico e ranking.",
-    },
-    {
-      href: `/financeiro?periodo=${periodKey}`,
-      icon: Wallet,
-      title: "DRE Grupo",
-      desc: "Resultado da rede e por unidade — CMV, margem e resultado operacional.",
-    },
-    {
-      href: `/avaliacoes?periodo=${periodKey}`,
-      icon: Star,
-      title: "Avaliações",
-      desc: "Notas e comentários das 3 plataformas, por loja e por período.",
-    },
-    {
-      href: "/pedidos",
-      icon: Receipt,
-      title: "Pedidos",
-      desc: "Pedido a pedido por plataforma — forma de pagamento, VR e turnos.",
-    },
-    {
-      href: "/importacao/cobertura",
-      icon: LayoutGrid,
-      title: "Cobertura de importação",
-      desc: "O que cada loja já tem importado, mês a mês.",
-    },
-  ]
+  if (report.soon || !report.href) {
+    return (
+      <div className="flex cursor-not-allowed items-start gap-3 rounded-xl border border-dashed bg-card/60 p-4 opacity-70">
+        {inner}
+      </div>
+    )
+  }
 
   return (
-    <div
-      data-print="page"
-      className="flex flex-1 flex-col gap-6 bg-muted/30 p-6"
+    <Link
+      href={report.href}
+      className="group flex items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
     >
-      {/* Cabeçalho */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Relatório consolidado da rede · {periodLabel} ·{" "}
-            {report.unitsComFaturamento}/{report.unitsTotal} loja
-            {report.unitsTotal === 1 ? "" : "s"} com faturamento
-          </p>
-        </div>
-        <div className="flex items-center gap-2" data-print="hide">
-          <PeriodSelector current={period} options={availablePeriods} />
-          <ExportPdfButton />
-        </div>
-      </div>
-
-      <ImportCoverageBanner
-        coverage={report.coverage}
-        year={year}
-        month={month}
-        periodLabel={periodLabel}
-      />
-
-      {/* 1 — Consolidado */}
-      <SectionDivider number={1} label="Consolidado da rede" />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {kpis.map((kpi) => (
-          <KpiCard key={kpi.label} kpi={kpi} />
-        ))}
-      </div>
-
-      {/* DRE em cascata */}
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="border-b px-5 py-3">
-          <p className="text-sm font-semibold">Resultado da rede · {periodLabel}</p>
-          <p className="text-[11px] text-muted-foreground">
-            Do faturamento bruto ao resultado operacional
-          </p>
-        </div>
-        <div className="divide-y">
-          {dre.map((line) => (
-            <div
-              key={line.label}
-              className={`flex items-center justify-between gap-3 px-5 py-2.5 ${
-                line.kind === "sum" ? "bg-muted/30" : ""
-              }`}
-            >
-              <div className="min-w-0">
-                <p
-                  className={`truncate text-sm ${
-                    line.strong
-                      ? "font-bold"
-                      : line.kind === "sum"
-                        ? "font-semibold"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {line.kind === "minus" && (
-                    <span className="mr-1 text-rose-500">−</span>
-                  )}
-                  {line.kind === "plus" && (
-                    <span className="mr-1 text-emerald-500">+</span>
-                  )}
-                  {line.kind === "sum" && <span className="mr-1">=</span>}
-                  {line.label}
-                </p>
-                {line.note && (
-                  <p className="text-[10px] text-muted-foreground">{line.note}</p>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                {line.pct !== undefined && (
-                  <span
-                    className={`text-[11px] font-medium ${
-                      line.value >= 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-600 dark:text-rose-400"
-                    }`}
-                  >
-                    {fmtPct(line.pct)}
-                  </span>
-                )}
-                <span
-                  className={`text-sm ${
-                    line.strong ? "font-bold" : "font-medium"
-                  } ${
-                    line.kind === "minus"
-                      ? "text-rose-600 dark:text-rose-400"
-                      : ""
-                  }`}
-                >
-                  {fmtBRL(line.value)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 2 — Atalhos pros relatórios detalhados */}
-      <SectionDivider number={2} label="Relatórios detalhados" />
-      <div
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-        data-print="hide"
-      >
-        {atalhos.map((a) => {
-          const Icon = a.icon
-          return (
-            <Link
-              key={a.href}
-              href={a.href}
-              className="group flex items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
-            >
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                <Icon className="size-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1 text-sm font-semibold">
-                  {a.title}
-                  <ArrowRight className="size-3.5 -translate-x-1 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
-              </div>
-            </Link>
-          )
-        })}
-      </div>
-    </div>
+      {inner}
+    </Link>
   )
 }

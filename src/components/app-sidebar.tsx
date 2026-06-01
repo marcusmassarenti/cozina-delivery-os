@@ -54,10 +54,7 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Relatórios", href: "/relatorios", icon: ClipboardList },
-    ],
+    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
   },
   {
     label: "Operação",
@@ -73,6 +70,11 @@ const navGroups: NavGroup[] = [
     label: "Financeiro",
     defaultOpen: true,
     items: [
+      {
+        label: "Hub de Relatórios",
+        href: "/relatorios",
+        icon: ClipboardList,
+      },
       {
         label: "Relatório Diário",
         href: "/relatorio-diario",
