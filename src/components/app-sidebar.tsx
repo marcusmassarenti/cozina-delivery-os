@@ -6,6 +6,7 @@ import {
   Cable,
   CalendarRange,
   ChevronDown,
+  ClipboardList,
   FileUp,
   Flame,
   LayoutDashboard,
@@ -53,7 +54,10 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
+    items: [
+      { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Relatórios", href: "/relatorios", icon: ClipboardList },
+    ],
   },
   {
     label: "Operação",
