@@ -134,7 +134,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Cancelamentos",
         desc: "Pedidos cancelados por loja e plataforma.",
         icon: Ban,
-        soon: true,
+        href: "/relatorios/cancelamentos",
       },
       {
         title: "Ticket médio comparativo",
