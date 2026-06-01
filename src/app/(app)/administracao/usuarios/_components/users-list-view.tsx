@@ -3,13 +3,21 @@
 import * as React from "react"
 import { Building2, UserCog, UsersRound } from "lucide-react"
 
-import { perfilBadge, perfilLabel } from "@/lib/perfis"
 import type { AppUser } from "../_actions"
 import { DeleteUserButton } from "./delete-user-button"
 import { EditUserDialog } from "./edit-user-dialog"
-import { NewUserDialog, type UnitOption } from "./new-user-dialog"
+import {
+  NewUserDialog,
+  type UnitOption,
+  type RoleOption,
+} from "./new-user-dialog"
 
 type Tab = "internos" | "franqueados"
+
+const BADGE_HOLDING =
+  "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+const BADGE_UNIT =
+  "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
 
 function formatDate(iso: string | null): string {
   if (!iso) return "Nunca"
@@ -25,15 +33,24 @@ export function UsersListView({
   users,
   currentUserId,
   units,
+  roles,
 }: {
   users: AppUser[]
   currentUserId: string | null
   units: UnitOption[]
+  roles: RoleOption[]
 }) {
   const [tab, setTab] = React.useState<Tab>("internos")
 
-  const internos = users.filter((u) => u.perfil === "administrador")
-  const franqueados = users.filter((u) => u.perfil === "franqueado")
+  const scopeByKey = new Map(roles.map((r) => [r.key, r.dataScope]))
+  const labelByKey = new Map(roles.map((r) => [r.key, r.label]))
+  const roleLabel = (key: string) => labelByKey.get(key) ?? key
+  const isUnit = (key: string) => scopeByKey.get(key) === "unit"
+  const badgeFor = (key: string) => (isUnit(key) ? BADGE_UNIT : BADGE_HOLDING)
+
+  // Abas por escopo: holding (admin/gerente/custom) = Equipe; unit = Franqueados.
+  const internos = users.filter((u) => !isUnit(u.perfil))
+  const franqueados = users.filter((u) => isUnit(u.perfil))
   const filtered = tab === "internos" ? internos : franqueados
 
   return (
@@ -51,7 +68,7 @@ export function UsersListView({
             Cadastre, gerencie e atribua permissões aos usuários do sistema.
           </p>
         </div>
-        <NewUserDialog units={units} />
+        <NewUserDialog units={units} roles={roles} />
       </div>
 
       {/* Tabs */}
@@ -119,13 +136,13 @@ export function UsersListView({
                 </div>
                 <div className="flex flex-col items-center gap-0.5">
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${perfilBadge(
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${badgeFor(
                       u.perfil,
                     )}`}
                   >
-                    {perfilLabel(u.perfil)}
+                    {roleLabel(u.perfil)}
                   </span>
-                  {u.perfil === "franqueado" && u.unitCode && (
+                  {isUnit(u.perfil) && u.unitCode && (
                     <span className="text-[10px] text-muted-foreground">
                       #{u.unitCode} · {u.unitName?.split(" — ")[1] ?? u.unitName}
                     </span>
@@ -138,7 +155,7 @@ export function UsersListView({
                   {formatDate(u.lastSignInAt)}
                 </div>
                 <div className="flex items-center gap-0.5">
-                  <EditUserDialog user={u} units={units} />
+                  <EditUserDialog user={u} units={units} roles={roles} />
                   <DeleteUserButton
                     userId={u.id}
                     userName={u.fullName}

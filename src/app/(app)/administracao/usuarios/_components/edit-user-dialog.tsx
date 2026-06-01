@@ -25,24 +25,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PERFIS, perfilRequiresUnit, type PerfilId } from "@/lib/perfis"
 import { updateUser, type AppUser, type UserActionState } from "../_actions"
-import type { UnitOption } from "./new-user-dialog"
+import type { UnitOption, RoleOption } from "./new-user-dialog"
 
 const initial: UserActionState = { ok: false }
 
 export function EditUserDialog({
   user,
   units,
+  roles,
 }: {
   user: AppUser
   units: UnitOption[]
+  roles: RoleOption[]
 }) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(updateUser, initial)
-  const [perfil, setPerfil] = React.useState<PerfilId>(
-    user.perfil === "administrador" ? "administrador" : "franqueado",
-  )
+  // Perfil atual do usuário se ainda existir; senão cai pro 1º disponível.
+  const initialPerfil = roles.some((r) => r.key === user.perfil)
+    ? user.perfil
+    : (roles[0]?.key ?? "")
+  const [perfil, setPerfil] = React.useState<string>(initialPerfil)
   const [unitId, setUnitId] = React.useState<string>(user.unitId ?? "")
   const router = useRouter()
 
@@ -53,7 +56,8 @@ export function EditUserDialog({
     }
   }, [state, router])
 
-  const showUnit = perfilRequiresUnit(perfil)
+  const showUnit =
+    roles.find((r) => r.key === perfil)?.dataScope === "unit"
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -117,26 +121,25 @@ export function EditUserDialog({
           </Field>
 
           <Field label="Perfil de Acesso">
-            <Select
-              value={perfil}
-              onValueChange={(v) => setPerfil(v as PerfilId)}
-            >
+            <Select value={perfil} onValueChange={(v) => setPerfil(v ?? "")}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>
+                  {(v) => roles.find((r) => r.key === v)?.label ?? ""}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {PERFIS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.label}
+                {roles.map((r) => (
+                  <SelectItem key={r.key} value={r.key}>
+                    {r.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <input type="hidden" name="perfil" value={perfil} />
             <p className="text-[10px] text-muted-foreground">
-              {perfil === "administrador"
-                ? "Acesso a toda a rede (equipe Cozina)."
-                : "Acesso somente à própria unidade (cliente)."}
+              {showUnit
+                ? "Acesso somente à(s) loja(s) vinculada(s)."
+                : "Acesso à rede toda."}
             </p>
           </Field>
 

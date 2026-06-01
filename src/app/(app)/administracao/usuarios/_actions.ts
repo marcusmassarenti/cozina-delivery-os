@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireModulePermission } from "@/lib/auth/guards"
-import { perfilRequiresUnit } from "@/lib/perfis"
+import { getRolesConfig } from "@/lib/auth/permissions"
+
+/** Escopo de dados do perfil (vem da tela de Permissões). Default: holding. */
+async function roleScope(perfilKey: string): Promise<"holding" | "unit"> {
+  const roles = await getRolesConfig()
+  return roles.find((r) => r.key === perfilKey)?.dataScope ?? "holding"
+}
 
 export type AppUser = {
   id: string
@@ -71,9 +77,11 @@ function validatePassword(p: string): string | null {
 }
 
 /**
- * Sincroniza user_unit_access com o perfil:
- * - administrador → scope='holding', scope_id=cozina holding id
- * - franqueado    → scope='unit', scope_id=unitId
+ * Sincroniza user_unit_access com o ESCOPO do perfil (data_scope), não mais
+ * com nomes fixos:
+ * - holding → scope='holding' (role 'admin' só pro perfil 'administrador',
+ *   senão 'manager') — vê a rede toda.
+ * - unit    → scope='unit', scope_id=unitId — só a loja vinculada.
  */
 async function syncAccess(
   supabase: ReturnType<typeof createAdminClient>,
@@ -84,26 +92,32 @@ async function syncAccess(
   // Limpa rows antigas desse usuário
   await supabase.from("user_unit_access").delete().eq("user_id", userId)
 
-  if (perfil === "administrador") {
-    const { data: holding } = await supabase
-      .from("holdings")
-      .select("id")
-      .eq("slug", "cozina-foods")
-      .maybeSingle()
-    if (holding) {
+  const scope = await roleScope(perfil)
+
+  if (scope === "unit") {
+    if (unitId) {
       await supabase.from("user_unit_access").insert({
         user_id: userId,
-        scope_type: "holding",
-        scope_id: holding.id,
-        role: "admin",
+        scope_type: "unit",
+        scope_id: unitId,
+        role: "manager",
       })
     }
-  } else if (perfil === "franqueado" && unitId) {
+    return
+  }
+
+  // holding-scoped
+  const { data: holding } = await supabase
+    .from("holdings")
+    .select("id")
+    .eq("slug", "cozina-foods")
+    .maybeSingle()
+  if (holding) {
     await supabase.from("user_unit_access").insert({
       user_id: userId,
-      scope_type: "unit",
-      scope_id: unitId,
-      role: "manager",
+      scope_type: "holding",
+      scope_id: holding.id,
+      role: perfil === "administrador" ? "admin" : "manager",
     })
   }
 }
@@ -123,8 +137,8 @@ export async function createUser(
   if (!email || !email.includes("@")) fieldErrors.email = "Email inválido"
   const pwErr = validatePassword(password)
   if (pwErr) fieldErrors.password = pwErr
-  if (perfilRequiresUnit(perfil) && !unitId)
-    fieldErrors.unitId = "Selecione a unidade do franqueado"
+  if ((await roleScope(perfil)) === "unit" && !unitId)
+    fieldErrors.unitId = "Selecione a unidade vinculada ao perfil"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -180,8 +194,8 @@ export async function updateUser(
   if (!fullName) fieldErrors.fullName = "Nome obrigatório"
   if (password && validatePassword(password))
     fieldErrors.password = validatePassword(password)!
-  if (perfilRequiresUnit(perfil) && !unitId)
-    fieldErrors.unitId = "Selecione a unidade do franqueado"
+  if ((await roleScope(perfil)) === "unit" && !unitId)
+    fieldErrors.unitId = "Selecione a unidade vinculada ao perfil"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
