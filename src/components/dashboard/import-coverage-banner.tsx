@@ -2,6 +2,7 @@ import { AlertTriangle, CircleCheck } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { ImportCoverage, PlatformCoverage } from "@/lib/data/relatorio-diario"
+import { nowParts } from "@/lib/period"
 
 const MES_ABREV = [
   "jan", "fev", "mar", "abr", "mai", "jun",
@@ -33,10 +34,11 @@ export function ImportCoverageBanner({
   month: number
   periodLabel: string
 }) {
-  // Alvo: menor entre fim do mês e ontem (D-1).
+  // Alvo: menor entre fim do mês e ontem (D-1). "Ontem" é calculado em horário
+  // de Brasília — senão, na Vercel (UTC), depois das 21h o D-1 pula um dia.
   const monthEnd = new Date(year, month, 0)
-  const now = new Date()
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  const today = nowParts()
+  const yesterday = new Date(today.year, today.month - 1, today.day - 1)
   const target = yesterday < monthEnd ? yesterday : monthEnd
 
   const lagDays = (cov: PlatformCoverage): number | null => {

@@ -6,7 +6,33 @@
 
 export type Period = { year: number; month: number }
 
-/** "2026-05" → { year: 2026, month: 5 }; "abc" → mês corrente */
+/** Fuso oficial do app — a rede é toda no Brasil. */
+export const APP_TZ = "America/Sao_Paulo"
+
+/**
+ * Partes de "agora" no fuso de Brasília, independente do timezone do servidor.
+ * A Vercel roda em UTC, então `new Date().getDate()` lá vira o dia seguinte
+ * depois das 21h daqui. Use isto pra calcular "hoje/este mês/ontem" sem erro
+ * de virada de dia.
+ */
+export function nowParts(): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date())
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value)
+  return { year: get("year"), month: get("month"), day: get("day") }
+}
+
+/** Período (ano + mês) atual em horário de Brasília. */
+export function currentPeriod(): Period {
+  const { year, month } = nowParts()
+  return { year, month }
+}
+
+/** "2026-05" → { year: 2026, month: 5 }; "abc" → mês corrente (Brasília) */
 export function parsePeriodParam(raw: string | string[] | undefined): Period {
   const value = Array.isArray(raw) ? raw[0] : raw
   if (value) {
@@ -19,8 +45,7 @@ export function parsePeriodParam(raw: string | string[] | undefined): Period {
       }
     }
   }
-  const now = new Date()
-  return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  return currentPeriod()
 }
 
 /** { year: 2026, month: 5 } → "2026-05" */

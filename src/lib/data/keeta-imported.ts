@@ -13,6 +13,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
+import { currentPeriod } from "@/lib/period"
 import type {
   NinefoodCoverageCell,
   NinefoodCoverageMatrix,
@@ -943,9 +944,7 @@ export async function getKeetaCoverageMatrix(
     }
   }
 
-  const today = new Date()
-  const currentYear = today.getFullYear()
-  const currentMonth = today.getMonth() + 1
+  const { year: currentYear, month: currentMonth } = currentPeriod()
 
   return {
     months,

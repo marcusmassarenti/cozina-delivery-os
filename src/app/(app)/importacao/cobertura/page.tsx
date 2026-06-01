@@ -5,14 +5,13 @@ import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { getCoverageMatrix } from "@/lib/data/ifood-imported"
 import { getNinefoodCoverageMatrix } from "@/lib/data/ninefood-imported"
 import { getKeetaCoverageMatrix } from "@/lib/data/keeta-imported"
+import { currentPeriod } from "@/lib/period"
 
 import { IfoodCoverageView } from "./_components/ifood-coverage-view"
 import { NinefoodCoverageView } from "./_components/ninefood-coverage-view"
 
 export default async function CoberturaPage() {
-  const now = new Date()
-  const endYear = now.getFullYear()
-  const endMonth = now.getMonth() + 1
+  const { year: endYear, month: endMonth } = currentPeriod()
   const startYear = 2026
   const startMonth = 1
 
@@ -65,7 +64,7 @@ export default async function CoberturaPage() {
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             O que cada loja tem importado entre janeiro/2026 e{" "}
-            {now.toLocaleDateString("pt-BR", {
+            {new Date(endYear, endMonth - 1, 1).toLocaleDateString("pt-BR", {
               month: "long",
               year: "numeric",
             })}{" "}

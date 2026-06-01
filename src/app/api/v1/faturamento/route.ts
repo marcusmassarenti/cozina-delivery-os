@@ -7,6 +7,7 @@
  */
 import { apiError, verifyApiKey } from "@/lib/api/auth"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
+import { currentPeriod } from "@/lib/period"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -27,10 +28,9 @@ export async function GET(req: Request) {
   if (!auth.ok) return apiError(auth.status, auth.error)
 
   const url = new URL(req.url)
-  const now = new Date()
-  const year = parseIntParam(url.searchParams.get("year")) ?? now.getFullYear()
-  const month =
-    parseIntParam(url.searchParams.get("month")) ?? now.getMonth() + 1
+  const cur = currentPeriod()
+  const year = parseIntParam(url.searchParams.get("year")) ?? cur.year
+  const month = parseIntParam(url.searchParams.get("month")) ?? cur.month
   if (month < 1 || month > 12) {
     return apiError(400, "Parâmetro 'month' inválido (use 1 a 12).")
   }

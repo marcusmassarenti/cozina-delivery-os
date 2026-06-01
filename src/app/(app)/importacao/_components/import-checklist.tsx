@@ -6,7 +6,7 @@ import {
   type Cadencia,
   type ReportStatus,
 } from "@/lib/data/import-checklist"
-import { formatPeriodLabel } from "@/lib/period"
+import { currentPeriod, formatPeriodLabel } from "@/lib/period"
 
 const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
@@ -36,9 +36,7 @@ function fmtDia(d: string): string {
  *  - Diários/semanais (rede): frescor — até que dia tem dado ("em dia" = D-1).
  */
 export async function ImportChecklist() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
+  const { year, month } = currentPeriod()
   const data = await getImportChecklistForMonth(year, month)
 
   const pendentes = data.reports.length - data.okCount
