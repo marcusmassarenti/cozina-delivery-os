@@ -251,29 +251,86 @@ export async function deleteProdutosVendidos(
   }
 }
 
-/** Edita o preço / 'considerar' de um código de produto. */
-export async function saveProdutoPreco(input: {
+/** Edita o preço / 'considerar' de uma CATEGORIA (vale pra todos os códigos). */
+export async function saveCategoriaPrecoGroup(input: {
   unitId: string
   unitCode: string
-  codigo: string
-  descricao?: string
+  categoria: string
   preco: number
   considerar: boolean
 }): Promise<FechamentoState> {
   try {
     const { admin } = await requireModulePermission("financeiro", "edit")
-    const codigo = input.codigo?.trim()
-    if (!input.unitId || !codigo)
-      return { ok: false, message: "Código inválido." }
+    const categoria = input.categoria?.trim()
+    if (!input.unitId || !categoria)
+      return { ok: false, message: "Categoria inválida." }
     const preco = Number.isFinite(input.preco) ? Math.max(0, input.preco) : 0
+
+    const { error } = await admin
+      .from("unit_produto_precos")
+      .update({
+        preco,
+        considerar: !!input.considerar,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("unit_id", input.unitId)
+      .eq("categoria", categoria)
+    if (error) return { ok: false, message: error.message }
+    if (input.unitCode) revalidatePath(`/unidades/${input.unitCode}`)
+    return { ok: true }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro desconhecido",
+    }
+  }
+}
+
+/** Atribui uma categoria a um código novo (herda o preço/considerar dela). */
+export async function assignProdutoCategoria(input: {
+  unitId: string
+  unitCode: string
+  codigo: string
+  descricao?: string
+  categoria: string
+}): Promise<FechamentoState> {
+  try {
+    const { admin } = await requireModulePermission("financeiro", "edit")
+    const codigo = input.codigo?.trim()
+    const categoria = input.categoria?.trim()
+    if (!input.unitId || !codigo || !categoria)
+      return { ok: false, message: "Dados inválidos." }
+
+    // herda preço/considerar da categoria escolhida
+    let preco = 0
+    let considerar = true
+    const lc = categoria.toLowerCase()
+    if (lc === "não considerar" || lc === "nao considerar") {
+      considerar = false
+      preco = 0
+    } else {
+      const { data } = await admin
+        .from("unit_produto_precos")
+        .select("preco, considerar")
+        .eq("unit_id", input.unitId)
+        .eq("categoria", categoria)
+        .gt("preco", 0)
+        .limit(1)
+        .maybeSingle()
+      if (data) {
+        preco = Number(data.preco) || 0
+        considerar = !!data.considerar
+      }
+    }
 
     const { error } = await admin.from("unit_produto_precos").upsert(
       {
         unit_id: input.unitId,
         codigo,
         descricao: input.descricao ?? null,
+        categoria,
         preco,
-        considerar: !!input.considerar,
+        considerar,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "unit_id,codigo" },

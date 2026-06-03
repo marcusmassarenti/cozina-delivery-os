@@ -7,7 +7,8 @@ import { fmtBRL } from "@/lib/format"
 import type { VinagreteRef, ProdutoPreco } from "@/lib/data/produtos-vendidos"
 import {
   importProdutosVendidos,
-  saveProdutoPreco,
+  saveCategoriaPrecoGroup,
+  assignProdutoCategoria,
   getProdutoPrecosAction,
   deleteProdutosVendidos,
 } from "../_actions"
@@ -23,18 +24,17 @@ const brl2 = (n: number) =>
     maximumFractionDigits: 2,
   })
 
-/** Nome legível (os nomes vêm com espaçamento bagunçado). */
 const limpaNome = (s: string) => s.replace(/\s+/g, " ").trim()
 
-type Row = {
-  codigo: string
-  descricao: string
+type CatRow = {
   categoria: string
   preco: number
   considerar: boolean
   quantidade: number | null
   soma: number | null
 }
+
+type SemCat = { codigo: string; descricao: string; quantidade: number }
 
 export function VinagretePanel({
   unitId,
@@ -117,43 +117,61 @@ export function VinagretePanel({
     }
   }
 
+  function afterSaved() {
+    reloadPrecos()
+    onPrecoSaved()
+  }
+
   const temDados = !!vinRef?.temDados
 
-  // Junta cadastro (por código) + quantidades da semana.
-  const weekMap = new Map((vinRef?.linhas ?? []).map((l) => [l.codigo, l]))
-  const rows: Row[] = precos.map((p) => {
-    const w = weekMap.get(p.codigo)
-    return {
-      codigo: p.codigo,
-      descricao: p.descricao || w?.descricao || p.codigo,
-      categoria: p.categoria,
-      preco: p.preco,
-      considerar: p.considerar,
-      quantidade: w ? w.quantidade : null,
-      soma: w ? w.soma : null,
-    }
-  })
-  // códigos vendidos que ainda não estão no cadastro (defensivo)
-  const noCadastro = new Set(precos.map((p) => p.codigo))
+  // categorias do cadastro (preço/considerar representativos)
+  const catInfo = new Map<string, { preco: number; considerar: boolean }>()
+  for (const p of precos) {
+    if (!p.categoria) continue
+    const g = catInfo.get(p.categoria) ?? { preco: 0, considerar: p.considerar }
+    if (g.preco === 0 && p.preco > 0) g.preco = p.preco
+    catInfo.set(p.categoria, g)
+  }
+  const categoriasDisponiveis = [...catInfo.keys()].sort((a, b) =>
+    a.localeCompare(b),
+  )
+
+  // quantidades/soma da semana, por categoria; e os produtos sem categoria
+  const weekCat = new Map<string, { qtd: number; soma: number }>()
+  const semCategoria: SemCat[] = []
   for (const l of vinRef?.linhas ?? []) {
-    if (!noCadastro.has(l.codigo)) {
-      rows.push({
+    if (!l.categoria) {
+      semCategoria.push({
         codigo: l.codigo,
         descricao: l.descricao,
-        categoria: l.categoria,
-        preco: l.preco ?? 0,
-        considerar: l.considerar,
         quantidade: l.quantidade,
-        soma: l.soma,
       })
+      continue
     }
+    const g = weekCat.get(l.categoria) ?? { qtd: 0, soma: 0 }
+    g.qtd += l.quantidade
+    g.soma += l.soma
+    weekCat.set(l.categoria, g)
   }
-  rows.sort((a, b) => {
-    const qa = a.quantidade ?? -1
-    const qb = b.quantidade ?? -1
-    if (qa !== qb) return qb - qa
-    return limpaNome(a.descricao).localeCompare(limpaNome(b.descricao))
-  })
+  semCategoria.sort((a, b) => b.quantidade - a.quantidade)
+
+  const catRows: CatRow[] = [...catInfo.entries()]
+    .map(([categoria, info]) => {
+      const w = weekCat.get(categoria)
+      return {
+        categoria,
+        preco: info.preco,
+        considerar: info.considerar,
+        quantidade: w ? w.qtd : null,
+        soma: w ? w.soma : null,
+      }
+    })
+    .sort((a, b) => {
+      const qa = a.quantidade ?? -1
+      const qb = b.quantidade ?? -1
+      if (qa !== qb) return qb - qa
+      return a.categoria.localeCompare(b.categoria)
+    })
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
@@ -162,7 +180,7 @@ export function VinagretePanel({
           Vinagrete / bebidas pela planilha do JK
         </div>
         <div className="flex items-center gap-2">
-          {precos.length > 0 && (
+          {catRows.length > 0 && (
             <button
               type="button"
               onClick={() => setOpen((o) => !o)}
@@ -201,9 +219,9 @@ export function VinagretePanel({
 
       {!temDados && (
         <p className="text-[10px] text-muted-foreground">
-          Suba a planilha “Produtos vendidos” do JK da semana — o sistema soma a
-          quantidade por código × preço. Em “ver / editar preços” você ajusta os
-          preços por produto (código novo aparece pra precificar).
+          Suba a planilha “Produtos vendidos” do JK da semana — o sistema soma
+          por categoria × preço. Em “ver / editar preços” você ajusta os preços
+          das categorias a qualquer momento.
         </p>
       )}
 
@@ -227,21 +245,35 @@ export function VinagretePanel({
             </div>
           </div>
 
-          {vinRef.faltaPreco.length > 0 && (
-            <p className="text-[10px] text-amber-600 dark:text-amber-400">
-              {vinRef.faltaPreco.length} produto(s) sem preço (R$ 0,00) —
-              ajuste em “ver / editar preços”.
-            </p>
+          {semCategoria.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-950/30">
+              <div className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                {semCategoria.length} produto(s) sem categoria — escolha a
+                categoria (não entram na conta enquanto isso):
+              </div>
+              <div className="mt-1 flex flex-col gap-1">
+                {semCategoria.map((s) => (
+                  <SemCategoriaRow
+                    key={s.codigo}
+                    item={s}
+                    unitId={unitId}
+                    unitCode={unitCode}
+                    categorias={categoriasDisponiveis}
+                    onSaved={afterSaved}
+                  />
+                ))}
+              </div>
+            </div>
           )}
         </>
       )}
 
-      {open && rows.length > 0 && (
+      {open && catRows.length > 0 && (
         <div className="max-h-80 overflow-auto rounded-md border">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10">
               <tr className="border-b bg-muted text-[10px] text-muted-foreground">
-                <th className="px-2 py-1.5 text-left font-medium">Produto</th>
+                <th className="px-2 py-1.5 text-left font-medium">Categoria</th>
                 <th className="px-2 py-1.5 text-right font-medium">Qtd</th>
                 <th className="px-2 py-1.5 text-right font-medium">Preço</th>
                 <th className="px-2 py-1.5 text-center font-medium">Conta?</th>
@@ -249,16 +281,13 @@ export function VinagretePanel({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <PrecoRow
-                  key={r.codigo}
+              {catRows.map((r) => (
+                <CategoriaRow
+                  key={r.categoria}
                   row={r}
                   unitId={unitId}
                   unitCode={unitCode}
-                  onSaved={() => {
-                    reloadPrecos()
-                    onPrecoSaved()
-                  }}
+                  onSaved={afterSaved}
                 />
               ))}
             </tbody>
@@ -282,13 +311,13 @@ export function VinagretePanel({
   )
 }
 
-function PrecoRow({
+function CategoriaRow({
   row,
   unitId,
   unitCode,
   onSaved,
 }: {
-  row: Row
+  row: CatRow
   unitId: string
   unitCode: string
   onSaved: () => void
@@ -300,11 +329,10 @@ function PrecoRow({
 
   async function commit(preco: number, cons: boolean) {
     setBusy(true)
-    await saveProdutoPreco({
+    await saveCategoriaPrecoGroup({
       unitId,
       unitCode,
-      codigo: row.codigo,
-      descricao: row.descricao,
+      categoria: row.categoria,
       preco,
       considerar: cons,
     })
@@ -320,12 +348,7 @@ function PrecoRow({
         busy && "animate-pulse",
       )}
     >
-      <td className="px-2 py-1.5">
-        <div className="leading-tight">{limpaNome(row.descricao)}</div>
-        {row.categoria && (
-          <div className="text-[9px] text-muted-foreground">{row.categoria}</div>
-        )}
-      </td>
+      <td className="px-2 py-1.5">{row.categoria}</td>
       <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
         {row.quantidade ?? "—"}
       </td>
@@ -347,6 +370,72 @@ function PrecoRow({
         {row.soma != null ? fmtBRL(row.soma) : "—"}
       </td>
     </tr>
+  )
+}
+
+function SemCategoriaRow({
+  item,
+  unitId,
+  unitCode,
+  categorias,
+  onSaved,
+}: {
+  item: SemCat
+  unitId: string
+  unitCode: string
+  categorias: string[]
+  onSaved: () => void
+}) {
+  const [busy, setBusy] = React.useState(false)
+
+  async function pick(value: string) {
+    let categoria = value
+    if (value === "__nova__") {
+      const nome = window.prompt("Nome da nova categoria:")
+      if (!nome || !nome.trim()) return
+      categoria = nome.trim()
+    }
+    if (!categoria) return
+    setBusy(true)
+    await assignProdutoCategoria({
+      unitId,
+      unitCode,
+      codigo: item.codigo,
+      descricao: item.descricao,
+      categoria,
+    })
+    setBusy(false)
+    onSaved()
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-2 text-[11px]",
+        busy && "animate-pulse",
+      )}
+    >
+      <span className="min-w-0 flex-1 truncate">
+        {limpaNome(item.descricao)}{" "}
+        <span className="text-muted-foreground">({item.quantidade})</span>
+      </span>
+      <select
+        defaultValue=""
+        disabled={busy}
+        onChange={(e) => pick(e.target.value)}
+        className="rounded border border-input bg-background px-1.5 py-1 text-[11px] outline-none focus:border-ring"
+      >
+        <option value="" disabled>
+          categoria…
+        </option>
+        {categorias.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+        <option value="__nova__">+ nova categoria…</option>
+      </select>
+    </div>
   )
 }
 
