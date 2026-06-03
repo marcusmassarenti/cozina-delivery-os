@@ -3,13 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import {
-  CalendarRange,
-  FileDown,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from "lucide-react"
+import { CalendarRange, FileDown, Plus, Trash2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,11 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { fmtBRL } from "@/lib/format"
 import type { Fechamento } from "@/lib/data/fechamentos"
-import {
-  saveFechamento,
-  deleteFechamento,
-  prefillRecebido,
-} from "../_actions"
+import { saveFechamento, deleteFechamento } from "../_actions"
 
 type AcertoFields = {
   valorChurrascoPote: number
@@ -105,48 +95,10 @@ export function FechamentoTab({
   const router = useRouter()
   const [draft, setDraft] = React.useState<Draft>(emptyDraft())
   const [editing, setEditing] = React.useState(false)
-  const [isExisting, setIsExisting] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
-  const [pulling, setPulling] = React.useState(false)
-  const [pulled, setPulled] = React.useState(false)
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(
     null,
   )
-  const lastPulled = React.useRef("")
-
-  // Puxa o recebido da semana do importado (estimativa).
-  const pull = React.useCallback(
-    async (ini: string, fim: string) => {
-      if (!ini || !fim || fim < ini) return
-      lastPulled.current = `${ini}|${fim}`
-      setPulling(true)
-      const res = await prefillRecebido(unitId, ini, fim)
-      setPulling(false)
-      if (res.ok && res.data) {
-        setDraft((p) => ({
-          ...p,
-          // iFood guarda por competência (mês) e o depósito defasa ~1 semana —
-          // só sobrescreve se veio algo; senão preserva o que foi digitado.
-          recebidoIfood:
-            res.data!.ifood > 0 ? res.data!.ifood : p.recebidoIfood,
-          recebidoKeeta: res.data!.keeta,
-          recebido99: res.data!.ninefood,
-        }))
-        setPulled(true)
-      }
-    },
-    [unitId],
-  )
-
-  // Auto-pull ao escolher as duas datas num fechamento NOVO.
-  React.useEffect(() => {
-    if (isExisting || !editing) return
-    const { periodoInicio: ini, periodoFim: fim } = draft
-    if (ini && fim && fim >= ini && `${ini}|${fim}` !== lastPulled.current) {
-      pull(ini, fim)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.periodoInicio, draft.periodoFim, editing, isExisting])
 
   const recebido =
     draft.recebidoIfood +
@@ -159,17 +111,11 @@ export function FechamentoTab({
   function startNew() {
     setDraft(emptyDraft())
     setEditing(true)
-    setIsExisting(false)
-    setPulled(false)
-    lastPulled.current = ""
     setMsg(null)
   }
   function startEdit(f: Fechamento) {
     setDraft(fromFechamento(f))
     setEditing(true)
-    setIsExisting(true)
-    setPulled(false)
-    lastPulled.current = `${f.periodoInicio}|${f.periodoFim}`
     setMsg(null)
   }
 
@@ -261,29 +207,6 @@ export function FechamentoTab({
                   />
                 </Field>
               </div>
-
-              {draft.periodoInicio && draft.periodoFim && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
-                  <span className="text-muted-foreground">
-                    {pulling
-                      ? "Puxando o recebido da semana..."
-                      : pulled
-                        ? "≈ 99 e Keeta puxados do importado · iFood você confere/digita (depósito defasa)"
-                        : "Dá pra puxar o recebido do que já foi importado"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => pull(draft.periodoInicio, draft.periodoFim)}
-                    disabled={pulling}
-                    className="inline-flex items-center gap-1 rounded px-2 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={cn("size-3", pulling && "animate-spin")}
-                    />
-                    Puxar da semana
-                  </button>
-                </div>
-              )}
 
               <Bloco titulo="1. Recebido das plataformas">
                 <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} />
