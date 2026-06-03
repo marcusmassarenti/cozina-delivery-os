@@ -6,7 +6,9 @@ import { requireModulePermission } from "@/lib/auth/guards"
 import { getRecebidoSemana, type RecebidoSemana } from "@/lib/data/fechamentos"
 import {
   computeVinagreteRef,
+  getCategoriaPrecos,
   normCat,
+  type CategoriaPreco,
   type VinagreteRef,
 } from "@/lib/data/produtos-vendidos"
 import { parseProdutosVendidos } from "@/lib/import/produtos-vendidos"
@@ -122,6 +124,20 @@ export async function getVinagreteReference(
     if (!unitId || !inicio || !fim) return { ok: false }
     const ref = await computeVinagreteRef(unitId, inicio, fim)
     return { ok: true, ref }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/** Cadastro de preços da unidade (sempre disponível, mesmo sem planilha). */
+export async function getCategoriaPrecosAction(
+  unitId: string,
+): Promise<{ ok: boolean; precos?: CategoriaPreco[] }> {
+  try {
+    await requireModulePermission("financeiro", "view")
+    if (!unitId) return { ok: false }
+    const precos = await getCategoriaPrecos(unitId)
+    return { ok: true, precos }
   } catch {
     return { ok: false }
   }

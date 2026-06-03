@@ -4,8 +4,15 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { fmtBRL } from "@/lib/format"
-import type { VinagreteRef, VinagreteLinha } from "@/lib/data/produtos-vendidos"
-import { importProdutosVendidos, saveCategoriaPreco } from "../_actions"
+import type {
+  VinagreteRef,
+  CategoriaPreco,
+} from "@/lib/data/produtos-vendidos"
+import {
+  importProdutosVendidos,
+  saveCategoriaPreco,
+  getCategoriaPrecosAction,
+} from "../_actions"
 
 function fmtDia(s: string): string {
   const [, m, d] = s.split("-")
@@ -17,6 +24,23 @@ const brl2 = (n: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+
+function normCat(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+type Row = {
+  categoria: string
+  preco: number
+  considerar: boolean
+  quantidade: number | null
+  soma: number | null
+}
 
 export function VinagretePanel({
   unitId,
@@ -40,7 +64,24 @@ export function VinagretePanel({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(
     null,
   )
+  const [precos, setPrecos] = React.useState<CategoriaPreco[]>([])
   const fileRef = React.useRef<HTMLInputElement>(null)
+
+  // Carrega o cadastro de preços (independe de ter planilha importada).
+  React.useEffect(() => {
+    let alive = true
+    getCategoriaPrecosAction(unitId).then((res) => {
+      if (alive && res.ok && res.precos) setPrecos(res.precos)
+    })
+    return () => {
+      alive = false
+    }
+  }, [unitId])
+
+  async function reloadPrecos() {
+    const res = await getCategoriaPrecosAction(unitId)
+    if (res.ok && res.precos) setPrecos(res.precos)
+  }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -56,6 +97,7 @@ export function VinagretePanel({
     if (fileRef.current) fileRef.current.value = ""
     if (res.ok && res.ref && res.periodoInicio && res.periodoFim) {
       onImported(res.ref, res.periodoInicio, res.periodoFim)
+      reloadPrecos() // pode ter criado preço pra categoria nova
       setOpen(true)
       setMsg({
         ok: true,
@@ -68,6 +110,28 @@ export function VinagretePanel({
 
   const temDados = !!vinRef?.temDados
 
+  // Junta cadastro de preços + quantidades da semana (se houver).
+  const weekMap = new Map(
+    (vinRef?.linhas ?? []).map((l) => [normCat(l.categoria), l]),
+  )
+  const rows: Row[] = precos
+    .map((p) => {
+      const w = weekMap.get(normCat(p.categoria))
+      return {
+        categoria: p.categoria,
+        preco: p.preco,
+        considerar: p.considerar,
+        quantidade: w ? w.quantidade : null,
+        soma: w ? w.soma : null,
+      }
+    })
+    .sort((a, b) => {
+      const qa = a.quantidade ?? -1
+      const qb = b.quantidade ?? -1
+      if (qa !== qb) return qb - qa
+      return a.categoria.localeCompare(b.categoria)
+    })
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -75,7 +139,7 @@ export function VinagretePanel({
           Vinagrete / bebidas pela planilha do JK
         </div>
         <div className="flex items-center gap-2">
-          {temDados && (
+          {precos.length > 0 && (
             <button
               type="button"
               onClick={() => setOpen((o) => !o)}
@@ -100,9 +164,9 @@ export function VinagretePanel({
 
       {!temDados && (
         <p className="text-[10px] text-muted-foreground">
-          Suba a planilha “Produtos vendidos” do JK da semana. O sistema soma a
-          quantidade por categoria × preço e mostra o total aqui (referência pro
-          campo do vinagrete).
+          Suba a planilha “Produtos vendidos” do JK da semana pra calcular o
+          total (qtd × preço). Em “ver / editar preços” você ajusta os preços
+          das categorias a qualquer momento.
         </p>
       )}
 
@@ -128,42 +192,41 @@ export function VinagretePanel({
 
           {vinRef.faltaPreco.length > 0 && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400">
-              Sem preço (R$ 0,00): {vinRef.faltaPreco.join(", ")} — ajuste
-              abaixo.
+              Sem preço (R$ 0,00): {vinRef.faltaPreco.join(", ")} — ajuste em
+              “ver / editar preços”.
             </p>
           )}
-
-          {open && (
-            <div className="overflow-hidden rounded-md border">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-[10px] text-muted-foreground">
-                    <th className="px-2 py-1.5 text-left font-medium">
-                      Categoria
-                    </th>
-                    <th className="px-2 py-1.5 text-right font-medium">Qtd</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Preço</th>
-                    <th className="px-2 py-1.5 text-center font-medium">
-                      Conta?
-                    </th>
-                    <th className="px-2 py-1.5 text-right font-medium">Soma</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vinRef.linhas.map((l) => (
-                    <PrecoRow
-                      key={l.categoria}
-                      linha={l}
-                      unitId={unitId}
-                      unitCode={unitCode}
-                      onSaved={onPrecoSaved}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </>
+      )}
+
+      {open && rows.length > 0 && (
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/40 text-[10px] text-muted-foreground">
+                <th className="px-2 py-1.5 text-left font-medium">Categoria</th>
+                <th className="px-2 py-1.5 text-right font-medium">Qtd</th>
+                <th className="px-2 py-1.5 text-right font-medium">Preço</th>
+                <th className="px-2 py-1.5 text-center font-medium">Conta?</th>
+                <th className="px-2 py-1.5 text-right font-medium">Soma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <PrecoRow
+                  key={r.categoria}
+                  row={r}
+                  unitId={unitId}
+                  unitCode={unitCode}
+                  onSaved={() => {
+                    reloadPrecos()
+                    onPrecoSaved()
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {msg && (
@@ -183,27 +246,27 @@ export function VinagretePanel({
 }
 
 function PrecoRow({
-  linha,
+  row,
   unitId,
   unitCode,
   onSaved,
 }: {
-  linha: VinagreteLinha
+  row: Row
   unitId: string
   unitCode: string
   onSaved: () => void
 }) {
-  const [considerar, setConsiderar] = React.useState(linha.considerar)
+  const [considerar, setConsiderar] = React.useState(row.considerar)
   const [busy, setBusy] = React.useState(false)
 
-  React.useEffect(() => setConsiderar(linha.considerar), [linha.considerar])
+  React.useEffect(() => setConsiderar(row.considerar), [row.considerar])
 
   async function commit(preco: number, cons: boolean) {
     setBusy(true)
     await saveCategoriaPreco({
       unitId,
       unitCode,
-      categoria: linha.categoria,
+      categoria: row.categoria,
       preco,
       considerar: cons,
     })
@@ -219,13 +282,13 @@ function PrecoRow({
         busy && "animate-pulse",
       )}
     >
-      <td className="px-2 py-1.5">{linha.categoria}</td>
+      <td className="px-2 py-1.5">{row.categoria}</td>
       <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
-        {linha.quantidade}
+        {row.quantidade ?? "—"}
       </td>
       <td className="px-2 py-1.5 text-right">
         <PrecoInput
-          value={linha.preco ?? 0}
+          value={row.preco}
           onCommit={(v) => commit(v, considerar)}
         />
       </td>
@@ -235,13 +298,13 @@ function PrecoRow({
           checked={considerar}
           onChange={(e) => {
             setConsiderar(e.target.checked)
-            commit(linha.preco ?? 0, e.target.checked)
+            commit(row.preco, e.target.checked)
           }}
           className="size-3.5 accent-[var(--primary)]"
         />
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums font-medium">
-        {fmtBRL(linha.soma)}
+        {row.soma != null ? fmtBRL(row.soma) : "—"}
       </td>
     </tr>
   )
