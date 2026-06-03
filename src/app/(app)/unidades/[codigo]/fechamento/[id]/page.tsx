@@ -1,4 +1,6 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { getUnitByCode } from "@/lib/data/units"
@@ -44,12 +46,24 @@ export default async function FechamentoPrintPage({
   return (
     <div className="min-h-screen bg-muted/30 p-6">
       <div className="mx-auto max-w-2xl" data-print="page">
-        {/* Cabeçalho */}
-        <div className="mb-4 flex items-center justify-between">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/cozina-logo.png" alt="Cozina" className="h-10 w-auto" />
+        {/* Barra de ações (não entra no PDF) */}
+        <div
+          className="mb-4 flex items-center justify-between"
+          data-print="hide"
+        >
+          <Link
+            href={`/unidades/${codigo}`}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Voltar
+          </Link>
           <ExportPdfButton />
         </div>
+
+        {/* Logo (entra no PDF) */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/cozina-logo.png" alt="Cozina" className="mb-4 h-10 w-auto" />
 
         <div className="rounded-xl border bg-card p-6 shadow-sm">
           <div className="mb-4 border-b pb-3">
