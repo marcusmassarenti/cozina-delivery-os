@@ -1,4 +1,5 @@
-import { CalendarRange } from "lucide-react"
+import Link from "next/link"
+import { CalendarRange, Target } from "lucide-react"
 
 import type { PlatformId } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -180,6 +181,14 @@ export default async function RelatorioDiarioPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <Link
+            href="/relatorios/acompanhamento"
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            title="Venda diária por loja com meta e falta, agrupado por marca"
+          >
+            <Target className="size-4 text-primary" />
+            Infos Diária Venda (metas)
+          </Link>
           <LojaFilter units={activeUnits} />
           <ExportPdfButton />
           <PeriodSelector
