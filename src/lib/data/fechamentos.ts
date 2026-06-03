@@ -84,7 +84,8 @@ export type Fechamento = {
   recebidoIfood: number
   recebidoKeeta: number
   recebido99: number
-  creditoDebito: number
+  /** VR da semana (coluna `credito_debito` reaproveitada). Soma no recebido. */
+  vr: number
   custoProdutos: number
   custoVinagrete: number
   acerto: Record<string, unknown>
@@ -103,27 +104,13 @@ function mapRow(r: Record<string, unknown>): Fechamento {
     recebidoIfood: num(r.recebido_ifood),
     recebidoKeeta: num(r.recebido_keeta),
     recebido99: num(r.recebido_99),
-    creditoDebito: num(r.credito_debito),
+    vr: num(r.credito_debito),
     custoProdutos: num(r.custo_produtos),
     custoVinagrete: num(r.custo_vinagrete),
     acerto: (r.acerto as Record<string, unknown>) ?? {},
     observacoes: (r.observacoes as string | null) ?? null,
     createdAt: r.created_at as string,
   }
-}
-
-/** Lucro líquido derivado (recebido − custos) — nunca persistido. */
-export function lucroLiquido(f: {
-  recebidoIfood: number
-  recebidoKeeta: number
-  recebido99: number
-  creditoDebito: number
-  custoProdutos: number
-  custoVinagrete: number
-}): number {
-  const recebido =
-    f.recebidoIfood + f.recebidoKeeta + f.recebido99 + f.creditoDebito
-  return recebido - f.custoProdutos - f.custoVinagrete
 }
 
 /** Um fechamento pelo id (pra tela de impressão). */

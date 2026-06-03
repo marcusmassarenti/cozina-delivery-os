@@ -4,7 +4,14 @@ import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { getUnitByCode } from "@/lib/data/units"
-import { getFechamentoById, lucroLiquido } from "@/lib/data/fechamentos"
+import { getFechamentoById } from "@/lib/data/fechamentos"
+import {
+  toAcerto,
+  recebidoTotal,
+  lucroLiquido,
+  computeSplit,
+  acertoBreakdown,
+} from "@/lib/fechamento-calc"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { fmtBRL } from "@/lib/format"
@@ -12,6 +19,11 @@ import { fmtBRL } from "@/lib/format"
 function fmtData(s: string): string {
   const [y, m, d] = s.split("-")
   return `${d}/${m}/${y}`
+}
+
+function signed(n: number): string {
+  const s = fmtBRL(Math.abs(n))
+  return n < 0 ? `−${s}` : `+${s}`
 }
 
 export default async function FechamentoPrintPage({
@@ -30,18 +42,11 @@ export default async function FechamentoPrintPage({
   const f = await getFechamentoById(id)
   if (!f || f.unitId !== unit.id) notFound()
 
-  const recebido =
-    f.recebidoIfood + f.recebidoKeeta + f.recebido99 + f.creditoDebito
+  const recebido = recebidoTotal(f)
   const lucro = lucroLiquido(f)
-  const metade = lucro / 2
-  const a = f.acerto as Record<string, number>
-  const acertoLinhas: { label: string; value: number }[] = [
-    { label: "Valor Churrasco no Pote", value: a.valorChurrascoPote ?? 0 },
-    { label: "Churrasco no Pote p/ Pibus", value: a.paraPibus ?? 0 },
-    { label: "Desconto CNPão", value: a.descontoCnpao ?? 0 },
-    { label: "Legumes", value: a.legumes ?? 0 },
-    { label: "VR", value: a.vr ?? 0 },
-  ].filter((l) => l.value !== 0)
+  const acerto = toAcerto(f.acerto)
+  const split = computeSplit(lucro, acerto)
+  const acertoLinhas = acertoBreakdown(acerto)
 
   return (
     <div className="min-h-screen bg-muted/30 p-6">
@@ -81,7 +86,7 @@ export default async function FechamentoPrintPage({
             <Row label="iFood" value={f.recebidoIfood} />
             <Row label="Keeta" value={f.recebidoKeeta} />
             <Row label="99 Food" value={f.recebido99} />
-            <Row label="Crédito / débito da semana" value={f.creditoDebito} />
+            <Row label="VR (descontado do iFood)" value={f.vr} />
             <Row label="Total recebido" value={recebido} strong />
           </Secao>
 
@@ -94,24 +99,11 @@ export default async function FechamentoPrintPage({
             />
           </Secao>
 
-          {/* 3. Resultado */}
+          {/* 3. Lucro + base ÷ 2 */}
           <div className="my-4 rounded-lg bg-primary/5 p-4">
             <Row label="Lucro líquido" value={lucro} strong big />
-            <div className="mt-2 grid grid-cols-2 gap-3 border-t pt-2">
-              <div>
-                <div className="text-xs text-muted-foreground">Metade JK</div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {fmtBRL(metade)}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">
-                  Metade Cozina
-                </div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {fmtBRL(metade)}
-                </div>
-              </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Base ÷ 2 = {fmtBRL(split.base)} pra cada (antes dos acertos)
             </div>
           </div>
 
@@ -119,10 +111,39 @@ export default async function FechamentoPrintPage({
           {acertoLinhas.length > 0 && (
             <Secao titulo="4. Acerto / repasse">
               {acertoLinhas.map((l) => (
-                <Row key={l.label} label={l.label} value={l.value} />
+                <div
+                  key={l.key}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span>{l.label}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    JK {signed(l.jk)} · Cozina {signed(l.cozina)}
+                  </span>
+                </div>
               ))}
+              {acerto.outrosObs && (
+                <div className="text-xs text-muted-foreground">
+                  Outros: {acerto.outrosObs}
+                </div>
+              )}
             </Secao>
           )}
+
+          {/* 5. Resultado final */}
+          <div className="my-4 grid grid-cols-2 gap-3 rounded-lg bg-primary/10 p-4">
+            <div>
+              <div className="text-xs text-muted-foreground">JK recebe</div>
+              <div className="text-xl font-semibold tabular-nums">
+                {fmtBRL(split.jk)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Cozina recebe</div>
+              <div className="text-xl font-semibold tabular-nums">
+                {fmtBRL(split.cozina)}
+              </div>
+            </div>
+          </div>
 
           {f.observacoes && (
             <div className="mt-4 border-t pt-3">

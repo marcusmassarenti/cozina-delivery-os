@@ -31,7 +31,7 @@ export async function saveFechamento(input: {
   recebidoIfood: number
   recebidoKeeta: number
   recebido99: number
-  creditoDebito: number
+  vr: number
   custoProdutos: number
   custoVinagrete: number
   acerto: Record<string, unknown>
@@ -47,7 +47,7 @@ export async function saveFechamento(input: {
       return { ok: false, message: "Fim da semana antes do início." }
     }
 
-    // Valores ≥ 0, exceto crédito/débito que pode ser negativo.
+    // Valores ≥ 0, exceto VR que pode ser negativo (ajuste).
     const pos = (n: number) => (Number.isFinite(n) ? Math.max(0, n) : 0)
     const any = (n: number) => (Number.isFinite(n) ? n : 0)
 
@@ -59,7 +59,7 @@ export async function saveFechamento(input: {
         recebido_ifood: pos(input.recebidoIfood),
         recebido_keeta: pos(input.recebidoKeeta),
         recebido_99: pos(input.recebido99),
-        credito_debito: any(input.creditoDebito),
+        credito_debito: any(input.vr), // coluna reaproveitada como VR
         custo_produtos: pos(input.custoProdutos),
         custo_vinagrete: pos(input.custoVinagrete),
         acerto: input.acerto ?? {},
