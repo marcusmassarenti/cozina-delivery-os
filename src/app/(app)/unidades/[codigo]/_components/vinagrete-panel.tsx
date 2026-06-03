@@ -66,7 +66,17 @@ export function VinagretePanel({
     null,
   )
   const [precos, setPrecos] = React.useState<ProdutoPreco[]>([])
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
   const fileRef = React.useRef<HTMLInputElement>(null)
+
+  function toggleCat(c: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(c)) next.delete(c)
+      else next.add(c)
+      return next
+    })
+  }
 
   React.useEffect(() => {
     let alive = true
@@ -159,6 +169,23 @@ export function VinagretePanel({
     weekCat.set(l.categoria, g)
   }
   semCategoria.sort((a, b) => b.quantidade - a.quantidade)
+
+  // qtd da semana por código (pra mostrar ao expandir uma categoria)
+  const weekByCod = new Map((vinRef?.linhas ?? []).map((l) => [l.codigo, l]))
+  function produtosDaCategoria(categoria: string) {
+    return precos
+      .filter((p) => p.categoria === categoria)
+      .map((p) => ({
+        codigo: p.codigo,
+        descricao: p.descricao || weekByCod.get(p.codigo)?.descricao || p.codigo,
+        quantidade: weekByCod.get(p.codigo)?.quantidade ?? null,
+      }))
+      .sort(
+        (a, b) =>
+          (b.quantidade ?? -1) - (a.quantidade ?? -1) ||
+          limpaNome(a.descricao).localeCompare(limpaNome(b.descricao)),
+      )
+  }
 
   const catRows: CatRow[] = [...catInfo.entries()]
     .map(([categoria, info]) => {
@@ -295,13 +322,28 @@ export function VinagretePanel({
             </thead>
             <tbody>
               {catRows.map((r) => (
-                <CategoriaRow
-                  key={r.categoria}
-                  row={r}
-                  unitId={unitId}
-                  unitCode={unitCode}
-                  onSaved={afterSaved}
-                />
+                <React.Fragment key={r.categoria}>
+                  <CategoriaRow
+                    row={r}
+                    expanded={expanded.has(r.categoria)}
+                    onToggle={() => toggleCat(r.categoria)}
+                    unitId={unitId}
+                    unitCode={unitCode}
+                    onSaved={afterSaved}
+                  />
+                  {expanded.has(r.categoria) &&
+                    produtosDaCategoria(r.categoria).map((p) => (
+                      <ProdutoMoverRow
+                        key={p.codigo}
+                        produto={p}
+                        atual={r.categoria}
+                        categorias={categoriasDisponiveis}
+                        unitId={unitId}
+                        unitCode={unitCode}
+                        onSaved={afterSaved}
+                      />
+                    ))}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -352,11 +394,15 @@ export function VinagretePanel({
 
 function CategoriaRow({
   row,
+  expanded,
+  onToggle,
   unitId,
   unitCode,
   onSaved,
 }: {
   row: CatRow
+  expanded: boolean
+  onToggle: () => void
   unitId: string
   unitCode: string
   onSaved: () => void
@@ -387,7 +433,19 @@ function CategoriaRow({
         busy && "animate-pulse",
       )}
     >
-      <td className="px-2 py-1.5">{row.categoria}</td>
+      <td className="px-2 py-1.5">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-1 text-left hover:text-primary"
+          title="Ver/mover produtos desta categoria"
+        >
+          <span className="text-[8px] text-muted-foreground">
+            {expanded ? "▼" : "▶"}
+          </span>
+          {row.categoria}
+        </button>
+      </td>
       <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
         {row.quantidade ?? "—"}
       </td>
@@ -509,6 +567,73 @@ function SemCategoriaRow({
         </div>
       )}
     </div>
+  )
+}
+
+function ProdutoMoverRow({
+  produto,
+  atual,
+  categorias,
+  unitId,
+  unitCode,
+  onSaved,
+}: {
+  produto: { codigo: string; descricao: string; quantidade: number | null }
+  atual: string
+  categorias: string[]
+  unitId: string
+  unitCode: string
+  onSaved: () => void
+}) {
+  const [busy, setBusy] = React.useState(false)
+
+  async function mover(categoria: string) {
+    if (!categoria || categoria === atual) return
+    setBusy(true)
+    await assignProdutoCategoria({
+      unitId,
+      unitCode,
+      codigo: produto.codigo,
+      descricao: produto.descricao,
+      categoria,
+    })
+    setBusy(false)
+    onSaved()
+  }
+
+  return (
+    <tr
+      className={cn(
+        "border-b border-dashed bg-muted/20 last:border-0",
+        busy && "animate-pulse",
+      )}
+    >
+      <td className="py-1 pl-6 pr-2 text-[11px] text-muted-foreground">
+        {limpaNome(produto.descricao)}
+      </td>
+      <td className="px-2 py-1 text-right text-[11px] tabular-nums text-muted-foreground">
+        {produto.quantidade ?? "—"}
+      </td>
+      <td colSpan={3} className="px-2 py-1 text-right">
+        <select
+          value=""
+          disabled={busy}
+          onChange={(e) => mover(e.target.value)}
+          className="rounded border border-input bg-background px-1 py-0.5 text-[10px] outline-none focus:border-ring"
+        >
+          <option value="" disabled>
+            mover p/…
+          </option>
+          {categorias
+            .filter((c) => c !== atual)
+            .map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+        </select>
+      </td>
+    </tr>
   )
 }
 
