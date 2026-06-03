@@ -395,6 +395,15 @@ function DetailTabs({
 }) {
   const m = monthlyMerged
   const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
+
+  // Fechamentos só do mês selecionado (a semana aparece no mês que ela cobre).
+  const mm = String(month).padStart(2, "0")
+  const mesIni = `${year}-${mm}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const mesFim = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`
+  const fechamentosDoMes = fechamentos.filter(
+    (f) => f.periodoInicio <= mesFim && f.periodoFim >= mesIni,
+  )
   // Define os slots de plataforma pras tabs Cardápio e Financeiro.
   // Aparece no chip mesmo sem dados (com aviso "sem dados") pra Marcus
   // saber que a plataforma existe mas falta importar.
@@ -494,7 +503,7 @@ function DetailTabs({
           <FechamentoTab
             unitId={unit.id}
             unitCode={unit.code}
-            fechamentos={fechamentos}
+            fechamentos={fechamentosDoMes}
             canEdit={canEditFechamento}
           />
         </TabsContent>
