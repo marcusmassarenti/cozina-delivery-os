@@ -12,6 +12,7 @@ import {
   importProdutosVendidos,
   saveCategoriaPreco,
   getCategoriaPrecosAction,
+  deleteProdutosVendidos,
 } from "../_actions"
 
 function fmtDia(s: string): string {
@@ -45,6 +46,8 @@ type Row = {
 export function VinagretePanel({
   unitId,
   unitCode,
+  inicio,
+  fim,
   vinRef,
   onImported,
   onPrecoSaved,
@@ -108,6 +111,20 @@ export function VinagretePanel({
     }
   }
 
+  async function onRemover() {
+    if (!inicio || !fim) return
+    setBusy(true)
+    setMsg(null)
+    const res = await deleteProdutosVendidos(unitId, unitCode, inicio, fim)
+    setBusy(false)
+    if (res.ok) {
+      onPrecoSaved() // re-busca a referência da semana (fica sem dados)
+      setMsg({ ok: true, text: "Planilha removida. Pode importar a correta." })
+    } else {
+      setMsg({ ok: false, text: res.message ?? "Erro ao remover." })
+    }
+  }
+
   const temDados = !!vinRef?.temDados
 
   // Junta cadastro de preços + quantidades da semana (se houver).
@@ -148,8 +165,22 @@ export function VinagretePanel({
               {open ? "ocultar" : "ver / editar preços"}
             </button>
           )}
+          {temDados && (
+            <button
+              type="button"
+              onClick={onRemover}
+              disabled={busy}
+              className="text-[11px] text-rose-600 transition-colors hover:text-rose-700 disabled:opacity-50 dark:text-rose-400"
+            >
+              remover planilha
+            </button>
+          )}
           <label className="cursor-pointer rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium transition-colors hover:bg-muted">
-            {busy ? "Importando..." : "Importar planilha (.xlsx)"}
+            {busy
+              ? "Aguarde..."
+              : temDados
+                ? "Trocar planilha (.xlsx)"
+                : "Importar planilha (.xlsx)"}
             <input
               ref={fileRef}
               type="file"

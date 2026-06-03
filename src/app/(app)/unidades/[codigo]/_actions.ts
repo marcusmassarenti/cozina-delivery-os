@@ -224,6 +224,34 @@ export async function importProdutosVendidos(
   }
 }
 
+/** Remove a planilha importada de uma semana (pra reimportar outra). */
+export async function deleteProdutosVendidos(
+  unitId: string,
+  unitCode: string,
+  inicio: string,
+  fim: string,
+): Promise<FechamentoState> {
+  try {
+    const { admin } = await requireModulePermission("financeiro", "edit")
+    if (!unitId || !inicio || !fim)
+      return { ok: false, message: "Semana inválida." }
+    const { error } = await admin
+      .from("unit_produtos_vendidos")
+      .delete()
+      .eq("unit_id", unitId)
+      .eq("periodo_inicio", inicio)
+      .eq("periodo_fim", fim)
+    if (error) return { ok: false, message: error.message }
+    if (unitCode) revalidatePath(`/unidades/${unitCode}`)
+    return { ok: true }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro desconhecido",
+    }
+  }
+}
+
 /** Edita o preço / 'considerar' de uma categoria. */
 export async function saveCategoriaPreco(input: {
   unitId: string
