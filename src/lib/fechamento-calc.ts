@@ -76,19 +76,37 @@ export function lucroLiquido(f: RecebidoCustos): number {
   return recebidoTotal(f) - f.custoProdutos - f.custoVinagrete
 }
 
-/** Divide o lucro 50/50 e aplica os acertos do bloco 4. */
+/**
+ * Divide o lucro 50/50 e aplica os acertos do bloco 4.
+ *
+ * O JK paga o vinagrete/maionese/bebidas, então recebe ele INTEGRAL de volta
+ * por cima da metade (reembolso). Só depois entram os acertos/repasse.
+ *  - JK     = lucro/2 + vinagrete − acertos
+ *  - Cozina = lucro/2 + acertos
+ *
+ * @param vinagrete custo do vinagrete/maionese/bebidas (volta inteiro pro JK)
+ */
 export function computeSplit(
   lucro: number,
+  vinagrete: number,
   a: Acerto,
-): { base: number; jk: number; cozina: number } {
-  const base = lucro / 2
+): {
+  half: number
+  jkBase: number
+  cozinaBase: number
+  jk: number
+  cozina: number
+} {
+  const half = lucro / 2
+  const jkBase = half + (vinagrete || 0) // vinagrete volta inteiro pro JK
+  const cozinaBase = half
 
   // custo compartilhado → metade pra cada
   const shared = (val: number, mode: AcertoMode) => {
-    const half = (val || 0) / 2
+    const h = (val || 0) / 2
     return mode === "reembolsar"
-      ? { jk: half, cozina: -half } // JK pagou tudo → Cozina reembolsa a metade
-      : { jk: -half, cozina: -half } // dividir → cada um paga a sua
+      ? { jk: h, cozina: -h } // JK pagou tudo → Cozina reembolsa a metade
+      : { jk: -h, cozina: -h } // dividir → cada um paga a sua
   }
   const luz = shared(a.luz, a.luzMode)
   const guarda = shared(a.guarda, a.guardaMode)
@@ -97,9 +115,9 @@ export function computeSplit(
   // CNPão + B2B → soma Cozina, desconta JK
   const transfer = (a.cnpao || 0) + (a.b2b || 0)
 
-  const jk = base - transfer + luz.jk + guarda.jk + outros.jk
-  const cozina = base + transfer + luz.cozina + guarda.cozina + outros.cozina
-  return { base, jk, cozina }
+  const jk = jkBase - transfer + luz.jk + guarda.jk + outros.jk
+  const cozina = cozinaBase + transfer + luz.cozina + guarda.cozina + outros.cozina
+  return { half, jkBase, cozinaBase, jk, cozina }
 }
 
 export type AcertoLine = {

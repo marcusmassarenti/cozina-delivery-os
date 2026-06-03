@@ -45,7 +45,7 @@ export default async function FechamentoPrintPage({
   const recebido = recebidoTotal(f)
   const lucro = lucroLiquido(f)
   const acerto = toAcerto(f.acerto)
-  const split = computeSplit(lucro, acerto)
+  const split = computeSplit(lucro, f.custoVinagrete, acerto)
   const acertoLinhas = acertoBreakdown(acerto)
 
   return (
@@ -103,7 +103,11 @@ export default async function FechamentoPrintPage({
           <div className="my-4 rounded-lg bg-primary/5 p-4">
             <Row label="Lucro líquido" value={lucro} strong big />
             <div className="mt-1 text-xs text-muted-foreground">
-              Base ÷ 2 = {fmtBRL(split.base)} pra cada (antes dos acertos)
+              Lucro ÷ 2 = {fmtBRL(split.half)} pra cada
+              {f.custoVinagrete > 0 && (
+                <> · vinagrete {fmtBRL(f.custoVinagrete)} volta inteiro pro JK</>
+              )}{" "}
+              (antes dos acertos)
             </div>
           </div>
 
