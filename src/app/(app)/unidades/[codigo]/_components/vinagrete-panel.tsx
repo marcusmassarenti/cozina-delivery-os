@@ -387,22 +387,19 @@ function SemCategoriaRow({
   onSaved: () => void
 }) {
   const [busy, setBusy] = React.useState(false)
+  // null = escolhendo no select; string = digitando nova categoria
+  const [nova, setNova] = React.useState<string | null>(null)
 
-  async function pick(value: string) {
-    let categoria = value
-    if (value === "__nova__") {
-      const nome = window.prompt("Nome da nova categoria:")
-      if (!nome || !nome.trim()) return
-      categoria = nome.trim()
-    }
-    if (!categoria) return
+  async function assign(categoria: string) {
+    const c = categoria.trim()
+    if (!c) return
     setBusy(true)
     await assignProdutoCategoria({
       unitId,
       unitCode,
       codigo: item.codigo,
       descricao: item.descricao,
-      categoria,
+      categoria: c,
     })
     setBusy(false)
     onSaved()
@@ -419,22 +416,59 @@ function SemCategoriaRow({
         {limpaNome(item.descricao)}{" "}
         <span className="text-muted-foreground">({item.quantidade})</span>
       </span>
-      <select
-        defaultValue=""
-        disabled={busy}
-        onChange={(e) => pick(e.target.value)}
-        className="rounded border border-input bg-background px-1.5 py-1 text-[11px] outline-none focus:border-ring"
-      >
-        <option value="" disabled>
-          categoria…
-        </option>
-        {categorias.map((c) => (
-          <option key={c} value={c}>
-            {c}
+      {nova === null ? (
+        <select
+          value=""
+          disabled={busy}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === "__nova__") setNova("")
+            else if (v) assign(v)
+          }}
+          className="rounded border border-input bg-background px-1.5 py-1 text-[11px] outline-none focus:border-ring"
+        >
+          <option value="" disabled>
+            categoria…
           </option>
-        ))}
-        <option value="__nova__">+ nova categoria…</option>
-      </select>
+          {categorias.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value="__nova__">+ nova categoria…</option>
+        </select>
+      ) : (
+        <div className="flex items-center gap-1">
+          <input
+            autoFocus
+            value={nova}
+            disabled={busy}
+            placeholder="nome da categoria"
+            onChange={(e) => setNova(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") assign(nova)
+              if (e.key === "Escape") setNova(null)
+            }}
+            className="w-32 rounded border border-input bg-background px-1.5 py-1 text-[11px] outline-none focus:border-ring"
+          />
+          <button
+            type="button"
+            disabled={busy || !nova.trim()}
+            onClick={() => assign(nova)}
+            className="rounded bg-primary px-1.5 py-1 text-[11px] font-medium text-primary-foreground disabled:opacity-50"
+          >
+            criar
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setNova(null)}
+            className="px-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   )
 }
