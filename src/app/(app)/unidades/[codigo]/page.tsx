@@ -45,6 +45,8 @@ import { CardapioTab } from "./_components/cardapio-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
+import { FechamentoTab } from "./_components/fechamento-tab"
+import { getFechamentos, type Fechamento } from "@/lib/data/fechamentos"
 
 export default async function UnidadeDetalhePage({
   params,
@@ -64,6 +66,12 @@ export default async function UnidadeDetalhePage({
   if (accessibleIds !== null && !accessibleIds.includes(unit.id)) notFound()
 
   const canEditUnit = await userCan("unidades", "edit")
+
+  // Fechamento de sociedade (acerto 50/50) — só na JK por enquanto.
+  const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
+  const [fechamentos, canEditFechamento] = isJK
+    ? await Promise.all([getFechamentos(unit.id), userCan("financeiro", "edit")])
+    : [[], false]
 
   const { year, month } = parsePeriodParam(sp.periodo)
   const [
@@ -185,7 +193,7 @@ export default async function UnidadeDetalhePage({
         </div>
       </div>
 
-      {hasData ? (
+      {hasData || isJK ? (
         <>
           {usaImportado && (
             <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
@@ -211,6 +219,8 @@ export default async function UnidadeDetalhePage({
             usaKeeta={usaKeeta}
             year={year}
             month={month}
+            fechamentos={fechamentos}
+            canEditFechamento={canEditFechamento}
           />
         </>
       ) : (
@@ -370,6 +380,8 @@ function DetailTabs({
   usaKeeta,
   year,
   month,
+  fechamentos,
+  canEditFechamento,
 }: {
   unit: Unit
   monthlyMerged: UnitMonthly
@@ -378,8 +390,11 @@ function DetailTabs({
   usaKeeta: boolean
   year: number
   month: number
+  fechamentos: Fechamento[]
+  canEditFechamento: boolean
 }) {
   const m = monthlyMerged
+  const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
   // Define os slots de plataforma pras tabs Cardápio e Financeiro.
   // Aparece no chip mesmo sem dados (com aviso "sem dados") pra Marcus
   // saber que a plataforma existe mas falta importar.
@@ -448,6 +463,7 @@ function DetailTabs({
         <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
         <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
         <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
+        {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
       </TabsList>
 
       {/* Financeiro = DRE completo da loja (Receita + Financeiro + Custos) */}
@@ -471,6 +487,18 @@ function DetailTabs({
       <TabsContent value="avaliacoes" className="mt-4">
         <PlatformSwitcher slots={avaliacoesSlots} />
       </TabsContent>
+
+      {/* Fechamento de sociedade (só JK) */}
+      {isJK && (
+        <TabsContent value="fechamento" className="mt-4">
+          <FechamentoTab
+            unitId={unit.id}
+            unitCode={unit.code}
+            fechamentos={fechamentos}
+            canEdit={canEditFechamento}
+          />
+        </TabsContent>
+      )}
     </Tabs>
   )
 }
