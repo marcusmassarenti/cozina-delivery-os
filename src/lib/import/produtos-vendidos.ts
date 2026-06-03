@@ -3,20 +3,25 @@ import * as XLSX from "xlsx"
 /**
  * Parser da planilha "Produtos vendidos" que o JK exporta toda semana.
  * Estrutura: título "Produtos vendidos", datas (inicial/final) em serial Excel,
- * cabeçalho com "Categoria" + "Quantidade", e linhas item a item.
+ * cabeçalho com "Descrição" + "Cód. item" + "Quantidade", e linhas item a item.
  *
- * A gente só precisa de: Categoria (col 0) + Quantidade somada por categoria,
- * e o período da semana. O preço vem do cadastro (não do arquivo).
+ * O modelo real NÃO traz categoria — então referenciamos por CÓDIGO (Cód. item).
+ * Pegamos: código + descrição + quantidade somada por código, e o período.
+ * O preço vem do cadastro (não do arquivo).
  */
 
-export type ProdutoCategoria = { categoria: string; quantidade: number }
+export type ProdutoVendido = {
+  codigo: string
+  descricao: string
+  quantidade: number
+}
 
 export type ParsedProdutosVendidos =
   | {
       reportType: "produtos_vendidos"
       periodoInicio: string // YYYY-MM-DD
       periodoFim: string
-      categorias: ProdutoCategoria[]
+      produtos: ProdutoVendido[]
     }
   | { reportType: "unknown"; error: string }
 
@@ -28,12 +33,11 @@ function toNum(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null
   const s = norm(v)
   if (!s) return null
-  // aceita "1.234,56" ou "1234.56"
   const n = Number(s.replace(/\./g, "").replace(",", "."))
   return Number.isFinite(n) ? n : null
 }
 
-/** Detecta o workbook "Produtos vendidos" (título + Categoria + Quantidade). */
+/** Detecta o workbook "Produtos vendidos" (título + Descrição + Quantidade). */
 export function isProdutosVendidosWorkbook(wb: XLSX.WorkBook): boolean {
   const ws = wb.Sheets[wb.SheetNames[0]]
   if (!ws) return false
@@ -47,9 +51,9 @@ export function isProdutosVendidosWorkbook(wb: XLSX.WorkBook): boolean {
     .flat()
     .map((c) => norm(c).toLowerCase())
   const hasTitulo = flat.some((c) => c.includes("produtos vendidos"))
-  const hasCategoria = flat.some((c) => c === "categoria")
+  const hasDescricao = flat.some((c) => c === "descrição" || c === "descricao")
   const hasQtd = flat.some((c) => c.includes("quantidade"))
-  return hasTitulo && hasCategoria && hasQtd
+  return hasTitulo && hasDescricao && hasQtd
 }
 
 /** Serial Excel (sistema 1900) → ISO YYYY-MM-DD. */
@@ -88,21 +92,24 @@ export function parseProdutosVendidos(
     defval: "",
   })
 
-  // cabeçalho: linha cuja alguma célula é exatamente "Categoria"
+  // cabeçalho: linha cuja alguma célula é "Descrição"
   let headerIdx = -1
-  let catCol = 0
+  let descCol = -1
   for (let i = 0; i < Math.min(rows.length, 12); i++) {
-    const idx = rows[i].findIndex((c) => norm(c).toLowerCase() === "categoria")
+    const idx = rows[i].findIndex((c) => {
+      const t = norm(c).toLowerCase()
+      return t === "descrição" || t === "descricao"
+    })
     if (idx >= 0) {
       headerIdx = i
-      catCol = idx
+      descCol = idx
       break
     }
   }
   if (headerIdx < 0)
-    return { reportType: "unknown", error: "Não achei a coluna Categoria." }
+    return { reportType: "unknown", error: "Não achei a coluna Descrição." }
 
-  // datas da semana (linhas acima/no cabeçalho)
+  // datas da semana
   let periodoInicio: string | null = null
   let periodoFim: string | null = null
   for (let i = 0; i <= headerIdx; i++) {
@@ -130,35 +137,46 @@ export function parseProdutosVendidos(
     }
   }
 
-  // soma quantidade por categoria.
-  // Quantidade = 2º número da linha depois da descrição (col 0=categoria,
-  // 1=descrição; depois vêm cód.item, QUANTIDADE, valor unit, valor total).
-  const map = new Map<string, number>()
+  // soma quantidade por código.
+  // Após a descrição vêm os números: [Cód. item, QUANTIDADE, valor unit, valor total].
+  const map = new Map<string, { descricao: string; quantidade: number }>()
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i]
-    const categoria = norm(r[catCol])
-    if (!categoria) continue
+    const descricao = norm(r[descCol])
+    if (!descricao) continue
+    // ignora rodapé tipo "relatório - RelProdutosVendidos.rpt"
+    if (/^relat[óo]rio/i.test(descricao) || /\.rpt/i.test(descricao)) continue
+
     const nums: number[] = []
-    for (let j = catCol + 2; j < r.length; j++) {
+    for (let j = descCol + 1; j < r.length; j++) {
       if (norm(r[j]) === "") continue
       const n = toNum(r[j])
       if (n != null) nums.push(n)
     }
-    const quantidade = nums.length >= 2 ? nums[1] : (nums[0] ?? 0)
-    map.set(categoria, (map.get(categoria) ?? 0) + (quantidade || 0))
+    if (nums.length < 2) continue // sem código + quantidade → pula
+    const codigo = String(Math.round(nums[0]))
+    const quantidade = nums[1] || 0
+
+    const prev = map.get(codigo)
+    if (prev) prev.quantidade += quantidade
+    else map.set(codigo, { descricao, quantidade })
   }
 
-  const categorias = [...map.entries()]
-    .map(([categoria, quantidade]) => ({ categoria, quantidade }))
+  const produtos: ProdutoVendido[] = [...map.entries()]
+    .map(([codigo, v]) => ({
+      codigo,
+      descricao: v.descricao,
+      quantidade: v.quantidade,
+    }))
     .sort((a, b) => b.quantidade - a.quantidade)
 
-  if (categorias.length === 0)
-    return { reportType: "unknown", error: "Nenhuma categoria encontrada." }
+  if (produtos.length === 0)
+    return { reportType: "unknown", error: "Nenhum produto encontrado." }
   if (!periodoInicio || !periodoFim)
     return {
       reportType: "unknown",
       error: "Não achei as datas (inicial/final) da semana.",
     }
 
-  return { reportType: "produtos_vendidos", periodoInicio, periodoFim, categorias }
+  return { reportType: "produtos_vendidos", periodoInicio, periodoFim, produtos }
 }

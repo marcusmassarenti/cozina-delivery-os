@@ -2,17 +2,21 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
-export type CategoriaPreco = {
+export type ProdutoPreco = {
   id: string
+  codigo: string
+  descricao: string
   categoria: string
   preco: number
   considerar: boolean
 }
 
 export type VinagreteLinha = {
+  codigo: string
+  descricao: string
   categoria: string
   quantidade: number
-  preco: number | null // null = sem preço cadastrado
+  preco: number | null // null = código sem preço cadastrado
   considerar: boolean
   soma: number
   semPreco: boolean
@@ -23,51 +27,42 @@ export type VinagreteRef = {
   periodoFim: string
   linhas: VinagreteLinha[]
   total: number
-  faltaPreco: string[] // categorias consideradas mas sem preço
+  faltaPreco: string[] // descrições consideradas mas sem preço
   temDados: boolean
 }
 
-/** Chave de match: minúsculo, sem acento, espaços colapsados. */
-export function normCat(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // tira acentos
-    .replace(/\s+/g, " ")
-    .trim()
-}
-
-export async function getCategoriaPrecos(
+export async function getProdutoPrecos(
   unitId: string,
-): Promise<CategoriaPreco[]> {
+): Promise<ProdutoPreco[]> {
   const admin = createAdminClient()
   const { data, error } = await admin
-    .from("unit_categoria_precos")
-    .select("id, categoria, preco, considerar")
+    .from("unit_produto_precos")
+    .select("id, codigo, descricao, categoria, preco, considerar")
     .eq("unit_id", unitId)
-    .order("categoria")
   if (error) {
-    console.error("getCategoriaPrecos:", error.message)
+    console.error("getProdutoPrecos:", error.message)
     return []
   }
   return (data ?? []).map((r) => ({
     id: r.id as string,
-    categoria: r.categoria as string,
+    codigo: String(r.codigo),
+    descricao: (r.descricao as string | null) ?? "",
+    categoria: (r.categoria as string | null) ?? "",
     preco: Number(r.preco) || 0,
     considerar: !!r.considerar,
   }))
 }
 
-/** Soma de quantidade por categoria da(s) semana(s) que cobrem [inicio, fim]. */
+/** Quantidade por código da(s) semana(s) que cobrem [inicio, fim]. */
 export async function getProdutosVendidosSemana(
   unitId: string,
   inicio: string,
   fim: string,
-): Promise<{ categoria: string; quantidade: number }[]> {
+): Promise<{ codigo: string; descricao: string; quantidade: number }[]> {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("unit_produtos_vendidos")
-    .select("categoria, quantidade")
+    .select("codigo, descricao, quantidade")
     .eq("unit_id", unitId)
     .lte("periodo_inicio", fim)
     .gte("periodo_fim", inicio)
@@ -75,19 +70,22 @@ export async function getProdutosVendidosSemana(
     console.error("getProdutosVendidosSemana:", error.message)
     return []
   }
-  // soma por categoria (caso haja mais de um registro na janela)
-  const map = new Map<string, number>()
+  const map = new Map<string, { descricao: string; quantidade: number }>()
   for (const r of data ?? []) {
-    const cat = String(r.categoria)
-    map.set(cat, (map.get(cat) ?? 0) + (Number(r.quantidade) || 0))
+    const cod = String(r.codigo)
+    const prev = map.get(cod)
+    const q = Number(r.quantidade) || 0
+    if (prev) prev.quantidade += q
+    else map.set(cod, { descricao: (r.descricao as string) ?? "", quantidade: q })
   }
-  return [...map.entries()].map(([categoria, quantidade]) => ({
-    categoria,
-    quantidade,
+  return [...map.entries()].map(([codigo, v]) => ({
+    codigo,
+    descricao: v.descricao,
+    quantidade: v.quantidade,
   }))
 }
 
-/** Junta produtos vendidos + preços → detalhamento e total do vinagrete. */
+/** Junta produtos vendidos (por código) + preços → detalhamento e total. */
 export async function computeVinagreteRef(
   unitId: string,
   inicio: string,
@@ -95,18 +93,20 @@ export async function computeVinagreteRef(
 ): Promise<VinagreteRef> {
   const [produtos, precos] = await Promise.all([
     getProdutosVendidosSemana(unitId, inicio, fim),
-    getCategoriaPrecos(unitId),
+    getProdutoPrecos(unitId),
   ])
-  const precoMap = new Map(precos.map((p) => [normCat(p.categoria), p]))
+  const precoMap = new Map(precos.map((p) => [p.codigo, p]))
 
   const linhas: VinagreteLinha[] = produtos
     .map((pr) => {
-      const p = precoMap.get(normCat(pr.categoria))
+      const p = precoMap.get(pr.codigo)
       const considerar = p ? p.considerar : true
       const preco = p ? p.preco : null
       const soma = considerar && preco != null ? pr.quantidade * preco : 0
       return {
-        categoria: pr.categoria,
+        codigo: pr.codigo,
+        descricao: pr.descricao || p?.descricao || pr.codigo,
+        categoria: p?.categoria ?? "",
         quantidade: pr.quantidade,
         preco,
         considerar,
@@ -119,7 +119,7 @@ export async function computeVinagreteRef(
   const total = Math.round(linhas.reduce((a, l) => a + l.soma, 0) * 100) / 100
   const faltaPreco = linhas
     .filter((l) => l.considerar && (l.preco == null || l.preco === 0))
-    .map((l) => l.categoria)
+    .map((l) => l.descricao)
 
   return {
     periodoInicio: inicio,

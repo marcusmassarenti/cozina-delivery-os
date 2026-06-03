@@ -6,9 +6,8 @@ import { requireModulePermission } from "@/lib/auth/guards"
 import { getRecebidoSemana, type RecebidoSemana } from "@/lib/data/fechamentos"
 import {
   computeVinagreteRef,
-  getCategoriaPrecos,
-  normCat,
-  type CategoriaPreco,
+  getProdutoPrecos,
+  type ProdutoPreco,
   type VinagreteRef,
 } from "@/lib/data/produtos-vendidos"
 import { parseProdutosVendidos } from "@/lib/import/produtos-vendidos"
@@ -129,21 +128,21 @@ export async function getVinagreteReference(
   }
 }
 
-/** Cadastro de preços da unidade (sempre disponível, mesmo sem planilha). */
-export async function getCategoriaPrecosAction(
+/** Cadastro de preços (por código) da unidade — sempre disponível. */
+export async function getProdutoPrecosAction(
   unitId: string,
-): Promise<{ ok: boolean; precos?: CategoriaPreco[] }> {
+): Promise<{ ok: boolean; precos?: ProdutoPreco[] }> {
   try {
     await requireModulePermission("financeiro", "view")
     if (!unitId) return { ok: false }
-    const precos = await getCategoriaPrecos(unitId)
+    const precos = await getProdutoPrecos(unitId)
     return { ok: true, precos }
   } catch {
     return { ok: false }
   }
 }
 
-/** Sobe a planilha do JK: soma por categoria, salva e devolve o detalhamento. */
+/** Sobe a planilha do JK: soma por código, salva e devolve o detalhamento. */
 export async function importProdutosVendidos(
   formData: FormData,
 ): Promise<{
@@ -169,9 +168,9 @@ export async function importProdutosVendidos(
     if (parsed.reportType !== "produtos_vendidos")
       return { ok: false, message: parsed.error }
 
-    const { periodoInicio, periodoFim, categorias } = parsed
+    const { periodoInicio, periodoFim, produtos } = parsed
 
-    // Re-importar a semana: apaga e regrava (evita categoria fantasma).
+    // Re-importar a semana: apaga e regrava (evita produto fantasma).
     await admin
       .from("unit_produtos_vendidos")
       .delete()
@@ -179,38 +178,38 @@ export async function importProdutosVendidos(
       .eq("periodo_inicio", periodoInicio)
       .eq("periodo_fim", periodoFim)
 
-    const rows = categorias.map((c) => ({
+    const rows = produtos.map((p) => ({
       unit_id: unitId,
       periodo_inicio: periodoInicio,
       periodo_fim: periodoFim,
-      categoria: c.categoria,
-      quantidade: c.quantidade,
+      codigo: p.codigo,
+      descricao: p.descricao,
+      quantidade: p.quantidade,
     }))
     if (rows.length > 0) {
       const { error } = await admin.from("unit_produtos_vendidos").insert(rows)
       if (error) return { ok: false, message: error.message }
     }
 
-    // Garante uma linha de preço pra cada categoria nova (pra aparecer no painel).
+    // Cria uma linha de preço (R$ 0) pra cada código novo (pra aparecer/precificar).
     const { data: precos } = await admin
-      .from("unit_categoria_precos")
-      .select("categoria")
+      .from("unit_produto_precos")
+      .select("codigo")
       .eq("unit_id", unitId)
-    const existentes = new Set(
-      (precos ?? []).map((p) => normCat(String(p.categoria))),
-    )
-    const novas = categorias
-      .filter((c) => !existentes.has(normCat(c.categoria)))
-      .map((c) => ({
+    const existentes = new Set((precos ?? []).map((p) => String(p.codigo)))
+    const novos = produtos
+      .filter((p) => !existentes.has(p.codigo))
+      .map((p) => ({
         unit_id: unitId,
-        categoria: c.categoria,
+        codigo: p.codigo,
+        descricao: p.descricao,
         preco: 0,
-        considerar: normCat(c.categoria) !== "nao considerar",
+        considerar: true,
       }))
-    if (novas.length > 0) {
+    if (novos.length > 0) {
       await admin
-        .from("unit_categoria_precos")
-        .upsert(novas, { onConflict: "unit_id,categoria" })
+        .from("unit_produto_precos")
+        .upsert(novos, { onConflict: "unit_id,codigo" })
     }
 
     const ref = await computeVinagreteRef(unitId, periodoInicio, periodoFim)
@@ -252,30 +251,32 @@ export async function deleteProdutosVendidos(
   }
 }
 
-/** Edita o preço / 'considerar' de uma categoria. */
-export async function saveCategoriaPreco(input: {
+/** Edita o preço / 'considerar' de um código de produto. */
+export async function saveProdutoPreco(input: {
   unitId: string
   unitCode: string
-  categoria: string
+  codigo: string
+  descricao?: string
   preco: number
   considerar: boolean
 }): Promise<FechamentoState> {
   try {
     const { admin } = await requireModulePermission("financeiro", "edit")
-    const categoria = input.categoria?.trim()
-    if (!input.unitId || !categoria)
-      return { ok: false, message: "Categoria inválida." }
+    const codigo = input.codigo?.trim()
+    if (!input.unitId || !codigo)
+      return { ok: false, message: "Código inválido." }
     const preco = Number.isFinite(input.preco) ? Math.max(0, input.preco) : 0
 
-    const { error } = await admin.from("unit_categoria_precos").upsert(
+    const { error } = await admin.from("unit_produto_precos").upsert(
       {
         unit_id: input.unitId,
-        categoria,
+        codigo,
+        descricao: input.descricao ?? null,
         preco,
         considerar: !!input.considerar,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "unit_id,categoria" },
+      { onConflict: "unit_id,codigo" },
     )
     if (error) return { ok: false, message: error.message }
     if (input.unitCode) revalidatePath(`/unidades/${input.unitCode}`)

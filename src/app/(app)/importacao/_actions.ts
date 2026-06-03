@@ -23,6 +23,7 @@ import type {
   ParsedNinefoodDadosPedido,
 } from "@/lib/import/ninefood"
 import { isKeetaWorkbook, parseKeetaReport } from "@/lib/import/keeta"
+import { isProdutosVendidosWorkbook } from "@/lib/import/produtos-vendidos"
 import type {
   ParsedKeetaLoja,
   ParsedKeetaItem,
@@ -360,6 +361,16 @@ async function processFile(
   let platform: "ifood" | "99food" | "keeta" = "ifood"
   try {
     const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: false })
+    // "Produtos vendidos" do JK não é importação de plataforma — é dentro do
+    // Fechamento da unidade. Se cair aqui por engano, avisa onde importar.
+    if (isProdutosVendidosWorkbook(wb)) {
+      return {
+        filename: file.name,
+        ok: false,
+        message:
+          'Essa é a planilha "Produtos vendidos" do JK — importe ela dentro do Fechamento da unidade (aba Fechamento), não aqui.',
+      }
+    }
     if (isKeetaWorkbook(wb)) platform = "keeta"
     else if (isNinefoodWorkbook(wb)) platform = "99food"
   } catch {

@@ -4,14 +4,11 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { fmtBRL } from "@/lib/format"
-import type {
-  VinagreteRef,
-  CategoriaPreco,
-} from "@/lib/data/produtos-vendidos"
+import type { VinagreteRef, ProdutoPreco } from "@/lib/data/produtos-vendidos"
 import {
   importProdutosVendidos,
-  saveCategoriaPreco,
-  getCategoriaPrecosAction,
+  saveProdutoPreco,
+  getProdutoPrecosAction,
   deleteProdutosVendidos,
 } from "../_actions"
 
@@ -26,16 +23,12 @@ const brl2 = (n: number) =>
     maximumFractionDigits: 2,
   })
 
-function normCat(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-}
+/** Nome legível (os nomes vêm com espaçamento bagunçado). */
+const limpaNome = (s: string) => s.replace(/\s+/g, " ").trim()
 
 type Row = {
+  codigo: string
+  descricao: string
   categoria: string
   preco: number
   considerar: boolean
@@ -67,13 +60,12 @@ export function VinagretePanel({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(
     null,
   )
-  const [precos, setPrecos] = React.useState<CategoriaPreco[]>([])
+  const [precos, setPrecos] = React.useState<ProdutoPreco[]>([])
   const fileRef = React.useRef<HTMLInputElement>(null)
 
-  // Carrega o cadastro de preços (independe de ter planilha importada).
   React.useEffect(() => {
     let alive = true
-    getCategoriaPrecosAction(unitId).then((res) => {
+    getProdutoPrecosAction(unitId).then((res) => {
       if (alive && res.ok && res.precos) setPrecos(res.precos)
     })
     return () => {
@@ -82,7 +74,7 @@ export function VinagretePanel({
   }, [unitId])
 
   async function reloadPrecos() {
-    const res = await getCategoriaPrecosAction(unitId)
+    const res = await getProdutoPrecosAction(unitId)
     if (res.ok && res.precos) setPrecos(res.precos)
   }
 
@@ -100,7 +92,7 @@ export function VinagretePanel({
     if (fileRef.current) fileRef.current.value = ""
     if (res.ok && res.ref && res.periodoInicio && res.periodoFim) {
       onImported(res.ref, res.periodoInicio, res.periodoFim)
-      reloadPrecos() // pode ter criado preço pra categoria nova
+      reloadPrecos()
       setOpen(true)
       setMsg({
         ok: true,
@@ -118,7 +110,7 @@ export function VinagretePanel({
     const res = await deleteProdutosVendidos(unitId, unitCode, inicio, fim)
     setBusy(false)
     if (res.ok) {
-      onPrecoSaved() // re-busca a referência da semana (fica sem dados)
+      onPrecoSaved()
       setMsg({ ok: true, text: "Planilha removida. Pode importar a correta." })
     } else {
       setMsg({ ok: false, text: res.message ?? "Erro ao remover." })
@@ -127,27 +119,41 @@ export function VinagretePanel({
 
   const temDados = !!vinRef?.temDados
 
-  // Junta cadastro de preços + quantidades da semana (se houver).
-  const weekMap = new Map(
-    (vinRef?.linhas ?? []).map((l) => [normCat(l.categoria), l]),
-  )
-  const rows: Row[] = precos
-    .map((p) => {
-      const w = weekMap.get(normCat(p.categoria))
-      return {
-        categoria: p.categoria,
-        preco: p.preco,
-        considerar: p.considerar,
-        quantidade: w ? w.quantidade : null,
-        soma: w ? w.soma : null,
-      }
-    })
-    .sort((a, b) => {
-      const qa = a.quantidade ?? -1
-      const qb = b.quantidade ?? -1
-      if (qa !== qb) return qb - qa
-      return a.categoria.localeCompare(b.categoria)
-    })
+  // Junta cadastro (por código) + quantidades da semana.
+  const weekMap = new Map((vinRef?.linhas ?? []).map((l) => [l.codigo, l]))
+  const rows: Row[] = precos.map((p) => {
+    const w = weekMap.get(p.codigo)
+    return {
+      codigo: p.codigo,
+      descricao: p.descricao || w?.descricao || p.codigo,
+      categoria: p.categoria,
+      preco: p.preco,
+      considerar: p.considerar,
+      quantidade: w ? w.quantidade : null,
+      soma: w ? w.soma : null,
+    }
+  })
+  // códigos vendidos que ainda não estão no cadastro (defensivo)
+  const noCadastro = new Set(precos.map((p) => p.codigo))
+  for (const l of vinRef?.linhas ?? []) {
+    if (!noCadastro.has(l.codigo)) {
+      rows.push({
+        codigo: l.codigo,
+        descricao: l.descricao,
+        categoria: l.categoria,
+        preco: l.preco ?? 0,
+        considerar: l.considerar,
+        quantidade: l.quantidade,
+        soma: l.soma,
+      })
+    }
+  }
+  rows.sort((a, b) => {
+    const qa = a.quantidade ?? -1
+    const qb = b.quantidade ?? -1
+    if (qa !== qb) return qb - qa
+    return limpaNome(a.descricao).localeCompare(limpaNome(b.descricao))
+  })
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
@@ -195,9 +201,9 @@ export function VinagretePanel({
 
       {!temDados && (
         <p className="text-[10px] text-muted-foreground">
-          Suba a planilha “Produtos vendidos” do JK da semana pra calcular o
-          total (qtd × preço). Em “ver / editar preços” você ajusta os preços
-          das categorias a qualquer momento.
+          Suba a planilha “Produtos vendidos” do JK da semana — o sistema soma a
+          quantidade por código × preço. Em “ver / editar preços” você ajusta os
+          preços por produto (código novo aparece pra precificar).
         </p>
       )}
 
@@ -223,19 +229,19 @@ export function VinagretePanel({
 
           {vinRef.faltaPreco.length > 0 && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400">
-              Sem preço (R$ 0,00): {vinRef.faltaPreco.join(", ")} — ajuste em
-              “ver / editar preços”.
+              {vinRef.faltaPreco.length} produto(s) sem preço (R$ 0,00) —
+              ajuste em “ver / editar preços”.
             </p>
           )}
         </>
       )}
 
       {open && rows.length > 0 && (
-        <div className="overflow-hidden rounded-md border">
+        <div className="max-h-80 overflow-auto rounded-md border">
           <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b bg-muted/40 text-[10px] text-muted-foreground">
-                <th className="px-2 py-1.5 text-left font-medium">Categoria</th>
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b bg-muted text-[10px] text-muted-foreground">
+                <th className="px-2 py-1.5 text-left font-medium">Produto</th>
                 <th className="px-2 py-1.5 text-right font-medium">Qtd</th>
                 <th className="px-2 py-1.5 text-right font-medium">Preço</th>
                 <th className="px-2 py-1.5 text-center font-medium">Conta?</th>
@@ -245,7 +251,7 @@ export function VinagretePanel({
             <tbody>
               {rows.map((r) => (
                 <PrecoRow
-                  key={r.categoria}
+                  key={r.codigo}
                   row={r}
                   unitId={unitId}
                   unitCode={unitCode}
@@ -294,10 +300,11 @@ function PrecoRow({
 
   async function commit(preco: number, cons: boolean) {
     setBusy(true)
-    await saveCategoriaPreco({
+    await saveProdutoPreco({
       unitId,
       unitCode,
-      categoria: row.categoria,
+      codigo: row.codigo,
+      descricao: row.descricao,
       preco,
       considerar: cons,
     })
@@ -313,15 +320,17 @@ function PrecoRow({
         busy && "animate-pulse",
       )}
     >
-      <td className="px-2 py-1.5">{row.categoria}</td>
+      <td className="px-2 py-1.5">
+        <div className="leading-tight">{limpaNome(row.descricao)}</div>
+        {row.categoria && (
+          <div className="text-[9px] text-muted-foreground">{row.categoria}</div>
+        )}
+      </td>
       <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
         {row.quantidade ?? "—"}
       </td>
       <td className="px-2 py-1.5 text-right">
-        <PrecoInput
-          value={row.preco}
-          onCommit={(v) => commit(v, considerar)}
-        />
+        <PrecoInput value={row.preco} onCommit={(v) => commit(v, considerar)} />
       </td>
       <td className="px-2 py-1.5 text-center">
         <input
