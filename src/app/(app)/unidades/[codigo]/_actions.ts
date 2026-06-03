@@ -286,6 +286,38 @@ export async function saveCategoriaPrecoGroup(input: {
   }
 }
 
+/** Edita preço / quantidade fixa de um insumo de embalagem. */
+export async function saveEmbalagem(input: {
+  unitId: string
+  unitCode: string
+  id: string
+  preco: number
+  qtdFixa: number
+}): Promise<FechamentoState> {
+  try {
+    const { admin } = await requireModulePermission("financeiro", "edit")
+    if (!input.unitId || !input.id)
+      return { ok: false, message: "Insumo inválido." }
+    const preco = Number.isFinite(input.preco) ? Math.max(0, input.preco) : 0
+    const qtdFixa = Number.isFinite(input.qtdFixa)
+      ? Math.max(0, input.qtdFixa)
+      : 0
+    const { error } = await admin
+      .from("unit_embalagem")
+      .update({ preco, qtd_fixa: qtdFixa, updated_at: new Date().toISOString() })
+      .eq("unit_id", input.unitId)
+      .eq("id", input.id)
+    if (error) return { ok: false, message: error.message }
+    if (input.unitCode) revalidatePath(`/unidades/${input.unitCode}`)
+    return { ok: true }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro desconhecido",
+    }
+  }
+}
+
 /** Atribui uma categoria a um código novo (herda o preço/considerar dela). */
 export async function assignProdutoCategoria(input: {
   unitId: string

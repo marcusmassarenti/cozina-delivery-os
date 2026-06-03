@@ -4,11 +4,16 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { fmtBRL } from "@/lib/format"
-import type { VinagreteRef, ProdutoPreco } from "@/lib/data/produtos-vendidos"
+import type {
+  VinagreteRef,
+  ProdutoPreco,
+  EmbalagemLinha,
+} from "@/lib/data/produtos-vendidos"
 import {
   importProdutosVendidos,
   saveCategoriaPrecoGroup,
   assignProdutoCategoria,
+  saveEmbalagem,
   getProdutoPrecosAction,
   deleteProdutosVendidos,
 } from "../_actions"
@@ -227,21 +232,29 @@ export function VinagretePanel({
 
       {temDados && vinRef && (
         <>
-          <div className="flex items-center justify-between rounded-md bg-primary/10 px-3 py-2">
-            <span className="text-xs text-muted-foreground">
-              Total calculado (qtd × preço)
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold tabular-nums">
-                {fmtBRL(vinRef.total)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onUsar(vinRef.total)}
-                className="rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                usar no campo
-              </button>
+          <div className="flex flex-col gap-1 rounded-md bg-primary/10 px-3 py-2">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Produtos (qtd × preço)</span>
+              <span className="tabular-nums">{fmtBRL(vinRef.total)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Embalagem ({vinRef.poteCount} potes)</span>
+              <span className="tabular-nums">{fmtBRL(vinRef.embalagemTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t pt-1">
+              <span className="text-xs font-medium">Total</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold tabular-nums">
+                  {fmtBRL(vinRef.totalGeral)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onUsar(vinRef.totalGeral)}
+                  className="rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  usar no campo
+                </button>
+              </div>
             </div>
           </div>
 
@@ -285,6 +298,32 @@ export function VinagretePanel({
                 <CategoriaRow
                   key={r.categoria}
                   row={r}
+                  unitId={unitId}
+                  unitCode={unitCode}
+                  onSaved={afterSaved}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {open && vinRef && vinRef.embalagem.length > 0 && (
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted text-[10px] text-muted-foreground">
+                <th className="px-2 py-1.5 text-left font-medium">Embalagem</th>
+                <th className="px-2 py-1.5 text-right font-medium">Qtd</th>
+                <th className="px-2 py-1.5 text-right font-medium">Preço</th>
+                <th className="px-2 py-1.5 text-right font-medium">Soma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vinRef.embalagem.map((e) => (
+                <EmbalagemRow
+                  key={e.id}
+                  item={e}
                   unitId={unitId}
                   unitCode={unitCode}
                   onSaved={afterSaved}
@@ -470,6 +509,88 @@ function SemCategoriaRow({
         </div>
       )}
     </div>
+  )
+}
+
+function EmbalagemRow({
+  item,
+  unitId,
+  unitCode,
+  onSaved,
+}: {
+  item: EmbalagemLinha
+  unitId: string
+  unitCode: string
+  onSaved: () => void
+}) {
+  const [busy, setBusy] = React.useState(false)
+
+  async function save(preco: number, qtdFixa: number) {
+    setBusy(true)
+    await saveEmbalagem({ unitId, unitCode, id: item.id, preco, qtdFixa })
+    setBusy(false)
+    onSaved()
+  }
+
+  return (
+    <tr className={cn("border-b last:border-0", busy && "animate-pulse")}>
+      <td className="px-2 py-1.5">
+        {item.nome}
+        {item.porPote && (
+          <span className="text-[9px] text-muted-foreground"> · por pote</span>
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+        {item.porPote ? (
+          item.quantidade
+        ) : (
+          <DecimalInput
+            value={item.qtdFixa}
+            onCommit={(q) => save(item.preco, q)}
+          />
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        <DecimalInput value={item.preco} onCommit={(p) => save(p, item.qtdFixa)} />
+      </td>
+      <td className="px-2 py-1.5 text-right tabular-nums font-medium">
+        {fmtBRL(item.soma)}
+      </td>
+    </tr>
+  )
+}
+
+/** Input decimal livre (aceita até 4 casas, ex.: 0,0018) — pro preço da embalagem. */
+function DecimalInput({
+  value,
+  onCommit,
+}: {
+  value: number
+  onCommit: (n: number) => void
+}) {
+  const fmt = (n: number) => (n ? String(n).replace(".", ",") : "")
+  const [txt, setTxt] = React.useState(fmt(value))
+  React.useEffect(() => setTxt(fmt(value)), [value])
+
+  function commit() {
+    const v = parseFloat(txt.trim().replace(",", "."))
+    const next = Number.isFinite(v) ? v : 0
+    if (next !== value) onCommit(next)
+    else setTxt(fmt(value))
+  }
+
+  return (
+    <input
+      value={txt}
+      inputMode="decimal"
+      placeholder="0"
+      onChange={(e) => setTxt(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur()
+      }}
+      className="w-16 rounded border border-input bg-background px-1.5 py-1 text-right tabular-nums outline-none focus:border-ring"
+    />
   )
 }
 

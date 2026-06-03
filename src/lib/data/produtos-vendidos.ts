@@ -22,11 +22,25 @@ export type VinagreteLinha = {
   semPreco: boolean
 }
 
+export type EmbalagemLinha = {
+  id: string
+  nome: string
+  preco: number
+  porPote: boolean
+  qtdFixa: number
+  quantidade: number // nº de potes (se porPote) ou qtdFixa
+  soma: number
+}
+
 export type VinagreteRef = {
   periodoInicio: string
   periodoFim: string
   linhas: VinagreteLinha[]
-  total: number
+  total: number // só produtos
+  poteCount: number // qtd da categoria Vinagrete (pra lacre/grampo)
+  embalagem: EmbalagemLinha[]
+  embalagemTotal: number
+  totalGeral: number // produtos + embalagem
   faltaPreco: string[] // descrições consideradas mas sem preço
   temDados: boolean
 }
@@ -85,15 +99,40 @@ export async function getProdutosVendidosSemana(
   }))
 }
 
+export async function getEmbalagem(
+  unitId: string,
+): Promise<
+  { id: string; nome: string; preco: number; porPote: boolean; qtdFixa: number }[]
+> {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from("unit_embalagem")
+    .select("id, nome, preco, por_pote, qtd_fixa, sort_order")
+    .eq("unit_id", unitId)
+    .order("sort_order")
+  if (error) {
+    console.error("getEmbalagem:", error.message)
+    return []
+  }
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    nome: r.nome as string,
+    preco: Number(r.preco) || 0,
+    porPote: !!r.por_pote,
+    qtdFixa: Number(r.qtd_fixa) || 0,
+  }))
+}
+
 /** Junta produtos vendidos (por código) + preços → detalhamento e total. */
 export async function computeVinagreteRef(
   unitId: string,
   inicio: string,
   fim: string,
 ): Promise<VinagreteRef> {
-  const [produtos, precos] = await Promise.all([
+  const [produtos, precos, embalagemCad] = await Promise.all([
     getProdutosVendidosSemana(unitId, inicio, fim),
     getProdutoPrecos(unitId),
+    getEmbalagem(unitId),
   ])
   const precoMap = new Map(precos.map((p) => [p.codigo, p]))
 
@@ -121,11 +160,36 @@ export async function computeVinagreteRef(
     .filter((l) => l.considerar && (l.preco == null || l.preco === 0))
     .map((l) => l.descricao)
 
+  // nº de potes = qtd da categoria "Vinagrete" (lacre/grampo multiplicam por isso)
+  const poteCount = linhas
+    .filter((l) => l.categoria.trim().toLowerCase() === "vinagrete")
+    .reduce((a, l) => a + l.quantidade, 0)
+
+  const embalagem: EmbalagemLinha[] = embalagemCad.map((e) => {
+    const quantidade = e.porPote ? poteCount : e.qtdFixa
+    return {
+      id: e.id,
+      nome: e.nome,
+      preco: e.preco,
+      porPote: e.porPote,
+      qtdFixa: e.qtdFixa,
+      quantidade,
+      soma: Math.round(quantidade * e.preco * 100) / 100,
+    }
+  })
+  const embalagemTotal =
+    Math.round(embalagem.reduce((a, e) => a + e.soma, 0) * 100) / 100
+  const totalGeral = Math.round((total + embalagemTotal) * 100) / 100
+
   return {
     periodoInicio: inicio,
     periodoFim: fim,
     linhas,
     total,
+    poteCount,
+    embalagem,
+    embalagemTotal,
+    totalGeral,
     faltaPreco,
     temDados: produtos.length > 0,
   }

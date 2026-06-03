@@ -328,7 +328,7 @@ export function FechamentoTab({
                   label="Vinagrete / maionese / bebidas"
                   value={draft.custoVinagrete}
                   onChange={(n) => setNum("custoVinagrete", n)}
-                  reference={vinRef?.temDados ? vinRef.total : null}
+                  reference={vinRef?.temDados ? vinRef.totalGeral : null}
                   referenceLabel="calculado"
                 />
               </Bloco>
