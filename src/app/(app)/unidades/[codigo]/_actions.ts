@@ -3,8 +3,25 @@
 import { revalidatePath } from "next/cache"
 
 import { requireModulePermission } from "@/lib/auth/guards"
+import { getRecebidoSemana, type RecebidoSemana } from "@/lib/data/fechamentos"
 
 export type FechamentoState = { ok: boolean; message?: string }
+
+/** Soma do importado na semana — SÓ pra conferência (cinza no form). */
+export async function prefillRecebido(
+  unitId: string,
+  inicio: string,
+  fim: string,
+): Promise<{ ok: boolean; data?: RecebidoSemana }> {
+  try {
+    await requireModulePermission("financeiro", "view")
+    if (!unitId || !inicio || !fim) return { ok: false }
+    const data = await getRecebidoSemana(unitId, inicio, fim)
+    return { ok: true, data }
+  } catch {
+    return { ok: false }
+  }
+}
 
 export async function saveFechamento(input: {
   unitId: string

@@ -1,6 +1,80 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
+
+export type RecebidoSemana = {
+  ifood: number
+  ninefood: number
+  keeta: number
+}
+
+/**
+ * Soma do importado na semana, SÓ pra conferência (referência cinza no form).
+ * Base = data do PEDIDO, então diverge do depósito real (que defasa ~1 semana).
+ * O número que vale no acerto é sempre o manual (depósito do extrato).
+ *  - iFood:  soma dos lançamentos com data do fato (pode vir incompleto/bruto)
+ *  - 99 Food: líquido diário (pós-taxas)
+ *  - Keeta:  ganhos líquidos por pedido
+ */
+export async function getRecebidoSemana(
+  unitId: string,
+  inicio: string, // YYYY-MM-DD
+  fim: string,
+): Promise<RecebidoSemana> {
+  const admin = createAdminClient()
+  const fimTs = `${fim}T23:59:59`
+  const round2 = (n: number) => Math.round(n * 100) / 100
+
+  const [ifoodRows, nineRows, keetaRows] = await Promise.all([
+    fetchAllRows<{ valor: number | string }>(
+      (from, to) =>
+        admin
+          .from("ifood_financeiro_lancamentos")
+          .select("valor")
+          .eq("unit_id", unitId)
+          .gte("data_fato_gerador", inicio)
+          .lte("data_fato_gerador", fimTs)
+          .order("id")
+          .range(from, to),
+      "recebido semana ifood",
+    ),
+    fetchAllRows<{ liquido: number | string }>(
+      (from, to) =>
+        admin
+          .from("ninefood_daily_loja")
+          .select("liquido")
+          .eq("unit_id", unitId)
+          .gte("data", inicio)
+          .lte("data", fim)
+          .order("id")
+          .range(from, to),
+      "recebido semana 99",
+    ),
+    fetchAllRows<{ ganhos_liquidos: number | string | null }>(
+      (from, to) =>
+        admin
+          .from("keeta_pedidos")
+          .select("ganhos_liquidos")
+          .eq("unit_id", unitId)
+          .gte("data", inicio)
+          .lte("data", fim)
+          .order("id")
+          .range(from, to),
+      "recebido semana keeta",
+    ),
+  ])
+
+  return {
+    ifood: round2(ifoodRows.reduce((a, r) => a + (Number(r.valor) || 0), 0)),
+    ninefood: round2(
+      nineRows.reduce((a, r) => a + (Number(r.liquido) || 0), 0),
+    ),
+    keeta: round2(
+      keetaRows.reduce((a, r) => a + (Number(r.ganhos_liquidos) || 0), 0),
+    ),
+  }
+}
 
 export type Fechamento = {
   id: string

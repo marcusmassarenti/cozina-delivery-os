@@ -10,8 +10,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { fmtBRL } from "@/lib/format"
-import type { Fechamento } from "@/lib/data/fechamentos"
-import { saveFechamento, deleteFechamento } from "../_actions"
+import type { Fechamento, RecebidoSemana } from "@/lib/data/fechamentos"
+import {
+  saveFechamento,
+  deleteFechamento,
+  prefillRecebido,
+} from "../_actions"
 
 type AcertoFields = {
   valorChurrascoPote: number
@@ -99,6 +103,28 @@ export function FechamentoTab({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(
     null,
   )
+  // Referência cinza: soma do importado na semana (NÃO preenche os campos).
+  const [imported, setImported] = React.useState<RecebidoSemana | null>(null)
+  const [pulling, setPulling] = React.useState(false)
+  const lastPulled = React.useRef("")
+
+  // Ao ter as duas datas, busca o importado da semana só pra conferência.
+  React.useEffect(() => {
+    const { periodoInicio: ini, periodoFim: fim } = draft
+    if (!editing || !ini || !fim || fim < ini) {
+      setImported(null)
+      return
+    }
+    const key = `${ini}|${fim}`
+    if (key === lastPulled.current) return
+    lastPulled.current = key
+    setPulling(true)
+    prefillRecebido(unitId, ini, fim).then((res) => {
+      setPulling(false)
+      setImported(res.ok && res.data ? res.data : null)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.periodoInicio, draft.periodoFim, editing])
 
   const recebido =
     draft.recebidoIfood +
@@ -111,11 +137,15 @@ export function FechamentoTab({
   function startNew() {
     setDraft(emptyDraft())
     setEditing(true)
+    setImported(null)
+    lastPulled.current = ""
     setMsg(null)
   }
   function startEdit(f: Fechamento) {
     setDraft(fromFechamento(f))
     setEditing(true)
+    setImported(null)
+    lastPulled.current = ""
     setMsg(null)
   }
 
@@ -208,10 +238,17 @@ export function FechamentoTab({
                 </Field>
               </div>
 
+              {(pulling || imported) && (
+                <p className="text-[10px] text-muted-foreground">
+                  {pulling
+                    ? "Conferindo o importado da semana..."
+                    : "Em cinza: total importado da semana (≈ vendas, não o depósito) — clique pra usar. O valor que vale é o depósito que você digita."}
+                </p>
+              )}
               <Bloco titulo="1. Recebido das plataformas">
-                <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} />
-                <Money label="Keeta" value={draft.recebidoKeeta} onChange={(n) => setNum("recebidoKeeta", n)} />
-                <Money label="99 Food" value={draft.recebido99} onChange={(n) => setNum("recebido99", n)} />
+                <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} reference={imported?.ifood ?? null} />
+                <Money label="Keeta" value={draft.recebidoKeeta} onChange={(n) => setNum("recebidoKeeta", n)} reference={imported?.keeta ?? null} />
+                <Money label="99 Food" value={draft.recebido99} onChange={(n) => setNum("recebido99", n)} reference={imported?.ninefood ?? null} />
                 <Money label="Crédito/débito" value={draft.creditoDebito} onChange={(n) => setNum("creditoDebito", n)} allowNegative />
               </Bloco>
 
@@ -426,11 +463,14 @@ function Money({
   value,
   onChange,
   allowNegative = false,
+  reference = null,
 }: {
   label: string
   value: number
   onChange: (n: number) => void
   allowNegative?: boolean
+  /** Valor importado da semana — mostrado em cinza só pra conferência. */
+  reference?: number | null
 }) {
   const display =
     value === 0
@@ -456,6 +496,21 @@ function Money({
         }}
         className="rounded-md border border-input bg-background px-2 py-1.5 text-right text-sm tabular-nums outline-none focus:border-ring"
       />
+      {reference != null && reference > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange(reference)}
+          title="Usar este valor importado"
+          className="text-right text-[9px] text-muted-foreground/70 transition-colors hover:text-primary"
+        >
+          importado:{" "}
+          {reference.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}{" "}
+          · usar
+        </button>
+      )}
     </label>
   )
 }
