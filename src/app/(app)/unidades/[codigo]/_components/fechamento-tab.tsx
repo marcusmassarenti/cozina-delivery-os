@@ -21,11 +21,14 @@ import {
   computeSplit,
   acertoBreakdown,
 } from "@/lib/fechamento-calc"
+import type { VinagreteRef } from "@/lib/data/produtos-vendidos"
 import {
   saveFechamento,
   deleteFechamento,
   prefillRecebido,
+  getVinagreteReference,
 } from "../_actions"
+import { VinagretePanel } from "./vinagrete-panel"
 
 type Draft = {
   periodoInicio: string
@@ -117,6 +120,9 @@ export function FechamentoTab({
   const [imported, setImported] = React.useState<RecebidoSemana | null>(null)
   const [pulling, setPulling] = React.useState(false)
   const lastPulled = React.useRef("")
+  // Vinagrete pela planilha do JK (referência cinza no campo + painel de preços).
+  const [vinRef, setVinRef] = React.useState<VinagreteRef | null>(null)
+  const lastVin = React.useRef("")
 
   // Ao ter as duas datas, busca o importado da semana só pra conferência.
   React.useEffect(() => {
@@ -135,6 +141,37 @@ export function FechamentoTab({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.periodoInicio, draft.periodoFim, editing])
+
+  // Referência do vinagrete (planilha do JK) pra semana selecionada.
+  React.useEffect(() => {
+    const { periodoInicio: ini, periodoFim: fim } = draft
+    if (!editing || !ini || !fim || fim < ini) {
+      setVinRef(null)
+      return
+    }
+    const key = `${ini}|${fim}`
+    if (key === lastVin.current) return
+    lastVin.current = key
+    getVinagreteReference(unitId, ini, fim).then((res) => {
+      setVinRef(res.ok && res.ref ? res.ref : null)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.periodoInicio, draft.periodoFim, editing])
+
+  // Recarrega a referência do vinagrete (após editar preço).
+  async function refreshVin() {
+    const { periodoInicio: ini, periodoFim: fim } = draft
+    if (!ini || !fim) return
+    const res = await getVinagreteReference(unitId, ini, fim)
+    setVinRef(res.ok && res.ref ? res.ref : null)
+  }
+
+  // Importou a planilha: alinha a semana ao arquivo e mostra o detalhamento.
+  function onVinImported(ref: VinagreteRef, ini: string, fim: string) {
+    setDraft((p) => ({ ...p, periodoInicio: ini, periodoFim: fim }))
+    lastVin.current = `${ini}|${fim}`
+    setVinRef(ref)
+  }
 
   const rc = {
     recebidoIfood: draft.recebidoIfood,
@@ -287,8 +324,25 @@ export function FechamentoTab({
 
               <Bloco titulo="2. Custos da operação">
                 <Money label="Produtos (CMV Cozina)" value={draft.custoProdutos} onChange={(n) => setNum("custoProdutos", n)} />
-                <Money label="Vinagrete / maionese / bebidas" value={draft.custoVinagrete} onChange={(n) => setNum("custoVinagrete", n)} />
+                <Money
+                  label="Vinagrete / maionese / bebidas"
+                  value={draft.custoVinagrete}
+                  onChange={(n) => setNum("custoVinagrete", n)}
+                  reference={vinRef?.temDados ? vinRef.total : null}
+                  referenceLabel="calculado"
+                />
               </Bloco>
+
+              <VinagretePanel
+                unitId={unitId}
+                unitCode={unitCode}
+                inicio={draft.periodoInicio}
+                fim={draft.periodoFim}
+                vinRef={vinRef}
+                onImported={onVinImported}
+                onPrecoSaved={refreshVin}
+                onUsar={(t) => setNum("custoVinagrete", t)}
+              />
 
               {/* Bloco 4 — acerto / repasse */}
               <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
@@ -660,13 +714,15 @@ function Money({
   onChange,
   allowNegative = false,
   reference = null,
+  referenceLabel = "importado",
 }: {
   label: string
   value: number
   onChange: (n: number) => void
   allowNegative?: boolean
-  /** Valor importado da semana — mostrado em cinza só pra conferência. */
+  /** Valor importado/calculado da semana — em cinza só pra conferência. */
   reference?: number | null
+  referenceLabel?: string
 }) {
   const display =
     value === 0
@@ -696,10 +752,10 @@ function Money({
         <button
           type="button"
           onClick={() => onChange(reference)}
-          title="Usar este valor importado"
+          title="Usar este valor"
           className="text-right text-[9px] text-muted-foreground/70 transition-colors hover:text-primary"
         >
-          importado:{" "}
+          {referenceLabel}:{" "}
           {reference.toLocaleString("pt-BR", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
