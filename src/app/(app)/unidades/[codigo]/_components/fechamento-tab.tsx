@@ -146,7 +146,12 @@ export function FechamentoTab({
   }
   const recebido = recebidoTotal(rc)
   const lucro = lucroLiquido(rc)
-  const split = computeSplit(lucro, draft.custoVinagrete, draft.acerto)
+  const split = computeSplit(
+    lucro,
+    draft.custoProdutos,
+    draft.custoVinagrete,
+    draft.acerto,
+  )
   const acertoLines = acertoBreakdown(draft.acerto)
 
   function startNew() {
@@ -359,6 +364,13 @@ export function FechamentoTab({
                   muted
                 />
               )}
+              {draft.custoProdutos > 0 && (
+                <Linha
+                  label="+ Produtos/CMV (volta pra Cozina)"
+                  value={draft.custoProdutos}
+                  muted
+                />
+              )}
 
               {acertoLines.length > 0 && (
                 <div className="mt-1 flex flex-col gap-1 rounded-md border border-dashed bg-background/60 p-2">
@@ -469,7 +481,12 @@ export function FechamentoTab({
                     custoProdutos: f.custoProdutos,
                     custoVinagrete: f.custoVinagrete,
                   })
-                  const s = computeSplit(luc, f.custoVinagrete, toAcerto(f.acerto))
+                  const s = computeSplit(
+                    luc,
+                    f.custoProdutos,
+                    f.custoVinagrete,
+                    toAcerto(f.acerto),
+                  )
                   return (
                     <tr key={f.id} className="border-b last:border-0">
                       <td className="px-3 py-2.5 font-medium">

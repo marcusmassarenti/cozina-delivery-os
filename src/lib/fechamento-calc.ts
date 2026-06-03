@@ -79,15 +79,19 @@ export function lucroLiquido(f: RecebidoCustos): number {
 /**
  * Divide o lucro 50/50 e aplica os acertos do bloco 4.
  *
- * O JK paga o vinagrete/maionese/bebidas, então recebe ele INTEGRAL de volta
- * por cima da metade (reembolso). Só depois entram os acertos/repasse.
+ * Cada sócio reembolsa o custo que bancou, por cima da metade do lucro:
+ *  - O JK paga o vinagrete/maionese/bebidas → volta inteiro pro JK.
+ *  - A Cozina produz (CMV) → o custo do produto volta inteiro pra Cozina.
+ * Só depois entram os acertos/repasse. Assim o total fecha no recebido.
  *  - JK     = lucro/2 + vinagrete − acertos
- *  - Cozina = lucro/2 + acertos
+ *  - Cozina = lucro/2 + produto + acertos
  *
- * @param vinagrete custo do vinagrete/maionese/bebidas (volta inteiro pro JK)
+ * @param produto    custo dos produtos (CMV Cozina) — volta inteiro pra Cozina
+ * @param vinagrete  custo do vinagrete/maionese/bebidas — volta inteiro pro JK
  */
 export function computeSplit(
   lucro: number,
+  produto: number,
   vinagrete: number,
   a: Acerto,
 ): {
@@ -99,7 +103,7 @@ export function computeSplit(
 } {
   const half = lucro / 2
   const jkBase = half + (vinagrete || 0) // vinagrete volta inteiro pro JK
-  const cozinaBase = half
+  const cozinaBase = half + (produto || 0) // produto (CMV) volta inteiro pra Cozina
 
   // custo compartilhado → metade pra cada
   const shared = (val: number, mode: AcertoMode) => {
