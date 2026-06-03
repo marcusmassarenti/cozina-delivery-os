@@ -3,8 +3,30 @@
 import { revalidatePath } from "next/cache"
 
 import { requireModulePermission } from "@/lib/auth/guards"
+import { getRecebidoSemana, type RecebidoSemana } from "@/lib/data/fechamentos"
 
 export type FechamentoState = { ok: boolean; message?: string }
+
+/** Puxa o "Recebido" da semana do que já foi importado (estimativa). */
+export async function prefillRecebido(
+  unitId: string,
+  inicio: string,
+  fim: string,
+): Promise<{ ok: boolean; data?: RecebidoSemana; message?: string }> {
+  try {
+    await requireModulePermission("financeiro", "view")
+    if (!unitId || !inicio || !fim) {
+      return { ok: false, message: "Datas incompletas." }
+    }
+    const data = await getRecebidoSemana(unitId, inicio, fim)
+    return { ok: true, data }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro desconhecido",
+    }
+  }
+}
 
 export async function saveFechamento(input: {
   unitId: string
