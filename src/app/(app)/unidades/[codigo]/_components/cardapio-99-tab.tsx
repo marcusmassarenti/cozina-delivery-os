@@ -87,7 +87,7 @@ export async function Cardapio99Tab({
             </thead>
             <tbody className="divide-y">
               {itens.map((it, idx) => (
-                <tr key={it.nomeItem} className="hover:bg-muted/30">
+                <tr key={`${it.nomeItem}-${idx}`} className="hover:bg-muted/30">
                   <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
                     {idx + 1}
                   </td>

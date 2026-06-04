@@ -216,8 +216,8 @@ export async function CardapioTab({
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
-                  <tr key={it.nomeItem} className="border-t">
+                {items.map((it, i) => (
+                  <tr key={`${it.nomeItem}-${i}`} className="border-t">
                     <td className="px-4 py-2.5">
                       <p className="line-clamp-1 text-xs font-medium">
                         {it.nomeItem}
@@ -267,8 +267,8 @@ export async function CardapioTab({
                 </tr>
               </thead>
               <tbody>
-                {complementos.map((c) => (
-                  <tr key={c.nomeComplemento} className="border-t">
+                {complementos.map((c, i) => (
+                  <tr key={`${c.nomeComplemento}-${i}`} className="border-t">
                     <td className="px-4 py-2.5">
                       <p className="line-clamp-1 text-xs font-medium">
                         {c.nomeComplemento}
