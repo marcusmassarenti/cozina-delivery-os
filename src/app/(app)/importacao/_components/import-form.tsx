@@ -35,7 +35,11 @@ export function ImportForm({
 }: {
   availableUnits: AvailableUnit[]
 }) {
-  const [state, formAction] = useActionState(importIfoodReports, initial)
+  const [submitting, setSubmitting] = React.useState(false)
+  const [progress, setProgress] = React.useState<{
+    done: number
+    total: number
+  } | null>(null)
   const [files, setFiles] = React.useState<File[]>([])
   const [localResults, setLocalResults] = React.useState<ImportFileResult[]>(
     [],
@@ -48,12 +52,43 @@ export function ImportForm({
   const formRef = React.useRef<HTMLFormElement>(null)
   const router = useRouter()
 
-  React.useEffect(() => {
-    if (state.results) {
-      setLocalResults(state.results)
-      if (state.results.some((r) => r.ok)) router.refresh()
+  // Importa UM arquivo por request. A Conciliação do iFood traz dezenas de
+  // milhares de lançamentos por loja; mandar todos juntos estoura o timeout da
+  // função serverless (e deixa import parcial). Sequencial mantém cada request
+  // curta, mostra o progresso loja a loja e isola erros por arquivo.
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (files.length === 0 || submitting) return
+    setSubmitting(true)
+    setLocalResults([])
+    setProgress({ done: 0, total: files.length })
+    const acc: ImportFileResult[] = []
+    for (let i = 0; i < files.length; i++) {
+      const fd = new FormData()
+      fd.set("files", files[i])
+      try {
+        const res = await importIfoodReports(initial, fd)
+        if (res.results?.length) acc.push(...res.results)
+        else
+          acc.push({
+            filename: files[i].name,
+            ok: false,
+            message: res.message ?? "Falha ao importar.",
+          })
+      } catch (err) {
+        acc.push({
+          filename: files[i].name,
+          ok: false,
+          message: err instanceof Error ? err.message : "Erro inesperado.",
+        })
+      }
+      setLocalResults([...acc])
+      setProgress({ done: i + 1, total: files.length })
     }
-  }, [state, router])
+    setSubmitting(false)
+    setProgress(null)
+    router.refresh()
+  }
 
   function startWizardAt(storeId: string) {
     // Fila por LOJA ÚNICA (dedup) — a mesma loja aparece em vários
@@ -177,10 +212,7 @@ export function ImportForm({
   return (
     <form
       ref={formRef}
-      action={(fd) => {
-        formAction(fd)
-        // limpa só se todos der certo (vamos checar no effect)
-      }}
+      onSubmit={handleSubmit}
       className="flex flex-col gap-4"
     >
       {/* Dropzone */}
@@ -257,16 +289,20 @@ export function ImportForm({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <SubmitButton disabled={files.length === 0} />
+      <div className="flex items-center justify-end gap-3">
+        {progress && (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {progress.done}/{progress.total} arquivos
+          </span>
+        )}
+        <Button type="submit" disabled={submitting || files.length === 0}>
+          {submitting
+            ? progress
+              ? `Importando ${progress.done + 1}/${progress.total}...`
+              : "Importando..."
+            : "Importar todos"}
+        </Button>
       </div>
-
-      {state.message && (
-        <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
-          <XCircle className="mt-0.5 size-4 shrink-0" />
-          <span>{state.message}</span>
-        </div>
-      )}
 
       {localResults.length > 0 && (
         <ResultsList
@@ -292,15 +328,6 @@ export function ImportForm({
         />
       )}
     </form>
-  )
-}
-
-function SubmitButton({ disabled }: { disabled: boolean }) {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" disabled={pending || disabled}>
-      {pending ? "Importando..." : "Importar todos"}
-    </Button>
   )
 }
 
