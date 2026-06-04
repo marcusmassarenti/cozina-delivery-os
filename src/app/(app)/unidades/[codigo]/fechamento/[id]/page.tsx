@@ -70,6 +70,23 @@ export default async function FechamentoPrintPage({
   const vinEmbalagem = vinRef.embalagem.filter(
     (e) => e.considerar && e.soma > 0,
   )
+  // linhas unificadas (categorias + embalagem) divididas em 2 colunas (cabe em 1 página)
+  const vinRows = [
+    ...vinCats.map((c) => ({
+      nome: c.categoria,
+      qtd: c.qtd,
+      preco: c.preco,
+      soma: c.soma,
+    })),
+    ...vinEmbalagem.map((e) => ({
+      nome: e.nome,
+      qtd: e.quantidade,
+      preco: e.preco,
+      soma: e.soma,
+    })),
+  ]
+  const vinMeio = Math.ceil(vinRows.length / 2)
+  const vinCols = [vinRows.slice(0, vinMeio), vinRows.slice(vinMeio)]
 
   return (
     <div className="min-h-screen bg-muted/30 p-6">
@@ -211,54 +228,42 @@ export default async function FechamentoPrintPage({
               categoria × preço · semana {fmtData(f.periodoInicio)} a{" "}
               {fmtData(f.periodoFim)}
             </p>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="py-1 text-left font-medium">Categoria</th>
-                  <th className="py-1 text-right font-medium">Qtd</th>
-                  <th className="py-1 text-right font-medium">Preço</th>
-                  <th className="py-1 text-right font-medium">Soma</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vinCats.map((c) => (
-                  <tr key={c.categoria} className="border-b last:border-0">
-                    <td className="py-1">{c.categoria}</td>
-                    <td className="py-1 text-right tabular-nums text-muted-foreground">
-                      {c.qtd}
-                    </td>
-                    <td className="py-1 text-right tabular-nums text-muted-foreground">
-                      {fmtBRL(c.preco)}
-                    </td>
-                    <td className="py-1 text-right font-medium tabular-nums">
-                      {fmtBRL(c.soma)}
-                    </td>
-                  </tr>
-                ))}
-                {vinEmbalagem.map((e) => (
-                  <tr key={e.id} className="border-b last:border-0">
-                    <td className="py-1">{e.nome}</td>
-                    <td className="py-1 text-right tabular-nums text-muted-foreground">
-                      {e.quantidade}
-                    </td>
-                    <td className="py-1 text-right tabular-nums text-muted-foreground">
-                      {fmtBRL(e.preco)}
-                    </td>
-                    <td className="py-1 text-right font-medium tabular-nums">
-                      {fmtBRL(e.soma)}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="border-t-2">
-                  <td className="py-1.5 font-semibold" colSpan={3}>
-                    Total
-                  </td>
-                  <td className="py-1.5 text-right font-semibold tabular-nums">
-                    {fmtBRL(vinRef.totalGeral)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="grid grid-cols-2 gap-x-6">
+              {vinCols.map((col, i) => (
+                <table key={i} className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-[10px] text-muted-foreground">
+                      <th className="py-1 text-left font-medium">Categoria</th>
+                      <th className="py-1 text-right font-medium">Qtd</th>
+                      <th className="py-1 text-right font-medium">Preço</th>
+                      <th className="py-1 text-right font-medium">Soma</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {col.map((r) => (
+                      <tr key={r.nome} className="border-b last:border-0">
+                        <td className="py-1 pr-1">{r.nome}</td>
+                        <td className="py-1 text-right tabular-nums text-muted-foreground">
+                          {r.qtd}
+                        </td>
+                        <td className="py-1 text-right tabular-nums text-muted-foreground">
+                          {fmtBRL(r.preco)}
+                        </td>
+                        <td className="py-1 pl-1 text-right font-medium tabular-nums">
+                          {fmtBRL(r.soma)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t-2 pt-1.5">
+              <span className="text-sm font-semibold">Total</span>
+              <span className="text-sm font-semibold tabular-nums">
+                {fmtBRL(vinRef.totalGeral)}
+              </span>
+            </div>
           </div>
         )}
 
@@ -284,15 +289,20 @@ const PRINT_CSS = `
   .fech-card .fech-sec { margin-bottom: 7px !important; }
   .fech-card .fech-box { margin: 8px 0 !important; padding: 10px !important; }
   .fech-logo { height: 30px !important; }
-  /* detalhe do vinagrete: pode fluir pra 2ª página se for longo */
+  /* detalhe do vinagrete (2 colunas) — apertado pra caber junto na página */
   .fech-detalhe {
-    break-inside: auto !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
-    margin-top: 14px !important;
+    margin-top: 10px !important;
+    font-size: 10px !important;
   }
   .fech-detalhe tr { break-inside: avoid; }
+  .fech-detalhe td,
+  .fech-detalhe th {
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
+  }
 }
 `
 
