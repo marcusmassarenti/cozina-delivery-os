@@ -286,13 +286,14 @@ export async function saveCategoriaPrecoGroup(input: {
   }
 }
 
-/** Edita preço / quantidade fixa de um insumo de embalagem. */
+/** Edita preço / quantidade fixa / 'considerar' de um insumo de embalagem. */
 export async function saveEmbalagem(input: {
   unitId: string
   unitCode: string
   id: string
   preco: number
   qtdFixa: number
+  considerar: boolean
 }): Promise<FechamentoState> {
   try {
     const { admin } = await requireModulePermission("financeiro", "edit")
@@ -304,7 +305,12 @@ export async function saveEmbalagem(input: {
       : 0
     const { error } = await admin
       .from("unit_embalagem")
-      .update({ preco, qtd_fixa: qtdFixa, updated_at: new Date().toISOString() })
+      .update({
+        preco,
+        qtd_fixa: qtdFixa,
+        considerar: !!input.considerar,
+        updated_at: new Date().toISOString(),
+      })
       .eq("unit_id", input.unitId)
       .eq("id", input.id)
     if (error) return { ok: false, message: error.message }

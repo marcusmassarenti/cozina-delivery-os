@@ -358,6 +358,7 @@ export function VinagretePanel({
                 <th className="px-2 py-1.5 text-left font-medium">Embalagem</th>
                 <th className="px-2 py-1.5 text-right font-medium">Qtd</th>
                 <th className="px-2 py-1.5 text-right font-medium">Preço</th>
+                <th className="px-2 py-1.5 text-center font-medium">Conta?</th>
                 <th className="px-2 py-1.5 text-right font-medium">Soma</th>
               </tr>
             </thead>
@@ -649,16 +650,32 @@ function EmbalagemRow({
   onSaved: () => void
 }) {
   const [busy, setBusy] = React.useState(false)
+  const [considerar, setConsiderar] = React.useState(item.considerar)
 
-  async function save(preco: number, qtdFixa: number) {
+  React.useEffect(() => setConsiderar(item.considerar), [item.considerar])
+
+  async function save(preco: number, qtdFixa: number, cons: boolean) {
     setBusy(true)
-    await saveEmbalagem({ unitId, unitCode, id: item.id, preco, qtdFixa })
+    await saveEmbalagem({
+      unitId,
+      unitCode,
+      id: item.id,
+      preco,
+      qtdFixa,
+      considerar: cons,
+    })
     setBusy(false)
     onSaved()
   }
 
   return (
-    <tr className={cn("border-b last:border-0", busy && "animate-pulse")}>
+    <tr
+      className={cn(
+        "border-b last:border-0",
+        !considerar && "opacity-50",
+        busy && "animate-pulse",
+      )}
+    >
       <td className="px-2 py-1.5">
         {item.nome}
         {item.porPote && (
@@ -671,12 +688,26 @@ function EmbalagemRow({
         ) : (
           <DecimalInput
             value={item.qtdFixa}
-            onCommit={(q) => save(item.preco, q)}
+            onCommit={(q) => save(item.preco, q, considerar)}
           />
         )}
       </td>
       <td className="px-2 py-1.5 text-right">
-        <DecimalInput value={item.preco} onCommit={(p) => save(p, item.qtdFixa)} />
+        <DecimalInput
+          value={item.preco}
+          onCommit={(p) => save(p, item.qtdFixa, considerar)}
+        />
+      </td>
+      <td className="px-2 py-1.5 text-center">
+        <input
+          type="checkbox"
+          checked={considerar}
+          onChange={(e) => {
+            setConsiderar(e.target.checked)
+            save(item.preco, item.qtdFixa, e.target.checked)
+          }}
+          className="size-3.5 accent-[var(--primary)]"
+        />
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums font-medium">
         {fmtBRL(item.soma)}

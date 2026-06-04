@@ -28,6 +28,7 @@ export type EmbalagemLinha = {
   preco: number
   porPote: boolean
   qtdFixa: number
+  considerar: boolean
   quantidade: number // nº de potes (se porPote) ou qtdFixa
   soma: number
 }
@@ -99,15 +100,20 @@ export async function getProdutosVendidosSemana(
   }))
 }
 
-export async function getEmbalagem(
-  unitId: string,
-): Promise<
-  { id: string; nome: string; preco: number; porPote: boolean; qtdFixa: number }[]
+export async function getEmbalagem(unitId: string): Promise<
+  {
+    id: string
+    nome: string
+    preco: number
+    porPote: boolean
+    qtdFixa: number
+    considerar: boolean
+  }[]
 > {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("unit_embalagem")
-    .select("id, nome, preco, por_pote, qtd_fixa, sort_order")
+    .select("id, nome, preco, por_pote, qtd_fixa, considerar, sort_order")
     .eq("unit_id", unitId)
     .order("sort_order")
   if (error) {
@@ -120,6 +126,7 @@ export async function getEmbalagem(
     preco: Number(r.preco) || 0,
     porPote: !!r.por_pote,
     qtdFixa: Number(r.qtd_fixa) || 0,
+    considerar: !!r.considerar,
   }))
 }
 
@@ -173,12 +180,16 @@ export async function computeVinagreteRef(
       preco: e.preco,
       porPote: e.porPote,
       qtdFixa: e.qtdFixa,
+      considerar: e.considerar,
       quantidade,
       soma: Math.round(quantidade * e.preco * 100) / 100,
     }
   })
   const embalagemTotal =
-    Math.round(embalagem.reduce((a, e) => a + e.soma, 0) * 100) / 100
+    Math.round(
+      embalagem.filter((e) => e.considerar).reduce((a, e) => a + e.soma, 0) *
+        100,
+    ) / 100
   const totalGeral = Math.round((total + embalagemTotal) * 100) / 100
 
   return {
