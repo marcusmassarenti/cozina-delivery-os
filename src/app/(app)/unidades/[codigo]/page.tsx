@@ -33,7 +33,8 @@ import {
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { userCan } from "@/lib/auth/permissions"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
-import type { UnitMonthly } from "@/lib/mock-monthly"
+import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
+import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { parsePeriodParam } from "@/lib/period"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { PlatformSwitcher } from "@/components/shared/platform-switcher"
@@ -84,6 +85,7 @@ export default async function UnidadeDetalhePage({
     avalNine,
     avalKeeta,
     availablePeriods,
+    monthlyByUnit,
   ] = await Promise.all([
     getUnitPlatforms(unit.id),
     getFinanceiroResumoForMonth(unit.id, year, month),
@@ -94,6 +96,9 @@ export default async function UnidadeDetalhePage({
     getNinefoodAvaliacoesResumoForMonth(unit.id, year, month),
     getKeetaAvaliacoesResumoForMonth(unit.id, year, month),
     getAvailablePeriods(),
+    // Monthly canônico DO PERÍODO SELECIONADO (getUnitByCode usa o mês corrente,
+    // que zera quando você olha um mês passado). Sem isto, o DRE da loja zerava.
+    getRealMonthlyForUnits([unit.id], year, month),
   ])
 
   // Nota média da loja = média ponderada (por nº de avaliações) das 3
@@ -112,8 +117,11 @@ export default async function UnidadeDetalhePage({
       : 0
   const notaFonte = notaParts.map((p) => p.plat).join(" + ")
 
-  // m = monthly mesclado: soma plataformas importadas (iFood + 99 + Keeta)
-  const m = mergeMonthly(unit.monthly, fin, nine, keeta)
+  // m = monthly mesclado: soma plataformas importadas (iFood + 99 + Keeta).
+  // Usa o monthly do PERÍODO SELECIONADO (não o unit.monthly, que é do mês
+  // corrente e zerava o DRE ao olhar meses passados).
+  const periodMonthly = monthlyByUnit.get(unit.id) ?? emptyMonthly
+  const m = mergeMonthly(periodMonthly, fin, nine, keeta)
   // hasData inclui Cardápio 99 (item) — só Loja não cobre quando Marcus
   // importou só o cardápio, sem o financeiro.
   const hasData =
