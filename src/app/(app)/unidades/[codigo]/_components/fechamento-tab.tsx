@@ -315,7 +315,36 @@ export function FechamentoTab({
                 <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} reference={imported?.ifood ?? null} />
                 <Money label="Keeta" value={draft.recebidoKeeta} onChange={(n) => setNum("recebidoKeeta", n)} reference={imported?.keeta ?? null} />
                 <Money label="99 Food" value={draft.recebido99} onChange={(n) => setNum("recebido99", n)} reference={imported?.ninefood ?? null} />
-                <Money label="VR (desc. do iFood)" value={draft.vr} onChange={(n) => setNum("vr", n)} reference={imported?.vr ?? null} />
+                {(() => {
+                  // VR vem BRUTO do relatório; aplicamos a taxa de 8% do iFood
+                  // (CLAUDE.md) e preenchemos o campo com o LÍQUIDO, mostrando o
+                  // bruto e o desconto no hint pra conferência.
+                  const vrBruto = imported?.vr ?? 0
+                  const vrLiq = Math.round(vrBruto * 0.92 * 100) / 100
+                  const fmt = (n: number) =>
+                    n.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  return (
+                    <Money
+                      label="VR (desc. do iFood)"
+                      value={draft.vr}
+                      onChange={(n) => setNum("vr", n)}
+                      reference={vrBruto > 0 ? vrLiq : null}
+                      referenceHint={
+                        vrBruto > 0 ? (
+                          <>
+                            líq. {fmt(vrLiq)}{" "}
+                            <span className="opacity-70">
+                              (bruto {fmt(vrBruto)} · −8%)
+                            </span>
+                          </>
+                        ) : null
+                      }
+                    />
+                  )
+                })()}
               </Bloco>
               <p className="-mt-2 text-[10px] text-muted-foreground">
                 iFood/Keeta/99 = recebido da loja (já sem o VR). O VR vai no
@@ -715,6 +744,7 @@ function Money({
   allowNegative = false,
   reference = null,
   referenceLabel = "importado",
+  referenceHint = null,
 }: {
   label: string
   value: number
@@ -723,6 +753,8 @@ function Money({
   /** Valor importado/calculado da semana — em cinza só pra conferência. */
   reference?: number | null
   referenceLabel?: string
+  /** Texto custom do hint (substitui o "importado: X"); mantém o "· usar". */
+  referenceHint?: React.ReactNode
 }) {
   const display =
     value === 0
@@ -755,11 +787,15 @@ function Money({
           title="Usar este valor"
           className="text-right text-[9px] text-muted-foreground/70 transition-colors hover:text-primary"
         >
-          {referenceLabel}:{" "}
-          {reference.toLocaleString("pt-BR", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}{" "}
+          {referenceHint ?? (
+            <>
+              {referenceLabel}:{" "}
+              {reference.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </>
+          )}{" "}
           · usar
         </button>
       )}
