@@ -314,13 +314,15 @@ export async function getRealMonthlyForUnits(
     ((monthlyRes.data ?? []) as MonthlyRow[]).map((m) => [m.unit_id, m]),
   )
 
-  // Fallbacks só pras lojas SEM o relatório principal.
-  const ifoodFbIds = unitIds.filter((id) => !(finMap.get(id)?.hasData ?? false))
+  // Keeta cai no preço de tabela do Pedidos recentes quando não há Loja diária.
   const keetaFbIds = unitIds.filter((id) => !(keetaMap.get(id)?.hasData ?? false))
 
   const [vrRows, keetaPorLoja] = await Promise.all([
-    ifoodFbIds.length > 0
-      ? getVrByUnits(year, month, ifoodFbIds)
+    // VR é pago À PARTE pelo iFood (fora do líquido da Conciliação). Puxamos
+    // por TODAS as lojas: serve de fallback de bruto/líquido/pedidos pras lojas
+    // sem Conciliação E alimenta o VR líquido do DRE em todas elas.
+    unitIds.length > 0
+      ? getVrByUnits(year, month, unitIds)
       : Promise.resolve([]),
     keetaFbIds.length > 0
       ? getKeetaPedidoPorLoja(keetaFbIds, year, month)
@@ -333,6 +335,7 @@ export async function getRealMonthlyForUnits(
         valorItens: v.valorItens,
         valorLiquido: v.valorLiquido,
         pedidos: v.totalPedidos,
+        vrValor: v.vrValor,
       },
     ]),
   )
@@ -388,10 +391,12 @@ export async function getRealMonthlyForUnits(
     const totalCancelados = ifoodCancel + nineCancel + keetaCancel
     const ticketMedio = totalPedidos > 0 ? totalBruto / totalPedidos : 0
 
-    // VR não é populado aqui (vive na tela de Pedidos). Deixar 0 evita
-    // duplicar o VR no DRE (que soma vrLíquido por cima do líquido).
-    const vrRecebido = 0
-    const vrTaxa = 0
+    // VR é pago à parte pelo iFood (fora do líquido da Conciliação), então
+    // entra como receita extra no DRE — resultado.ts soma o VR líquido
+    // (vrRecebido − vrTaxa, ou seja vr*0,92) por cima do líquido. O valor vem
+    // do relatório de Pedidos (forma de pagamento/VR). Taxa média de 8%.
+    const vrRecebido = ifFb?.vrValor ?? 0
+    const vrTaxa = vrRecebido * 0.08
 
     // Custos (manuais)
     const custoCozina = m ? Number(m.custo_produtos_cozina) : 0
