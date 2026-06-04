@@ -49,13 +49,13 @@ export async function CardapioTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Snapshot do período (se houver) — vem do XLSX consolidado da rede */}
+      {/* Funil de conversão do PERÍODO (mês inteiro) — fonte preferida. */}
       {periodoSnapshot && (
         <div className="rounded-xl border border-l-4 border-l-indigo-500 bg-card p-5">
           <div className="mb-3 flex items-center gap-2">
             <CalendarRange className="size-4 text-indigo-600" />
             <h3 className="text-sm font-semibold">
-              Snapshot do período · {periodoSnapshot.periodLabel}
+              Funil de conversão · {periodoSnapshot.periodLabel}
             </h3>
           </div>
           <div className="grid gap-3 md:grid-cols-5">
@@ -116,7 +116,7 @@ export async function CardapioTab({
           (senão vira card redundante/parcial ao lado do snapshot completo). */}
       <div className="rounded-xl border bg-card p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Funil de conversão (diário acumulado)</h3>
+          <h3 className="text-sm font-semibold">Funil de conversão</h3>
           <span className="text-[11px] text-muted-foreground">
             {funnel.diasComDado} dia{funnel.diasComDado > 1 ? "s" : ""} com dado
           </span>
