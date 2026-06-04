@@ -171,6 +171,26 @@ export async function CardapioTab({
       </>
       )}
 
+      {/* Sem itens (só veio o funil do consolidado da rede) — explica como ver. */}
+      {items.length === 0 && complementos.length === 0 && (
+        <div className="rounded-xl border border-dashed bg-card p-5">
+          <p className="text-sm font-medium">
+            Produtos vendidos desta loja ainda não disponíveis
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O funil acima veio do <b>Cardápio consolidado da rede</b>, que lista os
+            produtos só no total da marca (a planilha não separa item por loja).
+            Pra ver os <b>produtos vendidos desta loja</b>, exporte na iFood o
+            relatório de <b>Cardápio individual da loja</b> (uma loja por vez) e
+            suba em{" "}
+            <a href="/importacao" className="underline">
+              /importacao
+            </a>
+            .
+          </p>
+        </div>
+      )}
+
       {/* Top itens + complementos lado a lado (vem do período se houver, senão do diário) */}
       {(items.length > 0 || complementos.length > 0) && (
       <div className="grid gap-4 lg:grid-cols-2">
