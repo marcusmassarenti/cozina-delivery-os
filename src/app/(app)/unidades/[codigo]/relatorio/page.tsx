@@ -83,8 +83,12 @@ export default async function RelatorioMensalUnidade({
   return (
     <div
       data-print="page"
-      className="relatorio-mensal mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 bg-muted/30 p-6 print:max-w-none print:gap-4 print:bg-white print:p-0"
+      className="relatorio-mensal mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 bg-muted/30 p-6 print:max-w-none print:gap-3 print:bg-white print:p-0"
     >
+      {/* Ajustes finos de impressão: linhas não quebram no meio, títulos não
+          ficam órfãos no rodapé, tabelas podem fluir entre páginas. Injetado
+          aqui (o Tailwind v4 não emite CSS raw appendado no globals). */}
+      <style>{`@media print{.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -213,7 +217,7 @@ export default async function RelatorioMensalUnidade({
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 print:break-inside-avoid print:p-3">
+    <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 print:gap-2 print:rounded-none print:border-0 print:p-0">
       <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {titulo}
       </h2>
