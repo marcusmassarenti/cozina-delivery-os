@@ -4,6 +4,7 @@ import { LogOut, RefreshCw } from "lucide-react"
 
 import { CommandSearch } from "@/components/command-search"
 import { DashboardCustomizeButton } from "@/components/dashboard/dashboard-customize-button"
+import { DashboardPrivacyToggle } from "@/components/dashboard/dashboard-privacy-toggle"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -32,6 +33,7 @@ export function TopBar({
         </div>
 
         <div className="flex items-center gap-0.5">
+          <DashboardPrivacyToggle />
           <DashboardCustomizeButton />
           <ThemeToggle />
           <IconButton aria-label="Recarregar">

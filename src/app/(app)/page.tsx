@@ -355,7 +355,7 @@ export default async function Home({
 
 
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
