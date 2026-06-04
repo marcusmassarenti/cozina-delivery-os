@@ -6,6 +6,7 @@ import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getUnitByCode } from "@/lib/data/units"
 import { getFechamentoById } from "@/lib/data/fechamentos"
+import { computeVinagreteRef } from "@/lib/data/produtos-vendidos"
 import {
   toAcerto,
   recebidoTotal,
@@ -48,6 +49,27 @@ export default async function FechamentoPrintPage({
   const acerto = toAcerto(f.acerto)
   const split = computeSplit(lucro, f.custoProdutos, f.custoVinagrete, acerto)
   const acertoLinhas = acertoBreakdown(acerto)
+
+  // Detalhe do vinagrete/bebidas pro JK conferir (planilha "Produtos vendidos").
+  const vinRef = await computeVinagreteRef(unit.id, f.periodoInicio, f.periodoFim)
+  const vinCatMap = new Map<
+    string,
+    { qtd: number; preco: number; soma: number }
+  >()
+  for (const l of vinRef.linhas) {
+    if (!l.categoria || !l.considerar || l.quantidade <= 0) continue
+    const g = vinCatMap.get(l.categoria) ?? { qtd: 0, preco: l.preco ?? 0, soma: 0 }
+    g.qtd += l.quantidade
+    g.soma += l.soma
+    if ((l.preco ?? 0) > 0) g.preco = l.preco ?? g.preco
+    vinCatMap.set(l.categoria, g)
+  }
+  const vinCats = [...vinCatMap.entries()]
+    .map(([categoria, g]) => ({ categoria, ...g }))
+    .sort((a, b) => b.soma - a.soma)
+  const vinEmbalagem = vinRef.embalagem.filter(
+    (e) => e.considerar && e.soma > 0,
+  )
 
   return (
     <div className="min-h-screen bg-muted/30 p-6">
@@ -178,6 +200,67 @@ export default async function FechamentoPrintPage({
           )}
         </div>
 
+        {/* Detalhe do vinagrete/bebidas — pro JK conferir (planilha do JK) */}
+        {vinRef.temDados && vinCats.length > 0 && (
+          <div className="fech-detalhe mt-4 rounded-xl border bg-card p-6 shadow-sm">
+            <div className="mb-1 text-sm font-semibold">
+              Detalhe do vinagrete / maionese / bebidas
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Pela planilha “Produtos vendidos” do JK · semana{" "}
+              {fmtData(f.periodoInicio)} a {fmtData(f.periodoFim)}
+            </p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="py-1 text-left font-medium">Categoria</th>
+                  <th className="py-1 text-right font-medium">Qtd</th>
+                  <th className="py-1 text-right font-medium">Preço</th>
+                  <th className="py-1 text-right font-medium">Soma</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vinCats.map((c) => (
+                  <tr key={c.categoria} className="border-b last:border-0">
+                    <td className="py-1">{c.categoria}</td>
+                    <td className="py-1 text-right tabular-nums text-muted-foreground">
+                      {c.qtd}
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-muted-foreground">
+                      {fmtBRL(c.preco)}
+                    </td>
+                    <td className="py-1 text-right font-medium tabular-nums">
+                      {fmtBRL(c.soma)}
+                    </td>
+                  </tr>
+                ))}
+                {vinEmbalagem.map((e) => (
+                  <tr key={e.id} className="border-b last:border-0">
+                    <td className="py-1">{e.nome}</td>
+                    <td className="py-1 text-right tabular-nums text-muted-foreground">
+                      {e.quantidade}
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-muted-foreground">
+                      {fmtBRL(e.preco)}
+                    </td>
+                    <td className="py-1 text-right font-medium tabular-nums">
+                      {fmtBRL(e.soma)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t-2">
+                  <td className="py-1.5 font-semibold" colSpan={3}>
+                    Total
+                  </td>
+                  <td className="py-1.5 text-right font-semibold tabular-nums">
+                    {fmtBRL(vinRef.totalGeral)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <p className="mt-3 text-center text-[10px] text-muted-foreground">
           Cozina Foods · documento gerado pelo Cozina Delivery OS
         </p>
@@ -200,6 +283,15 @@ const PRINT_CSS = `
   .fech-card .fech-sec { margin-bottom: 7px !important; }
   .fech-card .fech-box { margin: 8px 0 !important; padding: 10px !important; }
   .fech-logo { height: 30px !important; }
+  /* detalhe do vinagrete: pode fluir pra 2ª página se for longo */
+  .fech-detalhe {
+    break-inside: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-top: 14px !important;
+  }
+  .fech-detalhe tr { break-inside: avoid; }
 }
 `
 
