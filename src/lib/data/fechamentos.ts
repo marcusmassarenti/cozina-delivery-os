@@ -7,6 +7,8 @@ export type RecebidoSemana = {
   ifood: number
   ninefood: number
   keeta: number
+  /** VR (vale-refeição) recebido via iFood na semana — relatório de Pedidos. */
+  vr: number
 }
 
 /**
@@ -16,6 +18,8 @@ export type RecebidoSemana = {
  *  - iFood:  soma dos lançamentos com data do fato (pode vir incompleto/bruto)
  *  - 99 Food: líquido diário (pós-taxas)
  *  - Keeta:  ganhos líquidos por pedido
+ *  - VR:     total pago via VR (qualquer bandeira) no relatório de Pedidos do
+ *            iFood — é pago à parte, fora do repasse da conciliação.
  */
 export async function getRecebidoSemana(
   unitId: string,
@@ -26,7 +30,7 @@ export async function getRecebidoSemana(
   const fimTs = `${fim}T23:59:59`
   const round2 = (n: number) => Math.round(n * 100) / 100
 
-  const [ifoodRows, nineRows, keetaRows] = await Promise.all([
+  const [ifoodRows, nineRows, keetaRows, vrRows] = await Promise.all([
     fetchAllRows<{ valor: number | string }>(
       (from, to) =>
         admin
@@ -63,6 +67,19 @@ export async function getRecebidoSemana(
           .range(from, to),
       "recebido semana keeta",
     ),
+    fetchAllRows<{ total_pago_cliente: number | string | null }>(
+      (from, to) =>
+        admin
+          .from("ifood_pedidos")
+          .select("total_pago_cliente")
+          .eq("unit_id", unitId)
+          .not("bandeira_vr", "is", null)
+          .gte("data", inicio)
+          .lte("data", fim)
+          .order("id")
+          .range(from, to),
+      "recebido semana vr",
+    ),
   ])
 
   return {
@@ -72,6 +89,9 @@ export async function getRecebidoSemana(
     ),
     keeta: round2(
       keetaRows.reduce((a, r) => a + (Number(r.ganhos_liquidos) || 0), 0),
+    ),
+    vr: round2(
+      vrRows.reduce((a, r) => a + (Number(r.total_pago_cliente) || 0), 0),
     ),
   }
 }

@@ -315,7 +315,7 @@ export function FechamentoTab({
                 <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} reference={imported?.ifood ?? null} />
                 <Money label="Keeta" value={draft.recebidoKeeta} onChange={(n) => setNum("recebidoKeeta", n)} reference={imported?.keeta ?? null} />
                 <Money label="99 Food" value={draft.recebido99} onChange={(n) => setNum("recebido99", n)} reference={imported?.ninefood ?? null} />
-                <Money label="VR (desc. do iFood)" value={draft.vr} onChange={(n) => setNum("vr", n)} />
+                <Money label="VR (desc. do iFood)" value={draft.vr} onChange={(n) => setNum("vr", n)} reference={imported?.vr ?? null} />
               </Bloco>
               <p className="-mt-2 text-[10px] text-muted-foreground">
                 iFood/Keeta/99 = recebido da loja (já sem o VR). O VR vai no
