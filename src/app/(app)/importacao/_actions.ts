@@ -232,6 +232,24 @@ const MAX_FILES_PER_BATCH = 30
  *
  * Idempotente: re-importar a mesma data/competência substitui os dados.
  */
+/**
+ * Soma um contador em LOTES sobre `values`. O PostgREST monta o `.in()` como
+ * query string na URL; com centenas de IDs longos a URL estoura (~15KB) e a
+ * request falha ("fetch failed") depois de ~8s — o que travava a importação de
+ * relatórios de pedido (centenas de linhas). Lotes de 150 mantêm a URL curta.
+ */
+async function somaEmLotes(
+  values: string[],
+  countSlice: (slice: string[]) => Promise<number>,
+): Promise<number> {
+  const CHUNK = 150
+  let total = 0
+  for (let i = 0; i < values.length; i += CHUNK) {
+    total += await countSlice(values.slice(i, i + CHUNK))
+  }
+  return total
+}
+
 export async function importIfoodReports(
   _prevState: ImportBatchState,
   formData: FormData,
@@ -1507,12 +1525,14 @@ async function saveNinefoodDadosPedido(
   // Idempotência: pedido_id é único, então a gente faz upsert
   // ON CONFLICT (unit_id, pedido_id) — quem já existe é atualizado
   const pedidoIds = grupo.pedidos.map((p) => p.pedidoId)
-  const { count: existingCount } = await admin
-    .from("ninefood_pedidos")
-    .select("id", { count: "exact", head: true })
-    .eq("unit_id", unit.unitId)
-    .in("pedido_id", pedidoIds)
-  const atualizados = existingCount ?? 0
+  const atualizados = await somaEmLotes(pedidoIds, async (slice) => {
+    const { count } = await admin
+      .from("ninefood_pedidos")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", unit.unitId)
+      .in("pedido_id", slice)
+    return count ?? 0
+  })
   const novos = grupo.pedidos.length - atualizados
   const substituido = atualizados > 0
 
@@ -1955,12 +1975,15 @@ async function saveKeetaPedidos(
   const periodoFim = new Date(sortedTs[sortedTs.length - 1])
 
   const pedidoIds = grupo.pedidos.map((p) => p.pedidoId)
-  const { count: existingCount } = await admin
-    .from("keeta_pedidos")
-    .select("id", { count: "exact", head: true })
-    .eq("unit_id", unit.unitId)
-    .in("pedido_id", pedidoIds)
-  const substituido = (existingCount ?? 0) > 0
+  const existingCount = await somaEmLotes(pedidoIds, async (slice) => {
+    const { count } = await admin
+      .from("keeta_pedidos")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", unit.unitId)
+      .in("pedido_id", slice)
+    return count ?? 0
+  })
+  const substituido = existingCount > 0
 
   const { data: importLog, error: ilErr } = await admin
     .from("platform_imports")
@@ -2101,12 +2124,14 @@ async function saveKeetaPedidosRecentes(
   const periodoFim = new Date(sortedTs[sortedTs.length - 1])
 
   const numeros = grupo.pedidos.map((p) => p.numeroPedido)
-  const { count: existingCount } = await admin
-    .from("keeta_pedidos_recentes")
-    .select("id", { count: "exact", head: true })
-    .eq("unit_id", unit.unitId)
-    .in("numero_pedido", numeros)
-  const atualizados = existingCount ?? 0
+  const atualizados = await somaEmLotes(numeros, async (slice) => {
+    const { count } = await admin
+      .from("keeta_pedidos_recentes")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", unit.unitId)
+      .in("numero_pedido", slice)
+    return count ?? 0
+  })
   const novos = grupo.pedidos.length - atualizados
 
   const { data: importLog, error: ilErr } = await admin
@@ -2549,12 +2574,14 @@ async function saveAvaliacoesPorLoja(
     .filter((id): id is string => !!id)
   let existingCount = 0
   if (longIds.length > 0) {
-    const { count } = await admin
-      .from("ifood_avaliacoes")
-      .select("id", { count: "exact", head: true })
-      .eq("unit_id", unit.unitId)
-      .in("pedido_id_longo", longIds)
-    existingCount = count ?? 0
+    existingCount = await somaEmLotes(longIds, async (slice) => {
+      const { count } = await admin
+        .from("ifood_avaliacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("unit_id", unit.unitId)
+        .in("pedido_id_longo", slice)
+      return count ?? 0
+    })
   }
   const novas = grupo.avaliacoes.length - existingCount
   const atualizadas = existingCount
