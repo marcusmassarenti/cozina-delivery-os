@@ -98,7 +98,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Comparativo de produtos",
         desc: "Mesmo produto entre lojas diferentes.",
         icon: GitCompareArrows,
-        soon: true,
+        href: "/relatorios/comparativo-produtos",
       },
     ],
   },
@@ -140,7 +140,7 @@ const CATEGORIAS: Categoria[] = [
         title: "Ticket médio comparativo",
         desc: "Ticket médio entre lojas e plataformas.",
         icon: Receipt,
-        soon: true,
+        href: "/relatorios/ticket-medio",
       },
       {
         title: "Cobertura de importação",
