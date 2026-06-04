@@ -3,13 +3,23 @@
 import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { requireModulePermission } from "@/lib/auth/guards"
+import { requireAdmin, requireModulePermission } from "@/lib/auth/guards"
 import { getRolesConfig } from "@/lib/auth/permissions"
 
 /** Escopo de dados do perfil (vem da tela de Permissões). Default: holding. */
 async function roleScope(perfilKey: string): Promise<"holding" | "unit"> {
   const roles = await getRolesConfig()
   return roles.find((r) => r.key === perfilKey)?.dataScope ?? "holding"
+}
+
+/**
+ * Allow-list de perfis: só aceita keys que existem em app_roles. Impede
+ * escalonamento via perfil arbitrário (ex: gravar perfil="administrador" num
+ * sistema sem essa role, ou um valor inventado que caia em fallback inseguro).
+ */
+async function isPerfilValido(perfilKey: string): Promise<boolean> {
+  const roles = await getRolesConfig()
+  return roles.some((r) => r.key === perfilKey)
 }
 
 export type AppUser = {
@@ -137,6 +147,8 @@ export async function createUser(
   if (!email || !email.includes("@")) fieldErrors.email = "Email inválido"
   const pwErr = validatePassword(password)
   if (pwErr) fieldErrors.password = pwErr
+  if (!(await isPerfilValido(perfil)))
+    fieldErrors.perfil = "Perfil inválido."
   if ((await roleScope(perfil)) === "unit" && !unitId)
     fieldErrors.unitId = "Selecione a unidade vinculada ao perfil"
 
@@ -145,7 +157,9 @@ export async function createUser(
   }
 
   try {
-    const { admin: supabase } = await requireModulePermission("usuarios", "edit")
+    // Só admin cria usuários (não basta usuarios:edit — evita escalonamento via
+    // role custom com edit ligado).
+    const { admin: supabase } = await requireAdmin()
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -194,6 +208,8 @@ export async function updateUser(
   if (!fullName) fieldErrors.fullName = "Nome obrigatório"
   if (password && validatePassword(password))
     fieldErrors.password = validatePassword(password)!
+  if (!(await isPerfilValido(perfil)))
+    fieldErrors.perfil = "Perfil inválido."
   if ((await roleScope(perfil)) === "unit" && !unitId)
     fieldErrors.unitId = "Selecione a unidade vinculada ao perfil"
 
@@ -202,10 +218,8 @@ export async function updateUser(
   }
 
   try {
-    const { admin: supabase, userId: callerId } = await requireModulePermission(
-      "usuarios",
-      "edit",
-    )
+    // Só admin altera perfil/senha/escopo de outros usuários.
+    const { admin: supabase, userId: callerId } = await requireAdmin()
 
     const { error: profileErr } = await supabase
       .from("profiles")
@@ -249,10 +263,8 @@ export async function updateUser(
 export async function deleteUser(userId: string): Promise<UserActionState> {
   if (!userId) return { ok: false, message: "ID do usuário ausente." }
   try {
-    const { admin: supabase, userId: callerId } = await requireModulePermission(
-      "usuarios",
-      "delete",
-    )
+    // Só admin deleta usuários.
+    const { admin: supabase, userId: callerId } = await requireAdmin()
     // Bloqueia self-delete
     if (callerId === userId) {
       return {

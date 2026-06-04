@@ -7,7 +7,7 @@ import "server-only"
 
 import type { PlatformId } from "@/components/platform-logo"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 
 const PLATS: PlatformId[] = ["ifood", "99food", "keeta"]
@@ -56,7 +56,7 @@ export async function getAcompanhamentoVendas(
   const from = Math.max(1, Math.min(fromDay, diasNoMes))
   const to = Math.max(from, Math.min(toDay, diasNoMes))
 
-  const allUnits = (await getUnits()).filter((u) => u.active)
+  const allUnits = (await getVisibleUnits()).filter((u) => u.active)
   const unitsLite = allUnits.map((u) => ({
     id: u.id,
     code: u.code,

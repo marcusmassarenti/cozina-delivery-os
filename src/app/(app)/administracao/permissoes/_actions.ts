@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireModulePermission } from "@/lib/auth/guards"
+import { requireAdmin } from "@/lib/auth/guards"
 import { MODULES, type DataScope } from "@/lib/auth/permissions"
 
 export type PermActionState = { ok: boolean; message?: string; roleId?: string }
@@ -36,7 +36,7 @@ export async function saveRole(input: {
   perms: PermRow[]
 }): Promise<PermActionState> {
   try {
-    const { admin } = await requireModulePermission("usuarios", "edit")
+    const { admin } = await requireAdmin()
     const { roleId, dataScope } = input
     if (!roleId) return { ok: false, message: "Perfil inválido." }
     if (dataScope !== "holding" && dataScope !== "unit") {
@@ -93,7 +93,7 @@ export async function createRole(input: {
   dataScope: DataScope
 }): Promise<PermActionState> {
   try {
-    const { admin } = await requireModulePermission("usuarios", "edit")
+    const { admin } = await requireAdmin()
     const label = input.label.trim()
     if (!label) return { ok: false, message: "Dê um nome ao perfil." }
     const key = slugify(label)
@@ -146,7 +146,7 @@ export async function createRole(input: {
 /** Apaga um perfil custom (perfis de sistema são bloqueados). */
 export async function deleteRole(roleId: string): Promise<PermActionState> {
   try {
-    const { admin } = await requireModulePermission("usuarios", "edit")
+    const { admin } = await requireAdmin()
     if (!roleId) return { ok: false, message: "Perfil inválido." }
 
     const { data: role } = await admin

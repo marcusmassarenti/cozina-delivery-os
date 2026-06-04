@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { requireModulePermission } from "@/lib/auth/guards"
+import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { getRecebidoSemana, type RecebidoSemana } from "@/lib/data/fechamentos"
 import {
   computeVinagreteRef,
@@ -14,6 +15,18 @@ import { parseProdutosVendidos } from "@/lib/import/produtos-vendidos"
 
 export type FechamentoState = { ok: boolean; message?: string }
 
+/**
+ * Garante que o usuário tem acesso à unidade (anti cross-tenant). RLS é
+ * bypassada pela service_role, então a checagem de unidade é no app.
+ * holding (ids === null) → acessa tudo; unit → só os ids vinculados.
+ */
+async function assertUnitAccess(unitId: string): Promise<void> {
+  const ids = await getAccessibleUnitIds()
+  if (ids !== null && !ids.includes(unitId)) {
+    throw new Error("Sem acesso a esta unidade.")
+  }
+}
+
 /** Soma do importado na semana — SÓ pra conferência (cinza no form). */
 export async function prefillRecebido(
   unitId: string,
@@ -23,6 +36,7 @@ export async function prefillRecebido(
   try {
     await requireModulePermission("financeiro", "view")
     if (!unitId || !inicio || !fim) return { ok: false }
+    await assertUnitAccess(unitId)
     const data = await getRecebidoSemana(unitId, inicio, fim)
     return { ok: true, data }
   } catch {
@@ -53,6 +67,7 @@ export async function saveFechamento(input: {
     if (input.periodoFim < input.periodoInicio) {
       return { ok: false, message: "Fim da semana antes do início." }
     }
+    await assertUnitAccess(input.unitId)
 
     // Valores ≥ 0, exceto VR que pode ser negativo (ajuste).
     const pos = (n: number) => (Number.isFinite(n) ? Math.max(0, n) : 0)
@@ -95,6 +110,13 @@ export async function deleteFechamento(
   try {
     const { admin } = await requireModulePermission("financeiro", "edit")
     if (!id) return { ok: false, message: "ID ausente." }
+    const { data: fech } = await admin
+      .from("unit_fechamentos")
+      .select("unit_id")
+      .eq("id", id)
+      .maybeSingle()
+    if (!fech) return { ok: false, message: "Fechamento não encontrado." }
+    await assertUnitAccess(fech.unit_id as string)
     const { error } = await admin
       .from("unit_fechamentos")
       .delete()
@@ -121,6 +143,7 @@ export async function getVinagreteReference(
   try {
     await requireModulePermission("financeiro", "view")
     if (!unitId || !inicio || !fim) return { ok: false }
+    await assertUnitAccess(unitId)
     const ref = await computeVinagreteRef(unitId, inicio, fim)
     return { ok: true, ref }
   } catch {
@@ -135,6 +158,7 @@ export async function getProdutoPrecosAction(
   try {
     await requireModulePermission("financeiro", "view")
     if (!unitId) return { ok: false }
+    await assertUnitAccess(unitId)
     const precos = await getProdutoPrecos(unitId)
     return { ok: true, precos }
   } catch {
@@ -158,6 +182,7 @@ export async function importProdutosVendidos(
     const unitCode = String(formData.get("unitCode") || "")
     const file = formData.get("file")
     if (!unitId) return { ok: false, message: "Unidade inválida." }
+    await assertUnitAccess(unitId)
     if (!(file instanceof File) || file.size === 0)
       return { ok: false, message: "Arquivo inválido." }
     if (file.size > 30 * 1024 * 1024)
@@ -234,6 +259,7 @@ export async function deleteProdutosVendidos(
     const { admin } = await requireModulePermission("financeiro", "edit")
     if (!unitId || !inicio || !fim)
       return { ok: false, message: "Semana inválida." }
+    await assertUnitAccess(unitId)
     const { error } = await admin
       .from("unit_produtos_vendidos")
       .delete()
@@ -264,6 +290,7 @@ export async function saveCategoriaPrecoGroup(input: {
     const categoria = input.categoria?.trim()
     if (!input.unitId || !categoria)
       return { ok: false, message: "Categoria inválida." }
+    await assertUnitAccess(input.unitId)
     const preco = Number.isFinite(input.preco) ? Math.max(0, input.preco) : 0
 
     const { error } = await admin
@@ -299,6 +326,7 @@ export async function saveEmbalagem(input: {
     const { admin } = await requireModulePermission("financeiro", "edit")
     if (!input.unitId || !input.id)
       return { ok: false, message: "Insumo inválido." }
+    await assertUnitAccess(input.unitId)
     const preco = Number.isFinite(input.preco) ? Math.max(0, input.preco) : 0
     const qtdFixa = Number.isFinite(input.qtdFixa)
       ? Math.max(0, input.qtdFixa)
@@ -338,6 +366,7 @@ export async function assignProdutoCategoria(input: {
     const categoria = input.categoria?.trim()
     if (!input.unitId || !codigo || !categoria)
       return { ok: false, message: "Dados inválidos." }
+    await assertUnitAccess(input.unitId)
 
     // herda preço/considerar da categoria escolhida
     let preco = 0

@@ -168,18 +168,16 @@ export const getCurrentRole = cache(async (): Promise<RoleConfig> => {
     .select("scope_type, role")
     .eq("user_id", userId)
   const list = accesses ?? []
+  // Admin explícito (role='admin' em escopo holding) é sinal forte e seguro.
   if (
     list.some((a) => a.scope_type === "holding" && a.role === "admin") &&
     byKey.has("administrador")
   ) {
     return byKey.get("administrador")!
   }
-  if (
-    list.some((a) => a.scope_type === "holding" || a.scope_type === "brand") &&
-    byKey.has("gerente")
-  ) {
-    return byKey.get("gerente")!
-  }
+  // Fail-CLOSED: perfil desconhecido NÃO é promovido a "gerente" por ter
+  // qualquer row holding/brand (era brecha — concedia visão da rede inteira).
+  // Cai no fallback (franqueado), que só enxerga via user_unit_access da loja.
   return fallback
 })
 

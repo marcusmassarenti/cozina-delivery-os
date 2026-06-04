@@ -6,6 +6,7 @@ import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getAcompanhamentoVendas } from "@/lib/data/acompanhamento"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRL } from "@/lib/format"
 import {
   currentPeriod,
@@ -39,6 +40,7 @@ export default async function AcompanhamentoPage({
   searchParams: Promise<{ mes?: string; de?: string; ate?: string }>
 }) {
   const sp = await searchParams
+  await assertCanView("relatorios")
   const periodsRaw = await getAvailablePeriods()
   const periodOptions = periodsRaw.map((p) => ({
     key: formatPeriodKey(p),
