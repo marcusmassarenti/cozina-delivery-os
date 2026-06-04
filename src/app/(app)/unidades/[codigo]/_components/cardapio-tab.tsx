@@ -110,9 +110,10 @@ export async function CardapioTab({
         </div>
       )}
 
-      {funnel.diasComDado > 0 && (
+      {funnel.diasComDado > 0 && !periodoSnapshot && (
       <>
-      {/* Funil de conversão (do diário, se houver) */}
+      {/* Funil de conversão do DIÁRIO — só quando NÃO há snapshot do período
+          (senão vira card redundante/parcial ao lado do snapshot completo). */}
       <div className="rounded-xl border bg-card p-5">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Funil de conversão (diário acumulado)</h3>
