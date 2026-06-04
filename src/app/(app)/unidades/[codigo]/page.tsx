@@ -46,6 +46,7 @@ import { CardapioTab } from "./_components/cardapio-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
+import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
 import { getFechamentos, type Fechamento } from "@/lib/data/fechamentos"
 
@@ -625,39 +626,3 @@ function formatCnpj(c: string): string {
   return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
 }
 
-/**
- * Quando há Financeiro importado pra esse mês (iFood e/ou 99 Food),
- * sobrescreve os valores do monthly manual com a soma dos importados.
- * Custos da indústria (Cozina/Loja) permanecem manuais.
- */
-function mergeMonthly(
-  manual: UnitMonthly,
-  fin: Awaited<ReturnType<typeof getFinanceiroResumoForMonth>>,
-  nine: Awaited<ReturnType<typeof getNinefoodResumoForMonth>>,
-  keeta: Awaited<ReturnType<typeof getKeetaResumoForMonth>>,
-): UnitMonthly {
-  if (!fin.hasData && !nine.hasData && !keeta.hasData) return manual
-
-  // `manual` JÁ vem do agregador canônico (getRealMonthlyForUnits via getUnit),
-  // que consolida iFood + 99 + Keeta com TODOS os fallbacks corretos:
-  //  - pedidos/líquido do iFood caem no relatório de Pedidos (VR) quando não há
-  //    Conciliação (antes aqui zerava → bug #2);
-  //  - margem usa total_recebido_real quando preenchido (antes aqui ignorava →
-  //    bug #1);
-  //  - Keeta cai no preço de tabela dos Pedidos recentes.
-  // Portanto NÃO recalculamos os KPIs aqui (evita divergir do resto do app).
-  // Esta função só ENRIQUECE os campos granulares do iFood (aba Receita), que o
-  // agregador deixa agregados/zerados. 99 Food e Keeta entram agregados.
-  if (!fin.hasData) return manual
-  return {
-    ...manual,
-    cancelamentosReembolsos: Math.abs(fin.perdaCancelamento),
-    taxaEntregaIfood: Math.abs(fin.taxaEntrega),
-    promocoes: Math.abs(fin.promocaoLoja),
-    taxaComissaoIfood:
-      Math.abs(fin.comissaoIfood) +
-      Math.abs(fin.taxaTransacao) +
-      Math.abs(fin.taxaServicoCliente),
-    outrosDescontosIfood: Math.abs(fin.pacoteAnuncios),
-  }
-}
