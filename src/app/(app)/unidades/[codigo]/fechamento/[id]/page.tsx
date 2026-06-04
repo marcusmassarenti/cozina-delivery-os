@@ -204,11 +204,12 @@ export default async function FechamentoPrintPage({
         {vinRef.temDados && vinCats.length > 0 && (
           <div className="fech-detalhe mt-4 rounded-xl border bg-card p-6 shadow-sm">
             <div className="mb-1 text-sm font-semibold">
-              Detalhe do vinagrete / maionese / bebidas
+              Produtos vendidos do JK
             </div>
             <p className="mb-3 text-xs text-muted-foreground">
-              Pela planilha “Produtos vendidos” do JK · semana{" "}
-              {fmtData(f.periodoInicio)} a {fmtData(f.periodoFim)}
+              Custo de vinagrete / maionese / bebidas — quantidade vendida por
+              categoria × preço · semana {fmtData(f.periodoInicio)} a{" "}
+              {fmtData(f.periodoFim)}
             </p>
             <table className="w-full text-sm">
               <thead>
