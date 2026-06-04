@@ -5,6 +5,21 @@ Time de 8 agentes (revisão + verificação adversarial). **27 bugs confirmados*
 
 ## 🔴 Bugs ALTA
 
+> ✅ **TODOS OS 9 RESOLVIDOS** (jun/2026) em 3 commits:
+> - **Segurança (#3, #4, #8, #9)** — commit `0aa8e89`. assertUnitAccess nas actions de
+>   fechamento/vinagrete; assertCanView + getVisibleUnits no Acompanhamento;
+>   requireAdmin() + allow-list de perfil em usuários/permissões; getCurrentRole
+>   fail-closed (perfil desconhecido não vira mais "gerente").
+> - **Número (#1, #2, #5, #6)** — commit `d11154c`. mergeMonthly virou overlay fino
+>   (defere ao agregador canônico: margem com total_recebido_real + fallback de
+>   pedidos); saveFinanceiro deduplica por competência; parser 99 Food deduplica
+>   pedido_id. (De brinde, fecha a MÉDIA #16: createUser/updateUser agora validam
+>   o perfil contra app_roles.)
+> - **VR (#7)** — commit `d4ee263`. Marcus confirmou que o iFood paga o VR à parte;
+>   o agregador passou a popular vrRecebido/vrTaxaMedia8 (8%) por loja do relatório
+>   de Pedidos. Verificado: DRE de mai/2026 mostra VR líquido R$ 61.906,78 (antes
+>   R$ 0,00); ifood_pedidos sem duplicatas (unique unit_id+pedido_id).
+
 ### 1. [Unidades (lista + detalhe + abas)] Margem da loja (Hero + DRE) ignora o Faturamento Real Recebido manual — diverge do card da lista
 - **Arquivo:** `src/app/(app)/unidades/[codigo]/page.tsx:662-664 (mergeMonthly) e :283-287 (HeroKpis Margem)`
 - **O quê:** Regra de negócio do projeto (CLAUDE.md secao 5): 'Faturamento Real Recebido manual — Quando preenchido, sobrepõe o calculado pra margem'. O agregador da LISTA/Dashboard respeita isso: em lancamentos.ts:401 faz `const baseMargem = totalRecebidoReal > 0 ? totalRecebidoReal : totalLiquido; margemLiquida = baseMargem - custoCozina - custoLoja`. Mas o mergeMonthly da PÁGINA DE DETALHE recalcula do zero: `totalLiquido = liquido` (soma dos liquidos das plataformas) e `margemLiquida = totalLiquido - custoTotal`, sem nunca olhar total_recebido_real. Resultado: quando o franqueado preenche o Faturamento Real Recebido, o card na /unidades mostra uma margem e o Hero/DRE da loja mostram OUTRA. O número da tela principal da loja fica errado (não reflete o que de fato caiu na conta).
