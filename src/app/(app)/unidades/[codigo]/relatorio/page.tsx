@@ -89,7 +89,7 @@ export default async function RelatorioMensalUnidade({
           filho direto de [data-print=page] (linha ~50) — o que empurrava o bloco
           grande pra próxima página e deixava o vazio. Liberamos pra fluir aqui
           (mesmo padrão do .acomp-print), e mantemos linhas/títulos inteiros. */}
-      <style>{`@media print{[data-print="page"].relatorio-mensal>*{break-inside:auto !important}.relatorio-mensal .grid:has(>.rounded-xl){display:block !important}.relatorio-mensal .grid:has(>.rounded-xl)>*{margin-bottom:.6rem}.relatorio-mensal .rounded-lg,.relatorio-mensal .rounded-xl{break-inside:avoid}.relatorio-mensal .rounded-lg.overflow-hidden,.relatorio-mensal .rounded-xl.overflow-hidden,.relatorio-mensal .rounded-lg:has(table),.relatorio-mensal .rounded-xl:has(table){break-inside:auto;overflow:visible}.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
+      <style>{`@media print{[data-print="page"].relatorio-mensal>*{break-inside:auto !important}.relatorio-mensal .secao-break{break-before:page}.relatorio-mensal .grid:has(>.rounded-xl){display:block !important}.relatorio-mensal .grid:has(>.rounded-xl)>*{margin-bottom:.6rem}.relatorio-mensal .rounded-lg,.relatorio-mensal .rounded-xl{break-inside:avoid}.relatorio-mensal .rounded-lg.overflow-hidden,.relatorio-mensal .rounded-xl.overflow-hidden,.relatorio-mensal .rounded-lg:has(table),.relatorio-mensal .rounded-xl:has(table){break-inside:auto;overflow:visible}.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -165,47 +165,39 @@ export default async function RelatorioMensalUnidade({
         <FinanceiroLojaTab unitId={unit.id} monthly={m} year={year} month={month} />
       </Secao>
 
-      {/* Cardápio — por plataforma */}
-      <Secao titulo="Cardápio">
-        <div className="flex flex-col gap-5">
-          {has("ifood") && (
-            <PlatBloco platform="ifood" label="iFood">
-              <CardapioTab unitId={unit.id} year={year} month={month} />
-            </PlatBloco>
-          )}
-          {has("99food") && (
-            <PlatBloco platform="99food" label="99 Food">
-              <Cardapio99Tab unitId={unit.id} year={year} month={month} />
-            </PlatBloco>
-          )}
-          {has("keeta") && (
-            <PlatBloco platform="keeta" label="Keeta">
-              <CardapioKeetaTab unitId={unit.id} year={year} month={month} />
-            </PlatBloco>
-          )}
-        </div>
-      </Secao>
+      {/* Cardápio — cada plataforma começa em uma página nova */}
+      {has("ifood") && (
+        <Secao titulo="Cardápio" platform="ifood" platLabel="iFood" breakBefore>
+          <CardapioTab unitId={unit.id} year={year} month={month} />
+        </Secao>
+      )}
+      {has("99food") && (
+        <Secao titulo="Cardápio" platform="99food" platLabel="99 Food" breakBefore>
+          <Cardapio99Tab unitId={unit.id} year={year} month={month} />
+        </Secao>
+      )}
+      {has("keeta") && (
+        <Secao titulo="Cardápio" platform="keeta" platLabel="Keeta" breakBefore>
+          <CardapioKeetaTab unitId={unit.id} year={year} month={month} />
+        </Secao>
+      )}
 
-      {/* Avaliações — por plataforma */}
-      <Secao titulo="Avaliações">
-        <div className="flex flex-col gap-5">
-          {has("ifood") && (
-            <PlatBloco platform="ifood" label="iFood">
-              <AvaliacoesTab unitId={unit.id} year={year} month={month} />
-            </PlatBloco>
-          )}
-          {has("99food") && (
-            <PlatBloco platform="99food" label="99 Food">
-              <Avaliacoes99Tab unitId={unit.id} year={year} month={month} />
-            </PlatBloco>
-          )}
-          {has("keeta") && (
-            <PlatBloco platform="keeta" label="Keeta">
-              <AvaliacoesKeetaTab unitId={unit.id} year={year} month={month} />
-            </PlatBloco>
-          )}
-        </div>
-      </Secao>
+      {/* Avaliações — cada plataforma começa em uma página nova */}
+      {has("ifood") && (
+        <Secao titulo="Avaliações" platform="ifood" platLabel="iFood" breakBefore>
+          <AvaliacoesTab unitId={unit.id} year={year} month={month} />
+        </Secao>
+      )}
+      {has("99food") && (
+        <Secao titulo="Avaliações" platform="99food" platLabel="99 Food" breakBefore>
+          <Avaliacoes99Tab unitId={unit.id} year={year} month={month} />
+        </Secao>
+      )}
+      {has("keeta") && (
+        <Secao titulo="Avaliações" platform="keeta" platLabel="Keeta" breakBefore>
+          <AvaliacoesKeetaTab unitId={unit.id} year={year} month={month} />
+        </Secao>
+      )}
 
       <p className="mt-1 text-[10px] text-muted-foreground print:mt-2">
         Gerado pelo Cozina Delivery OS · {periodLabel} · dados do iFood, 99 Food e
@@ -216,36 +208,37 @@ export default async function RelatorioMensalUnidade({
   )
 }
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 print:gap-2 print:rounded-none print:border-0 print:p-0">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {titulo}
-      </h2>
-      {children}
-    </section>
-  )
-}
-
-function PlatBloco({
+function Secao({
+  titulo,
+  breakBefore,
   platform,
-  label,
+  platLabel,
   children,
 }: {
-  platform: "ifood" | "99food" | "keeta"
-  label: string
+  titulo: string
+  breakBefore?: boolean
+  platform?: "ifood" | "99food" | "keeta"
+  platLabel?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-        <span data-print="hide">
-          <PlatformLogo platform={platform} size="sm" />
-        </span>
-        {label}
-      </div>
+    <section
+      className={`flex flex-col gap-3 rounded-xl border bg-card p-4 print:gap-2 print:rounded-none print:border-0 print:p-0 ${breakBefore ? "secao-break" : ""}`}
+    >
+      <h2 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {titulo}
+        {platform && platLabel && (
+          <>
+            <span>·</span>
+            <span data-print="hide">
+              <PlatformLogo platform={platform} size="sm" />
+            </span>
+            <span className="normal-case tracking-normal">{platLabel}</span>
+          </>
+        )}
+      </h2>
       {children}
-    </div>
+    </section>
   )
 }
 
