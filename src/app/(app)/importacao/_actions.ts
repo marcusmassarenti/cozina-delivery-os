@@ -2401,12 +2401,20 @@ async function saveFinanceiro(
   userId: string | null,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<ImportSummary> {
+  // Dedupe POR COMPETÊNCIA, não pelo mês do cabeçalho. Um arquivo pode trazer
+  // lançamentos de mais de uma competência (o iFood às vezes mistura repasses
+  // de meses vizinhos); apagar só parsed.refMonth deixava as outras
+  // competências acumularem (duplicar) a cada reimportação. A coluna
+  // 'competencia' é a chave de período confiável do schema (0007).
+  const competencias = [
+    ...new Set(parsed.lancamentos.map((l) => l.competencia)),
+  ].filter(Boolean)
+
   const { count: existingCount } = await admin
     .from("ifood_financeiro_lancamentos")
     .select("id", { count: "exact", head: true })
     .eq("unit_id", unit.unitId)
-    .eq("ref_year", parsed.refYear)
-    .eq("ref_month", parsed.refMonth)
+    .in("competencia", competencias.length > 0 ? competencias : ["__none__"])
   const substituido = (existingCount ?? 0) > 0
 
   const { data: importLog, error: ilErr } = await admin
@@ -2432,8 +2440,7 @@ async function saveFinanceiro(
       .from("ifood_financeiro_lancamentos")
       .delete()
       .eq("unit_id", unit.unitId)
-      .eq("ref_year", parsed.refYear)
-      .eq("ref_month", parsed.refMonth)
+      .in("competencia", competencias)
   }
 
   const CHUNK = 1000

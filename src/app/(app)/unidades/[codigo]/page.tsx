@@ -623,90 +623,26 @@ function mergeMonthly(
 ): UnitMonthly {
   if (!fin.hasData && !nine.hasData && !keeta.hasData) return manual
 
-  // Soma totais reais; quando uma plataforma não tem dado, usa o manual da
-  // própria plataforma (do array platforms) como fallback.
-  const ifoodBruto = fin.hasData
-    ? fin.bruto
-    : manual.platforms.find((p) => p.id === "ifood")?.bruto ?? 0
-  const ifoodLiquido = fin.hasData
-    ? fin.liquido
-    : manual.platforms.find((p) => p.id === "ifood")?.liquido ?? 0
-  const ifoodPedidos = fin.hasData ? fin.pedidosUnicos : 0
-  const ifoodCancel = fin.hasData
-    ? fin.cancelamentoTotalQtd + fin.cancelamentoParcialQtd
-    : 0
-
-  const nineBruto = nine.hasData
-    ? nine.bruto
-    : manual.platforms.find((p) => p.id === "99food")?.bruto ?? 0
-  const nineLiquido = nine.hasData
-    ? nine.liquido
-    : manual.platforms.find((p) => p.id === "99food")?.liquido ?? 0
-  const ninePedidos = nine.hasData ? nine.pedidos : 0
-  const nineCancel = nine.hasData ? nine.cancelamentosQtd : 0
-
-  const keetaBruto = keeta.hasData
-    ? keeta.bruto
-    : manual.platforms.find((p) => p.id === "keeta")?.bruto ?? 0
-  const keetaLiquido = keeta.hasData
-    ? keeta.liquido
-    : manual.platforms.find((p) => p.id === "keeta")?.liquido ?? 0
-  const keetaPedidos = keeta.hasData ? keeta.pedidos : 0
-  const keetaCancel = keeta.hasData ? keeta.cancelamentosQtd : 0
-
-  const bruto = ifoodBruto + nineBruto + keetaBruto
-  const liquido = ifoodLiquido + nineLiquido + keetaLiquido
-  const pedidos = ifoodPedidos + ninePedidos + keetaPedidos
-  const cancelados = ifoodCancel + nineCancel + keetaCancel
-  const ticketMedio = pedidos > 0 ? bruto / pedidos : 0
-  const totalLiquido = liquido
-  const custoTotal = manual.custoProdutosCozina + (manual.custoProdutosLoja ?? 0)
-  const margemLiquida = totalLiquido - custoTotal
-  const margemLucroPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
-
-  // platforms[] atualizado pras 2 plataformas com dado real
-  const platforms = manual.platforms.map((p) => {
-    if (p.id === "ifood" && fin.hasData) {
-      const pctLoja = fin.bruto > 0 ? (fin.liquido / fin.bruto) * 100 : 0
-      return { ...p, bruto: fin.bruto, liquido: fin.liquido, pctLoja }
-    }
-    if (p.id === "99food" && nine.hasData) {
-      return { ...p, bruto: nine.bruto, liquido: nine.liquido, pctLoja: nine.pctLoja }
-    }
-    if (p.id === "keeta" && keeta.hasData) {
-      return {
-        ...p,
-        bruto: keeta.bruto,
-        liquido: keeta.liquido,
-        pctLoja: keeta.pctLoja,
-      }
-    }
-    return p
-  })
-
+  // `manual` JÁ vem do agregador canônico (getRealMonthlyForUnits via getUnit),
+  // que consolida iFood + 99 + Keeta com TODOS os fallbacks corretos:
+  //  - pedidos/líquido do iFood caem no relatório de Pedidos (VR) quando não há
+  //    Conciliação (antes aqui zerava → bug #2);
+  //  - margem usa total_recebido_real quando preenchido (antes aqui ignorava →
+  //    bug #1);
+  //  - Keeta cai no preço de tabela dos Pedidos recentes.
+  // Portanto NÃO recalculamos os KPIs aqui (evita divergir do resto do app).
+  // Esta função só ENRIQUECE os campos granulares do iFood (aba Receita), que o
+  // agregador deixa agregados/zerados. 99 Food e Keeta entram agregados.
+  if (!fin.hasData) return manual
   return {
     ...manual,
-    pedidos,
-    pedidosCancelados: cancelados,
-    ticketMedio,
-    faturamentoBruto: bruto,
-    faturamentoLiquido: liquido,
-    totalLiquido,
-    // Esses campos abaixo são herdados do iFood (não temos equivalente do 99
-    // Food granular por taxa). Pra Receita tab, 99 Food entra agregado.
-    cancelamentosReembolsos: fin.hasData ? Math.abs(fin.perdaCancelamento) : manual.cancelamentosReembolsos,
-    taxaEntregaIfood: fin.hasData ? Math.abs(fin.taxaEntrega) : manual.taxaEntregaIfood,
-    promocoes: fin.hasData ? Math.abs(fin.promocaoLoja) : manual.promocoes,
-    taxaComissaoIfood: fin.hasData
-      ? Math.abs(fin.comissaoIfood) +
-        Math.abs(fin.taxaTransacao) +
-        Math.abs(fin.taxaServicoCliente)
-      : manual.taxaComissaoIfood,
-    outrosDescontosIfood: fin.hasData
-      ? Math.abs(fin.pacoteAnuncios)
-      : manual.outrosDescontosIfood,
-    margemLiquida,
-    margemLucroPct,
-    platforms,
+    cancelamentosReembolsos: Math.abs(fin.perdaCancelamento),
+    taxaEntregaIfood: Math.abs(fin.taxaEntrega),
+    promocoes: Math.abs(fin.promocaoLoja),
+    taxaComissaoIfood:
+      Math.abs(fin.comissaoIfood) +
+      Math.abs(fin.taxaTransacao) +
+      Math.abs(fin.taxaServicoCliente),
+    outrosDescontosIfood: Math.abs(fin.pacoteAnuncios),
   }
 }

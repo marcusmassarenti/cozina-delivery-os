@@ -245,7 +245,35 @@ export function parseNinefoodDadosPedido(
 
   return {
     reportType: "dados_pedido",
-    porLoja: Array.from(buckets.values()),
+    porLoja: Array.from(buckets.values()).map((b) => ({
+      ...b,
+      pedidos: dedupePedidos(b.pedidos),
+    })),
   }
+}
+
+/**
+ * Um mesmo "ID do pedido" pode aparecer em mais de uma linha (reembolsos e
+ * ajustes geram linhas de compensação). A tabela tem unique (unit_id,
+ * pedido_id) e gravamos com upsert onConflict — duas linhas do mesmo pedido no
+ * mesmo chunk quebram com "ON CONFLICT DO UPDATE command cannot affect row a
+ * second time", e ainda inflam a contagem de pedidos/avaliações. Deduplicamos
+ * mantendo a linha com mais informação (financeiro + avaliação). Espelha o
+ * dedupePedidos da Keeta.
+ */
+function dedupePedidos(
+  list: ParsedNinefoodPedido[],
+): ParsedNinefoodPedido[] {
+  const score = (p: ParsedNinefoodPedido) =>
+    Math.abs(p.receitaRealLoja ?? 0) +
+    Math.abs(p.receitaVendas ?? 0) +
+    (p.conteudoAvaliacao ? 1000 : 0) +
+    (p.nivelAvaliacao ? 1000 : 0)
+  const m = new Map<string, ParsedNinefoodPedido>()
+  for (const p of list) {
+    const ex = m.get(p.pedidoId)
+    if (!ex || score(p) > score(ex)) m.set(p.pedidoId, p)
+  }
+  return Array.from(m.values())
 }
 
