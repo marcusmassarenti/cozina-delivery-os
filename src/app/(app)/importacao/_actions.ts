@@ -2468,7 +2468,10 @@ async function saveFinanceiro(
       .in("competencia", competencias)
   }
 
-  const CHUNK = 1000
+  // Conciliação do iFood tem MUITOS lançamentos (22k+ por loja/mês). Chunks
+  // grandes cortam os round-trips ao Postgres — o gargalo do import (várias
+  // lojas de uma vez estourava o timeout da função serverless).
+  const CHUNK = 5000
   const rows = parsed.lancamentos.map((l) => ({
     unit_id: unit.unitId,
     competencia: l.competencia,
