@@ -277,10 +277,10 @@ export function FechamentoTab({
 
       {/* Formulário */}
       {editing && (
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="rounded-xl border bg-card p-4 shadow-sm">
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             {/* Entradas */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Início da semana (segunda)">
                   <Input
@@ -300,17 +300,13 @@ export function FechamentoTab({
                 </Field>
               </div>
               <p className="-mt-2 text-[10px] text-muted-foreground">
-                A semana é sempre segunda → domingo. Escolha a segunda e o
-                domingo é preenchido automático.
+                Semana sempre segunda → domingo (o domingo preenche sozinho).
+                {pulling
+                  ? " Conferindo o importado…"
+                  : imported
+                    ? " Em cinza = importado da semana (≈ vendas); clique pra usar — o que vale é o depósito que você digita."
+                    : ""}
               </p>
-
-              {(pulling || imported) && (
-                <p className="text-[10px] text-muted-foreground">
-                  {pulling
-                    ? "Conferindo o importado da semana..."
-                    : "Em cinza: total importado da semana (≈ vendas, não o depósito) — clique pra usar. O valor que vale é o depósito que você digita."}
-                </p>
-              )}
               <Bloco titulo="1. Recebido das plataformas">
                 <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} reference={imported?.ifood ?? null} />
                 <Money label="Keeta" value={draft.recebidoKeeta} onChange={(n) => setNum("recebidoKeeta", n)} reference={imported?.keeta ?? null} />
@@ -388,34 +384,40 @@ export function FechamentoTab({
                   CNPão e B2B somam pra parte da Cozina e descontam do JK.
                 </p>
 
-                {/* Custos compartilhados com modo */}
-                <SharedCost
-                  label="Luz"
-                  value={draft.acerto.luz}
-                  mode={draft.acerto.luzMode}
-                  onValue={(n) => setAcerto("luz", n)}
-                  onMode={(m) => setAcerto("luzMode", m)}
-                />
-                <SharedCost
-                  label="Guarda"
-                  value={draft.acerto.guarda}
-                  mode={draft.acerto.guardaMode}
-                  onValue={(n) => setAcerto("guarda", n)}
-                  onMode={(m) => setAcerto("guardaMode", m)}
-                />
-                <SharedCost
-                  label="Outros"
-                  value={draft.acerto.outros}
-                  mode={draft.acerto.outrosMode}
-                  onValue={(n) => setAcerto("outros", n)}
-                  onMode={(m) => setAcerto("outrosMode", m)}
-                  obs={draft.acerto.outrosObs}
-                  onObs={(t) => setAcerto("outrosObs", t)}
+                {/* Custos compartilhados com modo — 3 lado a lado */}
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <SharedCost
+                    label="Luz"
+                    value={draft.acerto.luz}
+                    mode={draft.acerto.luzMode}
+                    onValue={(n) => setAcerto("luz", n)}
+                    onMode={(m) => setAcerto("luzMode", m)}
+                  />
+                  <SharedCost
+                    label="Guarda"
+                    value={draft.acerto.guarda}
+                    mode={draft.acerto.guardaMode}
+                    onValue={(n) => setAcerto("guarda", n)}
+                    onMode={(m) => setAcerto("guardaMode", m)}
+                  />
+                  <SharedCost
+                    label="Outros"
+                    value={draft.acerto.outros}
+                    mode={draft.acerto.outrosMode}
+                    onValue={(n) => setAcerto("outros", n)}
+                    onMode={(m) => setAcerto("outrosMode", m)}
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={draft.acerto.outrosObs ?? ""}
+                  onChange={(e) => setAcerto("outrosObs", e.target.value)}
+                  placeholder="O que é esse 'outros'? (observação)"
+                  className="rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
                 />
                 <p className="-mt-1 text-[10px] text-muted-foreground">
-                  Luz / Guarda / Outros: <b>Dividir</b> = cada um paga metade ·{" "}
-                  <b>Reembolsar JK</b> = ele já pagou tudo, a Cozina devolve a
-                  parte dela (JK recebe a mais).
+                  <b>Dividir</b> = cada um paga metade · <b>Reembolsar JK</b> = ele
+                  já pagou tudo, a Cozina devolve a parte dela.
                 </p>
               </div>
 
@@ -667,39 +669,24 @@ function Bloco({
   )
 }
 
-/** Custo compartilhado: valor + toggle dividir/reembolsar (+ obs opcional). */
+/** Custo compartilhado: valor + toggle dividir/reembolsar (compacto p/ 3 col). */
 function SharedCost({
   label,
   value,
   mode,
   onValue,
   onMode,
-  obs,
-  onObs,
 }: {
   label: string
   value: number
   mode: AcertoMode
   onValue: (n: number) => void
   onMode: (m: AcertoMode) => void
-  obs?: string
-  onObs?: (t: string) => void
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-md border border-input/60 bg-background/40 p-2">
-      <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-        <Money label={label} value={value} onChange={onValue} />
-        <ModeToggle value={mode} onChange={onMode} />
-      </div>
-      {onObs && (
-        <input
-          type="text"
-          value={obs ?? ""}
-          onChange={(e) => onObs(e.target.value)}
-          placeholder="Observação (o que é esse 'outros')"
-          className="rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
-        />
-      )}
+      <Money label={label} value={value} onChange={onValue} />
+      <ModeToggle value={mode} onChange={onMode} />
     </div>
   )
 }
