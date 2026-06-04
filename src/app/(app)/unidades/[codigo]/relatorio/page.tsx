@@ -89,7 +89,7 @@ export default async function RelatorioMensalUnidade({
           filho direto de [data-print=page] (linha ~50) — o que empurrava o bloco
           grande pra próxima página e deixava o vazio. Liberamos pra fluir aqui
           (mesmo padrão do .acomp-print), e mantemos linhas/títulos inteiros. */}
-      <style>{`@media print{[data-print="page"].relatorio-mensal>*{break-inside:auto !important}.relatorio-mensal .grid:has(>.rounded-xl){display:block !important}.relatorio-mensal .grid:has(>.rounded-xl)>*{margin-bottom:.6rem}.relatorio-mensal .rounded-lg,.relatorio-mensal .rounded-xl{break-inside:avoid}.relatorio-mensal .rounded-lg:has(table),.relatorio-mensal .rounded-xl:has(table){break-inside:auto;overflow:visible}.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
+      <style>{`@media print{[data-print="page"].relatorio-mensal>*{break-inside:auto !important}.relatorio-mensal .grid:has(>.rounded-xl){display:block !important}.relatorio-mensal .grid:has(>.rounded-xl)>*{margin-bottom:.6rem}.relatorio-mensal .rounded-lg,.relatorio-mensal .rounded-xl{break-inside:avoid}.relatorio-mensal .rounded-lg.overflow-hidden,.relatorio-mensal .rounded-xl.overflow-hidden,.relatorio-mensal .rounded-lg:has(table),.relatorio-mensal .rounded-xl:has(table){break-inside:auto;overflow:visible}.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
