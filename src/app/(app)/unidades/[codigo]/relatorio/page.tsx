@@ -85,10 +85,11 @@ export default async function RelatorioMensalUnidade({
       data-print="page"
       className="relatorio-mensal mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 bg-muted/30 p-6 print:max-w-none print:gap-3 print:bg-white print:p-0"
     >
-      {/* Ajustes finos de impressão: linhas não quebram no meio, títulos não
-          ficam órfãos no rodapé, tabelas podem fluir entre páginas. Injetado
-          aqui (o Tailwind v4 não emite CSS raw appendado no globals). */}
-      <style>{`@media print{.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
+      {/* Ajustes de impressão. O globals.css força break-inside:avoid em TODO
+          filho direto de [data-print=page] (linha ~50) — o que empurrava o bloco
+          grande pra próxima página e deixava o vazio. Liberamos pra fluir aqui
+          (mesmo padrão do .acomp-print), e mantemos linhas/títulos inteiros. */}
+      <style>{`@media print{[data-print="page"].relatorio-mensal>*{break-inside:auto !important}.relatorio-mensal tr{break-inside:avoid}.relatorio-mensal h2,.relatorio-mensal h3{break-after:avoid}.relatorio-mensal table{break-inside:auto}}`}</style>
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
