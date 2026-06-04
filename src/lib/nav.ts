@@ -7,7 +7,6 @@ import {
   type LucideIcon,
   Package,
   Receipt,
-  Settings,
   ShieldCheck,
   Star,
   Store,
@@ -106,16 +105,6 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/administracao/permissoes",
         icon: ShieldCheck,
         module: "usuarios",
-      },
-    ],
-  },
-  {
-    items: [
-      {
-        label: "Configurações",
-        href: "/configuracoes",
-        icon: Settings,
-        comingSoon: true,
       },
     ],
   },
