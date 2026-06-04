@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Sparkles } from "lucide-react"
+import { ArrowLeft, FileText, Sparkles } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
@@ -180,6 +180,13 @@ export default async function UnidadeDetalhePage({
             current={{ year, month }}
             options={availablePeriods}
           />
+          <Link
+            href={`/unidades/${unit.code}/relatorio?periodo=${year}-${String(month).padStart(2, "0")}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
+          >
+            <FileText className="size-3.5" />
+            Relatório do mês
+          </Link>
           {canEditUnit && (
             <EditUnitDialog
               unit={{
