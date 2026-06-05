@@ -75,12 +75,16 @@ export async function getProdutosVendidosSemana(
   fim: string,
 ): Promise<{ codigo: string; descricao: string; quantidade: number }[]> {
   const admin = createAdminClient()
+  // Igualdade EXATA da semana consultada (não overlap). O overlap antigo
+  // (.lte inicio<=fim & .gte fim>=inicio) casava QUALQUER semana que tocasse o
+  // intervalo e somava as quantidades por código entre elas — inflando potes,
+  // total e a referência do vinagrete quando havia 2 planilhas tocando a semana.
   const { data, error } = await admin
     .from("unit_produtos_vendidos")
     .select("codigo, descricao, quantidade")
     .eq("unit_id", unitId)
-    .lte("periodo_inicio", fim)
-    .gte("periodo_fim", inicio)
+    .eq("periodo_inicio", inicio)
+    .eq("periodo_fim", fim)
   if (error) {
     console.error("getProdutosVendidosSemana:", error.message)
     return []

@@ -19,9 +19,12 @@ export type ProdutoRanking = {
 export type ProdutoMetric = "qtd" | "valor"
 
 /**
- * Top produtos da plataforma no mês, somando as lojas escolhidas (ou a rede
- * toda se a lista vier vazia). `limit` alto pra a comparação alta/queda pegar
- * a cauda também.
+ * Top produtos da plataforma no mês, somando as lojas escolhidas. `limit` alto
+ * pra a comparação alta/queda pegar a cauda também.
+ *
+ * IMPORTANTE: lista vazia = "nenhuma loja no escopo" → retorna [] (sem dados).
+ * NÃO cai pra rede inteira (era o bug: franqueado sem lojas visíveis via o top
+ * de toda a rede). Nenhum caller passa [] querendo a rede toda.
  */
 export async function getTopProdutos(
   platform: PlatformId,
@@ -30,7 +33,8 @@ export async function getTopProdutos(
   month: number,
   limit = 200,
 ): Promise<ProdutoRanking[]> {
-  const filter = unitIds.length > 0 ? unitIds : undefined
+  if (unitIds.length === 0) return []
+  const filter = unitIds
 
   if (platform === "ifood") {
     const rows = await getNetworkTopItemsForMonth(year, month, limit, filter)

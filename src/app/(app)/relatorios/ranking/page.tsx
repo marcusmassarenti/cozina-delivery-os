@@ -66,7 +66,10 @@ export default async function RankingPage({
       case "ticket":
         return ticket(r.bruto, r.pedidos)
       case "margem":
-        return r.margemPct
+        // Margem real só existe com CMV lançado. Sem custo, margemPct é só
+        // repasse/bruto — não é margem. Sentinela -Infinity joga essas lojas
+        // pro fim do ranking e a coluna mostra "—" (igual à coluna dedicada).
+        return r.temCusto ? r.margemPct : Number.NEGATIVE_INFINITY
       case "pedidos":
         return r.pedidos
       default:
@@ -74,7 +77,7 @@ export default async function RankingPage({
     }
   }
   const fmtMetrica = (n: number) => {
-    if (metrica === "margem") return fmtPct(n)
+    if (metrica === "margem") return Number.isFinite(n) ? fmtPct(n) : "—"
     if (metrica === "pedidos") return fmtNum(n)
     return fmtBRL(n)
   }
