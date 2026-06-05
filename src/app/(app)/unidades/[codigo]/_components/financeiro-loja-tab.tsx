@@ -268,6 +268,11 @@ export async function FinanceiroLojaTab({
               </div>
             ))}
           </div>
+          <TotalRow
+            label="Total das taxas"
+            value={`− ${fmtBRL(descontos.reduce((a, d) => a + d.value, 0))}`}
+            valueClass="text-rose-700 dark:text-rose-400"
+          />
         </div>
       )}
 
@@ -292,9 +297,11 @@ export async function FinanceiroLojaTab({
                   value={`${fmtBRL(b.valor)} · ${fmtNum(b.pedidos)} ped`}
                 />
               ))}
+              <TotalRow
+                value={`${fmtBRL(pagamento.vrValor)} · ${fmtNum(pagamento.vrPedidos)} ped`}
+              />
               <p className="mt-2 text-[11px] text-muted-foreground">
-                {fmtNum(pagamento.vrPedidos)} pedidos · {fmtBRL(pagamento.vrValor)}{" "}
-                ({fmtPct(pagamento.vrPct)} do pago). Não entra no faturamento.
+                {fmtPct(pagamento.vrPct)} do pago · não entra no faturamento.
               </p>
             </div>
           )}
@@ -319,6 +326,7 @@ export async function FinanceiroLojaTab({
                 />
               )
             })}
+            <TotalRow value={`${fmtBRL(pagamento.totalValor)} · 100%`} />
           </div>
           <div className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
@@ -333,12 +341,10 @@ export async function FinanceiroLojaTab({
               label="Loja (investiu)"
               value={fmtBRL(pagamento.incentivoLoja)}
             />
-            <div className="mt-1.5 flex items-baseline justify-between border-t pt-2">
-              <span className="text-xs font-semibold">Total em promoções</span>
-              <span className="text-sm font-bold tabular-nums">
-                {fmtBRL(pagamento.incentivoIfood + pagamento.incentivoLoja)}
-              </span>
-            </div>
+            <TotalRow
+              label="Total em promoções"
+              value={fmtBRL(pagamento.incentivoIfood + pagamento.incentivoLoja)}
+            />
             <p className="mt-2 text-[11px] text-muted-foreground">
               &quot;Loja&quot; = promoção que a própria loja bancou (saiu do
               bolso dela pra atrair pedido).
@@ -361,6 +367,11 @@ export async function FinanceiroLojaTab({
                   value={`${fmtNum(tn.pedidos)} ped`}
                 />
               ))}
+            <TotalRow
+              value={`${fmtNum(
+                pagamento.porTurno.reduce((a, t) => a + t.pedidos, 0),
+              )} ped`}
+            />
           </div>
         </div>
       )}
@@ -416,6 +427,26 @@ function MiniRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline justify-between gap-2 py-1">
       <span className="truncate text-xs text-muted-foreground">{label}</span>
       <span className="shrink-0 text-xs font-medium tabular-nums">{value}</span>
+    </div>
+  )
+}
+
+/** Linha de total no rodapé de um card (negrito, separada por borda). */
+function TotalRow({
+  label = "Total",
+  value,
+  valueClass,
+}: {
+  label?: string
+  value: string
+  valueClass?: string
+}) {
+  return (
+    <div className="mt-1.5 flex items-baseline justify-between gap-2 border-t pt-2">
+      <span className="text-xs font-semibold">{label}</span>
+      <span className={`shrink-0 text-sm font-bold tabular-nums ${valueClass ?? ""}`}>
+        {value}
+      </span>
     </div>
   )
 }
