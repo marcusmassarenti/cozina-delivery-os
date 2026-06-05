@@ -1,10 +1,12 @@
 import {
   Bike,
+  CalendarDays,
   DollarSign,
   Info,
   Megaphone,
   Percent,
   PiggyBank,
+  ShoppingBag,
   Ticket,
   TrendingUp,
   Truck,
@@ -13,8 +15,10 @@ import {
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { DailyBarChart } from "@/components/shared/daily-bar-chart"
 import { PlatformLogo } from "@/components/platform-logo"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView, userCan } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
@@ -64,9 +68,16 @@ export default async function ResultadoPage({
         ? undefined // admin/gerente: rede inteira
         : allUnits.map((u) => u.id) // franqueado: só as lojas dele
 
-  const [resultado, drePlats, availablePeriods] = await Promise.all([
+  // Unidades no escopo (rede inteira p/ admin, ou as do franqueado/filtro) —
+  // pra somar a série diária (faturamento + pedidos) na rede.
+  const matrixUnits = filterIds
+    ? allUnits.filter((u) => filterIds.includes(u.id))
+    : allUnits
+
+  const [resultado, drePlats, daily, availablePeriods] = await Promise.all([
     getNetworkResultadoForMonth(year, month, filterIds),
     getNetworkDrePlatforms(year, month, filterIds),
+    getDailyReportMatrix(year, month, "todas", matrixUnits),
     getAvailablePeriods(),
   ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
@@ -220,6 +231,44 @@ export default async function ResultadoPage({
               operacao={totals.custoOperacao}
             />
           </div>
+
+          {/* Tendência diária da rede: faturamento + pedidos */}
+          {daily.hasData && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border bg-card p-5 shadow-sm">
+                <div className="mb-3 flex items-center gap-2">
+                  <CalendarDays className="size-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Faturamento por dia</h3>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    rede · bruto
+                  </span>
+                </div>
+                <DailyBarChart
+                  dias={daily.days}
+                  valores={daily.networkByDay.faturamento}
+                  format={fmtBRL}
+                  formatShort={fmtBRLShort}
+                />
+              </div>
+              <div className="rounded-xl border bg-card p-5 shadow-sm">
+                <div className="mb-3 flex items-center gap-2">
+                  <ShoppingBag className="size-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Pedidos por dia</h3>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    rede
+                  </span>
+                </div>
+                <DailyBarChart
+                  dias={daily.days}
+                  valores={daily.networkByDay.pedidos}
+                  format={(n) => `${fmtNum(n)} pedidos`}
+                  formatShort={(n) => `${fmtNum(n)} ped`}
+                  barClass="bg-sky-500/70 hover:bg-sky-500"
+                  emptyLabel="Sem pedidos no mês."
+                />
+              </div>
+            </div>
+          )}
 
           {semCusto && (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
