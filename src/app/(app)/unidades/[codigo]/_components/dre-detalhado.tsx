@@ -80,6 +80,8 @@ export function DreDetalhado({
   const resultadoOperacional = margem - opScope
   const resultadoOpPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
   const resultadoTotal = (opScope > 0 ? resultadoOperacional : margem) + vr
+  // Análise vertical: cada linha como % do faturamento bruto do escopo.
+  const pctOf = (v: number) => (bruto > 0 ? (v / bruto) * 100 : 0)
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -120,7 +122,7 @@ export function DreDetalhado({
         </div>
       </div>
 
-      <Row label="Faturamento bruto" value={fmtBRL(bruto)} bold />
+      <Row label="Faturamento bruto" value={fmtBRL(bruto)} bold pct={100} />
 
       {/* Taxas: em "Todas" agrupa por plataforma (clicável); por plataforma
           mostra a abertura direto. */}
@@ -128,20 +130,33 @@ export function DreDetalhado({
         label="(−) Taxas das plataformas"
         value={`− ${fmtBRL(taxas)}`}
         muted
+        pct={pctOf(taxas)}
       />
       <div className="mb-1 space-y-0.5 pl-1">
         {isTodas
-          ? platforms.map((p) => <PlatTaxa key={p.id} plat={p} />)
-          : plat && <ItemList itens={plat.itens} total={plat.taxaTotal} />}
+          ? platforms.map((p) => <PlatTaxa key={p.id} plat={p} base={bruto} />)
+          : plat && (
+              <ItemList
+                itens={plat.itens}
+                total={plat.taxaTotal}
+                base={bruto}
+              />
+            )}
       </div>
 
       <Divider />
-      <Row label="= Líquido das plataformas" value={fmtBRL(liquido)} bold />
+      <Row
+        label="= Líquido das plataformas"
+        value={fmtBRL(liquido)}
+        bold
+        pct={pctOf(liquido)}
+      />
 
       <Row
         label="(−) CMV (Cozina + Loja)"
         value={cmvScope > 0 ? `− ${fmtBRL(cmvScope)}` : "sem custo lançado"}
         muted
+        pct={cmvScope > 0 ? pctOf(cmvScope) : undefined}
       />
       <Divider />
       <Row
@@ -165,6 +180,7 @@ export function DreDetalhado({
             label="(−) Custo da operação"
             value={`− ${fmtBRL(opScope)}`}
             muted
+            pct={pctOf(opScope)}
           />
           <Divider />
           <Row
@@ -190,13 +206,14 @@ export function DreDetalhado({
       )}
       {vr > 0 && (
         <>
-          <VrLine vrLiquido={vr} info={vrInfo} />
+          <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />
           <Divider />
           <Row
             label={`= ${totalLabel}`}
             value={fmtBRL(resultadoTotal)}
             bold
             highlight
+            pct={pctOf(resultadoTotal)}
           />
         </>
       )}
@@ -213,7 +230,15 @@ export function DreDetalhado({
   )
 }
 
-function VrLine({ vrLiquido, info }: { vrLiquido: number; info?: VrInfo }) {
+function VrLine({
+  vrLiquido,
+  info,
+  pct,
+}: {
+  vrLiquido: number
+  info?: VrInfo
+  pct?: number
+}) {
   // Sem a abertura: linha simples.
   if (!info) {
     return (
@@ -221,6 +246,7 @@ function VrLine({ vrLiquido, info }: { vrLiquido: number; info?: VrInfo }) {
         label="(+) VR recebido à parte"
         value={`+ ${fmtBRL(vrLiquido)}`}
         tone="pos"
+        pct={pct}
       />
     )
   }
@@ -230,8 +256,15 @@ function VrLine({ vrLiquido, info }: { vrLiquido: number; info?: VrInfo }) {
       <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 [&::-webkit-details-marker]:hidden">
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         <span className="text-xs">(+) VR recebido à parte</span>
-        <span className="ml-auto text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-          + {fmtBRL(vrLiquido)}
+        <span className="ml-auto flex items-baseline gap-1.5">
+          <span className="text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+            + {fmtBRL(vrLiquido)}
+          </span>
+          {pct != null && (
+            <span className="w-11 text-right text-[10px] font-normal tabular-nums text-muted-foreground">
+              {fmtPct(pct)}
+            </span>
+          )}
         </span>
       </summary>
       <div className="ml-6 border-l pl-4 pr-1">
@@ -287,19 +320,25 @@ function VrLine({ vrLiquido, info }: { vrLiquido: number; info?: VrInfo }) {
   )
 }
 
-function PlatTaxa({ plat }: { plat: DrePlat }) {
+function PlatTaxa({ plat, base }: { plat: DrePlat; base: number }) {
+  const pct = base > 0 ? (plat.taxaTotal / base) * 100 : 0
   return (
     <details className="group rounded-md">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         <PlatformLogo platform={plat.id} size="sm" />
         <span className="text-muted-foreground">{plat.name}</span>
-        <span className="ml-auto font-semibold tabular-nums text-rose-700 dark:text-rose-400">
-          − {fmtBRL(plat.taxaTotal)}
+        <span className="ml-auto flex items-baseline gap-1.5">
+          <span className="font-semibold tabular-nums text-rose-700 dark:text-rose-400">
+            − {fmtBRL(plat.taxaTotal)}
+          </span>
+          <span className="w-11 text-right text-[10px] font-normal tabular-nums text-muted-foreground">
+            {fmtPct(pct)}
+          </span>
         </span>
       </summary>
       <div className="border-l pl-6 pr-1.5">
-        <ItemList itens={plat.itens} total={plat.taxaTotal} />
+        <ItemList itens={plat.itens} total={plat.taxaTotal} base={base} />
       </div>
     </details>
   )
@@ -308,9 +347,11 @@ function PlatTaxa({ plat }: { plat: DrePlat }) {
 function ItemList({
   itens,
   total,
+  base,
 }: {
   itens: { label: string; value: number; credit?: boolean }[]
   total: number
+  base: number
 }) {
   if (itens.length === 0) {
     return (
@@ -322,25 +363,33 @@ function ItemList({
   }
   return (
     <>
-      {itens.map((it) => (
-        <div
-          key={it.label}
-          className="flex items-baseline justify-between gap-2 py-0.5"
-        >
-          <span className="truncate text-[11px] text-muted-foreground">
-            {it.label}
-          </span>
-          <span
-            className={`shrink-0 text-[11px] tabular-nums ${
-              it.credit
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-rose-700 dark:text-rose-400"
-            }`}
+      {itens.map((it) => {
+        const pct = base > 0 ? (it.value / base) * 100 : 0
+        return (
+          <div
+            key={it.label}
+            className="flex items-baseline justify-between gap-2 py-0.5"
           >
-            {it.credit ? "+" : "−"} {fmtBRL(it.value)}
-          </span>
-        </div>
-      ))}
+            <span className="truncate text-[11px] text-muted-foreground">
+              {it.label}
+            </span>
+            <span className="flex shrink-0 items-baseline gap-1.5">
+              <span
+                className={`text-[11px] tabular-nums ${
+                  it.credit
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-rose-700 dark:text-rose-400"
+                }`}
+              >
+                {it.credit ? "+" : "−"} {fmtBRL(it.value)}
+              </span>
+              <span className="w-10 text-right text-[9px] font-normal tabular-nums text-muted-foreground">
+                {fmtPct(pct)}
+              </span>
+            </span>
+          </div>
+        )
+      })}
     </>
   )
 }
@@ -352,6 +401,7 @@ function Row({
   muted,
   highlight,
   tone,
+  pct,
 }: {
   label: string
   value: React.ReactNode
@@ -359,6 +409,8 @@ function Row({
   muted?: boolean
   highlight?: boolean
   tone?: "pos"
+  /** % do bruto (análise vertical) — mostrado em cinza ao lado do valor. */
+  pct?: number
 }) {
   return (
     <div
@@ -373,20 +425,27 @@ function Row({
       >
         {label}
       </span>
-      <span
-        className={`shrink-0 text-sm tabular-nums ${
-          bold ? "font-bold" : "font-medium"
-        } ${
-          tone === "pos"
-            ? "text-emerald-700 dark:text-emerald-400"
-            : muted
-              ? "text-muted-foreground"
-              : highlight
-                ? "text-emerald-700 dark:text-emerald-400"
-                : ""
-        }`}
-      >
-        {value}
+      <span className="flex shrink-0 items-baseline gap-1.5">
+        <span
+          className={`text-sm tabular-nums ${
+            bold ? "font-bold" : "font-medium"
+          } ${
+            tone === "pos"
+              ? "text-emerald-700 dark:text-emerald-400"
+              : muted
+                ? "text-muted-foreground"
+                : highlight
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : ""
+          }`}
+        >
+          {value}
+        </span>
+        {pct != null && (
+          <span className="w-11 text-right text-[10px] font-normal tabular-nums text-muted-foreground">
+            {fmtPct(pct)}
+          </span>
+        )}
       </span>
     </div>
   )
