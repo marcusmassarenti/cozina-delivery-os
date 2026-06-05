@@ -1368,8 +1368,14 @@ export async function getNetworkFunnelForMonth(
 ): Promise<NetworkFunnel> {
   const admin = createAdminClient()
   const { start, end } = monthRange(year, month)
-  const funnel = await fetchAllRows<{
+  // Fonte = snapshot de período do Cardápio (ifood_cardapio_periodo), a MESMA
+  // do detalhe da loja. O relatório consolidado de Cardápio do iFood salva o
+  // "Funil Loja" como snapshot de período (não como funil diário), então a
+  // tabela ifood_daily_funnel fica vazia e o dashboard mostrava "sem cardápio"
+  // mesmo havendo dado. Pega, por loja, o snapshot cujo period_end cai no mês.
+  const snaps = await fetchAllRows<{
     unit_id: string
+    period_end: string
     visitas: number
     visualizacoes: number
     sacola: number
@@ -1377,39 +1383,33 @@ export async function getNetworkFunnelForMonth(
     concluidos: number
   }>((from, to) => {
     let q = admin
-      .from("ifood_daily_funnel")
+      .from("ifood_cardapio_periodo")
       .select(
-        "unit_id, visitas, visualizacoes, sacola, revisao, concluidos",
+        "unit_id, period_end, visitas, visualizacoes, sacola, revisao, concluidos",
       )
-      .gte("date", start)
-      .lte("date", end)
-      .order("date")
-      .order("unit_id")
+      .gte("period_end", start)
+      .lte("period_end", end)
+      .order("period_end", { ascending: false })
       .range(from, to)
-    if (filterUnitIds)
-      q = q.in("unit_id", filterUnitIds)
+    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
     return q
-  }, "ifood_daily_funnel rede")
+  }, "ifood_cardapio_periodo rede")
 
-  // Agrega por unidade
+  // 1 snapshot por loja: o mais recente cujo period_end cai no mês (já vem
+  // ordenado desc, então a 1ª ocorrência de cada loja é a certa).
   const byUnit = new Map<
     string,
     { visitas: number; visualizacoes: number; sacola: number; revisao: number; concluidos: number }
   >()
-  for (const r of funnel) {
-    const cur = byUnit.get(r.unit_id) ?? {
-      visitas: 0,
-      visualizacoes: 0,
-      sacola: 0,
-      revisao: 0,
-      concluidos: 0,
-    }
-    cur.visitas += r.visitas || 0
-    cur.visualizacoes += r.visualizacoes || 0
-    cur.sacola += r.sacola || 0
-    cur.revisao += r.revisao || 0
-    cur.concluidos += r.concluidos || 0
-    byUnit.set(r.unit_id, cur)
+  for (const r of snaps) {
+    if (byUnit.has(r.unit_id)) continue
+    byUnit.set(r.unit_id, {
+      visitas: r.visitas || 0,
+      visualizacoes: r.visualizacoes || 0,
+      sacola: r.sacola || 0,
+      revisao: r.revisao || 0,
+      concluidos: r.concluidos || 0,
+    })
   }
 
   // Resolve nome das unidades
