@@ -2,29 +2,94 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Upload } from "lucide-react"
+import { Download, FileSpreadsheet, Loader2, Plus } from "lucide-react"
 
-import { importInsumos } from "../_actions"
+import { importInsumos, upsertInsumosRows } from "../_actions"
 import type { Insumo } from "@/lib/data/producao"
 
 /**
- * Catálogo de insumos do ERP. Importa colando texto (uma linha por insumo,
- * colunas separadas por TAB: Código / Nome / Unidade — ideal pra colar direto
- * de uma planilha do ERP).
+ * Catálogo de insumos do ERP. Três jeitos de cadastrar:
+ *  1) campos (Código / Nome / Unidade) — o mais simples;
+ *  2) baixar modelo .xlsx, preencher e importar;
+ *  3) colar texto em massa (avançado).
  */
 export function InsumoImport({ insumos }: { insumos: Insumo[] }) {
   const router = useRouter()
-  const [text, setText] = React.useState("")
-  const [open, setOpen] = React.useState(false)
+  const fileRef = React.useRef<HTMLInputElement>(null)
+  const [form, setForm] = React.useState({ codigo: "", nome: "", unidade: "UN" })
+  const [pasteOpen, setPasteOpen] = React.useState(false)
+  const [paste, setPaste] = React.useState("")
+  const [listOpen, setListOpen] = React.useState(false)
   const [msg, setMsg] = React.useState<string | null>(null)
   const [pending, start] = React.useTransition()
 
-  const submit = () => {
+  const addOne = () => {
+    if (!form.codigo.trim() || !form.nome.trim()) return
     start(async () => {
-      const res = await importInsumos(text)
+      const res = await upsertInsumosRows([form])
       setMsg(res.message ?? (res.ok ? "Salvo." : "Erro."))
       if (res.ok) {
-        setText("")
+        setForm({ codigo: "", nome: "", unidade: "UN" })
+        router.refresh()
+      }
+    })
+  }
+
+  const baixarModelo = async () => {
+    const XLSX = await import("xlsx")
+    const rows = insumos.length
+      ? insumos.map((i) => ({
+          Código: i.codigo,
+          Nome: i.nome,
+          Unidade: i.unidade,
+        }))
+      : [
+          { Código: "CNP053", Nome: "BRISKET 100G", Unidade: "UN" },
+          { Código: "CNP061", Nome: "PULLED PORK 100G", Unidade: "UN" },
+        ]
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Insumos")
+    XLSX.writeFile(wb, "modelo-insumos.xlsx")
+  }
+
+  const importarPlanilha = async (file: File) => {
+    const XLSX = await import("xlsx")
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(buf)
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
+    const pick = (r: Record<string, unknown>, keys: string[]) => {
+      for (const k of keys) {
+        const v = r[k]
+        if (v != null && String(v).trim()) return String(v).trim()
+      }
+      return ""
+    }
+    const rows = json
+      .map((r) => ({
+        codigo: pick(r, ["Código", "Codigo", "codigo", "CÓDIGO", "CODIGO"]),
+        nome: pick(r, ["Nome", "nome", "NOME"]),
+        unidade: pick(r, ["Unidade", "unidade", "UN", "Un"]) || "UN",
+      }))
+      .filter((r) => r.codigo)
+    if (rows.length === 0) {
+      setMsg("Planilha sem linhas válidas (precisa de Código + Nome).")
+      return
+    }
+    start(async () => {
+      const res = await upsertInsumosRows(rows)
+      setMsg(res.message ?? "")
+      if (res.ok) router.refresh()
+    })
+  }
+
+  const importarPaste = () => {
+    start(async () => {
+      const res = await importInsumos(paste)
+      setMsg(res.message ?? "")
+      if (res.ok) {
+        setPaste("")
         router.refresh()
       }
     })
@@ -32,44 +97,134 @@ export function InsumoImport({ insumos }: { insumos: Insumo[] }) {
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
-      <h3 className="text-sm font-semibold">Catálogo de insumos (ERP)</h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {insumos.length} insumo(s) cadastrados. Cole do ERP: uma linha por
-        insumo, colunas <b>Código → Nome → Unidade</b> separadas por TAB.
-      </p>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={"CNP053\tBRISKET 100G\tUN\nCNP061\tPULLED PORK 100G\tUN"}
-        rows={4}
-        className="mt-3 w-full rounded-md border bg-background p-2 font-mono text-xs outline-none focus:border-ring"
-      />
-      <div className="mt-2 flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-semibold">Catálogo de insumos (ERP)</h3>
+        <span className="text-[11px] text-muted-foreground">
+          {insumos.length} cadastrados
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={baixarModelo}
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <Download className="size-3.5" /> modelo .xlsx
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <FileSpreadsheet className="size-3.5" /> importar .xlsx
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) importarPlanilha(f)
+              e.target.value = ""
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Campos pra adicionar 1 insumo */}
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-medium text-muted-foreground">
+            Código
+          </span>
+          <input
+            value={form.codigo}
+            onChange={(e) => setForm((f) => ({ ...f, codigo: e.target.value }))}
+            onKeyDown={(e) => e.key === "Enter" && addOne()}
+            placeholder="CNP053"
+            className="h-9 w-28 rounded-md border bg-background px-2 font-mono text-xs uppercase outline-none focus:border-ring"
+          />
+        </label>
+        <label className="flex flex-1 flex-col gap-1">
+          <span className="text-[10px] font-medium text-muted-foreground">
+            Nome
+          </span>
+          <input
+            value={form.nome}
+            onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+            onKeyDown={(e) => e.key === "Enter" && addOne()}
+            placeholder="BRISKET 100G"
+            className="h-9 w-full min-w-32 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-medium text-muted-foreground">
+            Unidade
+          </span>
+          <input
+            value={form.unidade}
+            onChange={(e) => setForm((f) => ({ ...f, unidade: e.target.value }))}
+            onKeyDown={(e) => e.key === "Enter" && addOne()}
+            placeholder="UN"
+            className="h-9 w-20 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
+          />
+        </label>
         <button
           type="button"
-          onClick={submit}
-          disabled={pending || !text.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          onClick={addOne}
+          disabled={pending || !form.codigo.trim() || !form.nome.trim()}
+          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
           {pending ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <Upload className="size-3.5" />
+            <Plus className="size-3.5" />
           )}
-          Importar / atualizar
+          Adicionar
         </button>
+      </div>
+
+      <div className="mt-2 flex items-center gap-3">
         {insumos.length > 0 && (
           <button
             type="button"
-            onClick={() => setOpen((o) => !o)}
-            className="text-xs text-muted-foreground underline"
+            onClick={() => setListOpen((o) => !o)}
+            className="text-[11px] text-muted-foreground underline"
           >
-            {open ? "ocultar" : "ver catálogo"}
+            {listOpen ? "ocultar catálogo" : "ver catálogo"}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setPasteOpen((o) => !o)}
+          className="text-[11px] text-muted-foreground underline"
+        >
+          {pasteOpen ? "fechar" : "colar em massa (texto)"}
+        </button>
         {msg && <span className="text-[11px] text-muted-foreground">{msg}</span>}
       </div>
-      {open && (
+
+      {pasteOpen && (
+        <div className="mt-2">
+          <textarea
+            value={paste}
+            onChange={(e) => setPaste(e.target.value)}
+            placeholder={"CNP053\tBRISKET 100G\tUN\nCNP061\tPULLED PORK 100G\tUN"}
+            rows={3}
+            className="w-full rounded-md border bg-background p-2 font-mono text-xs outline-none focus:border-ring"
+          />
+          <button
+            type="button"
+            onClick={importarPaste}
+            disabled={pending || !paste.trim()}
+            className="mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+          >
+            Importar texto
+          </button>
+        </div>
+      )}
+
+      {listOpen && (
         <div className="mt-3 max-h-48 overflow-auto rounded-md border">
           <table className="w-full text-xs">
             <tbody className="divide-y">

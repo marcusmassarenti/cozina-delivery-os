@@ -129,14 +129,42 @@ export async function unmapItem(input: {
   return { ok: true }
 }
 
+/** Adiciona/atualiza insumos do catálogo a partir de linhas estruturadas
+ * (usado pelo form de campos e pela importação de planilha .xlsx). */
+export async function upsertInsumosRows(
+  rows: { codigo: string; nome: string; unidade?: string }[],
+): Promise<ActionState> {
+  let admin
+  try {
+    ;({ admin } = await requireAdmin())
+  } catch {
+    return fail("Apenas administradores.")
+  }
+  const clean = (rows ?? [])
+    .map((r) => ({
+      codigo: (r.codigo ?? "").trim().toUpperCase(),
+      nome: (r.nome ?? "").trim(),
+      unidade: (r.unidade ?? "").trim() || "UN",
+      ativo: true,
+    }))
+    .filter((r) => r.codigo && r.nome)
+  if (clean.length === 0) return fail("Preencha pelo menos Código e Nome.")
+  const { error } = await admin
+    .from("producao_insumo")
+    .upsert(clean, { onConflict: "codigo" })
+  if (error) return fail(`Erro ao salvar: ${error.message}`)
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, message: `${clean.length} insumo(s) salvos.` }
+}
+
 /**
- * Substitui a ficha técnica de um prato a partir de texto: uma linha por
- * insumo, "CÓDIGO x QTD" (ou "CÓDIGO QTD"). Códigos inexistentes no catálogo
- * são ignorados e reportados na mensagem.
+ * Substitui a ficha técnica de um prato por uma lista de { código, qtd }.
+ * Códigos repetidos somam; códigos fora do catálogo são ignorados e
+ * reportados.
  */
 export async function setFicha(input: {
   pratoId: string
-  text: string
+  linhas: { codigo: string; qtd: number }[]
 }): Promise<ActionState> {
   let admin
   try {
@@ -146,16 +174,13 @@ export async function setFicha(input: {
   }
   if (!input.pratoId) return fail("Prato inválido.")
 
-  const parsed: { codigo: string; qtd: number }[] = []
-  for (const raw of (input.text ?? "").split("\n")) {
-    const line = raw.replace(/×/g, "x").trim()
-    if (!line) continue
-    const m = line.match(/^(\S+?)\s*(?:x\s*)?(\d+(?:[.,]\d+)?)$/i)
-    if (!m) continue
-    parsed.push({
-      codigo: m[1].toUpperCase(),
-      qtd: parseFloat(m[2].replace(",", ".")),
-    })
+  // Normaliza + soma repetidos.
+  const merged = new Map<string, number>()
+  for (const l of input.linhas ?? []) {
+    const codigo = (l.codigo ?? "").trim().toUpperCase()
+    const qtd = Number(l.qtd) || 0
+    if (!codigo || qtd <= 0) continue
+    merged.set(codigo, (merged.get(codigo) ?? 0) + qtd)
   }
 
   // Valida contra o catálogo.
@@ -163,8 +188,12 @@ export async function setFicha(input: {
     .from("producao_insumo")
     .select("codigo")
   const validos = new Set((insumos ?? []).map((i) => i.codigo as string))
-  const aplicar = parsed.filter((p) => validos.has(p.codigo))
-  const invalidos = parsed.filter((p) => !validos.has(p.codigo)).map((p) => p.codigo)
+  const aplicar: { codigo: string; qtd: number }[] = []
+  const invalidos: string[] = []
+  for (const [codigo, qtd] of merged) {
+    if (validos.has(codigo)) aplicar.push({ codigo, qtd })
+    else invalidos.push(codigo)
+  }
 
   // Troca a ficha inteira do prato.
   const { error: eDel } = await admin
@@ -188,7 +217,7 @@ export async function setFicha(input: {
     ok: true,
     message:
       invalidos.length > 0
-        ? `Salvo. Códigos ignorados (não estão no catálogo): ${invalidos.join(", ")}`
+        ? `Salvo. Ignorados (fora do catálogo): ${invalidos.join(", ")}`
         : `Ficha salva (${aplicar.length} insumo(s)).`,
   }
 }

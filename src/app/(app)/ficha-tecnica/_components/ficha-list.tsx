@@ -2,15 +2,17 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, Loader2, Save, Trash2 } from "lucide-react"
+import { ChevronDown, Loader2, Plus, Save, Trash2, X } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { deletePrato, setFicha } from "../_actions"
 import type { Insumo, Prato } from "@/lib/data/producao"
 
+type Linha = { codigo: string; qtd: number }
+
 /**
- * Pratos canônicos + editor da ficha técnica. A ficha é editada como texto
- * ("CÓDIGO x QTD" por linha) — simples e rápido de preencher/colar.
+ * Pratos canônicos + editor da ficha técnica. Cada insumo é escolhido num
+ * seletor (do catálogo) com a quantidade ao lado — sem digitar código.
  */
 export function FichaList({
   pratos,
@@ -28,12 +30,16 @@ export function FichaList({
         </span>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Pra cada prato, liste os insumos: uma linha <b>CÓDIGO x QTD</b> (ex.:{" "}
-        <code className="rounded bg-muted px-1">CNP053 x 1</code>). É o que vira
-        a demanda de produção.
+        Pra cada prato, escolha os insumos e a quantidade por prato vendido. É o
+        que vira a demanda de produção.
       </p>
 
-      {pratos.length === 0 ? (
+      {insumos.length === 0 ? (
+        <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Cadastre os insumos no catálogo acima primeiro — eles aparecem no
+          seletor da ficha.
+        </p>
+      ) : pratos.length === 0 ? (
         <p className="py-4 text-center text-xs text-muted-foreground">
           Nenhum prato ainda — mapeie um item vendido acima pra criar o primeiro.
         </p>
@@ -50,20 +56,25 @@ export function FichaList({
 
 function PratoCard({ prato, insumos }: { prato: Prato; insumos: Insumo[] }) {
   const router = useRouter()
-  const insumoNome = React.useMemo(
-    () => new Map(insumos.map((i) => [i.codigo, i.nome])),
-    [insumos],
+  const [linhas, setLinhas] = React.useState<Linha[]>(
+    prato.ficha.map((f) => ({ codigo: f.insumoCodigo, qtd: f.qtd })),
   )
-  const initial = prato.ficha
-    .map((f) => `${f.insumoCodigo} x ${f.qtd}`)
-    .join("\n")
-  const [text, setText] = React.useState(initial)
   const [pending, start] = React.useTransition()
   const [msg, setMsg] = React.useState<string | null>(null)
 
+  const setLinha = (i: number, patch: Partial<Linha>) =>
+    setLinhas((arr) => arr.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  const addLinha = () =>
+    setLinhas((arr) => [...arr, { codigo: "", qtd: 1 }])
+  const delLinha = (i: number) =>
+    setLinhas((arr) => arr.filter((_, idx) => idx !== i))
+
   const salvar = () => {
     start(async () => {
-      const res = await setFicha({ pratoId: prato.id, text })
+      const res = await setFicha({
+        pratoId: prato.id,
+        linhas: linhas.filter((l) => l.codigo && l.qtd > 0),
+      })
       setMsg(res.message ?? (res.ok ? "Salvo." : "Erro."))
       if (res.ok) router.refresh()
     })
@@ -104,32 +115,57 @@ function PratoCard({ prato, insumos }: { prato: Prato; insumos: Insumo[] }) {
             ))}
           </div>
         )}
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={"CNP053 x 1\nCNP061 x 2"}
-          rows={Math.max(3, prato.ficha.length + 1)}
-          className="w-full rounded-md border bg-background p-2 font-mono text-xs outline-none focus:border-ring"
-        />
-        {/* Pré-visualização dos nomes dos códigos digitados */}
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
-          {text
-            .replace(/×/g, "x")
-            .split("\n")
-            .map((l) => l.trim().match(/^(\S+)/)?.[1]?.toUpperCase())
-            .filter((c): c is string => !!c)
-            .map((c, idx) => (
-              <span key={`${c}-${idx}`}>
-                <b>{c}</b>{" "}
-                {insumoNome.has(c) ? (
-                  insumoNome.get(c)
-                ) : (
-                  <span className="text-rose-600">(fora do catálogo)</span>
-                )}
+
+        <div className="space-y-1.5">
+          {linhas.map((l, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                value={l.codigo}
+                onChange={(e) => setLinha(i, { codigo: e.target.value })}
+                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
+              >
+                <option value="">— selecione o insumo —</option>
+                {insumos.map((ins) => (
+                  <option key={ins.codigo} value={ins.codigo}>
+                    {ins.codigo} — {ins.nome}
+                    {ins.ativo ? "" : " (inativo)"}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={l.qtd}
+                onChange={(e) =>
+                  setLinha(i, { qtd: parseFloat(e.target.value) || 0 })
+                }
+                className="h-8 w-20 rounded-md border bg-background px-2 text-right text-xs tabular-nums outline-none focus:border-ring"
+              />
+              <span className="w-6 text-[10px] text-muted-foreground">
+                {insumos.find((x) => x.codigo === l.codigo)?.unidade ?? ""}
               </span>
-            ))}
+              <button
+                type="button"
+                onClick={() => delLinha(i)}
+                aria-label="Remover"
+                className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
         </div>
-        <div className="mt-2 flex items-center gap-2">
+
+        <button
+          type="button"
+          onClick={addLinha}
+          className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+        >
+          <Plus className="size-3.5" /> adicionar insumo
+        </button>
+
+        <div className="mt-3 flex items-center gap-2 border-t pt-2">
           <button
             type="button"
             onClick={salvar}
