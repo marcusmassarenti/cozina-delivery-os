@@ -263,7 +263,7 @@ export type NetworkDrePlat = {
   taxaTotal: number
   /** VR líquido à parte (só iFood). */
   vrLiquido: number
-  itens: { label: string; value: number }[]
+  itens: { label: string; value: number; credit?: boolean }[]
 }
 
 /**
@@ -362,9 +362,21 @@ export async function getNetworkDrePlatforms(
   ): NetworkDrePlat | null => {
     if (bruto <= 0) return null
     const taxaTotal = Math.max(0, bruto - liq)
-    const lista = itens.filter((i) => i.value > 0)
+    const lista: { label: string; value: number; credit?: boolean }[] =
+      itens.filter((i) => i.value > 0)
     const resto = taxaTotal - lista.reduce((s, i) => s + i.value, 0)
-    if (resto > 0.5) lista.push({ label: "Cancelamentos / outros", value: resto })
+    if (resto > 0.5) {
+      lista.push({ label: "Cancelamentos / outros", value: resto })
+    } else if (resto < -0.5) {
+      // Os descontos itemizados somam mais que a taxa líquida real — a
+      // diferença é o que a plataforma devolveu (promoções financiadas por
+      // ela, estornos/ressarcimentos). Entra como crédito pra fechar a conta.
+      lista.push({
+        label: "Créditos / estornos da plataforma",
+        value: -resto,
+        credit: true,
+      })
+    }
     return { id, name, bruto, liquido: liq, taxaTotal, vrLiquido: vr, itens: lista }
   }
   return [

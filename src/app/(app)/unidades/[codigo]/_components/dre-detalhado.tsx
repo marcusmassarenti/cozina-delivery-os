@@ -14,8 +14,10 @@ export type DrePlat = {
   taxaTotal: number
   /** VR líquido que entra à parte (só iFood > 0). */
   vrLiquido: number
-  /** Abertura das taxas (pode ser parcial; Keeta vem vazio). */
-  itens: { label: string; value: number }[]
+  /** Abertura das taxas (pode ser parcial; Keeta vem vazio). `credit` = linha
+   * positiva (estorno/promoção que a plataforma devolveu), pra fechar com a
+   * taxa líquida real. */
+  itens: { label: string; value: number; credit?: boolean }[]
 }
 
 export type VrInfo = {
@@ -307,7 +309,7 @@ function ItemList({
   itens,
   total,
 }: {
-  itens: { label: string; value: number }[]
+  itens: { label: string; value: number; credit?: boolean }[]
   total: number
 }) {
   if (itens.length === 0) {
@@ -328,8 +330,14 @@ function ItemList({
           <span className="truncate text-[11px] text-muted-foreground">
             {it.label}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-rose-700 dark:text-rose-400">
-            − {fmtBRL(it.value)}
+          <span
+            className={`shrink-0 text-[11px] tabular-nums ${
+              it.credit
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-rose-700 dark:text-rose-400"
+            }`}
+          >
+            {it.credit ? "+" : "−"} {fmtBRL(it.value)}
           </span>
         </div>
       ))}

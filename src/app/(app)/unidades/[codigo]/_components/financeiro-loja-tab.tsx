@@ -111,9 +111,21 @@ export async function FinanceiroLojaTab({
     const p = m.platforms.find((x) => x.id === id)
     if (!p || p.bruto <= 0) return null
     const taxaTotal = Math.max(0, p.bruto - p.liquido)
-    const lista = itens.filter((i) => i.value > 0)
+    const lista: { label: string; value: number; credit?: boolean }[] =
+      itens.filter((i) => i.value > 0)
     const resto = taxaTotal - lista.reduce((a, i) => a + i.value, 0)
-    if (resto > 0.5) lista.push({ label: "Cancelamentos / outros", value: resto })
+    if (resto > 0.5) {
+      lista.push({ label: "Cancelamentos / outros", value: resto })
+    } else if (resto < -0.5) {
+      // Descontos itemizados > taxa líquida real → a diferença é o que a
+      // plataforma devolveu (promoção financiada por ela, estorno). Entra
+      // como crédito pra abertura fechar com a linha de taxas.
+      lista.push({
+        label: "Créditos / estornos da plataforma",
+        value: -resto,
+        credit: true,
+      })
+    }
     return {
       id,
       name,
