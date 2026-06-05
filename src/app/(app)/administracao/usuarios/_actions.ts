@@ -62,16 +62,23 @@ export async function listUsers(): Promise<AppUser[]> {
   const unitById = new Map(
     (unitsRes.data ?? []).map((u) => [u.id, u]),
   )
+  // Normaliza o perfil contra app_roles: o default da coluna é 'viewer' (não
+  // existe em app_roles), então um profile criado pelo Supabase Dashboard
+  // mostraria badge/aba erradas. Qualquer perfil fora do allow-list cai em
+  // 'franqueado' (fail-safe, escopo de loja).
+  const validRoleKeys = new Set((await getRolesConfig()).map((r) => r.key))
 
   return authRes.data.users.map((u) => {
     const p = profileByUserId.get(u.id)
     const unitId = accessByUserId.get(u.id) ?? null
     const unit = unitId ? unitById.get(unitId) : null
+    const perfilRaw = p?.perfil ?? ""
+    const perfil = validRoleKeys.has(perfilRaw) ? perfilRaw : "franqueado"
     return {
       id: u.id,
       email: u.email ?? "—",
       fullName: p?.full_name ?? null,
-      perfil: p?.perfil ?? "franqueado",
+      perfil,
       unitId,
       unitCode: unit?.code ?? null,
       unitName: unit?.name ?? null,

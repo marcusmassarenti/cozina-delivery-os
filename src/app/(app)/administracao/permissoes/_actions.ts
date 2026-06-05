@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath, revalidateTag } from "next/cache"
+import { revalidatePath, updateTag } from "next/cache"
 
 import { requireAdmin } from "@/lib/auth/guards"
 import { MODULES, type DataScope } from "@/lib/auth/permissions"
@@ -79,7 +79,7 @@ export async function saveRole(input: {
       if (permErr) return { ok: false, message: permErr.message }
     }
 
-    revalidateTag("rbac", "max")
+    updateTag("rbac")
     revalidatePath("/administracao/permissoes")
     return { ok: true }
   } catch (e) {
@@ -135,7 +135,7 @@ export async function createRole(input: {
       .insert(rows)
     if (seedErr) return { ok: false, message: seedErr.message }
 
-    revalidateTag("rbac", "max")
+    updateTag("rbac")
     revalidatePath("/administracao/permissoes")
     return { ok: true, roleId: role.id }
   } catch (e) {
@@ -174,7 +174,7 @@ export async function deleteRole(roleId: string): Promise<PermActionState> {
     const { error } = await admin.from("app_roles").delete().eq("id", roleId)
     if (error) return { ok: false, message: error.message }
 
-    revalidateTag("rbac", "max")
+    updateTag("rbac")
     revalidatePath("/administracao/permissoes")
     return { ok: true }
   } catch (e) {
