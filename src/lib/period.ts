@@ -72,6 +72,23 @@ export function formatPeriodLabel({ year, month }: Period): string {
   return `${meses[month - 1]}/${year}`
 }
 
+/**
+ * Dias "decorridos" no mês, pra usar como denominador de média/dia:
+ *  - mês corrente (BRT) → dia de hoje (mês parcial; ex.: dia 3 → divide por 3)
+ *  - mês passado → total de dias do mês (28/29/30/31)
+ *  - mês futuro → total de dias do mês (não deveria ter dados)
+ * Sempre ≥ 1 pra não dividir por zero.
+ */
+export function daysElapsedInMonth({ year, month }: Period): number {
+  const lastDay = new Date(year, month, 0).getDate()
+  const cur = currentPeriod()
+  if (year === cur.year && month === cur.month) {
+    const { day } = nowParts()
+    return Math.min(Math.max(day, 1), lastDay)
+  }
+  return lastDay
+}
+
 /** Período anterior (mês anterior) */
 export function previousPeriod({ year, month }: Period): Period {
   if (month === 1) return { year: year - 1, month: 12 }
