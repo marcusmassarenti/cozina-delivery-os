@@ -21,7 +21,10 @@ export async function AvaliacoesTab({
 }) {
   const [resumo, lista] = await Promise.all([
     getAvaliacoesResumoForMonth(unitId, year, month),
-    listAvaliacoesForMonth(unitId, year, month, { limit: 50 }),
+    // Limite alto = mês inteiro da loja (cabe bem abaixo do cap de 1000). Antes
+    // era 50: o header "Comentários (N)" e o filtro de nota rodavam só sobre os
+    // 50 mais recentes e subestimavam vs o KPI "Com comentário" (mês todo).
+    listAvaliacoesForMonth(unitId, year, month, { limit: 1000 }),
   ])
   const listaFiltrada =
     notasFiltro.length > 0

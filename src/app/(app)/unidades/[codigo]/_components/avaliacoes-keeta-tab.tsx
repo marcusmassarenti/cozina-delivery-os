@@ -26,7 +26,8 @@ export async function AvaliacoesKeetaTab({
 }) {
   const [resumo, lista] = await Promise.all([
     getKeetaAvaliacoesResumoForMonth(unitId, year, month),
-    listKeetaAvaliacoesForMonth(unitId, year, month, 50),
+    // Mês inteiro da loja (era 50 → "Últimas 50" e filtro de nota truncavam).
+    listKeetaAvaliacoesForMonth(unitId, year, month, 1000),
   ])
   const listaFiltrada =
     notasFiltro.length > 0
