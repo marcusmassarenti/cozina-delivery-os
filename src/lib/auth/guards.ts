@@ -13,6 +13,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
+  getAccessibleUnitIds,
   getAuthUser,
   userCan,
   type ModuleKey,
@@ -115,6 +116,45 @@ export async function requireModulePermission(
   const { userId, email } = await requireAuth()
   if (!(await userCan(module, action))) {
     throw new ForbiddenError("Seu perfil não tem permissão pra essa ação.")
+  }
+  return { userId, email, admin: createAdminClient() }
+}
+
+/**
+ * Exige só usuário logado e devolve o admin client. Pra actions de
+ * lançamento da PRÓPRIA loja (custos, fechamento, vinagrete), onde o
+ * escopo certo é "acesso à unidade" — não a permissão GLOBAL de módulo.
+ * Combine com requireUnitAccess / assertUnitAccess pra travar cross-tenant.
+ */
+export async function requireAuthWithAdmin(): Promise<{
+  userId: string
+  email: string | null
+  admin: ReturnType<typeof createAdminClient>
+}> {
+  const { userId, email } = await requireAuth()
+  return { userId, email, admin: createAdminClient() }
+}
+
+/**
+ * Exige usuário logado COM acesso à unidade `unitId` (anti cross-tenant):
+ *  - holding/admin (getAccessibleUnitIds === null) → acessa qualquer loja
+ *  - franqueado → só as lojas vinculadas a ele
+ * É o gate certo pra editar dados de UMA loja (custos, fechamento), pois o
+ * franqueado gerencia a própria unidade mesmo sem permissão global de
+ * financeiro:edit (que é da holding).
+ *
+ * @throws AuthError se não houver sessão
+ * @throws ForbiddenError se a unidade não estiver no escopo do usuário
+ */
+export async function requireUnitAccess(unitId: string): Promise<{
+  userId: string
+  email: string | null
+  admin: ReturnType<typeof createAdminClient>
+}> {
+  const { userId, email } = await requireAuth()
+  const ids = await getAccessibleUnitIds()
+  if (ids !== null && (!unitId || !ids.includes(unitId))) {
+    throw new ForbiddenError("Você não tem acesso a esta unidade.")
   }
   return { userId, email, admin: createAdminClient() }
 }

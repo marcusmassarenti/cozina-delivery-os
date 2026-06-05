@@ -2,8 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireModulePermission } from "@/lib/auth/guards"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { requireUnitAccess } from "@/lib/auth/guards"
 
 export type SaveCostsState = {
   ok: boolean
@@ -39,8 +38,10 @@ export async function saveUnitCosts(input: {
     : 0
 
   try {
-    await requireModulePermission("financeiro", "edit")
-    const supabase = createAdminClient()
+    // Escopo por UNIDADE (não financeiro:edit global): o franqueado gerencia o
+    // custo da própria loja; admin/holding gerencia qualquer uma. Também fecha
+    // o buraco cross-tenant (antes não checava a unidade).
+    const { admin: supabase } = await requireUnitAccess(unitId)
     const { error } = await supabase.from("monthly_entries").upsert(
       {
         unit_id: unitId,

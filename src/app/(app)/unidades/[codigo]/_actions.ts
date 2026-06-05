@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache"
 
-import { requireModulePermission } from "@/lib/auth/guards"
+import {
+  requireAuthWithAdmin,
+  requireModulePermission,
+} from "@/lib/auth/guards"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { getRecebidoSemana, type RecebidoSemana } from "@/lib/data/fechamentos"
 import {
@@ -59,7 +62,7 @@ export async function saveFechamento(input: {
   observacoes: string
 }): Promise<FechamentoState> {
   try {
-    const { admin, userId } = await requireModulePermission("financeiro", "edit")
+    const { admin, userId } = await requireAuthWithAdmin()
 
     if (!input.unitId || !input.periodoInicio || !input.periodoFim) {
       return { ok: false, message: "Escolha a semana (início e fim)." }
@@ -108,7 +111,7 @@ export async function deleteFechamento(
   unitCode: string,
 ): Promise<FechamentoState> {
   try {
-    const { admin } = await requireModulePermission("financeiro", "edit")
+    const { admin } = await requireAuthWithAdmin()
     if (!id) return { ok: false, message: "ID ausente." }
     const { data: fech } = await admin
       .from("unit_fechamentos")
@@ -177,7 +180,7 @@ export async function importProdutosVendidos(
   periodoFim?: string
 }> {
   try {
-    const { admin } = await requireModulePermission("financeiro", "edit")
+    const { admin } = await requireAuthWithAdmin()
     const unitId = String(formData.get("unitId") || "")
     const unitCode = String(formData.get("unitCode") || "")
     const file = formData.get("file")
@@ -256,7 +259,7 @@ export async function deleteProdutosVendidos(
   fim: string,
 ): Promise<FechamentoState> {
   try {
-    const { admin } = await requireModulePermission("financeiro", "edit")
+    const { admin } = await requireAuthWithAdmin()
     if (!unitId || !inicio || !fim)
       return { ok: false, message: "Semana inválida." }
     await assertUnitAccess(unitId)
@@ -286,7 +289,7 @@ export async function saveCategoriaPrecoGroup(input: {
   considerar: boolean
 }): Promise<FechamentoState> {
   try {
-    const { admin } = await requireModulePermission("financeiro", "edit")
+    const { admin } = await requireAuthWithAdmin()
     const categoria = input.categoria?.trim()
     if (!input.unitId || !categoria)
       return { ok: false, message: "Categoria inválida." }
@@ -323,7 +326,7 @@ export async function saveEmbalagem(input: {
   considerar: boolean
 }): Promise<FechamentoState> {
   try {
-    const { admin } = await requireModulePermission("financeiro", "edit")
+    const { admin } = await requireAuthWithAdmin()
     if (!input.unitId || !input.id)
       return { ok: false, message: "Insumo inválido." }
     await assertUnitAccess(input.unitId)
@@ -361,7 +364,7 @@ export async function assignProdutoCategoria(input: {
   categoria: string
 }): Promise<FechamentoState> {
   try {
-    const { admin } = await requireModulePermission("financeiro", "edit")
+    const { admin } = await requireAuthWithAdmin()
     const codigo = input.codigo?.trim()
     const categoria = input.categoria?.trim()
     if (!input.unitId || !codigo || !categoria)
