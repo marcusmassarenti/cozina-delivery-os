@@ -141,7 +141,12 @@ export async function FinanceiroLojaTab({
         {/* Custos editáveis */}
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold">Custos da loja</h3>
+          {/* key inclui os valores salvos → quando o servidor re-renderiza
+              com o lançamento novo (após salvar / trocar de mês), o editor
+              remonta e o campo SEMPRE reflete o que está salvo (o useState do
+              editor só lê a prop na montagem). */}
           <UnitCostsEditor
+            key={`${unitId}-${year}-${month}-${m.custoProdutosCozina}-${operacao}`}
             unitId={unitId}
             year={year}
             month={month}
