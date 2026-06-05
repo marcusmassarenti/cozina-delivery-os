@@ -2,6 +2,7 @@ import {
   Cable,
   CalendarRange,
   ClipboardList,
+  Factory,
   FileUp,
   LayoutDashboard,
   type LucideIcon,
@@ -88,6 +89,12 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "importacao",
       },
       { label: "Conexões", href: "/conexoes", icon: Cable, module: "conexoes" },
+      {
+        label: "Ficha Técnica",
+        href: "/ficha-tecnica",
+        icon: Factory,
+        module: "conexoes",
+      },
     ],
   },
   {
