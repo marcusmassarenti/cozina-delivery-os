@@ -10,6 +10,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { currentPeriod } from "@/lib/period"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 
@@ -507,10 +508,10 @@ export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
   )
 
   const map = new Map<string, AvailablePeriod>()
-  // Sempre inclui o mês corrente (mesmo sem dados)
-  const now = new Date()
-  const curYear = now.getFullYear()
-  const curMonth = now.getMonth() + 1
+  // Sempre inclui o mês corrente (mesmo sem dados). Fuso de Brasília (não o UTC
+  // do servidor Vercel) pra casar com o PeriodSelector e não liberar/ocultar o
+  // mês errado na virada (~21h BRT em diante).
+  const { year: curYear, month: curMonth } = currentPeriod()
   const curKey = `${curYear}-${curMonth}`
   map.set(curKey, {
     year: curYear,

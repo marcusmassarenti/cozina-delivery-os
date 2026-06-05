@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
+import { currentPeriod } from "@/lib/period"
 import type { PlatformId } from "@/components/platform-logo"
 
 export type Unit = {
@@ -50,9 +51,10 @@ function attach(
   return { ...u, platforms, externalStoreIds, platformInauguracoes, monthly }
 }
 
+// Mês corrente SEMPRE no fuso de Brasília (não o UTC do servidor Vercel), pra
+// não virar o mês cedo demais (~21h BRT em diante) e divergir do PeriodSelector.
 function currentYearMonth(): { year: number; month: number } {
-  const now = new Date()
-  return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  return currentPeriod()
 }
 
 /**
