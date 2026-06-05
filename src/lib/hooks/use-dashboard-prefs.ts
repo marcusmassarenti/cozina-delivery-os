@@ -14,6 +14,7 @@ const STORAGE_KEY = "dashboard.sections.visible"
 const EVENT_NAME = "dashboard-prefs-change"
 
 export type SectionId =
+  | "atencao"
   | "kpis"
   | "plataformas"
   | "cardapio"
@@ -22,8 +23,12 @@ export type SectionId =
 
 export const SECTION_META: Record<
   SectionId,
-  { label: string; description: string; number: number }
+  { label: string; description: string; number?: number }
 > = {
+  atencao: {
+    label: "Precisa de atenção",
+    description: "Lojas com sinal de problema no mês (faturamento, nota, CMV…)",
+  },
   kpis: {
     number: 1,
     label: "Performance da Operação",
@@ -52,6 +57,7 @@ export const SECTION_META: Record<
 }
 
 export const SECTION_ORDER: SectionId[] = [
+  "atencao",
   "kpis",
   "plataformas",
   "cardapio",
@@ -60,6 +66,7 @@ export const SECTION_ORDER: SectionId[] = [
 ]
 
 const DEFAULTS: Record<SectionId, boolean> = {
+  atencao: true,
   kpis: true,
   plataformas: true,
   cardapio: true,

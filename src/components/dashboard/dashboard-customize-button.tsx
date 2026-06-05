@@ -108,9 +108,11 @@ export function DashboardCustomizeButton() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium">
-                      <span className="mr-1 text-muted-foreground">
-                        {meta.number}.
-                      </span>
+                      {meta.number != null && (
+                        <span className="mr-1 text-muted-foreground">
+                          {meta.number}.
+                        </span>
+                      )}
                       {meta.label}
                     </p>
                     <p className="mt-0.5 text-[10px] text-muted-foreground">

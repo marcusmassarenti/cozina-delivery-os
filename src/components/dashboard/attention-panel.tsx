@@ -4,7 +4,7 @@ import {
   ArrowRight,
   Ban,
   CheckCircle2,
-  ChevronRight,
+  ChevronDown,
   Inbox,
   Star,
   TrendingDown,
@@ -29,11 +29,11 @@ type Grupo = {
 }
 
 /**
- * Painel "Precisa de atenção": uma linha discreta por loja (loja + nº de
- * alertas). Clicar na loja expande os alertas dela (faturamento caindo,
- * cancelamento, CMV, parou de importar, nota baixa). Vazio = estado positivo.
+ * Painel "Precisa de atenção": grade compacta de cards, um por loja (lado a
+ * lado pra economizar espaço). O card fechado mostra loja + nº de alertas;
+ * clicar abre os alertas dela e o link "Abrir loja". Vazio = estado positivo.
  *
- * Usa <details>/<summary> nativo → colapsável sem "use client".
+ * <details>/<summary> nativo → expansão sem "use client".
  */
 export function AttentionPanel({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
@@ -45,7 +45,7 @@ export function AttentionPanel({ items }: { items: AttentionItem[] }) {
     )
   }
 
-  // Agrupa por loja preservando a ordem de severidade já vinda do data layer.
+  // Agrupa por loja preservando a ordem de severidade vinda do data layer.
   const byUnit = new Map<string, Grupo>()
   for (const it of items) {
     let g = byUnit.get(it.unitId)
@@ -60,112 +60,109 @@ export function AttentionPanel({ items }: { items: AttentionItem[] }) {
     (a, b) =>
       Number(temAlta(b)) - Number(temAlta(a)) || b.items.length - a.items.length,
   )
-
   const urgentes = items.filter((i) => i.severity === "alta").length
 
   return (
-    <div className="overflow-hidden rounded-xl border border-amber-200 bg-card dark:border-amber-900/50">
-      {/* Rotação do chevron + sem o triângulo nativo do <summary> */}
-      <style>{`.atencao summary{list-style:none}.atencao summary::-webkit-details-marker{display:none}.atencao details[open] .chev{transform:rotate(90deg)}`}</style>
+    <div className="flex flex-col gap-2">
+      {/* gira o chevron quando o card abre (sem JS no cliente) */}
+      <style>{`.atencao summary{list-style:none}.atencao summary::-webkit-details-marker{display:none}.atencao details[open] .chev{transform:rotate(180deg)}`}</style>
 
-      <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
+      <div className="flex items-center gap-2">
         <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-        <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-          Precisa de atenção
-        </h2>
-        <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">
+        <h2 className="text-sm font-semibold">Precisa de atenção</h2>
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
           {lojas.length} loja{lojas.length !== 1 ? "s" : ""}
           {urgentes > 0 ? ` · ${urgentes} urgente${urgentes !== 1 ? "s" : ""}` : ""}
         </span>
       </div>
 
-      <ul className="atencao divide-y">
+      <div className="atencao grid grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {lojas.map((loja) => {
           const isAlta = temAlta(loja)
-          // tipos distintos pra mostrar ícones-resumo na linha colapsada
           const tipos = [...new Set(loja.items.map((i) => i.type))]
           return (
-            <li key={loja.code}>
-              <details>
-                <summary className="flex cursor-pointer select-none items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted/50">
-                  <ChevronRight className="chev size-4 shrink-0 text-muted-foreground transition-transform" />
-                  <span
-                    className={`size-2 shrink-0 rounded-full ${
-                      isAlta ? "bg-red-500" : "bg-amber-500"
-                    }`}
-                  />
-                  <span className="truncate text-sm font-medium">
-                    {loja.name}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">
-                      #{loja.code}
-                    </span>
+            <details
+              key={loja.code}
+              className={`group overflow-hidden rounded-lg border bg-card ${
+                isAlta
+                  ? "border-red-200 dark:border-red-900/50"
+                  : "border-amber-200 dark:border-amber-900/50"
+              }`}
+            >
+              <summary className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 transition-colors hover:bg-muted/50">
+                <span
+                  className={`size-2 shrink-0 rounded-full ${
+                    isAlta ? "bg-red-500" : "bg-amber-500"
+                  }`}
+                />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {loja.name}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    #{loja.code}
                   </span>
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                    <span className="hidden items-center gap-1 text-muted-foreground sm:flex">
-                      {tipos.map((t) => {
-                        const Icon = ICON[t]
-                        return <Icon key={t} className="size-3.5" />
-                      })}
-                    </span>
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
-                        isAlta
-                          ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                      }`}
-                    >
-                      {loja.items.length}
-                    </span>
-                  </span>
-                </summary>
+                </span>
+                <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+                  {tipos.map((t) => {
+                    const Icon = ICON[t]
+                    return <Icon key={t} className="size-3.5" />
+                  })}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                    isAlta
+                      ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                  }`}
+                >
+                  {loja.items.length}
+                </span>
+                <ChevronDown className="chev size-4 shrink-0 text-muted-foreground transition-transform" />
+              </summary>
 
-                <div className="border-t bg-muted/20 px-4 py-3">
-                  <ul className="space-y-2">
-                    {loja.items.map((it, i) => {
-                      const Icon = ICON[it.type]
-                      const itAlta = it.severity === "alta"
-                      return (
-                        <li key={`${it.type}-${i}`} className="flex items-start gap-2.5">
+              <div className="border-t bg-muted/20 px-3 py-2.5">
+                <ul className="space-y-2">
+                  {loja.items.map((it, i) => {
+                    const Icon = ICON[it.type]
+                    const itAlta = it.severity === "alta"
+                    return (
+                      <li key={`${it.type}-${i}`} className="flex items-start gap-2">
+                        <Icon
+                          className={`mt-0.5 size-3.5 shrink-0 ${
+                            itAlta
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-amber-700 dark:text-amber-400"
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1">
                           <span
-                            className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ${
+                            className={`text-xs font-semibold ${
                               itAlta
-                                ? "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400"
-                                : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-amber-700 dark:text-amber-400"
                             }`}
                           >
-                            <Icon className="size-3.5" />
+                            {it.title}
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <span
-                              className={`text-xs font-semibold ${
-                                itAlta
-                                  ? "text-red-600 dark:text-red-400"
-                                  : "text-amber-700 dark:text-amber-400"
-                              }`}
-                            >
-                              {it.title}
-                            </span>
-                            <p className="text-xs text-muted-foreground">
-                              {it.detail}
-                            </p>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  <Link
-                    href={`/unidades/${loja.code}`}
-                    className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                  >
-                    Abrir loja
-                    <ArrowRight className="size-3.5" />
-                  </Link>
-                </div>
-              </details>
-            </li>
+                          <p className="text-[11px] leading-snug text-muted-foreground">
+                            {it.detail}
+                          </p>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <Link
+                  href={`/unidades/${loja.code}`}
+                  className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  Abrir loja
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
+            </details>
           )
         })}
-      </ul>
+      </div>
     </div>
   )
 }

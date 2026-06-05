@@ -424,7 +424,11 @@ export default async function Home({
         </div>
       )}
 
-      {status.ok && units.length > 0 && <AttentionPanel items={attention} />}
+      {status.ok && units.length > 0 && (
+        <DashboardSection id="atencao">
+          <AttentionPanel items={attention} />
+        </DashboardSection>
+      )}
 
       {allUnits.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
