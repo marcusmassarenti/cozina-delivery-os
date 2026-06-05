@@ -88,6 +88,17 @@ export async function FinanceiroLojaTab({
 
   // VR líquido (iFood, à parte) = recebido − 8% de taxa.
   const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
+  // De onde vem o VR (pra abrir no DRE): bruto vendido, taxa (estimada 8%),
+  // líquido recebido e a quebra por bandeira (do relatório de pedidos iFood).
+  const vrInfo =
+    vrLiquido > 0
+      ? {
+          bruto: m.vrRecebido,
+          taxa: m.vrTaxaMedia8,
+          liquido: vrLiquido,
+          porBandeira: pagamento.hasData ? pagamento.porBandeira : [],
+        }
+      : undefined
 
   // Abertura das taxas por plataforma pro DRE detalhado. iFood vem itemizado
   // do `m`; 99 Food do seu resumo (comissão/taxa/promoções); Keeta só o total.
@@ -158,6 +169,7 @@ export async function FinanceiroLojaTab({
             totalLiquido={liquido}
             cmv={cmv}
             operacao={operacao}
+            vrInfo={vrInfo}
           />
         </div>
 

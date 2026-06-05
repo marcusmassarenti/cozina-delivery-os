@@ -4,7 +4,7 @@ import * as React from "react"
 import { ChevronDown, Wallet } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
-import { fmtBRL, fmtPct } from "@/lib/format"
+import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 export type DrePlat = {
   id: PlatformId
@@ -16,6 +16,16 @@ export type DrePlat = {
   vrLiquido: number
   /** Abertura das taxas (pode ser parcial; Keeta vem vazio). */
   itens: { label: string; value: number }[]
+}
+
+export type VrInfo = {
+  /** Vendido em VR (bruto, do relatório). */
+  bruto: number
+  /** Taxa estimada (8% padrão — o iFood não detalha a taxa do VR). */
+  taxa: number
+  /** Recebido na conta (líquido = bruto − taxa). */
+  liquido: number
+  porBandeira: { bandeira: string; valor: number; pedidos: number }[]
 }
 
 /**
@@ -31,12 +41,14 @@ export function DreDetalhado({
   totalLiquido,
   cmv,
   operacao,
+  vrInfo,
 }: {
   platforms: DrePlat[]
   totalBruto: number
   totalLiquido: number
   cmv: number
   operacao: number
+  vrInfo?: VrInfo
 }) {
   const [sel, setSel] = React.useState<"todas" | PlatformId>("todas")
   const multi = platforms.length > 1
@@ -170,11 +182,7 @@ export function DreDetalhado({
       )}
       {vr > 0 && (
         <>
-          <Row
-            label="(+) VR recebido à parte"
-            value={`+ ${fmtBRL(vr)}`}
-            tone="pos"
-          />
+          <VrLine vrLiquido={vr} info={vrInfo} />
           <Divider />
           <Row
             label="= Resultado total da loja"
@@ -194,6 +202,80 @@ export function DreDetalhado({
         )}
       </p>
     </div>
+  )
+}
+
+function VrLine({ vrLiquido, info }: { vrLiquido: number; info?: VrInfo }) {
+  // Sem a abertura: linha simples.
+  if (!info) {
+    return (
+      <Row
+        label="(+) VR recebido à parte"
+        value={`+ ${fmtBRL(vrLiquido)}`}
+        tone="pos"
+      />
+    )
+  }
+  const taxaPct = info.bruto > 0 ? (info.taxa / info.bruto) * 100 : 0
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        <span className="text-xs">(+) VR recebido à parte</span>
+        <span className="ml-auto text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+          + {fmtBRL(vrLiquido)}
+        </span>
+      </summary>
+      <div className="ml-6 border-l pl-4 pr-1">
+        <div className="flex items-baseline justify-between gap-2 py-0.5">
+          <span className="text-[11px] text-muted-foreground">
+            Vendido em VR (bruto)
+          </span>
+          <span className="text-[11px] font-medium tabular-nums">
+            {fmtBRL(info.bruto)}
+          </span>
+        </div>
+        <div className="flex items-baseline justify-between gap-2 py-0.5">
+          <span className="text-[11px] text-muted-foreground">
+            (−) Taxa estimada ({taxaPct.toFixed(0)}%)
+          </span>
+          <span className="text-[11px] tabular-nums text-rose-700 dark:text-rose-400">
+            − {fmtBRL(info.taxa)}
+          </span>
+        </div>
+        <div className="flex items-baseline justify-between gap-2 border-t py-0.5 pt-1">
+          <span className="text-[11px] font-semibold">Recebido na conta</span>
+          <span className="text-[11px] font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+            {fmtBRL(info.liquido)}
+          </span>
+        </div>
+        {info.porBandeira.length > 0 && (
+          <div className="mt-1.5 border-t pt-1">
+            <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Por bandeira (bruto)
+            </p>
+            {info.porBandeira.map((b) => (
+              <div
+                key={b.bandeira}
+                className="flex items-baseline justify-between gap-2 py-0.5"
+              >
+                <span className="truncate text-[11px] text-muted-foreground">
+                  {b.bandeira}
+                </span>
+                <span className="shrink-0 text-[11px] tabular-nums">
+                  {fmtBRL(b.valor)} · {fmtNum(b.pedidos)} ped
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+          A taxa de {taxaPct.toFixed(0)}% é uma estimativa padrão — o iFood não
+          detalha a taxa do VR no relatório, então o bruto é real e o líquido é
+          aproximado.
+        </p>
+      </div>
+    </details>
   )
 }
 
