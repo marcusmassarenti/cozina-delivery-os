@@ -50,25 +50,28 @@ export function ItensFichaList({
         unidade vendida. É o que vira a demanda de produção.
       </p>
 
-      {insumos.length === 0 ? (
-        <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Cadastre os insumos no catálogo acima primeiro — eles aparecem no
-          seletor de cada item.
-        </p>
-      ) : lista.length === 0 ? (
+      {lista.length === 0 ? (
         <p className="py-4 text-center text-xs text-muted-foreground">
           {soPendentes ? "Todos os itens com ficha 🎉" : "Sem itens no mês."}
         </p>
       ) : (
-        <div className="space-y-2">
-          {lista.map((it) => (
-            <ItemCard
-              key={`${it.platform}|${it.nomeItem}`}
-              item={it}
-              insumos={insumos}
-            />
-          ))}
-        </div>
+        <>
+          {insumos.length === 0 && (
+            <p className="mb-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Cadastre os insumos no catálogo acima pra montar as fichas — eles
+              aparecem no seletor de cada item.
+            </p>
+          )}
+          <div className="space-y-2">
+            {lista.map((it) => (
+              <ItemCard
+                key={`${it.platform}|${it.nomeItem}`}
+                item={it}
+                insumos={insumos}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
