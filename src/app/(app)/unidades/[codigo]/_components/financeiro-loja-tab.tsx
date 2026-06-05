@@ -1,6 +1,7 @@
 import {
   Bike,
   CalendarDays,
+  Info,
   Megaphone,
   PieChart,
   Receipt,
@@ -53,6 +54,14 @@ export async function FinanceiroLojaTab({
   const platsComBruto = m.platforms
     .filter((p) => p.bruto > 0)
     .map((p) => p.id)
+  // 99 Food / Keeta com faturamento: a abertura detalhada abaixo é só do iFood,
+  // então avisamos que essas plataformas não trazem esse nível de detalhe.
+  const outrasComBruto = m.platforms.filter(
+    (p) => (p.id === "99food" || p.id === "keeta") && p.bruto > 0,
+  )
+  const outrasLabel = outrasComBruto
+    .map((p) => (p.id === "99food" ? "99 Food" : "Keeta"))
+    .join(" e ")
   const cmv = m.custoProdutosCozina + (m.custoProdutosLoja ?? 0)
   const operacao = m.custoOperacao
   const margem = liquido - cmv
@@ -243,6 +252,20 @@ export async function FinanceiroLojaTab({
           <DailyChart dias={daily.days} valores={dailyFat} />
         </div>
       </div>
+
+      {/* Aviso: o detalhamento abaixo é exclusivo do iFood */}
+      {outrasComBruto.length > 0 && (descontos.length > 0 || pagamento.hasData) && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+          <Info className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            A abertura detalhada abaixo (taxas, vale-refeição, formas de
+            pagamento e turnos) vem só do relatório do <b>iFood</b>.{" "}
+            {outrasLabel} não fornece{outrasComBruto.length > 1 ? "m" : ""} esse
+            nível de detalhe — o faturamento total dessas plataformas já está no
+            DRE e no &quot;Para onde vai o bruto&quot;.
+          </span>
+        </div>
+      )}
 
       {/* Descontos das plataformas (detalhe iFood) */}
       {descontos.length > 0 && (
