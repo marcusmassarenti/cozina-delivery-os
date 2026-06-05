@@ -3,17 +3,12 @@ import { Factory, Info } from "lucide-react"
 
 import { requireAdmin } from "@/lib/auth/guards"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import {
-  getInsumos,
-  getItensVendidos,
-  getPratosComFicha,
-} from "@/lib/data/producao"
+import { getInsumos, getItensVendidos } from "@/lib/data/producao"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
 import { InsumoImport } from "./_components/insumo-import"
-import { DeParaList } from "./_components/de-para-list"
-import { FichaList } from "./_components/ficha-list"
+import { ItensFichaList } from "./_components/itens-ficha-list"
 
 /**
  * Ficha Técnica — de-para "item vendido no delivery → insumos do ERP" que
@@ -37,13 +32,11 @@ export default async function FichaTecnicaPage({
   const sp = await searchParams
   const { year, month } = parsePeriodParam(sp.periodo)
 
-  const [insumos, pratos, itens, periods] = await Promise.all([
+  const [insumos, itens, periods] = await Promise.all([
     getInsumos(),
-    getPratosComFicha(),
     getItensVendidos(year, month),
     getAvailablePeriods(),
   ])
-  const pratoNames = pratos.map((p) => p.nome)
 
   return (
     <div className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
@@ -67,8 +60,8 @@ export default async function FichaTecnicaPage({
         <Info className="mt-0.5 size-3.5 shrink-0" />
         <span>
           Fluxo: <b>1)</b> cadastre os insumos do ERP (códigos CNP) · <b>2)</b>{" "}
-          mapeie cada item vendido pra um prato · <b>3)</b> monte a ficha do
-          prato (insumos × qtd). O ERP puxa a demanda pronta em{" "}
+          em cada item vendido, escolha os insumos que ele consome (a ficha). O
+          ERP puxa a demanda pronta em{" "}
           <code className="rounded bg-sky-100 px-1 dark:bg-sky-900/40">
             GET /api/v1/demanda-insumos
           </code>
@@ -77,8 +70,7 @@ export default async function FichaTecnicaPage({
       </div>
 
       <InsumoImport insumos={insumos} />
-      <DeParaList itens={itens} pratoNames={pratoNames} />
-      <FichaList pratos={pratos} insumos={insumos} />
+      <ItensFichaList itens={itens} insumos={insumos} />
     </div>
   )
 }

@@ -51,6 +51,8 @@ export type ItemVendido = {
   qtd: number
   pratoId: string | null
   pratoNome: string | null
+  /** Ficha atual do item (insumos × qtd) — vazia se ainda sem ficha. */
+  ficha: FichaLinha[]
 }
 
 export type DemandaInsumoLinha = {
@@ -248,6 +250,37 @@ async function getDeParaMap(): Promise<
   return map
 }
 
+/** prato_id → linhas da ficha (com nome/unidade do insumo resolvidos). */
+async function getFichaByPrato(): Promise<Map<string, FichaLinha[]>> {
+  const admin = createAdminClient()
+  const [ficha, insumos] = await Promise.all([
+    fetchAllRows<{ prato_id: string; insumo_codigo: string; qtd: number | string }>(
+      (from, to) =>
+        admin
+          .from("producao_ficha")
+          .select("prato_id, insumo_codigo, qtd")
+          .order("id")
+          .range(from, to),
+      "producao_ficha (byPrato)",
+    ),
+    getInsumos(),
+  ])
+  const insumoById = new Map(insumos.map((i) => [i.codigo, i]))
+  const map = new Map<string, FichaLinha[]>()
+  for (const f of ficha ?? []) {
+    const ins = insumoById.get(f.insumo_codigo)
+    const arr = map.get(f.prato_id) ?? []
+    arr.push({
+      insumoCodigo: f.insumo_codigo,
+      insumoNome: ins?.nome ?? f.insumo_codigo,
+      unidade: ins?.unidade ?? "UN",
+      qtd: Number(f.qtd) || 0,
+    })
+    map.set(f.prato_id, arr)
+  }
+  return map
+}
+
 export async function getPratosComFicha(): Promise<Prato[]> {
   const admin = createAdminClient()
   const [pratos, nomes, ficha, insumos] = await Promise.all([
@@ -328,9 +361,10 @@ export async function getItensVendidos(
   year: number,
   month: number,
 ): Promise<ItemVendido[]> {
-  const [sales, dePara] = await Promise.all([
+  const [sales, dePara, fichaByPrato] = await Promise.all([
     getItemSalesByUnit(year, month),
     getDeParaMap(),
+    getFichaByPrato(),
   ])
   const acc = new Map<string, ItemVendido>()
   for (const s of sales) {
@@ -341,12 +375,14 @@ export async function getItensVendidos(
       qtd: 0,
       pratoId: null,
       pratoNome: null,
+      ficha: [] as FichaLinha[],
     }
     cur.qtd += s.qtd
     const m = dePara.get(k)
     if (m) {
       cur.pratoId = m.pratoId
       cur.pratoNome = m.pratoNome
+      cur.ficha = fichaByPrato.get(m.pratoId) ?? []
     }
     acc.set(k, cur)
   }

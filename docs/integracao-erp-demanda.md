@@ -20,10 +20,10 @@ venda (item, qtd)  →  de-para (item → prato)  →  ficha (prato → insumos�
 
 Tela **Ficha Técnica** (`/ficha-tecnica`, só admin):
 
-1. **Catálogo de insumos** — cole os insumos do ERP (código CNP, nome, unidade).
-2. **De-para** — mapeie cada item vendido pra um **prato canônico** (consolida os
-   nomes diferentes entre iFood/99/Keeta num só prato).
-3. **Ficha técnica** — pra cada prato, liste os insumos (`CÓDIGO x QTD`).
+1. **Catálogo de insumos** — cadastre os insumos do ERP (código CNP, nome,
+   unidade) por campos, importando uma planilha `.xlsx`, ou colando texto.
+2. **Itens vendidos → insumos** — abra cada item vendido e escolha, no seletor,
+   os insumos que ele consome, com a quantidade por unidade vendida.
 
 Itens sem ficha **não somem** — aparecem em `naoMapeados` na API, sinalizando o
 que falta cadastrar.

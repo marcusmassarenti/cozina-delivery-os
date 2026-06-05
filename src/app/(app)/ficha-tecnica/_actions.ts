@@ -15,7 +15,7 @@ function fail(message: string): ActionState {
 /**
  * Importa/atualiza o catálogo de insumos do ERP a partir de texto colado
  * (uma linha por insumo). Aceita colunas separadas por TAB (Código / Nome /
- * Unidade) — ideal pra colar direto de uma planilha — ou "CÓDIGO Nome".
+ * Unidade) ou "CÓDIGO Nome".
  */
 export async function importInsumos(text: string): Promise<ActionState> {
   let admin
@@ -60,77 +60,8 @@ export async function importInsumos(text: string): Promise<ActionState> {
   return { ok: true, message: `${rows.length} insumo(s) salvos.` }
 }
 
-/**
- * Mapeia um item vendido (plataforma + nome) pra um prato canônico. Se o prato
- * (por nome) ainda não existe, cria. Upsert no de-para (1 nome por plataforma).
- */
-export async function mapItem(input: {
-  platform: Platform
-  nomeItem: string
-  pratoNome: string
-}): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const pratoNome = input.pratoNome.trim()
-  if (!input.nomeItem || !pratoNome) return fail("Informe o prato.")
-
-  // Acha o prato por nome (case-insensitive) ou cria.
-  const { data: existing } = await admin
-    .from("producao_prato")
-    .select("id")
-    .ilike("nome", pratoNome)
-    .maybeSingle()
-  let pratoId = existing?.id as string | undefined
-  if (!pratoId) {
-    const { data: created, error: e1 } = await admin
-      .from("producao_prato")
-      .insert({ nome: pratoNome })
-      .select("id")
-      .single()
-    if (e1 || !created) return fail(`Erro ao criar prato: ${e1?.message ?? ""}`)
-    pratoId = created.id
-  }
-
-  const { error: e2 } = await admin.from("producao_prato_nome").upsert(
-    {
-      platform: input.platform,
-      nome_item: input.nomeItem,
-      prato_id: pratoId,
-    },
-    { onConflict: "platform,nome_item" },
-  )
-  if (e2) return fail(`Erro ao mapear: ${e2.message}`)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true }
-}
-
-/** Remove o mapeamento de um item (volta a "não mapeado"). */
-export async function unmapItem(input: {
-  platform: Platform
-  nomeItem: string
-}): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const { error } = await admin
-    .from("producao_prato_nome")
-    .delete()
-    .eq("platform", input.platform)
-    .eq("nome_item", input.nomeItem)
-  if (error) return fail(`Erro: ${error.message}`)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true }
-}
-
 /** Adiciona/atualiza insumos do catálogo a partir de linhas estruturadas
- * (usado pelo form de campos e pela importação de planilha .xlsx). */
+ * (form de campos + importação de planilha .xlsx). */
 export async function upsertInsumosRows(
   rows: { codigo: string; nome: string; unidade?: string }[],
 ): Promise<ActionState> {
@@ -158,12 +89,13 @@ export async function upsertInsumosRows(
 }
 
 /**
- * Substitui a ficha técnica de um prato por uma lista de { código, qtd }.
- * Códigos repetidos somam; códigos fora do catálogo são ignorados e
- * reportados.
+ * Define a ficha de UM item vendido (1 etapa: item → insumos). Por trás cria/
+ * acha o "prato" interno (nome = nome do item) e o de-para, e grava a ficha.
+ * Códigos repetidos somam; fora do catálogo são ignorados e reportados.
  */
-export async function setFicha(input: {
-  pratoId: string
+export async function setItemFicha(input: {
+  platform: Platform
+  nomeItem: string
   linhas: { codigo: string; qtd: number }[]
 }): Promise<ActionState> {
   let admin
@@ -172,7 +104,7 @@ export async function setFicha(input: {
   } catch {
     return fail("Apenas administradores.")
   }
-  if (!input.pratoId) return fail("Prato inválido.")
+  if (!input.nomeItem) return fail("Item inválido.")
 
   // Normaliza + soma repetidos.
   const merged = new Map<string, number>()
@@ -182,6 +114,32 @@ export async function setFicha(input: {
     if (!codigo || qtd <= 0) continue
     merged.set(codigo, (merged.get(codigo) ?? 0) + qtd)
   }
+
+  // Acha (ou cria) o prato interno desse item.
+  const { data: existing } = await admin
+    .from("producao_prato_nome")
+    .select("prato_id")
+    .eq("platform", input.platform)
+    .eq("nome_item", input.nomeItem)
+    .maybeSingle()
+  let pratoId = existing?.prato_id as string | undefined
+  if (!pratoId) {
+    if (merged.size === 0) return { ok: true }
+    const { data: created, error: e1 } = await admin
+      .from("producao_prato")
+      .insert({ nome: input.nomeItem })
+      .select("id")
+      .single()
+    if (e1 || !created) return fail(`Erro ao criar: ${e1?.message ?? ""}`)
+    pratoId = created.id
+    const { error: e2 } = await admin.from("producao_prato_nome").insert({
+      platform: input.platform,
+      nome_item: input.nomeItem,
+      prato_id: pratoId,
+    })
+    if (e2) return fail(`Erro ao mapear: ${e2.message}`)
+  }
+  const pid: string = pratoId!
 
   // Valida contra o catálogo.
   const { data: insumos } = await admin
@@ -195,17 +153,15 @@ export async function setFicha(input: {
     else invalidos.push(codigo)
   }
 
-  // Troca a ficha inteira do prato.
   const { error: eDel } = await admin
     .from("producao_ficha")
     .delete()
-    .eq("prato_id", input.pratoId)
+    .eq("prato_id", pid)
   if (eDel) return fail(`Erro ao limpar ficha: ${eDel.message}`)
-
   if (aplicar.length > 0) {
     const { error: eIns } = await admin.from("producao_ficha").insert(
       aplicar.map((p) => ({
-        prato_id: input.pratoId,
+        prato_id: pid,
         insumo_codigo: p.codigo,
         qtd: p.qtd,
       })),
@@ -222,19 +178,38 @@ export async function setFicha(input: {
   }
 }
 
-/** Apaga um prato (e, em cascata, seus nomes e ficha). */
-export async function deletePrato(pratoId: string): Promise<ActionState> {
+/** Remove a ficha/mapeamento de um item (volta a "sem ficha"). Limpa o prato
+ * interno se ele não tiver mais nenhum nome apontando. */
+export async function removeItemFicha(input: {
+  platform: Platform
+  nomeItem: string
+}): Promise<ActionState> {
   let admin
   try {
     ;({ admin } = await requireAdmin())
   } catch {
     return fail("Apenas administradores.")
   }
-  const { error } = await admin
-    .from("producao_prato")
+  const { data: map } = await admin
+    .from("producao_prato_nome")
+    .select("prato_id")
+    .eq("platform", input.platform)
+    .eq("nome_item", input.nomeItem)
+    .maybeSingle()
+  await admin
+    .from("producao_prato_nome")
     .delete()
-    .eq("id", pratoId)
-  if (error) return fail(`Erro: ${error.message}`)
+    .eq("platform", input.platform)
+    .eq("nome_item", input.nomeItem)
+  if (map?.prato_id) {
+    const { count } = await admin
+      .from("producao_prato_nome")
+      .select("id", { count: "exact", head: true })
+      .eq("prato_id", map.prato_id)
+    if (!count) {
+      await admin.from("producao_prato").delete().eq("id", map.prato_id)
+    }
+  }
   revalidatePath("/ficha-tecnica")
   return { ok: true }
 }
