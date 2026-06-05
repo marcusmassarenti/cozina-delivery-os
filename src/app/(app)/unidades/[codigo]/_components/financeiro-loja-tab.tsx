@@ -3,7 +3,6 @@ import {
   CalendarDays,
   Info,
   Megaphone,
-  PieChart,
   Receipt,
   Ticket,
   Truck,
@@ -18,6 +17,7 @@ import type { UnitMonthly } from "@/lib/mock-monthly"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 import { UnitCostsEditor } from "./unit-costs-editor"
+import { BrutoBreakdown } from "./bruto-breakdown"
 
 /**
  * Aba Financeiro da loja — o DRE completo num lugar só (funde Receita +
@@ -50,10 +50,11 @@ export async function FinanceiroLojaTab({
   const bruto = m.faturamentoBruto
   const liquido = m.totalLiquido
   const taxas = Math.max(0, bruto - liquido)
-  // Plataformas que entram no consolidado (pra rotular o "Para onde vai o bruto").
-  const platsComBruto = m.platforms
+  // Plataformas que entram no consolidado (bruto/líquido por app) — pro
+  // "Para onde vai o bruto" com seletor de plataforma.
+  const brutoPlatforms = m.platforms
     .filter((p) => p.bruto > 0)
-    .map((p) => p.id)
+    .map((p) => ({ id: p.id, bruto: p.bruto, liquido: p.liquido }))
   // 99 Food / Keeta com faturamento: a abertura detalhada abaixo é só do iFood,
   // então avisamos que essas plataformas não trazem esse nível de detalhe.
   const outrasComBruto = m.platforms.filter(
@@ -194,56 +195,15 @@ export async function FinanceiroLojaTab({
         </div>
       )}
 
-      {/* Gráficos: composição do bruto + faturamento dia-a-dia */}
+      {/* Gráficos: composição do bruto (por plataforma) + faturamento dia-a-dia */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <PieChart className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Para onde vai o bruto</h3>
-            <span className="ml-auto flex items-center gap-1">
-              {platsComBruto.map((p) => (
-                <PlatformLogo key={p} platform={p} size="sm" />
-              ))}
-            </span>
-          </div>
-          <CompBar
-            label="Líquido pra loja"
-            value={liquido}
-            base={bruto}
-            color="bg-emerald-500"
-          />
-          <CompBar
-            label="Taxas das plataformas"
-            value={taxas}
-            base={bruto}
-            color="bg-rose-500"
-          />
-          {cmv > 0 && (
-            <CompBar
-              label="CMV (produtos)"
-              value={cmv}
-              base={bruto}
-              color="bg-amber-500"
-            />
-          )}
-          {operacao > 0 && (
-            <CompBar
-              label="Custo da operação"
-              value={operacao}
-              base={bruto}
-              color="bg-orange-500"
-            />
-          )}
-          {cmv > 0 && (
-            <CompBar
-              label={operacao > 0 ? "Resultado operacional" : "Margem líquida"}
-              value={Math.max(0, operacao > 0 ? resultado : margem)}
-              base={bruto}
-              color="bg-blue-500"
-              emphasis
-            />
-          )}
-        </div>
+        <BrutoBreakdown
+          platforms={brutoPlatforms}
+          totalBruto={bruto}
+          totalLiquido={liquido}
+          cmv={cmv}
+          operacao={operacao}
+        />
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <CalendarDays className="size-4 text-muted-foreground" />
@@ -445,45 +405,6 @@ function DeliveryItem({
       >
         {value > 0 ? fmtBRL(value) : "—"}
       </span>
-    </div>
-  )
-}
-
-function CompBar({
-  label,
-  value,
-  base,
-  color,
-  emphasis,
-}: {
-  label: string
-  value: number
-  base: number
-  color: string
-  emphasis?: boolean
-}) {
-  const pct = base > 0 ? (value / base) * 100 : 0
-  return (
-    <div className="mb-2.5">
-      <div className="mb-0.5 flex items-baseline justify-between">
-        <span
-          className={`text-xs ${emphasis ? "font-semibold" : "text-muted-foreground"}`}
-        >
-          {label}
-        </span>
-        <div className="flex items-baseline gap-2 tabular-nums">
-          <span className="text-xs font-semibold">{fmtBRLShort(value)}</span>
-          <span className="text-[10px] text-muted-foreground">
-            {pct.toFixed(0)}%
-          </span>
-        </div>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-full ${color}`}
-          style={{ width: `${Math.min(100, pct)}%` }}
-        />
-      </div>
     </div>
   )
 }
