@@ -64,7 +64,7 @@ export function UnitCostsEditor({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="flex flex-col gap-3">
       <Field
         label="Custo Cozina (CMV)"
         hint="o que a fábrica faturou pra loja"
@@ -79,7 +79,7 @@ export function UnitCostsEditor({
         onChange={setO}
         onCommit={save}
       />
-      <div className="sm:col-span-2 -mt-1 flex h-4 items-center gap-1 text-[11px]">
+      <div className="-mt-1 flex h-4 items-center gap-1 text-[11px]">
         {status === "saving" && (
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <Loader2 className="size-3 animate-spin" /> salvando…
