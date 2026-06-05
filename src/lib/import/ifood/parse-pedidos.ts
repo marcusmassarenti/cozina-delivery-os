@@ -104,10 +104,14 @@ export function parseIfoodPedidos(workbook: XLSX.WorkBook): ParsedPedidos {
   })
   if (rows.length === 0) throw new Error("Relatório de pedidos está vazio")
 
+  // pedidos é um Map keyed por pedidoId (ID COMPLETO) pra deduplicar: o iFood
+  // pode emitir 2 linhas com o mesmo pedido (ajuste/estorno), e o upsert do
+  // save usa onConflict "unit_id,pedido_id" — sem dedup, o lote quebra com
+  // "ON CONFLICT cannot affect row a second time". Last-write-wins.
   type Bucket = {
     storeId: string
     storeName: string | null
-    pedidos: ParsedPedidoIfood[]
+    pedidos: Map<string, ParsedPedidoIfood>
   }
   const buckets = new Map<string, Bucket>()
 
@@ -146,12 +150,12 @@ export function parseIfoodPedidos(workbook: XLSX.WorkBook): ParsedPedidos {
 
     let bucket = buckets.get(storeId)
     if (!bucket) {
-      bucket = { storeId, storeName, pedidos: [] }
+      bucket = { storeId, storeName, pedidos: new Map() }
       buckets.set(storeId, bucket)
     } else if (!bucket.storeName && storeName) {
       bucket.storeName = storeName
     }
-    bucket.pedidos.push(pedido)
+    bucket.pedidos.set(pedidoId, pedido)
   }
 
   if (buckets.size === 0) {
@@ -160,6 +164,10 @@ export function parseIfoodPedidos(workbook: XLSX.WorkBook): ParsedPedidos {
 
   return {
     reportType: "pedidos",
-    porLoja: Array.from(buckets.values()),
+    porLoja: Array.from(buckets.values()).map((b) => ({
+      storeId: b.storeId,
+      storeName: b.storeName,
+      pedidos: Array.from(b.pedidos.values()),
+    })),
   }
 }

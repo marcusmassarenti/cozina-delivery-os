@@ -97,22 +97,58 @@ export function parseSimNao(v: unknown): boolean | null {
 }
 
 /**
+ * Normaliza um número que pode vir em formato US (ponto decimal) ou BR
+ * (vírgula decimal), devolvendo uma string parseável pelo Number().
+ *
+ * Regras:
+ *  - Tem ponto E vírgula → o ÚLTIMO separador é o decimal; o outro é milhar.
+ *      "1.234,56" → "1234.56"   |   "1,234.56" → "1234.56"
+ *  - Só vírgula → decimal quando vem 1-2 dígitos depois ("113,69" → "113.69");
+ *      3 dígitos ou várias vírgulas = milhar ("1,234" → "1234").
+ *  - Só ponto (ou nenhum separador) → mantém (ponto = decimal, formato US).
+ *
+ * Compartilhado com o parser do Keeta. Antes o 99 Food assumia SEMPRE ponto =
+ * milhar (`.replace(/\./g,"")`), o que inflava 100× quando o decimal vinha com
+ * ponto: "113.69" → 11369.
+ */
+export function normalizeNumeric(raw: string): string {
+  let s = raw.trim().replace(/%$/, "").replace(/\s/g, "")
+  const hasDot = s.includes(".")
+  const hasComma = s.includes(",")
+  if (hasDot && hasComma) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", ".")
+    } else {
+      s = s.replace(/,/g, "")
+    }
+  } else if (hasComma) {
+    const parts = s.split(",")
+    const last = parts[parts.length - 1]
+    if (parts.length === 2 && last.length !== 3) {
+      s = s.replace(",", ".")
+    } else {
+      s = s.replace(/,/g, "")
+    }
+  }
+  return s
+}
+
+/**
  * Number do 99 Food: pode vir como
  *  - number puro: 12345
  *  - string com vírgula decimal: "540,8"
+ *  - string com ponto decimal (formato US): "113.69"
  *  - string vazia ou "0": 0
  *  - null/undefined: 0
+ * Detecta o separador decimal por valor (ponto OU vírgula) — ver normalizeNumeric.
  */
 export function toNumber(v: unknown, fallback = 0): number {
   if (v == null || v === "") return fallback
   if (typeof v === "number") return isNaN(v) ? fallback : v
   if (typeof v === "string") {
-    const cleaned = v.trim().replace(/\./g, "").replace(",", ".")
-    // Se ainda tem vírgula DEPOIS de já trocar (e.g. "1.234,56" → "1234.56") tudo certo.
-    // Mas e se vier só "540,8"? Cleaned vira "540.8" → ok.
-    // Se vier "300.00%" — primeiro removemos %.
-    const noPct = cleaned.endsWith("%") ? cleaned.slice(0, -1) : cleaned
-    const n = Number(noPct)
+    const s = normalizeNumeric(v)
+    if (s === "") return fallback
+    const n = Number(s)
     return isNaN(n) ? fallback : n
   }
   return fallback
@@ -123,10 +159,9 @@ export function toNumberOrNull(v: unknown): number | null {
   if (v == null || v === "") return null
   if (typeof v === "number") return isNaN(v) ? null : v
   if (typeof v === "string") {
-    const cleaned = v.trim().replace(/\./g, "").replace(",", ".")
-    const noPct = cleaned.endsWith("%") ? cleaned.slice(0, -1) : cleaned
-    if (noPct === "") return null
-    const n = Number(noPct)
+    const s = normalizeNumeric(v)
+    if (s === "") return null
+    const n = Number(s)
     return isNaN(n) ? null : n
   }
   return null

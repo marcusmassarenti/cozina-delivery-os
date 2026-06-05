@@ -22,40 +22,7 @@ export {
   formatDateOnly,
 } from "../ninefood/utils"
 
-import { toStringOrNull } from "../ninefood/utils"
-
-/**
- * Normaliza um número que pode vir em formato US (ponto decimal) ou BR
- * (vírgula decimal), devolvendo uma string parseável pelo Number().
- *
- * Regras:
- *  - Tem ponto E vírgula → o ÚLTIMO separador é o decimal; o outro é milhar.
- *      "1.234,56" → "1234.56"   |   "1,234.56" → "1234.56"
- *  - Só vírgula → decimal quando vem 1-2 dígitos depois ("113,69" → "113.69");
- *      3 dígitos ou várias vírgulas = milhar ("1,234" → "1234").
- *  - Só ponto (ou nenhum separador) → mantém (ponto = decimal, formato US).
- */
-function normalizeNumeric(raw: string): string {
-  let s = raw.trim().replace(/%$/, "").replace(/\s/g, "")
-  const hasDot = s.includes(".")
-  const hasComma = s.includes(",")
-  if (hasDot && hasComma) {
-    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
-      s = s.replace(/\./g, "").replace(",", ".")
-    } else {
-      s = s.replace(/,/g, "")
-    }
-  } else if (hasComma) {
-    const parts = s.split(",")
-    const last = parts[parts.length - 1]
-    if (parts.length === 2 && last.length !== 3) {
-      s = s.replace(",", ".")
-    } else {
-      s = s.replace(/,/g, "")
-    }
-  }
-  return s
-}
+import { toStringOrNull, normalizeNumeric } from "../ninefood/utils"
 
 /**
  * Número do Keeta. Detecta ponto OU vírgula como decimal (ver normalizeNumeric).
