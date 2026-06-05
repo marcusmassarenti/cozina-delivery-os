@@ -26,7 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { updateUser, type AppUser, type UserActionState } from "../_actions"
-import type { UnitOption, RoleOption } from "./new-user-dialog"
+import {
+  UnitMultiSelect,
+  type UnitOption,
+  type RoleOption,
+} from "./new-user-dialog"
 
 const initial: UserActionState = { ok: false }
 
@@ -46,7 +50,9 @@ export function EditUserDialog({
     ? user.perfil
     : (roles[0]?.key ?? "")
   const [perfil, setPerfil] = React.useState<string>(initialPerfil)
-  const [unitId, setUnitId] = React.useState<string>(user.unitId ?? "")
+  const [unitIds, setUnitIds] = React.useState<string[]>(
+    user.units.map((u) => u.id),
+  )
   const router = useRouter()
 
   React.useEffect(() => {
@@ -144,28 +150,18 @@ export function EditUserDialog({
           </Field>
 
           {showUnit && (
-            <Field
-              label="Unidade vinculada"
-              error={state.fieldErrors?.unitId}
-            >
-              <Select value={unitId} onValueChange={(v) => setUnitId(v ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a unidade">
-                    {(v) => {
-                      const u = units.find((x) => x.id === v)
-                      return u ? `#${u.code} · ${u.name}` : "Selecione a unidade"
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {units.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      #{u.code} · {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <input type="hidden" name="unitId" value={unitId} />
+            <Field label="Lojas vinculadas" error={state.fieldErrors?.unitId}>
+              <UnitMultiSelect
+                units={units}
+                selected={unitIds}
+                onToggle={(id) =>
+                  setUnitIds((prev) =>
+                    prev.includes(id)
+                      ? prev.filter((x) => x !== id)
+                      : [...prev, id],
+                  )
+                }
+              />
             </Field>
           )}
 

@@ -22,14 +22,15 @@ async function isPerfilValido(perfilKey: string): Promise<boolean> {
   return roles.some((r) => r.key === perfilKey)
 }
 
+export type UserUnitRef = { id: string; code: string; name: string }
+
 export type AppUser = {
   id: string
   email: string
   fullName: string | null
   perfil: string
-  unitId: string | null
-  unitCode: string | null
-  unitName: string | null
+  /** Lojas vinculadas (franqueado pode ter mais de uma). */
+  units: UserUnitRef[]
   createdAt: string
   lastSignInAt: string | null
 }
@@ -56,9 +57,14 @@ export async function listUsers(): Promise<AppUser[]> {
   const profileByUserId = new Map(
     (profilesRes.data ?? []).map((p) => [p.user_id, p]),
   )
-  const accessByUserId = new Map(
-    (accessRes.data ?? []).map((a) => [a.user_id, a.scope_id]),
-  )
+  // Um usuário pode ter VÁRIAS lojas vinculadas → acumula numa lista.
+  const accessByUserId = new Map<string, string[]>()
+  for (const a of accessRes.data ?? []) {
+    if (!a.scope_id) continue
+    const arr = accessByUserId.get(a.user_id) ?? []
+    arr.push(a.scope_id)
+    accessByUserId.set(a.user_id, arr)
+  }
   const unitById = new Map(
     (unitsRes.data ?? []).map((u) => [u.id, u]),
   )
@@ -70,8 +76,10 @@ export async function listUsers(): Promise<AppUser[]> {
 
   return authRes.data.users.map((u) => {
     const p = profileByUserId.get(u.id)
-    const unitId = accessByUserId.get(u.id) ?? null
-    const unit = unitId ? unitById.get(unitId) : null
+    const units = (accessByUserId.get(u.id) ?? [])
+      .map((id) => unitById.get(id))
+      .filter((x): x is { id: string; code: string; name: string } => !!x)
+      .map((x) => ({ id: x.id, code: x.code, name: x.name }))
     const perfilRaw = p?.perfil ?? ""
     const perfil = validRoleKeys.has(perfilRaw) ? perfilRaw : "franqueado"
     return {
@@ -79,9 +87,7 @@ export async function listUsers(): Promise<AppUser[]> {
       email: u.email ?? "—",
       fullName: p?.full_name ?? null,
       perfil,
-      unitId,
-      unitCode: unit?.code ?? null,
-      unitName: unit?.name ?? null,
+      units,
       createdAt: u.created_at,
       lastSignInAt: u.last_sign_in_at ?? null,
     }
@@ -104,7 +110,7 @@ async function syncAccess(
   supabase: ReturnType<typeof createAdminClient>,
   userId: string,
   perfil: string,
-  unitId: string | null,
+  unitIds: string[],
 ) {
   // Limpa rows antigas desse usuário
   await supabase.from("user_unit_access").delete().eq("user_id", userId)
@@ -112,13 +118,16 @@ async function syncAccess(
   const scope = await roleScope(perfil)
 
   if (scope === "unit") {
-    if (unitId) {
-      await supabase.from("user_unit_access").insert({
-        user_id: userId,
-        scope_type: "unit",
-        scope_id: unitId,
-        role: "manager",
-      })
+    const ids = [...new Set(unitIds.filter(Boolean))]
+    if (ids.length > 0) {
+      await supabase.from("user_unit_access").insert(
+        ids.map((scope_id) => ({
+          user_id: userId,
+          scope_type: "unit",
+          scope_id,
+          role: "manager",
+        })),
+      )
     }
     return
   }
@@ -147,7 +156,11 @@ export async function createUser(
   const email = String(formData.get("email") ?? "").trim().toLowerCase()
   const password = String(formData.get("password") ?? "")
   const perfil = String(formData.get("perfil") ?? "franqueado").trim()
-  const unitId = String(formData.get("unitId") ?? "").trim() || null
+  const unitIds = formData
+    .getAll("unitIds")
+    .map(String)
+    .map((s) => s.trim())
+    .filter(Boolean)
 
   const fieldErrors: Record<string, string> = {}
   if (!fullName) fieldErrors.fullName = "Nome obrigatório"
@@ -156,8 +169,8 @@ export async function createUser(
   if (pwErr) fieldErrors.password = pwErr
   if (!(await isPerfilValido(perfil)))
     fieldErrors.perfil = "Perfil inválido."
-  if ((await roleScope(perfil)) === "unit" && !unitId)
-    fieldErrors.unitId = "Selecione a unidade vinculada ao perfil"
+  if ((await roleScope(perfil)) === "unit" && unitIds.length === 0)
+    fieldErrors.unitId = "Selecione ao menos uma loja vinculada ao perfil"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -186,7 +199,7 @@ export async function createUser(
         .update({ full_name: fullName, perfil })
         .eq("user_id", data.user.id)
 
-      await syncAccess(supabase, data.user.id, perfil, unitId)
+      await syncAccess(supabase, data.user.id, perfil, unitIds)
     }
 
     revalidatePath("/administracao/usuarios")
@@ -207,7 +220,11 @@ export async function updateUser(
   const fullName = String(formData.get("fullName") ?? "").trim()
   const password = String(formData.get("password") ?? "")
   const perfil = String(formData.get("perfil") ?? "franqueado").trim()
-  const unitId = String(formData.get("unitId") ?? "").trim() || null
+  const unitIds = formData
+    .getAll("unitIds")
+    .map(String)
+    .map((s) => s.trim())
+    .filter(Boolean)
 
   if (!userId) return { ok: false, message: "ID do usuário ausente." }
 
@@ -217,8 +234,8 @@ export async function updateUser(
     fieldErrors.password = validatePassword(password)!
   if (!(await isPerfilValido(perfil)))
     fieldErrors.perfil = "Perfil inválido."
-  if ((await roleScope(perfil)) === "unit" && !unitId)
-    fieldErrors.unitId = "Selecione a unidade vinculada ao perfil"
+  if ((await roleScope(perfil)) === "unit" && unitIds.length === 0)
+    fieldErrors.unitId = "Selecione ao menos uma loja vinculada ao perfil"
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -255,7 +272,7 @@ export async function updateUser(
       }
     }
 
-    await syncAccess(supabase, userId, perfil, unitId)
+    await syncAccess(supabase, userId, perfil, unitIds)
 
     revalidatePath("/administracao/usuarios")
     return { ok: true }

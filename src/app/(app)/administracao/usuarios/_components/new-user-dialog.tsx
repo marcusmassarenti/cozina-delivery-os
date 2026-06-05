@@ -4,7 +4,7 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { UserPlus } from "lucide-react"
+import { Check, UserPlus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -48,14 +48,14 @@ export function NewUserDialog({
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(createUser, initial)
   const [perfil, setPerfil] = React.useState<string>(defaultRole)
-  const [unitId, setUnitId] = React.useState<string>("")
+  const [unitIds, setUnitIds] = React.useState<string[]>([])
   const router = useRouter()
 
   React.useEffect(() => {
     if (state.ok) {
       setOpen(false)
       setPerfil(defaultRole)
-      setUnitId("")
+      setUnitIds([])
       router.refresh()
     }
   }, [state, router, defaultRole])
@@ -140,27 +140,20 @@ export function NewUserDialog({
 
           {showUnit && (
             <Field
-              label="Unidade vinculada"
+              label="Lojas vinculadas"
               error={state.fieldErrors?.unitId}
             >
-              <Select value={unitId} onValueChange={(v) => setUnitId(v ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a unidade">
-                    {(v) => {
-                      const u = units.find((x) => x.id === v)
-                      return u ? `#${u.code} · ${u.name}` : "Selecione a unidade"
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {units.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      #{u.code} · {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <input type="hidden" name="unitId" value={unitId} />
+              <UnitMultiSelect
+                units={units}
+                selected={unitIds}
+                onToggle={(id) =>
+                  setUnitIds((prev) =>
+                    prev.includes(id)
+                      ? prev.filter((x) => x !== id)
+                      : [...prev, id],
+                  )
+                }
+              />
             </Field>
           )}
 
@@ -183,6 +176,64 @@ export function NewUserDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Lista de lojas com checkbox (multi-seleção). Renderiza um <input
+ * type="hidden" name="unitIds"> por loja marcada, então o form action lê via
+ * formData.getAll("unitIds"). Usado no criar e no editar usuário.
+ */
+export function UnitMultiSelect({
+  units,
+  selected,
+  onToggle,
+}: {
+  units: UnitOption[]
+  selected: string[]
+  onToggle: (id: string) => void
+}) {
+  return (
+    <>
+      <div className="max-h-44 divide-y overflow-y-auto rounded-md border">
+        {units.length === 0 && (
+          <p className="px-3 py-2 text-xs text-muted-foreground">
+            Nenhuma loja cadastrada.
+          </p>
+        )}
+        {units.map((u) => {
+          const checked = selected.includes(u.id)
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onToggle(u.id)}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50"
+            >
+              <span
+                className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                  checked
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input bg-background"
+                }`}
+              >
+                {checked && <Check className="size-3" />}
+              </span>
+              <span className="truncate">
+                <span className="font-medium">#{u.code}</span> · {u.name}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {selected.map((id) => (
+        <input key={id} type="hidden" name="unitIds" value={id} />
+      ))}
+      <p className="text-[10px] text-muted-foreground">
+        {selected.length} loja{selected.length !== 1 ? "s" : ""} selecionada
+        {selected.length !== 1 ? "s" : ""}
+      </p>
+    </>
   )
 }
 

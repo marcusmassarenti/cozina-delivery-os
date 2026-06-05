@@ -142,9 +142,14 @@ export function UsersListView({
                   >
                     {roleLabel(u.perfil)}
                   </span>
-                  {isUnit(u.perfil) && u.unitCode && (
-                    <span className="text-[10px] text-muted-foreground">
-                      #{u.unitCode} · {u.unitName?.split(" — ")[1] ?? u.unitName}
+                  {isUnit(u.perfil) && u.units.length > 0 && (
+                    <span
+                      className="max-w-full truncate text-[10px] text-muted-foreground"
+                      title={u.units.map((x) => `#${x.code} · ${x.name}`).join("\n")}
+                    >
+                      {u.units.length === 1
+                        ? `#${u.units[0].code} · ${u.units[0].name.split(" — ")[1] ?? u.units[0].name}`
+                        : `${u.units.length} lojas: ${u.units.map((x) => `#${x.code}`).join(", ")}`}
                     </span>
                   )}
                 </div>
