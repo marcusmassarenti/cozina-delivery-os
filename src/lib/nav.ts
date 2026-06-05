@@ -6,7 +6,6 @@ import {
   FileUp,
   LayoutDashboard,
   type LucideIcon,
-  Package,
   Receipt,
   ShieldCheck,
   Star,
@@ -49,7 +48,6 @@ export const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       { label: "Unidades", href: "/unidades", icon: Store, module: "unidades" },
-      { label: "Produtos", href: "/produtos", icon: Package, comingSoon: true },
       { label: "Pedidos", href: "/pedidos", icon: Receipt, module: "pedidos" },
       {
         label: "Avaliações",
@@ -90,7 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { label: "Conexões", href: "/conexoes", icon: Cable, module: "conexoes" },
       {
-        label: "Ficha Técnica",
+        label: "Ficha Técnica ERP",
         href: "/ficha-tecnica",
         icon: Factory,
         module: "conexoes",
