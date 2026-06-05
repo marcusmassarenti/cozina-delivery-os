@@ -14,12 +14,13 @@
 
 import "server-only"
 
-import { getUnits, type Unit } from "@/lib/data/units"
+import { getUnits } from "@/lib/data/units"
 import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
+import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 
 export type ResultadoUnitRow = {
   unitId: string
@@ -113,10 +114,13 @@ export async function getNetworkResultadoForMonth(
     keetaPorLoja.map((k) => [k.unitId, k.promoLoja]),
   )
 
-  const platBruto = (u: Unit, id: "ifood" | "99food" | "keeta") =>
-    u.monthly.platforms.find((p) => p.id === id)?.bruto ?? 0
-  const platLiquido = (u: Unit, id: "ifood" | "99food" | "keeta") =>
-    u.monthly.platforms.find((p) => p.id === id)?.liquido ?? 0
+  // Fallback de plataforma SEM import no mês: usa o monthly do MÊS CONSULTADO
+  // (manualByUnit = getRealMonthlyForUnits(year,month)), NÃO u.monthly — que é
+  // montado sempre com o mês corrente e contaminaria meses passados.
+  const platBruto = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+    m.platforms.find((p) => p.id === id)?.bruto ?? 0
+  const platLiquido = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+    m.platforms.find((p) => p.id === id)?.liquido ?? 0
 
   const rows: ResultadoUnitRow[] = []
   for (const u of active) {
@@ -124,6 +128,8 @@ export async function getNetworkResultadoForMonth(
     const nine = nineByUnit.get(u.id)
     const keeta = keetaByUnit.get(u.id)
     const manual = manualByUnit.get(u.id)
+    // Monthly do MÊS CONSULTADO (não u.monthly, que é o mês corrente).
+    const monthlyM = manual ?? emptyMonthly
 
     const hasIfood = fin?.hasData ?? false
     const has99 = nine?.hasData ?? false
@@ -131,12 +137,12 @@ export async function getNetworkResultadoForMonth(
     const temImport = hasIfood || has99 || hasKeeta
 
     // Bruto / líquido por plataforma (importado preferido, fallback manual)
-    const ifoodBruto = hasIfood ? fin!.bruto : platBruto(u, "ifood")
-    const ifoodLiq = hasIfood ? fin!.liquido : platLiquido(u, "ifood")
-    const nineBruto = has99 ? nine!.bruto : platBruto(u, "99food")
-    const nineLiq = has99 ? nine!.liquido : platLiquido(u, "99food")
-    const keetaBruto = hasKeeta ? keeta!.bruto : platBruto(u, "keeta")
-    const keetaLiq = hasKeeta ? keeta!.liquido : platLiquido(u, "keeta")
+    const ifoodBruto = hasIfood ? fin!.bruto : platBruto(monthlyM, "ifood")
+    const ifoodLiq = hasIfood ? fin!.liquido : platLiquido(monthlyM, "ifood")
+    const nineBruto = has99 ? nine!.bruto : platBruto(monthlyM, "99food")
+    const nineLiq = has99 ? nine!.liquido : platLiquido(monthlyM, "99food")
+    const keetaBruto = hasKeeta ? keeta!.bruto : platBruto(monthlyM, "keeta")
+    const keetaLiq = hasKeeta ? keeta!.liquido : platLiquido(monthlyM, "keeta")
 
     const bruto = ifoodBruto + nineBruto + keetaBruto
     const liquidoPlataformas = ifoodLiq + nineLiq + keetaLiq
@@ -145,7 +151,7 @@ export async function getNetworkResultadoForMonth(
     if (hasIfood) pedidos += fin!.pedidosUnicos
     if (has99) pedidos += nine!.pedidos
     if (hasKeeta) pedidos += keeta!.pedidos
-    if (!temImport) pedidos = u.monthly.pedidos
+    if (!temImport) pedidos = monthlyM.pedidos
 
     // Custos + VR vêm do manual
     const cmvCozina = manual?.custoProdutosCozina ?? 0

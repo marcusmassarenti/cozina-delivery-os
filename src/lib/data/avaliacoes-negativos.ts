@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
 import type { PlatformId } from "@/components/platform-logo"
 
 export type ComentarioNegativo = {
@@ -38,16 +39,24 @@ export async function getComentariosNegativos(
 
   // iFood
   {
-    let q = admin
-      .from("ifood_avaliacoes")
-      .select("unit_id, nota, comentario, data_avaliacao")
-      .lte("nota", maxNota)
-      .not("comentario", "is", null)
-      .gte("data_avaliacao", startIso)
-      .lte("data_avaliacao", endIncl)
-      .limit(800)
-    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
-    const { data } = await q
+    const data = await fetchAllRows<{
+      unit_id: string
+      nota: number
+      comentario: string | null
+      data_avaliacao: string | null
+    }>((from, to) => {
+      let q = admin
+        .from("ifood_avaliacoes")
+        .select("unit_id, nota, comentario, data_avaliacao")
+        .lte("nota", maxNota)
+        .not("comentario", "is", null)
+        .gte("data_avaliacao", startIso)
+        .lte("data_avaliacao", endIncl)
+        .order("id")
+        .range(from, to)
+      if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
+      return q
+    }, "negativos ifood")
     for (const r of data ?? []) {
       const c = String(r.comentario ?? "").trim()
       if (!c) continue
@@ -63,16 +72,24 @@ export async function getComentariosNegativos(
 
   // 99 Food
   {
-    let q = admin
-      .from("ninefood_pedidos")
-      .select("unit_id, nivel_avaliacao, conteudo_avaliacao, data_avaliacao")
-      .lte("nivel_avaliacao", maxNota)
-      .not("conteudo_avaliacao", "is", null)
-      .gte("data_avaliacao", startIso)
-      .lt("data_avaliacao", endExcl)
-      .limit(800)
-    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
-    const { data } = await q
+    const data = await fetchAllRows<{
+      unit_id: string
+      nivel_avaliacao: number
+      conteudo_avaliacao: string | null
+      data_avaliacao: string | null
+    }>((from, to) => {
+      let q = admin
+        .from("ninefood_pedidos")
+        .select("unit_id, nivel_avaliacao, conteudo_avaliacao, data_avaliacao")
+        .lte("nivel_avaliacao", maxNota)
+        .not("conteudo_avaliacao", "is", null)
+        .gte("data_avaliacao", startIso)
+        .lt("data_avaliacao", endExcl)
+        .order("id")
+        .range(from, to)
+      if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
+      return q
+    }, "negativos 99food")
     for (const r of data ?? []) {
       const c = String(r.conteudo_avaliacao ?? "").trim()
       if (!c) continue
@@ -88,16 +105,26 @@ export async function getComentariosNegativos(
 
   // Keeta
   {
-    let q = admin
-      .from("keeta_pedidos")
-      .select("unit_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao")
-      .lte("pontuacao_avaliacao", maxNota)
-      .not("conteudo_avaliacao", "is", null)
-      .gte("data_avaliacao", startIso)
-      .lte("data_avaliacao", endIncl)
-      .limit(800)
-    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
-    const { data } = await q
+    const data = await fetchAllRows<{
+      unit_id: string
+      pontuacao_avaliacao: number
+      conteudo_avaliacao: string | null
+      data_avaliacao: string | null
+    }>((from, to) => {
+      let q = admin
+        .from("keeta_pedidos")
+        .select(
+          "unit_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao",
+        )
+        .lte("pontuacao_avaliacao", maxNota)
+        .not("conteudo_avaliacao", "is", null)
+        .gte("data_avaliacao", startIso)
+        .lte("data_avaliacao", endIncl)
+        .order("id")
+        .range(from, to)
+      if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
+      return q
+    }, "negativos keeta")
     for (const r of data ?? []) {
       const c = String(r.conteudo_avaliacao ?? "").trim()
       if (!c) continue
