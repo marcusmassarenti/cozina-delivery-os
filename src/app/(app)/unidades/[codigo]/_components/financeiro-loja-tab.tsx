@@ -19,6 +19,24 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { UnitCostsEditor } from "./unit-costs-editor"
 import { BrutoBreakdown } from "./bruto-breakdown"
 
+// Ordem cronológica dos turnos (o iFood manda fora de ordem / por volume).
+const TURNO_ORDEM = [
+  "cafe da manha",
+  "almoco",
+  "cafe da tarde",
+  "jantar",
+  "madrugada",
+]
+function turnoRank(chave: string): number {
+  const norm = chave
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+  const i = TURNO_ORDEM.indexOf(norm)
+  return i === -1 ? 99 : i
+}
+
 /**
  * Aba Financeiro da loja — o DRE completo num lugar só (funde Receita +
  * Financeiro + Custos). Tudo derivado do `m` mesclado (3 plataformas), então
@@ -322,13 +340,15 @@ export async function FinanceiroLojaTab({
                 <PlatformLogo platform="ifood" size="sm" />
               </span>
             </div>
-            {pagamento.porTurno.map((tn) => (
-              <MiniRow
-                key={tn.chave}
-                label={tn.chave}
-                value={`${fmtNum(tn.pedidos)} ped`}
-              />
-            ))}
+            {[...pagamento.porTurno]
+              .sort((a, b) => turnoRank(a.chave) - turnoRank(b.chave))
+              .map((tn) => (
+                <MiniRow
+                  key={tn.chave}
+                  label={tn.chave}
+                  value={`${fmtNum(tn.pedidos)} ped`}
+                />
+              ))}
           </div>
         </div>
       )}
