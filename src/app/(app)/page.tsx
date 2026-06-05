@@ -117,12 +117,23 @@ export default async function Home({
     ? allUnits.filter((u) => unidadesFilter.has(u.code))
     : allUnits
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
-  // Texto curto que descreve o escopo dos cards (rede vs lojas filtradas)
+  // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
+  // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
+  // nº de lojas filtradas.
   const activeCount = activeUnitIds.length
-  const scopeLabel =
-    isScoped || unidadesFilter
-      ? `${activeCount} loja${activeCount !== 1 ? "s" : ""}`
+  const scopeLabel = unidadesFilter
+    ? `${activeCount} loja${activeCount !== 1 ? "s" : ""}`
+    : isScoped
+      ? activeCount === 1
+        ? "sua loja"
+        : "suas lojas"
       : "rede"
+  // Substantivo pro estado vazio do painel de atenção ("… no azul").
+  const lojasNoun = isScoped
+    ? activeCount === 1
+      ? "sua loja"
+      : "suas lojas"
+    : "todas as lojas"
   // Sentinela: as network functions tratam [] como "rede inteira". Pro
   // franqueado SEM lojas visíveis, isso vazaria a rede — então mando um ID
   // impossível pra forçar resultado vazio (fail-closed).
@@ -388,7 +399,11 @@ export default async function Home({
           <p className="mt-0.5 text-sm text-muted-foreground">
             {unidadesFilter
               ? `${activeCount} loja${activeCount !== 1 ? "s" : ""} selecionada${activeCount !== 1 ? "s" : ""}`
-              : "Visão da rede"}{" "}
+              : isScoped
+                ? activeCount === 1
+                  ? "Sua loja"
+                  : "Suas lojas"
+                : "Visão da rede"}{" "}
             · {formatPeriodLabel({ year, month })}
           </p>
         </div>
@@ -426,7 +441,7 @@ export default async function Home({
 
       {status.ok && units.length > 0 && (
         <DashboardSection id="atencao">
-          <AttentionPanel items={attention} />
+          <AttentionPanel items={attention} lojasLabel={lojasNoun} />
         </DashboardSection>
       )}
 

@@ -35,12 +35,19 @@ type Grupo = {
  *
  * <details>/<summary> nativo → expansão sem "use client".
  */
-export function AttentionPanel({ items }: { items: AttentionItem[] }) {
+export function AttentionPanel({
+  items,
+  lojasLabel = "todas as lojas",
+}: {
+  items: AttentionItem[]
+  /** "todas as lojas" (admin) | "sua loja" | "suas lojas" (franqueado) */
+  lojasLabel?: string
+}) {
   if (items.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
         <CheckCircle2 className="size-4 shrink-0" />
-        Nenhum alerta este mês — todas as lojas no azul.
+        Nenhum alerta este mês — {lojasLabel} no azul.
       </div>
     )
   }
