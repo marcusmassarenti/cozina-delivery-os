@@ -11,6 +11,7 @@ import {
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
+import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
 import type { UnitMonthly } from "@/lib/mock-monthly"
@@ -18,6 +19,7 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 import { UnitCostsEditor } from "./unit-costs-editor"
 import { BrutoBreakdown } from "./bruto-breakdown"
+import { DreDetalhado, type DrePlat } from "./dre-detalhado"
 
 // Ordem cronológica dos turnos (o iFood manda fora de ordem / por volume).
 const TURNO_ORDEM = [
@@ -56,18 +58,18 @@ export async function FinanceiroLojaTab({
   month: number
 }) {
   const m = monthly
-  const [pagamento, deliveryFee, daily] = await Promise.all([
+  const [pagamento, deliveryFee, daily, nineResumo] = await Promise.all([
     getPagamentoResumoForMonth(unitId, year, month),
     getDeliveryFeeForMonth(unitId, year, month),
     getDailyReportMatrix(year, month, "todas", [
       { id: unitId, code: "", name: "" },
     ]),
+    getNinefoodResumoForMonth(unitId, year, month),
   ])
   const dailyFat = daily.units[0]?.faturamento ?? {}
 
   const bruto = m.faturamentoBruto
   const liquido = m.totalLiquido
-  const taxas = Math.max(0, bruto - liquido)
   // Plataformas que entram no consolidado (bruto/líquido por app) — pro
   // "Para onde vai o bruto" com seletor de plataforma.
   const brutoPlatforms = m.platforms
@@ -83,10 +85,59 @@ export async function FinanceiroLojaTab({
     .join(" e ")
   const cmv = m.custoProdutosCozina + (m.custoProdutosLoja ?? 0)
   const operacao = m.custoOperacao
-  const margem = liquido - cmv
-  const resultado = margem - operacao
-  const margemPct = bruto > 0 ? (margem / bruto) * 100 : 0
-  const resultadoPct = bruto > 0 ? (resultado / bruto) * 100 : 0
+
+  // VR líquido (iFood, à parte) = recebido − 8% de taxa.
+  const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
+
+  // Abertura das taxas por plataforma pro DRE detalhado. iFood vem itemizado
+  // do `m`; 99 Food do seu resumo (comissão/taxa/promoções); Keeta só o total.
+  const buildPlat = (
+    id: PlatformId,
+    name: string,
+    itens: { label: string; value: number }[],
+    vr: number,
+  ): DrePlat | null => {
+    const p = m.platforms.find((x) => x.id === id)
+    if (!p || p.bruto <= 0) return null
+    const taxaTotal = Math.max(0, p.bruto - p.liquido)
+    const lista = itens.filter((i) => i.value > 0)
+    const resto = taxaTotal - lista.reduce((a, i) => a + i.value, 0)
+    if (resto > 0.5) lista.push({ label: "Cancelamentos / outros", value: resto })
+    return {
+      id,
+      name,
+      bruto: p.bruto,
+      liquido: p.liquido,
+      taxaTotal,
+      vrLiquido: vr,
+      itens: lista,
+    }
+  }
+  const dreTaxas = [
+    buildPlat(
+      "ifood",
+      "iFood",
+      [
+        { label: "Taxa de entrega", value: m.taxaEntregaIfood },
+        { label: "Comissão + serviço", value: m.taxaComissaoIfood },
+        { label: "Promoções (loja bancou)", value: m.promocoes },
+        { label: "Serviços logísticos", value: m.servicosLogisticos },
+        { label: "Outros / anúncios", value: m.outrosDescontosIfood },
+      ],
+      vrLiquido,
+    ),
+    buildPlat(
+      "99food",
+      "99 Food",
+      [
+        { label: "Comissão", value: nineResumo.comissaoRs },
+        { label: "Taxa de pagamento", value: nineResumo.taxaCanalPagamentoRs },
+        { label: "Promoções", value: nineResumo.promocoesRs },
+      ],
+      0,
+    ),
+    buildPlat("keeta", "Keeta", [], 0),
+  ].filter((p): p is DrePlat => p !== null)
 
   const descontos = [
     { label: "Taxa de entrega", value: m.taxaEntregaIfood },
@@ -100,74 +151,14 @@ export async function FinanceiroLojaTab({
     <div className="space-y-4">
       {/* DRE da loja */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-2">
-          <div className="mb-3 flex items-center gap-2">
-            <Wallet className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">DRE da loja · mês</h3>
-          </div>
-          <DreRow label="Faturamento bruto" value={fmtBRL(bruto)} bold />
-          <DreRow
-            label="(−) Taxas das plataformas"
-            value={`− ${fmtBRL(taxas)}`}
-            muted
+        <div className="lg:col-span-2">
+          <DreDetalhado
+            platforms={dreTaxas}
+            totalBruto={bruto}
+            totalLiquido={liquido}
+            cmv={cmv}
+            operacao={operacao}
           />
-          <Divider />
-          <DreRow
-            label="= Líquido (entra na conta)"
-            value={fmtBRL(liquido)}
-            bold
-            highlight
-          />
-          <DreRow
-            label="(−) CMV (Cozina + Loja)"
-            value={cmv > 0 ? `− ${fmtBRL(cmv)}` : "sem custo lançado"}
-            muted
-          />
-          <Divider />
-          <DreRow
-            label="= Margem líquida"
-            value={
-              <span className="flex items-baseline gap-2">
-                {fmtBRL(margem)}
-                {cmv > 0 && (
-                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                    ({fmtPct(margemPct)})
-                  </span>
-                )}
-              </span>
-            }
-            bold
-            highlight={operacao <= 0}
-          />
-          {operacao > 0 && (
-            <>
-              <DreRow
-                label="(−) Custo da operação"
-                value={`− ${fmtBRL(operacao)}`}
-                muted
-              />
-              <Divider />
-              <DreRow
-                label="= Resultado operacional"
-                value={
-                  <span className="flex items-baseline gap-2">
-                    {fmtBRL(resultado)}
-                    <span
-                      className={`text-xs font-semibold ${
-                        resultado >= 0
-                          ? "text-emerald-700 dark:text-emerald-400"
-                          : "text-rose-700 dark:text-rose-400"
-                      }`}
-                    >
-                      ({fmtPct(resultadoPct)})
-                    </span>
-                  </span>
-                }
-                bold
-                highlight
-              />
-            </>
-          )}
         </div>
 
         {/* Custos editáveis */}
@@ -377,49 +368,6 @@ export async function FinanceiroLojaTab({
       )}
     </div>
   )
-}
-
-function DreRow({
-  label,
-  value,
-  bold,
-  muted,
-  highlight,
-}: {
-  label: string
-  value: React.ReactNode
-  bold?: boolean
-  muted?: boolean
-  highlight?: boolean
-}) {
-  return (
-    <div
-      className={`flex items-baseline justify-between gap-2 py-1.5 ${
-        highlight ? "rounded-md bg-emerald-50 px-2 dark:bg-emerald-950/30" : ""
-      }`}
-    >
-      <span
-        className={`text-xs ${muted ? "text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}
-      >
-        {label}
-      </span>
-      <span
-        className={`text-sm tabular-nums ${
-          highlight
-            ? "font-bold text-emerald-700 dark:text-emerald-400"
-            : bold
-              ? "font-semibold"
-              : ""
-        } ${muted ? "text-muted-foreground" : ""}`}
-      >
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function Divider() {
-  return <div className="my-2 h-px bg-border" />
 }
 
 function MiniRow({ label, value }: { label: string; value: string }) {
