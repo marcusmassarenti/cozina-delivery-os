@@ -8,6 +8,7 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
 import { InsumoImport } from "./_components/insumo-import"
+import { BulkFichaAction } from "./_components/bulk-ficha-action"
 import { ItensFichaList } from "./_components/itens-ficha-list"
 
 /**
@@ -70,6 +71,9 @@ export default async function FichaTecnicaPage({
       </div>
 
       <InsumoImport insumos={insumos} />
+      {itens.some((i) => i.ficha.length > 0) && (
+        <BulkFichaAction itens={itens} insumos={insumos} />
+      )}
       <ItensFichaList itens={itens} insumos={insumos} />
     </div>
   )

@@ -178,6 +178,80 @@ export async function setItemFicha(input: {
   }
 }
 
+/**
+ * Aplica uma ficha (lista de insumos × qtd) em VÁRIOS itens de uma vez. Cada
+ * destino pode ter a sua lista (ex.: mesma base, proteína trocada). Cria/acha o
+ * prato interno de cada item, valida contra o catálogo e grava.
+ */
+export async function bulkSetFichas(
+  targets: {
+    platform: Platform
+    nomeItem: string
+    linhas: { codigo: string; qtd: number }[]
+  }[],
+): Promise<ActionState> {
+  let admin
+  try {
+    ;({ admin } = await requireAdmin())
+  } catch {
+    return fail("Apenas administradores.")
+  }
+  if (!targets || targets.length === 0) {
+    return fail("Nenhum produto selecionado.")
+  }
+  const { data: insumos } = await admin
+    .from("producao_insumo")
+    .select("codigo")
+  const validos = new Set((insumos ?? []).map((i) => i.codigo as string))
+
+  let okCount = 0
+  for (const t of targets) {
+    if (!t.nomeItem) continue
+    const merged = new Map<string, number>()
+    for (const l of t.linhas ?? []) {
+      const codigo = (l.codigo ?? "").trim().toUpperCase()
+      const qtd = Number(l.qtd) || 0
+      if (!codigo || qtd <= 0 || !validos.has(codigo)) continue
+      merged.set(codigo, (merged.get(codigo) ?? 0) + qtd)
+    }
+    if (merged.size === 0) continue
+
+    const { data: existing } = await admin
+      .from("producao_prato_nome")
+      .select("prato_id")
+      .eq("platform", t.platform)
+      .eq("nome_item", t.nomeItem)
+      .maybeSingle()
+    let pratoId = existing?.prato_id as string | undefined
+    if (!pratoId) {
+      const { data: created } = await admin
+        .from("producao_prato")
+        .insert({ nome: t.nomeItem })
+        .select("id")
+        .single()
+      if (!created) continue
+      pratoId = created.id
+      await admin.from("producao_prato_nome").insert({
+        platform: t.platform,
+        nome_item: t.nomeItem,
+        prato_id: pratoId,
+      })
+    }
+    const pid: string = pratoId!
+    await admin.from("producao_ficha").delete().eq("prato_id", pid)
+    await admin.from("producao_ficha").insert(
+      Array.from(merged.entries()).map(([codigo, qtd]) => ({
+        prato_id: pid,
+        insumo_codigo: codigo,
+        qtd,
+      })),
+    )
+    okCount++
+  }
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, message: `Ficha aplicada em ${okCount} produto(s).` }
+}
+
 /** Remove a ficha/mapeamento de um item (volta a "sem ficha"). Limpa o prato
  * interno se ele não tiver mais nenhum nome apontando. */
 export async function removeItemFicha(input: {
