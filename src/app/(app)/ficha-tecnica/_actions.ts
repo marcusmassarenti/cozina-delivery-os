@@ -88,6 +88,92 @@ export async function upsertInsumosRows(
   return { ok: true, message: `${clean.length} insumo(s) salvos.` }
 }
 
+/** Exclui um insumo do catálogo. Bloqueia se ele estiver em uso em alguma
+ * ficha — nesse caso é preciso substituir antes (ver replaceInsumoAndDelete). */
+export async function deleteInsumo(
+  codigo: string,
+): Promise<ActionState & { emUso?: number }> {
+  let admin
+  try {
+    ;({ admin } = await requireAdmin())
+  } catch {
+    return fail("Apenas administradores.")
+  }
+  const cod = (codigo ?? "").trim().toUpperCase()
+  if (!cod) return fail("Código inválido.")
+
+  const { count } = await admin
+    .from("producao_ficha")
+    .select("id", { count: "exact", head: true })
+    .eq("insumo_codigo", cod)
+  if (count && count > 0) {
+    return {
+      ok: false,
+      emUso: count,
+      message: `Em uso em ${count} ficha(s). Substitua por outro insumo antes de excluir.`,
+    }
+  }
+  const { error } = await admin
+    .from("producao_insumo")
+    .delete()
+    .eq("codigo", cod)
+  if (error) return fail(`Erro: ${error.message}`)
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, message: "Insumo excluído." }
+}
+
+/** Troca um insumo por outro em TODAS as fichas (somando onde o destino já
+ * existe) e exclui o antigo do catálogo. */
+export async function replaceInsumoAndDelete(input: {
+  fromCodigo: string
+  toCodigo: string
+}): Promise<ActionState> {
+  let admin
+  try {
+    ;({ admin } = await requireAdmin())
+  } catch {
+    return fail("Apenas administradores.")
+  }
+  const from = (input.fromCodigo ?? "").trim().toUpperCase()
+  const to = (input.toCodigo ?? "").trim().toUpperCase()
+  if (!from || !to || from === to) return fail("Escolha um insumo diferente.")
+
+  const { data: toIns } = await admin
+    .from("producao_insumo")
+    .select("codigo")
+    .eq("codigo", to)
+    .maybeSingle()
+  if (!toIns) return fail("Insumo substituto não existe.")
+
+  const { data: rows } = await admin
+    .from("producao_ficha")
+    .select("id, prato_id, qtd")
+    .eq("insumo_codigo", from)
+  for (const r of rows ?? []) {
+    const { data: dup } = await admin
+      .from("producao_ficha")
+      .select("id, qtd")
+      .eq("prato_id", r.prato_id)
+      .eq("insumo_codigo", to)
+      .maybeSingle()
+    if (dup) {
+      await admin
+        .from("producao_ficha")
+        .update({ qtd: Number(dup.qtd) + Number(r.qtd) })
+        .eq("id", dup.id)
+      await admin.from("producao_ficha").delete().eq("id", r.id)
+    } else {
+      await admin
+        .from("producao_ficha")
+        .update({ insumo_codigo: to })
+        .eq("id", r.id)
+    }
+  }
+  await admin.from("producao_insumo").delete().eq("codigo", from)
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, message: `Substituído por ${to} e excluído.` }
+}
+
 /**
  * Define a ficha de UM item vendido (1 etapa: item → insumos). Por trás cria/
  * acha o "prato" interno (nome = nome do item) e o de-para, e grava a ficha.

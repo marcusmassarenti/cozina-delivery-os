@@ -2,9 +2,14 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, FileSpreadsheet, Loader2, Plus } from "lucide-react"
+import { Download, FileSpreadsheet, Loader2, Plus, Trash2, X } from "lucide-react"
 
-import { importInsumos, upsertInsumosRows } from "../_actions"
+import {
+  deleteInsumo,
+  importInsumos,
+  replaceInsumoAndDelete,
+  upsertInsumosRows,
+} from "../_actions"
 import type { Insumo } from "@/lib/data/producao"
 
 /**
@@ -225,22 +230,145 @@ export function InsumoImport({ insumos }: { insumos: Insumo[] }) {
       )}
 
       {listOpen && (
-        <div className="mt-3 max-h-48 overflow-auto rounded-md border">
+        <div className="mt-3 max-h-60 overflow-auto rounded-md border">
           <table className="w-full text-xs">
+            <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur">
+              <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-2 py-1.5 font-semibold">Código</th>
+                <th className="px-2 py-1.5 font-semibold">Nome</th>
+                <th className="px-2 py-1.5 font-semibold">Unidade</th>
+                <th className="w-8 px-2 py-1.5"></th>
+              </tr>
+            </thead>
             <tbody className="divide-y">
               {insumos.map((i) => (
-                <tr key={i.codigo} className={i.ativo ? "" : "opacity-50"}>
-                  <td className="px-2 py-1 font-mono font-medium">{i.codigo}</td>
-                  <td className="px-2 py-1">{i.nome}</td>
-                  <td className="px-2 py-1 text-right text-muted-foreground">
-                    {i.unidade}
-                  </td>
-                </tr>
+                <CatalogRow
+                  key={i.codigo}
+                  insumo={i}
+                  outros={insumos.filter((x) => x.codigo !== i.codigo)}
+                />
               ))}
             </tbody>
           </table>
         </div>
       )}
     </div>
+  )
+}
+
+function CatalogRow({
+  insumo,
+  outros,
+}: {
+  insumo: Insumo
+  outros: Insumo[]
+}) {
+  const router = useRouter()
+  const [pending, start] = React.useTransition()
+  const [sub, setSub] = React.useState(false) // modo "substituir e excluir"
+  const [subTo, setSubTo] = React.useState("")
+  const [erro, setErro] = React.useState<string | null>(null)
+
+  const excluir = () => {
+    setErro(null)
+    start(async () => {
+      const res = await deleteInsumo(insumo.codigo)
+      if (res.ok) {
+        router.refresh()
+      } else if (res.emUso) {
+        setSub(true)
+        setErro(res.message ?? "Em uso.")
+      } else {
+        setErro(res.message ?? "Erro.")
+      }
+    })
+  }
+  const substituir = () => {
+    if (!subTo) return
+    start(async () => {
+      const res = await replaceInsumoAndDelete({
+        fromCodigo: insumo.codigo,
+        toCodigo: subTo,
+      })
+      if (res.ok) router.refresh()
+      else setErro(res.message ?? "Erro.")
+    })
+  }
+
+  return (
+    <>
+      <tr className={insumo.ativo ? "" : "opacity-50"}>
+        <td className="px-2 py-1 font-mono font-medium">{insumo.codigo}</td>
+        <td className="px-2 py-1">{insumo.nome}</td>
+        <td className="px-2 py-1 text-muted-foreground">{insumo.unidade}</td>
+        <td className="px-2 py-1 text-right">
+          <button
+            type="button"
+            onClick={excluir}
+            disabled={pending}
+            aria-label="Excluir insumo"
+            className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:hover:bg-rose-950/30"
+          >
+            {pending && !sub ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+          </button>
+        </td>
+      </tr>
+      {(sub || erro) && (
+        <tr>
+          <td colSpan={4} className="bg-amber-50 px-2 py-2 dark:bg-amber-950/20">
+            {erro && (
+              <p className="mb-1 text-[11px] text-amber-800 dark:text-amber-300">
+                {erro}
+              </p>
+            )}
+            {sub && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">
+                  Substituir <b>{insumo.codigo}</b> por:
+                </span>
+                <select
+                  value={subTo}
+                  onChange={(e) => setSubTo(e.target.value)}
+                  className="h-7 w-48 rounded-md border bg-background px-1.5 text-[11px] outline-none focus:border-ring"
+                >
+                  <option value="">— escolha —</option>
+                  {outros.map((o) => (
+                    <option key={o.codigo} value={o.codigo}>
+                      {o.codigo} — {o.nome}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={substituir}
+                  disabled={pending || !subTo}
+                  className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {pending ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : null}
+                  Substituir e excluir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSub(false)
+                    setErro(null)
+                  }}
+                  aria-label="Cancelar"
+                  className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
