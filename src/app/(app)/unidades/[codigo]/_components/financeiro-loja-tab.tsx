@@ -329,8 +329,20 @@ export async function FinanceiroLojaTab({
               </span>
             </div>
             <MiniRow label="iFood" value={fmtBRL(pagamento.incentivoIfood)} />
-            <MiniRow label="Loja" value={fmtBRL(pagamento.incentivoLoja)} />
-            <MiniRow label="Rede" value={fmtBRL(pagamento.incentivoRede)} />
+            <MiniRow
+              label="Loja (investiu)"
+              value={fmtBRL(pagamento.incentivoLoja)}
+            />
+            <div className="mt-1.5 flex items-baseline justify-between border-t pt-2">
+              <span className="text-xs font-semibold">Total em promoções</span>
+              <span className="text-sm font-bold tabular-nums">
+                {fmtBRL(pagamento.incentivoIfood + pagamento.incentivoLoja)}
+              </span>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              &quot;Loja&quot; = promoção que a própria loja bancou (saiu do
+              bolso dela pra atrair pedido).
+            </p>
           </div>
           <div className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
