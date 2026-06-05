@@ -2,24 +2,35 @@ import {
   Bike,
   DollarSign,
   Info,
+  Megaphone,
   Percent,
   PiggyBank,
   Ticket,
   TrendingUp,
+  Truck,
   Wallet,
 } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { PlatformLogo } from "@/components/platform-logo"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView, userCan } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
-import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
+import {
+  getNetworkDrePlatforms,
+  getNetworkResultadoForMonth,
+} from "@/lib/data/resultado"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import { getNetworkPagamentoResumo } from "@/lib/data/ifood-pedidos"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import {
+  DreDetalhado,
+  type VrInfo,
+} from "@/app/(app)/unidades/[codigo]/_components/dre-detalhado"
+import { BrutoBreakdown } from "@/app/(app)/unidades/[codigo]/_components/bruto-breakdown"
 
 import { ResultadoTable } from "./_components/resultado-table"
 
@@ -53,14 +64,22 @@ export default async function ResultadoPage({
         ? undefined // admin/gerente: rede inteira
         : allUnits.map((u) => u.id) // franqueado: só as lojas dele
 
-  const [resultado, availablePeriods] = await Promise.all([
+  const [resultado, drePlats, availablePeriods] = await Promise.all([
     getNetworkResultadoForMonth(year, month, filterIds),
+    getNetworkDrePlatforms(year, month, filterIds),
     getAvailablePeriods(),
   ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
 
   const hasData = rows.length > 0
   const semCusto = hasData && unitsComCusto === 0
+
+  // Margem SEM VR (mesma definição do DRE da loja e do Resumo): líquido das
+  // plataformas − CMV. O VR entra depois como ganho à parte. Recalcula aqui
+  // porque totals.margemLiquida histórico inclui VR.
+  const margemSemVr = totals.liquidoPlataformas - totals.cmvTotal
+  const margemSemVrPct =
+    totals.bruto > 0 ? (margemSemVr / totals.bruto) * 100 : 0
 
   // Custo de entrega das lojas com faturamento (parte das taxas das plataformas)
   const deliveryFee = hasData
@@ -81,6 +100,19 @@ export default async function ResultadoPage({
         rows.map((r) => r.unitId),
       )
     : null
+
+  // VR da rede pro DRE detalhado: líquido autoritativo (totals.vrLiquido);
+  // bruto/taxa derivados pela regra dos 8% (líquido = bruto × 0,92), idêntico
+  // ao detalhe da loja. Por bandeira (bruto) vem do relatório de Pedidos.
+  const vrInfoRede: VrInfo | undefined =
+    totals.vrLiquido > 0
+      ? {
+          liquido: totals.vrLiquido,
+          bruto: totals.vrLiquido / 0.92,
+          taxa: totals.vrLiquido / 0.92 - totals.vrLiquido,
+          porBandeira: pagamento?.porBandeira ?? [],
+        }
+      : undefined
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -152,175 +184,41 @@ export default async function ResultadoPage({
             <Kpi
               icon={<TrendingUp className="size-4" />}
               label="Margem de Lucro"
-              value={semCusto ? "—" : fmtPct(totals.margemPct)}
+              value={semCusto ? "—" : fmtPct(margemSemVrPct)}
               hint={
                 semCusto
                   ? "lance os custos pra ver a margem"
-                  : `${fmtBRL(totals.margemLiquida)} de margem`
+                  : `${fmtBRL(margemSemVr)} · sem VR (igual ao Resumo)`
               }
-              tone={semCusto ? "neutral" : totals.margemLiquida >= 0 ? "positive" : "negative"}
+              tone={semCusto ? "neutral" : margemSemVr >= 0 ? "positive" : "negative"}
             />
           </div>
 
-          {/* DRE da rede + nota */}
+          {/* DRE da rede (detalhado, por plataforma) + composição do bruto */}
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-2">
-              <div className="mb-3 flex items-center gap-2">
-                <Wallet className="size-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">
-                  DRE da rede · {formatPeriodLabel({ year, month })}
-                </h2>
-              </div>
-              <DreRow label="Faturamento bruto" value={fmtBRL(totals.bruto)} bold />
-              <DreRow
-                label="(−) Taxas das plataformas"
-                value={`− ${fmtBRL(totals.taxasPlataforma)}`}
-                muted
+            <div className="lg:col-span-2">
+              <DreDetalhado
+                platforms={drePlats}
+                totalBruto={totals.bruto}
+                totalLiquido={totals.liquidoPlataformas}
+                cmv={totals.cmvTotal}
+                operacao={totals.custoOperacao}
+                vrInfo={vrInfoRede}
+                title={`DRE da rede · ${formatPeriodLabel({ year, month })}`}
+                totalLabel="Resultado total da rede"
               />
-              {deliveryFee.total > 0 && (
-                <p className="-mt-1 pl-3 text-[11px] text-muted-foreground">
-                  ↳ dos quais{" "}
-                  <span className="font-medium">
-                    {fmtBRL(deliveryFee.total)}
-                  </span>{" "}
-                  são taxa de entrega ({fmtPct(entregaPctBruto)} do bruto)
-                </p>
-              )}
-              {totals.promocoesLoja > 0 && (
-                <p className="-mt-1 pl-3 text-[11px] text-muted-foreground">
-                  ↳ e{" "}
-                  <span className="font-medium">
-                    {fmtBRL(totals.promocoesLoja)}
-                  </span>{" "}
-                  em promoções/descontos que a loja bancou (
-                  {fmtPct(
-                    totals.bruto > 0
-                      ? (totals.promocoesLoja / totals.bruto) * 100
-                      : 0,
-                  )}{" "}
-                  do bruto)
-                </p>
-              )}
-              <Divider />
-              <DreRow
-                label="= Líquido das plataformas"
-                value={fmtBRL(totals.liquidoPlataformas)}
-                bold
-                highlight
-              />
-              {totals.vrLiquido > 0 && (
-                <DreRow
-                  label="(+) VR líquido (via loja)"
-                  value={`+ ${fmtBRL(totals.vrLiquido)}`}
-                  muted
-                />
-              )}
-              <DreRow
-                label="(−) CMV (Cozina + Loja)"
-                value={
-                  totals.cmvTotal > 0
-                    ? `− ${fmtBRL(totals.cmvTotal)}`
-                    : "sem custo lançado"
-                }
-                muted
-              />
-              <Divider />
-              <DreRow
-                label="= Margem líquida"
-                value={
-                  <span className="flex items-baseline gap-2">
-                    {fmtBRL(totals.margemLiquida)}
-                    {!semCusto && (
-                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                        ({fmtPct(totals.margemPct)})
-                      </span>
-                    )}
-                  </span>
-                }
-                bold
-                highlight={totals.custoOperacao <= 0}
-              />
-              {totals.custoOperacao > 0 && (
-                <>
-                  <DreRow
-                    label="(−) Custo da operação"
-                    value={`− ${fmtBRL(totals.custoOperacao)}`}
-                    muted
-                  />
-                  <Divider />
-                  <DreRow
-                    label="= Resultado operacional"
-                    value={
-                      <span className="flex items-baseline gap-2">
-                        {fmtBRL(totals.resultadoOperacional)}
-                        <span
-                          className={`text-xs font-semibold ${
-                            totals.resultadoOperacional >= 0
-                              ? "text-emerald-700 dark:text-emerald-400"
-                              : "text-rose-700 dark:text-rose-400"
-                          }`}
-                        >
-                          ({fmtPct(totals.resultadoPct)})
-                        </span>
-                      </span>
-                    }
-                    bold
-                    highlight
-                  />
-                </>
-              )}
             </div>
-
-            {/* Composição por etapa (visual) */}
-            <div className="rounded-xl border bg-card p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold">Pra onde vai o bruto</h2>
-              <CompBar
-                label="Líquido pra loja"
-                value={totals.liquidoPlataformas}
-                base={totals.bruto}
-                color="bg-emerald-500"
-              />
-              <CompBar
-                label="Taxas das plataformas"
-                value={totals.taxasPlataforma}
-                base={totals.bruto}
-                color="bg-rose-500"
-              />
-              {totals.cmvTotal > 0 && (
-                <CompBar
-                  label="CMV (custo dos produtos)"
-                  value={totals.cmvTotal}
-                  base={totals.bruto}
-                  color="bg-amber-500"
-                />
-              )}
-              {totals.custoOperacao > 0 && (
-                <CompBar
-                  label="Custo da operação"
-                  value={totals.custoOperacao}
-                  base={totals.bruto}
-                  color="bg-orange-500"
-                />
-              )}
-              {!semCusto && (
-                <CompBar
-                  label={
-                    totals.custoOperacao > 0
-                      ? "Resultado operacional"
-                      : "Margem líquida"
-                  }
-                  value={Math.max(
-                    0,
-                    totals.custoOperacao > 0
-                      ? totals.resultadoOperacional
-                      : totals.margemLiquida,
-                  )}
-                  base={totals.bruto}
-                  color="bg-blue-500"
-                  emphasis
-                />
-              )}
-            </div>
+            <BrutoBreakdown
+              platforms={drePlats.map((p) => ({
+                id: p.id,
+                bruto: p.bruto,
+                liquido: p.liquido,
+              }))}
+              totalBruto={totals.bruto}
+              totalLiquido={totals.liquidoPlataformas}
+              cmv={totals.cmvTotal}
+              operacao={totals.custoOperacao}
+            />
           </div>
 
           {semCusto && (
@@ -334,13 +232,13 @@ export default async function ResultadoPage({
             </div>
           )}
 
-          {pagamento && pagamento.vrPedidos > 0 && (
-            <div className="rounded-xl border bg-card p-5 shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <Ticket className="size-4 text-violet-600" />
+          {pagamento && pagamento.hasData && (
+            <div>
+              <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-sm font-semibold">
-                  Vale-Refeição por bandeira (iFood)
+                  Detalhes do iFood · relatório de Pedidos
                 </h2>
+                <PlatformLogo platform="ifood" size="sm" />
                 <a
                   href="/pedidos"
                   className="ml-auto text-[11px] text-muted-foreground underline"
@@ -348,29 +246,110 @@ export default async function ResultadoPage({
                   ver em Pedidos
                 </a>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {pagamento.porBandeira.map((b) => (
-                  <div
-                    key={b.bandeira}
-                    className="flex items-center justify-between rounded-lg border bg-card px-3 py-2"
-                  >
-                    <span className="text-xs font-medium">{b.bandeira}</span>
-                    <div className="text-right">
-                      <p className="text-sm font-bold tabular-nums">
-                        {fmtBRL(b.valor)}
-                      </p>
-                      <p className="text-[10px] tabular-nums text-muted-foreground">
-                        {fmtNum(b.pedidos)} pedidos
-                      </p>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {pagamento.vrPedidos > 0 && (
+                  <div className="rounded-xl border bg-card p-5 shadow-sm">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Ticket className="size-4 text-violet-600" />
+                      <h3 className="text-sm font-semibold">
+                        Vale-Refeição por bandeira
+                      </h3>
+                      <span className="ml-auto">
+                        <PlatformLogo platform="ifood" size="sm" />
+                      </span>
                     </div>
+                    {pagamento.porBandeira.map((b) => (
+                      <MiniRow
+                        key={b.bandeira}
+                        label={b.bandeira}
+                        value={`${fmtBRL(b.valor)} · ${fmtNum(b.pedidos)} ped`}
+                      />
+                    ))}
+                    <TotalRow
+                      value={`${fmtBRL(pagamento.vrValor)} · ${fmtNum(pagamento.vrPedidos)} ped`}
+                    />
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      {fmtPct(pagamento.vrPct)} do pago · não entra no
+                      faturamento.
+                    </p>
                   </div>
-                ))}
+                )}
+                <div className="rounded-xl border bg-card p-5 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Wallet className="size-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">Mix de pagamento</h3>
+                    <span className="ml-auto">
+                      <PlatformLogo platform="ifood" size="sm" />
+                    </span>
+                  </div>
+                  {pagamento.mix.map((mx) => {
+                    const pct =
+                      pagamento.totalValor > 0
+                        ? (mx.valor / pagamento.totalValor) * 100
+                        : 0
+                    return (
+                      <MiniRow
+                        key={mx.grupo}
+                        label={mx.grupo}
+                        value={`${fmtBRL(mx.valor)} · ${pct.toFixed(0)}%`}
+                      />
+                    )
+                  })}
+                  <TotalRow value={`${fmtBRL(pagamento.totalValor)} · 100%`} />
+                </div>
+                <div className="rounded-xl border bg-card p-5 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Megaphone className="size-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">
+                      Promoções (quem bancou)
+                    </h3>
+                    <span className="ml-auto">
+                      <PlatformLogo platform="ifood" size="sm" />
+                    </span>
+                  </div>
+                  <MiniRow
+                    label="iFood"
+                    value={fmtBRL(pagamento.incentivoIfood)}
+                  />
+                  <MiniRow
+                    label="Loja (investiu)"
+                    value={fmtBRL(pagamento.incentivoLoja)}
+                  />
+                  <TotalRow
+                    label="Total em promoções"
+                    value={fmtBRL(
+                      pagamento.incentivoIfood + pagamento.incentivoLoja,
+                    )}
+                  />
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    &quot;Loja&quot; = promoção que a própria loja bancou (saiu
+                    do bolso dela pra atrair pedido).
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-card p-5 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Truck className="size-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">Por turno</h3>
+                    <span className="ml-auto">
+                      <PlatformLogo platform="ifood" size="sm" />
+                    </span>
+                  </div>
+                  {[...pagamento.porTurno]
+                    .sort((a, b) => turnoRank(a.chave) - turnoRank(b.chave))
+                    .map((tn) => (
+                      <MiniRow
+                        key={tn.chave}
+                        label={tn.chave}
+                        value={`${fmtNum(tn.pedidos)} ped`}
+                      />
+                    ))}
+                  <TotalRow
+                    value={`${fmtNum(
+                      pagamento.porTurno.reduce((a, t) => a + t.pedidos, 0),
+                    )} ped`}
+                  />
+                </div>
               </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Total: {fmtNum(pagamento.vrPedidos)} pedidos ·{" "}
-                {fmtBRL(pagamento.vrValor)} ({fmtPct(pagamento.vrPct)} do pago) ·
-                valor = total pago pelo cliente
-              </p>
             </div>
           )}
 
@@ -425,84 +404,51 @@ function Kpi({
   )
 }
 
-function DreRow({
-  label,
-  value,
-  bold,
-  muted,
-  highlight,
-}: {
-  label: string
-  value: React.ReactNode
-  bold?: boolean
-  muted?: boolean
-  highlight?: boolean
-}) {
+/** Ordena turnos na sequência do dia (café → almoço → café tarde → jantar). */
+const TURNO_ORDEM = [
+  "cafe da manha",
+  "almoco",
+  "cafe da tarde",
+  "jantar",
+  "madrugada",
+]
+function turnoRank(chave: string): number {
+  const norm = chave
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+  const i = TURNO_ORDEM.indexOf(norm)
+  return i === -1 ? 99 : i
+}
+
+function MiniRow({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`flex items-baseline justify-between gap-2 py-1.5 ${
-        highlight ? "rounded-md bg-emerald-50 px-2 dark:bg-emerald-950/30" : ""
-      }`}
-    >
-      <span
-        className={`text-xs ${muted ? "text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}
-      >
-        {label}
-      </span>
-      <span
-        className={`text-sm tabular-nums ${
-          highlight
-            ? "font-bold text-emerald-700 dark:text-emerald-400"
-            : bold
-              ? "font-semibold"
-              : ""
-        } ${muted ? "text-muted-foreground" : ""}`}
-      >
-        {value}
-      </span>
+    <div className="flex items-baseline justify-between gap-2 py-1">
+      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-xs font-medium tabular-nums">{value}</span>
     </div>
   )
 }
 
-function Divider() {
-  return <div className="my-2 h-px bg-border" />
-}
-
-function CompBar({
-  label,
+/** Linha de total no rodapé de um card (negrito, separada por borda). */
+function TotalRow({
+  label = "Total",
   value,
-  base,
-  color,
-  emphasis,
+  valueClass,
 }: {
-  label: string
-  value: number
-  base: number
-  color: string
-  emphasis?: boolean
+  label?: string
+  value: string
+  valueClass?: string
 }) {
-  const pct = base > 0 ? (value / base) * 100 : 0
   return (
-    <div className="mb-2.5">
-      <div className="mb-0.5 flex items-baseline justify-between">
-        <span
-          className={`text-xs ${emphasis ? "font-semibold" : "text-muted-foreground"}`}
-        >
-          {label}
-        </span>
-        <div className="flex items-baseline gap-2 tabular-nums">
-          <span className="text-xs font-semibold">{fmtBRLShort(value)}</span>
-          <span className="text-[10px] text-muted-foreground">
-            {pct.toFixed(0)}%
-          </span>
-        </div>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-full ${color}`}
-          style={{ width: `${Math.min(100, pct)}%` }}
-        />
-      </div>
+    <div className="mt-1.5 flex items-baseline justify-between gap-2 border-t pt-2">
+      <span className="text-xs font-semibold">{label}</span>
+      <span
+        className={`shrink-0 text-sm font-bold tabular-nums ${valueClass ?? ""}`}
+      >
+        {value}
+      </span>
     </div>
   )
 }

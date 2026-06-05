@@ -252,3 +252,146 @@ export async function getNetworkResultadoForMonth(
     unitsComCusto: rows.filter((r) => r.temCusto).length,
   }
 }
+
+// ─── DRE detalhado da rede (taxas itemizadas por plataforma) ──────────
+
+export type NetworkDrePlat = {
+  id: "ifood" | "99food" | "keeta"
+  name: string
+  bruto: number
+  liquido: number
+  taxaTotal: number
+  /** VR líquido à parte (só iFood). */
+  vrLiquido: number
+  itens: { label: string; value: number }[]
+}
+
+/**
+ * Abertura das taxas por plataforma SOMADA na rede — alimenta o DreDetalhado da
+ * tela /financeiro (mesmo componente do detalhe da loja). iFood vem itemizado
+ * da Conciliação; 99 Food do resumo; Keeta só o total.
+ */
+export async function getNetworkDrePlatforms(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+): Promise<NetworkDrePlat[]> {
+  const allUnits = await getUnits()
+  let active = allUnits.filter((u) => u.active)
+  if (filterUnitIds) {
+    const set = new Set(filterUnitIds)
+    active = active.filter((u) => set.has(u.id))
+  }
+  const unitIds = active.map((u) => u.id)
+  if (unitIds.length === 0) return []
+
+  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit] = await Promise.all([
+    getFinanceiroResumoByUnits(unitIds, year, month),
+    getNinefoodResumoByUnits(unitIds, year, month),
+    getKeetaResumoByUnits(unitIds, year, month),
+    getRealMonthlyForUnits(unitIds, year, month),
+  ])
+  const pBruto = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+    m.platforms.find((p) => p.id === id)?.bruto ?? 0
+  const pLiq = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+    m.platforms.find((p) => p.id === id)?.liquido ?? 0
+
+  const a = {
+    if: { bruto: 0, liq: 0, entrega: 0, comissao: 0, promo: 0 },
+    ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
+    ke: { bruto: 0, liq: 0 },
+    vr: 0,
+  }
+  for (const u of active) {
+    const fin = finByUnit.get(u.id)
+    const nine = nineByUnit.get(u.id)
+    const keeta = keetaByUnit.get(u.id)
+    const mm = manualByUnit.get(u.id) ?? emptyMonthly
+    const hasIfood = fin?.hasData ?? false
+    const has99 = nine?.hasData ?? false
+    const hasKeeta = keeta?.hasData ?? false
+
+    // Bruto/líquido por plataforma (importado preferido, fallback manual) —
+    // MESMA lógica do getNetworkResultadoForMonth, pra somar idêntico.
+    const ifBruto = hasIfood ? fin!.bruto : pBruto(mm, "ifood")
+    const ifLiq = hasIfood ? fin!.liquido : pLiq(mm, "ifood")
+    const niBruto = has99 ? nine!.bruto : pBruto(mm, "99food")
+    const niLiq = has99 ? nine!.liquido : pLiq(mm, "99food")
+    const keBruto = hasKeeta ? keeta!.bruto : pBruto(mm, "keeta")
+    const keLiq = hasKeeta ? keeta!.liquido : pLiq(mm, "keeta")
+
+    // Pula quem não tem faturamento (mesmo critério do DRE): assim o bruto,
+    // líquido e VR somam EXATAMENTE igual ao totals do resultado.
+    let pedidos = 0
+    if (hasIfood) pedidos += fin!.pedidosUnicos
+    if (has99) pedidos += nine!.pedidos
+    if (hasKeeta) pedidos += keeta!.pedidos
+    if (!hasIfood && !has99 && !hasKeeta) pedidos = mm.pedidos
+    const unitBruto = ifBruto + niBruto + keBruto
+    if (unitBruto <= 0 && pedidos <= 0) continue
+
+    a.if.bruto += ifBruto
+    a.if.liq += ifLiq
+    if (hasIfood) {
+      // Mesmos itens do DRE da loja (mergeMonthly): entrega + comissão +
+      // promoção que a loja bancou. Transação/serviço/anúncios não são
+      // itemizados nesse padrão — caem no resto "Cancelamentos / outros".
+      a.if.entrega += Math.abs(fin!.taxaEntrega)
+      a.if.comissao += Math.abs(fin!.comissaoIfood)
+      a.if.promo += Math.abs(fin!.promocaoLoja)
+    }
+    a.ni.bruto += niBruto
+    a.ni.liq += niLiq
+    if (has99) {
+      a.ni.comissao += nine!.comissaoRs
+      a.ni.taxaPgto += nine!.taxaCanalPagamentoRs
+      a.ni.promo += nine!.promocoesRs
+    }
+    a.ke.bruto += keBruto
+    a.ke.liq += keLiq
+    a.vr += Math.max(0, mm.vrRecebido - mm.vrTaxaMedia8)
+  }
+
+  const make = (
+    id: "ifood" | "99food" | "keeta",
+    name: string,
+    bruto: number,
+    liq: number,
+    itens: { label: string; value: number }[],
+    vr: number,
+  ): NetworkDrePlat | null => {
+    if (bruto <= 0) return null
+    const taxaTotal = Math.max(0, bruto - liq)
+    const lista = itens.filter((i) => i.value > 0)
+    const resto = taxaTotal - lista.reduce((s, i) => s + i.value, 0)
+    if (resto > 0.5) lista.push({ label: "Cancelamentos / outros", value: resto })
+    return { id, name, bruto, liquido: liq, taxaTotal, vrLiquido: vr, itens: lista }
+  }
+  return [
+    make(
+      "ifood",
+      "iFood",
+      a.if.bruto,
+      a.if.liq,
+      [
+        { label: "Taxa de entrega", value: a.if.entrega },
+        { label: "Comissão + serviço", value: a.if.comissao },
+        { label: "Promoções (loja bancou)", value: a.if.promo },
+      ],
+      a.vr,
+    ),
+    make(
+      "99food",
+      "99 Food",
+      a.ni.bruto,
+      a.ni.liq,
+      [
+        { label: "Comissão", value: a.ni.comissao },
+        { label: "Taxa de pagamento", value: a.ni.taxaPgto },
+        { label: "Promoções", value: a.ni.promo },
+      ],
+      0,
+    ),
+    make("keeta", "Keeta", a.ke.bruto, a.ke.liq, [], 0),
+  ].filter((p): p is NetworkDrePlat => p !== null)
+}

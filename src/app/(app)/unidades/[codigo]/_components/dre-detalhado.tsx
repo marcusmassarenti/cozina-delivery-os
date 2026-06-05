@@ -42,6 +42,8 @@ export function DreDetalhado({
   cmv,
   operacao,
   vrInfo,
+  title = "DRE da loja · mês",
+  totalLabel = "Resultado total da loja",
 }: {
   platforms: DrePlat[]
   totalBruto: number
@@ -49,6 +51,10 @@ export function DreDetalhado({
   cmv: number
   operacao: number
   vrInfo?: VrInfo
+  /** Cabeçalho do card (default "DRE da loja · mês"). */
+  title?: string
+  /** Rótulo da linha de resultado final (default "Resultado total da loja"). */
+  totalLabel?: string
 }) {
   const [sel, setSel] = React.useState<"todas" | PlatformId>("todas")
   const multi = platforms.length > 1
@@ -77,7 +83,7 @@ export function DreDetalhado({
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Wallet className="size-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold">DRE da loja · mês</h3>
+        <h3 className="text-sm font-semibold">{title}</h3>
         <div className="ml-auto flex items-center gap-1">
           {multi && (
             <button
@@ -185,7 +191,7 @@ export function DreDetalhado({
           <VrLine vrLiquido={vr} info={vrInfo} />
           <Divider />
           <Row
-            label="= Resultado total da loja"
+            label={`= ${totalLabel}`}
             value={fmtBRL(resultadoTotal)}
             bold
             highlight
