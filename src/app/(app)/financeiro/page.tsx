@@ -1,12 +1,10 @@
 import {
   Bike,
-  CalendarDays,
   DollarSign,
   Info,
   Megaphone,
   Percent,
   PiggyBank,
-  ShoppingBag,
   Ticket,
   TrendingUp,
   Truck,
@@ -15,7 +13,7 @@ import {
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
-import { DailyBarChart } from "@/components/shared/daily-bar-chart"
+import { DailyTrendChart } from "./_components/daily-trend-chart"
 import { PlatformLogo } from "@/components/platform-logo"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
@@ -74,13 +72,39 @@ export default async function ResultadoPage({
     ? allUnits.filter((u) => filterIds.includes(u.id))
     : allUnits
 
-  const [resultado, drePlats, daily, availablePeriods] = await Promise.all([
-    getNetworkResultadoForMonth(year, month, filterIds),
-    getNetworkDrePlatforms(year, month, filterIds),
-    getDailyReportMatrix(year, month, "todas", matrixUnits),
-    getAvailablePeriods(),
-  ])
+  const [resultado, drePlats, dTodas, dIfood, d99, dKeeta, availablePeriods] =
+    await Promise.all([
+      getNetworkResultadoForMonth(year, month, filterIds),
+      getNetworkDrePlatforms(year, month, filterIds),
+      getDailyReportMatrix(year, month, "todas", matrixUnits),
+      getDailyReportMatrix(year, month, "ifood", matrixUnits),
+      getDailyReportMatrix(year, month, "99food", matrixUnits),
+      getDailyReportMatrix(year, month, "keeta", matrixUnits),
+      getAvailablePeriods(),
+    ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
+
+  // Séries diárias por plataforma pro gráfico interativo (faturamento + pedidos)
+  const toSeries = (m: typeof dTodas) => ({
+    days: m.days,
+    faturamento: m.networkByDay.faturamento,
+    pedidos: m.networkByDay.pedidos,
+  })
+  const dailyByPlat = {
+    todas: toSeries(dTodas),
+    ifood: toSeries(dIfood),
+    "99food": toSeries(d99),
+    keeta: toSeries(dKeeta),
+  }
+  const dailyPlatforms = (
+    [
+      ["ifood", dIfood],
+      ["99food", d99],
+      ["keeta", dKeeta],
+    ] as const
+  )
+    .filter(([, m]) => m.hasData)
+    .map(([id]) => id)
 
   const hasData = rows.length > 0
   const semCusto = hasData && unitsComCusto === 0
@@ -232,42 +256,9 @@ export default async function ResultadoPage({
             />
           </div>
 
-          {/* Tendência diária da rede: faturamento + pedidos */}
-          {daily.hasData && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border bg-card p-5 shadow-sm">
-                <div className="mb-3 flex items-center gap-2">
-                  <CalendarDays className="size-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Faturamento por dia</h3>
-                  <span className="ml-auto text-[11px] text-muted-foreground">
-                    rede · bruto
-                  </span>
-                </div>
-                <DailyBarChart
-                  dias={daily.days}
-                  valores={daily.networkByDay.faturamento}
-                  format={fmtBRL}
-                  formatShort={fmtBRLShort}
-                />
-              </div>
-              <div className="rounded-xl border bg-card p-5 shadow-sm">
-                <div className="mb-3 flex items-center gap-2">
-                  <ShoppingBag className="size-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Pedidos por dia</h3>
-                  <span className="ml-auto text-[11px] text-muted-foreground">
-                    rede
-                  </span>
-                </div>
-                <DailyBarChart
-                  dias={daily.days}
-                  valores={daily.networkByDay.pedidos}
-                  format={(n) => `${fmtNum(n)} pedidos`}
-                  formatShort={(n) => `${fmtNum(n)} ped`}
-                  barClass="bg-sky-500/70 hover:bg-sky-500"
-                  emptyLabel="Sem pedidos no mês."
-                />
-              </div>
-            </div>
+          {/* Tendência diária da rede: faturamento + pedidos, por plataforma */}
+          {dTodas.hasData && (
+            <DailyTrendChart data={dailyByPlat} platforms={dailyPlatforms} />
           )}
 
           {semCusto && (
