@@ -49,14 +49,17 @@ export function DreDetalhado({
   const liquido = isTodas ? totalLiquido : plat?.liquido ?? 0
   const taxas = Math.max(0, bruto - liquido)
   const vr = isTodas ? vrTotal : plat?.vrLiquido ?? 0
-  const entraNaConta = liquido + vr
   const share = totalBruto > 0 ? bruto / totalBruto : 0
   const cmvScope = isTodas ? cmv : cmv * share
   const opScope = isTodas ? operacao : operacao * share
-  const margem = entraNaConta - cmvScope
-  const resultado = margem - opScope
+  // A margem NÃO inclui o VR — pra bater com o Resumo/Hero/dashboard (mesma
+  // definição em todo o app). O VR entra DEPOIS como ganho à parte, levando ao
+  // "Resultado total da loja". Assim a % de margem fica única e confiável.
+  const margem = liquido - cmvScope
   const margemPct = bruto > 0 ? (margem / bruto) * 100 : 0
-  const resultadoPct = bruto > 0 ? (resultado / bruto) * 100 : 0
+  const resultadoOperacional = margem - opScope
+  const resultadoOpPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
+  const resultadoTotal = (opScope > 0 ? resultadoOperacional : margem) + vr
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -115,17 +118,6 @@ export function DreDetalhado({
       <Divider />
       <Row label="= Líquido das plataformas" value={fmtBRL(liquido)} bold />
 
-      {vr > 0 && (
-        <Row
-          label="(+) VR líquido · entra à parte"
-          value={`+ ${fmtBRL(vr)}`}
-          tone="pos"
-        />
-      )}
-      {vr > 0 && (
-        <Row label="= Entra na conta" value={fmtBRL(entraNaConta)} bold highlight />
-      )}
-
       <Row
         label="(−) CMV (Cozina + Loja)"
         value={cmvScope > 0 ? `− ${fmtBRL(cmvScope)}` : "sem custo lançado"}
@@ -145,7 +137,7 @@ export function DreDetalhado({
           </span>
         }
         bold
-        highlight={opScope <= 0}
+        highlight={opScope <= 0 && vr <= 0}
       />
       {opScope > 0 && (
         <>
@@ -159,18 +151,34 @@ export function DreDetalhado({
             label="= Resultado operacional"
             value={
               <span className="flex items-baseline gap-2">
-                {fmtBRL(resultado)}
+                {fmtBRL(resultadoOperacional)}
                 <span
                   className={`text-xs font-semibold ${
-                    resultado >= 0
+                    resultadoOperacional >= 0
                       ? "text-emerald-700 dark:text-emerald-400"
                       : "text-rose-700 dark:text-rose-400"
                   }`}
                 >
-                  ({fmtPct(resultadoPct)})
+                  ({fmtPct(resultadoOpPct)})
                 </span>
               </span>
             }
+            bold
+            highlight={vr <= 0}
+          />
+        </>
+      )}
+      {vr > 0 && (
+        <>
+          <Row
+            label="(+) VR recebido à parte"
+            value={`+ ${fmtBRL(vr)}`}
+            tone="pos"
+          />
+          <Divider />
+          <Row
+            label="= Resultado total da loja"
+            value={fmtBRL(resultadoTotal)}
             bold
             highlight
           />
@@ -178,8 +186,9 @@ export function DreDetalhado({
       )}
 
       <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-        O <b>VR</b> (vale-refeição) é pago à parte pelo iFood e cai na conta da
-        loja — por isso entra aqui (líquido = recebido − 8% de taxa).
+        A <b>margem</b> é só das vendas das plataformas (mesma do Resumo). O{" "}
+        <b>VR</b> é pago à parte pelo iFood e cai na conta da loja (líquido =
+        recebido − 8%), então aparece como ganho extra no resultado total.
         {!isTodas && cmv > 0 && (
           <> CMV e operação rateados pela fatia do bruto desta plataforma.</>
         )}
