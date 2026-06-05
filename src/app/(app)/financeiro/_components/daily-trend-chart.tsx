@@ -28,11 +28,14 @@ const TONE = {
 export function DailyTrendChart({
   data,
   platforms,
+  initial = "todas",
 }: {
   data: Partial<Record<"todas" | PlatformId, DailySeries>>
   platforms: PlatformId[]
+  /** Plataforma inicial selecionada (default "todas"). */
+  initial?: "todas" | PlatformId
 }) {
-  const [sel, setSel] = React.useState<"todas" | PlatformId>("todas")
+  const [sel, setSel] = React.useState<"todas" | PlatformId>(initial)
   const [hoverDay, setHoverDay] = React.useState<number | null>(null)
   const multi = platforms.length > 1
 

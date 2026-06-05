@@ -20,6 +20,8 @@ import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 
+import { DailyTrendChart } from "@/app/(app)/financeiro/_components/daily-trend-chart"
+
 import { RelatorioFilters } from "./_components/relatorio-filters"
 import { RelatorioKpis } from "./_components/relatorio-kpis"
 import { DailyBarChart, type Bar } from "./_components/daily-bar-chart"
@@ -72,12 +74,44 @@ export default async function RelatorioDiarioPage({
       ? activeUnits.filter((u) => lojaCodes.includes(u.code))
       : activeUnits
 
-  const matrix = await getDailyReportMatrix(
-    year,
-    month,
-    platform,
-    unitsForMatrix,
+  // Busca as 4 séries (todas + 3 plataformas) pro mesmo escopo de lojas — o
+  // `matrix` da métrica/plataforma selecionada é derivado de uma delas, e as 4
+  // alimentam o gráfico diário interativo (faturamento + pedidos).
+  const [dTodas, dIfood, d99, dKeeta] = await Promise.all([
+    getDailyReportMatrix(year, month, "todas", unitsForMatrix),
+    getDailyReportMatrix(year, month, "ifood", unitsForMatrix),
+    getDailyReportMatrix(year, month, "99food", unitsForMatrix),
+    getDailyReportMatrix(year, month, "keeta", unitsForMatrix),
+  ])
+  const matrix =
+    platform === "ifood"
+      ? dIfood
+      : platform === "99food"
+        ? d99
+        : platform === "keeta"
+          ? dKeeta
+          : dTodas
+
+  const toSeries = (m: typeof dTodas) => ({
+    days: m.days,
+    faturamento: m.networkByDay.faturamento,
+    pedidos: m.networkByDay.pedidos,
+  })
+  const dailyByPlat = {
+    todas: toSeries(dTodas),
+    ifood: toSeries(dIfood),
+    "99food": toSeries(d99),
+    keeta: toSeries(dKeeta),
+  }
+  const dailyPlatforms = (
+    [
+      ["ifood", dIfood],
+      ["99food", d99],
+      ["keeta", dKeeta],
+    ] as const
   )
+    .filter(([, m]) => m.hasData)
+    .map(([id]) => id)
 
   const metricLabel =
     METRIC_OPTIONS.find((m) => m.id === metric)?.label ?? "Faturamento Bruto"
@@ -221,6 +255,12 @@ export default async function RelatorioDiarioPage({
       ) : (
         <>
           <RelatorioKpis matrix={matrix} metric={metric} />
+          <DailyTrendChart
+            key={platform}
+            data={dailyByPlat}
+            platforms={dailyPlatforms}
+            initial={platform === "todas" ? "todas" : platform}
+          />
           <DailyBarChart
             bars={bars}
             metric={metric}
