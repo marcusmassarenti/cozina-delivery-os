@@ -58,6 +58,8 @@ import {
   formatPeriodLabel,
   daysElapsedInMonth,
 } from "@/lib/period"
+import { getAttentionItems } from "@/lib/data/attention"
+import { AttentionPanel } from "@/components/dashboard/attention-panel"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { createClient } from "@/lib/supabase/server"
 
@@ -135,19 +137,21 @@ export default async function Home({
       ? activeUnitIds
       : undefined
 
-  // Fase 2a: resumos por unidade + cobertura + entrega (dependem só do escopo).
+  // Fase 2a: resumos por unidade + cobertura + entrega + atenção (escopo).
   const [
     finByUnit,
     ninefoodByUnit,
     keetaByUnit,
     importCoverage,
     deliveryFee,
+    attention,
   ] = await Promise.all([
     getFinanceiroResumoByUnits(activeUnitIds, year, month),
     getNinefoodResumoByUnits(activeUnitIds, year, month),
     getKeetaResumoByUnits(activeUnitIds, year, month),
     getImportCoverageForMonth(year, month, filterUnitIds),
     getNetworkDeliveryFee(activeUnitIds, year, month),
+    getAttentionItems(units, year, month),
   ])
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
@@ -419,6 +423,8 @@ export default async function Home({
           <span className="font-medium">{status.message}</span>
         </div>
       )}
+
+      {status.ok && units.length > 0 && <AttentionPanel items={attention} />}
 
       {allUnits.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
