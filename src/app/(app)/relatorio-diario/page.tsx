@@ -24,7 +24,6 @@ import { DailyTrendChart } from "@/app/(app)/financeiro/_components/daily-trend-
 
 import { RelatorioFilters } from "./_components/relatorio-filters"
 import { RelatorioKpis } from "./_components/relatorio-kpis"
-import { DailyBarChart, type Bar } from "./_components/daily-bar-chart"
 import { UnitsRanking, type RankingUnit } from "./_components/units-ranking"
 import { WeeklyMatrix } from "./_components/weekly-matrix"
 import { ExportPdfButton } from "./_components/export-pdf-button"
@@ -128,22 +127,6 @@ export default async function RelatorioDiarioPage({
         ? fmtNum(v)
         : fmtPct(v)
 
-  // Rótulo curto pra cima da barra (compacto). Faturamento em milhares.
-  const barShort = (v: number): string => {
-    if (v <= 0) return ""
-    if (metric === "faturamento")
-      return (v / 1000).toFixed(1).replace(".", ",")
-    if (metric === "pedidos") return fmtNum(Math.round(v))
-    return v.toFixed(1).replace(".", ",")
-  }
-
-  const dayValue = (d: number): number => {
-    if (metric === "faturamento") return matrix.networkByDay.faturamento[d] ?? 0
-    if (metric === "pedidos") return matrix.networkByDay.pedidos[d] ?? 0
-    const c = matrix.networkByDay.cancelamentos[d] ?? 0
-    const p = matrix.networkByDay.pedidos[d] ?? 0
-    return p > 0 ? (c / p) * 100 : 0
-  }
   const unitTotal = (u: UnitDailyRow): number => {
     if (metric === "faturamento") return u.totalFaturamento
     if (metric === "pedidos") return u.totalPedidos
@@ -158,11 +141,6 @@ export default async function RelatorioDiarioPage({
     const p = u.pedidos[d] ?? 0
     return p > 0 ? (c / p) * 100 : 0
   }
-
-  const bars: Bar[] = matrix.days.map((d) => {
-    const v = dayValue(d)
-    return { day: d, value: v, label: fmt(v), short: barShort(v) }
-  })
 
   // % que cada loja representa. Faturamento/Pedidos: share do total da
   // métrica. Cancelamento (taxa não soma): share do total de cancelados.
@@ -260,12 +238,6 @@ export default async function RelatorioDiarioPage({
             data={dailyByPlat}
             platforms={dailyPlatforms}
             initial={platform === "todas" ? "todas" : platform}
-          />
-          <DailyBarChart
-            bars={bars}
-            metric={metric}
-            metricLabel={metricLabel}
-            platforms={activePlatforms}
           />
           <UnitsRanking
             units={rankingUnits}
