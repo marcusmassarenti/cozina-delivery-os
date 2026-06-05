@@ -299,7 +299,14 @@ function CatalogRow({
     <>
       <tr className={insumo.ativo ? "" : "opacity-50"}>
         <td className="px-2 py-1 font-mono font-medium">{insumo.codigo}</td>
-        <td className="px-2 py-1">{insumo.nome}</td>
+        <td className="px-2 py-1">
+          {insumo.nome}
+          {insumo.emUso > 0 && (
+            <span className="ml-2 rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground">
+              em {insumo.emUso} ficha{insumo.emUso > 1 ? "s" : ""}
+            </span>
+          )}
+        </td>
         <td className="px-2 py-1 text-muted-foreground">{insumo.unidade}</td>
         <td className="px-2 py-1 text-right">
           <button
@@ -307,6 +314,11 @@ function CatalogRow({
             onClick={excluir}
             disabled={pending}
             aria-label="Excluir insumo"
+            title={
+              insumo.emUso > 0
+                ? "Em uso — vai pedir substituição"
+                : "Excluir insumo"
+            }
             className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:hover:bg-rose-950/30"
           >
             {pending && !sub ? (

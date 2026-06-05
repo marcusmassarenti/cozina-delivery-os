@@ -23,6 +23,8 @@ export type Insumo = {
   nome: string
   unidade: string
   ativo: boolean
+  /** Em quantas fichas este insumo é usado (0 = pode excluir direto). */
+  emUso: number
 }
 
 export type FichaLinha = {
@@ -192,25 +194,41 @@ async function getItemSalesByUnit(
 
 export async function getInsumos(): Promise<Insumo[]> {
   const admin = createAdminClient()
-  const rows = await fetchAllRows<{
-    codigo: string
-    nome: string
-    unidade: string
-    ativo: boolean
-  }>(
-    (from, to) =>
-      admin
-        .from("producao_insumo")
-        .select("codigo, nome, unidade, ativo")
-        .order("codigo")
-        .range(from, to),
-    "producao_insumo",
-  )
+  const [rows, fichaRows] = await Promise.all([
+    fetchAllRows<{
+      codigo: string
+      nome: string
+      unidade: string
+      ativo: boolean
+    }>(
+      (from, to) =>
+        admin
+          .from("producao_insumo")
+          .select("codigo, nome, unidade, ativo")
+          .order("codigo")
+          .range(from, to),
+      "producao_insumo",
+    ),
+    fetchAllRows<{ insumo_codigo: string }>(
+      (from, to) =>
+        admin
+          .from("producao_ficha")
+          .select("insumo_codigo")
+          .order("id")
+          .range(from, to),
+      "producao_ficha (uso)",
+    ),
+  ])
+  const uso = new Map<string, number>()
+  for (const f of fichaRows ?? []) {
+    uso.set(f.insumo_codigo, (uso.get(f.insumo_codigo) ?? 0) + 1)
+  }
   return (rows ?? []).map((r) => ({
     codigo: r.codigo,
     nome: r.nome,
     unidade: r.unidade,
     ativo: r.ativo,
+    emUso: uso.get(r.codigo) ?? 0,
   }))
 }
 
