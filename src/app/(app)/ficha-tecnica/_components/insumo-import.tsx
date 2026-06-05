@@ -6,6 +6,7 @@ import { Download, FileSpreadsheet, Loader2, Plus, Trash2, X } from "lucide-reac
 
 import {
   deleteInsumo,
+  forceDeleteInsumo,
   importInsumos,
   replaceInsumoAndDelete,
   upsertInsumosRows,
@@ -294,6 +295,19 @@ function CatalogRow({
       else setErro(res.message ?? "Erro.")
     })
   }
+  const forcar = () => {
+    if (
+      !confirm(
+        `Excluir "${insumo.codigo}" e remover de ${insumo.emUso} ficha(s)?`,
+      )
+    )
+      return
+    start(async () => {
+      const res = await forceDeleteInsumo(insumo.codigo)
+      if (res.ok) router.refresh()
+      else setErro(res.message ?? "Erro.")
+    })
+  }
 
   return (
     <>
@@ -375,6 +389,15 @@ function CatalogRow({
                   className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
                 >
                   <X className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={forcar}
+                  disabled={pending}
+                  className="ml-auto text-[11px] font-medium text-rose-600 underline hover:text-rose-700 disabled:opacity-50"
+                >
+                  ou excluir assim mesmo (sai de {insumo.emUso} ficha
+                  {insumo.emUso > 1 ? "s" : ""})
                 </button>
               </div>
             )}

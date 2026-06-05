@@ -122,6 +122,29 @@ export async function deleteInsumo(
   return { ok: true, message: "Insumo excluído." }
 }
 
+/** Exclui um insumo MESMO em uso: remove ele de todas as fichas e apaga do
+ * catálogo. Pra fase de cadastro/teste, quando não quer substituir. */
+export async function forceDeleteInsumo(
+  codigo: string,
+): Promise<ActionState> {
+  let admin
+  try {
+    ;({ admin } = await requireAdmin())
+  } catch {
+    return fail("Apenas administradores.")
+  }
+  const cod = (codigo ?? "").trim().toUpperCase()
+  if (!cod) return fail("Código inválido.")
+  await admin.from("producao_ficha").delete().eq("insumo_codigo", cod)
+  const { error } = await admin
+    .from("producao_insumo")
+    .delete()
+    .eq("codigo", cod)
+  if (error) return fail(`Erro: ${error.message}`)
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, message: "Insumo excluído (removido das fichas)." }
+}
+
 /** Troca um insumo por outro em TODAS as fichas (somando onde o destino já
  * existe) e exclui o antigo do catálogo. */
 export async function replaceInsumoAndDelete(input: {
