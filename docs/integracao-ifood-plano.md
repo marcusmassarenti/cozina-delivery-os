@@ -34,14 +34,15 @@ repasse oficial dessas duas continuam via relatório manual.
 
 1. **Authentication** — OAuth2.
    `POST https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token`
-   - **Centralizado** (`grant_type=client_credentials`, clientId+clientSecret):
-     quando todas as lojas estão sob a mesma conta/dono. Token expira em ~6h.
-   - **Distribuído** (`/oauth/userCode` → `authorization_code` + `refresh_token`):
-     quando cada loja autoriza o app no Portal do Parceiro. Guarda o
-     `code_verifier` com segurança.
-   - ⚠️ **Decisão pendente (comercial, Marcus confirma):** as lojas das
-     franquias usam **uma conta iFood corporativa** (→ centralizado) ou **cada
-     franqueado tem a própria conta** (→ distribuído)? Isso define o fluxo.
+   - ✅ **DECIDIDO (2026-06): modelo CENTRALIZADO.** Toda a rede está sob uma
+     conta iFood corporativa (holding). Logo:
+     `grant_type=client_credentials` com **um único** `clientId`+`clientSecret`
+     (guardados em **env var** da Vercel, server-only — não vão pro banco nem
+     pro client). Token expira em ~6h, renovado por demanda. **Sem** o fluxo
+     `userCode`/`authorization_code` por loja.
+   - As lojas continuam tendo cada uma seu `merchant_id` no iFood; o app
+     central acessa todos. Guardamos só o **mapa** `unit_id ↔ merchant_id`
+     (não há token por loja).
 
 2. **Order module** — pedido a pedido. Substitui o relatório de **Pedidos**
    (forma de pagamento, VR, itens, valores, entrega, cliente).
@@ -68,10 +69,11 @@ repasse oficial dessas duas continuam via relatório manual.
 
 ## 3. Arquitetura (Vercel + Supabase)
 
-- **Credenciais por loja**: nova tabela `ifood_app_credentials`
-  (`unit_id`, `merchant_id`, `access_token`, `refresh_token`, `expires_at`),
-  tokens **criptografados** (server-only, nunca expostos ao client). Um app
-  iFood com N merchants vinculados.
+- **Credenciais (centralizado)**: `IFOOD_CLIENT_ID` / `IFOOD_CLIENT_SECRET`
+  em **env var** da Vercel (server-only). O access token (6h) fica em cache em
+  memória/Supabase com `expires_at` e é renovado por demanda. Nova tabela
+  apenas pro **mapa** `ifood_merchant_map` (`unit_id`, `merchant_id`) — sem
+  token por loja, porque é uma conta só.
 
 - **Pedidos (tempo real)**:
   - **Opção A — Vercel Cron + polling (recomendada p/ começar):** cron a cada
@@ -101,9 +103,9 @@ repasse oficial dessas duas continuam via relatório manual.
 ## 4. Fases
 
 - **Fase 0 — Acesso (BLOQUEIO, Marcus):**
-  conta **CNPJ** no developer.ifood.com.br · definir centralizado vs
-  distribuído · criar app **sandbox** · obter clientId/secret · vincular **1
-  loja piloto**.
+  conta **CNPJ** no developer.ifood.com.br · criar app (modelo **centralizado**)
+  · obter `clientId`/`clientSecret` · confirmar o `merchant_id` de **1 loja
+  piloto** (sugestão: JK ou Jardins, que já temos relatório pra comparar).
 
 - **Fase 1 — Auth + Pedidos (piloto 1 loja):**
   módulo de auth + refresh de token · cron de polling de pedidos · gravar em
@@ -125,8 +127,6 @@ repasse oficial dessas duas continuam via relatório manual.
 
 ## 5. Riscos / pontos de atenção
 
-- **Centralizado vs distribuído** — depende da estrutura das contas das
-  franquias. Marcus confirma com o contato iFood da rede.
 - **Homologação** — exige app **pronto** + **CNPJ**; testam o app inteiro, não
   só as chamadas. Ordem obrigatória: construir → homologar → produção.
 - **Rate limits** no polling — respeitar os intervalos definidos pelo iFood.
