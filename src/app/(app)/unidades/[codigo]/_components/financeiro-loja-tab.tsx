@@ -49,6 +49,10 @@ export async function FinanceiroLojaTab({
   const bruto = m.faturamentoBruto
   const liquido = m.totalLiquido
   const taxas = Math.max(0, bruto - liquido)
+  // Plataformas que entram no consolidado (pra rotular o "Para onde vai o bruto").
+  const platsComBruto = m.platforms
+    .filter((p) => p.bruto > 0)
+    .map((p) => p.id)
   const cmv = m.custoProdutosCozina + (m.custoProdutosLoja ?? 0)
   const operacao = m.custoOperacao
   const margem = liquido - cmv
@@ -187,6 +191,11 @@ export async function FinanceiroLojaTab({
           <div className="mb-3 flex items-center gap-2">
             <PieChart className="size-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Para onde vai o bruto</h3>
+            <span className="ml-auto flex items-center gap-1">
+              {platsComBruto.map((p) => (
+                <PlatformLogo key={p} platform={p} size="sm" />
+              ))}
+            </span>
           </div>
           <CompBar
             label="Líquido pra loja"
@@ -240,9 +249,10 @@ export async function FinanceiroLojaTab({
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <Receipt className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">
-              Para onde foram as taxas (iFood)
-            </h3>
+            <h3 className="text-sm font-semibold">Para onde foram as taxas</h3>
+            <span className="ml-auto">
+              <PlatformLogo platform="ifood" size="sm" />
+            </span>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {descontos.map((d) => (
@@ -270,6 +280,9 @@ export async function FinanceiroLojaTab({
                 <h3 className="text-sm font-semibold">
                   Vale-Refeição por bandeira
                 </h3>
+                <span className="ml-auto">
+                  <PlatformLogo platform="ifood" size="sm" />
+                </span>
               </div>
               {pagamento.porBandeira.map((b) => (
                 <MiniRow
@@ -288,6 +301,9 @@ export async function FinanceiroLojaTab({
             <div className="mb-3 flex items-center gap-2">
               <Wallet className="size-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold">Mix de pagamento</h3>
+              <span className="ml-auto">
+                <PlatformLogo platform="ifood" size="sm" />
+              </span>
             </div>
             {pagamento.mix.map((mx) => {
               const pct =
@@ -307,6 +323,9 @@ export async function FinanceiroLojaTab({
             <div className="mb-3 flex items-center gap-2">
               <Megaphone className="size-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold">Promoções (quem bancou)</h3>
+              <span className="ml-auto">
+                <PlatformLogo platform="ifood" size="sm" />
+              </span>
             </div>
             <MiniRow label="iFood" value={fmtBRL(pagamento.incentivoIfood)} />
             <MiniRow label="Loja" value={fmtBRL(pagamento.incentivoLoja)} />
@@ -316,6 +335,9 @@ export async function FinanceiroLojaTab({
             <div className="mb-3 flex items-center gap-2">
               <Truck className="size-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold">Por turno</h3>
+              <span className="ml-auto">
+                <PlatformLogo platform="ifood" size="sm" />
+              </span>
             </div>
             {pagamento.porTurno.map((tn) => (
               <MiniRow
