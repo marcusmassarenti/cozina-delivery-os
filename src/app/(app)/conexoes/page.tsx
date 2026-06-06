@@ -1,11 +1,11 @@
 import { headers } from "next/headers"
 import { Cable, Plug, Webhook } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { listApiClients } from "@/lib/data/api-clients"
 import { assertCanView } from "@/lib/auth/permissions"
 
 import { ApiKeysManager } from "./_components/api-keys-manager"
+import { PlataformasStatus } from "./_components/plataformas-status"
 
 /**
  * Conexões — hub de integrações.
@@ -116,38 +116,18 @@ export default async function ConexoesPage() {
         </div>
       </section>
 
-      {/* 2) Plataformas (entrada — em breve) */}
+      {/* 2) Plataformas (entrada) */}
       <section>
         <div className="mb-3 flex items-center gap-2">
           <Plug className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">Plataformas de delivery</h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Em breve
-          </span>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          Conexão direta com as APIs do iFood, 99 Food e Keeta — pra importar
-          os dados automaticamente, sem planilha. (Hoje os dados vêm pela
-          importação de relatórios.)
+          Ingestão dos dados de cada plataforma. O iFood está caminhando pra
+          conexão direta por API; 99 Food e Keeta seguem pela importação de
+          relatórios.
         </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {(["ifood", "99food", "keeta"] as PlatformId[]).map((p) => (
-            <div
-              key={p}
-              className="flex items-center gap-3 rounded-xl border border-dashed bg-card p-4"
-            >
-              <PlatformLogo platform={p} size="md" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {p === "ifood" ? "iFood" : p === "99food" ? "99 Food" : "Keeta"}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  Conexão de API · em breve
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PlataformasStatus />
       </section>
     </div>
   )
