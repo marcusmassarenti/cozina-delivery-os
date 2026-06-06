@@ -9,6 +9,12 @@ Decisão (2026-06): tocar o 99 **em paralelo** com a homologação do iFood —
 Marcus pediu. O processo é parecido (cadastro de integrador → app →
 credenciais → homologação), então a 2ª homologação tende a ser mais rápida.
 
+> **Status (2026-06-06):** cadastro de integrador **enviado** no portal
+> `developer-food.99app.com` com a empresa **Lab of Change Ltda** (CNPJ
+> 38.613.971/0001-80, mesma do iFood). O 99 informou que **verifica em até 3
+> dias úteis** e responde **por e-mail**. → aguardando aprovação pra criar o
+> app e obter `clientId`/`clientSecret`.
+
 ---
 
 ## 1. O que já está confirmado (pesquisa 2026-06)
@@ -58,11 +64,11 @@ Telas (Dashboard, DRE, Avaliações, Pedidos) já consomem esses dados.
 
 ## 5. Fases
 
-- **Fase 0 — Acesso (BLOQUEIO, Marcus):**
-  acessar `developer-food.99app.com` com a conta da holding (CNPJ) · iniciar
-  cadastro de integrador/parceiro · criar app · obter `clientId`/`clientSecret`
-  · confirmar o `merchant_id` de 1 loja piloto.
-  → **Marcus navega e manda print; eu guio (igual iFood).**
+- **Fase 0 — Acesso (BLOQUEIO, 99 Food):** ⏳ EM ANDAMENTO
+  ✅ cadastro de integrador enviado (Lab of Change Ltda) em 2026-06-06 ·
+  ⏳ aguardando verificação do 99 (até 3 dias úteis, resposta por e-mail) ·
+  ○ criar app · ○ obter `clientId`/`clientSecret` · ○ confirmar `merchant_id`
+  de 1 loja piloto.
 
 - **Fase 1 — Auth:** módulo `src/lib/ifood/auth.ts` clonado pro 99 + teste de
   token no ambiente de teste.

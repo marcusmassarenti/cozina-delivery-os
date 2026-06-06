@@ -10,7 +10,7 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
  * Quando o iFood liberar produção, o badge vira "Conectado" e entra a
  * última sincronização.
  */
-type Status = "conectado" | "homologacao" | "manual"
+type Status = "conectado" | "homologacao" | "verificacao" | "manual"
 
 const STATUS_STYLE: Record<
   Status,
@@ -24,6 +24,12 @@ const STATUS_STYLE: Record<
   },
   homologacao: {
     label: "Em homologação",
+    dot: "bg-amber-500",
+    badge:
+      "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
+  },
+  verificacao: {
+    label: "Em verificação",
     dot: "bg-amber-500",
     badge:
       "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
@@ -68,9 +74,18 @@ const PLATFORMS: PlatformStatus[] = [
   {
     id: "99food",
     name: "99 Food",
-    status: "manual",
-    headline: "Dados pelos relatórios importados (.xlsx / CSV)",
-    meta: [{ label: "API", value: "Financeira existe — fase futura" }],
+    status: "verificacao",
+    headline: "API oficial — cadastro de integrador enviado",
+    meta: [
+      { label: "Empresa", value: "Lab of Change Ltda · CNPJ" },
+      { label: "Verificação", value: "até 3 dias úteis (por e-mail)" },
+    ],
+    steps: [
+      { label: "Cadastro de integrador enviado", state: "done" },
+      { label: "Verificação 99 Food", state: "active" },
+      { label: "App + credenciais", state: "pending" },
+      { label: "Produção (todas as lojas)", state: "pending" },
+    ],
   },
   {
     id: "keeta",
