@@ -10,6 +10,7 @@
  */
 import { createClient } from "@supabase/supabase-js"
 import { readFileSync, mkdirSync, writeFileSync } from "fs"
+import { execSync } from "child_process"
 
 // ── carrega .env.local ────────────────────────────────────────────────
 const env = readFileSync(".env.local", "utf8")
@@ -104,4 +105,28 @@ writeFileSync(
   `${dir}/_manifest.json`,
   JSON.stringify({ geradoEm: now.toISOString(), totalLinhas: total, tabelas: manifest }, null, 2),
 )
-console.log(`\n✅ Backup completo em ${dir}/ — ${total} linhas. Copie a pasta pro Drive.`)
+console.log(`\n✅ Backup (JSON) completo em ${dir}/ — ${total} linhas.`)
+
+// ── dump completo .sql (opcional) ─────────────────────────────────────
+// Se SUPABASE_DB_URL estiver no .env.local e pg_dump instalado, gera o
+// full-dump.sql (restaura tudo num comando). Ver docs/recuperacao-banco.md.
+const dbUrl = process.env.SUPABASE_DB_URL
+if (dbUrl) {
+  try {
+    console.log("\nGerando dump completo (pg_dump)…")
+    execSync(
+      `pg_dump "${dbUrl}" --no-owner --no-privileges -f "${dir}/full-dump.sql"`,
+      { stdio: "inherit" },
+    )
+    console.log(`✅ Dump completo: ${dir}/full-dump.sql`)
+  } catch (e) {
+    console.warn(
+      `⚠ pg_dump falhou — instale ('brew install libpq' + PATH) ou use o Supabase CLI. ${e.message}`,
+    )
+  }
+} else {
+  console.log(
+    "\nℹ Pra gerar também um dump .sql restaurável com 1 comando, defina SUPABASE_DB_URL no .env.local (ver docs/recuperacao-banco.md).",
+  )
+}
+console.log("\n👉 Copie a pasta do backup pro Google Drive.")
