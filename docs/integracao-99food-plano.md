@@ -30,6 +30,28 @@ credenciais → homologação), então a 2ª homologação tende a ser mais ráp
   OpenAPI atual tem módulos de **Autenticação, Pedido, Cardápio/Menu, Loja e
   Financeiro** (escopo de "permissões de integração financeira").
 
+### ✅ Confirmado DENTRO do portal (2026-06-06) — tem Financial API!
+
+Navegando os "Documentos do desenvolvedor" (aba **Food** → API Reference),
+confirmamos a lista de módulos da OpenAPI do 99:
+
+- **Authorization** — `Get/Refresh Authtoken` (autentica com **app_id +
+  app_secret**, obtidos no "Gerenciamento de aplicativo"). Modelo de **bind de
+  loja**: vincula cada loja ao app e usa um `auth_token` por loja.
+- **Store / Menu / Order / Logistics** — todo o operacional + **webhooks**.
+- **Financial API** ⭐ (é o que queremos):
+  - `Get Financial API Authtoken` — token próprio do financeiro (escopo
+    separado, mais privilegiado).
+  - `Get Bill Data` — fatura/taxas.
+  - `Get Settlements Data` — **repasse** (líquido transferido pra loja).
+- Também há **Open Delivery Protocol** como alternativa de protocolo.
+- **Ambiente sandbox** disponível no portal → dá pra testar **sem** esperar a
+  aprovação de produção.
+
+→ Conclusão: o 99 **expõe financeiro/conciliação por API** (Settlements +
+Bill), diferente da Keeta. Vale integrar. O `Get Settlements Data` é o
+análogo do Settlements do iFood — casa direto com o nosso DRE/repasse.
+
 ## 2. O que ainda NÃO dá pra confirmar por fora
 
 - O **passo a passo exato do cadastro de integrador** (telas, campos, se exige
@@ -66,9 +88,17 @@ Telas (Dashboard, DRE, Avaliações, Pedidos) já consomem esses dados.
 
 - **Fase 0 — Acesso (BLOQUEIO, 99 Food):** ⏳ EM ANDAMENTO
   ✅ cadastro de integrador enviado (Lab of Change Ltda) em 2026-06-06 ·
-  ⏳ aguardando verificação do 99 (até 3 dias úteis, resposta por e-mail) ·
-  ○ criar app · ○ obter `clientId`/`clientSecret` · ○ confirmar `merchant_id`
-  de 1 loja piloto.
+  ⏳ **"Gerenciamento de qualificações" = "Em análise"** (até 3 dias úteis,
+  resposta por e-mail). **Confirmado:** o portal **bloqueia criar app** (até o
+  de teste) enquanto a qualificação não for aprovada — tentamos criar o app
+  "Cozina Delivery OS - Teste" em 2026-06-06 e deu "Falha na solicitação" por
+  isso. · ○ criar app de teste · ○ obter `app_id`/`app_secret` · ○ vincular
+  lojas (bind) · ○ confirmar `shopId` de 1 loja piloto.
+
+  Dados do cadastro (pra referência): perfil "Tecnologia / integradora",
+  marca "Churrasco no Pote", 18 estabelecimentos, 10 funcionários, ID da
+  empresa no 99 = `5764651942684002865`, webhook planejado
+  `https://delivery.cozinafoods.com/api/webhooks/99food`.
 
 - **Fase 1 — Auth:** módulo `src/lib/ifood/auth.ts` clonado pro 99 + teste de
   token no ambiente de teste.
