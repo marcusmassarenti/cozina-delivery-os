@@ -150,3 +150,63 @@ exporem (ou nunca) esses dados.
 - Homologação Financial: https://developer.ifood.com.br/pt-BR/docs/guides/modules/financial/homologation/
 - Homologação Order: https://developer.ifood.com.br/pt-BR/docs/guides/order/homologation/
 - Reviews: https://medium.com/ifood-developer/como-utilizar-a-api-de-reviews-do-ifood-do-zero-bbb408f5f824
+
+---
+
+## 8. Pesquisa 2026-06 — automação SEM RPA (e-mail vs API)
+
+Pesquisa profunda (fontes oficiais verificadas) pra responder: dá pra automatizar
+a ingestão diária **sem robô de login** (sem risco de ban)? Conclusões:
+
+### ❌ Não existe relatório agendado por e-mail em nenhuma das 3
+iFood, 99 e Keeta **só** mandam relatório por e-mail de forma **manual/sob
+demanda** (logar → exportar → chega no e-mail). **Não há agendamento recorrente
+nativo.** Logo, o "atalho do e-mail" não automatiza de verdade — só o robô (RPA)
+faria, e isso arrisca as contas. **Descartado.**
+
+### ✅ O caminho oficial é a API — e o iFood é o melhor encaixe
+- **iFood — Conciliação On Demand** (`/financial/.../reconciliation-ondemand`):
+  gera o arquivo **diariamente (D-1)**, em **CSV `.gz` com separador `;`** via
+  link expirável (throttle de 6h pra regerar o mesmo período). É **quase
+  plug-no-parser atual** (só `gunzip`). A API **Financial Events** traz o campo
+  `impacto_no_repasse` (separa o que entra no repasse líquido) — casa com o DRE.
+- **Barreira (confirmada):** exige **homologação como integrador** — conta
+  **CNPJ** (recusa CPF), cadastro orientado a "integradora" com **CNAE de
+  tecnologia**, e o iFood testa o app inteiro. Não é self-service de 1 loja.
+  → Cozina Foods (CNPJ) pode homologar a própria integração; **verificar se
+  precisa adicionar um CNAE de tecnologia** à empresa.
+
+### 🔄 Correção sobre 99Food (vs. tabela da Seção 1)
+A 99Food **foi relançada no Brasil em meados de 2025** e **agora TEM OpenAPI
+oficial com módulo Financeiro dedicado** (escopo "permissões de integração
+financeira"), além de Pedido/Menu/Loja/Auth. Ou seja, o financeiro do 99 **é
+obtível via API** (não só export manual) — o que a Seção 1 marcava como "❌ fora
+do padrão" está **desatualizado**. Onboarding de integrador parecido com o iFood.
+
+### Keeta — só operacional, financeiro não confirmado
+OpenDelivery é integração **técnica credenciada** (OAuth `client_credentials` +
+assinatura **HMAC-SHA256**, NDA + onboarding como software provider). Cobre
+**pedidos/cardápio (operação)**; **uso pra financeiro/histórico não foi
+confirmado** pelas fontes. → manter **manual** por ora.
+
+### Não há padrão único cobrindo financeiro nas 3
+As 3 tocam o **Open Delivery**, mas o escopo é **operacional** (pedidos/menu). O
+**financeiro/repasse depende da API proprietária de cada uma**.
+
+### Plano priorizado (recomendação)
+1. **iFood** (maior volume + dado mais importante + Conciliação On Demand quase
+   pronta pro parser) → começar pela **homologação de integrador**. É o prêmio.
+2. **99Food** → explorar a OpenAPI Financeira (onboarding parecido) — em paralelo.
+3. **Keeta** → **manual** até a API cobrir financeiro.
+4. **Import manual** continua como rede de segurança o tempo todo.
+
+> Decisão de Marcus (2026-06): por ora **seguir com o import manual**; a
+> automação via API fica pronta neste plano pra quando valer investir na
+> homologação.
+
+### Fontes (pesquisa 2026-06)
+- iFood Conciliação On Demand: https://developer.ifood.com.br/pt-BR/docs/guides/modules/financial/api-reconciliation-ondemand/
+- iFood Financial Events: https://developer.ifood.com.br/pt-BR/docs/guides/modules/financial/api-financial-events/
+- iFood relatório de conciliação (blog parceiros): https://blog-parceiros.ifood.com.br/relatorio-de-conciliacao/
+- 99Food OpenAPI: https://developer-food.99app.com  ·  portal lojista: https://merchant.99app.com
+- Keeta OpenDelivery: https://api-docs.mykeeta.com/apis/opendelivery
