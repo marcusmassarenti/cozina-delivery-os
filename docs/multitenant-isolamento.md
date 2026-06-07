@@ -65,6 +65,16 @@ sentinel `null = ver tudo` passa a valer **só pro super-admin da plataforma**.
   holding em `slug='cozina-foods'` (linha ~139). O provisionamento de cliente
   vai precisar usar a holding correta de cada um.
 
+### 0.A.1 — Super-admin = só Marcus (migration 0040)
+Decisão de Marcus: o **único** super-admin da plataforma é o **Marcus
+Massarenti**. A 0039 (backfill behavior-preserving) deixou 6 super-admins
+(3 admins + 3 gerentes da Cozina). A `0040_superadmin_apenas_marcus.sql`:
+1. garante vínculo de holding (Cozina) pra todos os holding-scope — pra
+   ninguém ficar sem ver nada ao perder o super-admin;
+2. deixa `is_superadmin = true` **só** pro Marcus.
+→ Os demais continuam **admins/gerentes da Cozina** (veem tudo da Cozina), mas
+não enxergam clientes futuros. Sem mudança de código (a lógica já trata isso).
+
 ### 0.B — Escopar as leituras sem filtro
 - `getUnitByCode` e quaisquer agregadores que leem sem `filterUnitIds` passam a
   receber/aplicar as units acessíveis. Varredura função a função.
