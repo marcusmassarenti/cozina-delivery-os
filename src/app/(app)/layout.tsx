@@ -5,7 +5,7 @@ import { TopBar } from "@/components/top-bar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
-import { MODULES, userCan } from "@/lib/auth/permissions"
+import { MODULES, userCan, isSuperadmin } from "@/lib/auth/permissions"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({
@@ -29,11 +29,12 @@ export default async function AppLayout({
     })),
   )
   const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
+  const superadmin = await isSuperadmin()
 
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <AppSidebar allowedModules={allowedModules} />
+        <AppSidebar allowedModules={allowedModules} isSuperadmin={superadmin} />
         <SidebarInset>
           <TopBar
             userName={userContext.fullName}

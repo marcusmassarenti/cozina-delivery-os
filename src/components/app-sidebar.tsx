@@ -101,17 +101,24 @@ function MenuItems({
 
 export function AppSidebar({
   allowedModules,
+  isSuperadmin = false,
 }: {
   allowedModules: string[]
+  isSuperadmin?: boolean
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
 
   const allowed = new Set(allowedModules)
-  // Item visível se: é "em breve" (mostra desabilitado), não tem módulo, ou
-  // o perfil pode "Ver" aquele módulo.
-  const canSee = (item: { module?: string; comingSoon?: boolean }) =>
-    !!item.comingSoon || !item.module || allowed.has(item.module)
+  // Item visível se: passa no gate de super-admin (quando exigido) E (é "em
+  // breve", não tem módulo, ou o perfil pode "Ver" aquele módulo).
+  const canSee = (item: {
+    module?: string
+    comingSoon?: boolean
+    superadminOnly?: boolean
+  }) =>
+    (!item.superadminOnly || isSuperadmin) &&
+    (!!item.comingSoon || !item.module || allowed.has(item.module))
 
   const favItems = NAV_ITEMS.filter((i) => isFav(i.href) && canSee(i))
 

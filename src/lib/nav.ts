@@ -1,4 +1,5 @@
 import {
+  Building2,
   Cable,
   CalendarRange,
   ClipboardList,
@@ -23,6 +24,8 @@ export type NavItem = {
   comingSoon?: boolean
   /** Módulo de permissão (RBAC). Sem módulo = sempre visível. */
   module?: string
+  /** Só aparece pro super-admin da plataforma (dono do SaaS). */
+  superadminOnly?: boolean
 }
 
 export type NavGroup = {
@@ -33,6 +36,18 @@ export type NavGroup = {
 
 /** Estrutura do menu lateral — fonte única (sidebar + busca + favoritos). */
 export const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Plataforma",
+    defaultOpen: true,
+    items: [
+      {
+        label: "Clientes",
+        href: "/plataforma",
+        icon: Building2,
+        superadminOnly: true,
+      },
+    ],
+  },
   {
     items: [
       {
@@ -126,7 +141,7 @@ export type FlatNavItem = {
 /** Lista achatada dos itens navegáveis (pra busca e favoritos). */
 export const NAV_ITEMS: FlatNavItem[] = NAV_GROUPS.flatMap((g) =>
   g.items
-    .filter((i) => !i.comingSoon)
+    .filter((i) => !i.comingSoon && !i.superadminOnly)
     .map((i) => ({
       label: i.label,
       href: i.href,
