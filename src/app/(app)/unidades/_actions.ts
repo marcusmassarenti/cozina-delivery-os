@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireModulePermission } from "@/lib/auth/guards"
+import { requireModulePermission, requireUnitAccess } from "@/lib/auth/guards"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -145,6 +145,7 @@ export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
   try {
     await requireModulePermission("unidades", "delete")
+    await requireUnitAccess(unitId) // anti cross-tenant: só apaga loja do próprio escopo
     const supabase = createAdminClient()
     const { error } = await supabase.from("units").delete().eq("id", unitId)
     if (error) return { ok: false, message: error.message }
@@ -209,6 +210,7 @@ export async function updateUnit(
 
   try {
     await requireModulePermission("unidades", "edit")
+    await requireUnitAccess(unitId) // anti cross-tenant: só edita loja do próprio escopo
     const supabase = createAdminClient()
 
     const { error: updErr } = await supabase

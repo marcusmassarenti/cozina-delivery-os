@@ -75,9 +75,33 @@ Massarenti**. A 0039 (backfill behavior-preserving) deixou 6 super-admins
 → Os demais continuam **admins/gerentes da Cozina** (veem tudo da Cozina), mas
 não enxergam clientes futuros. Sem mudança de código (a lógica já trata isso).
 
-### 0.B — Escopar as leituras sem filtro
-- `getUnitByCode` e quaisquer agregadores que leem sem `filterUnitIds` passam a
-  receber/aplicar as units acessíveis. Varredura função a função.
+### 0.B — Travas de escrita + leituras soltas (parcial — ✅ travas seguras feitas)
+Auditoria mostrou que o 0.A já trancou as **leituras** (páginas usam
+`getVisibleUnits` + escopo). O que sobrou divide em duas partes:
+
+**✅ Feito agora (código, seguro, sem mudar nada pra Cozina):**
+- `updateUnit` / `deleteUnit` → `requireUnitAccess(unitId)` — impede um admin
+  mexer numa loja de outro tenant **por ID**.
+- Tela **Usuários** (`administracao/usuarios/page.tsx`) → `getVisibleUnits()` no
+  lugar de `getUnits()` — o seletor de lojas não lista lojas de outros.
+
+**⏳ Funde com a Fase 1 (precisa do contexto "holding do usuário logado"):**
+Estes só ficam 100% corretos quando existir um `getCurrentHoldingId()` limpo —
+que é a base da Fase 1. **São pré-requisitos ANTES do 1º cliente entrar:**
+- `listUsers()` → hoje lista **todos** os usuários (de todos os tenants).
+  Escopar à holding do admin.
+- `createUser` / `syncAccess` → validar que as lojas vinculadas são da holding
+  do admin; `syncAccess` ainda fixa `slug='cozina-foods'`.
+- `createUnit` / `getDefaultBrand()` → criar sob a marca da holding do usuário
+  (hoje fixa a marca da Cozina).
+- `getUnitByCode(code)` → `code` repete entre tenants; escopar por loja
+  acessível e fetch seguro (sem `maybeSingle` que quebra com 2 linhas).
+- **API v1** (`/api/v1/*`, chaves `api_clients`) → hoje as chaves não são por
+  tenant; cada cliente precisaria de chave escopada à holding dele.
+
+> Nenhum destes é explorável HOJE (só existe a Cozina). Viram bloqueio só
+> quando entrar o 2º cliente — e a Fase 1 já constrói o contexto que resolve
+> todos de uma vez.
 
 ### 0.C — Defesa em profundidade (RLS de verdade nas leituras)
 - O ideal de SaaS: as leituras de dados de tenant passarem pelo **client com

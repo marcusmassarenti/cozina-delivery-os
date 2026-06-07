@@ -1,4 +1,4 @@
-import { getUnits } from "@/lib/data/units"
+import { getVisibleUnits } from "@/lib/data/units"
 import { getRolesConfig } from "@/lib/auth/permissions"
 import { createClient } from "@/lib/supabase/server"
 import { listUsers } from "./_actions"
@@ -7,7 +7,7 @@ import { UsersListView } from "./_components/users-list-view"
 export default async function UsuariosPage() {
   const [users, units, roles, supabase] = await Promise.all([
     listUsers(),
-    getUnits(),
+    getVisibleUnits(),
     getRolesConfig(),
     createClient(),
   ])
