@@ -47,17 +47,23 @@ dados de TODAS as empresas. Seguro hoje **só porque** só existe a Cozina
 
 ## Plano de correção (Fase 0)
 
-### 0.A — Matar o sentinel `null = tudo` (código + 1 migration)
-- `getAccessibleUnitIds()` passa a devolver **sempre `string[]`** = as lojas da
-  **holding do usuário** (resolve holding → brands → units). Nunca mais `null`
-  significando "tudo".
-- Atualizar os ~12 pontos que tratam `null` (passam a usar o array direto).
-- **Migration (backfill):** garantir que todo admin atual tenha uma row
-  `user_unit_access(holding, admin)` da holding dele — senão, ao remover o
-  `null`, ele veria vazio. Como hoje só há a Cozina, é um backfill trivial.
-- "Ver tudo de verdade" (você, dono da plataforma, p/ gerenciar todos os
-  clientes) **não** volta a ser `null` — vira um papel explícito de
-  **super-admin** na Fase 1.
+### 0.A — Super-admin explícito (✅ FEITO no código — migration 0039 a rodar)
+Abordagem mais limpa que a inicial: em vez de mexer nos ~12 call-sites, o
+sentinel `null = ver tudo` passa a valer **só pro super-admin da plataforma**.
+- **Migration `0039_superadmin.sql`:** coluna `profiles.is_superadmin` +
+  backfill que marca como super-admin quem HOJE vê a rede inteira (perfis de
+  escopo `holding`). **Preserva 100% o comportamento atual.**
+- **Código (`src/lib/auth/permissions.ts`):**
+  - novo `isSuperadmin()` (lê `profiles.is_superadmin`, cacheado).
+  - `getAccessibleUnitIds()`: se super-admin → `null` (vê tudo); senão →
+    **sempre array concreto**, resolvendo `holding → brands → units` do usuário.
+    Nunca mais "todas as lojas do banco" pra um admin de cliente.
+  - re-exportado em `roles.ts` (`isSuperadmin`) pro painel de dono (Fase 1).
+- Os ~12 call-sites **não mudam**: o ramo `null → tudo` agora só é alcançado
+  pelo super-admin (correto). Os admins de cliente caem no array escopado.
+- ⚠️ **Achado p/ a Fase 1:** `usuarios/_actions.ts → syncAccess()` fixa a
+  holding em `slug='cozina-foods'` (linha ~139). O provisionamento de cliente
+  vai precisar usar a holding correta de cada um.
 
 ### 0.B — Escopar as leituras sem filtro
 - `getUnitByCode` e quaisquer agregadores que leem sem `filterUnitIds` passam a

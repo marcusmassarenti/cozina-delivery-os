@@ -196,15 +196,40 @@ export async function assertCanView(module: ModuleKey): Promise<void> {
 }
 
 /**
- * IDs das unidades visíveis pro usuário, conforme data_scope do perfil:
- *  - 'holding' → null (rede inteira)
- *  - 'unit'    → só as units vinculadas em user_unit_access (+ brands).
+ * Super-admin da PLATAFORMA (dono do SaaS). É o ÚNICO que vê todos os clientes
+ * (todas as holdings). Privilégio EXPLÍCITO (`profiles.is_superadmin`), separado
+ * do admin de um cliente — que só enxerga a própria empresa. Fail-closed.
+ *
+ * Multi-tenant: é isto que substitui o antigo "admin de holding = vê tudo".
+ */
+export const isSuperadmin = cache(async (): Promise<boolean> => {
+  const user = await getAuthUser()
+  if (!user) return false
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("profiles")
+    .select("is_superadmin")
+    .eq("user_id", user.id)
+    .maybeSingle()
+  return !!data?.is_superadmin
+})
+
+/**
+ * IDs das unidades visíveis pro usuário:
+ *  - super-admin da plataforma → null (vê TODOS os clientes — o "ver tudo" mora
+ *    SÓ aqui agora)
+ *  - demais → SEMPRE um array concreto, escopado à(s) holding(s)/loja(s) do
+ *    usuário (resolve holding → brands → units). NUNCA "todas as lojas do banco".
  * Fail-closed: sem sessão/sem vínculo → [] (vê vazio, nunca tudo).
+ *
+ * IMPORTANTE (isolamento multi-tenant): antes, admin de holding devolvia null =
+ * "todas as lojas do banco" — o que vazaria entre clientes. Agora só o
+ * super-admin EXPLÍCITO recebe null; um admin de cliente fica preso à própria
+ * empresa, mesmo que o código esqueça de filtrar em algum lugar.
  */
 export const getAccessibleUnitIds = cache(
   async (): Promise<string[] | null> => {
-    const role = await getCurrentRole()
-    if (role.dataScope === "holding") return null
+    if (await isSuperadmin()) return null
 
     const user = await getAuthUser()
     if (!user) return []
@@ -215,19 +240,30 @@ export const getAccessibleUnitIds = cache(
       .select("scope_type, scope_id")
       .eq("user_id", user.id)
 
-    const unitIds = new Set<string>()
+    const holdingIds: string[] = []
     const brandIds: string[] = []
+    const unitIds = new Set<string>()
     for (const a of accesses ?? []) {
-      if (a.scope_type === "unit" && a.scope_id) unitIds.add(a.scope_id)
-      else if (a.scope_type === "brand" && a.scope_id)
-        brandIds.push(a.scope_id)
+      if (a.scope_type === "holding" && a.scope_id) holdingIds.push(a.scope_id)
+      else if (a.scope_type === "brand" && a.scope_id) brandIds.push(a.scope_id)
+      else if (a.scope_type === "unit" && a.scope_id) unitIds.add(a.scope_id)
     }
+
+    // holding → todas as brands da(s) holding(s)
+    if (holdingIds.length > 0) {
+      const { data: hBrands } = await admin
+        .from("brands")
+        .select("id")
+        .in("holding_id", holdingIds)
+      for (const b of hBrands ?? []) brandIds.push(b.id)
+    }
+    // brands → todas as units
     if (brandIds.length > 0) {
-      const { data: brandUnits } = await admin
+      const { data: bUnits } = await admin
         .from("units")
         .select("id")
         .in("brand_id", brandIds)
-      for (const u of brandUnits ?? []) unitIds.add(u.id)
+      for (const u of bUnits ?? []) unitIds.add(u.id)
     }
     return [...unitIds]
   },
