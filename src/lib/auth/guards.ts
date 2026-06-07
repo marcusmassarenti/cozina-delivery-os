@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import {
   getAccessibleUnitIds,
   getAuthUser,
+  isSuperadmin,
   userCan,
   type ModuleKey,
   type PermAction,
@@ -95,6 +96,27 @@ export async function requireAdmin(): Promise<{
   throw new ForbiddenError(
     "Apenas administradores podem fazer essa operação.",
   )
+}
+
+/**
+ * Exige usuário logado E super-admin da PLATAFORMA (dono do SaaS). Use em
+ * ações que gerenciam TODOS os clientes (provisionar cliente, etc.).
+ *
+ * @throws AuthError se não houver sessão
+ * @throws ForbiddenError se a sessão existe mas não é super-admin
+ */
+export async function requireSuperadmin(): Promise<{
+  userId: string
+  email: string | null
+  admin: ReturnType<typeof createAdminClient>
+}> {
+  const { userId, email } = await requireAuth()
+  if (!(await isSuperadmin())) {
+    throw new ForbiddenError(
+      "Apenas o super-admin da plataforma pode fazer essa operação.",
+    )
+  }
+  return { userId, email, admin: createAdminClient() }
 }
 
 /**

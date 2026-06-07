@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation"
-import { Building2, Plus, Store, Users } from "lucide-react"
+import { Building2, Store, Users } from "lucide-react"
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
 import { fmtNum } from "@/lib/format"
+
+import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
 
 /**
  * Painel de Dono da plataforma (super-admin) — visão de todos os clientes.
@@ -31,14 +33,7 @@ export default async function PlataformaPage() {
             Visão de dono — todas as empresas que usam o Cozina Delivery OS.
           </p>
         </div>
-        <button
-          disabled
-          title="Em breve (próximo passo da Fase 1)"
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-muted-foreground opacity-60 shadow-sm"
-        >
-          <Plus className="size-4" />
-          Novo cliente
-        </button>
+        <NovoClienteDialog />
       </div>
 
       {/* KPIs da plataforma */}
@@ -111,8 +106,9 @@ export default async function PlataformaPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Próximo passo: <strong>criar cliente</strong> (provisionar empresa + 1ª
-        loja + admin) e <strong>entrar num cliente</strong> pra ver os dados dele.
+        Use <strong>Novo cliente</strong> pra provisionar uma empresa (cria a
+        loja e o admin dela). Próximo passo: <strong>entrar num cliente</strong>{" "}
+        pra ver os dados dele por dentro.
       </p>
     </div>
   )
