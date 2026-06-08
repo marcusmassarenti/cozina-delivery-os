@@ -24,7 +24,13 @@ export function LogoUploader({ currentLogo }: { currentLogo: string | null }) {
     }
   }, [state, router])
 
-  const shown = preview || currentLogo
+  // Sempre mostra o logo EFETIVO: nova prévia > logo customizado > padrão.
+  const shown = preview || currentLogo || "/cozina-logo.png"
+  const caption = preview
+    ? "Prévia da nova imagem"
+    : currentLogo
+      ? "Logo atual da sua empresa"
+      : "Logo padrão do sistema — suba o seu pra substituir"
 
   return (
     <div className="max-w-xl rounded-xl border bg-card p-5 shadow-sm">
@@ -36,19 +42,16 @@ export function LogoUploader({ currentLogo }: { currentLogo: string | null }) {
 
       {/* Preview (fundo escuro pra simular o menu) */}
       <div className="mt-4 flex h-24 items-center justify-center rounded-lg border bg-zinc-900 p-4">
-        {shown ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={shown}
-            alt="Prévia do logo"
-            className="max-h-14 w-auto max-w-[220px] object-contain"
-          />
-        ) : (
-          <span className="text-xs text-zinc-400">
-            Sem logo — usando o padrão do sistema
-          </span>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={shown}
+          alt="Prévia do logo"
+          className="max-h-14 w-auto max-w-[220px] object-contain"
+        />
       </div>
+      <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+        {caption}
+      </p>
 
       <form action={formAction} className="mt-4 flex flex-col gap-3">
         <input
