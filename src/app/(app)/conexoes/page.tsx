@@ -1,12 +1,14 @@
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
-import { Cable, Plug, Webhook } from "lucide-react"
+import { Banknote, Cable, Plug, Webhook } from "lucide-react"
 
 import { listApiClients } from "@/lib/data/api-clients"
+import { getNinefoodSyncUnits } from "@/lib/data/ninefood-api"
 import { isSuperadmin } from "@/lib/auth/permissions"
 
 import { ApiKeysManager } from "./_components/api-keys-manager"
 import { PlataformasStatus } from "./_components/plataformas-status"
+import { NinefoodSync } from "./_components/ninefood-sync"
 
 /**
  * Conexões — hub de integrações.
@@ -16,7 +18,16 @@ import { PlataformasStatus } from "./_components/plataformas-status"
 export default async function ConexoesPage() {
   // Interno da plataforma (chaves de API + integrações) — só super-admin.
   if (!(await isSuperadmin())) notFound()
-  const [clients, h] = await Promise.all([listApiClients(), headers()])
+  const [clients, h, ninefoodUnits] = await Promise.all([
+    listApiClients(),
+    headers(),
+    getNinefoodSyncUnits(),
+  ])
+  // App roda com TZ=America/Sao_Paulo → new Date() já é BRT.
+  const now = new Date()
+  const syncYear = now.getFullYear()
+  const syncMonth = now.getMonth() + 1
+  const syncLabel = `${String(syncMonth).padStart(2, "0")}/${syncYear}`
   const host =
     h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
   const proto =
@@ -130,6 +141,41 @@ export default async function ConexoesPage() {
           relatórios.
         </p>
         <PlataformasStatus />
+      </section>
+
+      {/* 3) 99 Food — financeiro via API */}
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <Banknote className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              99 Food — Financeiro via API
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                beta
+              </span>
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Puxa o extrato financeiro (repasse, comissão, VR) direto da API do
+              99 e grava no banco. Defina o{" "}
+              <code className="rounded bg-muted px-1 font-mono text-[11px]">
+                app_shop_id
+              </code>{" "}
+              de cada loja e sincronize o mês.{" "}
+              <strong>Requer o app aprovado em produção no 99</strong> (loja real
+              vinculada) — com loja de teste o extrato vem vazio.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4">
+          <NinefoodSync
+            units={ninefoodUnits}
+            year={syncYear}
+            month={syncMonth}
+            monthLabel={syncLabel}
+          />
+        </div>
       </section>
     </div>
   )

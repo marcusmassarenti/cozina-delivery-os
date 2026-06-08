@@ -16,6 +16,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
+import { getVisibleUnits } from "@/lib/data/units"
 
 export type NinefoodApiResumo = {
   unitId: string
@@ -135,4 +136,53 @@ export async function getNinefoodApiUnitsWithData(
   return new Set(
     [...resumo.values()].filter((r) => r.hasData).map((r) => r.unitId),
   )
+}
+
+export type NinefoodSyncUnit = {
+  unitId: string
+  code: string
+  name: string
+  /** app_shop_id (acceptor_code) vinculado, ou null se ainda não setado */
+  appShopId: string | null
+  /** registros já sincronizados em ninefood_bill (qualquer período) */
+  syncedRows: number
+}
+
+/**
+ * Unidades com 99 Food ativo + o app_shop_id vinculado (pra tela de
+ * sincronização). Respeita o escopo do usuário (super-admin vê todas).
+ */
+export async function getNinefoodSyncUnits(): Promise<NinefoodSyncUnit[]> {
+  const units = await getVisibleUnits()
+  if (units.length === 0) return []
+  const admin = createAdminClient()
+  const ids = units.map((u) => u.id)
+
+  const [{ data: plats }, { data: counts }] = await Promise.all([
+    admin
+      .from("unit_platforms")
+      .select("unit_id, api_store_id")
+      .eq("platform", "99food")
+      .eq("active", true)
+      .in("unit_id", ids),
+    admin.from("ninefood_bill").select("unit_id").in("unit_id", ids),
+  ])
+
+  const storeId = new Map(
+    (plats ?? []).map((r) => [r.unit_id, r.api_store_id ?? null]),
+  )
+  const rowCount = new Map<string, number>()
+  for (const r of counts ?? []) {
+    rowCount.set(r.unit_id, (rowCount.get(r.unit_id) ?? 0) + 1)
+  }
+
+  return units
+    .filter((u) => storeId.has(u.id))
+    .map((u) => ({
+      unitId: u.id,
+      code: u.code,
+      name: u.name,
+      appShopId: storeId.get(u.id) ?? null,
+      syncedRows: rowCount.get(u.id) ?? 0,
+    }))
 }
