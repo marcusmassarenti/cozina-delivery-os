@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { Flame } from "lucide-react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -95,7 +96,18 @@ export default async function LoginPage() {
 
             <LoginForm />
 
-            <p className="mt-8 text-center text-[11px] text-muted-foreground">
+            <p className="mt-8 text-center text-[11px] leading-relaxed text-muted-foreground">
+              Ao acessar, você concorda com os{" "}
+              <Link href="/termos" className="underline hover:text-foreground">
+                Termos de Uso
+              </Link>{" "}
+              e a{" "}
+              <Link href="/privacidade" className="underline hover:text-foreground">
+                Política de Privacidade
+              </Link>
+              .
+            </p>
+            <p className="mt-3 text-center text-[10px] text-muted-foreground/70">
               Powered by Cozina Foods
             </p>
           </div>
