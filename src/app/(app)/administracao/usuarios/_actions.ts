@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdmin, requireModulePermission } from "@/lib/auth/guards"
-import { getRolesConfig } from "@/lib/auth/permissions"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+  getRolesConfig,
+} from "@/lib/auth/permissions"
 
 /** Escopo de dados do perfil (vem da tela de Permissões). Default: holding. */
 async function roleScope(perfilKey: string): Promise<"holding" | "unit"> {
@@ -43,55 +47,80 @@ export type UserActionState = {
 
 export async function listUsers(): Promise<AppUser[]> {
   const { admin: supabase } = await requireModulePermission("usuarios", "view")
-  const [authRes, profilesRes, accessRes, unitsRes] = await Promise.all([
+
+  // Multi-tenant: lista só os usuários da HOLDING do admin logado.
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return []
+
+  // Marcas e lojas da holding (pra resolver quem pertence a ela).
+  const { data: brandRows } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("holding_id", holdingId)
+  const brandIds = (brandRows ?? []).map((b) => b.id as string)
+  const { data: unitRows } = brandIds.length
+    ? await supabase
+        .from("units")
+        .select("id, code, name")
+        .in("brand_id", brandIds)
+    : { data: [] as { id: string; code: string; name: string }[] }
+  const holdingUnitIds = new Set((unitRows ?? []).map((u) => u.id))
+  const brandIdSet = new Set(brandIds)
+
+  const [authRes, profilesRes, accessRes] = await Promise.all([
     supabase.auth.admin.listUsers(),
     supabase.from("profiles").select("user_id, full_name, perfil"),
     supabase
       .from("user_unit_access")
-      .select("user_id, scope_type, scope_id")
-      .eq("scope_type", "unit"),
-    supabase.from("units").select("id, code, name"),
+      .select("user_id, scope_type, scope_id"),
   ])
   if (authRes.error) throw new Error(authRes.error.message)
+
+  // Quem pertence à holding (qualquer escopo apontando pra ela) + as lojas
+  // (unit) vinculadas a cada um DENTRO da holding.
+  const memberUserIds = new Set<string>()
+  const unitAccessByUser = new Map<string, string[]>()
+  for (const a of accessRes.data ?? []) {
+    if (!a.scope_id) continue
+    const inHolding =
+      (a.scope_type === "holding" && a.scope_id === holdingId) ||
+      (a.scope_type === "brand" && brandIdSet.has(a.scope_id)) ||
+      (a.scope_type === "unit" && holdingUnitIds.has(a.scope_id))
+    if (inHolding) memberUserIds.add(a.user_id)
+    if (a.scope_type === "unit" && holdingUnitIds.has(a.scope_id)) {
+      const arr = unitAccessByUser.get(a.user_id) ?? []
+      arr.push(a.scope_id)
+      unitAccessByUser.set(a.user_id, arr)
+    }
+  }
 
   const profileByUserId = new Map(
     (profilesRes.data ?? []).map((p) => [p.user_id, p]),
   )
-  // Um usuário pode ter VÁRIAS lojas vinculadas → acumula numa lista.
-  const accessByUserId = new Map<string, string[]>()
-  for (const a of accessRes.data ?? []) {
-    if (!a.scope_id) continue
-    const arr = accessByUserId.get(a.user_id) ?? []
-    arr.push(a.scope_id)
-    accessByUserId.set(a.user_id, arr)
-  }
-  const unitById = new Map(
-    (unitsRes.data ?? []).map((u) => [u.id, u]),
-  )
-  // Normaliza o perfil contra app_roles: o default da coluna é 'viewer' (não
-  // existe em app_roles), então um profile criado pelo Supabase Dashboard
-  // mostraria badge/aba erradas. Qualquer perfil fora do allow-list cai em
-  // 'franqueado' (fail-safe, escopo de loja).
+  const unitById = new Map((unitRows ?? []).map((u) => [u.id, u]))
+  // Perfil fora do allow-list (ex.: 'viewer' default) cai em 'franqueado'.
   const validRoleKeys = new Set((await getRolesConfig()).map((r) => r.key))
 
-  return authRes.data.users.map((u) => {
-    const p = profileByUserId.get(u.id)
-    const units = (accessByUserId.get(u.id) ?? [])
-      .map((id) => unitById.get(id))
-      .filter((x): x is { id: string; code: string; name: string } => !!x)
-      .map((x) => ({ id: x.id, code: x.code, name: x.name }))
-    const perfilRaw = p?.perfil ?? ""
-    const perfil = validRoleKeys.has(perfilRaw) ? perfilRaw : "franqueado"
-    return {
-      id: u.id,
-      email: u.email ?? "—",
-      fullName: p?.full_name ?? null,
-      perfil,
-      units,
-      createdAt: u.created_at,
-      lastSignInAt: u.last_sign_in_at ?? null,
-    }
-  })
+  return authRes.data.users
+    .filter((u) => memberUserIds.has(u.id))
+    .map((u) => {
+      const p = profileByUserId.get(u.id)
+      const units = (unitAccessByUser.get(u.id) ?? [])
+        .map((id) => unitById.get(id))
+        .filter((x): x is { id: string; code: string; name: string } => !!x)
+        .map((x) => ({ id: x.id, code: x.code, name: x.name }))
+      const perfilRaw = p?.perfil ?? ""
+      const perfil = validRoleKeys.has(perfilRaw) ? perfilRaw : "franqueado"
+      return {
+        id: u.id,
+        email: u.email ?? "—",
+        fullName: p?.full_name ?? null,
+        perfil,
+        units,
+        createdAt: u.created_at,
+        lastSignInAt: u.last_sign_in_at ?? null,
+      }
+    })
 }
 
 function validatePassword(p: string): string | null {
@@ -132,20 +161,32 @@ async function syncAccess(
     return
   }
 
-  // holding-scoped
-  const { data: holding } = await supabase
-    .from("holdings")
-    .select("id")
-    .eq("slug", "cozina-foods")
-    .maybeSingle()
-  if (holding) {
+  // holding-scoped → vincula à HOLDING do admin que está criando (multi-tenant),
+  // não mais à Cozina fixa.
+  const holdingId = await getCurrentHoldingId()
+  if (holdingId) {
     await supabase.from("user_unit_access").insert({
       user_id: userId,
       scope_type: "holding",
-      scope_id: holding.id,
+      scope_id: holdingId,
       role: perfil === "administrador" ? "admin" : "manager",
     })
   }
+}
+
+/**
+ * Valida que as lojas vinculadas estão no escopo do admin (anti cross-tenant).
+ * Super-admin (allowed === null) pode qualquer loja. Devolve mensagem de erro
+ * ou null se ok.
+ */
+async function assertUnitsInScope(unitIds: string[]): Promise<string | null> {
+  if (unitIds.length === 0) return null
+  const allowed = await getAccessibleUnitIds()
+  if (allowed === null) return null
+  const set = new Set(allowed)
+  if (unitIds.some((id) => !set.has(id)))
+    return "Uma das lojas selecionadas não pertence à sua empresa."
+  return null
 }
 
 export async function createUser(
@@ -171,6 +212,8 @@ export async function createUser(
     fieldErrors.perfil = "Perfil inválido."
   if ((await roleScope(perfil)) === "unit" && unitIds.length === 0)
     fieldErrors.unitId = "Selecione ao menos uma loja vinculada ao perfil"
+  const scopeErr = await assertUnitsInScope(unitIds)
+  if (scopeErr) fieldErrors.unitId = scopeErr
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -236,6 +279,8 @@ export async function updateUser(
     fieldErrors.perfil = "Perfil inválido."
   if ((await roleScope(perfil)) === "unit" && unitIds.length === 0)
     fieldErrors.unitId = "Selecione ao menos uma loja vinculada ao perfil"
+  const scopeErr = await assertUnitsInScope(unitIds)
+  if (scopeErr) fieldErrors.unitId = scopeErr
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }

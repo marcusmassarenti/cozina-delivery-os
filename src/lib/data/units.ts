@@ -3,7 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getAccessibleUnitIds } from "@/lib/auth/roles"
+import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { currentPeriod } from "@/lib/period"
@@ -142,14 +142,26 @@ export async function getVisibleUnits(): Promise<Unit[]> {
 
 export async function getUnitByCode(code: string): Promise<Unit | null> {
   const supabase = createAdminClient()
-  const { data, error } = await supabase
+
+  // Multi-tenant: `code` é único só por marca, então pode repetir entre
+  // empresas. Escopa às lojas acessíveis (super-admin = null = qualquer uma) e
+  // usa fetch seguro (limit 1) pra não quebrar com código repetido.
+  const allowed = await getAccessibleUnitIds()
+  if (allowed !== null && allowed.length === 0) return null
+
+  let q = supabase
     .from("units")
     .select(
       "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento",
     )
     .eq("code", code)
-    .maybeSingle()
+    .order("id")
+    .limit(1)
+  if (allowed !== null) q = q.in("id", allowed)
+
+  const { data: rows, error } = await q
   if (error) throw new Error(`Falha ao buscar unidade ${code}: ${error.message}`)
+  const data = rows?.[0]
   if (!data) return null
   const platformsDetails = await getUnitPlatformDetails(data.id)
   const platforms = platformsDetails.map((p) => p.platform)
@@ -215,13 +227,29 @@ export async function getUnitPlatforms(
 
 export async function getDefaultBrand(): Promise<{ id: string; name: string }> {
   const supabase = createAdminClient()
+
+  // Multi-tenant: a marca padrão é a 1ª marca da HOLDING do usuário logado —
+  // assim um admin de cliente cria loja na empresa dele, não na Cozina.
+  const holdingId = await getCurrentHoldingId()
+  if (holdingId) {
+    const { data } = await supabase
+      .from("brands")
+      .select("id, name")
+      .eq("holding_id", holdingId)
+      .order("created_at")
+      .limit(1)
+      .maybeSingle()
+    if (data) return data
+  }
+
+  // Fallback (compat): marca da Cozina.
   const { data, error } = await supabase
     .from("brands")
     .select("id, name")
     .eq("slug", "churrasco-no-pote")
     .maybeSingle()
   if (error || !data)
-    throw new Error("Marca Churrasco no Pote não encontrada — rodou a migration?")
+    throw new Error("Nenhuma marca encontrada pra esta empresa.")
   return data
 }
 

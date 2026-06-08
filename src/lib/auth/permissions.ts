@@ -268,3 +268,50 @@ export const getAccessibleUnitIds = cache(
     return [...unitIds]
   },
 )
+
+/**
+ * Holding (empresa/tenant) do usuário logado. Resolve a partir do
+ * user_unit_access — vínculo de holding direto, ou subindo via brand/unit.
+ * É a base das telas de admin (criar loja/usuário, listar usuários) ficarem
+ * presas à empresa do usuário. null se não der pra resolver (fail-closed nas
+ * chamadas).
+ */
+export const getCurrentHoldingId = cache(async (): Promise<string | null> => {
+  const user = await getAuthUser()
+  if (!user) return null
+  const admin = createAdminClient()
+  const { data: accesses } = await admin
+    .from("user_unit_access")
+    .select("scope_type, scope_id")
+    .eq("user_id", user.id)
+  const rows = accesses ?? []
+
+  const holdingRow = rows.find((a) => a.scope_type === "holding")
+  if (holdingRow?.scope_id) return holdingRow.scope_id as string
+
+  const brandRow = rows.find((a) => a.scope_type === "brand")
+  if (brandRow?.scope_id) {
+    const { data } = await admin
+      .from("brands")
+      .select("holding_id")
+      .eq("id", brandRow.scope_id)
+      .maybeSingle()
+    if (data?.holding_id) return data.holding_id as string
+  }
+
+  const unitRow = rows.find((a) => a.scope_type === "unit")
+  if (unitRow?.scope_id) {
+    const { data } = await admin
+      .from("units")
+      .select("brands(holding_id)")
+      .eq("id", unitRow.scope_id)
+      .maybeSingle()
+    const bj = data?.brands as
+      | { holding_id: string }
+      | { holding_id: string }[]
+      | null
+    const b = Array.isArray(bj) ? bj[0] : bj
+    if (b?.holding_id) return b.holding_id
+  }
+  return null
+})
