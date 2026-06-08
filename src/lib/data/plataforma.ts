@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSuperadmin } from "@/lib/auth/permissions"
+import { computeBillingStatus, type BillingStatus } from "@/lib/data/billing"
 
 /**
  * Painel de Dono (super-admin) — visão de TODOS os clientes (holdings) da
@@ -17,6 +18,13 @@ export type ClientOverview = {
   units: number
   activeUnits: number
   users: number
+  // Cobrança
+  paymentMethod: string | null
+  monthlyFee: number | null
+  dueDate: string | null
+  paid: boolean
+  suspendOn: string | null
+  billingStatus: BillingStatus
 }
 
 export type PlatformTotals = {
@@ -37,14 +45,37 @@ export async function getClientsOverview(): Promise<{
   if (!(await isSuperadmin())) return empty
 
   const admin = createAdminClient()
-  const [holdingsRes, brandsRes, unitsRes, accessRes] = await Promise.all([
-    admin.from("holdings").select("id, name, slug, created_at").order("created_at"),
+  const [brandsRes, unitsRes, accessRes] = await Promise.all([
     admin.from("brands").select("id, holding_id"),
     admin.from("units").select("id, brand_id, active"),
     admin.from("user_unit_access").select("user_id, scope_type, scope_id"),
   ])
 
-  const holdings = holdingsRes.data ?? []
+  // holdings com colunas de cobrança — fallback se a migration ainda não rodou
+  const hFull = await admin
+    .from("holdings")
+    .select(
+      "id, name, slug, created_at, payment_method, monthly_fee, due_date, paid, suspend_on",
+    )
+    .order("created_at")
+  const holdings = hFull.error
+    ? (
+        (
+          await admin
+            .from("holdings")
+            .select("id, name, slug, created_at")
+            .order("created_at")
+        ).data ?? []
+      ).map((h) => ({
+        ...h,
+        payment_method: null,
+        monthly_fee: null,
+        due_date: null,
+        paid: true,
+        suspend_on: null,
+      }))
+    : (hFull.data ?? [])
+
   const brands = brandsRes.data ?? []
   const units = unitsRes.data ?? []
   const accesses = accessRes.data ?? []
@@ -90,16 +121,34 @@ export async function getClientsOverview(): Promise<{
     }
   }
 
-  const clients: ClientOverview[] = holdings.map((h) => ({
-    id: h.id,
-    name: h.name,
-    slug: h.slug,
-    createdAt: h.created_at,
-    brands: brandsByHolding.get(h.id)?.size ?? 0,
-    units: unitCount.get(h.id) ?? 0,
-    activeUnits: activeUnitCount.get(h.id) ?? 0,
-    users: usersByHolding.get(h.id)?.size ?? 0,
-  }))
+  const clients: ClientOverview[] = holdings.map((h) => {
+    const hh = h as typeof h & {
+      payment_method: string | null
+      monthly_fee: number | string | null
+      due_date: string | null
+      paid: boolean | null
+      suspend_on: string | null
+    }
+    const billing = {
+      paymentMethod: hh.payment_method ?? null,
+      monthlyFee: hh.monthly_fee != null ? Number(hh.monthly_fee) : null,
+      dueDate: hh.due_date ?? null,
+      paid: hh.paid ?? true,
+      suspendOn: hh.suspend_on ?? null,
+    }
+    return {
+      id: h.id,
+      name: h.name,
+      slug: h.slug,
+      createdAt: h.created_at,
+      brands: brandsByHolding.get(h.id)?.size ?? 0,
+      units: unitCount.get(h.id) ?? 0,
+      activeUnits: activeUnitCount.get(h.id) ?? 0,
+      users: usersByHolding.get(h.id)?.size ?? 0,
+      ...billing,
+      billingStatus: computeBillingStatus(billing),
+    }
+  })
 
   const totals: PlatformTotals = {
     clients: clients.length,

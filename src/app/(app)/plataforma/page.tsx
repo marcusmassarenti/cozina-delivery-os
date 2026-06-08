@@ -1,24 +1,53 @@
 import { notFound } from "next/navigation"
-import { Building2, Store, Users } from "lucide-react"
+import { AlertTriangle, Building2, Store, Users } from "lucide-react"
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
-import { fmtNum } from "@/lib/format"
+import type { BillingStatus } from "@/lib/data/billing"
+import { fmtBRL, fmtNum } from "@/lib/format"
 
 import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
+import { EditBillingDialog } from "./_components/edit-billing-dialog"
 
-/**
- * Painel de Dono da plataforma (super-admin) — visão de todos os clientes.
- * Só o super-admin enxerga. É o cockpit do SaaS.
- */
+const STATUS: Record<BillingStatus, { label: string; cls: string }> = {
+  paid: {
+    label: "Pago",
+    cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400",
+  },
+  pending: {
+    label: "Pendente",
+    cls: "bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-400",
+  },
+  overdue: {
+    label: "Em atraso",
+    cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
+  },
+  suspended: {
+    label: "Suspenso",
+    cls: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400",
+  },
+  none: { label: "Sem cobrança", cls: "bg-muted text-muted-foreground" },
+}
+
+function fmtDate(d: string | null): string {
+  if (!d) return "—"
+  const [y, m, day] = d.split("-")
+  return `${day}/${m}/${y}`
+}
+
 export default async function PlataformaPage() {
   if (!(await isSuperadmin())) notFound()
   const { clients, totals } = await getClientsOverview()
 
+  const emAtraso = clients.filter(
+    (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
+  ).length
+
   const kpis = [
-    { label: "Clientes", value: totals.clients, icon: Building2 },
-    { label: "Lojas", value: totals.units, sub: `${totals.activeUnits} ativas`, icon: Store },
-    { label: "Usuários", value: totals.users, icon: Users },
+    { label: "Clientes", value: fmtNum(totals.clients), icon: Building2 },
+    { label: "Lojas", value: fmtNum(totals.units), sub: `${totals.activeUnits} ativas`, icon: Store },
+    { label: "Usuários", value: fmtNum(totals.users), icon: Users },
+    { label: "Em atraso", value: fmtNum(emAtraso), icon: AlertTriangle, alert: emAtraso > 0 },
   ]
 
   return (
@@ -30,72 +59,91 @@ export default async function PlataformaPage() {
             Clientes da plataforma
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Visão de dono — todas as empresas que usam o Cozina Delivery OS.
+            Visão de dono — empresas, assinatura e status de pagamento.
           </p>
         </div>
         <NovoClienteDialog />
       </div>
 
-      {/* KPIs da plataforma */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-xl border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <k.icon className="size-4" />
+              <k.icon className={`size-4 ${k.alert ? "text-amber-500" : ""}`} />
               {k.label}
             </div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums">
-              {fmtNum(k.value)}
+            <div
+              className={`mt-1 text-2xl font-semibold tabular-nums ${
+                k.alert ? "text-amber-600 dark:text-amber-400" : ""
+              }`}
+            >
+              {k.value}
             </div>
-            {k.sub && (
-              <div className="text-[11px] text-muted-foreground">{k.sub}</div>
-            )}
+            {k.sub && <div className="text-[11px] text-muted-foreground">{k.sub}</div>}
           </div>
         ))}
       </div>
 
-      {/* Lista de clientes */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-2.5 font-semibold">Cliente</th>
+                <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 font-semibold">Pagamento</th>
+                <th className="px-4 py-2.5 font-semibold">Vencimento</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Lojas</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Usuários</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Desde</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Ação</th>
               </tr>
             </thead>
             <tbody>
-              {clients.map((c) => (
-                <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <div className="font-medium">{c.name}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {c.slug}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {fmtNum(c.units)}
-                    <span className="text-[11px] text-muted-foreground">
-                      {" "}
-                      ({c.activeUnits} ativas)
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {fmtNum(c.users)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                    {new Date(c.createdAt).toLocaleDateString("pt-BR")}
-                  </td>
-                </tr>
-              ))}
+              {clients.map((c) => {
+                const st = STATUS[c.billingStatus]
+                return (
+                  <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {c.users} usuário{c.users !== 1 ? "s" : ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${st.cls}`}
+                      >
+                        {st.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>{c.paymentMethod ?? "—"}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {c.monthlyFee != null ? `${fmtBRL(c.monthlyFee)}/mês` : ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{fmtDate(c.dueDate)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {fmtNum(c.units)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <EditBillingDialog
+                        client={{
+                          id: c.id,
+                          name: c.name,
+                          paymentMethod: c.paymentMethod,
+                          monthlyFee: c.monthlyFee,
+                          dueDate: c.dueDate,
+                          paid: c.paid,
+                          suspendOn: c.suspendOn,
+                        }}
+                      />
+                    </td>
+                  </tr>
+                )
+              })}
               {clients.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-10 text-center text-sm text-muted-foreground"
-                  >
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                     Nenhum cliente ainda.
                   </td>
                 </tr>
@@ -106,9 +154,9 @@ export default async function PlataformaPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Use <strong>Novo cliente</strong> pra provisionar uma empresa (cria a
-        loja e o admin dela). Próximo passo: <strong>entrar num cliente</strong>{" "}
-        pra ver os dados dele por dentro.
+        Quando um cliente está <strong>sem pagar</strong> e passa da{" "}
+        <strong>data de suspensão</strong>, o acesso dele é bloqueado
+        automaticamente até regularizar.
       </p>
     </div>
   )

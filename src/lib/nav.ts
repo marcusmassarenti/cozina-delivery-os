@@ -38,18 +38,6 @@ export type NavGroup = {
 /** Estrutura do menu lateral — fonte única (sidebar + busca + favoritos). */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Plataforma",
-    defaultOpen: true,
-    items: [
-      {
-        label: "Clientes",
-        href: "/plataforma",
-        icon: Building2,
-        superadminOnly: true,
-      },
-    ],
-  },
-  {
     items: [
       {
         label: "Dashboard",
@@ -115,6 +103,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Administração",
     defaultOpen: true,
     items: [
+      {
+        label: "Clientes",
+        href: "/plataforma",
+        icon: Building2,
+        superadminOnly: true,
+      },
       {
         label: "Usuários",
         href: "/administracao/usuarios",

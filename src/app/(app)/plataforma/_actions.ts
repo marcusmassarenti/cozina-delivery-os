@@ -162,3 +162,50 @@ export async function criarCliente(
     return { ok: true }
   })
 }
+
+export type BillingActionState = { ok: boolean; message?: string }
+
+function dateOrNull(v: FormDataEntryValue | null): string | null {
+  const s = String(v ?? "").trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null
+}
+
+/** Salva os dados de cobrança de um cliente (super-admin). */
+export async function setClientBilling(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+
+    const paymentMethod =
+      String(formData.get("paymentMethod") ?? "").trim() || null
+    const feeRaw = String(formData.get("monthlyFee") ?? "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .trim()
+    const fee = feeRaw ? Number(feeRaw) : null
+    const monthlyFee = fee != null && !Number.isNaN(fee) ? fee : null
+    const dueDate = dateOrNull(formData.get("dueDate"))
+    const suspendOn = dateOrNull(formData.get("suspendOn"))
+    const paid = formData.get("paid") === "on"
+
+    const { error } = await admin
+      .from("holdings")
+      .update({
+        payment_method: paymentMethod,
+        monthly_fee: monthlyFee,
+        due_date: dueDate,
+        paid,
+        suspend_on: suspendOn,
+      })
+      .eq("id", holdingId)
+    if (error) return { ok: false, message: error.message }
+
+    revalidatePath("/plataforma")
+    revalidatePath("/", "layout")
+    return { ok: true }
+  })
+}

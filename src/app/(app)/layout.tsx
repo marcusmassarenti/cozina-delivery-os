@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { MODULES, userCan, isSuperadmin } from "@/lib/auth/permissions"
+import { getCurrentHoldingBilling } from "@/lib/data/billing"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({
@@ -32,6 +33,14 @@ export default async function AppLayout({
   const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
   const superadmin = await isSuperadmin()
 
+  // Cobrança: cliente sem pagar e passou da data de suspensão → bloqueia.
+  // Super-admin (dono) nunca é bloqueado.
+  const billing = await getCurrentHoldingBilling()
+  if (!superadmin && billing?.status === "suspended") {
+    redirect("/suspenso")
+  }
+  const overdue = billing?.status === "overdue"
+
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -45,6 +54,17 @@ export default async function AppLayout({
             userName={userContext.fullName}
             userInitials={userContext.initials}
           />
+          {overdue && (
+            <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-6 py-2.5 text-xs font-medium text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+              <span className="text-base leading-none">⚠️</span>
+              <span>
+                Pagamento em atraso
+                {billing?.suspendOn
+                  ? ` — regularize até ${billing.suspendOn.split("-").reverse().join("/")} pra não suspender o acesso.`
+                  : " — regularize pra manter o acesso."}
+              </span>
+            </div>
+          )}
           {children}
         </SidebarInset>
         <WelcomeTour
