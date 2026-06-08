@@ -1,8 +1,9 @@
 import { headers } from "next/headers"
+import { notFound } from "next/navigation"
 import { Cable, Plug, Webhook } from "lucide-react"
 
 import { listApiClients } from "@/lib/data/api-clients"
-import { assertCanView } from "@/lib/auth/permissions"
+import { isSuperadmin } from "@/lib/auth/permissions"
 
 import { ApiKeysManager } from "./_components/api-keys-manager"
 import { PlataformasStatus } from "./_components/plataformas-status"
@@ -13,7 +14,8 @@ import { PlataformasStatus } from "./_components/plataformas-status"
  *  2) Plataformas de delivery (entrada): iFood / 99 / Keeta — em breve.
  */
 export default async function ConexoesPage() {
-  await assertCanView("conexoes")
+  // Interno da plataforma (chaves de API + integrações) — só super-admin.
+  if (!(await isSuperadmin())) notFound()
   const [clients, h] = await Promise.all([listApiClients(), headers()])
   const host =
     h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"

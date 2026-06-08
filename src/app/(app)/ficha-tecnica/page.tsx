@@ -1,7 +1,8 @@
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { Factory, Info } from "lucide-react"
 
 import { requireAdmin } from "@/lib/auth/guards"
+import { isSuperadmin } from "@/lib/auth/permissions"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getInsumos, getItensVendidos } from "@/lib/data/producao"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -21,6 +22,9 @@ export default async function FichaTecnicaPage({
 }: {
   searchParams: Promise<{ periodo?: string }>
 }) {
+  // Interno da Cozina (de-para pro ERP industrial) — só super-admin.
+  if (!(await isSuperadmin())) notFound()
+
   let ok = false
   try {
     await requireAdmin()
