@@ -17,51 +17,44 @@ export default async function LoginPage() {
   return (
     <TooltipProvider>
       <div className="grid min-h-screen lg:grid-cols-2">
-        {/* Hero panel */}
-        <div className="relative hidden overflow-hidden lg:block">
-          {/* Background base preto */}
-          <div className="absolute inset-0 bg-zinc-950" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/cnp.jpg"
-            alt=""
-            aria-hidden
-            className="absolute inset-0 size-full object-cover opacity-55 [object-position:55%_55%]"
+        {/* Hero panel — genérico (white-label, sem marca de restaurante) */}
+        <div className="relative hidden overflow-hidden bg-zinc-950 lg:block">
+          {/* Brilhos abstratos com a cor da marca */}
+          <div className="absolute -left-32 top-12 size-[460px] rounded-full bg-[#ff4d1c]/25 blur-[130px]" />
+          <div className="absolute -right-24 bottom-0 size-[420px] rounded-full bg-[#ff4d1c]/15 blur-[130px]" />
+          {/* Grade sutil */}
+          <div
+            className="absolute inset-0 opacity-[0.05]"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
+              backgroundSize: "44px 44px",
+            }}
           />
-          {/* Overlay leve na esquerda pra dar contraste no texto sem
-              esmagar o logo CNP que precisa ficar em evidência. */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
-          {/* Vinheta pra escurecer só os extremos — meio fica respirando
-              pra ver o fogo do CNP. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/95" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
 
-          {/* Foreground content — header em cima, texto principal+slogan
-              empurrados pro pé da página pra dar respiro ao logo CNP */}
           <div className="relative z-10 flex h-full flex-col p-12">
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/cozina-logo.png"
-                alt="Cozina"
-                className="h-9 w-auto"
-              />
+              <img src="/cozina-logo.png" alt="Cozina" className="h-9 w-auto" />
               <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/80">
                 Delivery OS
               </span>
             </div>
 
-            {/* mt-auto empurra esse bloco pro final, mostrando o logo CNP
-                (com o fogo) limpo na parte superior */}
-            <div className="mt-auto max-w-2xl">
-              <h1 className="text-[1.75rem] font-bold leading-[1.2] text-white drop-shadow-lg xl:text-[2.25rem]">
-                Transformando vidas
+            <div className="mt-auto max-w-xl">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/70">
+                <Flame className="size-3 text-[#ff4d1c]" />
+                Gestão de Delivery
+              </div>
+              <h1 className="text-[1.75rem] font-bold leading-[1.2] text-white drop-shadow-lg xl:text-[2.5rem]">
+                Toda a sua operação
                 <br />
-                <span className="whitespace-nowrap text-[#ff4d1c]">
-                  com comida de qualidade
-                </span>
+                <span className="text-[#ff4d1c]">num só painel.</span>
               </h1>
-              <p className="mt-8 text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">
-                Fazendo Churrasco desde 2021
+              <p className="mt-6 max-w-md text-sm leading-relaxed text-white/60">
+                iFood, 99 Food e Keeta — pedidos, financeiro, avaliações e DRE
+                consolidados, em tempo real.
               </p>
             </div>
           </div>

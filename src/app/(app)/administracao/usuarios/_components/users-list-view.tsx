@@ -77,7 +77,7 @@ export function UsersListView({
           active={tab === "internos"}
           onClick={() => setTab("internos")}
           icon={<UserCog className="size-3.5" />}
-          label="Equipe Cozina"
+          label="Equipe"
           count={internos.length}
         />
         <TabButton
