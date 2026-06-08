@@ -44,6 +44,17 @@ export async function criarCliente(
     const lojaNome = String(formData.get("lojaNome") ?? "").trim()
     const lojaCidade = String(formData.get("lojaCidade") ?? "").trim()
     const lojaUf = String(formData.get("lojaUf") ?? "").trim().toUpperCase()
+    const establishmentType =
+      String(formData.get("establishmentType") ?? "").trim() || null
+    const paymentMethod =
+      String(formData.get("paymentMethod") ?? "").trim() || null
+    const feeRaw = String(formData.get("monthlyFee") ?? "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .trim()
+    const monthlyFee =
+      feeRaw && !Number.isNaN(Number(feeRaw)) ? Number(feeRaw) : null
+    const dueDate = dateOrNull(formData.get("dueDate"))
 
     const fieldErrors: Record<string, string> = {}
     if (!empresa) fieldErrors.empresa = "Nome da empresa obrigatório"
@@ -94,7 +105,15 @@ export async function criarCliente(
       // 2) empresa (holding)
       const { data: holding, error: hErr } = await admin
         .from("holdings")
-        .insert({ name: empresa, slug })
+        .insert({
+          name: empresa,
+          slug,
+          establishment_type: establishmentType,
+          payment_method: paymentMethod,
+          monthly_fee: monthlyFee,
+          due_date: dueDate,
+          paid: true,
+        })
         .select("id")
         .single()
       if (hErr || !holding) throw new Error(hErr?.message ?? "Falha ao criar empresa")
@@ -180,6 +199,10 @@ export async function setClientBilling(
     const holdingId = String(formData.get("holdingId") ?? "").trim()
     if (!holdingId) return { ok: false, message: "Cliente não identificado." }
 
+    const name = String(formData.get("name") ?? "").trim()
+    if (!name) return { ok: false, message: "Nome da empresa é obrigatório." }
+    const establishmentType =
+      String(formData.get("establishmentType") ?? "").trim() || null
     const paymentMethod =
       String(formData.get("paymentMethod") ?? "").trim() || null
     const feeRaw = String(formData.get("monthlyFee") ?? "")
@@ -195,6 +218,8 @@ export async function setClientBilling(
     const { error } = await admin
       .from("holdings")
       .update({
+        name,
+        establishment_type: establishmentType,
         payment_method: paymentMethod,
         monthly_fee: monthlyFee,
         due_date: dueDate,

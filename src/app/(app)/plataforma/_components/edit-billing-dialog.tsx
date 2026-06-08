@@ -4,7 +4,7 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { CreditCard } from "lucide-react"
+import { Pencil } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -23,6 +23,7 @@ import { setClientBilling, type BillingActionState } from "../_actions"
 export type BillingClient = {
   id: string
   name: string
+  establishmentType: string | null
   paymentMethod: string | null
   monthlyFee: number | null
   dueDate: string | null
@@ -31,6 +32,7 @@ export type BillingClient = {
 }
 
 const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outro"]
+const ESTAB = ["Restaurante", "Delivery próprio", "Franquia", "Outro"]
 const initial: BillingActionState = { ok: false }
 
 export function EditBillingDialog({ client }: { client: BillingClient }) {
@@ -54,25 +56,45 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
             type="button"
             className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <CreditCard className="size-3.5" />
-            Cobrança
+            <Pencil className="size-3.5" />
+            Editar
           </button>
         }
       />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="size-5 text-primary" />
-            Cobrança — {client.name}
+            <Pencil className="size-5 text-primary" />
+            Editar cliente
           </DialogTitle>
           <DialogDescription>
-            Forma de pagamento, vencimento e status. Se não estiver pago e
-            passar da data de suspensão, o acesso do cliente é bloqueado.
+            Cadastro e cobrança. Se não estiver pago e passar da data de
+            suspensão, o acesso do cliente é bloqueado.
           </DialogDescription>
         </DialogHeader>
 
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="holdingId" value={client.id} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Nome da empresa">
+              <Input name="name" defaultValue={client.name} required />
+            </Field>
+            <Field label="Tipo de estabelecimento">
+              <select
+                name="establishmentType"
+                defaultValue={client.establishmentType ?? ""}
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">—</option>
+                {ESTAB.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Forma de pagamento">

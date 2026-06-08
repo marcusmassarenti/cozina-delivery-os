@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { criarCliente, type CriarClienteState } from "../_actions"
 
+const ESTAB = ["Restaurante", "Delivery próprio", "Franquia", "Outro"]
+const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outro"]
 const initial: CriarClienteState = { ok: false }
 
 export function NovoClienteDialog() {
@@ -62,6 +64,21 @@ export function NovoClienteDialog() {
         <form action={formAction} className="flex flex-col gap-4">
           <Field label="Nome da empresa" error={state.fieldErrors?.empresa}>
             <Input name="empresa" placeholder="ex.: Burguer do João Ltda" required />
+          </Field>
+
+          <Field label="Tipo de estabelecimento">
+            <select
+              name="establishmentType"
+              defaultValue=""
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="">—</option>
+              {ESTAB.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <div className="rounded-lg border bg-muted/30 p-3">
@@ -108,6 +125,40 @@ export function NovoClienteDialog() {
                   <Input name="lojaUf" placeholder="SP" maxLength={2} />
                 </Field>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Cobrança (opcional)
+            </p>
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Forma de pagamento">
+                  <select
+                    name="paymentMethod"
+                    defaultValue=""
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Valor mensal (R$)">
+                  <Input
+                    name="monthlyFee"
+                    inputMode="decimal"
+                    placeholder="ex.: 199,90"
+                  />
+                </Field>
+              </div>
+              <Field label="Vencimento">
+                <Input type="date" name="dueDate" />
+              </Field>
             </div>
           </div>
 

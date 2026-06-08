@@ -18,6 +18,7 @@ export type ClientOverview = {
   units: number
   activeUnits: number
   users: number
+  establishmentType: string | null
   // Cobrança
   paymentMethod: string | null
   monthlyFee: number | null
@@ -32,6 +33,11 @@ export type PlatformTotals = {
   units: number
   activeUnits: number
   users: number
+  // Financeiro (snapshot do mês, baseado em monthly_fee + status)
+  received: number
+  pending: number
+  overdueAmount: number
+  mrr: number
 }
 
 export async function getClientsOverview(): Promise<{
@@ -40,7 +46,16 @@ export async function getClientsOverview(): Promise<{
 }> {
   const empty = {
     clients: [] as ClientOverview[],
-    totals: { clients: 0, units: 0, activeUnits: 0, users: 0 },
+    totals: {
+      clients: 0,
+      units: 0,
+      activeUnits: 0,
+      users: 0,
+      received: 0,
+      pending: 0,
+      overdueAmount: 0,
+      mrr: 0,
+    },
   }
   if (!(await isSuperadmin())) return empty
 
@@ -55,7 +70,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, payment_method, monthly_fee, due_date, paid, suspend_on",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, due_date, paid, suspend_on",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -68,6 +83,7 @@ export async function getClientsOverview(): Promise<{
         ).data ?? []
       ).map((h) => ({
         ...h,
+        establishment_type: null,
         payment_method: null,
         monthly_fee: null,
         due_date: null,
@@ -123,6 +139,7 @@ export async function getClientsOverview(): Promise<{
 
   const clients: ClientOverview[] = holdings.map((h) => {
     const hh = h as typeof h & {
+      establishment_type: string | null
       payment_method: string | null
       monthly_fee: number | string | null
       due_date: string | null
@@ -141,6 +158,7 @@ export async function getClientsOverview(): Promise<{
       name: h.name,
       slug: h.slug,
       createdAt: h.created_at,
+      establishmentType: hh.establishment_type ?? null,
       brands: brandsByHolding.get(h.id)?.size ?? 0,
       units: unitCount.get(h.id) ?? 0,
       activeUnits: activeUnitCount.get(h.id) ?? 0,
@@ -150,11 +168,24 @@ export async function getClientsOverview(): Promise<{
     }
   })
 
+  const fee = (c: ClientOverview) => c.monthlyFee ?? 0
   const totals: PlatformTotals = {
     clients: clients.length,
     units: clients.reduce((s, c) => s + c.units, 0),
     activeUnits: clients.reduce((s, c) => s + c.activeUnits, 0),
     users: clients.reduce((s, c) => s + c.users, 0),
+    received: clients
+      .filter((c) => c.billingStatus === "paid")
+      .reduce((s, c) => s + fee(c), 0),
+    pending: clients
+      .filter((c) => c.billingStatus === "pending")
+      .reduce((s, c) => s + fee(c), 0),
+    overdueAmount: clients
+      .filter(
+        (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
+      )
+      .reduce((s, c) => s + fee(c), 0),
+    mrr: clients.reduce((s, c) => s + fee(c), 0),
   }
 
   return { clients, totals }

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { AlertTriangle, Building2, Store, Users } from "lucide-react"
+import { AlertTriangle, Building2, CheckCircle2, Clock, Wallet } from "lucide-react"
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
@@ -44,10 +44,16 @@ export default async function PlataformaPage() {
   ).length
 
   const kpis = [
-    { label: "Clientes", value: fmtNum(totals.clients), icon: Building2 },
-    { label: "Lojas", value: fmtNum(totals.units), sub: `${totals.activeUnits} ativas`, icon: Store },
-    { label: "Usuários", value: fmtNum(totals.users), icon: Users },
-    { label: "Em atraso", value: fmtNum(emAtraso), icon: AlertTriangle, alert: emAtraso > 0 },
+    { label: "Receita mensal (MRR)", value: fmtBRL(totals.mrr), icon: Wallet },
+    { label: "Recebido", value: fmtBRL(totals.received), icon: CheckCircle2 },
+    { label: "A receber", value: fmtBRL(totals.pending), icon: Clock },
+    {
+      label: "Em atraso",
+      value: fmtBRL(totals.overdueAmount),
+      sub: `${emAtraso} cliente${emAtraso !== 1 ? "s" : ""}`,
+      icon: AlertTriangle,
+      alert: totals.overdueAmount > 0 || emAtraso > 0,
+    },
   ]
 
   return (
@@ -59,7 +65,9 @@ export default async function PlataformaPage() {
             Clientes da plataforma
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Visão de dono — empresas, assinatura e status de pagamento.
+            Visão de dono · {fmtNum(totals.clients)} cliente
+            {totals.clients !== 1 ? "s" : ""} · {fmtNum(totals.units)} lojas ·{" "}
+            {fmtNum(totals.users)} usuários
           </p>
         </div>
         <NovoClienteDialog />
@@ -105,6 +113,7 @@ export default async function PlataformaPage() {
                     <td className="px-4 py-3">
                       <div className="font-medium">{c.name}</div>
                       <div className="text-[11px] text-muted-foreground">
+                        {c.establishmentType ?? "Tipo não definido"} ·{" "}
                         {c.users} usuário{c.users !== 1 ? "s" : ""}
                       </div>
                     </td>
@@ -130,6 +139,7 @@ export default async function PlataformaPage() {
                         client={{
                           id: c.id,
                           name: c.name,
+                          establishmentType: c.establishmentType,
                           paymentMethod: c.paymentMethod,
                           monthlyFee: c.monthlyFee,
                           dueDate: c.dueDate,
