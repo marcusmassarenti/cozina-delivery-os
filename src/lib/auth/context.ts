@@ -25,6 +25,8 @@ export type UserContext = {
   brandName: string
   /** Logo da empresa (white-label). null = usa o logo padrão (Cozina). */
   logoUrl: string | null
+  /** Já viu o tour de boas-vindas? (controla o onboarding do 1º login) */
+  onboarded: boolean
 }
 
 const FALLBACK: UserContext = {
@@ -33,6 +35,7 @@ const FALLBACK: UserContext = {
   initials: "U",
   brandName: "Cozina Foods",
   logoUrl: null,
+  onboarded: true,
 }
 
 export async function getCurrentUserContext(): Promise<UserContext> {
@@ -109,12 +112,23 @@ export async function getCurrentUserContext(): Promise<UserContext> {
     logoUrl = (h?.logo_url as string | null) ?? null
   }
 
+  // Onboarding: default true (não mostra tour se não der pra determinar —
+  // ex.: antes da migration). Só mostra quando lê explicitamente `false`.
+  let onboarded = true
+  const { data: ob } = await admin
+    .from("profiles")
+    .select("onboarded")
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (ob && ob.onboarded === false) onboarded = false
+
   return {
     userId,
     fullName,
     initials: computeInitials(fullName),
     brandName,
     logoUrl,
+    onboarded,
   }
 }
 

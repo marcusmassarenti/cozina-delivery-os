@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { TopBar } from "@/components/top-bar"
+import { WelcomeTour } from "@/components/onboarding/welcome-tour"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
@@ -46,6 +47,10 @@ export default async function AppLayout({
           />
           {children}
         </SidebarInset>
+        <WelcomeTour
+          initialOnboarded={userContext.onboarded}
+          brandName={userContext.brandName}
+        />
       </SidebarProvider>
     </TooltipProvider>
   )
