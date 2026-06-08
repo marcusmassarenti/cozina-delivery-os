@@ -16,12 +16,15 @@ import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
 export type UserContext = {
   userId: string | null
   fullName: string
   initials: string
   brandName: string
+  /** Logo da empresa (white-label). null = usa o logo padrão (Cozina). */
+  logoUrl: string | null
 }
 
 const FALLBACK: UserContext = {
@@ -29,6 +32,7 @@ const FALLBACK: UserContext = {
   fullName: "Usuário",
   initials: "U",
   brandName: "Cozina Foods",
+  logoUrl: null,
 }
 
 export async function getCurrentUserContext(): Promise<UserContext> {
@@ -93,11 +97,24 @@ export async function getCurrentUserContext(): Promise<UserContext> {
     }
   }
 
+  // Logo da empresa (white-label) — resolve pela holding do usuário.
+  let logoUrl: string | null = null
+  const holdingId = await getCurrentHoldingId()
+  if (holdingId) {
+    const { data: h } = await admin
+      .from("holdings")
+      .select("logo_url")
+      .eq("id", holdingId)
+      .maybeSingle()
+    logoUrl = (h?.logo_url as string | null) ?? null
+  }
+
   return {
     userId,
     fullName,
     initials: computeInitials(fullName),
     brandName,
+    logoUrl,
   }
 }
 

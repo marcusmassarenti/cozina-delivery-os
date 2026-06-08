@@ -102,9 +102,11 @@ function MenuItems({
 export function AppSidebar({
   allowedModules,
   isSuperadmin = false,
+  logoUrl = null,
 }: {
   allowedModules: string[]
   isSuperadmin?: boolean
+  logoUrl?: string | null
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
@@ -127,7 +129,11 @@ export function AppSidebar({
       <SidebarHeader className="gap-1.5 px-3 py-3">
         <div className="group-data-[collapsible=icon]:hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/cozina-logo.png" alt="Cozina" className="h-9 w-auto" />
+          <img
+            src={logoUrl || "/cozina-logo.png"}
+            alt="Logo"
+            className="h-9 w-auto max-w-[170px] object-contain"
+          />
         </div>
         <Flame
           className="hidden size-5 text-[#ff4d1c] group-data-[collapsible=icon]:block"

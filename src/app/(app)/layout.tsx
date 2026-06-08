@@ -34,7 +34,11 @@ export default async function AppLayout({
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <AppSidebar allowedModules={allowedModules} isSuperadmin={superadmin} />
+        <AppSidebar
+          allowedModules={allowedModules}
+          isSuperadmin={superadmin}
+          logoUrl={userContext.logoUrl}
+        />
         <SidebarInset>
           <TopBar
             userName={userContext.fullName}
