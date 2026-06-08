@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
+import Link from "next/link"
 import { ArrowRight, Lock, User } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -54,15 +55,23 @@ export function LoginForm() {
         </div>
       </div>
 
-      <label className="flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={remember}
-          onChange={(e) => setRemember(e.target.checked)}
-          className="size-4 rounded border-border"
-        />
-        <span className="text-muted-foreground">Lembrar meu email</span>
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="size-4 rounded border-border"
+          />
+          <span className="text-muted-foreground">Lembrar meu email</span>
+        </label>
+        <Link
+          href="/esqueci-senha"
+          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Esqueci minha senha
+        </Link>
+      </div>
 
       {state.message && !state.ok && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
