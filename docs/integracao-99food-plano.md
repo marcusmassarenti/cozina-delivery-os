@@ -20,8 +20,17 @@ credenciais → homologação), então a 2ª homologação tende a ser mais ráp
 > `authorizationpage/getUrl` (que FUNCIONA e lista a loja), o 99 barrou com
 > **"Authorization failed, limited to authorized live environment application"**.
 > → Precisa **promover o app de teste → produção/live** no portal do 99
-> (mesmo tipo de portão da homologação do iFood). Depois disso: abrir o link,
-> autorizar a loja, e `getShopBillDetail` devolve R$ real.
+> (mesmo tipo de portão da homologação do iFood). **Ticket de produção aberto
+> no suporte do 99 em 2026-06-08** (status "Processando").
+>
+> 🎛️ **UI "pronto pra ligar" construída** (`/conexoes`, super-admin → "99 Food —
+> Financeiro via API"): por loja com 99 ativo, setar o `app_shop_id` + botão
+> "Sincronizar mês" (chama `getShopBillDetail` → grava em `ninefood_bill`).
+> Testado end-to-end no runtime (erro `STORE_NOT_AUTHORIZED` tratado). O id da
+> API mora em `unit_platforms.api_store_id` (coluna NOVA da migration 0047),
+> separada do `external_store_id` (que o import manual usa pra casar relatórios).
+> **Quando a produção sair:** autorizar a loja real no link → setar o
+> `app_shop_id` na Conexões → Sincronizar → R$ real → calibrar o DRE.
 
 ---
 
