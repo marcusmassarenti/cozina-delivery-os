@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { CreditCard, Loader2, Plus, Repeat, X } from "lucide-react"
 
 import { saveEntry } from "../_actions"
@@ -46,13 +46,23 @@ export function LancamentoModal({
   const isEditing = !!entry
   const [kind, setKind] = useState<Kind>(entry?.kind ?? defaultKind ?? "despesa")
   const [recorrente, setRecorrente] = useState(false)
+  const sp = useSearchParams()
+  const lojaParam = sp.get("loja")
+  const defaultUnit =
+    !entry && lojaParam && lojaParam !== "todas" && lojaParam !== "rede" ? lojaParam : ""
   const [accountId, setAccountId] = useState(entry?.accountId ?? "")
-  const [unitId, setUnitId] = useState(entry?.unitId ?? "")
+  const [unitId, setUnitId] = useState(entry?.unitId ?? defaultUnit)
 
   function pickAccount(id: string) {
     setAccountId(id)
     const acc = accounts.find((a) => a.id === id)
     if (acc?.unitId) setUnitId(acc.unitId)
+  }
+  function setLoja(v: string) {
+    setUnitId(v)
+    // se a conta escolhida é de outra loja, limpa pra evitar mismatch
+    const acc = accounts.find((a) => a.id === accountId)
+    if (acc?.unitId && acc.unitId !== v) setAccountId("")
   }
   const [titular, setTitular] = useState(entry?.titular ?? "")
   const [valor, setValor] = useState(
@@ -143,12 +153,12 @@ export function LancamentoModal({
                   onChange={(e) => pickAccount(e.target.value)}
                   required
                 >
-                  <AccountOptions accounts={accounts} />
+                  <AccountOptions accounts={accounts} loja={unitId} />
                 </select>
               </Field>
               <Field label="Para (destino)">
                 <select name="to_account_id" className={inputCls} defaultValue={dv.to} required>
-                  <AccountOptions accounts={accounts} />
+                  <AccountOptions accounts={accounts} loja={unitId} />
                 </select>
               </Field>
             </div>
@@ -162,7 +172,7 @@ export function LancamentoModal({
                     value={accountId}
                     onChange={(e) => pickAccount(e.target.value)}
                   >
-                    <AccountOptions accounts={accounts} />
+                    <AccountOptions accounts={accounts} loja={unitId} />
                   </select>
                 </Field>
                 <Field label="Categoria">
@@ -182,7 +192,7 @@ export function LancamentoModal({
 
           {units.length > 0 && (
             <Field label="Loja">
-              <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
+              <select value={unitId} onChange={(e) => setLoja(e.target.value)} className={inputCls}>
                 <option value="">Rede (geral)</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -320,10 +330,12 @@ function formatValor(v: string): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-/** Opções do select de conta, separando Contas e Cartões. */
-function AccountOptions({ accounts }: { accounts: FinAccount[] }) {
-  const contas = accounts.filter((a) => a.kind !== "cartao")
-  const cartoes = accounts.filter((a) => a.kind === "cartao")
+/** Opções do select de conta: filtra pela loja (+ Rede) e separa Contas/Cartões. */
+function AccountOptions({ accounts, loja }: { accounts: FinAccount[]; loja?: string }) {
+  // Com loja: mostra as contas da loja + as da Rede (compartilhadas). Sem loja: todas.
+  const visible = loja ? accounts.filter((a) => a.unitId === loja || a.unitId == null) : accounts
+  const contas = visible.filter((a) => a.kind !== "cartao")
+  const cartoes = visible.filter((a) => a.kind === "cartao")
   return (
     <>
       <option value="">—</option>
