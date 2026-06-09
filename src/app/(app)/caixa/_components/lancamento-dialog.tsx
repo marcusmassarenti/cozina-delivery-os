@@ -125,6 +125,19 @@ export function LancamentoModal({
         </div>
 
         <form action={submit} className="space-y-3">
+          {units.length > 0 && (
+            <Field label="Loja">
+              <select value={unitId} onChange={(e) => setLoja(e.target.value)} className={inputCls}>
+                <option value="">Rede (geral)</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (R$)">
               <input
@@ -188,19 +201,6 @@ export function LancamentoModal({
                 <ContatoPicker contacts={contacts} value={titular} onChange={setTitular} />
               </Field>
             </>
-          )}
-
-          {units.length > 0 && (
-            <Field label="Loja">
-              <select value={unitId} onChange={(e) => setLoja(e.target.value)} className={inputCls}>
-                <option value="">Rede (geral)</option>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
           )}
 
           <Field label="Descrição">
