@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { TopBar } from "@/components/top-bar"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
+import { WhatsNewModal } from "@/components/whats-new-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
@@ -71,6 +72,7 @@ export default async function AppLayout({
           initialOnboarded={userContext.onboarded}
           brandName={userContext.brandName}
         />
+        <WhatsNewModal onboarded={userContext.onboarded} />
       </SidebarProvider>
     </TooltipProvider>
   )

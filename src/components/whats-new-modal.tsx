@@ -1,0 +1,120 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import Link from "next/link"
+import { Bug, Sparkles, Wrench, X, type LucideIcon } from "lucide-react"
+
+import { CHANGELOG, type ChangeKind } from "@/lib/changelog"
+
+const KEY = "cozina:lastSeenVersion"
+const KIND_ICON: Record<ChangeKind, LucideIcon> = {
+  novo: Sparkles,
+  melhoria: Wrench,
+  correcao: Bug,
+}
+const KIND_CLS: Record<ChangeKind, string> = {
+  novo: "text-primary",
+  melhoria: "text-sky-600",
+  correcao: "text-rose-600",
+}
+
+/**
+ * Aviso de "Novidades" ao entrar: mostra a última versão lançada quando o
+ * usuário ainda não a viu (controle por localStorage). Só aparece pra quem já
+ * passou do onboarding — o usuário novo vê o tour de boas-vindas primeiro.
+ */
+export function WhatsNewModal({ onboarded }: { onboarded: boolean }) {
+  const [open, setOpen] = useState(false)
+  const latest = CHANGELOG[0]
+
+  useEffect(() => {
+    if (!latest || !onboarded) return
+    try {
+      if (localStorage.getItem(KEY) !== latest.version) setOpen(true)
+    } catch {
+      /* localStorage indisponível — não mostra */
+    }
+  }, [latest, onboarded])
+
+  function dismiss() {
+    try {
+      if (latest) localStorage.setItem(KEY, latest.version)
+    } catch {
+      /* ignore */
+    }
+    setOpen(false)
+  }
+
+  if (!open || !latest) return null
+  const items = latest.areas.flatMap((a) => a.items).slice(0, 5)
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4"
+      onClick={dismiss}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-2xl border bg-card shadow-2xl"
+      >
+        <div className="relative bg-primary/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Fechar"
+            className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+          <div className="flex items-center gap-3 pr-6">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Sparkles className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">Novidade no sistema!</span>
+                <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                  v{latest.version}
+                </span>
+              </div>
+              <p className="truncate text-xs text-muted-foreground">{latest.title}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4">
+          {latest.summary && (
+            <p className="text-sm leading-relaxed text-muted-foreground">{latest.summary}</p>
+          )}
+          <ul className="mt-3 space-y-2">
+            {items.map((item, i) => {
+              const Icon = KIND_ICON[item.kind]
+              return (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <Icon className={`mt-0.5 size-4 shrink-0 ${KIND_CLS[item.kind]}`} />
+                  <span>{item.title}</span>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <Link
+              href="/novidades"
+              onClick={dismiss}
+              className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Ver todas
+            </Link>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
