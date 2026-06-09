@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Hourglass, Loader2, Trash2, TriangleAlert, X } from "lucide-react"
+import { CheckCircle2, Hourglass, Trash2, TriangleAlert } from "lucide-react"
 
 import { fmtBRL } from "@/lib/format"
 import type { FinAccount, FinCategory, FinEntry } from "@/lib/data/caixa"
 
-import { deleteEntry, saveEntry, toggleEntryPaid } from "../_actions"
+import { deleteEntry, toggleEntryPaid } from "../_actions"
 import { FinIcon } from "./fin-icon"
+import { LancamentoModal } from "./lancamento-dialog"
 
 const STATUS = {
   efetivado: { label: "Confirmado", cls: "text-emerald-600", Icon: CheckCircle2 },
@@ -144,7 +145,7 @@ export function EntriesList({
       </div>
 
       {editing && (
-        <EditDialog
+        <LancamentoModal
           entry={editing}
           accounts={accounts}
           categories={categories}
@@ -156,141 +157,5 @@ export function EntriesList({
         />
       )}
     </>
-  )
-}
-
-function EditDialog({
-  entry,
-  accounts,
-  categories,
-  onClose,
-  onSaved,
-}: {
-  entry: FinEntry
-  accounts: FinAccount[]
-  categories: FinCategory[]
-  onClose: () => void
-  onSaved: () => void
-}) {
-  const [pending, start] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [paidDate, setPaidDate] = useState(entry.paidDate ?? "")
-  const cats = categories.filter((c) => c.kind === entry.kind)
-
-  function submit(fd: FormData) {
-    fd.set("id", entry.id)
-    fd.set("kind", entry.kind)
-    fd.set("paid_date", paidDate)
-    start(async () => {
-      const r = await saveEntry(fd)
-      if (r.ok) onSaved()
-      else setError(r.message ?? "Erro")
-    })
-  }
-
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })
-  const pago = !!paidDate
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
-      <div className="w-full max-w-lg rounded-xl border bg-card p-5 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold capitalize">Editar {entry.kind}</h2>
-          <button onClick={onClose} className="rounded p-1 hover:bg-accent">
-            <X className="size-4" />
-          </button>
-        </div>
-        <form action={submit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <L label="Valor (R$)">
-              <input name="value" inputMode="decimal" defaultValue={String(entry.value).replace(".", ",")} className={inp} />
-            </L>
-            <L label="Vence em">
-              <input name="due_date" type="date" defaultValue={entry.dueDate ?? ""} className={inp} />
-            </L>
-          </div>
-          {entry.kind !== "transferencia" && (
-            <div className="grid grid-cols-2 gap-3">
-              <L label="Conta / Cartão">
-                <select name="account_id" defaultValue={entry.accountId ?? ""} className={inp}>
-                  <option value="">—</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </L>
-              <L label="Categoria">
-                <select name="category_id" defaultValue={entry.categoryId ?? ""} className={inp}>
-                  <option value="">—</option>
-                  {cats.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.parentId ? "↳ " : ""}
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </L>
-            </div>
-          )}
-          <L label="Cliente / Fornecedor">
-            <input name="titular" defaultValue={entry.titular ?? ""} className={inp} />
-          </L>
-          <L label="Descrição">
-            <input name="description" defaultValue={entry.description ?? ""} className={inp} />
-          </L>
-
-          {/* Botão de Pago */}
-          <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-            <div className="flex items-center gap-2 text-sm">
-              {pago ? (
-                <CheckCircle2 className="size-4 text-emerald-600" />
-              ) : (
-                <Hourglass className="size-4 text-amber-600" />
-              )}
-              <span className="font-medium">{pago ? `Pago em ${fmtDate(paidDate)}` : "Não pago"}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPaidDate(pago ? "" : today)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                pago
-                  ? "border hover:bg-accent"
-                  : "bg-emerald-600 text-white hover:bg-emerald-700"
-              }`}
-            >
-              {pago ? "Marcar como não pago" : "Marcar como pago"}
-            </button>
-          </div>
-
-          {error && <p className="text-xs text-rose-600">{error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="rounded-md border px-3 py-2 text-sm hover:bg-accent">
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={pending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {pending && <Loader2 className="size-3.5 animate-spin" />}
-              Salvar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-const inp = "h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-
-function L({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
-      {children}
-    </label>
   )
 }
