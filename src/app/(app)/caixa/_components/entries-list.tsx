@@ -1,26 +1,47 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Hourglass, Trash2, TriangleAlert } from "lucide-react"
+import {
+  CheckCircle2,
+  ChevronDown,
+  Hourglass,
+  Search,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react"
 
 import { fmtBRL } from "@/lib/format"
 import type { FinAccount, FinCategory, FinEntry } from "@/lib/data/caixa"
 
-import { deleteEntry, toggleEntryPaid } from "../_actions"
+import {
+  bulkCategorize,
+  bulkDelete,
+  bulkMarkPaid,
+  deleteEntry,
+  toggleEntryPaid,
+} from "../_actions"
 import { FinIcon } from "./fin-icon"
 import { LancamentoModal } from "./lancamento-dialog"
 
 const STATUS = {
   efetivado: { label: "Confirmado", cls: "text-emerald-600", Icon: CheckCircle2 },
   atrasado: { label: "Atrasado", cls: "text-rose-600", Icon: TriangleAlert },
-  pendente: { label: "Pendente", cls: "text-amber-600", Icon: Hourglass },
+  pendente: { label: "Pendente", cls: "text-gray-400", Icon: Hourglass },
 } as const
 
 function fmtDate(d: string | null) {
   if (!d) return "—"
   const [y, m, day] = d.split("-")
   return `${day}/${m}/${y.slice(2)}`
+}
+
+/** Cor do valor: pendente = cinza · despesa paga = vermelho · receita recebida = verde. */
+function valueColor(e: FinEntry): string {
+  if (e.status !== "efetivado") return "text-gray-400"
+  if (e.kind === "despesa") return "text-rose-600"
+  if (e.kind === "receita") return "text-emerald-600"
+  return "text-sky-600"
 }
 
 export function EntriesList({
@@ -35,114 +56,276 @@ export function EntriesList({
   const router = useRouter()
   const [pending, start] = useTransition()
   const [editing, setEditing] = useState<FinEntry | null>(null)
-  const catById = new Map(categories.map((c) => [c.id, c]))
-  const accById = new Map(accounts.map((a) => [a.id, a]))
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkOpen, setBulkOpen] = useState(false)
 
-  function act(fn: () => Promise<{ ok: boolean }>) {
+  // filtros
+  const [search, setSearch] = useState("")
+  const [tipo, setTipo] = useState("")
+  const [contaId, setContaId] = useState("")
+  const [categoriaId, setCategoriaId] = useState("")
+  const [tag, setTag] = useState("")
+  const [valorMin, setValorMin] = useState("")
+
+  const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const accById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
+  const allTags = useMemo(
+    () => [...new Set(entries.flatMap((e) => e.tags))].sort(),
+    [entries],
+  )
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const min = parseFloat(valorMin.replace(",", ".")) || 0
+    return entries.filter((e) => {
+      if (tipo && e.kind !== tipo) return false
+      if (contaId && e.accountId !== contaId) return false
+      if (categoriaId && e.categoryId !== categoriaId) return false
+      if (tag && !e.tags.includes(tag)) return false
+      if (min && e.value < min) return false
+      if (q) {
+        const hay = [e.titular, e.description, e.categoryId ? catById.get(e.categoryId)?.name : ""]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [entries, search, tipo, contaId, categoriaId, tag, valorMin, catById])
+
+  const selEntries = entries.filter((e) => selected.has(e.id))
+  const totals = useMemo(() => {
+    const t = { pagas: 0, aPagar: 0, recebidas: 0, aReceber: 0, transf: 0 }
+    for (const e of selEntries) {
+      const ok = e.status === "efetivado"
+      if (e.kind === "transferencia") t.transf += e.value
+      else if (e.kind === "despesa") ok ? (t.pagas += e.value) : (t.aPagar += e.value)
+      else if (e.kind === "receita") ok ? (t.recebidas += e.value) : (t.aReceber += e.value)
+    }
+    return { ...t, saldo: t.recebidas + t.aReceber - t.pagas - t.aPagar }
+  }, [selEntries])
+
+  function act(fn: () => Promise<{ ok: boolean }>, clearSel = false) {
     start(async () => {
       await fn()
+      if (clearSel) setSelected(new Set())
+      setBulkOpen(false)
       router.refresh()
     })
   }
-
-  if (entries.length === 0) {
-    return (
-      <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">
-        Nenhum lançamento neste período. Clique em <strong>Novo Lançamento</strong> pra começar.
-      </div>
-    )
+  function toggleSel(id: string) {
+    setSelected((s) => {
+      const n = new Set(s)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
   }
+  const allSelected = filtered.length > 0 && filtered.every((e) => selected.has(e.id))
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(filtered.map((e) => e.id)))
+  }
+  const ids = [...selected]
 
   return (
-    <>
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        {entries.map((e) => {
-          const cat = e.categoryId ? catById.get(e.categoryId) : null
-          const acc = e.accountId ? accById.get(e.accountId) : null
-          const st = STATUS[e.status]
-          const isDespesa = e.kind === "despesa"
-          const isTransfer = e.kind === "transferencia"
-          return (
-            <div
-              key={e.id}
-              className="flex items-center gap-3 border-b px-4 py-2.5 last:border-0 hover:bg-muted/40"
-            >
-              <button
-                type="button"
-                onClick={() => setEditing(e)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
-              >
-                <div
-                  className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                    isTransfer
-                      ? "bg-sky-100 text-sky-600 dark:bg-sky-950/40"
-                      : isDespesa
-                        ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40"
-                        : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40"
-                  }`}
-                >
-                  <FinIcon name={cat?.icon ?? null} className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">
-                    {e.titular || e.description || cat?.name || "Lançamento"}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 truncate text-[11px] text-muted-foreground">
-                    <span>{cat?.name ?? (isTransfer ? "Transferência" : "Sem categoria")}</span>
-                    {acc && <span>· {acc.name}</span>}
-                    {e.installmentTotal && e.installmentTotal > 1 && (
-                      <span className="font-semibold text-foreground">
-                        · Parcela {e.installmentNo}/{e.installmentTotal}
-                      </span>
-                    )}
-                    {e.source !== "manual" && <span>· {e.source}</span>}
-                    <span>· vence {fmtDate(e.dueDate)}</span>
-                  </div>
-                </div>
-              </button>
-
-              <span className={`hidden items-center gap-1 text-[11px] font-semibold sm:flex ${st.cls}`}>
-                <st.Icon className="size-3.5" />
-                {st.label}
-              </span>
-
-              <div
-                className={`shrink-0 text-sm font-semibold tabular-nums ${
-                  isTransfer ? "text-sky-600" : isDespesa ? "text-rose-600" : "text-emerald-600"
-                }`}
-              >
-                {isDespesa ? "−" : isTransfer ? "" : "+"}
-                {fmtBRL(e.value)}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-0.5">
-                <button
-                  type="button"
-                  disabled={pending}
-                  title={e.status === "efetivado" ? "Marcar como pendente" : "Marcar como pago"}
-                  onClick={() => act(() => toggleEntryPaid(e.id, e.status !== "efetivado"))}
-                  className={`rounded-md p-1.5 hover:bg-accent disabled:opacity-50 ${
-                    e.status === "efetivado" ? "text-emerald-600" : "text-muted-foreground"
-                  }`}
-                >
-                  <CheckCircle2 className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  title="Excluir"
-                  onClick={() => {
-                    if (confirm("Excluir este lançamento?")) act(() => deleteEntry(e.id))
-                  }}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-            </div>
-          )
-        })}
+    <div className="flex flex-col gap-3">
+      {/* Filtros + busca */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-sm">
+        <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={chip}>
+          <option value="">Tipo: todos</option>
+          <option value="despesa">Despesa</option>
+          <option value="receita">Receita</option>
+          <option value="transferencia">Transferência</option>
+        </select>
+        <select value={contaId} onChange={(e) => setContaId(e.target.value)} className={chip}>
+          <option value="">Contas: todas</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className={chip}>
+          <option value="">Categorias: todas</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.parentId ? "↳ " : ""}
+              {c.name}
+            </option>
+          ))}
+        </select>
+        {allTags.length > 0 && (
+          <select value={tag} onChange={(e) => setTag(e.target.value)} className={chip}>
+            <option value="">Tags: todas</option>
+            {allTags.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
+        <input
+          value={valorMin}
+          onChange={(e) => setValorMin(e.target.value)}
+          inputMode="decimal"
+          placeholder="Valor ≥"
+          className={`${chip} w-24`}
+        />
+        <div className="relative ml-auto min-w-[200px] flex-1">
+          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar cliente, fornecedor, descrição"
+            className="h-9 w-full rounded-md border bg-background pl-8 pr-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
       </div>
+
+      {/* Barra de seleção / ação em lote */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="font-semibold">{selected.size} selecionado(s)</span>
+          <span className="text-rose-600">pagas {fmtBRL(totals.pagas)}</span>
+          <span className="text-amber-600">a pagar {fmtBRL(totals.aPagar)}</span>
+          <span className="text-emerald-600">recebidas {fmtBRL(totals.recebidas)}</span>
+          <span className="text-emerald-500">a receber {fmtBRL(totals.aReceber)}</span>
+          <span className="text-sky-600">transf. {fmtBRL(totals.transf)}</span>
+          <span className={`font-semibold ${totals.saldo < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+            saldo {fmtBRL(totals.saldo)}
+          </span>
+          <div className="relative ml-auto">
+            <button
+              onClick={() => setBulkOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent"
+            >
+              Ação em lote <ChevronDown className="size-4" />
+            </button>
+            {bulkOpen && (
+              <div className="absolute right-0 z-30 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border bg-card py-1 shadow-xl">
+                <MenuItem onClick={() => act(() => bulkMarkPaid(ids, true), true)}>
+                  ✅ Marcar como Pago
+                </MenuItem>
+                <MenuItem onClick={() => act(() => bulkMarkPaid(ids, false), true)}>
+                  ⏳ Marcar como Pendente
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    if (confirm(`Excluir ${ids.length} lançamento(s)?`)) act(() => bulkDelete(ids), true)
+                  }}
+                >
+                  🗑️ Excluir selecionados
+                </MenuItem>
+                <div className="my-1 border-t" />
+                {categories.map((c) => (
+                  <MenuItem key={c.id} onClick={() => act(() => bulkCategorize(ids, c.id), true)}>
+                    <FinIcon name={c.icon} className="size-3.5 text-muted-foreground" />
+                    Categorizar → {c.parentId ? "↳ " : ""}
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={() => setSelected(new Set())} className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            Limpar
+          </button>
+        </div>
+      )}
+
+      {/* Lista */}
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">
+          Nenhum lançamento {entries.length ? "com esses filtros" : "neste período"}.
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <label className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} className="size-4 accent-primary" />
+            Selecionar todos ({filtered.length})
+          </label>
+          {filtered.map((e) => {
+            const cat = e.categoryId ? catById.get(e.categoryId) : null
+            const acc = e.accountId ? accById.get(e.accountId) : null
+            const st = STATUS[e.status]
+            const isDespesa = e.kind === "despesa"
+            const isTransfer = e.kind === "transferencia"
+            return (
+              <div key={e.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-0 hover:bg-muted/40">
+                <input
+                  type="checkbox"
+                  checked={selected.has(e.id)}
+                  onChange={() => toggleSel(e.id)}
+                  className="size-4 shrink-0 accent-primary"
+                />
+                <button type="button" onClick={() => setEditing(e)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  <div
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                      isTransfer
+                        ? "bg-sky-100 text-sky-600 dark:bg-sky-950/40"
+                        : isDespesa
+                          ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40"
+                          : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40"
+                    }`}
+                  >
+                    <FinIcon name={cat?.icon ?? null} className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">
+                      {e.titular || e.description || cat?.name || "Lançamento"}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 truncate text-[11px] text-muted-foreground">
+                      <span>{cat?.name ?? (isTransfer ? "Transferência" : "Sem categoria")}</span>
+                      {acc && <span>· {acc.name}</span>}
+                      {e.installmentTotal && e.installmentTotal > 1 && (
+                        <span className="font-semibold text-foreground">
+                          · Parcela {e.installmentNo}/{e.installmentTotal}
+                        </span>
+                      )}
+                      <span>· vence {fmtDate(e.dueDate)}</span>
+                    </div>
+                  </div>
+                </button>
+
+                <span className={`hidden items-center gap-1 text-[11px] font-semibold sm:flex ${st.cls}`}>
+                  <st.Icon className="size-3.5" />
+                  {st.label}
+                </span>
+
+                <div className={`shrink-0 text-sm font-semibold tabular-nums ${valueColor(e)}`}>
+                  {isDespesa ? "−" : isTransfer ? "" : "+"}
+                  {fmtBRL(e.value)}
+                </div>
+
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    title={e.status === "efetivado" ? "Marcar como pendente" : "Marcar como pago"}
+                    onClick={() => act(() => toggleEntryPaid(e.id, e.status !== "efetivado"))}
+                    className={`rounded-md p-1.5 hover:bg-accent disabled:opacity-50 ${
+                      e.status === "efetivado" ? "text-emerald-600" : "text-gray-400"
+                    }`}
+                  >
+                    <CheckCircle2 className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    title="Excluir"
+                    onClick={() => {
+                      if (confirm("Excluir este lançamento?")) act(() => deleteEntry(e.id))
+                    }}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {editing && (
         <LancamentoModal
@@ -156,6 +339,20 @@ export function EntriesList({
           }}
         />
       )}
-    </>
+    </div>
+  )
+}
+
+const chip =
+  "h-9 rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+
+function MenuItem({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"
+    >
+      {children}
+    </button>
   )
 }

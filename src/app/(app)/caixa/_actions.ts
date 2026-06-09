@@ -343,6 +343,57 @@ export async function deleteEntry(id: string): Promise<ActionState> {
   }
 }
 
+// ─────────────────────────── Ações em lote ──────────────────────────────────
+export async function bulkMarkPaid(ids: string[], paid: boolean): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    if (!ids.length) return { ok: true }
+    const paidDate = paid
+      ? new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })
+      : null
+    const { error } = await admin
+      .from("fin_entries")
+      .update({ paid_date: paidDate, updated_at: new Date().toISOString() })
+      .in("id", ids)
+      .eq("holding_id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/caixa", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+export async function bulkDelete(ids: string[]): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    if (!ids.length) return { ok: true }
+    const { error } = await admin.from("fin_entries").delete().in("id", ids).eq("holding_id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/caixa", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+export async function bulkCategorize(ids: string[], categoryId: string): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    if (!ids.length) return { ok: true }
+    const { error } = await admin
+      .from("fin_entries")
+      .update({ category_id: categoryId || null, updated_at: new Date().toISOString() })
+      .in("id", ids)
+      .eq("holding_id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/caixa", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
 // ──────────────────── Seed de categorias padrão (restaurante) ────────────────
 const DEFAULTS: {
   name: string
