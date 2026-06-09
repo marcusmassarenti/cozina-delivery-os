@@ -11,6 +11,7 @@ import {
   Palette,
   Receipt,
   ShieldCheck,
+  Sparkles,
   Star,
   Store,
   Users,
@@ -46,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: LayoutDashboard,
         module: "dashboard",
       },
+      { label: "Novidades", href: "/novidades", icon: Sparkles },
     ],
   },
   {
