@@ -53,6 +53,7 @@ export async function saveAccount(formData: FormData): Promise<ActionState> {
       color: txt(formData.get("color")),
       exclude_from_total: String(formData.get("exclude_from_total")) === "true",
       logo_url: txt(formData.get("logo_url")),
+      unit_id: txt(formData.get("unit_id")),
     }
     if (!row.name) return { ok: false, message: "Dê um nome à conta." }
     if (id) {

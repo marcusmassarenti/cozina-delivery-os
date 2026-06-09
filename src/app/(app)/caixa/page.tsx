@@ -36,17 +36,18 @@ function fmtDate(d: string | null) {
 export default async function VisaoGeralPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; loja?: string }>
 }) {
   const holdingId = await getCaixaHoldingId()
   if (!holdingId) return null
 
   const sp = await searchParams
+  const loja = sp.loja
   const { year, month } = parsePeriodParam(sp.periodo)
   const [dash, categories, top] = await Promise.all([
-    getCaixaDashboard(holdingId, year, month),
+    getCaixaDashboard(holdingId, year, month, loja),
     getCategoriesFlat(holdingId),
-    getTopTitulares(holdingId, year, month),
+    getTopTitulares(holdingId, year, month, loja),
   ])
 
   const now = new Date()

@@ -8,6 +8,34 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/roles"
 import { todayISO } from "@/lib/data/billing"
+import { getVisibleUnits } from "@/lib/data/units"
+
+/** Filtro de loja: "todas" (consolidado) | "rede" (sem loja) | <unitId>. */
+export type Loja = string | undefined
+
+/** Aplica o filtro de loja a uma query Supabase (coluna unit_id).
+ * Usa `any` de propósito: os builders do Supabase têm tipos profundos
+ * demais e um genérico aqui estoura o TS (TS2589). */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function lojaWhere(q: any, loja: Loja): any {
+  if (loja === "rede") return q.is("unit_id", null)
+  if (loja && loja !== "todas") return q.eq("unit_id", loja)
+  return q
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Predicado em memória pro filtro de loja. */
+function lojaMatch(unitId: string | null, loja: Loja): boolean {
+  if (!loja || loja === "todas") return true
+  if (loja === "rede") return unitId == null
+  return unitId === loja
+}
+
+/** Lojas visíveis pro usuário (admin → todas; franqueado → as dele). */
+export async function getCaixaUnits(): Promise<{ id: string; name: string }[]> {
+  const units = await getVisibleUnits()
+  return units.map((u) => ({ id: u.id, name: u.name }))
+}
 
 export type AccountKind = "conta_corrente" | "cartao" | "dinheiro" | "outro"
 export type EntryKind = "despesa" | "receita" | "transferencia"
@@ -28,6 +56,7 @@ export type FinAccount = {
   color: string | null
   excludeFromTotal: boolean
   logoUrl: string | null
+  unitId: string | null
   /** saldo calculado (initial + efetivados); só em getAccountsWithBalance */
   balance?: number
   /** stats do período (só em getAccountsWithStats) */
@@ -137,28 +166,32 @@ function mapAccount(r: Record<string, unknown>): FinAccount {
     color: (r.color as string) ?? null,
     excludeFromTotal: !!r.exclude_from_total,
     logoUrl: (r.logo_url as string) ?? null,
+    unitId: (r.unit_id as string) ?? null,
   }
 }
 
 const ACCOUNT_COLS =
-  "id, name, kind, bank, initial_balance, active, sort_order, card_limit, closing_day, due_day, color, exclude_from_total, logo_url"
+  "id, name, kind, bank, initial_balance, active, sort_order, card_limit, closing_day, due_day, color, exclude_from_total, logo_url, unit_id"
 
-export async function getAccounts(holdingId: string): Promise<FinAccount[]> {
+export async function getAccounts(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
-  const { data } = await admin
-    .from("fin_accounts")
-    .select(ACCOUNT_COLS)
-    .eq("holding_id", holdingId)
+  const { data } = await lojaWhere(
+    admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId),
+    loja,
+  )
     .order("sort_order")
     .order("created_at")
   return (data ?? []).map(mapAccount)
 }
 
 /** Contas com saldo calculado: inicial + efetivados (entradas − saídas + transferências). */
-export async function getAccountsWithBalance(holdingId: string): Promise<FinAccount[]> {
+export async function getAccountsWithBalance(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
   const [{ data: accs }, { data: entries }] = await Promise.all([
-    admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId).order("sort_order"),
+    lojaWhere(
+      admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId),
+      loja,
+    ).order("sort_order"),
     admin
       .from("fin_entries")
       .select("kind, value, account_id, to_account_id, paid_date")
@@ -176,17 +209,20 @@ export async function getAccountsWithBalance(holdingId: string): Promise<FinAcco
       if (r.to_account_id) bal.set(r.to_account_id, (bal.get(r.to_account_id) ?? 0) + v)
     }
   }
-  return (accs ?? []).map((r) => {
+  return (accs ?? []).map((r: Record<string, unknown>) => {
     const a = mapAccount(r)
     return { ...a, balance: a.initialBalance + (bal.get(a.id) ?? 0) }
   })
 }
 
 /** Contas com saldo + stats (pagas/a pagar/recebidas/a receber + nº de movimentações). */
-export async function getAccountsWithStats(holdingId: string): Promise<FinAccount[]> {
+export async function getAccountsWithStats(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
   const [{ data: accs }, { data: entries }] = await Promise.all([
-    admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId).order("sort_order"),
+    lojaWhere(
+      admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId),
+      loja,
+    ).order("sort_order"),
     admin
       .from("fin_entries")
       .select("kind, value, account_id, to_account_id, paid_date")
@@ -223,7 +259,7 @@ export async function getAccountsWithStats(holdingId: string): Promise<FinAccoun
       bal.set(r.to_account_id, (bal.get(r.to_account_id) ?? 0) + v)
     }
   }
-  return (accs ?? []).map((r) => {
+  return (accs ?? []).map((r: Record<string, unknown>) => {
     const a = mapAccount(r)
     return {
       ...a,
@@ -284,6 +320,8 @@ export type EntryFilters = {
   search?: string
   /** exclui lançamentos cujo account_id está aqui (ex: compras de cartão) */
   excludeAccountIds?: string[]
+  /** filtro de loja: "todas" | "rede" | <unitId> */
+  loja?: Loja
 }
 
 export async function getEntries(
@@ -292,6 +330,7 @@ export async function getEntries(
 ): Promise<FinEntry[]> {
   const admin = createAdminClient()
   let q = admin.from("fin_entries").select(ENTRY_COLS).eq("holding_id", holdingId)
+  q = lojaWhere(q, filters.loja)
   if (filters.year) q = q.eq("ref_year", filters.year)
   if (filters.month) q = q.eq("ref_month", filters.month)
   if (filters.kind) q = q.eq("kind", filters.kind)
@@ -358,24 +397,33 @@ export async function getCaixaSummary(
   holdingId: string,
   year: number,
   month: number,
+  loja?: Loja,
 ): Promise<CaixaSummary> {
   const admin = createAdminClient()
   const [{ data: accs }, { data: rows }] = await Promise.all([
-    admin.from("fin_accounts").select("id, kind, initial_balance").eq("holding_id", holdingId),
-    admin
-      .from("fin_entries")
-      .select("kind, value, due_date, paid_date, account_id")
-      .eq("holding_id", holdingId)
-      .eq("ref_year", year)
-      .eq("ref_month", month),
+    lojaWhere(
+      admin.from("fin_accounts").select("id, kind, initial_balance").eq("holding_id", holdingId),
+      loja,
+    ),
+    lojaWhere(
+      admin
+        .from("fin_entries")
+        .select("kind, value, due_date, paid_date, account_id")
+        .eq("holding_id", holdingId)
+        .eq("ref_year", year)
+        .eq("ref_month", month),
+      loja,
+    ),
   ])
 
   // Cartões não contam como saldo em conta, e suas compras não entram no caixa.
-  const cardSet = new Set((accs ?? []).filter((a) => a.kind === "cartao").map((a) => a.id))
+  type AccRow = { id: string; kind: string; initial_balance: number | null }
+  const accsT = (accs ?? []) as AccRow[]
+  const cardSet = new Set(accsT.filter((a) => a.kind === "cartao").map((a) => a.id))
 
   const today = todayISO()
   const s: CaixaSummary = {
-    saldo: (accs ?? [])
+    saldo: accsT
       .filter((a) => a.kind !== "cartao")
       .reduce((a, r) => a + Number(r.initial_balance ?? 0), 0),
     receitaEfetivada: 0,
@@ -458,10 +506,11 @@ export async function getCaixaDashboard(
   holdingId: string,
   year: number,
   month: number,
+  loja?: Loja,
 ): Promise<CaixaDashboard> {
   const [accounts, periodEntries, categories] = await Promise.all([
-    getAccountsWithBalance(holdingId),
-    getEntries(holdingId, { year, month }),
+    getAccountsWithBalance(holdingId, loja),
+    getEntries(holdingId, { year, month, loja }),
     getCategoriesFlat(holdingId),
   ])
   const catById = new Map(categories.map((c) => [c.id, c]))
@@ -470,12 +519,13 @@ export async function getCaixaDashboard(
 
   // Pendentes (todas as competências) p/ painéis de vencimento.
   const admin = createAdminClient()
-  const { data: pendRows } = await admin
-    .from("fin_entries")
-    .select(ENTRY_COLS)
-    .eq("holding_id", holdingId)
-    .is("paid_date", null)
-  const pendAll: FinEntry[] = (pendRows ?? []).map(mapEntry).filter((e) => !e.hidden)
+  const { data: pendRows } = await lojaWhere(
+    admin.from("fin_entries").select(ENTRY_COLS).eq("holding_id", holdingId).is("paid_date", null),
+    loja,
+  )
+  const pendAll: FinEntry[] = ((pendRows ?? []) as Record<string, unknown>[])
+    .map(mapEntry)
+    .filter((e) => !e.hidden)
   // No caixa, compras de cartão ficam fora (só a fatura paga entra).
   const pend = pendAll.filter((e) => !isCardEntry(e))
   const periodCash = periodEntries.filter((e) => !isCardEntry(e))
@@ -652,9 +702,10 @@ export async function getTopTitulares(
   holdingId: string,
   year: number,
   month: number,
+  loja?: Loja,
 ): Promise<{ clientes: TitularTotal[]; fornecedores: TitularTotal[] }> {
   const cardIds = await getCardAccountIds(holdingId)
-  const entries = await getEntries(holdingId, { year, month, excludeAccountIds: cardIds })
+  const entries = await getEntries(holdingId, { year, month, excludeAccountIds: cardIds, loja })
   const agg = (kind: EntryKind) => {
     const m = new Map<string, TitularTotal>()
     for (const e of entries) {

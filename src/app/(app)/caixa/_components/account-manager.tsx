@@ -36,7 +36,14 @@ const KINDS = [
   { v: "outro", l: "Outro" },
 ]
 
-export function AccountManager({ accounts }: { accounts: FinAccount[]; mode?: "conta" | "cartao" }) {
+export function AccountManager({
+  accounts,
+  units = [],
+}: {
+  accounts: FinAccount[]
+  mode?: "conta" | "cartao"
+  units?: { id: string; name: string }[]
+}) {
   const [editing, setEditing] = useState<FinAccount | "new" | null>(null)
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -114,6 +121,7 @@ export function AccountManager({ accounts }: { accounts: FinAccount[]; mode?: "c
       {editing && (
         <AccountForm
           account={editing === "new" ? null : editing}
+          units={units}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
@@ -147,14 +155,17 @@ function Stat({
 
 function AccountForm({
   account,
+  units,
   onClose,
   onSaved,
 }: {
   account: FinAccount | null
+  units: { id: string; name: string }[]
   onClose: () => void
   onSaved: () => void
 }) {
   const [name, setName] = useState(account?.name ?? "")
+  const [unitId, setUnitId] = useState(account?.unitId ?? "")
   const [kind, setKind] = useState<string>(account?.kind ?? "conta_corrente")
   const [color, setColor] = useState(account?.color ?? CORES[0])
   const [bank, setBank] = useState<string>(account?.bank ?? "")
@@ -192,6 +203,7 @@ function AccountForm({
     fd.set("logo_url", outro ? logoUrl : "")
     fd.set("initial_balance", saldo)
     fd.set("exclude_from_total", String(exclude))
+    fd.set("unit_id", unitId)
     start(async () => {
       const r = await saveAccount(fd)
       if (r.ok) onSaved()
@@ -217,6 +229,20 @@ function AccountForm({
           className={`${inp} mt-1`}
           autoFocus
         />
+
+        {units.length > 0 && (
+          <div className="mt-4">
+            <Label>Loja</Label>
+            <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={`${inp} mt-1`}>
+              <option value="">Rede (compartilhada)</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-[1fr_auto] gap-4">
           <div>

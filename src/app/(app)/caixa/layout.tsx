@@ -1,9 +1,16 @@
 import { Coins } from "lucide-react"
 
-import { getAccounts, getCaixaHoldingId, getCategoriesFlat, getContacts } from "@/lib/data/caixa"
+import {
+  getAccounts,
+  getCaixaHoldingId,
+  getCaixaUnits,
+  getCategoriesFlat,
+  getContacts,
+} from "@/lib/data/caixa"
 
 import { CaixaTabs } from "./_components/caixa-tabs"
 import { LancamentoDialog } from "./_components/lancamento-dialog"
+import { LojaSelector } from "./_components/loja-selector"
 
 export default async function CaixaLayout({ children }: { children: React.ReactNode }) {
   const holdingId = await getCaixaHoldingId()
@@ -15,10 +22,11 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
     )
   }
 
-  const [accounts, categories, contacts] = await Promise.all([
+  const [accounts, categories, contacts, units] = await Promise.all([
     getAccounts(holdingId),
     getCategoriesFlat(holdingId),
     getContacts(holdingId),
+    getCaixaUnits(),
   ])
 
   return (
@@ -28,7 +36,10 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
           <Coins className="size-6 text-muted-foreground" />
           Fluxo de Caixa
         </h1>
-        <LancamentoDialog accounts={accounts} categories={categories} contacts={contacts} />
+        <div className="flex items-center gap-2">
+          {units.length > 0 && <LojaSelector units={units} />}
+          <LancamentoDialog accounts={accounts} categories={categories} contacts={contacts} />
+        </div>
       </div>
 
       <CaixaTabs />
