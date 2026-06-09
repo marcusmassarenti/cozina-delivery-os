@@ -50,9 +50,12 @@ export function BankBadge({
   const src = logoUrl || (bank ? BANK_LOGOS[bank] : null)
   if (src) {
     return (
-      <span style={style} className={`flex shrink-0 items-center justify-center ${className}`}>
+      <span
+        style={style}
+        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" className="size-full object-contain" />
+        <img src={src} alt="" className="size-full object-cover" />
       </span>
     )
   }
@@ -61,7 +64,7 @@ export function BankBadge({
     return (
       <span
         style={style}
-        className={`flex shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground ${className}`}
+        className={`flex shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ${className}`}
       >
         <Landmark className="size-1/2" />
       </span>
@@ -71,7 +74,7 @@ export function BankBadge({
   return (
     <span
       style={{ ...style, backgroundColor: m.bg, color: m.fg, fontSize }}
-      className={`flex shrink-0 items-center justify-center rounded-xl font-bold leading-none tracking-tight ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold leading-none tracking-tight ${className}`}
     >
       {m.label}
     </span>
