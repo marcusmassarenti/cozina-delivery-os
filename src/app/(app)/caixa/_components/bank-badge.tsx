@@ -55,7 +55,7 @@ export function BankBadge({
         className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white ${className}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" className="size-full object-contain p-[14%]" />
+        <img src={src} alt="" className="size-full object-contain p-[8%]" />
       </span>
     )
   }
