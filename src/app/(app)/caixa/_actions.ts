@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { requireAuth } from "@/lib/auth/guards"
-import { getCurrentHoldingId } from "@/lib/auth/roles"
+import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type ActionState = { ok: boolean; message?: string; id?: string }
@@ -16,6 +16,15 @@ async function ctx(): Promise<{
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) throw new Error("Sem cliente (holding) associado ao usuário.")
   return { holdingId, admin: createAdminClient() }
+}
+
+/** Franqueado só grava na(s) loja(s) dele. Admin/franqueador (null) grava em qualquer. */
+async function assertUnitAllowed(unitId: string | null): Promise<void> {
+  const allowed = await getAccessibleUnitIds()
+  if (allowed === null) return // admin / franqueador → sem restrição
+  if (!unitId || !allowed.includes(unitId)) {
+    throw new Error("Sem permissão para lançar nesta loja.")
+  }
 }
 
 const num = (v: FormDataEntryValue | null): number => {
@@ -56,6 +65,7 @@ export async function saveAccount(formData: FormData): Promise<ActionState> {
       unit_id: txt(formData.get("unit_id")),
     }
     if (!row.name) return { ok: false, message: "Dê um nome à conta." }
+    await assertUnitAllowed(row.unit_id)
     if (id) {
       const { error } = await admin.from("fin_accounts").update(row).eq("id", id).eq("holding_id", holdingId)
       if (error) return { ok: false, message: error.message }
@@ -195,6 +205,7 @@ export async function saveEntry(formData: FormData): Promise<ActionState> {
       tags,
       unit_id: txt(formData.get("unit_id")), // loja (puxada da conta no modal)
     }
+    await assertUnitAllowed(base.unit_id)
     const makeRow = (dueDate: string | null, paidDate: string | null, group: string | null) => {
       const refBase = dueDate ?? paidDate ?? today
       return {

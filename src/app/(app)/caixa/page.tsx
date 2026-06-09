@@ -15,6 +15,7 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import {
   getCaixaDashboard,
   getCaixaHoldingId,
+  getCaixaPorLoja,
   getCategoriesFlat,
   getTopTitulares,
   type CategoryTotal,
@@ -26,6 +27,7 @@ import {
 
 import { FinIcon } from "./_components/fin-icon"
 import { BankBadge } from "./_components/bank-badge"
+import { LojasComparativo } from "./_components/lojas-comparativo"
 
 function fmtDate(d: string | null) {
   if (!d) return "—"
@@ -49,6 +51,9 @@ export default async function VisaoGeralPage({
     getCategoriesFlat(holdingId),
     getTopTitulares(holdingId, year, month, loja),
   ])
+  // No Consolidado, mostra o comparativo por loja.
+  const consolidado = !loja || loja === "todas"
+  const lojas = consolidado ? await getCaixaPorLoja(holdingId, year, month) : []
 
   const now = new Date()
   const periods: { year: number; month: number }[] = []
@@ -92,6 +97,9 @@ export default async function VisaoGeralPage({
           highlight
         />
       </div>
+
+      {/* Comparativo por loja (só no Consolidado) */}
+      {consolidado && <LojasComparativo lojas={lojas} periodo={sp.periodo} />}
 
       {/* Pagamentos / Recebimentos */}
       <div className="grid gap-3 lg:grid-cols-2">

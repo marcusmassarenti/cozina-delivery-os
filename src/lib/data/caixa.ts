@@ -6,7 +6,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getCurrentHoldingId } from "@/lib/auth/roles"
+import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
 import { todayISO } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 
@@ -30,6 +30,14 @@ function lojaMatch(unitId: string | null, loja: Loja): boolean {
   if (loja === "rede") return unitId == null
   return unitId === loja
 }
+
+/** Restringe a query às lojas que o usuário enxerga (RBAC do franqueado).
+ * `allowed === null` = admin/franqueador → vê tudo (sem restrição). */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function scopeUnits(q: any, allowed: string[] | null): any {
+  return allowed === null ? q : q.in("unit_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"])
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** Lojas visíveis pro usuário (admin → todas; franqueado → as dele). */
 export async function getCaixaUnits(): Promise<{ id: string; name: string }[]> {
@@ -175,9 +183,10 @@ const ACCOUNT_COLS =
 
 export async function getAccounts(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
-  const { data } = await lojaWhere(
-    admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId),
-    loja,
+  const allowed = await getAccessibleUnitIds()
+  const { data } = await scopeUnits(
+    lojaWhere(admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId), loja),
+    allowed,
   )
     .order("sort_order")
     .order("created_at")
@@ -187,16 +196,20 @@ export async function getAccounts(holdingId: string, loja?: Loja): Promise<FinAc
 /** Contas com saldo calculado: inicial + efetivados (entradas − saídas + transferências). */
 export async function getAccountsWithBalance(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
+  const allowed = await getAccessibleUnitIds()
   const [{ data: accs }, { data: entries }] = await Promise.all([
-    lojaWhere(
-      admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId),
-      loja,
+    scopeUnits(
+      lojaWhere(admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId), loja),
+      allowed,
     ).order("sort_order"),
-    admin
-      .from("fin_entries")
-      .select("kind, value, account_id, to_account_id, paid_date")
-      .eq("holding_id", holdingId)
-      .not("paid_date", "is", null),
+    scopeUnits(
+      admin
+        .from("fin_entries")
+        .select("kind, value, account_id, to_account_id, paid_date")
+        .eq("holding_id", holdingId)
+        .not("paid_date", "is", null),
+      allowed,
+    ),
   ])
   const bal = new Map<string, number>()
   for (const r of entries ?? []) {
@@ -218,15 +231,19 @@ export async function getAccountsWithBalance(holdingId: string, loja?: Loja): Pr
 /** Contas com saldo + stats (pagas/a pagar/recebidas/a receber + nº de movimentações). */
 export async function getAccountsWithStats(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
+  const allowed = await getAccessibleUnitIds()
   const [{ data: accs }, { data: entries }] = await Promise.all([
-    lojaWhere(
-      admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId),
-      loja,
+    scopeUnits(
+      lojaWhere(admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId), loja),
+      allowed,
     ).order("sort_order"),
-    admin
-      .from("fin_entries")
-      .select("kind, value, account_id, to_account_id, paid_date")
-      .eq("holding_id", holdingId),
+    scopeUnits(
+      admin
+        .from("fin_entries")
+        .select("kind, value, account_id, to_account_id, paid_date")
+        .eq("holding_id", holdingId),
+      allowed,
+    ),
   ])
   type S = { pagas: number; aPagar: number; recebidas: number; aReceber: number; count: number }
   const stats = new Map<string, S>()
@@ -331,6 +348,7 @@ export async function getEntries(
   const admin = createAdminClient()
   let q = admin.from("fin_entries").select(ENTRY_COLS).eq("holding_id", holdingId)
   q = lojaWhere(q, filters.loja)
+  q = scopeUnits(q, await getAccessibleUnitIds())
   if (filters.year) q = q.eq("ref_year", filters.year)
   if (filters.month) q = q.eq("ref_month", filters.month)
   if (filters.kind) q = q.eq("kind", filters.kind)
@@ -400,19 +418,26 @@ export async function getCaixaSummary(
   loja?: Loja,
 ): Promise<CaixaSummary> {
   const admin = createAdminClient()
+  const allowed = await getAccessibleUnitIds()
   const [{ data: accs }, { data: rows }] = await Promise.all([
-    lojaWhere(
-      admin.from("fin_accounts").select("id, kind, initial_balance").eq("holding_id", holdingId),
-      loja,
+    scopeUnits(
+      lojaWhere(
+        admin.from("fin_accounts").select("id, kind, initial_balance").eq("holding_id", holdingId),
+        loja,
+      ),
+      allowed,
     ),
-    lojaWhere(
-      admin
-        .from("fin_entries")
-        .select("kind, value, due_date, paid_date, account_id")
-        .eq("holding_id", holdingId)
-        .eq("ref_year", year)
-        .eq("ref_month", month),
-      loja,
+    scopeUnits(
+      lojaWhere(
+        admin
+          .from("fin_entries")
+          .select("kind, value, due_date, paid_date, account_id")
+          .eq("holding_id", holdingId)
+          .eq("ref_year", year)
+          .eq("ref_month", month),
+        loja,
+      ),
+      allowed,
     ),
   ])
 
@@ -519,9 +544,12 @@ export async function getCaixaDashboard(
 
   // Pendentes (todas as competências) p/ painéis de vencimento.
   const admin = createAdminClient()
-  const { data: pendRows } = await lojaWhere(
-    admin.from("fin_entries").select(ENTRY_COLS).eq("holding_id", holdingId).is("paid_date", null),
-    loja,
+  const { data: pendRows } = await scopeUnits(
+    lojaWhere(
+      admin.from("fin_entries").select(ENTRY_COLS).eq("holding_id", holdingId).is("paid_date", null),
+      loja,
+    ),
+    await getAccessibleUnitIds(),
   )
   const pendAll: FinEntry[] = ((pendRows ?? []) as Record<string, unknown>[])
     .map(mapEntry)
@@ -694,6 +722,114 @@ export function countContacts(contacts: FinContact[]): ContactCounts {
     ).length,
     pf: contacts.filter((c) => c.personType === "pf").length,
   }
+}
+
+// ─────────────────────────── Comparativo por loja ───────────────────────────
+export type LojaResumo = {
+  unitId: string | null
+  name: string
+  saldo: number
+  recebido: number
+  pago: number
+  aReceber: number
+  aPagar: number
+  resultado: number
+}
+
+/** Resumo do caixa por loja (consolidado lado a lado) num período. */
+export async function getCaixaPorLoja(
+  holdingId: string,
+  year: number,
+  month: number,
+): Promise<LojaResumo[]> {
+  const admin = createAdminClient()
+  const allowed = await getAccessibleUnitIds()
+  const [units, accsRes, efetRes, mesRes, cardIds] = await Promise.all([
+    getCaixaUnits(),
+    scopeUnits(
+      admin
+        .from("fin_accounts")
+        .select("id, kind, initial_balance, unit_id, exclude_from_total")
+        .eq("holding_id", holdingId),
+      allowed,
+    ),
+    scopeUnits(
+      admin
+        .from("fin_entries")
+        .select("kind, value, unit_id, account_id")
+        .eq("holding_id", holdingId)
+        .not("paid_date", "is", null),
+      allowed,
+    ),
+    scopeUnits(
+      admin
+        .from("fin_entries")
+        .select("kind, value, unit_id, account_id, paid_date")
+        .eq("holding_id", holdingId)
+        .eq("ref_year", year)
+        .eq("ref_month", month),
+      allowed,
+    ),
+    getCardAccountIds(holdingId),
+  ])
+
+  type Acc = {
+    kind: string
+    initial_balance: number | null
+    unit_id: string | null
+    exclude_from_total: boolean
+  }
+  type Ent = { kind: string; value: number | null; unit_id: string | null; account_id: string | null; paid_date?: string | null }
+  const accs = (accsRes?.data ?? []) as Acc[]
+  const efet = (efetRes?.data ?? []) as Ent[]
+  const mes = (mesRes?.data ?? []) as Ent[]
+  const cardSet = new Set(cardIds)
+
+  const REDE = "__rede__"
+  const k = (u: string | null) => u ?? REDE
+  const empty = (): LojaResumo => ({
+    unitId: null,
+    name: "",
+    saldo: 0,
+    recebido: 0,
+    pago: 0,
+    aReceber: 0,
+    aPagar: 0,
+    resultado: 0,
+  })
+  const map = new Map<string, LojaResumo>()
+  for (const u of units) map.set(u.id, { ...empty(), unitId: u.id, name: u.name })
+  if (allowed === null) map.set(REDE, { ...empty(), unitId: null, name: "Rede (geral)" })
+  const bucket = (u: string | null) => map.get(k(u))
+
+  // saldo inicial das contas (não-cartão, não excluídas do total)
+  for (const a of accs) {
+    if (a.kind === "cartao" || a.exclude_from_total) continue
+    const b = bucket(a.unit_id)
+    if (b) b.saldo += Number(a.initial_balance ?? 0)
+  }
+  // saldo += efetivados (receita − despesa), fora cartão
+  for (const e of efet) {
+    if (e.account_id && cardSet.has(e.account_id)) continue
+    const b = bucket(e.unit_id)
+    if (!b) continue
+    if (e.kind === "receita") b.saldo += Number(e.value ?? 0)
+    else if (e.kind === "despesa") b.saldo -= Number(e.value ?? 0)
+  }
+  // fluxo do mês
+  for (const e of mes) {
+    if (e.account_id && cardSet.has(e.account_id)) continue
+    const b = bucket(e.unit_id)
+    if (!b) continue
+    const v = Number(e.value ?? 0)
+    if (e.kind === "receita") e.paid_date ? (b.recebido += v) : (b.aReceber += v)
+    else if (e.kind === "despesa") e.paid_date ? (b.pago += v) : (b.aPagar += v)
+  }
+  for (const b of map.values()) b.resultado = b.recebido - b.pago
+
+  return [...map.values()].sort((a, z) =>
+    a.unitId === null ? 1 : z.unitId === null ? -1 : z.saldo - a.saldo,
+  )
 }
 
 // Top clientes (receitas) / fornecedores (despesas) por titular, no período.
