@@ -3,6 +3,7 @@ import {
   Cable,
   CalendarRange,
   ClipboardList,
+  Coins,
   Factory,
   FileUp,
   LayoutDashboard,
@@ -78,6 +79,12 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "relatorios",
       },
       { label: "DRE Grupo", href: "/financeiro", icon: Wallet, module: "financeiro" },
+      {
+        label: "Fluxo de Caixa",
+        href: "/caixa",
+        icon: Coins,
+        module: "financeiro",
+      },
     ],
   },
   {
