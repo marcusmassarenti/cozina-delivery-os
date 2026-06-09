@@ -7,6 +7,8 @@ import { CreditCard, Loader2, Plus, Repeat, X } from "lucide-react"
 import { saveEntry } from "../_actions"
 import type { FinAccount, FinCategory, FinContact, FinEntry } from "@/lib/data/caixa"
 
+import { ContatoPicker } from "./contato-picker"
+
 type Kind = "despesa" | "receita" | "transferencia"
 
 const KIND_STYLE: Record<Kind, string> = {
@@ -43,16 +45,8 @@ export function LancamentoModal({
   const [recorrente, setRecorrente] = useState(false)
   const [accountId, setAccountId] = useState(entry?.accountId ?? "")
   const [titular, setTitular] = useState(entry?.titular ?? "")
-  const [showSug, setShowSug] = useState(false)
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
-
-  const sugestoes =
-    showSug && titular.trim()
-      ? contacts
-          .filter((c) => c.name.toLowerCase().includes(titular.trim().toLowerCase()))
-          .slice(0, 8)
-      : []
 
   const cats = categories.filter((c) => c.kind === kind)
   const isTransfer = kind === "transferencia"
@@ -177,39 +171,7 @@ export function LancamentoModal({
                 </Field>
               </div>
               <Field label="Cliente / Fornecedor">
-                <div className="relative">
-                  <input
-                    name="titular"
-                    value={titular}
-                    onChange={(e) => {
-                      setTitular(e.target.value)
-                      setShowSug(true)
-                    }}
-                    onFocus={() => setShowSug(true)}
-                    onBlur={() => setTimeout(() => setShowSug(false), 120)}
-                    autoComplete="off"
-                    placeholder="Buscar cadastro ou digitar"
-                    className={inputCls}
-                  />
-                  {sugestoes.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-44 overflow-y-auto rounded-md border bg-card shadow-lg">
-                      {sugestoes.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault()
-                            setTitular(c.name)
-                            setShowSug(false)
-                          }}
-                          className="block w-full truncate px-2.5 py-1.5 text-left text-sm hover:bg-accent"
-                        >
-                          {c.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <ContatoPicker contacts={contacts} value={titular} onChange={setTitular} />
               </Field>
             </>
           )}
