@@ -17,7 +17,8 @@ import { fmtBRL } from "@/lib/format"
 import type { CardInvoice, FinAccount, FinCategory } from "@/lib/data/caixa"
 
 import { deleteAccount, payCardInvoice, saveAccount } from "../_actions"
-import { FinIcon, bankColor } from "./fin-icon"
+import { FinIcon } from "./fin-icon"
+import { BankBadge } from "./bank-badge"
 
 const MESES = [
   "Janeiro",
@@ -193,9 +194,13 @@ function CardItem({
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
       <div className="flex items-center gap-3 border-b p-4">
-        <span className={`flex size-10 items-center justify-center rounded-lg text-white ${bankColor(account.bank)}`}>
-          <CreditCard className="size-5" />
-        </span>
+        {account.bank || account.logoUrl ? (
+          <BankBadge bank={account.bank} logoUrl={account.logoUrl} size={40} />
+        ) : (
+          <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <CreditCard className="size-5" />
+          </span>
+        )}
         <div className="flex-1">
           <div className="font-semibold">{account.name}</div>
           <div className="text-[11px] text-muted-foreground">

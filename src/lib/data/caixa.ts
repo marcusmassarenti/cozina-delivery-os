@@ -25,8 +25,13 @@ export type FinAccount = {
   cardLimit: number | null
   closingDay: number | null
   dueDay: number | null
+  color: string | null
+  excludeFromTotal: boolean
+  logoUrl: string | null
   /** saldo calculado (initial + efetivados); só em getAccountsWithBalance */
   balance?: number
+  /** stats do período (só em getAccountsWithStats) */
+  stats?: { pagas: number; aPagar: number; recebidas: number; aReceber: number; count: number }
 }
 
 export type FinCategory = {
@@ -129,11 +134,14 @@ function mapAccount(r: Record<string, unknown>): FinAccount {
     cardLimit: r.card_limit != null ? Number(r.card_limit) : null,
     closingDay: (r.closing_day as number) ?? null,
     dueDay: (r.due_day as number) ?? null,
+    color: (r.color as string) ?? null,
+    excludeFromTotal: !!r.exclude_from_total,
+    logoUrl: (r.logo_url as string) ?? null,
   }
 }
 
 const ACCOUNT_COLS =
-  "id, name, kind, bank, initial_balance, active, sort_order, card_limit, closing_day, due_day"
+  "id, name, kind, bank, initial_balance, active, sort_order, card_limit, closing_day, due_day, color, exclude_from_total, logo_url"
 
 export async function getAccounts(holdingId: string): Promise<FinAccount[]> {
   const admin = createAdminClient()
@@ -171,6 +179,57 @@ export async function getAccountsWithBalance(holdingId: string): Promise<FinAcco
   return (accs ?? []).map((r) => {
     const a = mapAccount(r)
     return { ...a, balance: a.initialBalance + (bal.get(a.id) ?? 0) }
+  })
+}
+
+/** Contas com saldo + stats (pagas/a pagar/recebidas/a receber + nº de movimentações). */
+export async function getAccountsWithStats(holdingId: string): Promise<FinAccount[]> {
+  const admin = createAdminClient()
+  const [{ data: accs }, { data: entries }] = await Promise.all([
+    admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId).order("sort_order"),
+    admin
+      .from("fin_entries")
+      .select("kind, value, account_id, to_account_id, paid_date")
+      .eq("holding_id", holdingId),
+  ])
+  type S = { pagas: number; aPagar: number; recebidas: number; aReceber: number; count: number }
+  const stats = new Map<string, S>()
+  const bal = new Map<string, number>()
+  const getS = (id: string): S => {
+    if (!stats.has(id)) stats.set(id, { pagas: 0, aPagar: 0, recebidas: 0, aReceber: 0, count: 0 })
+    return stats.get(id)!
+  }
+  for (const r of entries ?? []) {
+    const v = Number(r.value ?? 0)
+    const efet = !!r.paid_date
+    if (r.account_id) {
+      const s = getS(r.account_id)
+      s.count++
+      if (r.kind === "despesa") {
+        if (efet) {
+          s.pagas += v
+          bal.set(r.account_id, (bal.get(r.account_id) ?? 0) - v)
+        } else s.aPagar += v
+      } else if (r.kind === "receita") {
+        if (efet) {
+          s.recebidas += v
+          bal.set(r.account_id, (bal.get(r.account_id) ?? 0) + v)
+        } else s.aReceber += v
+      } else if (r.kind === "transferencia" && efet) {
+        bal.set(r.account_id, (bal.get(r.account_id) ?? 0) - v)
+      }
+    }
+    if (r.kind === "transferencia" && efet && r.to_account_id) {
+      bal.set(r.to_account_id, (bal.get(r.to_account_id) ?? 0) + v)
+    }
+  }
+  return (accs ?? []).map((r) => {
+    const a = mapAccount(r)
+    return {
+      ...a,
+      balance: a.initialBalance + (bal.get(a.id) ?? 0),
+      stats: stats.get(a.id) ?? { pagas: 0, aPagar: 0, recebidas: 0, aReceber: 0, count: 0 },
+    }
   })
 }
 
@@ -501,7 +560,7 @@ export async function getCaixaDashboard(
     })
 
   const saldoTotal = accounts
-    .filter((a) => a.kind !== "cartao")
+    .filter((a) => a.kind !== "cartao" && !a.excludeFromTotal)
     .reduce((s, a) => s + (a.balance ?? 0), 0)
 
   return {

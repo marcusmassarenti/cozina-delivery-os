@@ -24,7 +24,8 @@ import {
   type TitularTotal,
 } from "@/lib/data/caixa"
 
-import { FinIcon, bankColor } from "./_components/fin-icon"
+import { FinIcon } from "./_components/fin-icon"
+import { BankBadge } from "./_components/bank-badge"
 
 function fmtDate(d: string | null) {
   if (!d) return "—"
@@ -109,7 +110,7 @@ export default async function VisaoGeralPage({
             <div className="space-y-1.5">
               {dash.accounts.map((a) => (
                 <div key={a.id} className="flex items-center gap-2.5">
-                  <span className={`size-7 shrink-0 rounded-lg ${bankColor(a.bank)}`} />
+                  <BankBadge bank={a.bank} logoUrl={a.logoUrl} size={28} />
                   <span className="flex-1 truncate text-sm font-medium">{a.name}</span>
                   <span
                     className={`text-sm font-semibold tabular-nums ${
@@ -134,7 +135,7 @@ export default async function VisaoGeralPage({
             <div className="space-y-1.5">
               {dash.cartoes.map(({ account, faturaAberta, disponivel }) => (
                 <div key={account.id} className="flex items-center gap-2.5">
-                  <span className={`size-7 shrink-0 rounded-lg ${bankColor(account.bank)}`} />
+                  <BankBadge bank={account.bank} logoUrl={account.logoUrl} size={28} />
                   <div className="flex-1">
                     <div className="truncate text-sm font-medium">{account.name}</div>
                     <div className="text-[11px] text-muted-foreground">

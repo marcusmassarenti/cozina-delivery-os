@@ -50,6 +50,9 @@ export async function saveAccount(formData: FormData): Promise<ActionState> {
       card_limit: formData.get("card_limit") ? num(formData.get("card_limit")) : null,
       closing_day: intOr(formData.get("closing_day")),
       due_day: intOr(formData.get("due_day")),
+      color: txt(formData.get("color")),
+      exclude_from_total: String(formData.get("exclude_from_total")) === "true",
+      logo_url: txt(formData.get("logo_url")),
     }
     if (!row.name) return { ok: false, message: "Dê um nome à conta." }
     if (id) {
@@ -543,6 +546,28 @@ export async function lookupCNPJ(cnpj: string): Promise<{ ok: boolean; message?:
     message: rateLimited
       ? "Muitas consultas em pouco tempo — espere alguns segundos e tente de novo."
       : "Não consegui consultar agora. Tente novamente em instantes.",
+  }
+}
+
+// ─────────────────────────── Upload de logo ────────────────────────────────
+export async function uploadLogo(
+  formData: FormData,
+): Promise<{ ok: boolean; url?: string; message?: string }> {
+  try {
+    const { holdingId, admin } = await ctx()
+    const file = formData.get("file")
+    if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Selecione uma imagem." }
+    if (file.size > 2_000_000) return { ok: false, message: "Imagem muito grande (máx. 2 MB)." }
+    const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")
+    const path = `${holdingId}/${crypto.randomUUID()}.${ext}`
+    const { error } = await admin.storage
+      .from("fin-logos")
+      .upload(path, file, { contentType: file.type || "image/png", upsert: false })
+    if (error) return { ok: false, message: error.message }
+    const { data } = admin.storage.from("fin-logos").getPublicUrl(path)
+    return { ok: true, url: data.publicUrl }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro no upload." }
   }
 }
 
