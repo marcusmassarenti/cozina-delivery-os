@@ -19,7 +19,23 @@ export const BANKS: Record<string, { bg: string; fg: string; label: string; name
 
 export const BANK_SLUGS = Object.keys(BANKS)
 
-/** Selo do banco (marca por cor + wordmark). Aceita logo custom via logoUrl. */
+/** Logos reais (arquivos em /public/banks). Slug → caminho do arquivo. */
+export const BANK_LOGOS: Record<string, string> = {
+  itau: "/banks/itau.png",
+  itau_personnalite: "/banks/itau-personnalite.png",
+  bradesco: "/banks/bradesco.png",
+  santander: "/banks/santander.png",
+  bb: "/banks/banco-do-brasil.png",
+  caixa: "/banks/caixa.png",
+  nubank: "/banks/nubank.png",
+  inter: "/banks/inter.png",
+  c6: "/banks/c6-bank.png",
+  safra: "/banks/safra.png",
+  btg: "/banks/btg.png",
+  asaas: "/banks/asaas.png",
+}
+
+/** Selo do banco: logo real (arquivo/upload) quando há, senão marca por cor. */
 export function BankBadge({
   bank,
   logoUrl,
@@ -32,15 +48,16 @@ export function BankBadge({
   className?: string
 }) {
   const style = { width: size, height: size } as const
-  if (logoUrl) {
+  const src = logoUrl || (bank ? BANK_LOGOS[bank] : null)
+  if (src) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={logoUrl}
-        alt=""
+      <span
         style={style}
-        className={`shrink-0 rounded-xl object-contain ${className}`}
-      />
+        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white ${className}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" className="size-full object-contain p-[14%]" />
+      </span>
     )
   }
   const m = bank ? BANKS[bank] : null
