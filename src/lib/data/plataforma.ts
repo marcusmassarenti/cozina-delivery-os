@@ -9,6 +9,23 @@ import { computeBillingStatus, type BillingStatus } from "@/lib/data/billing"
  * plataforma. Só o super-admin chega aqui; mesmo assim, guardamos por dentro
  * (defesa em profundidade) — se não for super-admin, devolve vazio.
  */
+export type HoldingUnit = {
+  id: string
+  name: string
+  code: string | null
+  city: string | null
+  state: string | null
+  active: boolean
+}
+export type HoldingPayment = {
+  id: string
+  paidOn: string
+  amount: number
+  method: string | null
+  refMonth: string | null
+  note: string | null
+}
+
 export type ClientOverview = {
   id: string
   name: string
@@ -22,10 +39,17 @@ export type ClientOverview = {
   // Cobrança
   paymentMethod: string | null
   monthlyFee: number | null
+  pricePerUnit: number | null
+  includedUnits: number
+  billableUnits: number // lojas cobradas (ativas)
+  extraUnits: number // lojas além das inclusas
+  computedMonthly: number // base + extras × valor/loja
   dueDate: string | null
   paid: boolean
   suspendOn: string | null
   billingStatus: BillingStatus
+  unitsList: HoldingUnit[]
+  payments: HoldingPayment[]
 }
 
 export type PlatformTotals = {
@@ -60,17 +84,21 @@ export async function getClientsOverview(): Promise<{
   if (!(await isSuperadmin())) return empty
 
   const admin = createAdminClient()
-  const [brandsRes, unitsRes, accessRes] = await Promise.all([
+  const [brandsRes, unitsRes, accessRes, paymentsRes] = await Promise.all([
     admin.from("brands").select("id, holding_id"),
-    admin.from("units").select("id, brand_id, active"),
+    admin.from("units").select("id, brand_id, active, name, code, city, state"),
     admin.from("user_unit_access").select("user_id, scope_type, scope_id"),
+    admin
+      .from("holding_payments")
+      .select("id, holding_id, paid_on, amount, method, ref_month, note")
+      .order("paid_on", { ascending: false }),
   ])
 
   // holdings com colunas de cobrança — fallback se a migration ainda não rodou
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, due_date, paid, suspend_on",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -86,6 +114,8 @@ export async function getClientsOverview(): Promise<{
         establishment_type: null,
         payment_method: null,
         monthly_fee: null,
+        price_per_unit: null,
+        included_units: 1,
         due_date: null,
         paid: true,
         suspend_on: null,
@@ -95,6 +125,21 @@ export async function getClientsOverview(): Promise<{
   const brands = brandsRes.data ?? []
   const units = unitsRes.data ?? []
   const accesses = accessRes.data ?? []
+
+  // pagamentos por holding (tabela pode não existir ainda → vazio)
+  const paymentsByHolding = new Map<string, HoldingPayment[]>()
+  for (const p of paymentsRes.data ?? []) {
+    const arr = paymentsByHolding.get(p.holding_id) ?? []
+    arr.push({
+      id: p.id,
+      paidOn: p.paid_on,
+      amount: Number(p.amount),
+      method: p.method ?? null,
+      refMonth: p.ref_month ?? null,
+      note: p.note ?? null,
+    })
+    paymentsByHolding.set(p.holding_id, arr)
+  }
 
   // brand → holding  e  holding → brands
   const brandHolding = new Map<string, string>()
@@ -106,16 +151,27 @@ export async function getClientsOverview(): Promise<{
     brandsByHolding.set(b.holding_id, set)
   }
 
-  // unit → holding  +  contagens
+  // unit → holding  +  contagens  +  lista de lojas
   const unitHolding = new Map<string, string>()
   const unitCount = new Map<string, number>()
   const activeUnitCount = new Map<string, number>()
+  const unitsByHolding = new Map<string, HoldingUnit[]>()
   for (const u of units) {
     const h = brandHolding.get(u.brand_id)
     if (!h) continue
     unitHolding.set(u.id, h)
     unitCount.set(h, (unitCount.get(h) ?? 0) + 1)
     if (u.active) activeUnitCount.set(h, (activeUnitCount.get(h) ?? 0) + 1)
+    const list = unitsByHolding.get(h) ?? []
+    list.push({
+      id: u.id,
+      name: u.name,
+      code: u.code ?? null,
+      city: u.city ?? null,
+      state: u.state ?? null,
+      active: !!u.active,
+    })
+    unitsByHolding.set(h, list)
   }
 
   // usuários distintos por holding (qualquer escopo que aponte pra ela)
@@ -142,6 +198,8 @@ export async function getClientsOverview(): Promise<{
       establishment_type: string | null
       payment_method: string | null
       monthly_fee: number | string | null
+      price_per_unit: number | string | null
+      included_units: number | null
       due_date: string | null
       paid: boolean | null
       suspend_on: string | null
@@ -153,6 +211,13 @@ export async function getClientsOverview(): Promise<{
       paid: hh.paid ?? true,
       suspendOn: hh.suspend_on ?? null,
     }
+    // Mensalidade = base + (lojas ativas além das inclusas × valor por loja)
+    const activeUnits = activeUnitCount.get(h.id) ?? 0
+    const includedUnits = hh.included_units ?? 1
+    const pricePerUnit = hh.price_per_unit != null ? Number(hh.price_per_unit) : null
+    const billableUnits = activeUnits
+    const extraUnits = Math.max(0, billableUnits - includedUnits)
+    const computedMonthly = (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
     return {
       id: h.id,
       name: h.name,
@@ -161,14 +226,22 @@ export async function getClientsOverview(): Promise<{
       establishmentType: hh.establishment_type ?? null,
       brands: brandsByHolding.get(h.id)?.size ?? 0,
       units: unitCount.get(h.id) ?? 0,
-      activeUnits: activeUnitCount.get(h.id) ?? 0,
+      activeUnits,
       users: usersByHolding.get(h.id)?.size ?? 0,
       ...billing,
+      pricePerUnit,
+      includedUnits,
+      billableUnits,
+      extraUnits,
+      computedMonthly,
       billingStatus: computeBillingStatus(billing),
+      unitsList: unitsByHolding.get(h.id) ?? [],
+      payments: paymentsByHolding.get(h.id) ?? [],
     }
   })
 
-  const fee = (c: ClientOverview) => c.monthlyFee ?? 0
+  // MRR/recebido/etc usam a mensalidade calculada (base + lojas extras)
+  const fee = (c: ClientOverview) => c.computedMonthly
   const totals: PlatformTotals = {
     clients: clients.length,
     units: clients.reduce((s, c) => s + c.units, 0),

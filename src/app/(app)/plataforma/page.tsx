@@ -8,6 +8,8 @@ import { fmtBRL, fmtNum } from "@/lib/format"
 
 import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
 import { EditBillingDialog } from "./_components/edit-billing-dialog"
+import { UnitsDialog } from "./_components/units-dialog"
+import { PaymentsDialog } from "./_components/payments-dialog"
 
 const STATUS: Record<BillingStatus, { label: string; cls: string }> = {
   paid: {
@@ -127,26 +129,43 @@ export default async function PlataformaPage() {
                     <td className="px-4 py-3">
                       <div>{c.paymentMethod ?? "—"}</div>
                       <div className="text-[11px] text-muted-foreground">
-                        {c.monthlyFee != null ? `${fmtBRL(c.monthlyFee)}/mês` : ""}
+                        {c.computedMonthly > 0 ? `${fmtBRL(c.computedMonthly)}/mês` : "—"}
+                        {c.extraUnits > 0 && c.pricePerUnit
+                          ? ` · base + ${c.extraUnits}×${fmtBRL(c.pricePerUnit)}`
+                          : ""}
                       </div>
                     </td>
                     <td className="px-4 py-3 tabular-nums">{fmtDate(c.dueDate)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {fmtNum(c.units)}
-                    </td>
                     <td className="px-4 py-3 text-right">
-                      <EditBillingDialog
-                        client={{
-                          id: c.id,
-                          name: c.name,
-                          establishmentType: c.establishmentType,
-                          paymentMethod: c.paymentMethod,
-                          monthlyFee: c.monthlyFee,
-                          dueDate: c.dueDate,
-                          paid: c.paid,
-                          suspendOn: c.suspendOn,
-                        }}
-                      />
+                      <UnitsDialog name={c.name} units={c.unitsList} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <PaymentsDialog
+                          client={{
+                            id: c.id,
+                            name: c.name,
+                            payments: c.payments,
+                            suggested: c.computedMonthly,
+                            method: c.paymentMethod,
+                          }}
+                        />
+                        <EditBillingDialog
+                          client={{
+                            id: c.id,
+                            name: c.name,
+                            establishmentType: c.establishmentType,
+                            paymentMethod: c.paymentMethod,
+                            monthlyFee: c.monthlyFee,
+                            pricePerUnit: c.pricePerUnit,
+                            includedUnits: c.includedUnits,
+                            billableUnits: c.billableUnits,
+                            dueDate: c.dueDate,
+                            paid: c.paid,
+                            suspendOn: c.suspendOn,
+                          }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 )

@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Pencil } from "lucide-react"
 
+import { fmtBRL } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,6 +27,9 @@ export type BillingClient = {
   establishmentType: string | null
   paymentMethod: string | null
   monthlyFee: number | null
+  pricePerUnit: number | null
+  includedUnits: number
+  billableUnits: number
   dueDate: string | null
   paid: boolean
   suspendOn: string | null
@@ -35,10 +39,31 @@ const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outr
 const ESTAB = ["Restaurante", "Delivery próprio", "Franquia", "Outro"]
 const initial: BillingActionState = { ok: false }
 
+const fmtMoney = (v: string): string => {
+  const n = parseFloat(v.replace(/\./g, "").replace(",", "."))
+  if (!isFinite(n)) return ""
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+const parseMoney = (v: string): number => {
+  const n = parseFloat(v.replace(/\./g, "").replace(",", "."))
+  return isFinite(n) ? n : 0
+}
+
 export function EditBillingDialog({ client }: { client: BillingClient }) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(setClientBilling, initial)
   const [paid, setPaid] = React.useState(client.paid)
+  const [fee, setFee] = React.useState(
+    client.monthlyFee != null
+      ? client.monthlyFee.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+      : "",
+  )
+  const [ppu, setPpu] = React.useState(
+    client.pricePerUnit != null
+      ? client.pricePerUnit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+      : "",
+  )
+  const [included, setIncluded] = React.useState(String(client.includedUnits))
   const router = useRouter()
 
   React.useEffect(() => {
@@ -47,6 +72,9 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
       router.refresh()
     }
   }, [state, router])
+
+  const extras = Math.max(0, client.billableUnits - (Number(included) || 0))
+  const total = parseMoney(fee) + extras * parseMoney(ppu)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -68,8 +96,7 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
             Editar cliente
           </DialogTitle>
           <DialogDescription>
-            Cadastro e cobrança. Se não estiver pago e passar da data de
-            suspensão, o acesso do cliente é bloqueado.
+            Cadastro e cobrança. A mensalidade é a base + as lojas além das inclusas.
           </DialogDescription>
         </DialogHeader>
 
@@ -111,18 +138,49 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
                 ))}
               </select>
             </Field>
-            <Field label="Valor mensal (R$)">
+            <Field label="Valor base (R$)">
               <Input
                 name="monthlyFee"
                 inputMode="decimal"
                 placeholder="ex.: 199,90"
-                defaultValue={
-                  client.monthlyFee != null
-                    ? String(client.monthlyFee).replace(".", ",")
-                    : ""
-                }
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                onBlur={(e) => setFee(fmtMoney(e.target.value))}
               />
             </Field>
+          </div>
+
+          {/* Cobrança por loja */}
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Valor por loja extra (R$)">
+                <Input
+                  name="pricePerUnit"
+                  inputMode="decimal"
+                  placeholder="ex.: 30,00"
+                  value={ppu}
+                  onChange={(e) => setPpu(e.target.value)}
+                  onBlur={(e) => setPpu(fmtMoney(e.target.value))}
+                />
+              </Field>
+              <Field label="Lojas inclusas na base">
+                <Input
+                  name="includedUnits"
+                  type="number"
+                  min={0}
+                  value={included}
+                  onChange={(e) => setIncluded(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="mt-2.5 flex items-center justify-between border-t pt-2.5 text-sm">
+              <span className="text-muted-foreground">
+                {client.billableUnits} loja{client.billableUnits !== 1 ? "s" : ""} ativa
+                {client.billableUnits !== 1 ? "s" : ""}
+                {extras > 0 ? ` · ${extras} extra${extras !== 1 ? "s" : ""}` : ""}
+              </span>
+              <span className="font-semibold tabular-nums">Total: {fmtBRL(total)}/mês</span>
+            </div>
           </div>
 
           <Field label="Vencimento">
@@ -142,11 +200,7 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
 
           {!paid && (
             <Field label="Suspender acesso a partir de">
-              <Input
-                type="date"
-                name="suspendOn"
-                defaultValue={client.suspendOn ?? ""}
-              />
+              <Input type="date" name="suspendOn" defaultValue={client.suspendOn ?? ""} />
               <p className="text-[10px] text-muted-foreground">
                 Se não pagar até essa data, o cliente fica sem acesso ao sistema.
               </p>
@@ -171,13 +225,7 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
   )
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium">{label}</Label>

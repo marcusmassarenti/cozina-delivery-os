@@ -205,12 +205,18 @@ export async function setClientBilling(
       String(formData.get("establishmentType") ?? "").trim() || null
     const paymentMethod =
       String(formData.get("paymentMethod") ?? "").trim() || null
-    const feeRaw = String(formData.get("monthlyFee") ?? "")
-      .replace(/\./g, "")
-      .replace(",", ".")
-      .trim()
-    const fee = feeRaw ? Number(feeRaw) : null
-    const monthlyFee = fee != null && !Number.isNaN(fee) ? fee : null
+    const money = (key: string): number | null => {
+      const raw = String(formData.get(key) ?? "").replace(/\./g, "").replace(",", ".").trim()
+      const n = raw ? Number(raw) : null
+      return n != null && !Number.isNaN(n) ? n : null
+    }
+    const monthlyFee = money("monthlyFee")
+    const pricePerUnit = money("pricePerUnit")
+    const includedRaw = String(formData.get("includedUnits") ?? "").trim()
+    const includedUnits =
+      includedRaw && !Number.isNaN(Number(includedRaw))
+        ? Math.max(0, Math.trunc(Number(includedRaw)))
+        : 1
     const dueDate = dateOrNull(formData.get("dueDate"))
     const suspendOn = dateOrNull(formData.get("suspendOn"))
     const paid = formData.get("paid") === "on"
@@ -222,6 +228,8 @@ export async function setClientBilling(
         establishment_type: establishmentType,
         payment_method: paymentMethod,
         monthly_fee: monthlyFee,
+        price_per_unit: pricePerUnit,
+        included_units: includedUnits,
         due_date: dueDate,
         paid,
         suspend_on: suspendOn,
@@ -231,6 +239,47 @@ export async function setClientBilling(
 
     revalidatePath("/plataforma")
     revalidatePath("/", "layout")
+    return { ok: true }
+  })
+}
+
+/** Registra um pagamento recebido de um cliente (super-admin). */
+export async function recordPayment(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+    const paidOn = dateOrNull(formData.get("paidOn"))
+    if (!paidOn) return { ok: false, message: "Informe a data do pagamento." }
+    const amtRaw = String(formData.get("amount") ?? "").replace(/\./g, "").replace(",", ".").trim()
+    const amount = amtRaw ? Number(amtRaw) : NaN
+    if (Number.isNaN(amount) || amount <= 0) return { ok: false, message: "Informe um valor válido." }
+
+    const { error } = await admin.from("holding_payments").insert({
+      holding_id: holdingId,
+      paid_on: paidOn,
+      amount,
+      method: String(formData.get("method") ?? "").trim() || null,
+      ref_month: String(formData.get("refMonth") ?? "").trim() || null,
+      note: String(formData.get("note") ?? "").trim() || null,
+    })
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/plataforma")
+    return { ok: true }
+  })
+}
+
+/** Remove um pagamento registrado (super-admin). */
+export async function deletePayment(paymentId: string): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    if (!paymentId) return { ok: false, message: "Pagamento não identificado." }
+    const { error } = await admin.from("holding_payments").delete().eq("id", paymentId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/plataforma")
     return { ok: true }
   })
 }
