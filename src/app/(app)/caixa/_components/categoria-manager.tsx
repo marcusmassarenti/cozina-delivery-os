@@ -12,9 +12,18 @@ import { FIN_ICON_NAMES, FinIcon } from "./fin-icon"
 export function CategoriaManager({ categories }: { categories: FinCategory[] }) {
   const [open, setOpen] = useState(false)
   const [kindTab, setKindTab] = useState<"despesa" | "receita">("despesa")
+  const [icon, setIcon] = useState("Tag")
+  const [color, setColor] = useState(CORES[0])
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  function abrirNova() {
+    setIcon("Tag")
+    setColor(CORES[0])
+    setError(null)
+    setOpen(true)
+  }
 
   const parents = categories.filter((c) => !c.parentId)
   const childrenOf = (pid: string) => categories.filter((c) => c.parentId === pid)
@@ -49,7 +58,7 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
           ))}
         </div>
         <button
-          onClick={() => setOpen(true)}
+          onClick={abrirNova}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="size-4" />
@@ -134,26 +143,66 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
                     <option value="receita">Receita</option>
                   </select>
                 </Field>
-                <Field label="Ícone">
-                  <select name="icon" defaultValue="Tag" className={inputCls}>
-                    {FIN_ICON_NAMES.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
+                <Field label="Subcategoria de (opcional)">
+                  <select name="parent_id" defaultValue="" className={inputCls}>
+                    <option value="">— principal</option>
+                    {parents.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
                       </option>
                     ))}
                   </select>
                 </Field>
               </div>
-              <Field label="Subcategoria de (opcional)">
-                <select name="parent_id" defaultValue="" className={inputCls}>
-                  <option value="">— (categoria principal)</option>
-                  {parents.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
+
+              {/* Ícone — grade visual */}
+              <div>
+                <span className="mb-1 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+                  Ícone
+                  <span
+                    style={{ backgroundColor: `${color}22`, color }}
+                    className="flex size-5 items-center justify-center rounded-md"
+                  >
+                    <FinIcon name={icon} className="size-3" />
+                  </span>
+                </span>
+                <input type="hidden" name="icon" value={icon} />
+                <div className="grid grid-cols-8 gap-1.5">
+                  {FIN_ICON_NAMES.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setIcon(n)}
+                      className={`flex aspect-square items-center justify-center rounded-lg border ${
+                        icon === n
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-accent"
+                      }`}
+                    >
+                      <FinIcon name={n} className="size-4" />
+                    </button>
                   ))}
-                </select>
-              </Field>
+                </div>
+              </div>
+
+              {/* Cor */}
+              <div>
+                <span className="mb-1 block text-[11px] font-medium text-muted-foreground">Cor</span>
+                <input type="hidden" name="color" value={color} />
+                <div className="flex flex-wrap gap-1.5">
+                  {CORES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      style={{ backgroundColor: c }}
+                      className={`size-6 rounded-full ${
+                        color === c ? "ring-2 ring-foreground ring-offset-2" : ""
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
               {error && <p className="text-xs text-rose-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-md border px-3 py-2 text-sm hover:bg-accent">
@@ -175,6 +224,21 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
     </div>
   )
 }
+
+const CORES = [
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#ec4899",
+  "#78716c",
+  "#94a3b8",
+]
 
 const inputCls =
   "h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
