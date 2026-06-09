@@ -2,37 +2,59 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Plus, X } from "lucide-react"
+import { CreditCard, Loader2, Plus, Repeat, X } from "lucide-react"
 
 import { saveEntry } from "../_actions"
 import type { FinAccount, FinCategory } from "@/lib/data/caixa"
 
-type Props = {
-  accounts: FinAccount[]
-  categories: FinCategory[] // flat
-  defaultKind?: "despesa" | "receita"
+type Kind = "despesa" | "receita" | "transferencia"
+
+const KIND_STYLE: Record<Kind, string> = {
+  despesa: "bg-rose-500 text-white",
+  receita: "bg-emerald-500 text-white",
+  transferencia: "bg-sky-500 text-white",
+}
+const KIND_LABEL: Record<Kind, string> = {
+  despesa: "Despesa",
+  receita: "Receita",
+  transferencia: "Transferência",
 }
 
-export function LancamentoDialog({ accounts, categories, defaultKind }: Props) {
+export function LancamentoDialog({
+  accounts,
+  categories,
+  defaultKind,
+  label = "Novo Lançamento",
+}: {
+  accounts: FinAccount[]
+  categories: FinCategory[]
+  defaultKind?: Kind
+  label?: string
+}) {
   const [open, setOpen] = useState(false)
-  const [kind, setKind] = useState<"despesa" | "receita">(defaultKind ?? "despesa")
+  const [kind, setKind] = useState<Kind>(defaultKind ?? "despesa")
+  const [recorrente, setRecorrente] = useState(false)
+  const [accountId, setAccountId] = useState("")
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   const cats = categories.filter((c) => c.kind === kind)
+  const isTransfer = kind === "transferencia"
+  const selectedAcc = accounts.find((a) => a.id === accountId)
+  const isCard = selectedAcc?.kind === "cartao" && kind === "despesa"
 
   function submit(formData: FormData) {
     formData.set("kind", kind)
+    if (!recorrente) formData.set("recorrencia", "1")
     start(async () => {
       const r = await saveEntry(formData)
       if (r.ok) {
         setOpen(false)
         setError(null)
+        setRecorrente(false)
         router.refresh()
-      } else {
-        setError(r.message ?? "Erro ao salvar.")
-      }
+      } else setError(r.message ?? "Erro ao salvar.")
     })
   }
 
@@ -44,7 +66,7 @@ export function LancamentoDialog({ accounts, categories, defaultKind }: Props) {
         className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
       >
         <Plus className="size-4" />
-        Novo Lançamento
+        {label}
       </button>
 
       {open && (
@@ -57,22 +79,17 @@ export function LancamentoDialog({ accounts, categories, defaultKind }: Props) {
               </button>
             </div>
 
-            {/* Despesa / Receita */}
-            <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-              {(["despesa", "receita"] as const).map((k) => (
+            <div className="mb-4 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+              {(["despesa", "receita", "transferencia"] as const).map((k) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setKind(k)}
-                  className={`rounded-md py-1.5 text-sm font-medium capitalize transition ${
-                    kind === k
-                      ? k === "despesa"
-                        ? "bg-rose-500 text-white"
-                        : "bg-emerald-500 text-white"
-                      : "text-muted-foreground hover:bg-background"
+                  className={`rounded-md py-1.5 text-sm font-medium transition ${
+                    kind === k ? KIND_STYLE[k] : "text-muted-foreground hover:bg-background"
                   }`}
                 >
-                  {k}
+                  {KIND_LABEL[k]}
                 </button>
               ))}
             </div>
@@ -80,59 +97,137 @@ export function LancamentoDialog({ accounts, categories, defaultKind }: Props) {
             <form action={submit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Valor (R$)">
-                  <input
-                    name="value"
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    required
-                    className={inputCls}
-                  />
+                  <input name="value" inputMode="decimal" placeholder="0,00" required className={inputCls} />
                 </Field>
-                <Field label="Vence em">
+                <Field label={isTransfer ? "Data" : "Vence em"}>
                   <input name="due_date" type="date" className={inputCls} />
                 </Field>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Conta">
-                  <select name="account_id" className={inputCls} defaultValue="">
-                    <option value="">—</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Categoria">
-                  <select name="category_id" className={inputCls} defaultValue="">
-                    <option value="">—</option>
-                    {cats.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.parentId ? "↳ " : ""}
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="Cliente / Fornecedor">
-                <input name="titular" placeholder="Nome" className={inputCls} />
-              </Field>
+              {isTransfer ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="De (origem)">
+                    <select name="account_id" className={inputCls} defaultValue="" required>
+                      <option value="">—</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Para (destino)">
+                    <select name="to_account_id" className={inputCls} defaultValue="" required>
+                      <option value="">—</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Conta / Cartão">
+                      <select
+                        name="account_id"
+                        className={inputCls}
+                        value={accountId}
+                        onChange={(e) => setAccountId(e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.kind === "cartao" ? "💳 " : ""}
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Categoria">
+                      <select name="category_id" className={inputCls} defaultValue="">
+                        <option value="">—</option>
+                        {cats.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.parentId ? "↳ " : ""}
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="Cliente / Fornecedor">
+                    <input name="titular" placeholder="Nome" className={inputCls} />
+                  </Field>
+                </>
+              )}
 
               <Field label="Descrição">
                 <input name="description" placeholder="Descrição do lançamento" className={inputCls} />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Pago/recebido em (efetivo)">
+                <Field label={isTransfer ? "Efetivada em" : "Pago/recebido em"}>
                   <input name="paid_date" type="date" className={inputCls} />
                 </Field>
-                <Field label="Tags">
-                  <input name="tags" placeholder="separadas por vírgula" className={inputCls} />
-                </Field>
+                {!isTransfer && (
+                  <Field label="Tags">
+                    <input name="tags" placeholder="separadas por vírgula" className={inputCls} />
+                  </Field>
+                )}
               </div>
+
+              {/* Cartão → parcelamento · Conta → recorrência */}
+              {isCard ? (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-900/40 dark:bg-sky-950/20">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CreditCard className="size-4 text-sky-600" />
+                    Parcelar em
+                    <input
+                      name="parcelas"
+                      type="number"
+                      min={1}
+                      max={60}
+                      defaultValue={1}
+                      className={`${inputCls} w-16`}
+                    />
+                    x
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-sky-700 dark:text-sky-300">
+                    💳 Compra no cartão: cada parcela vai pra uma fatura. Não impacta o caixa até a
+                    fatura ser paga.
+                  </p>
+                </div>
+              ) : !isTransfer ? (
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={recorrente}
+                      onChange={(e) => setRecorrente(e.target.checked)}
+                      className="size-4 accent-primary"
+                    />
+                    <Repeat className="size-4 text-muted-foreground" />
+                    Repetir todo mês (conta recorrente)
+                  </label>
+                  {recorrente && (
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Por</span>
+                      <input
+                        name="recorrencia"
+                        type="number"
+                        min={2}
+                        max={60}
+                        defaultValue={12}
+                        className={`${inputCls} w-20`}
+                      />
+                      <span className="text-muted-foreground">meses · 1 lançamento por mês</span>
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {error && <p className="text-xs text-rose-600">{error}</p>}
 

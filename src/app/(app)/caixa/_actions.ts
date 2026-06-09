@@ -37,12 +37,19 @@ export async function saveAccount(formData: FormData): Promise<ActionState> {
   try {
     const { holdingId, admin } = await ctx()
     const id = txt(formData.get("id"))
+    const intOr = (v: FormDataEntryValue | null): number | null => {
+      const n = parseInt(String(v ?? ""), 10)
+      return Number.isNaN(n) ? null : n
+    }
     const row = {
       holding_id: holdingId,
       name: txt(formData.get("name")) ?? "",
       kind: String(formData.get("kind") ?? "conta_corrente"),
       bank: txt(formData.get("bank")),
       initial_balance: num(formData.get("initial_balance")),
+      card_limit: formData.get("card_limit") ? num(formData.get("card_limit")) : null,
+      closing_day: intOr(formData.get("closing_day")),
+      due_day: intOr(formData.get("due_day")),
     }
     if (!row.name) return { ok: false, message: "Dê um nome à conta." }
     if (id) {
@@ -52,7 +59,7 @@ export async function saveAccount(formData: FormData): Promise<ActionState> {
       const { error } = await admin.from("fin_accounts").insert(row)
       if (error) return { ok: false, message: error.message }
     }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -64,7 +71,7 @@ export async function deleteAccount(id: string): Promise<ActionState> {
     const { holdingId, admin } = await ctx()
     const { error } = await admin.from("fin_accounts").delete().eq("id", id).eq("holding_id", holdingId)
     if (error) return { ok: false, message: error.message }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -92,7 +99,7 @@ export async function saveCategory(formData: FormData): Promise<ActionState> {
       const { error } = await admin.from("fin_categories").insert(row)
       if (error) return { ok: false, message: error.message }
     }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -104,7 +111,7 @@ export async function deleteCategory(id: string): Promise<ActionState> {
     const { holdingId, admin } = await ctx()
     const { error } = await admin.from("fin_categories").delete().eq("id", id).eq("holding_id", holdingId)
     if (error) return { ok: false, message: error.message }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -112,42 +119,192 @@ export async function deleteCategory(id: string): Promise<ActionState> {
 }
 
 // ─────────────────────────── Lançamentos ────────────────────────────────────
+function addMonthsISO(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1 + n, d))
+  return dt.toISOString().slice(0, 10)
+}
+function addMonthsYM(year: number, month: number, n: number): { year: number; month: number } {
+  const idx = year * 12 + (month - 1) + n
+  return { year: Math.floor(idx / 12), month: (idx % 12) + 1 }
+}
+const pad2 = (n: number) => String(n).padStart(2, "0")
+const round2 = (n: number) => Math.round(n * 100) / 100
+/** Competência da fatura: compra após o fechamento entra na fatura do próximo mês. */
+function cardCompetence(purchaseISO: string, closingDay: number): { year: number; month: number } {
+  const [y, m, d] = purchaseISO.split("-").map(Number)
+  return d > closingDay ? addMonthsYM(y, m, 1) : { year: y, month: m }
+}
+
 export async function saveEntry(formData: FormData): Promise<ActionState> {
   try {
     const { holdingId, admin } = await ctx()
     const id = txt(formData.get("id"))
+    const kind = String(formData.get("kind") ?? "despesa")
+    const isTransfer = kind === "transferencia"
     const due = dateOr(formData.get("due_date"))
     const paid = dateOr(formData.get("paid_date"))
-    // Sem data → usa hoje como competência (senão o lançamento fica "sem período").
-    const today = new Date().toLocaleDateString("en-CA", {
-      timeZone: "America/Sao_Paulo",
-    })
-    const refBase = due ?? paid ?? today
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })
+    const value = num(formData.get("value"))
+    if (!value) return { ok: false, message: "Informe o valor." }
+    const accountId = txt(formData.get("account_id"))
+    if (isTransfer) {
+      const to = txt(formData.get("to_account_id"))
+      if (!accountId || !to) return { ok: false, message: "Escolha as contas de origem e destino." }
+      if (accountId === to) return { ok: false, message: "Origem e destino não podem ser iguais." }
+    }
     const tagsRaw = txt(formData.get("tags"))
-    const row = {
+    const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : null
+    const clamp = (k: string) =>
+      Math.max(1, Math.min(60, parseInt(String(formData.get(k) ?? "1"), 10) || 1))
+
+    const base = {
       holding_id: holdingId,
-      kind: String(formData.get("kind") ?? "despesa"),
-      value: num(formData.get("value")),
-      due_date: due,
-      paid_date: paid,
-      account_id: txt(formData.get("account_id")),
-      category_id: txt(formData.get("category_id")),
+      kind,
+      value,
+      account_id: accountId,
+      to_account_id: isTransfer ? txt(formData.get("to_account_id")) : null,
+      category_id: isTransfer ? null : txt(formData.get("category_id")),
       titular: txt(formData.get("titular")),
       description: txt(formData.get("description")),
-      tags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : null,
-      ref_year: refBase ? Number(refBase.slice(0, 4)) : null,
-      ref_month: refBase ? Number(refBase.slice(5, 7)) : null,
-      updated_at: new Date().toISOString(),
+      tags,
     }
-    if (!row.value) return { ok: false, message: "Informe o valor." }
+    const makeRow = (dueDate: string | null, paidDate: string | null, group: string | null) => {
+      const refBase = dueDate ?? paidDate ?? today
+      return {
+        ...base,
+        due_date: dueDate,
+        paid_date: paidDate,
+        recurrence_group: group,
+        ref_year: Number(refBase.slice(0, 4)),
+        ref_month: Number(refBase.slice(5, 7)),
+        updated_at: new Date().toISOString(),
+      }
+    }
+
+    // EDIÇÃO (não recria séries; edita só o lançamento)
     if (id) {
-      const { error } = await admin.from("fin_entries").update(row).eq("id", id).eq("holding_id", holdingId)
+      const { error } = await admin
+        .from("fin_entries")
+        .update(makeRow(due, paid, null))
+        .eq("id", id)
+        .eq("holding_id", holdingId)
+      if (error) return { ok: false, message: error.message }
+      revalidatePath("/caixa", "layout")
+      return { ok: true }
+    }
+
+    // É compra no CARTÃO? (despesa com conta do tipo cartão) → vai pra fatura, parcelável.
+    let card: { closing_day: number | null; due_day: number | null } | null = null
+    if (accountId && kind === "despesa") {
+      const { data } = await admin
+        .from("fin_accounts")
+        .select("kind, closing_day, due_day")
+        .eq("id", accountId)
+        .eq("holding_id", holdingId)
+        .single()
+      if (data?.kind === "cartao") card = data
+    }
+
+    if (card) {
+      const parcelas = clamp("parcelas")
+      const purchase = due ?? paid ?? today
+      const closing = card.closing_day ?? 1
+      const dueDay = Math.min(card.due_day ?? 10, 28)
+      const group = parcelas > 1 ? crypto.randomUUID() : null
+      const parte = round2(value / parcelas)
+      const cBase = cardCompetence(purchase, closing)
+      const rows = Array.from({ length: parcelas }, (_, i) => {
+        const comp = addMonthsYM(cBase.year, cBase.month, i)
+        const v = i === parcelas - 1 ? round2(value - parte * (parcelas - 1)) : parte
+        const invoiceDue = `${comp.year}-${pad2(comp.month)}-${pad2(dueDay)}`
+        return {
+          ...base,
+          value: v,
+          due_date: invoiceDue,
+          paid_date: null,
+          invoice_year: comp.year,
+          invoice_month: comp.month,
+          installment_no: i + 1,
+          installment_total: parcelas,
+          recurrence_group: group,
+          ref_year: comp.year,
+          ref_month: comp.month,
+          updated_at: new Date().toISOString(),
+        }
+      })
+      const { error } = await admin.from("fin_entries").insert(rows)
+      if (error) return { ok: false, message: error.message }
+      revalidatePath("/caixa", "layout")
+      return { ok: true }
+    }
+
+    // Conta normal: recorrência mensal opcional.
+    const repeat = clamp("recorrencia")
+    if (repeat > 1) {
+      const group = crypto.randomUUID()
+      const anchor = due ?? paid ?? today
+      const rows = Array.from({ length: repeat }, (_, i) =>
+        makeRow(addMonthsISO(anchor, i), i === 0 ? paid : null, group),
+      )
+      const { error } = await admin.from("fin_entries").insert(rows)
       if (error) return { ok: false, message: error.message }
     } else {
-      const { error } = await admin.from("fin_entries").insert(row)
+      const { error } = await admin.from("fin_entries").insert(makeRow(due, paid, null))
       if (error) return { ok: false, message: error.message }
     }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+/** Paga a fatura de um cartão (competência): marca lançamentos como efetivados +
+ * cria 1 despesa no caixa (na conta escolhida) = "pagamento de fatura". */
+export async function payCardInvoice(
+  cardId: string,
+  year: number,
+  month: number,
+  fromAccountId: string,
+): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })
+    const { data: rows } = await admin
+      .from("fin_entries")
+      .select("id, value")
+      .eq("holding_id", holdingId)
+      .eq("account_id", cardId)
+      .eq("invoice_year", year)
+      .eq("invoice_month", month)
+      .is("paid_date", null)
+    const total = (rows ?? []).reduce((s, r) => s + Number(r.value ?? 0), 0)
+    if (total <= 0) return { ok: false, message: "Fatura sem valor em aberto." }
+    // marca as compras como pagas (a fatura foi quitada)
+    await admin
+      .from("fin_entries")
+      .update({ paid_date: today, updated_at: new Date().toISOString() })
+      .eq("holding_id", holdingId)
+      .eq("account_id", cardId)
+      .eq("invoice_year", year)
+      .eq("invoice_month", month)
+      .is("paid_date", null)
+    // cria a despesa de pagamento no caixa
+    const { error } = await admin.from("fin_entries").insert({
+      holding_id: holdingId,
+      kind: "despesa",
+      value: total,
+      account_id: fromAccountId,
+      due_date: today,
+      paid_date: today,
+      is_card_payment: true,
+      description: `Pagamento fatura ${pad2(month)}/${year}`,
+      ref_year: year,
+      ref_month: month,
+    })
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -167,7 +324,7 @@ export async function toggleEntryPaid(id: string, paid: boolean): Promise<Action
       .eq("id", id)
       .eq("holding_id", holdingId)
     if (error) return { ok: false, message: error.message }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -179,7 +336,7 @@ export async function deleteEntry(id: string): Promise<ActionState> {
     const { holdingId, admin } = await ctx()
     const { error } = await admin.from("fin_entries").delete().eq("id", id).eq("holding_id", holdingId)
     if (error) return { ok: false, message: error.message }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
@@ -240,7 +397,7 @@ export async function seedDefaultCategories(): Promise<ActionState> {
         )
       }
     }
-    revalidatePath("/caixa")
+    revalidatePath("/caixa", "layout")
     return { ok: true }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
