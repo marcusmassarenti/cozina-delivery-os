@@ -50,12 +50,9 @@ export function BankBadge({
   const src = logoUrl || (bank ? BANK_LOGOS[bank] : null)
   if (src) {
     return (
-      <span
-        style={style}
-        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white ${className}`}
-      >
+      <span style={style} className={`flex shrink-0 items-center justify-center ${className}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" className="size-full object-contain p-[8%]" />
+        <img src={src} alt="" className="size-full object-contain" />
       </span>
     )
   }
