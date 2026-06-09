@@ -247,17 +247,22 @@ function AccountForm({
 
         <div className="mt-4">
           <Label>Logo do banco (opcional)</Label>
-          <div className="mt-1 grid grid-cols-4 gap-2 sm:grid-cols-5">
-            <LogoTile selected={!bank && !outro} onClick={() => { setBank(""); setOutro(false) }}>
-              <span className="text-[10px] text-muted-foreground">Sem logo</span>
+          <div className="mt-1 grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+            <LogoTile selected={!bank && !outro} caption="Sem logo" onClick={() => { setBank(""); setOutro(false) }}>
+              <span className="text-xs text-muted-foreground">—</span>
             </LogoTile>
             {BANK_SLUGS.map((s) => (
-              <LogoTile key={s} selected={bank === s && !outro} onClick={() => { setBank(s); setOutro(false) }}>
-                <BankBadge bank={s} size={34} />
+              <LogoTile
+                key={s}
+                selected={bank === s && !outro}
+                caption={BANKS[s].name}
+                onClick={() => { setBank(s); setOutro(false) }}
+              >
+                <BankBadge bank={s} size={52} />
               </LogoTile>
             ))}
-            <LogoTile selected={outro} onClick={() => setOutro(true)}>
-              <span className="text-[10px] text-muted-foreground">+ Outro</span>
+            <LogoTile selected={outro} caption="Outro" onClick={() => setOutro(true)}>
+              <span className="text-2xl font-light text-muted-foreground">+</span>
             </LogoTile>
           </div>
           {outro && (
@@ -341,26 +346,29 @@ function AccountForm({
 function LogoTile({
   selected,
   onClick,
+  caption,
   children,
 }: {
   selected: boolean
   onClick: () => void
+  caption: string
   children: React.ReactNode
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative flex aspect-square items-center justify-center rounded-lg border p-1 ${
-        selected ? "border-primary bg-primary/5" : "hover:bg-accent"
-      }`}
-    >
-      {selected && (
-        <span className="absolute right-0.5 top-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-          <Check className="size-2.5" />
-        </span>
-      )}
-      {children}
+    <button type="button" onClick={onClick} className="flex flex-col items-center gap-1">
+      <span
+        className={`relative flex aspect-square w-full items-center justify-center rounded-xl border p-2 ${
+          selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-accent"
+        }`}
+      >
+        {selected && (
+          <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Check className="size-2.5" />
+          </span>
+        )}
+        {children}
+      </span>
+      <span className="w-full truncate text-center text-[10px] text-muted-foreground">{caption}</span>
     </button>
   )
 }

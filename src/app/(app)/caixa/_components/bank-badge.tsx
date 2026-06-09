@@ -14,7 +14,6 @@ export const BANKS: Record<string, { bg: string; fg: string; label: string; name
   safra: { bg: "#0A2240", fg: "#fff", label: "Safra", name: "Safra" },
   btg: { bg: "#001E62", fg: "#fff", label: "btg", name: "BTG" },
   asaas: { bg: "#0052FF", fg: "#fff", label: "asaas", name: "Asaas" },
-  sicoob: { bg: "#00AE9D", fg: "#fff", label: "Sic", name: "Sicoob" },
 }
 
 export const BANK_SLUGS = Object.keys(BANKS)
