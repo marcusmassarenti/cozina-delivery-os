@@ -483,30 +483,66 @@ export type CnpjData = {
   cidade: string
   uf: string
 }
+function mapBrasilAPI(j: Record<string, unknown>): CnpjData {
+  return {
+    name: (j.nome_fantasia as string) || (j.razao_social as string) || "",
+    legalName: (j.razao_social as string) ?? "",
+    phone: (j.ddd_telefone_1 as string) ?? "",
+    email: (j.email as string) ?? "",
+    cep: String(j.cep ?? "").replace(/\D/g, ""),
+    logradouro: [j.descricao_tipo_de_logradouro, j.logradouro].filter(Boolean).join(" ").trim(),
+    numero: (j.numero as string) ?? "",
+    bairro: (j.bairro as string) ?? "",
+    cidade: (j.municipio as string) ?? "",
+    uf: (j.uf as string) ?? "",
+  }
+}
+function mapCnpjWs(j: Record<string, unknown>): CnpjData {
+  const e = (j.estabelecimento as Record<string, unknown>) ?? {}
+  const cidade = (e.cidade as Record<string, unknown>) ?? {}
+  const estado = (e.estado as Record<string, unknown>) ?? {}
+  const ddd = e.ddd1 as string
+  const tel = e.telefone1 as string
+  return {
+    name: (e.nome_fantasia as string) || (j.razao_social as string) || "",
+    legalName: (j.razao_social as string) ?? "",
+    phone: ddd && tel ? `${ddd}${tel}` : (tel ?? ""),
+    email: (e.email as string) ?? "",
+    cep: String(e.cep ?? "").replace(/\D/g, ""),
+    logradouro: [e.tipo_logradouro, e.logradouro].filter(Boolean).join(" ").trim(),
+    numero: (e.numero as string) ?? "",
+    bairro: (e.bairro as string) ?? "",
+    cidade: (cidade.nome as string) ?? "",
+    uf: (estado.sigla as string) ?? "",
+  }
+}
+
 export async function lookupCNPJ(cnpj: string): Promise<{ ok: boolean; message?: string; data?: CnpjData }> {
+  const c = cnpj.replace(/\D/g, "")
+  if (c.length !== 14) return { ok: false, message: "CNPJ inválido (precisa de 14 dígitos)." }
+  let rateLimited = false
+  // 1) BrasilAPI
   try {
-    const c = cnpj.replace(/\D/g, "")
-    if (c.length !== 14) return { ok: false, message: "CNPJ inválido." }
     const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${c}`, { cache: "no-store" })
-    if (!res.ok) return { ok: false, message: "CNPJ não encontrado." }
-    const j = await res.json()
-    return {
-      ok: true,
-      data: {
-        name: j.nome_fantasia || j.razao_social || "",
-        legalName: j.razao_social ?? "",
-        phone: j.ddd_telefone_1 ?? "",
-        email: j.email ?? "",
-        cep: String(j.cep ?? "").replace(/\D/g, ""),
-        logradouro: [j.descricao_tipo_de_logradouro, j.logradouro].filter(Boolean).join(" ").trim(),
-        numero: j.numero ?? "",
-        bairro: j.bairro ?? "",
-        cidade: j.municipio ?? "",
-        uf: j.uf ?? "",
-      },
-    }
+    if (res.ok) return { ok: true, data: mapBrasilAPI(await res.json()) }
+    if (res.status === 429) rateLimited = true
   } catch {
-    return { ok: false, message: "Erro ao consultar CNPJ." }
+    /* tenta o fallback */
+  }
+  // 2) CNPJ.ws (pública) — fallback
+  try {
+    const res = await fetch(`https://publica.cnpj.ws/cnpj/${c}`, { cache: "no-store" })
+    if (res.ok) return { ok: true, data: mapCnpjWs(await res.json()) }
+    if (res.status === 429) rateLimited = true
+    if (res.status === 404) return { ok: false, message: "CNPJ não encontrado na Receita." }
+  } catch {
+    /* cai pra mensagem final */
+  }
+  return {
+    ok: false,
+    message: rateLimited
+      ? "Muitas consultas em pouco tempo — espere alguns segundos e tente de novo."
+      : "Não consegui consultar agora. Tente novamente em instantes.",
   }
 }
 
