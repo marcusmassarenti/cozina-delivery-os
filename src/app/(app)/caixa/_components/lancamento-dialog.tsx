@@ -28,6 +28,7 @@ export function LancamentoModal({
   accounts,
   categories,
   contacts = [],
+  units = [],
   entry,
   defaultKind,
   onClose,
@@ -36,6 +37,7 @@ export function LancamentoModal({
   accounts: FinAccount[]
   categories: FinCategory[]
   contacts?: FinContact[]
+  units?: { id: string; name: string }[]
   entry?: FinEntry | null
   defaultKind?: Kind
   onClose: () => void
@@ -45,6 +47,13 @@ export function LancamentoModal({
   const [kind, setKind] = useState<Kind>(entry?.kind ?? defaultKind ?? "despesa")
   const [recorrente, setRecorrente] = useState(false)
   const [accountId, setAccountId] = useState(entry?.accountId ?? "")
+  const [unitId, setUnitId] = useState(entry?.unitId ?? "")
+
+  function pickAccount(id: string) {
+    setAccountId(id)
+    const acc = accounts.find((a) => a.id === id)
+    if (acc?.unitId) setUnitId(acc.unitId)
+  }
   const [titular, setTitular] = useState(entry?.titular ?? "")
   const [valor, setValor] = useState(
     entry ? entry.value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
@@ -59,6 +68,7 @@ export function LancamentoModal({
 
   function submit(formData: FormData) {
     formData.set("kind", kind)
+    formData.set("unit_id", unitId)
     if (isEditing) formData.set("id", entry!.id)
     if (!recorrente) formData.set("recorrencia", "1")
     start(async () => {
@@ -130,7 +140,7 @@ export function LancamentoModal({
                   name="account_id"
                   className={inputCls}
                   value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
+                  onChange={(e) => pickAccount(e.target.value)}
                   required
                 >
                   <AccountOptions accounts={accounts} />
@@ -150,7 +160,7 @@ export function LancamentoModal({
                     name="account_id"
                     className={inputCls}
                     value={accountId}
-                    onChange={(e) => setAccountId(e.target.value)}
+                    onChange={(e) => pickAccount(e.target.value)}
                   >
                     <AccountOptions accounts={accounts} />
                   </select>
@@ -168,6 +178,19 @@ export function LancamentoModal({
                 <ContatoPicker contacts={contacts} value={titular} onChange={setTitular} />
               </Field>
             </>
+          )}
+
+          {units.length > 0 && (
+            <Field label="Loja">
+              <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
+                <option value="">Rede (geral)</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
           )}
 
           <Field label="Descrição">
@@ -246,12 +269,14 @@ export function LancamentoDialog({
   accounts,
   categories,
   contacts = [],
+  units = [],
   defaultKind,
   label = "Novo Lançamento",
 }: {
   accounts: FinAccount[]
   categories: FinCategory[]
   contacts?: FinContact[]
+  units?: { id: string; name: string }[]
   defaultKind?: Kind
   label?: string
 }) {
@@ -272,6 +297,7 @@ export function LancamentoDialog({
           accounts={accounts}
           categories={categories}
           contacts={contacts}
+          units={units}
           defaultKind={defaultKind}
           onClose={() => setOpen(false)}
           onSaved={() => {

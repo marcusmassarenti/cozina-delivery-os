@@ -49,11 +49,13 @@ export function EntriesList({
   categories,
   accounts,
   contacts = [],
+  units = [],
 }: {
   entries: FinEntry[]
   categories: FinCategory[]
   accounts: FinAccount[]
   contacts?: FinContact[]
+  units?: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -335,6 +337,7 @@ export function EntriesList({
           accounts={accounts}
           categories={categories}
           contacts={contacts}
+          units={units}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)

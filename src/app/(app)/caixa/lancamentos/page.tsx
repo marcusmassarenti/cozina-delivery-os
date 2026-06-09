@@ -5,6 +5,7 @@ import {
   getAccounts,
   getCaixaHoldingId,
   getCaixaSummary,
+  getCaixaUnits,
   getCardAccountIds,
   getCategoriesFlat,
   getContacts,
@@ -25,11 +26,12 @@ export default async function LancamentosPage({
   const loja = sp.loja
   const { year, month } = parsePeriodParam(sp.periodo)
 
-  const [accounts, categories, cardIds, contacts, summary] = await Promise.all([
+  const [accounts, categories, cardIds, contacts, units, summary] = await Promise.all([
     getAccounts(holdingId),
     getCategoriesFlat(holdingId),
     getCardAccountIds(holdingId),
     getContacts(holdingId),
+    getCaixaUnits(),
     getCaixaSummary(holdingId, year, month, loja),
   ])
   // Compras de cartão ficam na aba Cartões (não na lista do caixa).
@@ -69,7 +71,7 @@ export default async function LancamentosPage({
         ))}
       </div>
 
-      <EntriesList entries={entries} categories={categories} accounts={accounts} contacts={contacts} />
+      <EntriesList entries={entries} categories={categories} accounts={accounts} contacts={contacts} units={units} />
     </div>
   )
 }

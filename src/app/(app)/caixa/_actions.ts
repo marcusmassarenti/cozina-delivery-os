@@ -193,6 +193,7 @@ export async function saveEntry(formData: FormData): Promise<ActionState> {
       titular: txt(formData.get("titular")),
       description: txt(formData.get("description")),
       tags,
+      unit_id: txt(formData.get("unit_id")), // loja (puxada da conta no modal)
     }
     const makeRow = (dueDate: string | null, paidDate: string | null, group: string | null) => {
       const refBase = dueDate ?? paidDate ?? today

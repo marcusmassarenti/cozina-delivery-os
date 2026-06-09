@@ -38,7 +38,12 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
         </h1>
         <div className="flex items-center gap-2">
           {units.length > 0 && <LojaSelector units={units} />}
-          <LancamentoDialog accounts={accounts} categories={categories} contacts={contacts} />
+          <LancamentoDialog
+            accounts={accounts}
+            categories={categories}
+            contacts={contacts}
+            units={units}
+          />
         </div>
       </div>
 
