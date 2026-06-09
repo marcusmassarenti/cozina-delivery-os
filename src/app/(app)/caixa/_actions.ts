@@ -394,6 +394,122 @@ export async function bulkCategorize(ids: string[], categoryId: string): Promise
   }
 }
 
+// ─────────────────────────── Contatos (Cadastros) ──────────────────────────
+const digits = (v: FormDataEntryValue | null) => String(v ?? "").replace(/\D/g, "") || null
+
+export async function saveContact(formData: FormData): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    const id = txt(formData.get("id"))
+    const row = {
+      holding_id: holdingId,
+      person_type: String(formData.get("person_type") ?? "pj"),
+      name: txt(formData.get("name")) ?? "",
+      legal_name: txt(formData.get("legal_name")),
+      doc: digits(formData.get("doc")),
+      contact_type: String(formData.get("contact_type") ?? "cliente"),
+      payment_term: txt(formData.get("payment_term")),
+      state_registration: txt(formData.get("state_registration")),
+      phone: txt(formData.get("phone")),
+      email: txt(formData.get("email")),
+      cep: digits(formData.get("cep")),
+      logradouro: txt(formData.get("logradouro")),
+      numero: txt(formData.get("numero")),
+      bairro: txt(formData.get("bairro")),
+      cidade: txt(formData.get("cidade")),
+      uf: txt(formData.get("uf")),
+      complemento: txt(formData.get("complemento")),
+      updated_at: new Date().toISOString(),
+    }
+    if (!row.name) return { ok: false, message: "Informe o nome." }
+    if (id) {
+      const { error } = await admin.from("fin_contacts").update(row).eq("id", id).eq("holding_id", holdingId)
+      if (error) return { ok: false, message: error.message }
+    } else {
+      const { error } = await admin.from("fin_contacts").insert(row)
+      if (error) return { ok: false, message: error.message }
+    }
+    revalidatePath("/caixa", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+export async function deleteContact(id: string): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    const { error } = await admin.from("fin_contacts").delete().eq("id", id).eq("holding_id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/caixa", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+export type CepData = { logradouro: string; bairro: string; cidade: string; uf: string }
+export async function lookupCEP(cep: string): Promise<{ ok: boolean; message?: string; data?: CepData }> {
+  try {
+    const c = cep.replace(/\D/g, "")
+    if (c.length !== 8) return { ok: false, message: "CEP inválido." }
+    const res = await fetch(`https://viacep.com.br/ws/${c}/json/`, { cache: "no-store" })
+    if (!res.ok) return { ok: false, message: "Falha ao consultar CEP." }
+    const j = await res.json()
+    if (j.erro) return { ok: false, message: "CEP não encontrado." }
+    return {
+      ok: true,
+      data: {
+        logradouro: j.logradouro ?? "",
+        bairro: j.bairro ?? "",
+        cidade: j.localidade ?? "",
+        uf: j.uf ?? "",
+      },
+    }
+  } catch {
+    return { ok: false, message: "Erro ao consultar CEP." }
+  }
+}
+
+export type CnpjData = {
+  name: string
+  legalName: string
+  phone: string
+  email: string
+  cep: string
+  logradouro: string
+  numero: string
+  bairro: string
+  cidade: string
+  uf: string
+}
+export async function lookupCNPJ(cnpj: string): Promise<{ ok: boolean; message?: string; data?: CnpjData }> {
+  try {
+    const c = cnpj.replace(/\D/g, "")
+    if (c.length !== 14) return { ok: false, message: "CNPJ inválido." }
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${c}`, { cache: "no-store" })
+    if (!res.ok) return { ok: false, message: "CNPJ não encontrado." }
+    const j = await res.json()
+    return {
+      ok: true,
+      data: {
+        name: j.nome_fantasia || j.razao_social || "",
+        legalName: j.razao_social ?? "",
+        phone: j.ddd_telefone_1 ?? "",
+        email: j.email ?? "",
+        cep: String(j.cep ?? "").replace(/\D/g, ""),
+        logradouro: [j.descricao_tipo_de_logradouro, j.logradouro].filter(Boolean).join(" ").trim(),
+        numero: j.numero ?? "",
+        bairro: j.bairro ?? "",
+        cidade: j.municipio ?? "",
+        uf: j.uf ?? "",
+      },
+    }
+  } catch {
+    return { ok: false, message: "Erro ao consultar CNPJ." }
+  }
+}
+
 // ──────────────────── Seed de categorias padrão (restaurante) ────────────────
 const DEFAULTS: {
   name: string

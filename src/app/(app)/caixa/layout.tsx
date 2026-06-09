@@ -1,6 +1,6 @@
 import { Coins } from "lucide-react"
 
-import { getAccounts, getCaixaHoldingId, getCategoriesFlat } from "@/lib/data/caixa"
+import { getAccounts, getCaixaHoldingId, getCategoriesFlat, getContacts } from "@/lib/data/caixa"
 
 import { CaixaTabs } from "./_components/caixa-tabs"
 import { LancamentoDialog } from "./_components/lancamento-dialog"
@@ -15,9 +15,10 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
     )
   }
 
-  const [accounts, categories] = await Promise.all([
+  const [accounts, categories, contacts] = await Promise.all([
     getAccounts(holdingId),
     getCategoriesFlat(holdingId),
+    getContacts(holdingId),
   ])
 
   return (
@@ -27,7 +28,7 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
           <Coins className="size-6 text-muted-foreground" />
           Fluxo de Caixa
         </h1>
-        <LancamentoDialog accounts={accounts} categories={categories} />
+        <LancamentoDialog accounts={accounts} categories={categories} contacts={contacts} />
       </div>
 
       <CaixaTabs />

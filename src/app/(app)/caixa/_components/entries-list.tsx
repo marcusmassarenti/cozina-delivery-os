@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 
 import { fmtBRL } from "@/lib/format"
-import type { FinAccount, FinCategory, FinEntry } from "@/lib/data/caixa"
+import type { FinAccount, FinCategory, FinContact, FinEntry } from "@/lib/data/caixa"
 
 import {
   bulkCategorize,
@@ -48,10 +48,12 @@ export function EntriesList({
   entries,
   categories,
   accounts,
+  contacts = [],
 }: {
   entries: FinEntry[]
   categories: FinCategory[]
   accounts: FinAccount[]
+  contacts?: FinContact[]
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -332,6 +334,7 @@ export function EntriesList({
           entry={editing}
           accounts={accounts}
           categories={categories}
+          contacts={contacts}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)

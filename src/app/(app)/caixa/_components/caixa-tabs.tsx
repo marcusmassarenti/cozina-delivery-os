@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListOrdered,
   Tag,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react"
@@ -17,6 +18,7 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/caixa/contas", label: "Contas", icon: Wallet },
   { href: "/caixa/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/caixa/categorias", label: "Categorias", icon: Tag },
+  { href: "/caixa/cadastros", label: "Cadastros", icon: Users },
 ]
 
 export function CaixaTabs() {

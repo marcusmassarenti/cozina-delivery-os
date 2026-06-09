@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { CreditCard, Loader2, Plus, Repeat, X } from "lucide-react"
 
 import { saveEntry } from "../_actions"
-import type { FinAccount, FinCategory, FinEntry } from "@/lib/data/caixa"
+import type { FinAccount, FinCategory, FinContact, FinEntry } from "@/lib/data/caixa"
 
 type Kind = "despesa" | "receita" | "transferencia"
 
@@ -24,6 +24,7 @@ const KIND_LABEL: Record<Kind, string> = {
 export function LancamentoModal({
   accounts,
   categories,
+  contacts = [],
   entry,
   defaultKind,
   onClose,
@@ -31,6 +32,7 @@ export function LancamentoModal({
 }: {
   accounts: FinAccount[]
   categories: FinCategory[]
+  contacts?: FinContact[]
   entry?: FinEntry | null
   defaultKind?: Kind
   onClose: () => void
@@ -166,7 +168,18 @@ export function LancamentoModal({
                 </Field>
               </div>
               <Field label="Cliente / Fornecedor">
-                <input name="titular" placeholder="Nome" defaultValue={dv.titular} className={inputCls} />
+                <input
+                  name="titular"
+                  list="caixa-contatos"
+                  placeholder="Buscar cadastro ou digitar"
+                  defaultValue={dv.titular}
+                  className={inputCls}
+                />
+                <datalist id="caixa-contatos">
+                  {contacts.map((c) => (
+                    <option key={c.id} value={c.name} />
+                  ))}
+                </datalist>
               </Field>
             </>
           )}
@@ -246,11 +259,13 @@ export function LancamentoModal({
 export function LancamentoDialog({
   accounts,
   categories,
+  contacts = [],
   defaultKind,
   label = "Novo Lançamento",
 }: {
   accounts: FinAccount[]
   categories: FinCategory[]
+  contacts?: FinContact[]
   defaultKind?: Kind
   label?: string
 }) {
@@ -270,6 +285,7 @@ export function LancamentoDialog({
         <LancamentoModal
           accounts={accounts}
           categories={categories}
+          contacts={contacts}
           defaultKind={defaultKind}
           onClose={() => setOpen(false)}
           onSaved={() => {

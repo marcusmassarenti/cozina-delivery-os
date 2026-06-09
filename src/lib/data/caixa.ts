@@ -521,6 +521,72 @@ export async function getCaixaDashboard(
   }
 }
 
+// ─────────────────────────── Contatos (Cadastros) ──────────────────────────
+export type ContactType = "cliente" | "fornecedor" | "ambos" | "colaborador"
+export type FinContact = {
+  id: string
+  personType: "pj" | "pf"
+  name: string
+  legalName: string | null
+  doc: string | null
+  contactType: ContactType
+  paymentTerm: string | null
+  stateRegistration: string | null
+  phone: string | null
+  email: string | null
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  complemento: string | null
+}
+
+function mapContact(r: Record<string, unknown>): FinContact {
+  return {
+    id: r.id as string,
+    personType: r.person_type as "pj" | "pf",
+    name: r.name as string,
+    legalName: (r.legal_name as string) ?? null,
+    doc: (r.doc as string) ?? null,
+    contactType: r.contact_type as ContactType,
+    paymentTerm: (r.payment_term as string) ?? null,
+    stateRegistration: (r.state_registration as string) ?? null,
+    phone: (r.phone as string) ?? null,
+    email: (r.email as string) ?? null,
+    cep: (r.cep as string) ?? null,
+    logradouro: (r.logradouro as string) ?? null,
+    numero: (r.numero as string) ?? null,
+    bairro: (r.bairro as string) ?? null,
+    cidade: (r.cidade as string) ?? null,
+    uf: (r.uf as string) ?? null,
+    complemento: (r.complemento as string) ?? null,
+  }
+}
+
+export async function getContacts(holdingId: string): Promise<FinContact[]> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("fin_contacts")
+    .select("*")
+    .eq("holding_id", holdingId)
+    .order("name")
+  return (data ?? []).map(mapContact)
+}
+
+export type ContactCounts = { todos: number; clientes: number; fornecedores: number; pf: number }
+export function countContacts(contacts: FinContact[]): ContactCounts {
+  return {
+    todos: contacts.length,
+    clientes: contacts.filter((c) => c.contactType === "cliente" || c.contactType === "ambos").length,
+    fornecedores: contacts.filter(
+      (c) => c.contactType === "fornecedor" || c.contactType === "ambos",
+    ).length,
+    pf: contacts.filter((c) => c.personType === "pf").length,
+  }
+}
+
 // Top clientes (receitas) / fornecedores (despesas) por titular, no período.
 export type TitularTotal = { name: string; total: number; count: number }
 export async function getTopTitulares(
