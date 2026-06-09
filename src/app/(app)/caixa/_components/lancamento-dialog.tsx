@@ -8,6 +8,7 @@ import { saveEntry } from "../_actions"
 import type { FinAccount, FinCategory, FinContact, FinEntry } from "@/lib/data/caixa"
 
 import { ContatoPicker } from "./contato-picker"
+import { CategoryPicker } from "./category-picker"
 
 type Kind = "despesa" | "receita" | "transferencia"
 
@@ -45,10 +46,13 @@ export function LancamentoModal({
   const [recorrente, setRecorrente] = useState(false)
   const [accountId, setAccountId] = useState(entry?.accountId ?? "")
   const [titular, setTitular] = useState(entry?.titular ?? "")
+  const [valor, setValor] = useState(
+    entry ? entry.value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
+  )
+  const [categoryId, setCategoryId] = useState(entry?.categoryId ?? "")
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  const cats = categories.filter((c) => c.kind === kind)
   const isTransfer = kind === "transferencia"
   const selectedAcc = accounts.find((a) => a.id === accountId)
   const isCard = selectedAcc?.kind === "cartao" && kind === "despesa"
@@ -103,7 +107,16 @@ export function LancamentoModal({
         <form action={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (R$)">
-              <input name="value" inputMode="decimal" placeholder="0,00" defaultValue={dv.value} required className={inputCls} />
+              <input
+                name="value"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                onBlur={(e) => setValor(formatValor(e.target.value))}
+                required
+                className={inputCls}
+              />
             </Field>
             <Field label={isTransfer ? "Data" : "Vence em"}>
               <input name="due_date" type="date" defaultValue={dv.due} className={inputCls} />
@@ -120,22 +133,12 @@ export function LancamentoModal({
                   onChange={(e) => setAccountId(e.target.value)}
                   required
                 >
-                  <option value="">—</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
+                  <AccountOptions accounts={accounts} />
                 </select>
               </Field>
               <Field label="Para (destino)">
                 <select name="to_account_id" className={inputCls} defaultValue={dv.to} required>
-                  <option value="">—</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
+                  <AccountOptions accounts={accounts} />
                 </select>
               </Field>
             </div>
@@ -149,25 +152,16 @@ export function LancamentoModal({
                     value={accountId}
                     onChange={(e) => setAccountId(e.target.value)}
                   >
-                    <option value="">—</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.kind === "cartao" ? "💳 " : ""}
-                        {a.name}
-                      </option>
-                    ))}
+                    <AccountOptions accounts={accounts} />
                   </select>
                 </Field>
                 <Field label="Categoria">
-                  <select key={kind} name="category_id" className={inputCls} defaultValue={dv.category}>
-                    <option value="">—</option>
-                    {cats.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.parentId ? "↳ " : ""}
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <CategoryPicker
+                    categories={categories}
+                    kind={kind as "despesa" | "receita"}
+                    value={categoryId}
+                    onChange={setCategoryId}
+                  />
                 </Field>
               </div>
               <Field label="Cliente / Fornecedor">
@@ -292,6 +286,42 @@ export function LancamentoDialog({
 
 const inputCls =
   "h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+
+/** Formata "50" → "50,00", "1234,5" → "1.234,50" (mantém centavos digitados). */
+function formatValor(v: string): string {
+  const n = parseFloat(v.replace(/\./g, "").replace(",", "."))
+  if (!isFinite(n)) return ""
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** Opções do select de conta, separando Contas e Cartões. */
+function AccountOptions({ accounts }: { accounts: FinAccount[] }) {
+  const contas = accounts.filter((a) => a.kind !== "cartao")
+  const cartoes = accounts.filter((a) => a.kind === "cartao")
+  return (
+    <>
+      <option value="">—</option>
+      {contas.length > 0 && (
+        <optgroup label="Contas">
+          {contas.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {cartoes.length > 0 && (
+        <optgroup label="Cartões">
+          {cartoes.map((a) => (
+            <option key={a.id} value={a.id}>
+              💳 {a.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  )
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

@@ -110,6 +110,27 @@ export async function saveCategory(formData: FormData): Promise<ActionState> {
   }
 }
 
+/** Cria uma categoria rápido (inline no lançamento) e devolve o id. */
+export async function createCategoryQuick(
+  name: string,
+  kind: string,
+): Promise<{ ok: boolean; id?: string; message?: string }> {
+  try {
+    const { holdingId, admin } = await ctx()
+    if (!name.trim()) return { ok: false, message: "Informe o nome." }
+    const { data, error } = await admin
+      .from("fin_categories")
+      .insert({ holding_id: holdingId, name: name.trim(), kind, icon: "Tag" })
+      .select("id")
+      .single()
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/caixa", "layout")
+    return { ok: true, id: data.id as string }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
 export async function deleteCategory(id: string): Promise<ActionState> {
   try {
     const { holdingId, admin } = await ctx()
