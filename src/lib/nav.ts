@@ -47,7 +47,6 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: LayoutDashboard,
         module: "dashboard",
       },
-      { label: "Novidades", href: "/novidades", icon: Sparkles },
     ],
   },
   {
@@ -143,6 +142,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Palette,
         module: "usuarios",
       },
+      { label: "Novidades", href: "/novidades", icon: Sparkles },
     ],
   },
 ]
