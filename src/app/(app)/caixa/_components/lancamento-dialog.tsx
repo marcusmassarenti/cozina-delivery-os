@@ -42,8 +42,17 @@ export function LancamentoModal({
   const [kind, setKind] = useState<Kind>(entry?.kind ?? defaultKind ?? "despesa")
   const [recorrente, setRecorrente] = useState(false)
   const [accountId, setAccountId] = useState(entry?.accountId ?? "")
+  const [titular, setTitular] = useState(entry?.titular ?? "")
+  const [showSug, setShowSug] = useState(false)
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
+
+  const sugestoes =
+    showSug && titular.trim()
+      ? contacts
+          .filter((c) => c.name.toLowerCase().includes(titular.trim().toLowerCase()))
+          .slice(0, 8)
+      : []
 
   const cats = categories.filter((c) => c.kind === kind)
   const isTransfer = kind === "transferencia"
@@ -168,18 +177,39 @@ export function LancamentoModal({
                 </Field>
               </div>
               <Field label="Cliente / Fornecedor">
-                <input
-                  name="titular"
-                  list="caixa-contatos"
-                  placeholder="Buscar cadastro ou digitar"
-                  defaultValue={dv.titular}
-                  className={inputCls}
-                />
-                <datalist id="caixa-contatos">
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.name} />
-                  ))}
-                </datalist>
+                <div className="relative">
+                  <input
+                    name="titular"
+                    value={titular}
+                    onChange={(e) => {
+                      setTitular(e.target.value)
+                      setShowSug(true)
+                    }}
+                    onFocus={() => setShowSug(true)}
+                    onBlur={() => setTimeout(() => setShowSug(false), 120)}
+                    autoComplete="off"
+                    placeholder="Buscar cadastro ou digitar"
+                    className={inputCls}
+                  />
+                  {sugestoes.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-44 overflow-y-auto rounded-md border bg-card shadow-lg">
+                      {sugestoes.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            setTitular(c.name)
+                            setShowSug(false)
+                          }}
+                          className="block w-full truncate px-2.5 py-1.5 text-left text-sm hover:bg-accent"
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Field>
             </>
           )}
