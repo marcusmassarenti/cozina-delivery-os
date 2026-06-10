@@ -5,7 +5,8 @@
  * Granularidade máxima: 1 linha = 1 lançamento financeiro.
  *
  * Regras de agregação implementadas no `totals`:
- * - bruto: soma de `Entrada Financeira` em vendas (impacto SIM)
+ * - bruto: "Valor das vendas" do iFood = soma da cesta (valor dos itens) por
+ *   pedido de Venda, exceto pedidos com cancelamento total (bate com a tela)
  * - comissaoIfood: soma das `Comissão*` em vendas (impacto SIM)
  * - taxaEntrega: soma de `Taxa entrega iFood` em vendas (impacto SIM)
  * - taxaTransacao: soma de `Taxa de transação*` em vendas (impacto SIM)
@@ -148,6 +149,8 @@ function computeTotals(
   const pedidosUnicos = new Set<string>()
   const pedidosCancTotal = new Set<string>()
   const pedidosCancParcial = new Set<string>()
+  // Cesta (valor dos itens) por pedido de Venda — vira o "bruto" depois do loop.
+  const cestaVendaPorPedido = new Map<string, number>()
 
   for (const l of lancamentos) {
     const desc = l.descricaoLancamento ?? ""
@@ -174,11 +177,17 @@ function computeTotals(
       t.liquido += l.valor
     }
 
+    // Valor das vendas (bruto) = valor dos itens da cesta, por pedido de Venda.
+    // O iFood mostra "Valor dos itens" na tela; guardamos a cesta por pedido
+    // (1 valor por pedido) e somamos depois, fora os cancelados totais.
+    if (isVenda && l.pedidoAssociadoIfood && l.valorCestaFinal != null) {
+      cestaVendaPorPedido.set(l.pedidoAssociadoIfood, l.valorCestaFinal)
+    }
+
     // Categorizações específicas (só em Vendas, pra não contar duplicado
     // em cancelamentos que estornam)
     if (isVenda) {
-      if (desc === "Entrada Financeira") t.bruto += l.valor
-      else if (
+      if (
         desc === "Comissão do iFood (entrega iFood)" ||
         desc === "Comissão do iFood"
       )
@@ -201,6 +210,14 @@ function computeTotals(
 
     // Ocorrências (anúncios, multas) — todas as competências
     if (desc === "Pacote de anúncios") t.pacoteAnuncios += l.valor
+  }
+
+  // Bruto = "Valor das vendas" do iFood = soma da cesta (itens) por pedido de
+  // Venda, exceto pedidos com cancelamento total. Bate no centavo com o
+  // "Valor dos itens" da tela do iFood (≈ Valor das vendas — difere só pelo
+  // pequeno ajuste de cancelamentos, que o relatório de conciliação não expõe).
+  for (const [pedido, cesta] of cestaVendaPorPedido) {
+    if (!pedidosCancTotal.has(pedido)) t.bruto += cesta
   }
 
   t.pedidosUnicos = pedidosUnicos.size
