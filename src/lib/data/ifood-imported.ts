@@ -1205,6 +1205,7 @@ export async function listPedidosForMonth(
     data_criacao_pedido: string | null
     valor_transacao: number | string | null
     valor: number | string | null
+    valor_cesta_final: number | string | null
     fato_gerador: string | null
     descricao_lancamento: string | null
     motivo_cancelamento: string | null
@@ -1212,7 +1213,7 @@ export async function listPedidosForMonth(
     let query = admin
       .from("ifood_financeiro_lancamentos")
       .select(
-        "pedido_associado_ifood, pedido_associado_ifood_curto, data_criacao_pedido, valor_transacao, valor, fato_gerador, descricao_lancamento, motivo_cancelamento",
+        "pedido_associado_ifood, pedido_associado_ifood_curto, data_criacao_pedido, valor_transacao, valor, valor_cesta_final, fato_gerador, descricao_lancamento, motivo_cancelamento",
       )
       .eq("unit_id", unitId)
       .eq("ref_year", year)
@@ -1253,7 +1254,10 @@ export async function listPedidosForMonth(
     const fg = r.fato_gerador ?? ""
     const val = Number(r.valor) || 0
 
-    if (fg === "Venda" && desc === "Entrada Financeira") cur.bruto += val
+    // Bruto do pedido = valor dos itens (cesta), igual à definição da tela.
+    // A cesta repete em cada linha de Venda; usa SET (não soma).
+    if (fg === "Venda" && r.valor_cesta_final != null)
+      cur.bruto = Number(r.valor_cesta_final)
     if (
       fg === "Venda" &&
       (desc === "Comissão do iFood (entrega iFood)" ||
@@ -1306,11 +1310,18 @@ export async function getPedidoDetalhe(
   const { data } = await admin
     .from("ifood_financeiro_lancamentos")
     .select(
-      "data_fato_gerador, data_criacao_pedido, pedido_associado_ifood_curto, fato_gerador, tipo_lancamento, descricao_lancamento, valor, impacto_no_repasse",
+      "data_fato_gerador, data_criacao_pedido, pedido_associado_ifood_curto, fato_gerador, tipo_lancamento, descricao_lancamento, valor, valor_cesta_final, impacto_no_repasse",
     )
     .eq("unit_id", unitId)
     .eq("pedido_associado_ifood", pedidoIfood)
     .order("data_fato_gerador")
+
+  // Bruto do pedido = valor dos itens (cesta) — igual à definição da tela.
+  const brutoCesta = Number(
+    (data ?? []).find(
+      (r) => r.fato_gerador === "Venda" && r.valor_cesta_final != null,
+    )?.valor_cesta_final ?? 0,
+  )
 
   const lancs = (data ?? []).map((r) => ({
     fatoGerador: r.fato_gerador,
@@ -1324,7 +1335,6 @@ export async function getPedidoDetalhe(
     (a, l) => {
       const desc = l.descricao ?? ""
       const fg = l.fatoGerador ?? ""
-      if (fg === "Venda" && desc === "Entrada Financeira") a.bruto += l.valor
       if (
         fg === "Venda" &&
         (desc === "Comissão do iFood (entrega iFood)" ||
@@ -1351,7 +1361,7 @@ export async function getPedidoDetalhe(
     dataCriacao: data?.[0]?.data_criacao_pedido ?? null,
     lancamentos: lancs,
     totais: {
-      bruto: Math.round(totais.bruto * 100) / 100,
+      bruto: Math.round(brutoCesta * 100) / 100,
       liquido: Math.round(totais.liquido * 100) / 100,
       comissao: Math.round(totais.comissao * 100) / 100,
       taxas: Math.round(totais.taxas * 100) / 100,
