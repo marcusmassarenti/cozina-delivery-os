@@ -11,7 +11,6 @@ import { assertCanView } from "@/lib/auth/permissions"
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
-import { NinefoodSyncCard } from "./_components/ninefood-sync-card"
 
 // O Server Action de importação roda no contexto desta rota. A Conciliação do
 // iFood traz dezenas de milhares de lançamentos por lote (9 lojas ≈ 60k linhas),
@@ -29,6 +28,7 @@ type ImportRow = {
   ref_year: number | null
   ref_month: number | null
   source_filename: string | null
+  source: string
   rows_imported: number
   status: string
   imported_at: string
@@ -46,7 +46,7 @@ async function getRecentImports(page: number): Promise<{
   const { data: imports, count } = await admin
     .from("platform_imports")
     .select(
-      "id, unit_id, platform, report_type, cadencia, ref_date, ref_year, ref_month, source_filename, rows_imported, status, imported_at",
+      "id, unit_id, platform, report_type, cadencia, ref_date, ref_year, ref_month, source_filename, source, rows_imported, status, imported_at",
       { count: "exact" },
     )
     .order("imported_at", { ascending: false })
@@ -102,13 +102,6 @@ export default async function ImportacaoPage({
     Math.ceil(recentTotal / HISTORICO_PAGE_SIZE),
   )
 
-  // competência padrão = mês anterior (último mês fechado), formato AAAA-MM
-  const _now = new Date()
-  const _prev = new Date(_now.getFullYear(), _now.getMonth() - 1, 1)
-  const defaultCompetencia = `${_prev.getFullYear()}-${String(
-    _prev.getMonth() + 1,
-  ).padStart(2, "0")}`
-
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -130,8 +123,6 @@ export default async function ImportacaoPage({
           Ver cobertura
         </Link>
       </div>
-
-      <NinefoodSyncCard defaultCompetencia={defaultCompetencia} />
 
       <DownloadGuide />
 
@@ -177,7 +168,7 @@ export default async function ImportacaoPage({
                   Referência
                 </th>
                 <th className="px-4 py-2.5 text-right font-medium">Linhas</th>
-                <th className="px-4 py-2.5 text-left font-medium">Arquivo</th>
+                <th className="px-4 py-2.5 text-left font-medium">Origem</th>
               </tr>
             </thead>
             <tbody>
@@ -224,7 +215,13 @@ export default async function ImportacaoPage({
                     {r.rows_imported.toLocaleString("pt-BR")}
                   </td>
                   <td className="px-4 py-2.5 max-w-[280px] truncate text-[11px] text-muted-foreground">
-                    {r.source_filename ?? "—"}
+                    {r.source === "api" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+                        ↻ Sincronização
+                      </span>
+                    ) : (
+                      (r.source_filename ?? "— relatório")
+                    )}
                   </td>
                 </tr>
               ))}

@@ -90,9 +90,41 @@ export async function getImportCoverageForMonth(
     qk,
   ])
 
+  // 99 Food também vem pela API (ninefood_api_bill). Considera a última
+  // business_date com financeiro no mês e usa a MAIS RECENTE entre import e API.
+  const mm = String(month).padStart(2, "0")
+  const lastDay = new Date(year, month, 0).getDate()
+  let qnApi = admin
+    .from("ninefood_api_bill")
+    .select("business_date")
+    .gte("business_date", `${year}-${mm}-01`)
+    .lte("business_date", `${year}-${mm}-${String(lastDay).padStart(2, "0")}`)
+    .order("business_date", { ascending: false })
+    .limit(1)
+  if (filterUnitIds) {
+    const { data: links } = await admin
+      .from("ninefood_store_links")
+      .select("app_shop_id")
+      .in("unit_id", filterUnitIds)
+    const shops = (links ?? []).map(
+      (r) => (r as { app_shop_id: string }).app_shop_id,
+    )
+    qnApi = qnApi.in("app_shop_id", shops.length ? shops : ["__none__"])
+  }
+  const { data: dnApi } = await qnApi
+
+  const ninefoodLatest =
+    [
+      dn?.[0]?.data as string | undefined,
+      dnApi?.[0]?.business_date as string | undefined,
+    ]
+      .filter((d): d is string => !!d)
+      .sort()
+      .pop() ?? null
+
   return {
     ifood: parseDay(di?.[0]?.data_fato_gerador as string | undefined),
-    ninefood: parseDay(dn?.[0]?.data as string | undefined),
+    ninefood: parseDay(ninefoodLatest),
     keeta: parseDay(dk?.[0]?.data as string | undefined),
   }
 }

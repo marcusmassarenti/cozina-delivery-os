@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { assertCanView } from "@/lib/auth/permissions"
+import { createAdminClient } from "@/lib/supabase/admin"
 import {
   syncNinefoodFinanceiro,
   type ShopSyncResult,
@@ -116,6 +117,46 @@ export async function runNinefood99SyncAll(
   try {
     const fin = await syncNinefoodFinanceiro({ startDate, endDate })
     const card = await syncNinefoodCardapio()
+
+    // grava no histórico de importações com origem = 'api' (aparece junto dos
+    // relatórios manuais, distinguível pela origem)
+    const admin = createAdminClient()
+    const unitByShop = new Map<string, string | null>()
+    for (const r of fin.results) unitByShop.set(r.appShopId, r.unitId)
+    const logs: Record<string, unknown>[] = []
+    for (const r of fin.results) {
+      if (r.unitId && r.count > 0)
+        logs.push({
+          unit_id: r.unitId,
+          platform: "99food",
+          report_type: "financeiro",
+          cadencia: "mensal",
+          ref_year: year,
+          ref_month: month,
+          rows_imported: r.count,
+          status: r.error ? "error" : "success",
+          error_message: r.error ?? null,
+          source: "api",
+        })
+    }
+    for (const r of card.results) {
+      const uid = unitByShop.get(r.appShopId)
+      if (uid && r.items > 0)
+        logs.push({
+          unit_id: uid,
+          platform: "99food",
+          report_type: "cardapio",
+          cadencia: "mensal",
+          ref_year: year,
+          ref_month: month,
+          rows_imported: r.items,
+          status: r.error ? "error" : "success",
+          error_message: r.error ?? null,
+          source: "api",
+        })
+    }
+    if (logs.length) await admin.from("platform_imports").insert(logs)
+
     revalidatePath("/importacao")
     revalidatePath("/financeiro")
     revalidatePath("/")

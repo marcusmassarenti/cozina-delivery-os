@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/ninefood-sync",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
