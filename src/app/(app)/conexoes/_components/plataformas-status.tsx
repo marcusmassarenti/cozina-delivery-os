@@ -1,14 +1,15 @@
-import { Check, Circle, Clock } from "lucide-react"
+import { ArrowRight, Check, Circle, Clock } from "lucide-react"
+import Link from "next/link"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 
 /**
  * Painel de status das integrações de plataforma (entrada).
  * Reflete o estado REAL de cada conexão — não é mockup:
- *  - iFood: app criado + auth pronta, em homologação (ticket aberto).
- *  - 99 Food / Keeta: importação manual de relatórios.
- * Quando o iFood liberar produção, o badge vira "Conectado" e entra a
- * última sincronização.
+ *  - iFood: app criado + auth pronta, em homologação (ticket aberto) → import manual por ora.
+ *  - 99 Food: CONECTADO via API (financeiro + cardápio sincronizando).
+ *  - Keeta: importação manual de relatórios.
+ * Cada card mostra ONDE sincronizar.
  */
 type Status = "conectado" | "homologacao" | "verificacao" | "manual"
 
@@ -51,6 +52,8 @@ type PlatformStatus = {
   headline: string
   meta: { label: string; value: string }[]
   steps?: Step[]
+  /** Onde o usuário sincroniza/importa os dados desta plataforma. */
+  sync: { label: string; href: string }
 }
 
 const PLATFORMS: PlatformStatus[] = [
@@ -70,22 +73,25 @@ const PLATFORMS: PlatformStatus[] = [
       { label: "Homologação iFood", state: "active" },
       { label: "Produção (todas as lojas)", state: "pending" },
     ],
+    sync: { label: "Por ora, importe os relatórios", href: "/importacao" },
   },
   {
     id: "99food",
     name: "99 Food",
-    status: "verificacao",
-    headline: "API oficial — cadastro de integrador enviado",
+    status: "conectado",
+    headline: "API oficial — financeiro + cardápio sincronizando",
     meta: [
-      { label: "Empresa", value: "Lab of Change Ltda · CNPJ" },
-      { label: "Verificação", value: "até 3 dias úteis (por e-mail)" },
+      { label: "Dados", value: "Financeiro (repasse) + Cardápio" },
+      { label: "Lojas", value: "4 de 18 vinculadas" },
+      { label: "Empresa", value: "Lab of Change Ltda" },
     ],
     steps: [
-      { label: "Cadastro de integrador enviado", state: "done" },
-      { label: "Verificação 99 Food", state: "active" },
-      { label: "App + credenciais", state: "pending" },
-      { label: "Produção (todas as lojas)", state: "pending" },
+      { label: "App de produção criado", state: "done" },
+      { label: "Lojas vinculadas + autorizadas", state: "done" },
+      { label: "Financeiro + Cardápio via API", state: "done" },
+      { label: "Vincular as demais lojas", state: "active" },
     ],
+    sync: { label: "Sincronize em Importação", href: "/importacao" },
   },
   {
     id: "keeta",
@@ -93,6 +99,7 @@ const PLATFORMS: PlatformStatus[] = [
     status: "manual",
     headline: "Dados pelos relatórios importados (.xlsx / CSV)",
     meta: [{ label: "API", value: "Só operacional — financeiro manual" }],
+    sync: { label: "Importe os relatórios", href: "/importacao" },
   },
 ]
 
@@ -146,7 +153,7 @@ export function PlataformasStatus() {
               ))}
             </dl>
 
-            {/* Tracker de progresso (só iFood por ora) */}
+            {/* Tracker de progresso */}
             {p.steps && (
               <ol className="mt-3 space-y-1.5 border-t pt-3">
                 {p.steps.map((s) => (
@@ -170,6 +177,15 @@ export function PlataformasStatus() {
                 ))}
               </ol>
             )}
+
+            {/* Onde sincronizar */}
+            <Link
+              href={p.sync.href}
+              className="mt-3 flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <span>{p.sync.label}</span>
+              <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+            </Link>
           </div>
         )
       })}
