@@ -22,10 +22,13 @@ export function UnitsListView({
   units,
   canEdit = false,
   canDelete = false,
+  ninefoodSyncedIds = [],
 }: {
   units: Unit[]
   canEdit?: boolean
   canDelete?: boolean
+  /** unit_ids que sincronizam pela API do 99 (ponto verde no logo). */
+  ninefoodSyncedIds?: string[]
 }) {
   const router = useRouter()
   const [search, setSearch] = React.useState("")
@@ -276,14 +279,39 @@ export function UnitsListView({
               {/* Bottom: plataformas + seta */}
               <div className="mt-auto flex items-center justify-between border-t pt-3">
                 <div className="flex items-center gap-1">
-                  {unit.platforms.length === 0 ? (
+                  {unit.platforms.length === 0 &&
+                  !ninefoodSyncedIds.includes(unit.id) ? (
                     <span className="text-[10px] text-muted-foreground">
                       Nenhuma plataforma
                     </span>
                   ) : (
-                    unit.platforms.map((p) => (
-                      <PlatformLogo key={p} platform={p} size="sm" />
-                    ))
+                    <>
+                      {unit.platforms.map((p) =>
+                        p === "99food" &&
+                        ninefoodSyncedIds.includes(unit.id) ? (
+                          <span
+                            key={p}
+                            className="relative inline-flex"
+                            title="Sincroniza pelo 99 Food (API)"
+                          >
+                            <PlatformLogo platform={p} size="sm" />
+                            <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 ring-1 ring-card" />
+                          </span>
+                        ) : (
+                          <PlatformLogo key={p} platform={p} size="sm" />
+                        ),
+                      )}
+                      {ninefoodSyncedIds.includes(unit.id) &&
+                        !unit.platforms.includes("99food") && (
+                          <span
+                            className="relative inline-flex"
+                            title="Sincroniza pelo 99 Food (API)"
+                          >
+                            <PlatformLogo platform="99food" size="sm" />
+                            <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 ring-1 ring-card" />
+                          </span>
+                        )}
+                    </>
                   )}
                 </div>
                 <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
