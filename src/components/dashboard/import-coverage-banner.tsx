@@ -1,4 +1,5 @@
-import { AlertTriangle, CircleCheck } from "lucide-react"
+import { AlertTriangle, CircleCheck, Download } from "lucide-react"
+import Link from "next/link"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { ImportCoverage, PlatformCoverage } from "@/lib/data/relatorio-diario"
@@ -63,6 +64,14 @@ export function ImportCoverageBanner({
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
   const noData = withData.length === 0
   const anyBehind = platforms.some((p) => isBehind(p.cov))
+  const PLAT_LABEL: Record<PlatformId, string> = {
+    ifood: "iFood",
+    "99food": "99 Food",
+    keeta: "Keeta",
+  }
+  const faltantes = platforms
+    .filter((p) => p.cov.lastDay === null)
+    .map((p) => PLAT_LABEL[p.id])
 
   const tone = noData
     ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400"
@@ -116,6 +125,17 @@ export function ImportCoverageBanner({
           })}
         </div>
       )}
+
+      {faltantes.length > 0 ? (
+        <Link
+          href="/importacao"
+          title="Baixe e importe os relatórios faltantes"
+          className="inline-flex items-center gap-1 rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-semibold transition-colors hover:bg-card/60"
+        >
+          <Download className="size-3" />
+          Falta importar: {faltantes.join(", ")}
+        </Link>
+      ) : null}
 
       <Ninefood99QuickSync year={year} month={month} />
     </div>
