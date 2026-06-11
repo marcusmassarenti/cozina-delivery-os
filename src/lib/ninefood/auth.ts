@@ -75,9 +75,16 @@ export async function getNinefoodAuthToken(appShopId: string): Promise<string> {
   const cached = cache.get(appShopId)
   if (cached && cached.expiresAt > Date.now() + SAFETY_MS) return cached.token
 
-  let json = await callAuth("get", appShopId)
-  if (!json.data?.auth_token) {
-    // sem token ainda → força um refresh e busca de novo
+  // Tenta pegar o token. Se a autorização da loja expirou (errno 10102) ou
+  // ainda não há token, faz um refresh e tenta de novo — assim a auth se
+  // auto-renova (o token da loja dura ~dias e expira sozinho).
+  let json: StandardResponse | null = null
+  try {
+    json = await callAuth("get", appShopId)
+  } catch {
+    json = null // ex.: "store authorization expired" → resolve com refresh
+  }
+  if (!json?.data?.auth_token) {
     await callAuth("refresh", appShopId)
     json = await callAuth("get", appShopId)
   }
