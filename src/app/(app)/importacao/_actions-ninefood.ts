@@ -7,6 +7,10 @@ import {
   syncNinefoodFinanceiro,
   type ShopSyncResult,
 } from "@/lib/ninefood/sync-financeiro"
+import {
+  syncNinefoodCardapio,
+  type CardapioSyncResult,
+} from "@/lib/ninefood/sync-cardapio"
 
 export type Ninefood99SyncState = {
   ok: boolean
@@ -63,6 +67,44 @@ export async function runNinefood99Sync(
     return {
       ok: false,
       competencia,
+      message: e instanceof Error ? e.message : "Erro inesperado no sync.",
+    }
+  }
+}
+
+export type Ninefood99CardapioState = {
+  ok: boolean
+  message?: string
+  results?: CardapioSyncResult[]
+}
+
+/**
+ * Puxa o cardápio atual (snapshot) das lojas vinculadas do 99 e grava em
+ * ninefood_api_menu_item.
+ */
+export async function runNinefood99Cardapio(
+  _prev: Ninefood99CardapioState,
+  _formData: FormData,
+): Promise<Ninefood99CardapioState> {
+  try {
+    await assertCanView("importacao")
+  } catch {
+    return { ok: false, message: "Você não tem permissão para sincronizar." }
+  }
+  try {
+    const { results } = await syncNinefoodCardapio()
+    revalidatePath("/importacao")
+    const comErro = results.filter((r) => r.error)
+    return {
+      ok: comErro.length === 0,
+      results,
+      message: comErro.length
+        ? `${comErro.length} loja(s) com erro — veja abaixo.`
+        : undefined,
+    }
+  } catch (e) {
+    return {
+      ok: false,
       message: e instanceof Error ? e.message : "Erro inesperado no sync.",
     }
   }
