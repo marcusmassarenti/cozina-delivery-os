@@ -5,7 +5,6 @@ import { createHash, randomBytes } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
 import { requireModulePermission, requireSuperadmin } from "@/lib/auth/guards"
-import { syncNinefoodBillRange } from "@/lib/ninefood/sync"
 
 export type CreateKeyState = {
   ok: boolean
@@ -77,76 +76,4 @@ export async function revokeApiKey(
   }
 }
 
-// ───────────────────────── 99 Food (sync financeiro) ────────────────────────
-
-export type SetStoreIdState = { ok: boolean; message?: string }
-
-/** Define/atualiza o app_shop_id (acceptor_code) do 99 numa unidade. */
-export async function setNinefoodStoreId(
-  formData: FormData,
-): Promise<SetStoreIdState> {
-  try {
-    const { admin } = await requireSuperadmin()
-    const unitId = String(formData.get("unitId") ?? "").trim()
-    const appShopId = String(formData.get("appShopId") ?? "").trim()
-    if (!unitId) return { ok: false, message: "Unidade inválida." }
-    const { error } = await admin
-      .from("unit_platforms")
-      .update({ api_store_id: appShopId || null })
-      .eq("unit_id", unitId)
-      .eq("platform", "99food")
-    if (error) return { ok: false, message: error.message }
-    revalidatePath("/conexoes")
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
-  }
-}
-
-export type SyncNinefoodState = {
-  ok: boolean
-  message?: string
-  fetched?: number
-  upserted?: number
-  liquido?: number
-}
-
-/** Roda a sincronização do extrato do 99 de uma unidade num mês. */
-export async function syncNinefoodUnit(
-  formData: FormData,
-): Promise<SyncNinefoodState> {
-  try {
-    const { admin } = await requireSuperadmin()
-    const unitId = String(formData.get("unitId") ?? "").trim()
-    const year = Number(formData.get("year"))
-    const month = Number(formData.get("month"))
-    if (!unitId || !year || !month) {
-      return { ok: false, message: "Parâmetros inválidos." }
-    }
-    const { data: up } = await admin
-      .from("unit_platforms")
-      .select("api_store_id")
-      .eq("unit_id", unitId)
-      .eq("platform", "99food")
-      .maybeSingle()
-    const appShopId = up?.api_store_id
-    if (!appShopId) {
-      return { ok: false, message: "Defina o app_shop_id da loja primeiro." }
-    }
-    const mm = String(month).padStart(2, "0")
-    const lastDay = new Date(year, month, 0).getDate()
-    const startDate = `${year}${mm}01`
-    const endDate = `${year}${mm}${String(lastDay).padStart(2, "0")}`
-
-    const r = await syncNinefoodBillRange({ unitId, appShopId, startDate, endDate })
-    revalidatePath("/conexoes")
-    return {
-      ok: true,
-      fetched: r.fetched,
-      upserted: r.upserted,
-      liquido: r.liquidoTotal,
-    }
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
-  }
-}
+// (Sync financeiro do 99 movido pra /importação — ver NinefoodSyncCard.)
