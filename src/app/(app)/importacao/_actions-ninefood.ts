@@ -72,6 +72,72 @@ export async function runNinefood99Sync(
   }
 }
 
+export type Ninefood99SyncAllState = {
+  ok: boolean
+  message?: string
+  competencia?: string
+  financeiro?: ShopSyncResult[]
+  cardapio?: CardapioSyncResult[]
+}
+
+/**
+ * Sincroniza TUDO do 99 de uma vez: financeiro (da competência) + cardápio
+ * (snapshot). Aceita `competencia` (AAAA-MM) OU `year`+`month` (do Dashboard).
+ */
+export async function runNinefood99SyncAll(
+  _prev: Ninefood99SyncAllState,
+  formData: FormData,
+): Promise<Ninefood99SyncAllState> {
+  try {
+    await assertCanView("importacao")
+  } catch {
+    return { ok: false, message: "Você não tem permissão para sincronizar." }
+  }
+
+  let year: number
+  let month: number
+  const comp = String(formData.get("competencia") ?? "").trim()
+  const m = comp.match(/^(\d{4})-(\d{2})$/)
+  if (m) {
+    year = Number(m[1])
+    month = Number(m[2])
+  } else {
+    year = Number(formData.get("year"))
+    month = Number(formData.get("month"))
+  }
+  if (!year || !month || month < 1 || month > 12) {
+    return { ok: false, message: "Competência inválida." }
+  }
+  const mm = String(month).padStart(2, "0")
+  const lastDay = new Date(year, month, 0).getDate()
+  const startDate = `${year}${mm}01`
+  const endDate = `${year}${mm}${String(lastDay).padStart(2, "0")}`
+
+  try {
+    const fin = await syncNinefoodFinanceiro({ startDate, endDate })
+    const card = await syncNinefoodCardapio()
+    revalidatePath("/importacao")
+    revalidatePath("/financeiro")
+    revalidatePath("/")
+    const erros = [
+      ...fin.results.filter((r) => r.error),
+      ...card.results.filter((r) => r.error),
+    ]
+    return {
+      ok: erros.length === 0,
+      competencia: `${year}-${mm}`,
+      financeiro: fin.results,
+      cardapio: card.results,
+      message: erros.length ? `${erros.length} erro(s) — veja abaixo.` : undefined,
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro inesperado no sync.",
+    }
+  }
+}
+
 export type Ninefood99CardapioState = {
   ok: boolean
   message?: string

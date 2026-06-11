@@ -4,6 +4,8 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { ImportCoverage, PlatformCoverage } from "@/lib/data/relatorio-diario"
 import { nowParts } from "@/lib/period"
 
+import { Ninefood99QuickSync } from "./ninefood99-quick-sync"
+
 const MES_ABREV = [
   "jan", "fev", "mar", "abr", "mai", "jun",
   "jul", "ago", "set", "out", "nov", "dez",
@@ -114,6 +116,8 @@ export function ImportCoverageBanner({
           })}
         </div>
       )}
+
+      <Ninefood99QuickSync year={year} month={month} />
     </div>
   )
 }

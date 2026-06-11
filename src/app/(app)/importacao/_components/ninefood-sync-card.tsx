@@ -11,20 +11,28 @@ import { PlatformLogo } from "@/components/platform-logo"
 import { fmtBRL } from "@/lib/format"
 
 import {
-  runNinefood99Sync,
-  type Ninefood99SyncState,
+  runNinefood99SyncAll,
+  type Ninefood99SyncAllState,
 } from "../_actions-ninefood"
 
-const initial: Ninefood99SyncState = { ok: false }
+const initial: Ninefood99SyncAllState = { ok: false }
 
 function SubmitButton() {
   const { pending } = useFormStatus()
   return (
     <Button type="submit" disabled={pending} className="gap-2">
       <RefreshCw className={`size-4 ${pending ? "animate-spin" : ""}`} />
-      {pending ? "Sincronizando…" : "Sincronizar agora"}
+      {pending ? "Sincronizando…" : "Sincronizar tudo"}
     </Button>
   )
+}
+
+type Row = {
+  name: string | null
+  liquido: number
+  count: number
+  items: number | null
+  error?: string
 }
 
 export function NinefoodSyncCard({
@@ -33,40 +41,56 @@ export function NinefoodSyncCard({
   defaultCompetencia: string
 }) {
   const router = useRouter()
-  const [state, formAction] = useActionState(runNinefood99Sync, initial)
+  const [state, formAction] = useActionState(runNinefood99SyncAll, initial)
 
   React.useEffect(() => {
-    if (state.results) router.refresh()
+    if (state.financeiro || state.cardapio) router.refresh()
   }, [state, router])
 
-  const results = state.results ?? []
-  const total = results.reduce(
-    (acc, r) => ({
-      count: acc.count + r.count,
-      bruto: acc.bruto + r.bruto,
-      liquido: acc.liquido + r.liquido,
-    }),
-    { count: 0, bruto: 0, liquido: 0 },
-  )
+  // Junta financeiro + cardápio por loja
+  const byShop = new Map<string, Row>()
+  for (const r of state.financeiro ?? []) {
+    byShop.set(r.appShopId, {
+      name: r.name,
+      liquido: r.liquido,
+      count: r.count,
+      items: null,
+      error: r.error,
+    })
+  }
+  for (const r of state.cardapio ?? []) {
+    const e = byShop.get(r.appShopId) ?? {
+      name: r.name,
+      liquido: 0,
+      count: 0,
+      items: null,
+    }
+    e.items = r.items
+    if (r.error && !e.error) e.error = r.error
+    byShop.set(r.appShopId, e)
+  }
+  const rows = [...byShop.values()]
+  const totLiq = rows.reduce((s, r) => s + r.liquido, 0)
+  const totLanc = rows.reduce((s, r) => s + r.count, 0)
+  const totItems = rows.reduce((s, r) => s + (r.items ?? 0), 0)
+  const hasResult = state.financeiro != null || state.cardapio != null
 
   return (
     <div className="rounded-xl border bg-card p-5">
       <div className="flex items-center gap-2.5">
         <PlatformLogo platform="99food" size="md" />
         <div>
-          <h2 className="text-sm font-semibold">
-            Sincronizar Financeiro — 99 Food (API)
-          </h2>
+          <h2 className="text-sm font-semibold">Sincronizar 99 Food (API)</h2>
           <p className="text-xs text-muted-foreground">
-            Puxa o extrato (repasse) das lojas vinculadas direto da API — sem
-            planilha. Idempotente: pode rodar quantas vezes quiser.
+            Financeiro (repasse) + Cardápio das lojas vinculadas, num clique
+            só. Idempotente: pode rodar quantas vezes quiser.
           </p>
         </div>
       </div>
 
       <form action={formAction} className="mt-4 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          Competência
+          Competência (financeiro)
           <input
             type="month"
             name="competencia"
@@ -92,27 +116,24 @@ export function NinefoodSyncCard({
         </p>
       ) : null}
 
-      {results.length > 0 ? (
+      {hasResult && rows.length > 0 ? (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
                 <th className="py-1 pr-4 font-medium">Loja</th>
                 <th className="py-1 pr-4 text-right font-medium">Lançamentos</th>
-                <th className="py-1 pr-4 text-right font-medium">Valor pedidos</th>
-                <th className="py-1 text-right font-medium">Líquido repasse</th>
+                <th className="py-1 pr-4 text-right font-medium">
+                  Líquido repasse
+                </th>
+                <th className="py-1 text-right font-medium">Itens cardápio</th>
               </tr>
             </thead>
             <tbody>
-              {results.map((r) => (
-                <tr key={r.appShopId} className="border-t border-border/60">
+              {rows.map((r, i) => (
+                <tr key={i} className="border-t border-border/60">
                   <td className="py-1.5 pr-4">
-                    {r.name ?? r.appShopId}
-                    {r.unitCreated ? (
-                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                        unidade criada
-                      </span>
-                    ) : null}
+                    {r.name ?? "—"}
                     {r.error ? (
                       <span className="ml-2 text-xs text-red-600">
                         {r.error}
@@ -122,11 +143,11 @@ export function NinefoodSyncCard({
                   <td className="py-1.5 pr-4 text-right tabular-nums">
                     {r.count}
                   </td>
-                  <td className="py-1.5 pr-4 text-right tabular-nums">
-                    {fmtBRL(r.bruto)}
-                  </td>
-                  <td className="py-1.5 text-right font-medium tabular-nums">
+                  <td className="py-1.5 pr-4 text-right font-medium tabular-nums">
                     {fmtBRL(r.liquido)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {r.items ?? "—"}
                   </td>
                 </tr>
               ))}
@@ -135,14 +156,12 @@ export function NinefoodSyncCard({
               <tr className="border-t-2 font-semibold">
                 <td className="py-1.5 pr-4">Total</td>
                 <td className="py-1.5 pr-4 text-right tabular-nums">
-                  {total.count}
+                  {totLanc}
                 </td>
                 <td className="py-1.5 pr-4 text-right tabular-nums">
-                  {fmtBRL(total.bruto)}
+                  {fmtBRL(totLiq)}
                 </td>
-                <td className="py-1.5 text-right tabular-nums">
-                  {fmtBRL(total.liquido)}
-                </td>
+                <td className="py-1.5 text-right tabular-nums">{totItems}</td>
               </tr>
             </tfoot>
           </table>

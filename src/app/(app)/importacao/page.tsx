@@ -12,7 +12,6 @@ import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
 import { NinefoodSyncCard } from "./_components/ninefood-sync-card"
-import { NinefoodCardapioCard } from "./_components/ninefood-cardapio-card"
 
 // O Server Action de importação roda no contexto desta rota. A Conciliação do
 // iFood traz dezenas de milhares de lançamentos por lote (9 lojas ≈ 60k linhas),
@@ -133,8 +132,6 @@ export default async function ImportacaoPage({
       </div>
 
       <NinefoodSyncCard defaultCompetencia={defaultCompetencia} />
-
-      <NinefoodCardapioCard />
 
       <DownloadGuide />
 
