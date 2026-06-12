@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils"
  *  - helpUrl: link da central de ajuda (interno ou externo).
  */
 const SUPPORT = {
-  email: "marcus@massarenti.me",
-  whatsapp: "", // ex.: "5511999999999"
+  email: "suporte@deliveryos.food",
+  whatsapp: "5511995125139", // só dígitos com DDI
   helpUrl: "/seguranca",
 }
 
