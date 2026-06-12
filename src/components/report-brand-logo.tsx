@@ -12,10 +12,20 @@ export async function ReportBrandLogo({
 }: {
   imgClassName?: string
 }) {
-  const { logoUrl } = await getCurrentUserContext()
-  if (logoUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={logoUrl} alt="" className={imgClassName} />
-  }
-  return <DeliveryOsMark className="size-10" />
+  const { logoUrl, companyName } = await getCurrentUserContext()
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt="" className={imgClassName} />
+      ) : (
+        <DeliveryOsMark className="size-10" />
+      )}
+      {companyName && (
+        <span className="text-xs font-semibold leading-tight text-foreground print:text-sm">
+          {companyName}
+        </span>
+      )}
+    </div>
+  )
 }

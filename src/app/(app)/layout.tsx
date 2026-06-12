@@ -49,6 +49,7 @@ export default async function AppLayout({
           allowedModules={allowedModules}
           isSuperadmin={superadmin}
           logoUrl={userContext.logoUrl}
+          companyName={userContext.companyName}
         />
         <SidebarInset>
           <TopBar
@@ -70,7 +71,7 @@ export default async function AppLayout({
         </SidebarInset>
         <WelcomeTour
           initialOnboarded={userContext.onboarded}
-          brandName={userContext.brandName}
+          brandName={userContext.companyName || userContext.brandName}
         />
         <WhatsNewModal onboarded={userContext.onboarded} />
       </SidebarProvider>

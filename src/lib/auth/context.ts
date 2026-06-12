@@ -25,6 +25,8 @@ export type UserContext = {
   fullName: string
   initials: string
   brandName: string
+  /** Nome da empresa (cliente) — editável na Personalização. Vem de holdings.name. */
+  companyName: string
   /** Logo da empresa (white-label). null = usa o logo padrão (Delivery OS). */
   logoUrl: string | null
   /** Já viu o tour de boas-vindas? (controla o onboarding do 1º login) */
@@ -36,6 +38,7 @@ const FALLBACK: UserContext = {
   fullName: "Usuário",
   initials: "U",
   brandName: "Cozina Foods",
+  companyName: "",
   logoUrl: null,
   onboarded: true,
 }
@@ -105,17 +108,20 @@ async function loadCurrentUserContext(): Promise<UserContext> {
     }
   }
 
-  // Logo da empresa (white-label) — resolve pela holding do usuário.
+  // Logo + nome da empresa (white-label) — resolve pela holding do usuário.
   let logoUrl: string | null = null
+  let companyName = ""
   const holdingId = await getCurrentHoldingId()
   if (holdingId) {
     const { data: h } = await admin
       .from("holdings")
-      .select("logo_url")
+      .select("logo_url, name")
       .eq("id", holdingId)
       .maybeSingle()
     logoUrl = (h?.logo_url as string | null) ?? null
+    companyName = (h?.name as string | null) ?? ""
   }
+  if (!companyName) companyName = brandName
 
   // Onboarding: default true (não mostra tour se não der pra determinar —
   // ex.: antes da migration). Só mostra quando lê explicitamente `false`.
@@ -132,6 +138,7 @@ async function loadCurrentUserContext(): Promise<UserContext> {
     fullName,
     initials: computeInitials(fullName),
     brandName,
+    companyName,
     logoUrl,
     onboarded,
   }

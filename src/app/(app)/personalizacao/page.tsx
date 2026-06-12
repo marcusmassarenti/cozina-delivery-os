@@ -5,6 +5,7 @@ import { isSuperadmin, userCan, getCurrentHoldingId } from "@/lib/auth/permissio
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/admin"
 
+import { CompanyNameForm } from "./_components/company-name-form"
 import { LogoUploader } from "./_components/logo-uploader"
 import { StoreLogoUploader } from "./_components/store-logo-uploader"
 import { LoginImageUploader } from "./_components/login-image-uploader"
@@ -46,6 +47,8 @@ export default async function PersonalizacaoPage() {
           Deixe o sistema com a cara da sua empresa.
         </p>
       </div>
+
+      <CompanyNameForm current={ctx.companyName} />
 
       <LogoUploader currentLogo={ctx.logoUrl} />
 

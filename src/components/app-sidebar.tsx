@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ChevronDown, Star } from "lucide-react"
 
-import { DeliveryOsMark, DeliveryOsWordmark } from "@/components/delivery-os-logo"
+import { DeliveryOsMark } from "@/components/delivery-os-logo"
 import {
   Collapsible,
   CollapsibleContent,
@@ -104,10 +104,12 @@ export function AppSidebar({
   allowedModules,
   isSuperadmin = false,
   logoUrl = null,
+  companyName = "",
 }: {
   allowedModules: string[]
   isSuperadmin?: boolean
   logoUrl?: string | null
+  companyName?: string
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
@@ -130,7 +132,7 @@ export function AppSidebar({
       <SidebarHeader className="gap-1.5 px-3 py-3">
         {logoUrl ? (
           <>
-            {/* Logo da empresa (white-label) + selo "Delivery OS" — expandido */}
+            {/* Logo da empresa + nome + selo "Delivery OS" — expandido */}
             <div className="group-data-[collapsible=icon]:hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -138,9 +140,14 @@ export function AppSidebar({
                 alt="Logo"
                 className="h-9 w-auto max-w-[170px] object-contain"
               />
-              <div className="mt-2 flex items-center gap-1.5 border-t border-white/[0.08] pt-2">
-                <DeliveryOsMark className="size-[18px] rounded-md" />
-                <span className="text-[10px] font-medium tracking-tight text-sidebar-foreground/65">
+              {companyName && (
+                <p className="mt-1.5 truncate text-xs font-medium text-sidebar-foreground/90">
+                  {companyName}
+                </p>
+              )}
+              <div className="mt-1.5 flex items-center gap-1.5 border-t border-white/[0.08] pt-1.5">
+                <DeliveryOsMark className="size-4 rounded-[5px]" />
+                <span className="text-[10px] font-medium tracking-tight text-sidebar-foreground/60">
                   Delivery OS
                 </span>
               </div>
@@ -153,8 +160,18 @@ export function AppSidebar({
           </>
         ) : (
           <>
-            {/* Marca padrão do produto: Delivery OS */}
-            <DeliveryOsWordmark className="group-data-[collapsible=icon]:hidden" />
+            {/* Sem logo: nome da empresa em destaque (ou Delivery OS) + selo */}
+            <div className="group-data-[collapsible=icon]:hidden">
+              <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">
+                {companyName || "Delivery OS"}
+              </p>
+              <div className="mt-1 flex items-center gap-1.5">
+                <DeliveryOsMark className="size-4 rounded-[5px]" />
+                <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-sidebar-foreground/55">
+                  {companyName ? "Delivery OS" : "Gestão de Delivery"}
+                </span>
+              </div>
+            </div>
             <DeliveryOsMark className="hidden size-8 group-data-[collapsible=icon]:flex" />
           </>
         )}

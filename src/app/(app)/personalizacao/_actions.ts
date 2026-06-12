@@ -20,6 +20,31 @@ function extFor(type: string): string {
   return "jpg"
 }
 
+/** Salva o nome da empresa (holdings.name) — aparece no menu, relatórios e boas-vindas. */
+export async function saveCompanyName(
+  _prev: BrandingState,
+  formData: FormData,
+): Promise<BrandingState> {
+  try {
+    const { admin } = await requireAdmin()
+    const holdingId = await getCurrentHoldingId()
+    if (!holdingId) return { ok: false, message: "Empresa não identificada." }
+    const name = String(formData.get("name") ?? "").trim()
+    if (!name) return { ok: false, message: "Digite o nome da empresa." }
+    if (name.length > 60) return { ok: false, message: "Nome muito longo (máx. 60)." }
+    const { error } = await admin
+      .from("holdings")
+      .update({ name })
+      .eq("id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/", "layout")
+    revalidatePath("/personalizacao")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
 /** Sobe o logo da empresa do admin logado e grava a URL em holdings.logo_url. */
 export async function uploadLogo(
   _prev: BrandingState,
