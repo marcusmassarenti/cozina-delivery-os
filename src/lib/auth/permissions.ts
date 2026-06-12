@@ -229,8 +229,6 @@ export const isSuperadmin = cache(async (): Promise<boolean> => {
  */
 export const getAccessibleUnitIds = cache(
   async (): Promise<string[] | null> => {
-    if (await isSuperadmin()) return null
-
     const user = await getAuthUser()
     if (!user) return []
 
@@ -247,6 +245,15 @@ export const getAccessibleUnitIds = cache(
       if (a.scope_type === "holding" && a.scope_id) holdingIds.push(a.scope_id)
       else if (a.scope_type === "brand" && a.scope_id) brandIds.push(a.scope_id)
       else if (a.scope_type === "unit" && a.scope_id) unitIds.add(a.scope_id)
+    }
+
+    // Isolamento entre clientes vale TAMBÉM pro super-admin: a visão
+    // operacional (dashboard, lojas, relatórios) fica presa à empresa dele.
+    // O "ver todos os clientes" mora só no /plataforma (gated por isSuperadmin).
+    // Exceção: super-admin SEM vínculo de empresa nenhum = admin de plataforma
+    // puro → null (vê tudo), pra não ficar com a tela vazia.
+    if (holdingIds.length === 0 && brandIds.length === 0 && unitIds.size === 0) {
+      return (await isSuperadmin()) ? null : []
     }
 
     // holding → todas as brands da(s) holding(s)
