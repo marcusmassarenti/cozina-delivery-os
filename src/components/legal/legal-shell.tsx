@@ -38,7 +38,13 @@ export function LegalShell({
           {children}
         </div>
 
-        <div className="mt-12 flex gap-4 border-t pt-6 text-sm">
+        <div className="mt-12 flex flex-wrap gap-4 border-t pt-6 text-sm">
+          <Link
+            href="/seguranca"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Segurança
+          </Link>
           <Link
             href="/termos"
             className="text-muted-foreground transition-colors hover:text-foreground"

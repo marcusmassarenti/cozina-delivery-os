@@ -33,10 +33,17 @@ export function WelcomeTour({
   const [step, setStep] = React.useState(0)
   const router = useRouter()
 
-  // Permite rever o tour com ?tour=1 (sem causar mismatch de hidratação).
+  // Permite rever o tour com ?tour=1 (sem causar mismatch de hidratação) ou
+  // pelo botão de ajuda (evento "deliveryos:open-tour").
   React.useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("tour=1"))
       setOpen(true)
+    const reopen = () => {
+      setStep(0)
+      setOpen(true)
+    }
+    window.addEventListener("deliveryos:open-tour", reopen)
+    return () => window.removeEventListener("deliveryos:open-tour", reopen)
   }, [])
 
   const slides: Slide[] = [
