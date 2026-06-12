@@ -32,6 +32,7 @@ import {
 } from "@/lib/data/keeta-imported"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { userCan } from "@/lib/auth/permissions"
+import { getCurrentUserContext } from "@/lib/auth/context"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -61,6 +62,9 @@ export default async function UnidadeDetalhePage({
   const sp = await searchParams
   const unit = await getUnitByCode(codigo)
   if (!unit) notFound()
+
+  // Logo da empresa (white-label) pro avatar da loja.
+  const brandLogoUrl = (await getCurrentUserContext()).logoUrl
 
   // Escopo: franqueado só abre a própria loja. accessibleIds === null =
   // admin/gerente (vê tudo). Loja fora do escopo → 404 (não revela que existe).
@@ -154,7 +158,7 @@ export default async function UnidadeDetalhePage({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <BrandLogo size="lg" />
+            <BrandLogo size="lg" logoUrl={unit.logoUrl ?? brandLogoUrl} name={unit.name} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-semibold tracking-tight">
@@ -203,6 +207,7 @@ export default async function UnidadeDetalhePage({
                 platforms,
                 externalStoreIds: unit.externalStoreIds,
                 platformInauguracoes: unit.platformInauguracoes,
+                logoUrl: unit.logoUrl,
               }}
             />
           )}

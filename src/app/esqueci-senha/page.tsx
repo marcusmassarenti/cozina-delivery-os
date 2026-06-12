@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 
 import { createClient } from "@/lib/supabase/server"
+import { DeliveryOsWordmark } from "@/components/delivery-os-logo"
 import { EsqueciForm } from "./_components/esqueci-form"
 
 export default async function EsqueciSenhaPage() {
@@ -13,8 +14,7 @@ export default async function EsqueciSenhaPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/cozina-logo.png" alt="Cozina" className="h-10 w-auto" />
+          <DeliveryOsWordmark subtitle={false} />
         </div>
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
           <h1 className="text-lg font-semibold">Recuperar senha</h1>

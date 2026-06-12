@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getUnitByCode } from "@/lib/data/units"
 import { getFechamentoById } from "@/lib/data/fechamentos"
 import { computeVinagreteRef } from "@/lib/data/produtos-vendidos"
@@ -111,12 +112,7 @@ export default async function FechamentoPrintPage({
 
         {/* Cabeçalho: logo Cozina + plataformas (entram no PDF) */}
         <div className="mb-4 flex items-center justify-between">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/cozina-logo.png"
-            alt="Cozina"
-            className="fech-logo h-10 w-auto"
-          />
+          <ReportBrandLogo imgClassName="fech-logo h-10 w-auto" />
           <div className="flex items-center gap-1.5">
             <PlatformLogo platform="ifood" size="md" />
             <PlatformLogo platform="99food" size="md" />

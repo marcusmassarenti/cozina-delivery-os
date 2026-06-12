@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown, Flame, Star } from "lucide-react"
+import { ChevronDown, Star } from "lucide-react"
 
+import { DeliveryOsMark, DeliveryOsWordmark } from "@/components/delivery-os-logo"
 import {
   Collapsible,
   CollapsibleContent,
@@ -127,21 +128,36 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" className="dark">
       <SidebarHeader className="gap-1.5 px-3 py-3">
-        <div className="group-data-[collapsible=icon]:hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={logoUrl || "/cozina-logo.png"}
-            alt="Logo"
-            className="h-9 w-auto max-w-[170px] object-contain"
-          />
-        </div>
-        <Flame
-          className="hidden size-5 text-[#ff4d1c] group-data-[collapsible=icon]:block"
-          aria-hidden
-        />
-        <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground group-data-[collapsible=icon]:hidden">
-          Gestão de Delivery
-        </div>
+        {logoUrl ? (
+          <>
+            {/* Logo da empresa (white-label) + selo "Delivery OS" — expandido */}
+            <div className="group-data-[collapsible=icon]:hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt="Logo"
+                className="h-9 w-auto max-w-[170px] object-contain"
+              />
+              <div className="mt-2 flex items-center gap-1.5 border-t border-white/[0.08] pt-2">
+                <DeliveryOsMark className="size-[18px] rounded-md" />
+                <span className="text-[10px] font-medium tracking-tight text-sidebar-foreground/65">
+                  Delivery OS
+                </span>
+              </div>
+            </div>
+            {/* Colapsado: logo num quadrado */}
+            <span className="hidden size-8 items-center justify-center overflow-hidden rounded-lg group-data-[collapsible=icon]:flex">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoUrl} alt="" className="size-full object-contain" />
+            </span>
+          </>
+        ) : (
+          <>
+            {/* Marca padrão do produto: Delivery OS */}
+            <DeliveryOsWordmark className="group-data-[collapsible=icon]:hidden" />
+            <DeliveryOsMark className="hidden size-8 group-data-[collapsible=icon]:flex" />
+          </>
+        )}
       </SidebarHeader>
       <SidebarContent>
         {/* Favoritos (só aparece depois de montar, com itens favoritados) */}

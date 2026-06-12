@@ -59,6 +59,7 @@ import {
   daysElapsedInMonth,
 } from "@/lib/period"
 import { getAttentionItems } from "@/lib/data/attention"
+import { getCurrentUserContext } from "@/lib/auth/context"
 import { AttentionPanel } from "@/components/dashboard/attention-panel"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { createClient } from "@/lib/supabase/server"
@@ -100,6 +101,7 @@ export default async function Home({
     ? (sp.plataforma as "ifood" | "99food" | "keeta")
     : null
   const onlyComFaturamento = sp.ativo === "1"
+  const brandLogoUrl = (await getCurrentUserContext()).logoUrl
 
   // Fase 1: precisa de allUnits pra resolver unidadesFilter ANTES de chamar
   // as queries de rede (que agora respeitam o filtro de unidades)
@@ -1031,7 +1033,7 @@ export default async function Home({
               number={hasAvaliacoesData ? 5 : 4}
               label="Detalhamento por Unidade"
             />
-            <UnitsTable units={unitsToShow} />
+            <UnitsTable units={unitsToShow} brandLogoUrl={brandLogoUrl} />
           </DashboardSection>
         </>
       )}

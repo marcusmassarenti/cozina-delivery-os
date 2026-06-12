@@ -1,9 +1,12 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 
 import { requireAdmin, requireSuperadmin } from "@/lib/auth/guards"
-import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+} from "@/lib/auth/permissions"
 
 export type BrandingState = { ok: boolean; message?: string }
 
@@ -52,6 +55,84 @@ export async function uploadLogo(
     if (updErr) return { ok: false, message: updErr.message }
 
     revalidatePath("/", "layout")
+    revalidatePath("/personalizacao")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+/**
+ * Sobe UM logo e aplica como avatar de TODAS as lojas da empresa
+ * (units.logo_url). Pra rede de marca única (ex.: Churrasco no Pote no Cozina),
+ * deixa todas as lojas com o mesmo logo de uma vez.
+ */
+export async function applyStoreLogoToAll(
+  _prev: BrandingState,
+  formData: FormData,
+): Promise<BrandingState> {
+  try {
+    const { admin } = await requireAdmin()
+    const holdingId = await getCurrentHoldingId()
+    if (!holdingId) return { ok: false, message: "Empresa não identificada." }
+
+    const file = formData.get("logo")
+    if (!(file instanceof File) || file.size === 0)
+      return { ok: false, message: "Selecione um arquivo de imagem." }
+    if (!ALLOWED.includes(file.type))
+      return { ok: false, message: "Formato inválido. Use PNG, JPG, WEBP ou SVG." }
+    if (file.size > MAX_BYTES)
+      return { ok: false, message: "Imagem muito grande (máximo 2 MB)." }
+
+    // Só as lojas do próprio escopo (anti cross-tenant). Fail-closed: nunca
+    // atualiza "todas as lojas do banco".
+    const unitIds = await getAccessibleUnitIds()
+    if (!unitIds || unitIds.length === 0)
+      return { ok: false, message: "Nenhuma loja no seu escopo." }
+
+    const path = `${holdingId}/store-logo.${extFor(file.type)}`
+    const { error: upErr } = await admin.storage
+      .from("branding")
+      .upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) return { ok: false, message: `Falha no upload: ${upErr.message}` }
+    const { data: pub } = admin.storage.from("branding").getPublicUrl(path)
+    const url = `${pub.publicUrl}?v=${Date.now()}`
+
+    const { error: updErr } = await admin
+      .from("units")
+      .update({ logo_url: url })
+      .in("id", unitIds)
+    if (updErr)
+      return {
+        ok: false,
+        message: `Não consegui aplicar. A coluna logo_url existe? (rode a migration 0062). Detalhe: ${updErr.message}`,
+      }
+
+    revalidateTag("units", "max")
+    revalidatePath("/", "layout")
+    revalidatePath("/unidades")
+    revalidatePath("/personalizacao")
+    return { ok: true, message: `Logo aplicado em ${unitIds.length} loja(s).` }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+/** Remove o logo de TODAS as lojas do escopo (volta pro logo da empresa / inicial). */
+export async function clearStoreLogoFromAll(): Promise<BrandingState> {
+  try {
+    const { admin } = await requireAdmin()
+    const unitIds = await getAccessibleUnitIds()
+    if (!unitIds || unitIds.length === 0)
+      return { ok: false, message: "Nenhuma loja no seu escopo." }
+    const { error } = await admin
+      .from("units")
+      .update({ logo_url: null })
+      .in("id", unitIds)
+    if (error) return { ok: false, message: error.message }
+    revalidateTag("units", "max")
+    revalidatePath("/", "layout")
+    revalidatePath("/unidades")
     revalidatePath("/personalizacao")
     return { ok: true }
   } catch (e) {

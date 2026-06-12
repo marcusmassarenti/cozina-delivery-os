@@ -9,7 +9,14 @@ import { PlatformLogo } from "@/components/platform-logo"
 import type { Unit } from "@/lib/data/units"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
-export function UnitsTable({ units }: { units: Unit[] }) {
+export function UnitsTable({
+  units,
+  brandLogoUrl = null,
+}: {
+  units: Unit[]
+  /** Logo da empresa (white-label) pro avatar das lojas. */
+  brandLogoUrl?: string | null
+}) {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
 
   const toggle = (code: string) =>
@@ -74,7 +81,7 @@ export function UnitsTable({ units }: { units: Unit[] }) {
                   ) : (
                     <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                   )}
-                  <BrandLogo size="md" />
+                  <BrandLogo size="md" logoUrl={unit.logoUrl ?? brandLogoUrl} name={unit.name} />
                   <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                     #{unit.code}
                   </span>
@@ -158,7 +165,7 @@ export function UnitsTable({ units }: { units: Unit[] }) {
                 <ChevronRight className="size-4 text-muted-foreground" />
               )}
               <div className="flex min-w-0 items-center gap-3 text-left">
-                <BrandLogo size="md" />
+                <BrandLogo size="md" logoUrl={unit.logoUrl ?? brandLogoUrl} name={unit.name} />
                 <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                   #{unit.code}
                 </span>

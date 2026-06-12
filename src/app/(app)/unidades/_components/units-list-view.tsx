@@ -23,12 +23,15 @@ export function UnitsListView({
   canEdit = false,
   canDelete = false,
   ninefoodSyncedIds = [],
+  brandLogoUrl = null,
 }: {
   units: Unit[]
   canEdit?: boolean
   canDelete?: boolean
   /** unit_ids que sincronizam pela API do 99 (ponto verde no logo). */
   ninefoodSyncedIds?: string[]
+  /** Logo da empresa (white-label) pro avatar das lojas. */
+  brandLogoUrl?: string | null
 }) {
   const router = useRouter()
   const [search, setSearch] = React.useState("")
@@ -224,7 +227,7 @@ export function UnitsListView({
             >
               {/* Top: logo + ações */}
               <div className="flex items-start justify-between">
-                <BrandLogo size="md" />
+                <BrandLogo size="md" logoUrl={unit.logoUrl ?? brandLogoUrl} name={unit.name} />
                 <div
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
@@ -246,6 +249,7 @@ export function UnitsListView({
                         platforms: unit.platforms,
                         externalStoreIds: unit.externalStoreIds,
                         platformInauguracoes: unit.platformInauguracoes,
+                        logoUrl: unit.logoUrl,
                       }}
                     />
                   )}

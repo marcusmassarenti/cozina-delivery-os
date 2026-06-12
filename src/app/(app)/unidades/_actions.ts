@@ -162,6 +162,68 @@ export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
   }
 }
 
+/** Sobe o logo de UMA loja (white-label por unidade) → units.logo_url. */
+export async function saveUnitLogo(formData: FormData): Promise<CreateUnitState> {
+  const unitId = String(formData.get("unitId") ?? "").trim()
+  const file = formData.get("logo")
+  if (!unitId) return { ok: false, message: "ID da unidade ausente." }
+  if (!(file instanceof File) || file.size === 0)
+    return { ok: false, message: "Selecione uma imagem." }
+  if (file.size > 2 * 1024 * 1024)
+    return { ok: false, message: "Imagem muito grande (máx. 2 MB)." }
+  try {
+    await requireModulePermission("unidades", "edit")
+    await requireUnitAccess(unitId) // anti cross-tenant: só a própria loja
+    const supabase = createAdminClient()
+    const ext = (file.name.split(".").pop() || "png").toLowerCase()
+    const path = `units/${unitId}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from("branding")
+      .upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) return { ok: false, message: `Falha no upload: ${upErr.message}` }
+    const { data: pub } = supabase.storage.from("branding").getPublicUrl(path)
+    const url = `${pub.publicUrl}?v=${Date.now()}` // cache-bust pro CDN
+    const { error } = await supabase
+      .from("units")
+      .update({ logo_url: url })
+      .eq("id", unitId)
+    if (error) return { ok: false, message: error.message }
+    revalidateTag("units", "max")
+    revalidatePath("/unidades")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}
+
+/** Remove o logo da loja (volta pro logo da empresa / inicial). */
+export async function removeUnitLogo(unitId: string): Promise<CreateUnitState> {
+  if (!unitId) return { ok: false, message: "ID da unidade ausente." }
+  try {
+    await requireModulePermission("unidades", "edit")
+    await requireUnitAccess(unitId)
+    const supabase = createAdminClient()
+    const { error } = await supabase
+      .from("units")
+      .update({ logo_url: null })
+      .eq("id", unitId)
+    if (error) return { ok: false, message: error.message }
+    revalidateTag("units", "max")
+    revalidatePath("/unidades")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}
+
 export async function updateUnit(
   _prevState: CreateUnitState,
   formData: FormData,

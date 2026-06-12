@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { ImageUp, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DeliveryOsWordmark } from "@/components/delivery-os-logo"
 import { removeLogo, uploadLogo, type BrandingState } from "../_actions"
 
 const initial: BrandingState = { ok: false }
@@ -24,8 +25,8 @@ export function LogoUploader({ currentLogo }: { currentLogo: string | null }) {
     }
   }, [state, router])
 
-  // Sempre mostra o logo EFETIVO: nova prévia > logo customizado > padrão.
-  const shown = preview || currentLogo || "/cozina-logo.png"
+  // Logo EFETIVO: nova prévia > logo customizado > padrão (Delivery OS).
+  const shown = preview || currentLogo
   const caption = preview
     ? "Prévia da nova imagem"
     : currentLogo
@@ -41,13 +42,17 @@ export function LogoUploader({ currentLogo }: { currentLogo: string | null }) {
       </p>
 
       {/* Preview (fundo escuro pra simular o menu) */}
-      <div className="mt-4 flex h-24 items-center justify-center rounded-lg border bg-zinc-900 p-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={shown}
-          alt="Prévia do logo"
-          className="max-h-14 w-auto max-w-[220px] object-contain"
-        />
+      <div className="mt-4 flex h-24 items-center justify-center rounded-lg border bg-zinc-900 p-4 text-white">
+        {shown ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={shown}
+            alt="Prévia do logo"
+            className="max-h-14 w-auto max-w-[220px] object-contain"
+          />
+        ) : (
+          <DeliveryOsWordmark subtitle={false} />
+        )}
       </div>
       <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
         {caption}

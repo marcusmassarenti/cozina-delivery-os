@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowRight, CheckCircle2, Loader2, Lock, TriangleAlert } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
+import { DeliveryOsWordmark } from "@/components/delivery-os-logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -72,8 +73,7 @@ export default function RedefinirSenhaPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/cozina-logo.png" alt="Cozina" className="h-10 w-auto" />
+          <DeliveryOsWordmark subtitle={false} />
         </div>
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
           {phase === "loading" && (

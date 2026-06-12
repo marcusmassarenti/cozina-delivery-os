@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Flame } from "lucide-react"
 
+import { DeliveryOsMark } from "@/components/delivery-os-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { createClient } from "@/lib/supabase/server"
@@ -49,8 +50,7 @@ export default async function LoginPage() {
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/95" />
             <div className="relative z-10 flex h-full flex-col p-12">
               <div className="flex items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/cozina-logo.png" alt="Cozina" className="h-9 w-auto" />
+                <DeliveryOsMark className="size-9" />
                 <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/80">
                   Delivery OS
                 </span>
@@ -83,8 +83,7 @@ export default async function LoginPage() {
 
           <div className="relative z-10 flex h-full flex-col p-12">
             <div className="flex items-center gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/cozina-logo.png" alt="Cozina" className="h-9 w-auto" />
+              <DeliveryOsMark className="size-9" />
               <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/80">
                 Delivery OS
               </span>
@@ -118,12 +117,7 @@ export default async function LoginPage() {
           <div className="mx-auto w-full max-w-sm">
             {/* Mobile logo */}
             <div className="mb-8 flex items-center gap-2 lg:hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/cozina-logo.png"
-                alt="Cozina"
-                className="h-9 w-auto"
-              />
+              <DeliveryOsMark className="size-9" />
               <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
                 Delivery OS
               </span>

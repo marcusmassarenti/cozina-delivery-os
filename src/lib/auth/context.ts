@@ -14,6 +14,8 @@
 
 import "server-only"
 
+import { cache } from "react"
+
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
@@ -23,7 +25,7 @@ export type UserContext = {
   fullName: string
   initials: string
   brandName: string
-  /** Logo da empresa (white-label). null = usa o logo padrão (Cozina). */
+  /** Logo da empresa (white-label). null = usa o logo padrão (Delivery OS). */
   logoUrl: string | null
   /** Já viu o tour de boas-vindas? (controla o onboarding do 1º login) */
   onboarded: boolean
@@ -38,7 +40,10 @@ const FALLBACK: UserContext = {
   onboarded: true,
 }
 
-export async function getCurrentUserContext(): Promise<UserContext> {
+// Cacheado por request (React.cache): layout + páginas reusam a mesma resposta.
+export const getCurrentUserContext = cache(loadCurrentUserContext)
+
+async function loadCurrentUserContext(): Promise<UserContext> {
   const supabase = await createClient()
   const { data: authData } = await supabase.auth.getUser()
   if (!authData?.user) return FALLBACK

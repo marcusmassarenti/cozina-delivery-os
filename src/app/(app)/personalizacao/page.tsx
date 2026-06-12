@@ -6,6 +6,7 @@ import { getCurrentUserContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 import { LogoUploader } from "./_components/logo-uploader"
+import { StoreLogoUploader } from "./_components/store-logo-uploader"
 import { LoginImageUploader } from "./_components/login-image-uploader"
 
 /**
@@ -47,6 +48,8 @@ export default async function PersonalizacaoPage() {
       </div>
 
       <LogoUploader currentLogo={ctx.logoUrl} />
+
+      <StoreLogoUploader />
 
       {superadmin && (
         <div className="flex flex-col gap-2">

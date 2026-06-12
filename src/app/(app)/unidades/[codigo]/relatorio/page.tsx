@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo } from "@/components/platform-logo"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getUnitByCode, getUnitPlatforms } from "@/lib/data/units"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -93,8 +94,7 @@ export default async function RelatorioMensalUnidade({
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/cozina-logo.png" alt="Cozina" className="h-10 w-auto" />
+          <ReportBrandLogo imgClassName="h-10 w-auto" />
           <div>
             <Link
               href={`/unidades/${unit.code}?periodo=${year}-${String(month).padStart(2, "0")}`}

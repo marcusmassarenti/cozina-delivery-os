@@ -84,7 +84,7 @@ export function NewUnitDialog() {
         <DialogHeader>
           <DialogTitle>Nova unidade</DialogTitle>
           <DialogDescription>
-            Cadastre uma franquia da rede Churrasco no Pote. O código é gerado
+            Cadastre uma loja da sua operação. O código é gerado
             automaticamente.
           </DialogDescription>
         </DialogHeader>
@@ -93,7 +93,7 @@ export function NewUnitDialog() {
           <Field label="Nome" error={state.fieldErrors?.name}>
             <Input
               name="name"
-              placeholder="ex.: Churrasco no Pote — JK"
+              placeholder="ex.: Loja Centro"
               required
             />
           </Field>

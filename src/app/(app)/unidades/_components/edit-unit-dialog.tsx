@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { updateUnit, type CreateUnitState } from "../_actions"
+import { UnitLogoUploader } from "./unit-logo-uploader"
 
 const UFs = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
@@ -66,6 +67,8 @@ export type EditUnitInitial = {
   externalStoreIds?: Partial<Record<PlatformId, string | null>>
   /** Inauguração por plataforma (override da data da unidade). */
   platformInauguracoes?: Partial<Record<PlatformId, string | null>>
+  /** Logo da loja (white-label por unidade). */
+  logoUrl?: string | null
 }
 
 export function EditUnitDialog({
@@ -118,6 +121,12 @@ export function EditUnitDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <UnitLogoUploader
+          unitId={unit.unitId}
+          unitName={unit.name}
+          currentLogo={unit.logoUrl ?? null}
+        />
+
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="unitId" value={unit.unitId} />
 
@@ -125,7 +134,7 @@ export function EditUnitDialog({
             <Input
               name="name"
               defaultValue={unit.name}
-              placeholder="ex.: Churrasco no Pote — JK"
+              placeholder="ex.: Loja Centro"
               required
             />
           </Field>

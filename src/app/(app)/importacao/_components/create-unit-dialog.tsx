@@ -475,7 +475,7 @@ function CreateForm({
           name="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="ex.: Churrasco no Pote — Hortolândia"
+          placeholder="ex.: Loja Centro"
           required
         />
       </Field>

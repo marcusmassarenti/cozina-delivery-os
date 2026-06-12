@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAcompanhamentoVendas } from "@/lib/data/acompanhamento"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { assertCanView } from "@/lib/auth/permissions"
@@ -100,8 +101,7 @@ export default async function AcompanhamentoPage({
       {/* Cabeçalho com logo */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/cozina-logo.png" alt="Cozina" className="h-10 w-auto print:h-12" />
+          <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
           <div>
             <Link
               href="/relatorios"

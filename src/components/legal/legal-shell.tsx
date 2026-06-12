@@ -1,5 +1,7 @@
 import Link from "next/link"
 
+import { DeliveryOsWordmark } from "@/components/delivery-os-logo"
+
 /** Layout compartilhado das páginas legais (Termos, Privacidade). Público. */
 export function LegalShell({
   title,
@@ -15,8 +17,7 @@ export function LegalShell({
       <header className="border-b">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-6 py-4">
           <Link href="/login" className="flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/cozina-logo.png" alt="Cozina" className="h-8 w-auto" />
+            <DeliveryOsWordmark subtitle={false} />
           </Link>
           <Link
             href="/login"

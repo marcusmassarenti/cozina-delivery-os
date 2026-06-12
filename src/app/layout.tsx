@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Cozina Delivery OS",
-  description: "Sistema operacional de delivery da rede Cozina Foods",
+  title: "Delivery OS",
+  description: "O sistema operacional do seu delivery — iFood, 99 Food e Keeta num lugar só.",
 };
 
 export default function RootLayout({

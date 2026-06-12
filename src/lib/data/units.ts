@@ -20,6 +20,8 @@ export type Unit = {
   brand_id: string
   data_inauguracao: string | null // "YYYY-MM-DD"
   data_encerramento: string | null
+  /** Logo da loja (white-label por unidade). null = usa o logo da empresa. */
+  logoUrl: string | null
   platforms: PlatformId[]
   /** Por plataforma, o ID da loja no sistema externo (ex.: iFood 260777). */
   externalStoreIds: Partial<Record<PlatformId, string | null>>
@@ -47,8 +49,9 @@ function attach(
   externalStoreIds: Partial<Record<PlatformId, string | null>>,
   platformInauguracoes: Partial<Record<PlatformId, string | null>>,
   monthly: UnitMonthly,
+  logoUrl: string | null = null,
 ): Unit {
-  return { ...u, platforms, externalStoreIds, platformInauguracoes, monthly }
+  return { ...u, logoUrl, platforms, externalStoreIds, platformInauguracoes, monthly }
 }
 
 // Mês corrente SEMPRE no fuso de Brasília (não o UTC do servidor Vercel), pra
@@ -106,6 +109,17 @@ async function getUnitsUncached(): Promise<Unit[]> {
   const { year, month } = currentYearMonth()
   const monthlyByUnit = await getRealMonthlyForUnits(unitIds, year, month)
 
+  // Logo por loja (best-effort: a coluna pode ainda não existir — pré-migration
+  // 0062. Sem ela, cai no logo da empresa / inicial).
+  const logoByUnit = new Map<string, string | null>()
+  const { data: logos, error: logoErr } = await supabase
+    .from("units")
+    .select("id, logo_url")
+  if (!logoErr) {
+    for (const r of logos ?? [])
+      logoByUnit.set(r.id, (r as { logo_url: string | null }).logo_url ?? null)
+  }
+
   return units.map((u) =>
     attach(
       u,
@@ -113,6 +127,7 @@ async function getUnitsUncached(): Promise<Unit[]> {
       externalIdsByUnit.get(u.id) ?? {},
       inaugByUnit.get(u.id) ?? {},
       monthlyByUnit.get(u.id) ?? emptyMonthly,
+      logoByUnit.get(u.id) ?? null,
     ),
   )
 }
@@ -173,12 +188,22 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   }
   const { year, month } = currentYearMonth()
   const monthlyByUnit = await getRealMonthlyForUnits([data.id], year, month)
+  // Logo da loja (best-effort — coluna pode não existir antes da migration 0062).
+  let logoUrl: string | null = null
+  const { data: logoRow, error: logoErr } = await supabase
+    .from("units")
+    .select("logo_url")
+    .eq("id", data.id)
+    .maybeSingle()
+  if (!logoErr)
+    logoUrl = (logoRow as { logo_url: string | null } | null)?.logo_url ?? null
   return attach(
     data,
     platforms,
     externalStoreIds,
     platformInauguracoes,
     monthlyByUnit.get(data.id) ?? emptyMonthly,
+    logoUrl,
   )
 }
 
