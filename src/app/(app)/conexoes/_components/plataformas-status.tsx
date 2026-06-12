@@ -63,7 +63,7 @@ const PLATFORMS: PlatformStatus[] = [
     status: "homologacao",
     headline: "Conciliação On Demand (D-1) pela API oficial",
     meta: [
-      { label: "App", value: "Cozina Delivery OS · centralizado" },
+      { label: "App", value: "Delivery OS · centralizado" },
       { label: "Módulos", value: "Financeiro · Merchant" },
       { label: "Ticket", value: "#28413618 · em análise" },
     ],

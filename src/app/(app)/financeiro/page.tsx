@@ -266,7 +266,7 @@ export default async function ResultadoPage({
               <Info className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 Nenhuma loja tem custos (CMV) lançados neste mês — a margem fica
-                indisponível. Edite o <strong>Custo Cozina</strong> de cada loja
+                indisponível. Edite o <strong>Custo CMV</strong> de cada loja
                 direto na tabela abaixo pra calcular o lucro real.
               </span>
             </div>

@@ -348,7 +348,7 @@ export function FechamentoTab({
               </p>
 
               <Bloco titulo="2. Custos da operação">
-                <Money label="Produtos (CMV Cozina)" value={draft.custoProdutos} onChange={(n) => setNum("custoProdutos", n)} />
+                <Money label="Produtos (CMV)" value={draft.custoProdutos} onChange={(n) => setNum("custoProdutos", n)} />
                 <Money
                   label="Vinagrete / maionese / bebidas"
                   value={draft.custoVinagrete}

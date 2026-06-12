@@ -103,7 +103,7 @@ export function ResultadoTable({
           <h3 className="text-sm font-semibold">Resultado por unidade</h3>
           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
             <Pencil className="size-3" />
-            clique em <span className="font-medium">Custo Cozina</span> ou{" "}
+            clique em <span className="font-medium">Custo CMV</span> ou{" "}
             <span className="font-medium">Custo operação</span> pra editar
           </p>
         </div>
@@ -120,7 +120,7 @@ export function ResultadoTable({
               <th className="px-3 py-2 text-right font-semibold">Bruto</th>
               <th className="px-3 py-2 text-right font-semibold">Líquido</th>
               <th className="px-3 py-2 text-right font-semibold">
-                Custo Cozina
+                Custo CMV
               </th>
               <th className="px-3 py-2 text-right font-semibold">
                 Custo operação

@@ -153,7 +153,7 @@ export function DreDetalhado({
       />
 
       <Row
-        label="(−) CMV (Cozina + Loja)"
+        label="(−) CMV"
         value={cmvScope > 0 ? `− ${fmtBRL(cmvScope)}` : "sem custo lançado"}
         muted
         pct={cmvScope > 0 ? pctOf(cmvScope) : undefined}

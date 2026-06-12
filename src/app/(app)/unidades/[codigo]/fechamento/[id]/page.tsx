@@ -142,7 +142,7 @@ export default async function FechamentoPrintPage({
 
           {/* 2. Custos */}
           <Secao titulo="2. Custos da operação">
-            <Row label="Produtos (CMV Cozina)" value={-f.custoProdutos} />
+            <Row label="Produtos (CMV)" value={-f.custoProdutos} />
             <Row
               label="Vinagrete / maionese / bebidas"
               value={-f.custoVinagrete}

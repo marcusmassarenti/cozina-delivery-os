@@ -66,8 +66,8 @@ export function UnitCostsEditor({
   return (
     <div className="flex flex-col gap-3">
       <Field
-        label="Custo Cozina (CMV)"
-        hint="o que a fábrica faturou pra loja"
+        label="Custo CMV"
+        hint="o custo da mercadoria vendida"
         value={c}
         onChange={setC}
         onCommit={save}

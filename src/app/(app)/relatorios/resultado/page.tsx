@@ -147,7 +147,7 @@ export default async function RelatoriosPage({
     },
     { label: "VR líquido", value: t.vrLiquido, kind: "plus" },
     { label: "Total líquido", value: t.totalLiquido, kind: "sum", strong: true },
-    { label: "CMV (Cozina + Loja)", value: -t.cmvTotal, kind: "minus" },
+    { label: "CMV", value: -t.cmvTotal, kind: "minus" },
     {
       label: "Margem líquida",
       value: t.margemLiquida,
