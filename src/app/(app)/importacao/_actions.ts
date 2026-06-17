@@ -505,12 +505,30 @@ async function processFile(
 
   // Relatório de Vendas (resumo) — não traz dado novo, já vem pela
   // Conciliação. Aceita silenciosamente pra não confundir o operador.
+  // Listamos as lojas detectadas pra ele conferir cobertura.
   if (parsed.reportType === "vendas") {
+    const periodo = parsed.period ? ` (${parsed.period})` : ""
+    const lojasLinhas = parsed.stores
+      .map((s) => {
+        const nome = s.storeName.replace(/^Churrasco no Pote\s*-?\s*/i, "") ||
+          s.storeName
+        const valor = s.valor.toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+          maximumFractionDigits: 0,
+        })
+        return `${nome} (${s.pedidos} ped · ${valor})`
+      })
+      .join(", ")
+    const lojasResumo =
+      parsed.stores.length === 0
+        ? ""
+        : ` · ${parsed.stores.length} loja(s) no arquivo${periodo}: ${lojasLinhas}`
     return {
       filename: file.name,
       ok: true,
       message:
-        'Relatório de Vendas do iFood — não precisa importar. Esses dados já vêm pelo "Relatório de Conciliação" (Financeiro).',
+        `Relatório de Vendas do iFood — não precisa importar (esses dados já vêm pelo "Relatório de Conciliação" / Financeiro).${lojasResumo}`,
     }
   }
 

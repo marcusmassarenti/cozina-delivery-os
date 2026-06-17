@@ -204,9 +204,28 @@ export type ParsedPedidos = {
 
 // ─── Resultado unificado ─────────────────────────────────────────────
 
-/** Relatório de Vendas (resumo) — sem dado novo, é só agregação visual. */
+/** Loja extraída do Relatório de Vendas (resumo agregado). */
+export type ParsedVendasStore = {
+  storeId: string
+  storeName: string
+  city: string | null
+  /** Total de pedidos (Entrega + Retirada somados). */
+  pedidos: number
+  /** Valor total de vendas (R$). */
+  valor: number
+}
+
+/**
+ * Relatório de Vendas (resumo) — sem dado novo, é só agregação visual.
+ * Mas vem com TODAS as lojas da rede; expomos a lista pra operador
+ * conferir cobertura.
+ */
 export type ParsedVendasResumo = {
   reportType: "vendas"
+  /** Ex.: "01/06/2026 - 16/06/2026" */
+  period: string | null
+  /** Lojas detectadas, ordenadas por valor de venda (maior → menor). */
+  stores: ParsedVendasStore[]
 }
 
 export type ParseResult =
