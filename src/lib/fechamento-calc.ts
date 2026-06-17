@@ -6,10 +6,16 @@
  * Regras do acerto (bloco 4):
  *  - CNPão e B2B: transferência entre sócios — SOMA pra Cozina, DESCONTA do
  *    JK (a loja consumiu/vendeu, então paga a Cozina). Não muda o total.
- *  - Luz / Guarda / Outros: custo compartilhado 50/50.
- *      • "dividir"     → cada um paga metade (desconta dos dois).
- *      • "reembolsar"  → o JK já pagou tudo; a Cozina devolve a metade dela
- *                        (JK recebe a mais, Cozina desconta).
+ *  - Luz / Guarda / Outros: custo compartilhado 50/50 pago FORA do caixa da
+ *    operação (de bolso, pelo JK que opera a loja). O split do recebido só
+ *    rebalanceia: a Cozina contribui com metade via repasse — JK recebe a
+ *    metade dela e Cozina desconta. Por isso ambos os modos ("dividir" e
+ *    "reembolsar") têm o mesmo efeito no split: { jk: +h, cozina: -h }.
+ *      • "dividir"     → o custo será dividido 50/50; assume que JK paga
+ *                        a conta inteira e desconta a metade da Cozina no
+ *                        split.
+ *      • "reembolsar"  → o JK já pagou tudo (passado); a Cozina devolve a
+ *                        metade dela via split (idêntico ao "dividir").
  */
 
 export type AcertoMode = "dividir" | "reembolsar"
@@ -105,12 +111,12 @@ export function computeSplit(
   const jkBase = half + (vinagrete || 0) // vinagrete volta inteiro pro JK
   const cozinaBase = half + (produto || 0) // produto (CMV) volta inteiro pra Cozina
 
-  // custo compartilhado → metade pra cada
-  const shared = (val: number, mode: AcertoMode) => {
+  // Custo compartilhado pago FORA do caixa da operação (pelo JK, de bolso):
+  // o split do recebido só rebalanceia — a Cozina contribui com a metade
+  // dela via repasse. JK recebe +h, Cozina desconta h. Em ambos os modes.
+  const shared = (val: number, _mode: AcertoMode) => {
     const h = (val || 0) / 2
-    return mode === "reembolsar"
-      ? { jk: h, cozina: -h } // JK pagou tudo → Cozina reembolsa a metade
-      : { jk: -h, cozina: -h } // dividir → cada um paga a sua
+    return { jk: h, cozina: -h }
   }
   const luz = shared(a.luz, a.luzMode)
   const guarda = shared(a.guarda, a.guardaMode)
@@ -140,9 +146,8 @@ export function acertoBreakdown(a: Acerto): AcertoLine[] {
     lines.push({ key: "b2b", label: "B2B → Cozina", jk: -a.b2b, cozina: a.b2b })
   const shared = (key: string, label: string, val: number, mode: AcertoMode) => {
     const half = val / 2
-    return mode === "reembolsar"
-      ? { key, label: `${label} (reembolsa JK)`, jk: half, cozina: -half }
-      : { key, label: `${label} (÷ 2)`, jk: -half, cozina: -half }
+    const suffix = mode === "reembolsar" ? "reembolsa JK" : "÷ 2"
+    return { key, label: `${label} (${suffix})`, jk: half, cozina: -half }
   }
   if (a.luz) lines.push(shared("luz", "Luz", a.luz, a.luzMode))
   if (a.guarda) lines.push(shared("guarda", "Guarda", a.guarda, a.guardaMode))
