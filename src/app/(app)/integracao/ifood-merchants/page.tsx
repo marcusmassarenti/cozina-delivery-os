@@ -3,7 +3,7 @@ import { ArrowLeft, Shield, Store } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
-import { LinkRow, RefreshButton } from "./_components/link-row"
+import { LinkRow, RefreshButton, RunSyncButton } from "./_components/link-row"
 
 type MerchantRow = {
   id: string
@@ -89,7 +89,10 @@ export default async function IfoodMerchantsPage() {
             produção.
           </p>
         </div>
-        <RefreshButton />
+        <div className="flex items-start gap-2">
+          <RunSyncButton />
+          <RefreshButton />
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
