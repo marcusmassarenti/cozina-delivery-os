@@ -225,7 +225,7 @@ export function ImportForm({
         <div className="flex size-12 items-center justify-center rounded-full bg-muted">
           <Upload className="size-5 text-muted-foreground" />
         </div>
-        <p className="text-sm font-medium">Arrasta XLSX aqui ou clica</p>
+        <p className="text-sm font-medium">Arrasta XLSX, CSV ou ZIP aqui ou clica</p>
         <p className="text-xs text-muted-foreground">
           Vários ao mesmo tempo · iFood (Cardápio · Financeiro · Avaliações),
           99 Food (Dados da loja · item · pedido) e Keeta (Loja diária · Itens ·
@@ -241,7 +241,7 @@ export function ImportForm({
         name="files"
         type="file"
         multiple
-        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".xlsx,.csv,.zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,text/csv"
         className="sr-only"
         onChange={(e) => addFiles(e.target.files)}
       />

@@ -22,6 +22,7 @@ import type {
   ParsedNinefoodDadosItem,
   ParsedNinefoodDadosPedido,
 } from "@/lib/import/ninefood"
+import { expandZips } from "@/lib/import/expand-zips"
 import { isKeetaWorkbook, parseKeetaReport } from "@/lib/import/keeta"
 import { isProdutosVendidosWorkbook } from "@/lib/import/produtos-vendidos"
 import type {
@@ -261,14 +262,26 @@ export async function importIfoodReports(
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
 
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0)
+  const rawFiles = formData
+    .getAll("files")
+    .filter((f): f is File => f instanceof File && f.size > 0)
+  if (rawFiles.length === 0) {
+    return { ok: false, message: "Selecione pelo menos um arquivo XLSX ou ZIP." }
+  }
+  // Expande .zip → .xlsx/.csv internos antes do limite de batch. O 99 Food
+  // (e às vezes o iFood) exporta tudo zipado quando o usuário baixa em lote.
+  const { files } = await expandZips(rawFiles)
   if (files.length === 0) {
-    return { ok: false, message: "Selecione pelo menos um arquivo XLSX." }
+    return {
+      ok: false,
+      message:
+        "Os ZIPs enviados não tinham arquivos .xlsx/.csv reconhecidos.",
+    }
   }
   if (files.length > MAX_FILES_PER_BATCH) {
     return {
       ok: false,
-      message: `Máximo ${MAX_FILES_PER_BATCH} arquivos por vez (você mandou ${files.length}).`,
+      message: `Máximo ${MAX_FILES_PER_BATCH} arquivos por vez (você mandou ${rawFiles.length}, expandidos pra ${files.length}).`,
     }
   }
 
