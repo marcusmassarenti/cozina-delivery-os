@@ -1124,6 +1124,18 @@ async function processNinefoodDadosLoja(
   userId: string | null,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<ImportFileResult[]> {
+  // Arquivo válido mas sem dados (loja sem operação no período) — devolve
+  // um result de sucesso com mensagem amigável em vez de "erro vazio".
+  if (parsed.porLoja.length === 0) {
+    return [
+      {
+        filename,
+        ok: true,
+        message:
+          "99 Food — Dados da loja: sem vendas no período (arquivo ok, mas vazio).",
+      },
+    ]
+  }
   const results: ImportFileResult[] = []
   const isMulti = parsed.porLoja.length > 1
 
@@ -1312,6 +1324,16 @@ async function processNinefoodDadosItem(
   userId: string | null,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<ImportFileResult[]> {
+  if (parsed.porLoja.length === 0) {
+    return [
+      {
+        filename,
+        ok: true,
+        message:
+          "99 Food — Dados do item: sem itens vendidos no período (arquivo ok, mas vazio).",
+      },
+    ]
+  }
   const results: ImportFileResult[] = []
   const isMulti = parsed.porLoja.length > 1
 
@@ -1476,6 +1498,16 @@ async function processNinefoodDadosPedido(
   userId: string | null,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<ImportFileResult[]> {
+  if (parsed.porLoja.length === 0) {
+    return [
+      {
+        filename,
+        ok: true,
+        message:
+          "99 Food — Dados do pedido: sem pedidos no período (arquivo ok, mas vazio).",
+      },
+    ]
+  }
   const results: ImportFileResult[] = []
   const isMulti = parsed.porLoja.length > 1
 

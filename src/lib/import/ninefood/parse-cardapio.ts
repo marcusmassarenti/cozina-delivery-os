@@ -57,7 +57,8 @@ export function parseNinefoodDadosItem(
   })
 
   if (rows.length === 0) {
-    throw new Error("Relatório vazio (sem linhas).")
+    // Loja sem venda de itens no período — retorna vazio em vez de erro.
+    return { reportType: "dados_item", porLoja: [] }
   }
 
   type Bucket = {
@@ -110,7 +111,7 @@ export function parseNinefoodDadosItem(
   }
 
   if (buckets.size === 0) {
-    throw new Error("Nenhuma linha válida no relatório.")
+    return { reportType: "dados_item", porLoja: [] }
   }
 
   return {

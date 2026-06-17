@@ -109,7 +109,10 @@ export function parseNinefoodDadosPedido(
   })
 
   if (rows.length === 0) {
-    throw new Error("Relatório vazio (sem linhas).")
+    // Arquivo válido (cabeçalho OK) mas sem linhas — loja sem operação
+    // no período. Retorna resultado vazio em vez de exceção: o processador
+    // marca como sucesso "0 pedidos no período".
+    return { reportType: "dados_pedido", porLoja: [] }
   }
 
   const has = (col: string) => headers.includes(col)
@@ -240,7 +243,9 @@ export function parseNinefoodDadosPedido(
   }
 
   if (buckets.size === 0) {
-    throw new Error("Nenhuma linha válida no relatório.")
+    // Linhas existem mas nenhuma passou nos filtros (sem storeId, sem
+    // pedido válido, etc). Trata como vazio amigável.
+    return { reportType: "dados_pedido", porLoja: [] }
   }
 
   return {

@@ -78,9 +78,8 @@ export function parseNinefoodDadosLoja(
   })
 
   if (rows.length === 0) {
-    throw new Error(
-      "O relatório está vazio (só o cabeçalho). Confirma o período e as lojas selecionadas no painel do 99 Food.",
-    )
+    // Loja sem operação no período (válido). Retorna vazio sem erro.
+    return { reportType: "dados_loja", porLoja: [] }
   }
 
   // Agrupa por storeId
@@ -146,7 +145,7 @@ export function parseNinefoodDadosLoja(
   }
 
   if (buckets.size === 0) {
-    throw new Error("Nenhuma linha válida no relatório.")
+    return { reportType: "dados_loja", porLoja: [] }
   }
 
   return {
