@@ -429,7 +429,13 @@ function ResultsList({
                     onResultUpdated={onResultUpdated}
                   />
                 ) : (
-                  <p className="mt-0.5 text-sm text-rose-700 dark:text-rose-400">
+                  <p
+                    className={`mt-0.5 text-sm ${
+                      r.ok
+                        ? "text-muted-foreground"
+                        : "text-rose-700 dark:text-rose-400"
+                    }`}
+                  >
                     {r.message}
                   </p>
                 )}
