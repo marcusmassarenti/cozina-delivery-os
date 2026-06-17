@@ -8,6 +8,8 @@ import {
   type AnticipationsMetrics,
   type IfoodAnticipationItem,
 } from "@/lib/ifood/anticipations"
+import { getFinancialEventsPage } from "@/lib/ifood/events"
+import { getReconciliationLink } from "@/lib/ifood/reconciliation"
 import {
   fetchAllFinancialEvents,
   type IfoodFinancialEvent,
@@ -391,5 +393,251 @@ export async function testAnticipations(
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     }
+  }
+}
+
+// ---- VALIDAR TUDO -----------------------------------------------------------
+
+export type ValidationStep = {
+  endpoint: string
+  label: string
+  ok: boolean
+  status?: number
+  durationMs?: number
+  detail?: string
+  error?: string
+}
+
+export type ValidateAllState = {
+  ranAt?: string
+  merchantId?: string
+  steps?: ValidationStep[]
+  okCount?: number
+  totalCount?: number
+  error?: string
+}
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+function ym(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
+/**
+ * Dispara os 6 endpoints em sequência pra demonstrar o pipeline completo
+ * pro auditor de uma vez só. Cada step vira uma linha no relatório:
+ *   - OK = a API respondeu (200 com dados, ou 404 "sem dados pro período"
+ *     mas auth + roteamento funcionaram).
+ *   - FAIL = 401/403/5xx ou path errado.
+ */
+export async function validateAll(
+  _prev: ValidateAllState,
+  formData: FormData,
+): Promise<ValidateAllState> {
+  const merchantId = String(formData.get("merchantId") ?? "").trim()
+  if (!merchantId) {
+    return { error: "Informe o merchantId do iFood." }
+  }
+
+  // janelas
+  const today = new Date()
+  const dMinus1 = new Date(today)
+  dMinus1.setDate(dMinus1.getDate() - 1)
+  const dMinus7 = new Date(dMinus1)
+  dMinus7.setDate(dMinus7.getDate() - 6)
+  const dMinus14 = new Date(dMinus1)
+  dMinus14.setDate(dMinus14.getDate() - 13)
+  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+
+  const steps: ValidationStep[] = []
+
+  // 1) Sales — usa um order id fake. 200 ou 404 OrderNotFound = auth OK.
+  {
+    const t0 = Date.now()
+    try {
+      const r = await getIfoodOrder("00000000-0000-0000-0000-000000000000")
+      const isAuthOk = r.status === 200 || r.status === 404
+      steps.push({
+        endpoint: "GET /order/v1.0/orders/{id}",
+        label: "Sales — auth + roteamento",
+        ok: isAuthOk,
+        status: r.status,
+        durationMs: Date.now() - t0,
+        detail:
+          r.status === 200
+            ? "Pedido retornado"
+            : r.status === 404
+              ? "OrderNotFound (esperado pra UUID fake)"
+              : undefined,
+        error: !isAuthOk ? r.error ?? `HTTP ${r.status}` : undefined,
+      })
+    } catch (e) {
+      steps.push({
+        endpoint: "GET /order/v1.0/orders/{id}",
+        label: "Sales — auth + roteamento",
+        ok: false,
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  // 2) Merchant listing
+  {
+    const t0 = Date.now()
+    try {
+      const r = await listIfoodMerchants()
+      const isOk = r.ok && (r.data?.length ?? 0) >= 0
+      steps.push({
+        endpoint: "GET /merchant/v1.0/merchants",
+        label: "Merchant listing",
+        ok: isOk,
+        status: r.status,
+        durationMs: Date.now() - t0,
+        detail: isOk ? `${r.data?.length ?? 0} merchant(s) na conta` : undefined,
+        error: !isOk ? r.error ?? `HTTP ${r.status}` : undefined,
+      })
+    } catch (e) {
+      steps.push({
+        endpoint: "GET /merchant/v1.0/merchants",
+        label: "Merchant listing",
+        ok: false,
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  // 3) Reconciliation — competência D-1 mês.
+  {
+    const t0 = Date.now()
+    const competencia = ym(lastMonth)
+    try {
+      const r = await getReconciliationLink(merchantId, competencia)
+      const isOk = r.ok && !!(r.data?.downloadPath ?? r.data?.downloadUrl)
+      steps.push({
+        endpoint: `GET /financial/v3.0/merchants/{id}/reconciliation?competence=${competencia}`,
+        label: "Reconciliation — link do CSV.gz",
+        ok: isOk || r.status === 404,
+        status: r.status,
+        durationMs: Date.now() - t0,
+        detail: isOk
+          ? "downloadPath emitido"
+          : r.status === 404
+            ? "Sem dados pro período (auth OK)"
+            : undefined,
+        error: !isOk && r.status !== 404 ? r.error ?? `HTTP ${r.status}` : undefined,
+      })
+    } catch (e) {
+      steps.push({
+        endpoint: "GET /financial/v3.0/merchants/{id}/reconciliation",
+        label: "Reconciliation — link do CSV.gz",
+        ok: false,
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  // 4) Financial Events — últimos 7 dias.
+  {
+    const t0 = Date.now()
+    try {
+      const r = await getFinancialEventsPage(merchantId, ymd(dMinus7), ymd(dMinus1), 1, 100)
+      const isOk = r.ok
+      steps.push({
+        endpoint: `GET /financial/v3.0/merchants/{id}/financial-events?beginDate=${ymd(dMinus7)}&endDate=${ymd(dMinus1)}`,
+        label: "Financial Events — paginação",
+        ok: isOk,
+        status: r.status,
+        durationMs: Date.now() - t0,
+        detail: isOk
+          ? `${r.data?.financialEvents?.length ?? 0} evento(s) na pág. 1 · hasNextPage=${r.data?.hasNextPage}`
+          : undefined,
+        error: !isOk ? r.error ?? `HTTP ${r.status}` : undefined,
+      })
+    } catch (e) {
+      steps.push({
+        endpoint: "GET /financial/v3.0/merchants/{id}/financial-events",
+        label: "Financial Events — paginação",
+        ok: false,
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  // 5) Settlements — janela de 14 dias.
+  {
+    const t0 = Date.now()
+    try {
+      const r = await getSettlements(merchantId, ymd(dMinus14), ymd(dMinus1))
+      const isOk = r.ok
+      const items = (r.data?.settlements ?? []).flatMap((p) => p.closingItems ?? [])
+      steps.push({
+        endpoint: `GET /financial/v3.0/merchants/{id}/settlements?beginDate=${ymd(dMinus14)}&endDate=${ymd(dMinus1)}`,
+        label: "Settlements — títulos do período",
+        ok: isOk || r.status === 404,
+        status: r.status,
+        durationMs: Date.now() - t0,
+        detail: isOk
+          ? `balance=${r.data?.balance ?? 0} · ${items.length} título(s)`
+          : r.status === 404
+            ? "Sem repasses no período (auth OK)"
+            : undefined,
+        error: !isOk && r.status !== 404 ? r.error ?? `HTTP ${r.status}` : undefined,
+      })
+    } catch (e) {
+      steps.push({
+        endpoint: "GET /financial/v3.0/merchants/{id}/settlements",
+        label: "Settlements — títulos do período",
+        ok: false,
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  // 6) Anticipations — janela de 14 dias.
+  {
+    const t0 = Date.now()
+    try {
+      const r = await getAnticipations(merchantId, ymd(dMinus14), ymd(dMinus1))
+      const isOk = r.ok
+      const items = (r.data?.settlements ?? []).flatMap((p) => p.closingItems ?? [])
+      steps.push({
+        endpoint: `GET /financial/v3.0/merchants/{id}/anticipations?beginCalculationDate=${ymd(dMinus14)}&endCalculationDate=${ymd(dMinus1)}`,
+        label: "Anticipations — antecipações D+1/D+7",
+        ok: isOk || r.status === 404,
+        status: r.status,
+        durationMs: Date.now() - t0,
+        detail: isOk
+          ? `balance=${r.data?.balance ?? 0} · ${items.length} antecipação(ões)`
+          : r.status === 404
+            ? "Sem antecipações no período (auth OK)"
+            : undefined,
+        error: !isOk && r.status !== 404 ? r.error ?? `HTTP ${r.status}` : undefined,
+      })
+    } catch (e) {
+      steps.push({
+        endpoint: "GET /financial/v3.0/merchants/{id}/anticipations",
+        label: "Anticipations — antecipações D+1/D+7",
+        ok: false,
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const okCount = steps.filter((s) => s.ok).length
+  revalidatePath("/integracao/ifood-homolog")
+  return {
+    ranAt: new Date().toISOString(),
+    merchantId,
+    steps,
+    okCount,
+    totalCount: steps.length,
   }
 }

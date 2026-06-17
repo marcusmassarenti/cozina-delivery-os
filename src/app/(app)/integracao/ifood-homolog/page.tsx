@@ -9,6 +9,7 @@ import { MerchantsTester } from "./_components/merchants-tester"
 import { ReconciliationTester } from "./_components/reconciliation-tester"
 import { SalesTester } from "./_components/sales-tester"
 import { SettlementsTester } from "./_components/settlements-tester"
+import { ValidateAll } from "./_components/validate-all"
 
 type LogRow = {
   id: string
@@ -34,8 +35,22 @@ async function getRecentLogs(): Promise<LogRow[]> {
   return (data ?? []) as LogRow[]
 }
 
+async function getDefaultMerchantId(): Promise<string | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ifood_merchants")
+    .select("id")
+    .order("last_seen_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
 export default async function IfoodHomologPage() {
-  const logs = await getRecentLogs()
+  const [logs, defaultMerchantId] = await Promise.all([
+    getRecentLogs(),
+    getDefaultMerchantId(),
+  ])
   const homologEnabled = process.env.IFOOD_HOMOLOGATION === "true"
   const clientIdSet =
     !!process.env.IFOOD_CLIENT_ID && !!process.env.IFOOD_CLIENT_SECRET
@@ -96,6 +111,9 @@ export default async function IfoodHomologPage() {
         />
       </div>
 
+      {/* Validar Tudo — botão único pra reunião */}
+      <ValidateAll defaultMerchantId={defaultMerchantId ?? undefined} />
+
       {/* Testers (Onda 1: Sales) */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -146,9 +164,18 @@ export default async function IfoodHomologPage() {
 
       {/* Logs */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Auditoria · últimas chamadas (50)
-        </h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Auditoria · últimas chamadas (50)
+          </h2>
+          <a
+            href="/api/integracao/ifood-audit-export"
+            download
+            className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted/50"
+          >
+            Baixar evidências (JSON)
+          </a>
+        </div>
         <div className="overflow-hidden rounded-xl border bg-card">
           <table className="w-full text-xs">
             <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">

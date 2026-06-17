@@ -19,31 +19,56 @@
 
 **Pontos-chave:** lojista/franqueador (não software house) · uso interno (não revenda) · sistema já existe e funciona com importação manual · a API substitui o manual.
 
-## 2. Estado da nossa integração (interno — não falar números na call)
+## 2. Estado da nossa integração
 
 | Fase | O quê | Status |
 |---|---|---|
-| 1 | Autenticação `client_credentials` + cache de token (renova 5 min antes de expirar) | ✅ pronta (`src/lib/ifood/auth.ts`) |
-| 2 | Client do módulo Financial (conciliação/settlements + 429/retry + dedupe) | 🔨 construir antes da call |
-| 3 | Gravar no banco + exibir no sistema (conciliação na tela) | 🔨 construir antes da call |
+| 1 | Autenticação `client_credentials` + cache de token (renova 5 min antes de expirar) | ✅ `src/lib/ifood/auth.ts` |
+| 2 | HTTP client central + 401 reauth + backoff 429/5xx + auditoria em `ifood_api_logs` | ✅ `src/lib/ifood/client.ts` |
+| 3 | 6 endpoints da Merchant API implementados, testados em sandbox, retornando 200 com payload real | ✅ ver tabela abaixo |
+| 4 | Painel interno `/integracao/ifood-homolog` com botão "Validar Tudo" + export JSON | ✅ pronto pra reunião |
+| 5 | Cron diário `/api/cron/ifood-sync` (06h BRT) com throttle 6h por (merchant, endpoint) | ✅ `vercel.json` |
+| 6 | UI `/integracao/ifood-merchants` pra vincular cada merchant a uma unidade da rede | ✅ pronta |
 
-### Revisão do que existe (auth.ts) vs critérios clássicos
-- ✅ **Token cacheado** com expiração — NÃO pede token a cada request (critério que mais reprova)
-- ✅ Renovação com margem de 5 min; `clearIfoodTokenCache()` pra recuperar de 401
-- ✅ Form `application/x-www-form-urlencoded` com campos camelCase (formato exigido)
-- ✅ Credenciais só em env server-only
-- ⚠️ A construir na Fase 2: tratamento de **429 com backoff**, **retry pós-401** (1x com clearCache), **dedupe por id de evento/registro**, **paginação e janela de datas** correta
+### Endpoints validados (sandbox, merchant de teste `500f2b4d-…`)
+
+| # | Endpoint | Última validação | Detalhe |
+|---|---|---|---|
+| 1 | `GET /order/v1.0/orders/{id}` | 200 / 404 | Auth + roteamento OK |
+| 2 | `GET /merchant/v1.0/merchants` | 200 | 1 merchant na conta |
+| 3 | `GET /financial/v3.0/merchants/{id}/reconciliation?competence=YYYY-MM` | 200 | downloadPath emitido → baixa .gz → gunzip → CSV 271 linhas → R$ 977,63 líquido |
+| 4 | `GET /financial/v3.0/merchants/{id}/financial-events?beginDate=…&endDate=…&page=N&size=100` | 200 | Paginação OK · 28 eventos |
+| 5 | `GET /financial/v3.0/merchants/{id}/settlements?beginDate=…&endDate=…` | 200 | balance R$ 122,01 · 3 títulos (REPASSE) + dados bancários |
+| 6 | `GET /financial/v3.0/merchants/{id}/anticipations?beginCalculationDate=…&endCalculationDate=…` | 200 | balance 0 (sem plano contratado nesse sandbox) |
+
+### Resiliência implementada (em `src/lib/ifood/client.ts`)
+- ✅ **Token cacheado** com expiração + renovação 5 min antes (`auth.ts`)
+- ✅ **401 → clearIfoodTokenCache + retry 1×** automático
+- ✅ **429 / 5xx → backoff exponencial** (`[2s, 4s, 8s]`, máx 3 tentativas)
+- ✅ **Auditoria automática** em `ifood_api_logs`: endpoint, status, ms, retries, Authorization mascarado (`Bearer ***`), homologation_header
+- ✅ **Throttle 6h por (merchant, endpoint)** em `ifood_api_throttle` — evita duplo disparo do cron
+- ✅ **Header `x-request-homologation: true`** quando `IFOOD_HOMOLOGATION=true` (env separa sandbox de produção)
+
+### Descobertas durante a implementação (úteis pra confirmar com o iFood)
+1. **Doc da Reconciliation usa `competencia` (pt-BR), mas a API espera `competence` (en)** — retorna 400 `BAD_REQUEST "Required query parameter 'competence' is not present."` se mandar errado.
+2. **Doc descreve paths como `/v3/reconciliation`, `/v3/financial-events`** — paths reais são `/financial/v3.0/merchants/{merchantId}/...`. Sem o prefixo `/financial/v3.0/merchants/{id}/`, o gateway retorna `{"message": "no Route matched with those values"}`.
+3. **Reconciliation retorna `downloadPath`** (não `downloadUrl` como em algumas refs). Já tratado com fallback.
 
 ## 3. Roteiro da demo (10–12 min)
 
-1. **Abrir o sistema** (produção) → Dashboard com as ~20 lojas → "este é o sistema que consome a API".
-2. **Autenticação** — mostrar o código do `auth.ts` (token cacheado + renovação). Falar: "token é cacheado e renovado 5 minutos antes de expirar; nunca solicitamos token por request".
-3. **Requisição Financial ao vivo** — disparar a sincronização (botão/rota) → log da chamada (endpoint, status 200) → dados de conciliação aparecendo no sistema.
-4. **Conferência de valores** — abrir uma loja e mostrar repasse/taxas batendo com o Portal do Parceiro (ter o portal aberto na mesma competência).
-5. **Resiliência** (falar, com código aberto se pedirem): 429 → backoff e reagenda; 401 → limpa cache de token e repete 1x; reprocessamento não duplica (dedupe por id).
-6. **Caso de uso final** — DRE por loja e fluxo de caixa alimentados pelo dado conciliado.
+> **Tudo passa por `/integracao/ifood-homolog`** — painel interno construído pra essa reunião.
 
-**Plano B se algo travar:** coleção Postman pronta com as mesmas chamadas + prints/logs de execuções anteriores.
+1. **Abrir o painel** → mostrar os 3 cards verdes no topo (Credenciais OK · Header `x-request-homologation` habilitado · Auditoria ativa).
+2. **Botão "Validar Tudo"** (no topo) — clicar 1 vez, o painel dispara os 6 endpoints em sequência (~2.5s) e renderiza a tabela com ✓ pra cada um. Auditor vê tudo passando em tempo real.
+3. **Auditoria · últimas 50 chamadas** (rolar pra baixo) — tabela mostra cada chamada já feita: endpoint, status, ms, retries, ✓ HOMOLOG.
+4. **Drill-down em uma chamada** — clicar num tester específico (ex.: Reconciliation) → mostra resposta crua + amostra do CSV parseado (32 colunas, 271 linhas, R$ 977,63 líquido).
+5. **Resiliência** — abrir `src/lib/ifood/client.ts` rapidamente se pedirem: 401 reauth, backoff [2s, 4s, 8s], logging em jsonb.
+6. **Cron diário** — abrir `vercel.json` mostrando o schedule `0 9 * * *` (06h BRT D-1) e `/integracao/ifood-merchants` que vincula cada merchant a uma unidade da rede.
+7. **Caso de uso final** — DRE por loja e fluxo de caixa (Dashboard) hoje alimentados por importação manual; com a API homologada, vira automático.
+
+**Evidências pra anexar no ticket:** botão **"Baixar evidências (JSON)"** na seção Auditoria gera `ifood-audit-YYYY-MM-DD.json` com as 50 últimas chamadas (Authorization mascarado).
+
+**Plano B se algo travar:** o JSON exportado tem todas as execuções anteriores; mostra do histórico.
 
 ## 4. Perguntas prováveis × nossas respostas
 
@@ -75,12 +100,25 @@
 6. Canal de suporte pós-produção (mudanças de contrato da API)?
 
 ## 6. Checklist do dia (22/06 à noite + 23/06 de manhã)
-- [ ] Rodar a sincronização Financial de ponta a ponta na véspera (e de manhã)
+- [ ] **Clicar "Validar Tudo"** em `/integracao/ifood-homolog` e confirmar 6/6 ✓
+- [ ] Baixar o JSON da auditoria pra ter em mãos durante a call
 - [ ] Sistema aberto e logado · Portal do Parceiro aberto (mesma loja/competência da demo)
-- [ ] Postman com as chamadas prontas (plano B) · logs/prints de execuções salvas
-- [ ] Código aberto no editor: `auth.ts` + client financial
+- [ ] Código aberto no editor: `src/lib/ifood/client.ts` + `auth.ts` (se pedirem detalhe)
 - [ ] Internet estável / celular 4G de backup
 - [ ] Entrar no Meet 10:55
 
----
-*Atualizar este doc com os achados da pesquisa (processo, critérios, falhas comuns) antes da call.*
+## 7. Onde está cada coisa no código
+
+| O quê | Onde |
+|---|---|
+| Painel de homologação (UI principal) | `src/app/(app)/integracao/ifood-homolog/page.tsx` |
+| Botão "Validar Tudo" | `src/app/(app)/integracao/ifood-homolog/_components/validate-all.tsx` |
+| UI de vincular merchants ↔ unidades | `src/app/(app)/integracao/ifood-merchants/page.tsx` |
+| Auth + cache de token | `src/lib/ifood/auth.ts` |
+| HTTP client central (401 reauth, backoff, logging) | `src/lib/ifood/client.ts` |
+| 6 endpoints | `src/lib/ifood/{sales,reconciliation,events,merchants,settlements,anticipations}.ts` |
+| Throttle 6h | `src/lib/ifood/throttle.ts` + tabela `ifood_api_throttle` |
+| Cron diário (06h BRT) | `src/app/api/cron/ifood-sync/route.ts` + `vercel.json` |
+| Orquestrador do cron | `src/lib/ifood/sync.ts` |
+| Export JSON da auditoria | `src/app/api/integracao/ifood-audit-export/route.ts` |
+| Tabelas no Supabase | `ifood_api_logs` · `ifood_api_throttle` · `ifood_merchants` |
