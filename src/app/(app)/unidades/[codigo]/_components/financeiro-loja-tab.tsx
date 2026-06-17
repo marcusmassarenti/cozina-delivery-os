@@ -133,6 +133,7 @@ export async function FinanceiroLojaTab({
       liquido: p.liquido,
       taxaTotal,
       vrLiquido: vr,
+      recebidoDireto: p.recebidoDireto ?? 0,
       itens: lista,
     }
   }

@@ -250,6 +250,7 @@ function platformBreakdown(
   name: string,
   bruto: number,
   liquido: number,
+  recebidoDireto = 0,
 ) {
   return {
     id,
@@ -257,6 +258,7 @@ function platformBreakdown(
     bruto,
     liquido,
     pctLoja: bruto > 0 ? (liquido / bruto) * 100 : 0,
+    recebidoDireto,
   }
 }
 
@@ -379,8 +381,9 @@ export async function getRealMonthlyForUnits(
     const keetaPedidos = keetaHas ? keeta!.pedidos : keFb?.pedidos ?? 0
     const keetaCancel = keetaHas ? keeta!.cancelamentosQtd : keFb?.cancelados ?? 0
 
+    const ifoodRecebidoDireto = ifoodHas ? fin!.recebidoDireto : 0
     const platforms = [
-      platformBreakdown("ifood", "iFood", ifoodBruto, ifoodLiquido),
+      platformBreakdown("ifood", "iFood", ifoodBruto, ifoodLiquido, ifoodRecebidoDireto),
       platformBreakdown("99food", "99 Food", nineBruto, nineLiquido),
       platformBreakdown("keeta", "Keeta", keetaBruto, keetaLiquido),
     ]

@@ -14,6 +14,12 @@ export type DrePlat = {
   taxaTotal: number
   /** VR líquido que entra à parte (só iFood > 0). */
   vrLiquido: number
+  /**
+   * Apenas iFood: valores que entram direto no caixa da loja (PIX,
+   * dinheiro, VR presencial, maquininha) em pedidos do app.
+   * liquido + recebidoDireto = "Total faturamento" do Portal iFood.
+   */
+  recebidoDireto?: number
   /** Abertura das taxas (pode ser parcial; Keeta vem vazio). `credit` = linha
    * positiva (estorno/promoção que a plataforma devolveu), pra fechar com a
    * taxa líquida real. */
@@ -61,6 +67,10 @@ export function DreDetalhado({
   const [sel, setSel] = React.useState<"todas" | PlatformId>("todas")
   const multi = platforms.length > 1
   const vrTotal = platforms.reduce((a, p) => a + p.vrLiquido, 0)
+  const recebidoDiretoTotal = platforms.reduce(
+    (a, p) => a + (p.recebidoDireto ?? 0),
+    0,
+  )
 
   // Escopo selecionado
   const isTodas = sel === "todas"
@@ -69,6 +79,12 @@ export function DreDetalhado({
   const liquido = isTodas ? totalLiquido : plat?.liquido ?? 0
   const taxas = Math.max(0, bruto - liquido)
   const vr = isTodas ? vrTotal : plat?.vrLiquido ?? 0
+  // "Recebido direto pela loja" — só iFood tem (PIX/dinheiro/VR/maquininha
+  // em pedidos do app). Entra como receita extra, igual o VR mas DIFERENTE
+  // do VR (este vem do iFood depois; aquele já entrou no caixa físico).
+  const recebidoDireto = isTodas
+    ? recebidoDiretoTotal
+    : plat?.recebidoDireto ?? 0
   const share = totalBruto > 0 ? bruto / totalBruto : 0
   const cmvScope = isTodas ? cmv : cmv * share
   const opScope = isTodas ? operacao : operacao * share
@@ -79,7 +95,8 @@ export function DreDetalhado({
   const margemPct = bruto > 0 ? (margem / bruto) * 100 : 0
   const resultadoOperacional = margem - opScope
   const resultadoOpPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
-  const resultadoTotal = (opScope > 0 ? resultadoOperacional : margem) + vr
+  const resultadoTotal =
+    (opScope > 0 ? resultadoOperacional : margem) + vr + recebidoDireto
   // Análise vertical: cada linha como % do faturamento bruto do escopo.
   const pctOf = (v: number) => (bruto > 0 ? (v / bruto) * 100 : 0)
 
@@ -151,6 +168,14 @@ export function DreDetalhado({
         bold
         pct={pctOf(liquido)}
       />
+
+      {recebidoDireto > 0 && (
+        <Row
+          label="(+) Recebido direto pela loja (PIX/dinheiro/VR/maquininha)"
+          value={`+ ${fmtBRL(recebidoDireto)}`}
+          pct={pctOf(recebidoDireto)}
+        />
+      )}
 
       <Row
         label="(−) CMV"

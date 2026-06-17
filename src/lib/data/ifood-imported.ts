@@ -69,7 +69,16 @@ export type FinanceiroResumo = {
   cancelamentoTotalQtd: number
   cancelamentoParcialQtd: number
   perdaCancelamento: number
+  /** Valor que entra no repasse iFood (impacto_no_repasse=true). */
   liquido: number
+  /**
+   * Valores que entram direto no caixa da loja em pedidos do iFood —
+   * dinheiro, PIX, VR/VA presencial, maquininha própria
+   * (Entrada Financeira com impacto_no_repasse=false).
+   * Bate ao centavo com "Valores recebidos direto pela loja" do Portal iFood.
+   * faturamento total iFood = liquido + recebidoDireto.
+   */
+  recebidoDireto: number
   /** True se há lançamentos importados pra esse período */
   hasData: boolean
 }
@@ -1086,6 +1095,7 @@ export async function getFinanceiroResumoByUnits(
     cancelamento_parcial_qtd: number
     perda_cancelamento: number | string
     liquido: number | string
+    recebido_direto: number | string
   }>) {
     out.set(row.unit_id, {
       pedidosUnicos: row.pedidos_unicos,
@@ -1102,6 +1112,7 @@ export async function getFinanceiroResumoByUnits(
       cancelamentoParcialQtd: row.cancelamento_parcial_qtd,
       perdaCancelamento: Number(row.perda_cancelamento),
       liquido: Number(row.liquido),
+      recebidoDireto: Number(row.recebido_direto),
       hasData: row.pedidos_unicos > 0 || Number(row.bruto) > 0,
     })
   }
@@ -1131,6 +1142,7 @@ export async function getFinanceiroResumoForMonth(
       cancelamentoParcialQtd: 0,
       perdaCancelamento: 0,
       liquido: 0,
+      recebidoDireto: 0,
       hasData: false,
     }
   )

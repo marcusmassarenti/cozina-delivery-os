@@ -6,6 +6,14 @@ export type PlatformBreakdown = {
   bruto: number
   liquido: number
   pctLoja: number
+  /**
+   * Apenas iFood: valores que entram direto no caixa da loja
+   * (dinheiro / PIX / VR presencial / maquininha própria) em pedidos do
+   * app, com impacto_no_repasse=false no Conciliação. Permite mostrar
+   * "Total faturamento iFood" = liquido + recebidoDireto, igual ao
+   * Portal do Parceiro. 99 Food/Keeta deixam em 0.
+   */
+  recebidoDireto?: number
 }
 
 export type UnitMonthly = {

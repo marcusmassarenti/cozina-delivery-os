@@ -17,6 +17,10 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import {
+  loadCoverageContext,
+  shouldExpectDataForMonth,
+} from "@/lib/data/coverage-helper"
 import { getUnits } from "@/lib/data/units"
 import type { PlatformId } from "@/components/platform-logo"
 
@@ -103,7 +107,10 @@ export async function getImportChecklistForMonth(
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
   const target = yesterday < monthEndDay ? yesterday : monthEndDay
 
-  // Lojas vinculadas por plataforma (pros mensais por loja).
+  // Lojas vinculadas por plataforma (pros mensais por loja). Aplica o
+  // helper de cobertura: lojas pausadas/encerradas no mês alvo NÃO entram
+  // na lista de quem deve mandar dado.
+  const coverage = await loadCoverageContext()
   const { data: platRows } = await admin
     .from("unit_platforms")
     .select("unit_id, platform")
@@ -111,6 +118,9 @@ export async function getImportChecklistForMonth(
   const linkedByPlatform = new Map<PlatformId, Set<string>>()
   for (const r of platRows ?? []) {
     const p = r.platform as PlatformId
+    if (!shouldExpectDataForMonth(coverage, r.unit_id, p, year, month)) {
+      continue
+    }
     if (!linkedByPlatform.has(p)) linkedByPlatform.set(p, new Set())
     linkedByPlatform.get(p)!.add(r.unit_id)
   }
