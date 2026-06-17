@@ -171,20 +171,24 @@ export async function getNinefoodResumoByUnits(
   }
 
   for (const [unitId, acc] of accs) {
-    // Líquido DERIVADO = bruto − comissão − taxa de pagamento − ofertas.
-    // A coluna "Receita total" do 99 (acc.liquido) inclui taxa de entrega e
-    // outras receitas, então fica MAIOR que o bruto de vendas e dava repasse
-    // impossível (>100%). Derivamos o repasse real igual iFood/Keeta.
-    const liquidoDerivado = Math.max(
-      0,
-      acc.bruto - acc.comissao - acc.taxaPgto - acc.promo,
-    )
+    // Prefere o líquido GRAVADO (settlement_amount real do 99) quando ele
+    // existir e estiver no range plausível (0 < liquido < bruto). Esse é o
+    // valor que efetivamente entra na conta da loja.
+    //
+    // Fallback (deriva = bruto − comissão − taxa pgto − promo) só pra dados
+    // antigos onde liquido vinha de XLSX e às vezes saía > bruto ou zero
+    // (incluía taxa de entrega, gerando repasse > 100%).
+    const liquidoGravado = acc.liquido
+    const liquidoUsar =
+      liquidoGravado > 0 && liquidoGravado <= acc.bruto
+        ? liquidoGravado
+        : Math.max(0, acc.bruto - acc.comissao - acc.taxaPgto - acc.promo)
     const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
-    const pctLoja = acc.bruto > 0 ? (liquidoDerivado / acc.bruto) * 100 : 0
+    const pctLoja = acc.bruto > 0 ? (liquidoUsar / acc.bruto) * 100 : 0
     out.set(unitId, {
       pedidos: acc.pedidos,
       bruto: acc.bruto,
-      liquido: liquidoDerivado,
+      liquido: liquidoUsar,
       comissaoRs: acc.comissao,
       taxaCanalPagamentoRs: acc.taxaPgto,
       promocoesRs: acc.promo,

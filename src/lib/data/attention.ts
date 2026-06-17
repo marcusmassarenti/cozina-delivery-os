@@ -110,9 +110,26 @@ export async function getAttentionItems(
 
     // 2) Faturamento caindo (projeção pelo ritmo do mês). No mês corrente,
     //    só projeta depois de uns dias (5 dias projetam qualquer coisa).
+    //
+    // SEMPRE checa cobertura: se mês anterior tinha plataforma X com
+    // faturamento mas o mês atual ainda não tem dados de X importados, a
+    // comparação é injusta (ex.: maio com iFood+99+Keeta vs junho só com
+    // 99 vai sempre parecer queda enorme). Só dispara quando todas as
+    // plataformas que tinham dados em N-1 também têm em N.
+    const coberturaCompleta =
+      !t || !p
+        ? false
+        : (p.platforms ?? []).every((prevPlat) => {
+            if ((prevPlat.bruto ?? 0) <= 0) return true // plataforma ociosa em N-1
+            const thisPlat = (t.platforms ?? []).find(
+              (x) => x.id === prevPlat.id,
+            )
+            return (thisPlat?.bruto ?? 0) > 0
+          })
     const projecaoConfiavel = !isCurrent || daysEl >= MIN_DIAS_PROJ
     if (
       projecaoConfiavel &&
+      coberturaCompleta &&
       brutoPrev >= MIN_BRUTO_PREV &&
       brutoThis > 0 &&
       daysEl > 0

@@ -73,7 +73,10 @@ const PLATFORMS: PlatformStatus[] = [
       { label: "Homologação iFood", state: "active" },
       { label: "Produção (todas as lojas)", state: "pending" },
     ],
-    sync: { label: "Por ora, importe os relatórios", href: "/importacao" },
+    sync: {
+      label: "Abrir painel de homologação",
+      href: "/integracao/ifood-homolog",
+    },
   },
   {
     id: "99food",

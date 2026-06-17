@@ -27,11 +27,21 @@ export async function getIfoodToken(): Promise<string> {
     return cache.accessToken
   }
 
-  const clientId = process.env.IFOOD_CLIENT_ID
-  const clientSecret = process.env.IFOOD_CLIENT_SECRET
+  // Em homologação (IFOOD_HOMOLOGATION=true), usa as credenciais de TESTE.
+  // Em produção, usa as principais. Mantém os 2 sets separados pra não
+  // misturar dados sandbox com produção depois.
+  const homolog = process.env.IFOOD_HOMOLOGATION === "true"
+  const clientId = homolog
+    ? process.env.IFOOD_TEST_CLIENT_ID
+    : process.env.IFOOD_CLIENT_ID
+  const clientSecret = homolog
+    ? process.env.IFOOD_TEST_CLIENT_SECRET
+    : process.env.IFOOD_CLIENT_SECRET
   if (!clientId || !clientSecret) {
     throw new Error(
-      "Faltam IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET nas variáveis de ambiente.",
+      homolog
+        ? "Faltam IFOOD_TEST_CLIENT_ID / IFOOD_TEST_CLIENT_SECRET (modo homologação)."
+        : "Faltam IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET nas variáveis de ambiente.",
     )
   }
 

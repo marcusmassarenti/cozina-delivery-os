@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/ninefood-sync",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/process-99-webhooks",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/ifood-sync",
+      "schedule": "0 9 * * *"
     }
   ]
 }
