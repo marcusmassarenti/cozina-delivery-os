@@ -1880,26 +1880,64 @@ async function saveKeetaItens(
       .in("data", isoDatas)
   }
 
-  const rows = grupo.itens.map((it) => ({
-    unit_id: unit.unitId,
-    data: formatDateOnly(it.data),
-    ref_year: it.data.getFullYear(),
-    ref_month: it.data.getMonth() + 1,
-    item_id: it.itemId,
-    nome_item: it.nomeItem,
-    qtd_vendida: it.qtdVendida,
-    preco_medio: it.precoMedio,
-    alcance: it.alcance,
-    add_carrinho: it.addCarrinho,
-    carrinho_pct: it.carrinhoPct,
-    import_id: importLog.id,
-  }))
+  // Dedupe por (data, nome_item): o Keeta pode exportar o mesmo item 2× no
+  // mesmo dia (combos, variações). Soma qtd_vendida; preço médio fica o do
+  // último (ou maior, pra não diminuir). Sem isso, viola a constraint UNIQUE
+  // (unit_id, data, nome_item).
+  type Row = {
+    unit_id: string
+    data: string
+    ref_year: number
+    ref_month: number
+    item_id: string | null
+    nome_item: string
+    qtd_vendida: number
+    preco_medio: number
+    alcance: number | null
+    add_carrinho: number | null
+    carrinho_pct: number | null
+    import_id: string
+  }
+  const dedupe = new Map<string, Row>()
+  for (const it of grupo.itens) {
+    const dataStr = formatDateOnly(it.data)
+    const key = `${dataStr}|${it.nomeItem}`
+    const existing = dedupe.get(key)
+    if (existing) {
+      existing.qtd_vendida += it.qtdVendida
+      if (it.precoMedio > existing.preco_medio) existing.preco_medio = it.precoMedio
+      if (it.alcance != null)
+        existing.alcance = Math.max(existing.alcance ?? 0, it.alcance)
+      if (it.addCarrinho != null)
+        existing.add_carrinho = Math.max(existing.add_carrinho ?? 0, it.addCarrinho)
+      continue
+    }
+    dedupe.set(key, {
+      unit_id: unit.unitId,
+      data: dataStr,
+      ref_year: it.data.getFullYear(),
+      ref_month: it.data.getMonth() + 1,
+      item_id: it.itemId,
+      nome_item: it.nomeItem,
+      qtd_vendida: it.qtdVendida,
+      preco_medio: it.precoMedio,
+      alcance: it.alcance,
+      add_carrinho: it.addCarrinho,
+      carrinho_pct: it.carrinhoPct,
+      import_id: importLog.id,
+    })
+  }
+  const rows = Array.from(dedupe.values())
 
+  // Usa upsert pra ser idempotente — se a dedupe acima falhar em algum caso
+  // não previsto, o segundo registro sobrescreve em vez de quebrar tudo.
   const CHUNK = 500
   for (let i = 0; i < rows.length; i += CHUNK) {
     const { error } = await admin
       .from("keeta_daily_item")
-      .insert(rows.slice(i, i + CHUNK))
+      .upsert(rows.slice(i, i + CHUNK), {
+        onConflict: "unit_id,data,nome_item",
+      })
     if (error)
       throw new Error(
         `Falha ao gravar Itens diário (chunk ${i / CHUNK + 1}): ${error.message}`,
