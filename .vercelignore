@@ -1,0 +1,23 @@
+# Arquivos/pastas que NÃO devem ir pro build da Vercel.
+
+# Backups locais do banco (não precisa em produção — pesa 300MB+)
+backups/
+
+# Caches locais
+.next/cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Variáveis e segredos
+.env.local
+.env*.local
+
+# IDE / sistema
+.DS_Store
+.vscode/
+.idea/
+
+# Outputs de scripts
+*.tmp
