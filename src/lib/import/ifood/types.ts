@@ -204,9 +204,15 @@ export type ParsedPedidos = {
 
 // ─── Resultado unificado ─────────────────────────────────────────────
 
+/** Relatório de Vendas (resumo) — sem dado novo, é só agregação visual. */
+export type ParsedVendasResumo = {
+  reportType: "vendas"
+}
+
 export type ParseResult =
   | ParsedCardapio
   | ParsedFinanceiro
   | ParsedAvaliacoes
   | ParsedPedidos
+  | ParsedVendasResumo
   | { reportType: "unknown"; error: string }

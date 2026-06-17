@@ -21,6 +21,19 @@ export function detectIfoodReportType(workbook: XLSX.WorkBook): IfoodReportType 
     return "cardapio"
   }
 
+  // Relatório de Vendas (resumido) — abas "Vendas" + "Horário com mais vendas"
+  // + "Formas de pagamento utilizadas" + "Dias com mais vendas". Não traz
+  // dado novo: tudo isso já vem pela Conciliação (financeiro) e pelo
+  // relatório de pedidos. Detectamos pra evitar erro "Tipo não reconhecido".
+  if (
+    sheets.has("Vendas") &&
+    (sheets.has("Horário com mais vendas") ||
+      sheets.has("Formas de pagamento utilizadas") ||
+      sheets.has("Dias com mais vendas"))
+  ) {
+    return "vendas"
+  }
+
   // Avaliações: aba única "Página 1" — checa pelos cabeçalhos
   // (nome da aba "Página 1" é genérico demais, vamos olhar dentro)
   const firstSheetName = workbook.SheetNames[0]

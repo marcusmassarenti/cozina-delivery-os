@@ -25,6 +25,7 @@ export function parseIfoodReport(buf: ArrayBuffer): ParseResult {
     if (reportType === "financeiro") return parseIfoodFinanceiro(workbook)
     if (reportType === "avaliacoes") return parseIfoodAvaliacoes(workbook)
     if (reportType === "pedidos") return parseIfoodPedidos(workbook)
+    if (reportType === "vendas") return { reportType: "vendas" }
     return {
       reportType: "unknown",
       error: `Tipo de relatório não reconhecido. Abas: ${workbook.SheetNames.join(", ")}`,

@@ -503,6 +503,17 @@ async function processFile(
     }
   }
 
+  // Relatório de Vendas (resumo) — não traz dado novo, já vem pela
+  // Conciliação. Aceita silenciosamente pra não confundir o operador.
+  if (parsed.reportType === "vendas") {
+    return {
+      filename: file.name,
+      ok: true,
+      message:
+        'Relatório de Vendas do iFood — não precisa importar. Esses dados já vêm pelo "Relatório de Conciliação" (Financeiro).',
+    }
+  }
+
   // Avaliações é multi-loja — não tem storeId top-level. Trata separado.
   if (parsed.reportType === "avaliacoes") {
     return await processAvaliacoesMultiloja(
