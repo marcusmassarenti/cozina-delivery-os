@@ -251,6 +251,7 @@ function platformBreakdown(
   bruto: number,
   liquido: number,
   recebidoDireto = 0,
+  promocoesLoja = 0,
 ) {
   return {
     id,
@@ -259,6 +260,7 @@ function platformBreakdown(
     liquido,
     pctLoja: bruto > 0 ? (liquido / bruto) * 100 : 0,
     recebidoDireto,
+    promocoesLoja,
   }
 }
 
@@ -382,10 +384,22 @@ export async function getRealMonthlyForUnits(
     const keetaCancel = keetaHas ? keeta!.cancelamentosQtd : keFb?.cancelados ?? 0
 
     const ifoodRecebidoDireto = ifoodHas ? fin!.recebidoDireto : 0
+    // Promoção que a LOJA bancou em cada plataforma. Pro "Para onde vai o
+    // bruto" separar do que é taxa real da plataforma (comissão+entrega).
+    const ifoodPromoLoja = ifoodHas ? Math.abs(fin!.promocaoLoja) : 0
+    const ninePromoLoja = Math.abs(nine?.promocoesRs ?? 0)
+    const keetaPromoLoja = keeta?.promocoesLoja ?? 0
     const platforms = [
-      platformBreakdown("ifood", "iFood", ifoodBruto, ifoodLiquido, ifoodRecebidoDireto),
-      platformBreakdown("99food", "99 Food", nineBruto, nineLiquido),
-      platformBreakdown("keeta", "Keeta", keetaBruto, keetaLiquido),
+      platformBreakdown(
+        "ifood",
+        "iFood",
+        ifoodBruto,
+        ifoodLiquido,
+        ifoodRecebidoDireto,
+        ifoodPromoLoja,
+      ),
+      platformBreakdown("99food", "99 Food", nineBruto, nineLiquido, 0, ninePromoLoja),
+      platformBreakdown("keeta", "Keeta", keetaBruto, keetaLiquido, 0, keetaPromoLoja),
     ]
 
     const totalBruto = ifoodBruto + nineBruto + keetaBruto

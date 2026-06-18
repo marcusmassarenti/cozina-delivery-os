@@ -99,6 +99,14 @@ export function ImportCoverageBanner({
           {platforms.map((p) => {
             const behind = isBehind(p.cov)
             const lag = lagDays(p.cov)
+            // O iFood publica o financeiro em ciclos semanais com defasagem
+            // (vendas só viram lançamento ~7 dias depois). Por isso a pílula
+            // do iFood mede a cobertura do FINANCEIRO (que alimenta a DRE),
+            // não do Relatório de Vendas — que costuma estar mais à frente.
+            const ifoodCycleNote =
+              p.id === "ifood"
+                ? " · iFood publica o financeiro semanalmente com defasagem de ~7 dias; o Relatório de Vendas (pedidos) costuma estar mais à frente"
+                : ""
             return (
               <span
                 key={p.id}
@@ -106,8 +114,8 @@ export function ImportCoverageBanner({
                   p.cov.lastDay === null
                     ? "Sem dados neste mês"
                     : behind
-                      ? `Atrasado ${lag} dia${lag === 1 ? "" : "s"} em relação a ontem`
-                      : "Em dia"
+                      ? `Atrasado ${lag} dia${lag === 1 ? "" : "s"} em relação a ontem${ifoodCycleNote}`
+                      : `Em dia${ifoodCycleNote}`
                 }
                 className={`inline-flex items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-[11px] font-medium ${
                   behind

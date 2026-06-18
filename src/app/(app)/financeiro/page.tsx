@@ -248,6 +248,7 @@ export default async function ResultadoPage({
                 id: p.id,
                 bruto: p.bruto,
                 liquido: p.liquido,
+                promocoesLoja: p.promocoesLoja ?? 0,
               }))}
               totalBruto={totals.bruto}
               totalLiquido={totals.liquidoPlataformas}

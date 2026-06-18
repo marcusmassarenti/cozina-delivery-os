@@ -74,7 +74,12 @@ export async function FinanceiroLojaTab({
   // "Para onde vai o bruto" com seletor de plataforma.
   const brutoPlatforms = m.platforms
     .filter((p) => p.bruto > 0)
-    .map((p) => ({ id: p.id, bruto: p.bruto, liquido: p.liquido }))
+    .map((p) => ({
+      id: p.id,
+      bruto: p.bruto,
+      liquido: p.liquido,
+      promocoesLoja: p.promocoesLoja ?? 0,
+    }))
   // 99 Food / Keeta com faturamento: a abertura detalhada abaixo é só do iFood,
   // então avisamos que essas plataformas não trazem esse nível de detalhe.
   const outrasComBruto = m.platforms.filter(

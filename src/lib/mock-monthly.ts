@@ -14,6 +14,15 @@ export type PlatformBreakdown = {
    * Portal do Parceiro. 99 Food/Keeta deixam em 0.
    */
   recebidoDireto?: number
+  /**
+   * Promoção/cupom que a LOJA bancou (decisão da franquia, não taxa que a
+   * plataforma cobra). Permite separar no "Para onde vai o bruto":
+   *  - Taxa real da plataforma = (bruto − liquido) − promocoesLoja
+   *  - Promoções da loja = promocoesLoja
+   * iFood: Promoção custeada pela loja. 99 Food: campo promocoes_rs.
+   * Keeta: soma de outras_despesas (cupons/multas bancadas pela loja).
+   */
+  promocoesLoja?: number
 }
 
 export type UnitMonthly = {

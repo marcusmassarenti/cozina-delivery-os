@@ -6,13 +6,25 @@ import { PieChart } from "lucide-react"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { fmtBRLShort } from "@/lib/format"
 
-type Plat = { id: PlatformId; bruto: number; liquido: number }
+type Plat = {
+  id: PlatformId
+  bruto: number
+  liquido: number
+  /** Promoção/cupom que a loja bancou (decisão da loja, não taxa). */
+  promocoesLoja: number
+}
 
 /**
  * "Para onde vai o bruto" com seletor de plataforma. Em "Todas" usa o
  * consolidado da loja; por plataforma usa o bruto/líquido daquela plataforma
  * e RATEIA o CMV + custo de operação pela fatia do bruto (a loja lança o custo
  * total, não por plataforma) — assim dá pra ver a margem aproximada por app.
+ *
+ * O "descontado" do bruto vem separado em DUAS barras:
+ *  - Taxa real da plataforma (comissão + entrega + serviço) = descontado − promoLoja
+ *  - Promoções da loja (cupom/desconto que a loja bancou) = promocoesLoja
+ * Isso evita a impressão de que iFood/Keeta cobram 50% de tarifa quando, na
+ * verdade, parte do desconto vem de campanhas que a própria loja banca.
  */
 export function BrutoBreakdown({
   platforms,
@@ -35,20 +47,27 @@ export function BrutoBreakdown({
   let liquido: number
   let cmvScope: number
   let opScope: number
+  let promoLoja: number
   if (sel === "todas") {
     bruto = totalBruto
     liquido = totalLiquido
     cmvScope = cmv
     opScope = operacao
+    promoLoja = platforms.reduce((s, p) => s + (p.promocoesLoja || 0), 0)
   } else {
     const p = platforms.find((x) => x.id === sel)
     bruto = p?.bruto ?? 0
     liquido = p?.liquido ?? 0
+    promoLoja = p?.promocoesLoja ?? 0
     const share = totalBruto > 0 ? bruto / totalBruto : 0
     cmvScope = cmv * share
     opScope = operacao * share
   }
-  const taxas = Math.max(0, bruto - liquido)
+  const descontadoTotal = Math.max(0, bruto - liquido)
+  // Cap em descontadoTotal: caso o relatório some promo > diferença bruto-liq
+  // (ex.: estornos), evita "Taxa real" negativa.
+  const promoCap = Math.min(promoLoja, descontadoTotal)
+  const taxaReal = descontadoTotal - promoCap
   const margem = liquido - cmvScope
   const resultado = margem - opScope
 
@@ -101,11 +120,21 @@ export function BrutoBreakdown({
         color="bg-emerald-500"
       />
       <CompBar
-        label="Taxas das plataformas"
-        value={taxas}
+        label="Taxa da plataforma"
+        sublabel="comissão, entrega, serviço"
+        value={taxaReal}
         base={bruto}
         color="bg-rose-500"
       />
+      {promoCap > 0 && (
+        <CompBar
+          label="Promoções da loja"
+          sublabel="cupons/descontos que a loja bancou"
+          value={promoCap}
+          base={bruto}
+          color="bg-fuchsia-500"
+        />
+      )}
       {cmvScope > 0 && (
         <CompBar
           label="CMV (produtos)"
@@ -144,12 +173,14 @@ export function BrutoBreakdown({
 
 function CompBar({
   label,
+  sublabel,
   value,
   base,
   color,
   emphasis,
 }: {
   label: string
+  sublabel?: string
   value: number
   base: number
   color: string
@@ -163,6 +194,11 @@ function CompBar({
           className={`text-xs ${emphasis ? "font-semibold" : "text-muted-foreground"}`}
         >
           {label}
+          {sublabel && (
+            <span className="ml-1 text-[10px] text-muted-foreground/70">
+              · {sublabel}
+            </span>
+          )}
         </span>
         <div className="flex items-baseline gap-2 tabular-nums">
           <span className="text-xs font-semibold">{fmtBRLShort(value)}</span>
