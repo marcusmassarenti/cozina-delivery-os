@@ -263,6 +263,9 @@ export type NetworkDrePlat = {
   taxaTotal: number
   /** VR líquido à parte (só iFood). */
   vrLiquido: number
+  /** Promoção/cupom que a LOJA bancou — separa "taxa real da plataforma" das
+   * decisões de campanha da loja no card "Para onde vai o bruto". */
+  promocoesLoja: number
   itens: { label: string; value: number; credit?: boolean }[]
 }
 
@@ -299,7 +302,7 @@ export async function getNetworkDrePlatforms(
   const a = {
     if: { bruto: 0, liq: 0, entrega: 0, comissao: 0, promo: 0 },
     ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
-    ke: { bruto: 0, liq: 0 },
+    ke: { bruto: 0, liq: 0, promo: 0 },
     vr: 0,
   }
   for (const u of active) {
@@ -349,6 +352,7 @@ export async function getNetworkDrePlatforms(
     }
     a.ke.bruto += keBruto
     a.ke.liq += keLiq
+    if (hasKeeta) a.ke.promo += keeta!.promocoesLoja
     a.vr += Math.max(0, mm.vrRecebido - mm.vrTaxaMedia8)
   }
 
@@ -359,6 +363,7 @@ export async function getNetworkDrePlatforms(
     liq: number,
     itens: { label: string; value: number }[],
     vr: number,
+    promoLoja: number,
   ): NetworkDrePlat | null => {
     if (bruto <= 0) return null
     const taxaTotal = Math.max(0, bruto - liq)
@@ -377,7 +382,16 @@ export async function getNetworkDrePlatforms(
         credit: true,
       })
     }
-    return { id, name, bruto, liquido: liq, taxaTotal, vrLiquido: vr, itens: lista }
+    return {
+      id,
+      name,
+      bruto,
+      liquido: liq,
+      taxaTotal,
+      vrLiquido: vr,
+      promocoesLoja: Math.min(Math.abs(promoLoja), taxaTotal),
+      itens: lista,
+    }
   }
   return [
     make(
@@ -391,6 +405,7 @@ export async function getNetworkDrePlatforms(
         { label: "Promoções (loja bancou)", value: a.if.promo },
       ],
       a.vr,
+      a.if.promo,
     ),
     make(
       "99food",
@@ -403,7 +418,8 @@ export async function getNetworkDrePlatforms(
         { label: "Promoções", value: a.ni.promo },
       ],
       0,
+      a.ni.promo,
     ),
-    make("keeta", "Keeta", a.ke.bruto, a.ke.liq, [], 0),
+    make("keeta", "Keeta", a.ke.bruto, a.ke.liq, [], 0, a.ke.promo),
   ].filter((p): p is NetworkDrePlat => p !== null)
 }
