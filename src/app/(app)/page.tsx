@@ -165,6 +165,9 @@ export default async function Home({
       : undefined
 
   // Fase 2a: resumos por unidade + cobertura + entrega + atenção (escopo).
+  // Quando o range é o mês inteiro, queryRange=undefined (caminho legado).
+  // Quando é range custom, passa pras queries filtrarem por dia.
+  const queryRange = isFullMonth ? undefined : periodRange
   const [
     finByUnit,
     ninefoodByUnit,
@@ -173,11 +176,11 @@ export default async function Home({
     deliveryFee,
     attention,
   ] = await Promise.all([
-    getFinanceiroResumoByUnits(activeUnitIds, year, month),
-    getNinefoodResumoByUnits(activeUnitIds, year, month),
-    getKeetaResumoByUnits(activeUnitIds, year, month),
+    getFinanceiroResumoByUnits(activeUnitIds, year, month, queryRange),
+    getNinefoodResumoByUnits(activeUnitIds, year, month, queryRange),
+    getKeetaResumoByUnits(activeUnitIds, year, month, queryRange),
     getImportCoverageForMonth(year, month, filterUnitIds),
-    getNetworkDeliveryFee(activeUnitIds, year, month),
+    getNetworkDeliveryFee(activeUnitIds, year, month, queryRange),
     getAttentionItems(units, year, month),
   ])
 
@@ -443,10 +446,10 @@ export default async function Home({
       </div>
 
       {!isFullMonth && (
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
-          <AlertTriangle className="size-3.5" />
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
           <span>
-            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> — nessa primeira versão os dados ainda são do <strong>mês todo</strong> ({formatPeriodLabel({ year, month })}). A filtragem por dia chega na próxima atualização.
+            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> — KPIs (bruto, líquido, pedidos, ticket médio, taxa de repasse, custo de entrega) já <strong>filtram por dia</strong>. <span className="opacity-70">Funil, top itens, avaliações, &quot;Precisa de atenção&quot; e CMV continuam do mês inteiro ({formatPeriodLabel({ year, month })}).</span>
           </span>
         </div>
       )}

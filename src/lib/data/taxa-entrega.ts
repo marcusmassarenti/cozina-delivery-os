@@ -61,9 +61,15 @@ export async function getDeliveryFeeByUnits(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Map<string, DeliveryFee>> {
   const out = new Map<string, DeliveryFee>()
   if (unitIds.length === 0) return out
+  // Range custom: pula RPCs (que não suportam) e vai direto pro paginated
+  // adaptado. RPCs são otimizadas pra mês inteiro só.
+  if (dateRange) {
+    return getDeliveryFeeByUnitsPaginated(unitIds, year, month, dateRange)
+  }
   const admin = createAdminClient()
   const ensureFee = (id: string) => {
     let f = out.get(id)
@@ -114,11 +120,12 @@ export async function getDeliveryFeeByUnits(
   return out
 }
 
-/** Fallback antigo: pagina as 3 tabelas e soma em JS. */
+/** Fallback antigo (e caminho do range custom): pagina as 3 tabelas e soma em JS. */
 async function getDeliveryFeeByUnitsPaginated(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Map<string, DeliveryFee>> {
   const out = new Map<string, DeliveryFee>()
   if (unitIds.length === 0) return out
@@ -134,16 +141,21 @@ async function getDeliveryFeeByUnitsPaginated(
 
   // iFood: lançamento "Taxa entrega iFood" (negativo = custo)
   const ifood = await pageAll<{ unit_id: string; valor: number | string }>(
-    (a, b) =>
-      admin
+    (a, b) => {
+      let q = admin
         .from("ifood_financeiro_lancamentos")
         .select("unit_id, valor")
         .in("unit_id", unitIds)
         .eq("ref_year", year)
         .eq("ref_month", month)
         .eq("descricao_lancamento", "Taxa entrega iFood")
-        .order("id")
-        .range(a, b),
+      if (dateRange) {
+        q = q
+          .gte("data_fato_gerador", dateRange.start)
+          .lte("data_fato_gerador", `${dateRange.end}T23:59:59`)
+      }
+      return q.order("id").range(a, b)
+    },
   )
   for (const r of ifood) {
     ensure(r.unit_id).ifood += Math.abs(Number(r.valor) || 0)
@@ -154,16 +166,18 @@ async function getDeliveryFeeByUnitsPaginated(
     unit_id: string
     custos_logisticos: number | string | null
     custo_loja_oferta_entrega_gratis: number | string | null
-  }>((a, b) =>
-    admin
+  }>((a, b) => {
+    let q = admin
       .from("ninefood_pedidos")
       .select("unit_id, custos_logisticos, custo_loja_oferta_entrega_gratis")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
-      .order("id")
-      .range(a, b),
-  )
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    }
+    return q.order("id").range(a, b)
+  })
   for (const r of nine) {
     ensure(r.unit_id).ninefood +=
       Math.abs(Number(r.custos_logisticos) || 0) +
@@ -174,16 +188,18 @@ async function getDeliveryFeeByUnitsPaginated(
   const keeta = await pageAll<{
     unit_id: string
     taxa_entrega: number | string | null
-  }>((a, b) =>
-    admin
+  }>((a, b) => {
+    let q = admin
       .from("keeta_pedidos")
       .select("unit_id, taxa_entrega")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
-      .order("id")
-      .range(a, b),
-  )
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    }
+    return q.order("id").range(a, b)
+  })
   for (const r of keeta) {
     ensure(r.unit_id).keeta += Math.abs(Number(r.taxa_entrega) || 0)
   }
@@ -209,14 +225,15 @@ export async function getDeliveryFeeForMonth(
 
 /**
  * Total de custo de entrega da rede no mês (somando as unidades),
- * com breakdown por plataforma. Aceita filtro de unidades.
+ * com breakdown por plataforma. Aceita filtro de unidades + range custom.
  */
 export async function getNetworkDeliveryFee(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<DeliveryFee> {
-  const map = await getDeliveryFeeByUnits(unitIds, year, month)
+  const map = await getDeliveryFeeByUnits(unitIds, year, month, dateRange)
   const acc = emptyFee()
   for (const f of map.values()) {
     acc.ifood += f.ifood

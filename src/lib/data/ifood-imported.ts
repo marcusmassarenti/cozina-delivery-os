@@ -1060,18 +1060,23 @@ export async function getFinanceiroResumoByUnits(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Map<string, FinanceiroResumo>> {
   const out = new Map<string, FinanceiroResumo>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
 
-  // Chama a RPC que agrega tudo no Postgres (1 query vs 100+ paginadas)
+  // Chama a RPC que agrega tudo no Postgres (1 query vs 100+ paginadas).
+  // `dateRange` (opcional) restringe pra range custom — assume mono-mês.
   const { data, error } = await admin.rpc(
     "ifood_financeiro_resumo_by_units",
     {
       p_unit_ids: unitIds,
       p_year: year,
       p_month: month,
+      ...(dateRange
+        ? { p_start_date: dateRange.start, p_end_date: dateRange.end }
+        : {}),
     },
   )
   if (error) {

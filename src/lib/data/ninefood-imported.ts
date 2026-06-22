@@ -85,6 +85,7 @@ export async function getNinefoodResumoByUnits(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Map<string, NinefoodResumo>> {
   const out = new Map<string, NinefoodResumo>()
   if (unitIds.length === 0) return out
@@ -93,6 +94,7 @@ export async function getNinefoodResumoByUnits(
   // Pagina: ninefood_daily_loja é 1 linha por loja por dia; com a rede
   // crescendo (~35 lojas × 30 dias = 1050) passa do cap de 1000 do Supabase e
   // descartaria dias silenciosamente. fetchAllRows + .order('id') resolve.
+  // `dateRange` (opcional) restringe pra range custom — assume mono-mês.
   const data = await fetchAllRows<{
     unit_id: string
     data: string
@@ -107,8 +109,8 @@ export async function getNinefoodResumoByUnits(
     cancelamentos_qtd: number | null
     tempo_medio_preparo_min: number | null
   }>(
-    (from, to) =>
-      admin
+    (from, to) => {
+      let q = admin
         .from("ninefood_daily_loja")
         .select(
           "unit_id, data, pedidos, bruto, liquido, comissao_rs, taxa_canal_pagamento_rs, promocoes_rs, avaliacao_loja, taxa_aceitacao_pct, cancelamentos_qtd, tempo_medio_preparo_min",
@@ -116,8 +118,11 @@ export async function getNinefoodResumoByUnits(
         .in("unit_id", unitIds)
         .eq("ref_year", year)
         .eq("ref_month", month)
-        .order("id")
-        .range(from, to),
+      if (dateRange) {
+        q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+      }
+      return q.order("id").range(from, to)
+    },
     "getNinefoodResumoByUnits",
   )
 

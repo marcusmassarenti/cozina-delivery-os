@@ -77,11 +77,16 @@ async function pageAll<T>(
 /**
  * Resumo mensal do Keeta por unidade. bruto/pedidos/cancelados vêm da
  * Loja diária; líquido vem dos Pedidos (ganhos líquidos somados).
+ *
+ * `dateRange` (opcional) restringe pra range custom (filtro de período).
+ * Quando passado, filtra `data BETWEEN start AND end` ADICIONAL ao
+ * ref_year/ref_month (que dão hit no índice). Assume range mono-mês.
  */
 export async function getKeetaResumoByUnits(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Map<string, KeetaResumo>> {
   const out = new Map<string, KeetaResumo>()
   if (unitIds.length === 0) return out
@@ -93,16 +98,18 @@ export async function getKeetaResumoByUnits(
     vendas_itens: number | string
     total_pedidos: number | null
     pedidos_cancelados: number | null
-  }>((a, b) =>
-    admin
+  }>((a, b) => {
+    let q = admin
       .from("keeta_daily_loja")
       .select("unit_id, vendas_itens, total_pedidos, pedidos_cancelados")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
-      .order("id")
-      .range(a, b),
-  )
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    }
+    return q.order("id").range(a, b)
+  })
   for (const r of loja) {
     const cur = out.get(r.unit_id) ?? emptyKeeta()
     cur.bruto += Number(r.vendas_itens) || 0
@@ -117,16 +124,18 @@ export async function getKeetaResumoByUnits(
     ganhos_liquidos: number | string | null
     vendas_itens: number | string | null
     outras_despesas: number | string | null
-  }>((a, b) =>
-    admin
+  }>((a, b) => {
+    let q = admin
       .from("keeta_pedidos")
       .select("unit_id, ganhos_liquidos, vendas_itens, outras_despesas")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
-      .order("id")
-      .range(a, b),
-  )
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    }
+    return q.order("id").range(a, b)
+  })
   const brutoFromPedidos = new Map<string, number>()
   const countFromPedidos = new Map<string, number>()
   for (const r of pedidos) {
