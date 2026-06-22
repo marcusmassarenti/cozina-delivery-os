@@ -47,6 +47,12 @@ import {
 import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import {
+  getFinanceiroResumoByUnitsForRange,
+  getKeetaResumoByUnitsForRange,
+  getNetworkDeliveryFeeForRange,
+  getNinefoodResumoByUnitsForRange,
+} from "@/lib/data/range-aggregation"
+import {
   getKeetaResumoByUnits,
   getNetworkKeetaAvaliacoesForMonth,
   getNetworkKeetaCancelamentosForMonth,
@@ -60,6 +66,7 @@ import {
   formatRangeLabel,
   rangeIsFullMonth,
   daysElapsedInMonth,
+  decomposeRangeByMonth,
 } from "@/lib/period"
 import { getAttentionItems } from "@/lib/data/attention"
 import { getCurrentUserContext } from "@/lib/auth/context"
@@ -165,9 +172,9 @@ export default async function Home({
       : undefined
 
   // Fase 2a: resumos por unidade + cobertura + entrega + atenção (escopo).
-  // Quando o range é o mês inteiro, queryRange=undefined (caminho legado).
-  // Quando é range custom, passa pras queries filtrarem por dia.
-  const queryRange = isFullMonth ? undefined : periodRange
+  // Mês inteiro → caminho legado (1 chamada por plataforma).
+  // Range custom → wrappers ForRange que decompõem cross-month e agregam.
+  // Cobertura e atenção seguem mensal (próxima iteração).
   const [
     finByUnit,
     ninefoodByUnit,
@@ -176,11 +183,19 @@ export default async function Home({
     deliveryFee,
     attention,
   ] = await Promise.all([
-    getFinanceiroResumoByUnits(activeUnitIds, year, month, queryRange),
-    getNinefoodResumoByUnits(activeUnitIds, year, month, queryRange),
-    getKeetaResumoByUnits(activeUnitIds, year, month, queryRange),
+    isFullMonth
+      ? getFinanceiroResumoByUnits(activeUnitIds, year, month)
+      : getFinanceiroResumoByUnitsForRange(activeUnitIds, periodRange),
+    isFullMonth
+      ? getNinefoodResumoByUnits(activeUnitIds, year, month)
+      : getNinefoodResumoByUnitsForRange(activeUnitIds, periodRange),
+    isFullMonth
+      ? getKeetaResumoByUnits(activeUnitIds, year, month)
+      : getKeetaResumoByUnitsForRange(activeUnitIds, periodRange),
     getImportCoverageForMonth(year, month, filterUnitIds),
-    getNetworkDeliveryFee(activeUnitIds, year, month, queryRange),
+    isFullMonth
+      ? getNetworkDeliveryFee(activeUnitIds, year, month)
+      : getNetworkDeliveryFeeForRange(activeUnitIds, periodRange),
     getAttentionItems(units, year, month),
   ])
 

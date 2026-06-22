@@ -2,22 +2,12 @@
 
 import * as React from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { Calendar, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react"
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   firstDayOfMonth,
-  formatPeriodKey,
-  formatPeriodLabel,
   formatRangeLabel,
   lastDayOfMonth,
-  MAX_RANGE_DAYS,
   rangeDays,
   rangeFromPeriod,
   rangeIsFullMonth,
@@ -34,30 +24,28 @@ export type AvailablePeriodOption = {
 }
 
 /**
- * Seletor de período com 2 modos:
- *  [◀]  [ 📅 Maio/2026 ▾ ]  [▶]  [📆 Período]      → mês completo
- *  [◀]  [ 📆 01–15 jun/2026 ▾ ]  [▶]  [📆 Período]  → range custom
+ * Seletor de período (range). Default = mês corrente. Clicar abre um
+ * popover grande com 2 colunas:
+ *  - Esquerda: atalhos (Hoje, Últimos 7d, Últimos 30d, Este mês, Mês
+ *    passado, Últimos 3 meses, Este ano, Limpar).
+ *  - Direita: 2 meses do calendário lado a lado, com seleção de range.
  *
  * URL convention:
- *  - mês completo  → ?periodo=YYYY-MM
- *  - range custom  → ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
- * Trocar de modo limpa o outro.
+ *  - mês inteiro → ?periodo=YYYY-MM
+ *  - range custom → ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
+ * Trocar limpa o outro param.
  *
- * `current` aceita Period {year,month} (compat) ou DateRange {start,end} —
- * Period vira o range do mês inteiro.
- *
- * `enableRange` mostra o botão "Período" pra escolher range custom. Default
- * = false (mês fechado, comportamento legado). Telas que ainda não tratam
- * range filtrado pelos dias mantêm enableRange=false.
+ * `current` aceita Period {year,month} ou DateRange {start,end} (compat).
+ * `options` (legado) e `enableRange` são ignorados — manteve só por compat.
  */
 export function PeriodSelector({
   current,
-  options,
+  options: _options,
   className,
-  enableRange = false,
+  enableRange: _enableRange,
 }: {
   current: Period | DateRange
-  options: AvailablePeriodOption[]
+  options?: AvailablePeriodOption[]
   className?: string
   enableRange?: boolean
 }) {
@@ -65,150 +53,19 @@ export function PeriodSelector({
   const searchParams = useSearchParams()
   const pathname = usePathname()
   const range: DateRange = isPeriod(current) ? rangeFromPeriod(current) : current
-  const isFullMonth = rangeIsFullMonth(range)
-  const currentMonth: Period | null = isFullMonth
-    ? { year: Number(range.start.slice(0, 4)), month: Number(range.start.slice(5, 7)) }
-    : null
-  const currentKey = currentMonth ? formatPeriodKey(currentMonth) : "__custom__"
+  const isFullMonthCurrent = rangeIsFullMonth(range)
+  // Sem param na URL = "default implícito" (mês corrente). Mostra "Selecionar
+  // período" no botão. Quando o user clica e escolhe algo (ou se a URL já tem
+  // param), mostra o label do que tá ativo.
+  const hasExplicitParam =
+    !!searchParams.get("periodo") ||
+    !!searchParams.get("inicio") ||
+    !!searchParams.get("fim")
 
-  function setMonth(key: string) {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set("periodo", key)
-    params.delete("inicio")
-    params.delete("fim")
-    router.push(`${pathname}?${params.toString()}`)
-  }
-
-  function setRange(start: string, end: string) {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set("inicio", start)
-    params.set("fim", end)
-    params.delete("periodo")
-    router.push(`${pathname}?${params.toString()}`)
-  }
-
-  // Setas: só fazem sentido em modo mês
-  const idx = currentMonth
-    ? options.findIndex(
-        (o) => o.year === currentMonth.year && o.month === currentMonth.month,
-      )
-    : -1
-  const hasNewer = idx > 0
-  const hasOlder = idx >= 0 && idx < options.length - 1
-  const arrowsDisabled = !currentMonth
-
-  function goPrev() {
-    if (!hasOlder) return
-    setMonth(formatPeriodKey(options[idx + 1]))
-  }
-  function goNext() {
-    if (!hasNewer) return
-    setMonth(formatPeriodKey(options[idx - 1]))
-  }
-
-  const label = formatRangeLabel(range)
-  const Icon = isFullMonth ? Calendar : CalendarRange
-
-  return (
-    <div className={`inline-flex items-center gap-1 ${className ?? ""}`}>
-      <button
-        type="button"
-        onClick={goPrev}
-        disabled={arrowsDisabled || !hasOlder}
-        aria-label="Mês anterior"
-        className="flex h-9 w-8 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-      >
-        <ChevronLeft className="size-3.5" />
-      </button>
-
-      <Select
-        value={currentKey}
-        onValueChange={(v) => {
-          if (!v || v === "__custom__") return
-          setMonth(v)
-        }}
-      >
-        <SelectTrigger className="h-9 min-w-[180px] gap-2 bg-card text-xs font-semibold">
-          <Icon className="size-3.5" />
-          <SelectValue>{label}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((opt) => {
-            const key = formatPeriodKey(opt)
-            const optLabel = formatPeriodLabel(opt)
-            const badges: string[] = []
-            if (opt.hasFinanceiro) badges.push("F")
-            if (opt.hasCardapio) badges.push("C")
-            if (opt.hasAvaliacoes) badges.push("A")
-            return (
-              <SelectItem key={key} value={key}>
-                <div className="flex items-center gap-2">
-                  <span>{optLabel}</span>
-                  {badges.length > 0 && (
-                    <span className="text-[9px] font-mono text-muted-foreground">
-                      {badges.join("·")}
-                    </span>
-                  )}
-                </div>
-              </SelectItem>
-            )
-          })}
-          {!isFullMonth && (
-            <SelectItem value="__custom__" disabled>
-              <span className="text-muted-foreground">{label} (custom)</span>
-            </SelectItem>
-          )}
-        </SelectContent>
-      </Select>
-
-      <button
-        type="button"
-        onClick={goNext}
-        disabled={arrowsDisabled || !hasNewer}
-        aria-label="Próximo mês"
-        className="flex h-9 w-8 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-      >
-        <ChevronRight className="size-3.5" />
-      </button>
-
-      {enableRange && (
-        <CustomRangeMenu
-          range={range}
-          onApply={setRange}
-          onClearToMonth={(p) => setMonth(formatPeriodKey(p))}
-        />
-      )}
-    </div>
-  )
-}
-
-function isPeriod(v: Period | DateRange): v is Period {
-  return (v as Period).month !== undefined
-}
-
-/**
- * Botão "Período" + menu inline (sem lib de popover — só estado + overlay
- * absolutamente posicionado). Click-outside fecha. Esc fecha.
- */
-function CustomRangeMenu({
-  range,
-  onApply,
-  onClearToMonth,
-}: {
-  range: DateRange
-  onApply: (start: string, end: string) => void
-  onClearToMonth: (p: Period) => void
-}) {
   const [open, setOpen] = React.useState(false)
-  const [start, setStart] = React.useState(range.start)
-  const [end, setEnd] = React.useState(range.end)
   const rootRef = React.useRef<HTMLDivElement>(null)
 
-  React.useEffect(() => {
-    setStart(range.start)
-    setEnd(range.end)
-  }, [range.start, range.end])
-
+  // Fecha ao clicar fora ou Esc
   React.useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
@@ -227,126 +84,483 @@ function CustomRangeMenu({
     }
   }, [open])
 
-  const days = rangeDays({ start, end })
-  const invalid = days < 1
-  const tooBig = days > MAX_RANGE_DAYS
-
-  function applyShortcut(daysBack: number) {
-    const today = new Date()
-    const endIso = isoLocal(today)
-    const startD = new Date(today.getTime() - (daysBack - 1) * 86_400_000)
-    setStart(isoLocal(startD))
-    setEnd(endIso)
+  function applyRange(start: string, end: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    // Se for mês inteiro, usa ?periodo=YYYY-MM (mais limpo na URL)
+    const r = { start, end }
+    if (rangeIsFullMonth(r)) {
+      params.set("periodo", start.slice(0, 7))
+      params.delete("inicio")
+      params.delete("fim")
+    } else {
+      params.set("inicio", start)
+      params.set("fim", end)
+      params.delete("periodo")
+    }
+    router.push(`${pathname}?${params.toString()}`)
+    setOpen(false)
   }
 
+  function clearToCurrentMonth() {
+    const today = nowParts()
+    const p = { year: today.year, month: today.month }
+    const r = rangeFromPeriod(p)
+    applyRange(r.start, r.end)
+  }
+
+  const label = hasExplicitParam ? formatRangeLabel(range) : "Selecionar período"
+
   return (
-    <div ref={rootRef} className="relative ml-1">
+    <div ref={rootRef} className={`relative inline-flex ${className ?? ""}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Período personalizado"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        className="flex h-9 items-center gap-1.5 rounded-md border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
       >
-        <CalendarRange className="size-3.5" />
-        Período
+        <Calendar className="size-3.5 text-muted-foreground" />
+        <span>{label}</span>
+        <ChevronDown className="size-3.5 text-muted-foreground" />
       </button>
+
       {open && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-50 w-72 rounded-md border bg-popover p-3 shadow-md">
-          <div className="mb-2 text-xs font-semibold">Período personalizado</div>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              De
-              <input
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-                className="rounded-md border bg-background px-2 py-1.5 text-xs"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              Até
-              <input
-                type="date"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-                className="rounded-md border bg-background px-2 py-1.5 text-xs"
-              />
-            </label>
-          </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">
-            {invalid
-              ? "Selecione um intervalo válido."
-              : tooBig
-                ? `Máximo ${MAX_RANGE_DAYS} dias. Selecionou ${days}.`
-                : `${days} dia${days === 1 ? "" : "s"} selecionado${days === 1 ? "" : "s"}.`}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-            <ShortcutBtn label="Últimos 7d" onClick={() => applyShortcut(7)} />
-            <ShortcutBtn label="Últimos 15d" onClick={() => applyShortcut(15)} />
-            <ShortcutBtn label="Últimos 30d" onClick={() => applyShortcut(30)} />
-            <ShortcutBtn
-              label="Este mês"
-              onClick={() => {
-                const today = new Date()
-                const p = {
-                  year: today.getFullYear(),
-                  month: today.getMonth() + 1,
-                }
-                setStart(firstDayOfMonth(p))
-                setEnd(lastDayOfMonth(p))
-              }}
-            />
-          </div>
-          <div className="mt-3 flex justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                const today = new Date()
-                onClearToMonth({
-                  year: today.getFullYear(),
-                  month: today.getMonth() + 1,
-                })
-              }}
-              className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
-            >
-              Voltar pra mês inteiro
-            </button>
-            <button
-              type="button"
-              disabled={invalid || tooBig}
-              onClick={() => {
-                setOpen(false)
-                onApply(start, end)
-              }}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
-            >
-              Aplicar
-            </button>
-          </div>
-        </div>
+        <RangePickerPanel
+          initial={range}
+          onApply={applyRange}
+          onClear={clearToCurrentMonth}
+          onClose={() => setOpen(false)}
+        />
       )}
     </div>
   )
 }
 
-function ShortcutBtn({ label, onClick }: { label: string; onClick: () => void }) {
+function isPeriod(v: Period | DateRange): v is Period {
+  return (v as Period).month !== undefined
+}
+
+// ─── Painel do picker (atalhos à esquerda + calendário duplo à direita) ─
+
+function RangePickerPanel({
+  initial,
+  onApply,
+  onClear,
+  onClose,
+}: {
+  initial: DateRange
+  onApply: (start: string, end: string) => void
+  onClear: () => void
+  onClose: () => void
+}) {
+  // Estado interno do picker — só "commita" pra URL no Aplicar / atalho
+  const [start, setStart] = React.useState<string | null>(initial.start)
+  const [end, setEnd] = React.useState<string | null>(initial.end)
+  const [hover, setHover] = React.useState<string | null>(null)
+  // Mês exibido à esquerda (o direito é sempre mês+1)
+  const [leftMonth, setLeftMonth] = React.useState<Period>(() => {
+    const d = parseIso(initial.start)
+    // Se o range cabe em 1 mês, mostra esse mês à esquerda. Se cross-month,
+    // mostra o mês do start à esquerda e o próximo à direita.
+    return { year: d.year, month: d.month }
+  })
+
+  const rightMonth = addMonth(leftMonth, 1)
+  const today = nowParts()
+  const todayIso = toIso(today)
+
+  function clickDay(iso: string) {
+    if (!start || (start && end)) {
+      // Inicia novo range
+      setStart(iso)
+      setEnd(null)
+      setHover(null)
+      return
+    }
+    // Já tem start, sem end → fixa o end
+    if (iso < start) {
+      // Clicou antes do start → vira novo start, end = start antigo
+      setEnd(start)
+      setStart(iso)
+    } else {
+      setEnd(iso)
+    }
+    setHover(null)
+  }
+
+  // Pra display do hover: se temos só start, preview até hover
+  const effectiveEnd = end ?? (hover && start && hover >= start ? hover : null)
+  const effectiveStart =
+    end || !hover || !start || hover >= start
+      ? start
+      : hover // hover < start, preview invertido
+
+  const canApply = start && end
+  const days = canApply ? rangeDays({ start: start!, end: end! }) : 0
+
+  function applyShortcut(s: string, e: string) {
+    setStart(s)
+    setEnd(e)
+    // Pula o "Aplicar" — commit direto
+    setTimeout(() => onApply(s, e), 0)
+  }
+
+  return (
+    <div
+      role="dialog"
+      className="absolute left-0 top-[calc(100%+6px)] z-50 flex w-[680px] max-w-[calc(100vw-2rem)] rounded-lg border bg-popover shadow-lg"
+    >
+      {/* Coluna 1: atalhos */}
+      <div className="flex w-44 flex-col border-r p-3">
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Atalhos
+        </div>
+        <ShortcutItem
+          label="Hoje"
+          onClick={() => applyShortcut(todayIso, todayIso)}
+        />
+        <ShortcutItem
+          label="Últimos 7 dias"
+          onClick={() => {
+            const e = todayIso
+            const s = toIso(addDays(today, -6))
+            applyShortcut(s, e)
+          }}
+        />
+        <ShortcutItem
+          label="Últimos 30 dias"
+          onClick={() => {
+            const e = todayIso
+            const s = toIso(addDays(today, -29))
+            applyShortcut(s, e)
+          }}
+        />
+        <ShortcutItem
+          label="Este mês"
+          onClick={() => {
+            const p = { year: today.year, month: today.month }
+            applyShortcut(firstDayOfMonth(p), lastDayOfMonth(p))
+          }}
+        />
+        <ShortcutItem
+          label="Mês passado"
+          onClick={() => {
+            const p = previousMonth({ year: today.year, month: today.month })
+            applyShortcut(firstDayOfMonth(p), lastDayOfMonth(p))
+          }}
+        />
+        <ShortcutItem
+          label="Últimos 3 meses"
+          onClick={() => {
+            const e = todayIso
+            const s = toIso(addDays(today, -89))
+            applyShortcut(s, e)
+          }}
+        />
+        <ShortcutItem
+          label="Este ano"
+          onClick={() => {
+            const s = `${today.year}-01-01`
+            applyShortcut(s, todayIso)
+          }}
+        />
+        <div className="mt-auto border-t pt-2">
+          <ShortcutItem
+            label="Limpar"
+            muted
+            onClick={() => {
+              onClear()
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Coluna 2: calendário duplo */}
+      <div className="flex flex-1 flex-col p-4">
+        <div className="mb-3 flex items-center">
+          <button
+            type="button"
+            onClick={() => setLeftMonth(addMonth(leftMonth, -1))}
+            aria-label="Mês anterior"
+            className="flex size-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ChevronLeft className="size-3.5" />
+          </button>
+          <div className="flex-1 text-center text-xs font-semibold lowercase">
+            {monthLabel(leftMonth)}
+          </div>
+          <div className="flex-1 text-center text-xs font-semibold lowercase">
+            {monthLabel(rightMonth)}
+          </div>
+          <button
+            type="button"
+            onClick={() => setLeftMonth(addMonth(leftMonth, 1))}
+            aria-label="Próximo mês"
+            className="flex size-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ChevronRight className="size-3.5" />
+          </button>
+        </div>
+        <div className="flex gap-6">
+          <CalendarMonth
+            month={leftMonth}
+            start={effectiveStart}
+            end={effectiveEnd}
+            onClickDay={clickDay}
+            onHoverDay={setHover}
+            todayIso={todayIso}
+          />
+          <CalendarMonth
+            month={rightMonth}
+            start={effectiveStart}
+            end={effectiveEnd}
+            onClickDay={clickDay}
+            onHoverDay={setHover}
+            todayIso={todayIso}
+          />
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3">
+          <div className="text-[11px] text-muted-foreground">
+            {start && end
+              ? `${days} dia${days === 1 ? "" : "s"} · ${formatRangeLabel({ start, end })}`
+              : start
+                ? `Início ${fmtDayLabel(start)} — escolha o fim`
+                : "Selecione o início e o fim"}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={!canApply}
+              onClick={() => start && end && onApply(start, end)}
+              className="rounded-md bg-primary px-3 py-1.5 text-[11px] font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ShortcutItem({
+  label,
+  onClick,
+  muted,
+}: {
+  label: string
+  onClick: () => void
+  muted?: boolean
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border bg-card px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className={`mb-0.5 w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted ${
+        muted ? "text-muted-foreground" : "text-foreground"
+      }`}
     >
       {label}
     </button>
   )
 }
 
-/** Date → YYYY-MM-DD local (sem fuso). */
-function isoLocal(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const dd = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${dd}`
+// ─── Calendário de 1 mês ────────────────────────────────────────────
+
+const DOW_LABELS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"]
+
+function CalendarMonth({
+  month,
+  start,
+  end,
+  onClickDay,
+  onHoverDay,
+  todayIso,
+}: {
+  month: Period
+  start: string | null
+  end: string | null
+  onClickDay: (iso: string) => void
+  onHoverDay: (iso: string | null) => void
+  todayIso: string
+}) {
+  const firstDow = new Date(month.year, month.month - 1, 1).getDay() // 0..6, dom..sab
+  const lastDay = new Date(month.year, month.month, 0).getDate()
+  const prevMonth = addMonth(month, -1)
+  const prevLastDay = new Date(prevMonth.year, prevMonth.month, 0).getDate()
+
+  // 6 linhas × 7 = 42 células. Algumas mostram o mês anterior/próximo, cinza.
+  const cells: Array<{ iso: string; day: number; inMonth: boolean }> = []
+  // Mês anterior pra preencher antes do dia 1
+  for (let i = firstDow - 1; i >= 0; i--) {
+    const d = prevLastDay - i
+    cells.push({
+      iso: `${prevMonth.year}-${pad(prevMonth.month)}-${pad(d)}`,
+      day: d,
+      inMonth: false,
+    })
+  }
+  // Mês atual
+  for (let d = 1; d <= lastDay; d++) {
+    cells.push({
+      iso: `${month.year}-${pad(month.month)}-${pad(d)}`,
+      day: d,
+      inMonth: true,
+    })
+  }
+  // Mês próximo pra completar 42
+  const nextMonth = addMonth(month, 1)
+  let d = 1
+  while (cells.length < 42) {
+    cells.push({
+      iso: `${nextMonth.year}-${pad(nextMonth.month)}-${pad(d)}`,
+      day: d,
+      inMonth: false,
+    })
+    d++
+  }
+
+  return (
+    <div className="flex-1">
+      <div className="mb-1.5 grid grid-cols-7 gap-y-1 text-center text-[10px] font-medium text-muted-foreground">
+        {DOW_LABELS.map((l) => (
+          <div key={l}>{l}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((c, i) => {
+          const isStart = start === c.iso
+          const isEnd = end === c.iso
+          const inRange =
+            start && end && c.iso >= start && c.iso <= end ? true : false
+          const isToday = c.iso === todayIso
+          const isEndpoint = isStart || isEnd
+          return (
+            <button
+              key={`${c.iso}-${i}`}
+              type="button"
+              onClick={() => onClickDay(c.iso)}
+              onMouseEnter={() => onHoverDay(c.iso)}
+              onMouseLeave={() => onHoverDay(null)}
+              className={`relative flex h-8 items-center justify-center text-[11px] tabular-nums transition-colors ${
+                !c.inMonth
+                  ? "text-muted-foreground/40"
+                  : isEndpoint
+                    ? "z-10 rounded-full bg-primary font-semibold text-primary-foreground"
+                    : inRange
+                      ? "bg-primary/15 text-foreground"
+                      : isToday
+                        ? "font-semibold text-primary"
+                        : "text-foreground hover:bg-muted"
+              } ${
+                inRange && !isEndpoint
+                  ? c.iso === start ||
+                    (start &&
+                      end &&
+                      c.iso === toIso(addDays(parseIso(start), 0)))
+                    ? "rounded-l-full"
+                    : c.iso === end
+                      ? "rounded-r-full"
+                      : ""
+                  : ""
+              }`}
+            >
+              {c.day}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Helpers de data (sem libs externas) ────────────────────────────
+
+type DateParts = { year: number; month: number; day: number }
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0")
+}
+
+function toIso(p: DateParts): string {
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`
+}
+
+function parseIso(iso: string): DateParts {
+  return {
+    year: Number(iso.slice(0, 4)),
+    month: Number(iso.slice(5, 7)),
+    day: Number(iso.slice(8, 10)),
+  }
+}
+
+function addDays(p: DateParts, n: number): DateParts {
+  const d = new Date(p.year, p.month - 1, p.day + n)
+  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() }
+}
+
+function addMonth(p: Period, n: number): Period {
+  const d = new Date(p.year, p.month - 1 + n, 1)
+  return { year: d.getFullYear(), month: d.getMonth() + 1 }
+}
+
+function previousMonth(p: Period): Period {
+  return addMonth(p, -1)
+}
+
+function nowParts(): DateParts {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date())
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value)
+  return { year: get("year"), month: get("month"), day: get("day") }
+}
+
+const MESES_NOMES = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+]
+
+function monthLabel(p: Period): string {
+  return `${MESES_NOMES[p.month - 1]} ${p.year}`
+}
+
+const MES_ABREV = [
+  "jan",
+  "fev",
+  "mar",
+  "abr",
+  "mai",
+  "jun",
+  "jul",
+  "ago",
+  "set",
+  "out",
+  "nov",
+  "dez",
+]
+
+function fmtDayLabel(iso: string): string {
+  const p = parseIso(iso)
+  return `${pad(p.day)}/${MES_ABREV[p.month - 1]}`
 }

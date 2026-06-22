@@ -224,3 +224,45 @@ export function rangeSingleMonth(r: DateRange): Period | null {
   if (a[1] !== b[1] || a[2] !== b[2]) return null
   return { year: Number(a[1]), month: Number(a[2]) }
 }
+
+/**
+ * Decompõe um range em uma lista de {period, sub-range} — um item por
+ * mês envolvido. Pro Dashboard agregar dados de queries mono-mês quando
+ * o usuário escolhe um range que cruza meses.
+ *
+ * "2026-05-26" → "2026-06-10" vira:
+ *   [
+ *     { period: {2026,5}, sub: {start: "2026-05-26", end: "2026-05-31"} },
+ *     { period: {2026,6}, sub: {start: "2026-06-01", end: "2026-06-10"} },
+ *   ]
+ */
+export function decomposeRangeByMonth(
+  r: DateRange,
+): Array<{ period: Period; sub: DateRange }> {
+  const a = ISO_RE.exec(r.start)
+  const b = ISO_RE.exec(r.end)
+  if (!a || !b) return []
+  const out: Array<{ period: Period; sub: DateRange }> = []
+  let curY = Number(a[1])
+  let curM = Number(a[2])
+  const endY = Number(b[1])
+  const endM = Number(b[2])
+  let curStart = r.start
+  while (curY < endY || (curY === endY && curM <= endM)) {
+    const p: Period = { year: curY, month: curM }
+    const monthEnd = lastDayOfMonth(p)
+    const isLast = curY === endY && curM === endM
+    const subEnd = isLast ? r.end : monthEnd
+    out.push({ period: p, sub: { start: curStart, end: subEnd } })
+    if (isLast) break
+    // Avança pro próximo mês
+    if (curM === 12) {
+      curY++
+      curM = 1
+    } else {
+      curM++
+    }
+    curStart = firstDayOfMonth({ year: curY, month: curM })
+  }
+  return out
+}
