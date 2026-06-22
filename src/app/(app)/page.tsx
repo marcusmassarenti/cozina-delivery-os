@@ -55,7 +55,10 @@ import {
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import {
   parsePeriodParam,
+  parseRangeFromSp,
   formatPeriodLabel,
+  formatRangeLabel,
+  rangeIsFullMonth,
   daysElapsedInMonth,
 } from "@/lib/period"
 import { getAttentionItems } from "@/lib/data/attention"
@@ -85,13 +88,24 @@ export default async function Home({
 }: {
   searchParams: Promise<{
     periodo?: string
+    inicio?: string // YYYY-MM-DD (range custom)
+    fim?: string // YYYY-MM-DD (range custom)
     unidades?: string // códigos separados por vírgula: "01,02,03"
     plataforma?: string // "ifood" | "99food" | "keeta" | undefined (=todas)
     ativo?: string // "1" pra mostrar só com faturamento
   }>
 }) {
   const sp = await searchParams
-  const { year, month } = parsePeriodParam(sp.periodo)
+  // Range de período custom (ou mês inteiro como default). Por enquanto as
+  // queries continuam por (year, month) do início — quando range é o mês
+  // inteiro, comportamento idêntico ao seletor antigo. Quando é custom, o
+  // banner avisa que os dados ainda são do mês todo (próxima iteração:
+  // filtrar pelas datas exatas).
+  const periodRange = parseRangeFromSp(sp)
+  const isFullMonth = rangeIsFullMonth(periodRange)
+  const { year, month } = parsePeriodParam(
+    `${periodRange.start.slice(0, 4)}-${periodRange.start.slice(5, 7)}`,
+  )
   const unidadesFilter = sp.unidades
     ? new Set(sp.unidades.split(",").filter(Boolean))
     : null
@@ -406,13 +420,14 @@ export default async function Home({
                   ? "Sua loja"
                   : "Suas lojas"
                 : "Visão da rede"}{" "}
-            · {formatPeriodLabel({ year, month })}
+            · {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodSelector
-            current={{ year, month }}
+            current={periodRange}
             options={availablePeriods}
+            enableRange
           />
           <DashboardFilters
             unitOptions={allUnits
@@ -426,6 +441,15 @@ export default async function Home({
           />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5" />
+          <span>
+            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> — nessa primeira versão os dados ainda são do <strong>mês todo</strong> ({formatPeriodLabel({ year, month })}). A filtragem por dia chega na próxima atualização.
+          </span>
+        </div>
+      )}
 
       {status.ok ? (
         <ImportCoverageBanner
