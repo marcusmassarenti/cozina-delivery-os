@@ -1,5 +1,7 @@
 import { fmtBRL } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
+import { AlertTriangle } from "lucide-react"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import {
   getAccounts,
@@ -17,14 +19,14 @@ import { EntriesList } from "../_components/entries-list"
 export default async function LancamentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; loja?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; loja?: string }>
 }) {
   const holdingId = await getCaixaHoldingId()
   if (!holdingId) return null
 
   const sp = await searchParams
   const loja = sp.loja
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
 
   const [accounts, categories, cardIds, contacts, units, summary] = await Promise.all([
     getAccounts(holdingId),
@@ -55,10 +57,19 @@ export default async function LancamentosPage({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          Movimentação de {formatPeriodLabel({ year, month })}
+          Movimentação de {formatRangeLabel(periodRange)}
         </p>
-        <PeriodSelector current={{ year, month }} options={periods} />
+        <PeriodSelector current={periodRange} options={periods} enableRange />
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Caixa lista o <strong>mês inteiro</strong>. Mostrando <strong>{formatPeriodLabel({ year, month })}</strong>.
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {chips.map((c) => (

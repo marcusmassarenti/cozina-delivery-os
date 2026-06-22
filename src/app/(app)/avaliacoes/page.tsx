@@ -7,7 +7,13 @@ import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import {
+  formatPeriodLabel,
+  formatRangeLabel,
+  parseRangeFromSp,
+  rangeIsFullMonth,
+} from "@/lib/period"
+import { AlertTriangle } from "lucide-react"
 
 import { AvaliacoesFilters } from "./_components/avaliacoes-filters"
 import { AvaliacoesNetworkDashboard } from "./_components/avaliacoes-network-dashboard"
@@ -34,12 +40,17 @@ export default async function AvaliacoesPage({
     unidade?: string
     plataforma?: string
     periodo?: string
+    inicio?: string
+    fim?: string
     notas?: string
   }>
 }) {
   const sp = await searchParams
   await assertCanView("avaliacoes")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const periodRange = parseRangeFromSp(sp)
+  const isFullMonth = rangeIsFullMonth(periodRange)
+  const year = Number(periodRange.start.slice(0, 4))
+  const month = Number(periodRange.start.slice(5, 7))
   const unidadeCode = sp.unidade ?? null
   const plataformaParam = ["ifood", "99food", "keeta"].includes(
     sp.plataforma ?? "",
@@ -97,16 +108,26 @@ export default async function AvaliacoesPage({
               : `Visão da rede · ${
                   plataformaParam ? PLATAFORMA_LABEL[plataformaParam] : "todas as plataformas"
                 }`}{" "}
-            · {formatPeriodLabel({ year, month })}
+            · {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodSelector
-            current={{ year, month }}
+            current={periodRange}
             options={availablePeriods}
+            enableRange
           />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Avaliações são agregadas <strong>por mês</strong> nas plataformas. Mostrando dados de <strong>{formatPeriodLabel({ year, month })}</strong> (mês do início do range selecionado).
+          </span>
+        </div>
+      )}
 
       <AvaliacoesFilters
         unitOptions={unitOptions}

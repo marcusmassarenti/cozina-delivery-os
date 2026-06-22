@@ -11,16 +11,23 @@ import {
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRL, fmtNum } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
+import { rangeSingleMonth } from "@/lib/period"
+import { AlertTriangle } from "lucide-react"
 
 export default async function TicketMedioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; lojas?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
+  // Matriz dia × loja precisa ser mono-mês (chave = dia do mês 1..31).
+  // Cross-month clampa pro mês do start + banner.
+  const singleMonth = rangeSingleMonth(periodRange)
+  const queryRange = isFullMonth || !singleMonth ? undefined : periodRange
 
   const allUnits = (await getVisibleUnits())
     .filter((u) => u.active)
@@ -32,10 +39,10 @@ export default async function TicketMedioPage({
       : allUnits
 
   const [todas, ifood, nine, keeta, availablePeriods] = await Promise.all([
-    getDailyReportMatrix(year, month, "todas", scoped),
-    getDailyReportMatrix(year, month, "ifood", scoped),
-    getDailyReportMatrix(year, month, "99food", scoped),
-    getDailyReportMatrix(year, month, "keeta", scoped),
+    getDailyReportMatrix(year, month, "todas", scoped, queryRange),
+    getDailyReportMatrix(year, month, "ifood", scoped, queryRange),
+    getDailyReportMatrix(year, month, "99food", scoped, queryRange),
+    getDailyReportMatrix(year, month, "keeta", scoped, queryRange),
     getAvailablePeriods(),
   ])
 
@@ -79,14 +86,30 @@ export default async function TicketMedioPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Ticket médio por loja e plataforma (faturamento ÷ pedidos) ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> —{" "}
+            {singleMonth
+              ? `mostrando dias do range em ${formatPeriodLabel({ year, month })}.`
+              : `range cruza meses; clampando pro mês ${formatPeriodLabel({ year, month })}.`}
+          </span>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">

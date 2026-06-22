@@ -1,4 +1,4 @@
-import { LineChart } from "lucide-react"
+import { AlertTriangle, LineChart } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -7,7 +7,8 @@ import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtNum } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
 
 const MES_CURTO = [
   "jan",
@@ -34,11 +35,11 @@ function notaColor(n: number | null): string {
 export default async function AvaliacoesEvolucaoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; lojas?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
 
   const allUnits = (await getVisibleUnits())
     .filter((u) => u.active)
@@ -100,9 +101,23 @@ export default async function AvaliacoesEvolucaoPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Evolução de nota é <strong>mês a mês</strong>. Usando como referência o mês <strong>{formatPeriodLabel({ year, month })}</strong> e os 5 anteriores.
+          </span>
+        </div>
+      )}
+
 
       {!hasData ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">

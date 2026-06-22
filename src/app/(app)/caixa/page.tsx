@@ -10,7 +10,8 @@ import {
 } from "lucide-react"
 
 import { fmtBRL } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import {
   getCaixaDashboard,
@@ -38,14 +39,14 @@ function fmtDate(d: string | null) {
 export default async function VisaoGeralPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; loja?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; loja?: string }>
 }) {
   const holdingId = await getCaixaHoldingId()
   if (!holdingId) return null
 
   const sp = await searchParams
   const loja = sp.loja
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
   const [dash, categories, top] = await Promise.all([
     getCaixaDashboard(holdingId, year, month, loja),
     getCategoriesFlat(holdingId),
@@ -67,10 +68,19 @@ export default async function VisaoGeralPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Base dos cards: {formatPeriodLabel({ year, month })}
+          Base dos cards: {formatRangeLabel(periodRange)}
         </p>
-        <PeriodSelector current={{ year, month }} options={periods} />
+        <PeriodSelector current={periodRange} options={periods} enableRange />
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Caixa é organizado por <strong>mês</strong>. Mostrando dados de <strong>{formatPeriodLabel({ year, month })}</strong>.
+          </span>
+        </div>
+      )}
 
       {categories.length === 0 && (
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300">

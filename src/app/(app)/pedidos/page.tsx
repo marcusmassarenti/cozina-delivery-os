@@ -23,7 +23,13 @@ import {
 } from "@/lib/data/ninefood-pedidos"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import {
+  formatPeriodLabel,
+  formatRangeLabel,
+  parseRangeFromSp,
+  rangeIsFullMonth,
+} from "@/lib/period"
+import { AlertTriangle } from "lucide-react"
 
 import { PedidosIfoodView } from "./_components/pedidos-ifood-view"
 import { PedidosKeetaView } from "./_components/pedidos-keeta-view"
@@ -42,13 +48,19 @@ export default async function PedidosPage({
 }: {
   searchParams: Promise<{
     periodo?: string
+    inicio?: string
+    fim?: string
     lojas?: string
     plataforma?: string
   }>
 }) {
   const sp = await searchParams
   await assertCanView("pedidos")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const periodRange = parseRangeFromSp(sp)
+  const isFullMonth = rangeIsFullMonth(periodRange)
+  const year = Number(periodRange.start.slice(0, 4))
+  const month = Number(periodRange.start.slice(5, 7))
+  const queryRange = isFullMonth ? undefined : periodRange
   const periodoParam = sp.periodo
   const plataforma: "ifood" | "99food" | "keeta" =
     sp.plataforma === "keeta"
@@ -77,7 +89,7 @@ export default async function PedidosPage({
           const [vrByUnit, resumo, fatMap] = await Promise.all([
             getVrByUnits(year, month, ids),
             getNetworkPagamentoResumo(year, month, ids),
-            getFinanceiroResumoByUnits(ids, year, month),
+            getFinanceiroResumoByUnits(ids, year, month, queryRange),
           ])
           const enriched = vrByUnit
             .map((u) => ({
@@ -95,7 +107,7 @@ export default async function PedidosPage({
             getNetworkKeetaPedidoResumo(ids, year, month),
             getKeetaPedidoUnitsWithData(year, month),
             getKeetaPedidoPorLoja(ids, year, month),
-            getKeetaResumoByUnits(ids, year, month),
+            getKeetaResumoByUnits(ids, year, month, queryRange),
           ])
           const enriched = porLoja
             .map((u) => ({
@@ -113,7 +125,7 @@ export default async function PedidosPage({
             getNetworkNinefoodPedidoResumo(ids, year, month),
             getNinefoodPedidoUnitsWithData(year, month),
             getNinefoodPedidoPorLoja(ids, year, month),
-            getNinefoodResumoByUnits(ids, year, month),
+            getNinefoodResumoByUnits(ids, year, month, queryRange),
           ])
           const enriched = porLoja
             .map((u) => ({
@@ -153,7 +165,7 @@ export default async function PedidosPage({
             {lojaCodes.length > 0
               ? `${filteredUnits.length} loja${filteredUnits.length === 1 ? "" : "s"}`
               : "Todas as lojas"}{" "}
-            · {dataCodes.size} com dados · {formatPeriodLabel({ year, month })}
+            · {dataCodes.size} com dados · {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -161,9 +173,22 @@ export default async function PedidosPage({
           <LojaFilter
             units={activeUnits.map((u) => ({ code: u.code, name: u.name }))}
           />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> — resumos das plataformas filtram por dia; algumas seções específicas (pagamento, VR por bandeira, cardápio) podem mostrar o mês inteiro de {formatPeriodLabel({ year, month })}.
+          </span>
+        </div>
+      )}
 
       {plataforma === "keeta" ? (
         <PedidosKeetaView

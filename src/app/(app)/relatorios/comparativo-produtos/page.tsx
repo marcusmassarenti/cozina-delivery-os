@@ -1,4 +1,4 @@
-import { GitCompareArrows } from "lucide-react"
+import { AlertTriangle, GitCompareArrows } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -8,7 +8,8 @@ import { getTopProdutos } from "@/lib/data/produtos"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRL, fmtNum } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
 
 const PLATS: { id: PlatformId; label: string }[] = [
   { id: "ifood", label: "iFood" },
@@ -17,7 +18,7 @@ const PLATS: { id: PlatformId; label: string }[] = [
 ]
 const TOP_N = 25
 
-type SP = { periodo?: string; lojas?: string; plat?: string; metrica?: string }
+type SP = { periodo?: string; inicio?: string; fim?: string; lojas?: string; plat?: string; metrica?: string }
 
 function buildHref(sp: SP, key: keyof SP, val: string): string {
   const p = new URLSearchParams()
@@ -35,7 +36,7 @@ export default async function ComparativoProdutosPage({
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
   const plataforma: PlatformId = PLATS.some((p) => p.id === sp.plat)
     ? (sp.plat as PlatformId)
     : "ifood"
@@ -95,14 +96,27 @@ export default async function ComparativoProdutosPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Mesmo produto entre lojas diferentes ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Produtos são agregados por <strong>mês</strong> nos relatórios. Mostrando <strong>{formatPeriodLabel({ year, month })}</strong> (mês do início do range).
+          </span>
+        </div>
+      )}
 
       {/* Switchers plataforma + métrica */}
       <div className="flex flex-wrap items-center gap-4">

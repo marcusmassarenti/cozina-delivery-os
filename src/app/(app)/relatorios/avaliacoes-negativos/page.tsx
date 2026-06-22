@@ -1,4 +1,4 @@
-import { MessageSquare } from "lucide-react"
+import { AlertTriangle, MessageSquare } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -8,7 +8,8 @@ import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtNum } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
 
 function Stars({ n }: { n: number }) {
   return (
@@ -30,11 +31,11 @@ function fmtData(iso: string | null): string {
 export default async function AvaliacoesNegativosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; lojas?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
 
   const allUnits = (await getVisibleUnits())
     .filter((u) => u.active)
@@ -68,14 +69,27 @@ export default async function AvaliacoesNegativosPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Avaliações de 1 e 2 ★ com comentário, pra agir rápido ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Comentários são agregados por <strong>mês</strong>. Mostrando <strong>{formatPeriodLabel({ year, month })}</strong>.
+          </span>
+        </div>
+      )}
 
       {comentarios.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">

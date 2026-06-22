@@ -6,7 +6,8 @@ import { isSuperadmin } from "@/lib/auth/permissions"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getInsumos, getItensVendidos } from "@/lib/data/producao"
 import { PeriodSelector } from "@/components/shared/period-selector"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
 
 import { InsumoImport } from "./_components/insumo-import"
 import { BulkFichaAction } from "./_components/bulk-ficha-action"
@@ -20,7 +21,7 @@ import { ItensFichaList } from "./_components/itens-ficha-list"
 export default async function FichaTecnicaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string }>
 }) {
   // Interno da Cozina (de-para pro ERP industrial) — só super-admin.
   if (!(await isSuperadmin())) notFound()
@@ -35,7 +36,7 @@ export default async function FichaTecnicaPage({
   if (!ok) redirect("/")
 
   const sp = await searchParams
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month } = readPeriod(sp)
 
   const [insumos, itens, periods] = await Promise.all([
     getInsumos(),
@@ -55,10 +56,10 @@ export default async function FichaTecnicaPage({
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Converte o que as lojas vendem (itens) na demanda de insumos do ERP
-            · itens de {formatPeriodLabel({ year, month })}
+            · itens de {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <PeriodSelector current={{ year, month }} options={periods} />
+        <PeriodSelector current={periodRange} options={periods} enableRange />
       </div>
 
       <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300">

@@ -8,7 +8,9 @@ import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
+import { AlertTriangle } from "lucide-react"
 import {
   RankingSwitcher,
   type RankingMetrica,
@@ -31,11 +33,11 @@ const METRICA_LABEL: Record<RankingMetrica, string> = {
 export default async function RankingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; lojas?: string; metrica?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string; metrica?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
   const metrica: RankingMetrica = VALID_METRICAS.includes(
     sp.metrica as RankingMetrica,
   )
@@ -101,14 +103,27 @@ export default async function RankingPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Lojas ordenadas por {METRICA_LABEL[metrica].toLowerCase()} ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            O ranking depende do DRE (que precisa do mês inteiro pra CMV e margem). Mostrando dados do mês <strong>{formatPeriodLabel({ year, month })}</strong>.
+          </span>
+        </div>
+      )}
 
       <RankingSwitcher current={metrica} />
 

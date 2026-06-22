@@ -27,20 +27,22 @@ import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import {
   formatPeriodKey,
   formatPeriodLabel,
-  parsePeriodParam,
+  formatRangeLabel,
 } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
+import { AlertTriangle } from "lucide-react"
 
 const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
 
 export default async function RelatoriosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; lojas?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const period = parsePeriodParam(sp.periodo)
-  const { year, month } = period
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
+  const period = { year, month }
   const periodKey = formatPeriodKey(period)
   const periodLabel = formatPeriodLabel(period)
 
@@ -222,10 +224,26 @@ export default async function RelatoriosPage({
           data-print="hide"
         >
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={period} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
           <ExportPdfButton />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div
+          className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400"
+          data-print="hide"
+        >
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Relatório consolidado é mensal (DRE com custos). Mostrando dados de <strong>{formatRangeLabel(periodRange)}</strong> usando o mês <strong>{periodLabel}</strong> como referência.
+          </span>
+        </div>
+      )}
 
       <ImportCoverageBanner
         coverage={report.coverage}

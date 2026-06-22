@@ -1,4 +1,4 @@
-import { Star } from "lucide-react"
+import { AlertTriangle, Star } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -8,7 +8,8 @@ import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtNum } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
+import { readPeriod } from "@/lib/period-helpers"
 
 function notaColor(n: number | null): string {
   if (n == null) return "text-muted-foreground"
@@ -29,11 +30,11 @@ function Nota({ n }: { n: number | null }) {
 export default async function AvaliacoesComparativoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; lojas?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
 
   const allUnits = (await getVisibleUnits())
     .filter((u) => u.active)
@@ -70,14 +71,27 @@ export default async function AvaliacoesComparativoPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Nota média loja × loja, por plataforma ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {formatRangeLabel(periodRange)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LojaFilter units={allUnits} />
-          <PeriodSelector current={{ year, month }} options={availablePeriods} />
+          <PeriodSelector
+            current={periodRange}
+            options={availablePeriods}
+            enableRange
+          />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Avaliações são agregadas por <strong>mês</strong>. Mostrando <strong>{formatPeriodLabel({ year, month })}</strong>.
+          </span>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
