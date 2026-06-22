@@ -157,6 +157,26 @@ function RangePickerPanel({
   const [start, setStart] = React.useState<string | null>(initial.start)
   const [end, setEnd] = React.useState<string | null>(initial.end)
   const [hover, setHover] = React.useState<string | null>(null)
+  // Posicionamento dinâmico: o painel é grande (680px) e o botão fica em
+  // headers com vários outros filtros — se abrir com `left-0` sai da viewport.
+  // Mede o parent (div.relative que ancora) e aplica shift X pra clampar
+  // dentro da viewport com 16px de folga. Funciona em qualquer largura.
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  const [shiftX, setShiftX] = React.useState(0)
+  React.useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const parent = el.offsetParent as HTMLElement | null
+    if (!parent) return
+    const pr = parent.getBoundingClientRect()
+    const panelW = el.offsetWidth || 680
+    // Com left-0, panel ocuparia [pr.left, pr.left + panelW]. Clampa em [16, vw-16].
+    const want = pr.left
+    const min = 16
+    const max = window.innerWidth - panelW - 16
+    const target = Math.max(min, Math.min(want, max))
+    setShiftX(target - want)
+  }, [])
   // Mês exibido à esquerda (o direito é sempre mês+1)
   const [leftMonth, setLeftMonth] = React.useState<Period>(() => {
     const d = parseIso(initial.start)
@@ -207,7 +227,9 @@ function RangePickerPanel({
 
   return (
     <div
+      ref={panelRef}
       role="dialog"
+      style={{ transform: `translateX(${shiftX}px)` }}
       className="absolute left-0 top-[calc(100%+6px)] z-50 flex w-[680px] max-w-[calc(100vw-2rem)] rounded-lg border bg-popover shadow-lg"
     >
       {/* Coluna 1: atalhos */}
