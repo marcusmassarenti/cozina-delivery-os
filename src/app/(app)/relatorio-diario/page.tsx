@@ -16,7 +16,14 @@ import {
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
-import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
+import {
+  formatPeriodLabel,
+  formatRangeLabel,
+  parseRangeFromSp,
+  rangeIsFullMonth,
+  rangeSingleMonth,
+} from "@/lib/period"
+import { AlertTriangle } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 
@@ -43,6 +50,8 @@ export default async function RelatorioDiarioPage({
 }: {
   searchParams: Promise<{
     periodo?: string
+    inicio?: string
+    fim?: string
     metrica?: string
     plataforma?: string
     lojas?: string
@@ -50,7 +59,15 @@ export default async function RelatorioDiarioPage({
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const periodRange = parseRangeFromSp(sp)
+  const isFullMonth = rangeIsFullMonth(periodRange)
+  // Relatório Diário usa matriz dia × loja com chave "dia do mês" (1..31).
+  // Cross-month conflitaria (dia 5 de maio vs dia 5 de junho na mesma chave),
+  // então clampa pro mês do START e avisa via banner.
+  const singleMonth = rangeSingleMonth(periodRange)
+  const year = singleMonth?.year ?? Number(periodRange.start.slice(0, 4))
+  const month = singleMonth?.month ?? Number(periodRange.start.slice(5, 7))
+  const queryRange = isFullMonth || !singleMonth ? undefined : periodRange
   const metric: DailyMetric = VALID_METRICS.includes(sp.metrica as DailyMetric)
     ? (sp.metrica as DailyMetric)
     : "faturamento"
@@ -77,10 +94,10 @@ export default async function RelatorioDiarioPage({
   // `matrix` da métrica/plataforma selecionada é derivado de uma delas, e as 4
   // alimentam o gráfico diário interativo (faturamento + pedidos).
   const [dTodas, dIfood, d99, dKeeta] = await Promise.all([
-    getDailyReportMatrix(year, month, "todas", unitsForMatrix),
-    getDailyReportMatrix(year, month, "ifood", unitsForMatrix),
-    getDailyReportMatrix(year, month, "99food", unitsForMatrix),
-    getDailyReportMatrix(year, month, "keeta", unitsForMatrix),
+    getDailyReportMatrix(year, month, "todas", unitsForMatrix, queryRange),
+    getDailyReportMatrix(year, month, "ifood", unitsForMatrix, queryRange),
+    getDailyReportMatrix(year, month, "99food", unitsForMatrix, queryRange),
+    getDailyReportMatrix(year, month, "keeta", unitsForMatrix, queryRange),
   ])
   const matrix =
     platform === "ifood"
@@ -184,7 +201,7 @@ export default async function RelatorioDiarioPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Acompanhamento dia a dia da rede ·{" "}
-            {formatPeriodLabel({ year, month })}
+            {formatRangeLabel(periodRange)}
           </p>
           {/* Linha só pro PDF: como os switchers ficam escondidos, o
               documento precisa dizer o que está mostrando */}
@@ -204,11 +221,24 @@ export default async function RelatorioDiarioPage({
           <LojaFilter units={activeUnits} />
           <ExportPdfButton />
           <PeriodSelector
-            current={{ year, month }}
+            current={periodRange}
             options={availablePeriods}
+            enableRange
           />
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400 print:hidden">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> —{" "}
+            {singleMonth
+              ? `mostrando só os dias do range em ${formatPeriodLabel({ year, month })}.`
+              : `range cruza meses; pra a matriz dia × loja, só os dias de ${formatPeriodLabel({ year, month })} são mostrados. Escolha um intervalo dentro de um único mês pra ver tudo.`}
+          </span>
+        </div>
+      )}
 
       <div className="print:hidden">
         <RelatorioFilters metric={metric} platform={platform} />

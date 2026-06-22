@@ -232,9 +232,13 @@ async function loadIfood(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Buckets> {
   const b = emptyBuckets()
   if (unitIds.length === 0) return b
+  // Range custom: RPC só agrega por mês inteiro, então sempre cai no
+  // paginated quando há filtro de dia.
+  if (dateRange) return loadIfoodPaginated(unitIds, year, month, dateRange)
   const admin = createAdminClient()
 
   const { data, error } = await admin.rpc("ifood_financeiro_diario_by_units", {
@@ -270,6 +274,7 @@ async function loadIfoodPaginated(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Buckets> {
   const b = emptyBuckets()
   if (unitIds.length === 0) return b
@@ -283,8 +288,8 @@ async function loadIfoodPaginated(
     valor: number | string
     pedido_associado_ifood: string | null
   }
-  const vendas = await fetchAllPages<VendaRow>((from, to) =>
-    admin
+  const vendas = await fetchAllPages<VendaRow>((from, to) => {
+    let q = admin
       .from("ifood_financeiro_lancamentos")
       .select("unit_id, data_fato_gerador, valor, pedido_associado_ifood")
       .in("unit_id", unitIds)
@@ -292,9 +297,13 @@ async function loadIfoodPaginated(
       .eq("ref_month", month)
       .eq("fato_gerador", "Venda")
       .eq("descricao_lancamento", "Entrada Financeira")
-      .order("id")
-      .range(from, to),
-  )
+    if (dateRange) {
+      q = q
+        .gte("data_fato_gerador", dateRange.start)
+        .lte("data_fato_gerador", `${dateRange.end}T23:59:59`)
+    }
+    return q.order("id").range(from, to)
+  })
 
   // Set de pedidos por (unit,dia) pra contar únicos
   const pedidoSet = new Map<string, Set<string>>()
@@ -321,17 +330,21 @@ async function loadIfoodPaginated(
     data_fato_gerador: string | null
     pedido_associado_ifood: string | null
   }
-  const cancels = await fetchAllPages<CancelRow>((from, to) =>
-    admin
+  const cancels = await fetchAllPages<CancelRow>((from, to) => {
+    let q = admin
       .from("ifood_financeiro_lancamentos")
       .select("unit_id, data_fato_gerador, pedido_associado_ifood")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
       .in("fato_gerador", ["Cancelamento Total", "Cancelamento Parcial"])
-      .order("id")
-      .range(from, to),
-  )
+    if (dateRange) {
+      q = q
+        .gte("data_fato_gerador", dateRange.start)
+        .lte("data_fato_gerador", `${dateRange.end}T23:59:59`)
+    }
+    return q.order("id").range(from, to)
+  })
 
   const cancelSet = new Map<string, Set<string>>()
   for (const r of cancels) {
@@ -356,6 +369,7 @@ async function loadNinefood(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Buckets> {
   const b = emptyBuckets()
   if (unitIds.length === 0) return b
@@ -368,16 +382,18 @@ async function loadNinefood(
     pedidos: number | null
     cancelamentos_qtd: number | null
   }
-  const data = await fetchAllPages<LojaRow>((from, to) =>
-    admin
+  const data = await fetchAllPages<LojaRow>((from, to) => {
+    let q = admin
       .from("ninefood_daily_loja")
       .select("unit_id, data, bruto, pedidos, cancelamentos_qtd")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
-      .order("id")
-      .range(from, to),
-  )
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    }
+    return q.order("id").range(from, to)
+  })
 
   for (const r of data) {
     const day = dateStrDay(String(r.data))
@@ -394,6 +410,7 @@ async function loadKeeta(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Buckets> {
   const b = emptyBuckets()
   if (unitIds.length === 0) return b
@@ -406,16 +423,18 @@ async function loadKeeta(
     total_pedidos: number | null
     pedidos_cancelados: number | null
   }
-  const data = await fetchAllPages<LojaRow>((from, to) =>
-    admin
+  const data = await fetchAllPages<LojaRow>((from, to) => {
+    let q = admin
       .from("keeta_daily_loja")
       .select("unit_id, data, vendas_itens, total_pedidos, pedidos_cancelados")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
-      .order("id")
-      .range(from, to),
-  )
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    }
+    return q.order("id").range(from, to)
+  })
 
   for (const r of data) {
     const day = dateStrDay(String(r.data))
@@ -451,23 +470,41 @@ async function getDailyReportMatrixUncached(
   month: number,
   platform: ReportPlatform,
   units: Array<{ id: string; code: string; name: string }>,
+  dateRange?: { start: string; end: string },
 ): Promise<DailyReportMatrix> {
   const daysInMonth = new Date(year, month, 0).getDate()
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  // dateRange MONO-MÊS: lista de dias só do range. Cross-month ignorado
+  // por aqui (a matriz usa dia-do-mês 1..31 como chave, conflitaria) —
+  // o caller deve passar mono-mês ou clampar.
+  const days =
+    dateRange &&
+    dateRange.start.slice(0, 7) === dateRange.end.slice(0, 7) &&
+    Number(dateRange.start.slice(0, 4)) === year &&
+    Number(dateRange.start.slice(5, 7)) === month
+      ? Array.from(
+          {
+            length:
+              Number(dateRange.end.slice(8, 10)) -
+              Number(dateRange.start.slice(8, 10)) +
+              1,
+          },
+          (_, i) => i + Number(dateRange.start.slice(8, 10)),
+        )
+      : Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const unitIds = units.map((u) => u.id)
 
   let buckets: Buckets
   if (platform === "ifood") {
-    buckets = await loadIfood(unitIds, year, month)
+    buckets = await loadIfood(unitIds, year, month, dateRange)
   } else if (platform === "99food") {
-    buckets = await loadNinefood(unitIds, year, month)
+    buckets = await loadNinefood(unitIds, year, month, dateRange)
   } else if (platform === "keeta") {
-    buckets = await loadKeeta(unitIds, year, month)
+    buckets = await loadKeeta(unitIds, year, month, dateRange)
   } else {
     const [a, b, c] = await Promise.all([
-      loadIfood(unitIds, year, month),
-      loadNinefood(unitIds, year, month),
-      loadKeeta(unitIds, year, month),
+      loadIfood(unitIds, year, month, dateRange),
+      loadNinefood(unitIds, year, month, dateRange),
+      loadKeeta(unitIds, year, month, dateRange),
     ])
     buckets = mergeBuckets(a, b, c)
   }
