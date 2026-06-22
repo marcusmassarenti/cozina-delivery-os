@@ -1128,9 +1128,10 @@ export async function getFinanceiroResumoForMonth(
   unitId: string,
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<FinanceiroResumo> {
   // Usa a RPC batch passando 1 unit_id só (rápido, sem paginação)
-  const batch = await getFinanceiroResumoByUnits([unitId], year, month)
+  const batch = await getFinanceiroResumoByUnits([unitId], year, month, dateRange)
   return (
     batch.get(unitId) ?? {
       pedidosUnicos: 0,

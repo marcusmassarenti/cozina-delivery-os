@@ -36,7 +36,14 @@ import { getCurrentUserContext } from "@/lib/auth/context"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
-import { parsePeriodParam } from "@/lib/period"
+import {
+  parseRangeFromSp,
+  rangeIsFullMonth,
+  formatRangeLabel,
+  formatPeriodLabel,
+} from "@/lib/period"
+import { getRealMonthlyForUnitsForRange } from "@/lib/data/range-aggregation"
+import { AlertTriangle } from "lucide-react"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { EditUnitDialog } from "../_components/edit-unit-dialog"
@@ -56,7 +63,7 @@ export default async function UnidadeDetalhePage({
   searchParams,
 }: {
   params: Promise<{ codigo: string }>
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string }>
 }) {
   const { codigo } = await params
   const sp = await searchParams
@@ -79,7 +86,13 @@ export default async function UnidadeDetalhePage({
     ? await Promise.all([getFechamentos(unit.id), userCan("financeiro", "edit")])
     : [[], false]
 
-  const { year, month } = parsePeriodParam(sp.periodo)
+  const periodRange = parseRangeFromSp(sp)
+  const isFullMonth = rangeIsFullMonth(periodRange)
+  const year = Number(periodRange.start.slice(0, 4))
+  const month = Number(periodRange.start.slice(5, 7))
+  // Quando o range é o mês inteiro, queryRange=undefined (caminho legado).
+  // Quando é custom, passa pras queries que aceitam (KPIs por dia).
+  const queryRange = isFullMonth ? undefined : periodRange
   const [
     platforms,
     fin,
@@ -93,17 +106,19 @@ export default async function UnidadeDetalhePage({
     monthlyByUnit,
   ] = await Promise.all([
     getUnitPlatforms(unit.id),
-    getFinanceiroResumoForMonth(unit.id, year, month),
-    getNinefoodResumoForMonth(unit.id, year, month),
-    getKeetaResumoForMonth(unit.id, year, month),
+    getFinanceiroResumoForMonth(unit.id, year, month, queryRange),
+    getNinefoodResumoForMonth(unit.id, year, month, queryRange),
+    getKeetaResumoForMonth(unit.id, year, month, queryRange),
     ninefoodHasAnyDataForMonth(unit.id, year, month),
     getAvaliacoesResumoForMonth(unit.id, year, month),
     getNinefoodAvaliacoesResumoForMonth(unit.id, year, month),
     getKeetaAvaliacoesResumoForMonth(unit.id, year, month),
     getAvailablePeriods(),
-    // Monthly canônico DO PERÍODO SELECIONADO (getUnitByCode usa o mês corrente,
-    // que zera quando você olha um mês passado). Sem isto, o DRE da loja zerava.
-    getRealMonthlyForUnits([unit.id], year, month),
+    // Monthly canônico DO PERÍODO SELECIONADO. Quando range custom, usa o
+    // agregador cross-month (que ainda assim pega CMV mensal do banco).
+    isFullMonth
+      ? getRealMonthlyForUnits([unit.id], year, month)
+      : getRealMonthlyForUnitsForRange([unit.id], periodRange),
   ])
 
   // Nota média da loja = média ponderada (por nº de avaliações) das 3
@@ -182,8 +197,9 @@ export default async function UnidadeDetalhePage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodSelector
-            current={{ year, month }}
+            current={periodRange}
             options={availablePeriods}
+            enableRange
           />
           <Link
             href={`/unidades/${unit.code}/relatorio?periodo=${year}-${String(month).padStart(2, "0")}`}
@@ -213,6 +229,15 @@ export default async function UnidadeDetalhePage({
           )}
         </div>
       </div>
+
+      {!isFullMonth && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> — KPIs e DRE filtram por dia. <span className="opacity-70">Avaliações, cardápio e custos mensais (CMV/operação) continuam do mês inteiro ({formatPeriodLabel({ year, month })}).</span>
+          </span>
+        </div>
+      )}
 
       {hasData || isJK ? (
         <>

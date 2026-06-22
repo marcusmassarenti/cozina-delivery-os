@@ -174,8 +174,9 @@ export async function getKeetaResumoForMonth(
   unitId: string,
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<KeetaResumo> {
-  const map = await getKeetaResumoByUnits([unitId], year, month)
+  const map = await getKeetaResumoByUnits([unitId], year, month, dateRange)
   return map.get(unitId) ?? emptyKeeta()
 }
 

@@ -217,8 +217,9 @@ export async function getNinefoodResumoForMonth(
   unitId: string,
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<NinefoodResumo> {
-  const batch = await getNinefoodResumoByUnits([unitId], year, month)
+  const batch = await getNinefoodResumoByUnits([unitId], year, month, dateRange)
   return (
     batch.get(unitId) ?? {
       pedidos: 0,

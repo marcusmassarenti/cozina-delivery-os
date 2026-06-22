@@ -284,6 +284,7 @@ export async function getRealMonthlyForUnits(
   unitIds: string[],
   year: number,
   month: number,
+  dateRange?: { start: string; end: string },
 ): Promise<Map<string, UnitMonthly>> {
   const result = new Map<string, UnitMonthly>()
   if (unitIds.length === 0) return result
@@ -291,9 +292,9 @@ export async function getRealMonthlyForUnits(
   const supabase = createAdminClient()
 
   const [finMap, nineMap, keetaMap, monthlyRes] = await Promise.all([
-    getFinanceiroResumoByUnits(unitIds, year, month),
-    getNinefoodResumoByUnits(unitIds, year, month),
-    getKeetaResumoByUnits(unitIds, year, month),
+    getFinanceiroResumoByUnits(unitIds, year, month, dateRange),
+    getNinefoodResumoByUnits(unitIds, year, month, dateRange),
+    getKeetaResumoByUnits(unitIds, year, month, dateRange),
     supabase
       .from("monthly_entries")
       .select(

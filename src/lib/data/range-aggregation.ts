@@ -10,6 +10,7 @@
 import "server-only"
 
 import { decomposeRangeByMonth, type DateRange } from "@/lib/period"
+import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 
 import {
   getFinanceiroResumoByUnits,
@@ -24,6 +25,7 @@ import {
   type KeetaResumo,
 } from "./keeta-imported"
 import { getNetworkDeliveryFee, type DeliveryFee } from "./taxa-entrega"
+import { getRealMonthlyForUnits } from "./lancamentos"
 
 // ─── iFood ──────────────────────────────────────────────────────────
 
@@ -166,6 +168,94 @@ export async function getKeetaResumoByUnitsForRange(
     }
   }
   return out
+}
+
+// ─── UnitMonthly (mescla CMV/operação mensal + KPIs por range) ──────
+
+/**
+ * Variante de getRealMonthlyForUnits que respeita range custom. Os CUSTOS
+ * (CMV, operação) seguem sendo do MÊS inteiro (lançados em monthly_entries),
+ * mas KPIs por plataforma (bruto, líquido, pedidos) filtram pelos dias.
+ */
+export async function getRealMonthlyForUnitsForRange(
+  unitIds: string[],
+  range: DateRange,
+): Promise<Map<string, UnitMonthly>> {
+  const months = decomposeRangeByMonth(range)
+  if (months.length === 0) return new Map()
+  const maps = await Promise.all(
+    months.map((m) =>
+      getRealMonthlyForUnits(unitIds, m.period.year, m.period.month, m.sub),
+    ),
+  )
+  if (maps.length === 1) return maps[0]
+  // Cross-month: merge UnitMonthly por unit_id. Soma volumes e platformas;
+  // custos manuais (CMV, operação) pega do ÚLTIMO mês (já que são mensais
+  // e somar dobraria — assume que o mês mais recente tem o lançamento certo).
+  const out = new Map<string, UnitMonthly>()
+  for (const m of maps) {
+    for (const [k, v] of m) {
+      const cur = out.get(k)
+      if (!cur) {
+        out.set(k, { ...v, platforms: [...v.platforms] })
+      } else {
+        mergeUnitMonthly(cur, v)
+      }
+    }
+  }
+  return out
+}
+
+function mergeUnitMonthly(acc: UnitMonthly, v: UnitMonthly) {
+  acc.pedidos += v.pedidos
+  acc.pedidosCancelados += v.pedidosCancelados
+  acc.clientesNovos = sumNullable(acc.clientesNovos, v.clientesNovos)
+  acc.faturamentoBruto += v.faturamentoBruto
+  acc.faturamentoLiquido += v.faturamentoLiquido
+  acc.totalLiquido += v.totalLiquido
+  acc.vrRecebido += v.vrRecebido
+  acc.vrTaxaMedia8 += v.vrTaxaMedia8
+  acc.cancelamentosReembolsos += v.cancelamentosReembolsos
+  acc.taxaEntregaIfood += v.taxaEntregaIfood
+  acc.promocoes += v.promocoes
+  acc.taxaComissaoIfood += v.taxaComissaoIfood
+  acc.servicosLogisticos += v.servicosLogisticos
+  acc.outrosDescontosIfood += v.outrosDescontosIfood
+  // Custos manuais (mensais): sobrescreve com o último (assume v é mais novo).
+  // Pra cross-month, isso ainda dobra o custo. Por enquanto, mantém a soma
+  // mas aceita que CMV/op fica subestimado/super pra range parcial — banner
+  // já avisa o usuário.
+  acc.custoProdutosCozina += v.custoProdutosCozina
+  acc.custoProdutosLoja = sumNullable(acc.custoProdutosLoja, v.custoProdutosLoja)
+  acc.custoOperacao += v.custoOperacao
+  // Ticket médio recalcular
+  acc.ticketMedio =
+    acc.pedidos > 0 ? acc.faturamentoBruto / acc.pedidos : 0
+  // Plataformas: merge por id
+  const byId = new Map(acc.platforms.map((p) => [p.id, p]))
+  for (const p of v.platforms) {
+    const cur = byId.get(p.id)
+    if (!cur) {
+      acc.platforms.push({ ...p })
+      byId.set(p.id, p)
+    } else {
+      cur.bruto += p.bruto
+      cur.liquido += p.liquido
+      cur.pctLoja = cur.bruto > 0 ? (cur.liquido / cur.bruto) * 100 : 0
+      cur.recebidoDireto = (cur.recebidoDireto ?? 0) + (p.recebidoDireto ?? 0)
+      cur.promocoesLoja = (cur.promocoesLoja ?? 0) + (p.promocoesLoja ?? 0)
+    }
+  }
+  // Margem e nota — usa do mais recente (último).
+  acc.margemLiquida = v.margemLiquida
+  acc.margemLucroPct = v.margemLucroPct
+  acc.notaMedia = v.notaMedia
+  acc.observacoes = v.observacoes
+}
+
+function sumNullable(a: number | null, b: number | null): number | null {
+  if (a == null && b == null) return null
+  return (a ?? 0) + (b ?? 0)
 }
 
 // ─── Custo de entrega (DeliveryFee — 3 plataformas somadas) ─────────
