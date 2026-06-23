@@ -46,27 +46,34 @@ type ResolvedCreds = {
   missingMsg: string
 }
 
+/** Trim defensivo: um espaço/newline acidental na env var não deve virar um
+ * "400 Client secret is mandatory" confuso — vira erro claro de credencial. */
+function envTrim(v: string | undefined): string | undefined {
+  const t = v?.trim()
+  return t ? t : undefined
+}
+
 /** Resolve qual par de credenciais usar pra um app, considerando homologação. */
 function resolveCredentials(app: IfoodApp): ResolvedCreds {
   if (isAppHomologation(app)) {
     return {
-      clientId: process.env.IFOOD_TEST_CLIENT_ID,
-      clientSecret: process.env.IFOOD_TEST_CLIENT_SECRET,
+      clientId: envTrim(process.env.IFOOD_TEST_CLIENT_ID),
+      clientSecret: envTrim(process.env.IFOOD_TEST_CLIENT_SECRET),
       missingMsg:
         "Faltam IFOOD_TEST_CLIENT_ID / IFOOD_TEST_CLIENT_SECRET (app de teste / homologação).",
     }
   }
   if (app === "review") {
     return {
-      clientId: process.env.IFOOD_REVIEW_CLIENT_ID,
-      clientSecret: process.env.IFOOD_REVIEW_CLIENT_SECRET,
+      clientId: envTrim(process.env.IFOOD_REVIEW_CLIENT_ID),
+      clientSecret: envTrim(process.env.IFOOD_REVIEW_CLIENT_SECRET),
       missingMsg:
         "Faltam IFOOD_REVIEW_CLIENT_ID / IFOOD_REVIEW_CLIENT_SECRET (app de Avaliações).",
     }
   }
   return {
-    clientId: process.env.IFOOD_CLIENT_ID,
-    clientSecret: process.env.IFOOD_CLIENT_SECRET,
+    clientId: envTrim(process.env.IFOOD_CLIENT_ID),
+    clientSecret: envTrim(process.env.IFOOD_CLIENT_SECRET),
     missingMsg: "Faltam IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET nas variáveis de ambiente.",
   }
 }
