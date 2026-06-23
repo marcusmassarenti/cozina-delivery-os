@@ -46,8 +46,21 @@ export function parseIfoodFinanceiro(workbook: XLSX.WorkBook): ParsedFinanceiro 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: null,
   })
+  return parseFinanceiroRows(rows)
+}
+
+/**
+ * Núcleo do parser financeiro: recebe linhas já extraídas (de XLSX ou do CSV
+ * da API de Reconciliation, que tem cabeçalhos idênticos) e devolve o
+ * `ParsedFinanceiro`. Os utils de conversão (`toNumber`, `parseIsoDateMaybe`,
+ * …) toleram tanto valores tipados do XLSX quanto strings do CSV, então o
+ * mesmo mapeamento serve pras duas origens — a importação manual e o sync.
+ */
+export function parseFinanceiroRows(
+  rows: Record<string, unknown>[],
+): ParsedFinanceiro {
   if (rows.length === 0) {
-    throw new Error("Aba 'Relatório de Conciliação' está vazia")
+    throw new Error("Relatório de Conciliação está vazio")
   }
 
   // Identifica loja + competência a partir da primeira linha

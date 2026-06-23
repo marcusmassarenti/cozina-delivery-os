@@ -144,18 +144,43 @@ function parseCsvLine(line: string): string[] {
   return out
 }
 
+/** Resultado de download + parse da conciliação, com TODAS as linhas. */
+export type ReconciliationRowsResult =
+  | {
+      ok: true
+      linkStatus: number
+      downloadUrl: string
+      retries: number
+      durationMs: number
+      sizeBytes: number
+      decompressedDurationMs: number
+      headers: string[]
+      rows: Record<string, string>[]
+    }
+  | {
+      ok: false
+      linkStatus: number
+      linkRaw?: string
+      downloadUrl?: string
+      linkError?: string
+      retries: number
+      durationMs: number
+    }
+
 /**
- * Orquestrador end-to-end: pega link → baixa → descompacta → parseia.
- * Retorna métricas + amostra (primeiras 50 linhas) pra UI da homologação.
+ * Baixa e parseia a conciliação de uma competência, devolvendo TODAS as linhas.
+ *
+ * Base compartilhada entre a UI de homologação (que fatia uma amostra +
+ * calcula métricas) e o sync automático (que persiste tudo no banco).
  */
-export async function fetchAndParseReconciliation(
+export async function downloadReconciliationRows(
   merchantId: string,
   competencia: string,
-) {
+): Promise<ReconciliationRowsResult> {
   const linkRes = await getReconciliationLink(merchantId, competencia)
   if (!linkRes.ok || !linkRes.data) {
     return {
-      ok: false as const,
+      ok: false,
       linkStatus: linkRes.status,
       linkRaw: linkRes.raw,
       linkError: linkRes.error,
@@ -170,7 +195,7 @@ export async function fetchAndParseReconciliation(
     linkRes.data.link
   if (!downloadUrl) {
     return {
-      ok: false as const,
+      ok: false,
       linkStatus: linkRes.status,
       linkRaw: linkRes.raw,
       linkError: "Resposta sem campo downloadPath/downloadUrl/url/link",
@@ -184,7 +209,7 @@ export async function fetchAndParseReconciliation(
     dl = await downloadAndDecompress(downloadUrl)
   } catch (e) {
     return {
-      ok: false as const,
+      ok: false,
       linkStatus: linkRes.status,
       linkRaw: linkRes.raw,
       downloadUrl,
@@ -195,11 +220,45 @@ export async function fetchAndParseReconciliation(
   }
 
   const parsed = parseCsvSemicolon(dl.csv)
+  return {
+    ok: true,
+    linkStatus: linkRes.status,
+    downloadUrl,
+    retries: linkRes.retries,
+    durationMs: linkRes.durationMs,
+    sizeBytes: dl.sizeBytes,
+    decompressedDurationMs: dl.durationMs,
+    headers: parsed.headers,
+    rows: parsed.rows,
+  }
+}
+
+/**
+ * Orquestrador end-to-end: pega link → baixa → descompacta → parseia.
+ * Retorna métricas + amostra (primeiras 50 linhas) pra UI da homologação.
+ */
+export async function fetchAndParseReconciliation(
+  merchantId: string,
+  competencia: string,
+) {
+  const res = await downloadReconciliationRows(merchantId, competencia)
+  if (!res.ok) {
+    return {
+      ok: false as const,
+      linkStatus: res.linkStatus,
+      linkRaw: res.linkRaw,
+      downloadUrl: res.downloadUrl,
+      linkError: res.linkError,
+      retries: res.retries,
+      durationMs: res.durationMs,
+    }
+  }
+
   // Métricas de homologação: contagem por impacto_no_repasse e soma de valor
   let countSim = 0
   let sumSim = 0
   let countNao = 0
-  for (const row of parsed.rows) {
+  for (const row of res.rows) {
     const impacto = (row.impacto_no_repasse ?? "").toUpperCase()
     const valor = Number(String(row.valor ?? "0").replace(",", "."))
     if (impacto === "SIM") {
@@ -212,15 +271,15 @@ export async function fetchAndParseReconciliation(
 
   return {
     ok: true as const,
-    linkStatus: linkRes.status,
-    downloadUrl,
-    retries: linkRes.retries,
-    durationMs: linkRes.durationMs,
-    sizeBytes: dl.sizeBytes,
-    decompressedDurationMs: dl.durationMs,
-    headers: parsed.headers,
-    rowCount: parsed.rows.length,
-    sample: parsed.rows.slice(0, 50),
+    linkStatus: res.linkStatus,
+    downloadUrl: res.downloadUrl,
+    retries: res.retries,
+    durationMs: res.durationMs,
+    sizeBytes: res.sizeBytes,
+    decompressedDurationMs: res.decompressedDurationMs,
+    headers: res.headers,
+    rowCount: res.rows.length,
+    sample: res.rows.slice(0, 50),
     metrics: { countSim, sumSim, countNao },
   }
 }

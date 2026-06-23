@@ -20,9 +20,11 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { parseFinanceiroRows } from "@/lib/import/ifood/parse-financeiro"
+import { persistFinanceiro } from "@/lib/import/ifood/persist-financeiro"
 
 import { fetchAllFinancialEvents } from "./events"
-import { fetchAndParseReconciliation } from "./reconciliation"
+import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
 
 export type UnitSyncResult = {
@@ -35,6 +37,10 @@ export type UnitSyncResult = {
     ok?: boolean
     status?: number
     rowCount?: number
+    /** Linhas efetivamente gravadas em ifood_financeiro_lancamentos. */
+    persisted?: number
+    /** true se substituiu lançamentos pré-existentes da competência. */
+    substituido?: boolean
     error?: string
   }[]
   events?: {
@@ -91,6 +97,7 @@ export async function syncIfoodAll(): Promise<{
   results: UnitSyncResult[]
 }> {
   const units = await listIfoodUnits()
+  const admin = createAdminClient()
   const results: UnitSyncResult[] = []
 
   for (const u of units) {
@@ -116,26 +123,51 @@ export async function syncIfoodAll(): Promise<{
         continue
       }
       try {
-        const recon = await fetchAndParseReconciliation(
-          u.merchantId,
-          competencia,
-        )
+        const recon = await downloadReconciliationRows(u.merchantId, competencia)
         await recordCall(u.merchantId, ep, recon.linkStatus)
-        if (recon.ok) {
-          r.reconciliation.push({
-            competencia,
-            ok: true,
-            status: recon.linkStatus,
-            rowCount: recon.rowCount,
-          })
-        } else {
+        if (!recon.ok) {
           r.reconciliation.push({
             competencia,
             ok: false,
             status: recon.linkStatus,
             error: recon.linkError,
           })
+          continue
         }
+
+        // Mês sem operação devolve CSV vazio (só cabeçalho) — sucesso, 0 linhas.
+        if (recon.rows.length === 0) {
+          r.reconciliation.push({
+            competencia,
+            ok: true,
+            status: recon.linkStatus,
+            rowCount: 0,
+            persisted: 0,
+          })
+          continue
+        }
+
+        // Mesmo parser e mesma persistência da importação manual de XLSX —
+        // API e planilha gravam idêntico (dedupe por competência, idempotente).
+        const parsed = parseFinanceiroRows(recon.rows)
+        const saved = await persistFinanceiro(
+          parsed,
+          { unitId: u.unitId, code: u.unitCode },
+          {
+            filename: `API Reconciliation ${competencia}`,
+            importedBy: null,
+            cadencia: "mensal",
+          },
+          admin,
+        )
+        r.reconciliation.push({
+          competencia,
+          ok: true,
+          status: recon.linkStatus,
+          rowCount: recon.rows.length,
+          persisted: saved.rowsImported,
+          substituido: saved.substituido,
+        })
       } catch (e) {
         await recordCall(u.merchantId, ep)
         r.reconciliation.push({

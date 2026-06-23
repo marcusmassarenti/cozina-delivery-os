@@ -22,6 +22,7 @@ import type {
   ParsedNinefoodDadosItem,
   ParsedNinefoodDadosPedido,
 } from "@/lib/import/ninefood"
+import { persistFinanceiro } from "@/lib/import/ifood/persist-financeiro"
 import { expandZips } from "@/lib/import/expand-zips"
 import { isKeetaWorkbook, parseKeetaReport } from "@/lib/import/keeta"
 import { isProdutosVendidosWorkbook } from "@/lib/import/produtos-vendidos"
@@ -2538,96 +2539,14 @@ async function saveFinanceiro(
   userId: string | null,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<ImportSummary> {
-  // Dedupe POR COMPETÊNCIA, não pelo mês do cabeçalho. Um arquivo pode trazer
-  // lançamentos de mais de uma competência (o iFood às vezes mistura repasses
-  // de meses vizinhos); apagar só parsed.refMonth deixava as outras
-  // competências acumularem (duplicar) a cada reimportação. A coluna
-  // 'competencia' é a chave de período confiável do schema (0007).
-  const competencias = [
-    ...new Set(parsed.lancamentos.map((l) => l.competencia)),
-  ].filter(Boolean)
-
-  const { count: existingCount } = await admin
-    .from("ifood_financeiro_lancamentos")
-    .select("id", { count: "exact", head: true })
-    .eq("unit_id", unit.unitId)
-    .in("competencia", competencias.length > 0 ? competencias : ["__none__"])
-  const substituido = (existingCount ?? 0) > 0
-
-  const { data: importLog, error: ilErr } = await admin
-    .from("platform_imports")
-    .insert({
-      unit_id: unit.unitId,
-      platform: "ifood",
-      report_type: "financeiro",
-      cadencia: "mensal",
-      ref_year: parsed.refYear,
-      ref_month: parsed.refMonth,
-      source_filename: filename,
-      imported_by: userId,
-      status: "success",
-      rows_imported: parsed.lancamentos.length,
-    })
-    .select("id")
-    .single()
-  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
-
-  if (substituido) {
-    await admin
-      .from("ifood_financeiro_lancamentos")
-      .delete()
-      .eq("unit_id", unit.unitId)
-      .in("competencia", competencias)
-  }
-
-  // Conciliação do iFood tem MUITOS lançamentos (22k+ por loja/mês). Chunks
-  // grandes cortam os round-trips ao Postgres — o gargalo do import (várias
-  // lojas de uma vez estourava o timeout da função serverless).
-  const CHUNK = 5000
-  const rows = parsed.lancamentos.map((l) => ({
-    unit_id: unit.unitId,
-    competencia: l.competencia,
-    ref_year: l.refYear,
-    ref_month: l.refMonth,
-    data_fato_gerador: toIso(l.dataFatoGerador),
-    fato_gerador: l.fatoGerador,
-    tipo_lancamento: l.tipoLancamento,
-    descricao_lancamento: l.descricaoLancamento,
-    valor: l.valor,
-    base_calculo: l.baseCalculo,
-    percentual_taxa: l.percentualTaxa,
-    valor_transacao: l.valorTransacao,
-    valor_cesta_inicial: l.valorCestaInicial,
-    valor_cesta_final: l.valorCestaFinal,
-    pedido_associado_ifood: l.pedidoAssociadoIfood,
-    pedido_associado_ifood_curto: l.pedidoAssociadoIfoodCurto,
-    pedido_associado_externo: l.pedidoAssociadoExterno,
-    motivo_cancelamento: l.motivoCancelamento,
-    descricao_ocorrencia: l.descricaoOcorrencia,
-    data_criacao_pedido: toIso(l.dataCriacaoPedido),
-    data_repasse_esperada: formatDateOnly(l.dataRepasseEsperada),
-    data_faturamento: toIso(l.dataFaturamento),
-    data_apuracao_inicio: formatDateOnly(l.dataApuracaoInicio),
-    data_apuracao_fim: formatDateOnly(l.dataApuracaoFim),
-    responsavel_transacao: l.responsavelTransacao,
-    canal_vendas: l.canalVendas,
-    impacto_no_repasse: l.impactoNoRepasse,
-    parcela_pagamento: l.parcelaPagamento,
-    id_saldo: l.idSaldo,
-    import_id: importLog.id,
-  }))
-
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const slice = rows.slice(i, i + CHUNK)
-    const { error } = await admin
-      .from("ifood_financeiro_lancamentos")
-      .insert(slice)
-    if (error) {
-      throw new Error(
-        `Falha ao gravar lançamentos (chunk ${i / CHUNK + 1}): ${error.message}`,
-      )
-    }
-  }
+  // Persistência compartilhada com o sync automático (API de Reconciliation):
+  // dedupe por competência + log em platform_imports + insert chunked.
+  const { substituido } = await persistFinanceiro(
+    parsed,
+    unit,
+    { filename, importedBy: userId, cadencia: "mensal" },
+    admin,
+  )
 
   return {
     kind: "financeiro",
@@ -3180,6 +3099,3 @@ function formatDateOnly(d: Date | null): string | null {
   return `${yyyy}-${mm}-${dd}`
 }
 
-function toIso(d: Date | null): string | null {
-  return d ? d.toISOString() : null
-}
