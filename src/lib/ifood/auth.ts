@@ -1,9 +1,13 @@
 /**
  * Autenticação na API do iFood — modelo CENTRALIZADO (client_credentials).
  *
- * Uma credencial única (clientId/clientSecret, em env var) acessa todos os
- * merchants da rede. O token (bearer) expira em algumas horas; cacheamos em
- * memória e renovamos por demanda.
+ * A rede tem MAIS DE UM app no iFood (cada app = uma categoria de módulos):
+ *   - "financial" → conciliação + merchant  (app Cozina Delivery OS)
+ *   - "review"    → avaliações              (app Cozina Delivery OS — Avaliações)
+ *
+ * Cada app tem credenciais próprias. Em homologação, o app é trocado pelo
+ * "app de teste" do iFood (que tem TODOS os módulos + a loja sandbox), via as
+ * env vars IFOOD_TEST_*. O token (bearer) expira em horas; cacheamos por app.
  *
  * Credenciais NUNCA no banco nem no client — só em env var server-only.
  */
@@ -12,37 +16,74 @@ import "server-only"
 const TOKEN_URL =
   "https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token"
 
+/** Apps registrados da rede no iFood. */
+export type IfoodApp = "financial" | "review"
+
 type TokenCache = { accessToken: string; expiresAt: number }
-let cache: TokenCache | null = null
+const cache: Partial<Record<IfoodApp, TokenCache>> = {}
 
 /** Margem de segurança: renova 5 min antes de expirar. */
 const SAFETY_MS = 5 * 60 * 1000
 
 /**
- * Devolve um access token válido do iFood (cacheado). Lança erro claro se as
- * credenciais não estiverem configuradas ou se o iFood recusar.
+ * Esse app está em homologação? (usa o app de teste do iFood)
+ *   - financial: IFOOD_HOMOLOGATION === "true" (legado; hoje produção)
+ *   - review: em homologação por padrão até IFOOD_REVIEW_HOMOLOGATION="false"
+ *     (o app de produção do Review só funciona depois de aprovado + lojas
+ *     vinculadas; antes disso, sempre cai no app de teste).
  */
-export async function getIfoodToken(): Promise<string> {
-  if (cache && cache.expiresAt > Date.now() + SAFETY_MS) {
-    return cache.accessToken
+export function isAppHomologation(app: IfoodApp): boolean {
+  if (app === "review") {
+    return process.env.IFOOD_REVIEW_HOMOLOGATION !== "false"
+  }
+  return process.env.IFOOD_HOMOLOGATION === "true"
+}
+
+type ResolvedCreds = {
+  clientId: string | undefined
+  clientSecret: string | undefined
+  /** rótulo pra mensagem de erro */
+  missingMsg: string
+}
+
+/** Resolve qual par de credenciais usar pra um app, considerando homologação. */
+function resolveCredentials(app: IfoodApp): ResolvedCreds {
+  if (isAppHomologation(app)) {
+    return {
+      clientId: process.env.IFOOD_TEST_CLIENT_ID,
+      clientSecret: process.env.IFOOD_TEST_CLIENT_SECRET,
+      missingMsg:
+        "Faltam IFOOD_TEST_CLIENT_ID / IFOOD_TEST_CLIENT_SECRET (app de teste / homologação).",
+    }
+  }
+  if (app === "review") {
+    return {
+      clientId: process.env.IFOOD_REVIEW_CLIENT_ID,
+      clientSecret: process.env.IFOOD_REVIEW_CLIENT_SECRET,
+      missingMsg:
+        "Faltam IFOOD_REVIEW_CLIENT_ID / IFOOD_REVIEW_CLIENT_SECRET (app de Avaliações).",
+    }
+  }
+  return {
+    clientId: process.env.IFOOD_CLIENT_ID,
+    clientSecret: process.env.IFOOD_CLIENT_SECRET,
+    missingMsg: "Faltam IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET nas variáveis de ambiente.",
+  }
+}
+
+/**
+ * Devolve um access token válido do iFood (cacheado por app). Lança erro claro
+ * se as credenciais não estiverem configuradas ou se o iFood recusar.
+ */
+export async function getIfoodToken(app: IfoodApp = "financial"): Promise<string> {
+  const cached = cache[app]
+  if (cached && cached.expiresAt > Date.now() + SAFETY_MS) {
+    return cached.accessToken
   }
 
-  // Em homologação (IFOOD_HOMOLOGATION=true), usa as credenciais de TESTE.
-  // Em produção, usa as principais. Mantém os 2 sets separados pra não
-  // misturar dados sandbox com produção depois.
-  const homolog = process.env.IFOOD_HOMOLOGATION === "true"
-  const clientId = homolog
-    ? process.env.IFOOD_TEST_CLIENT_ID
-    : process.env.IFOOD_CLIENT_ID
-  const clientSecret = homolog
-    ? process.env.IFOOD_TEST_CLIENT_SECRET
-    : process.env.IFOOD_CLIENT_SECRET
+  const { clientId, clientSecret, missingMsg } = resolveCredentials(app)
   if (!clientId || !clientSecret) {
-    throw new Error(
-      homolog
-        ? "Faltam IFOOD_TEST_CLIENT_ID / IFOOD_TEST_CLIENT_SECRET (modo homologação)."
-        : "Faltam IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET nas variáveis de ambiente.",
-    )
+    throw new Error(missingMsg)
   }
 
   // iFood usa form-urlencoded com campos em camelCase.
@@ -73,14 +114,19 @@ export async function getIfoodToken(): Promise<string> {
     throw new Error("Auth iFood: resposta sem accessToken.")
   }
 
-  cache = {
+  cache[app] = {
     accessToken: json.accessToken,
     expiresAt: Date.now() + (json.expiresIn ?? 10800) * 1000,
   }
-  return cache.accessToken
+  return json.accessToken
 }
 
-/** Limpa o cache do token (útil em testes / após erro de 401). */
-export function clearIfoodTokenCache(): void {
-  cache = null
+/** Limpa o cache do token (de um app específico, ou de todos). */
+export function clearIfoodTokenCache(app?: IfoodApp): void {
+  if (app) {
+    delete cache[app]
+  } else {
+    delete cache.financial
+    delete cache.review
+  }
 }

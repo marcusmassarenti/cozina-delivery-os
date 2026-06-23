@@ -14,7 +14,12 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { clearIfoodTokenCache, getIfoodToken } from "./auth"
+import {
+  clearIfoodTokenCache,
+  getIfoodToken,
+  isAppHomologation,
+  type IfoodApp,
+} from "./auth"
 
 const BASE_URL = "https://merchant-api.ifood.com.br"
 const MAX_RETRIES = 3
@@ -23,6 +28,8 @@ const BACKOFF_MS = [2000, 4000, 8000] // 2s, 4s, 8s
 export type IfoodFetchOptions = {
   /** Path SEM base URL — ex.: "/order/v1.0/orders/abc-123" */
   path: string
+  /** Qual app/credencial usar (default: financial). */
+  app?: IfoodApp
   method?: "GET" | "POST" | "PUT" | "DELETE"
   query?: Record<string, string | number | boolean | undefined>
   body?: unknown
@@ -48,10 +55,6 @@ export type IfoodFetchResult<T = unknown> = {
   error?: string
 }
 
-function isHomologation(): boolean {
-  return process.env.IFOOD_HOMOLOGATION === "true"
-}
-
 function buildUrl(path: string, query?: IfoodFetchOptions["query"]): string {
   const url = new URL(path.startsWith("http") ? path : `${BASE_URL}${path}`)
   if (query) {
@@ -73,10 +76,11 @@ export async function fetchIfood<T = unknown>(
   opts: IfoodFetchOptions,
 ): Promise<IfoodFetchResult<T>> {
   const method = opts.method ?? "GET"
+  const app: IfoodApp = opts.app ?? "financial"
   const url = buildUrl(opts.path, opts.query)
   const responseType = opts.responseType ?? "json"
   const endpointLabel = opts.endpointLabel ?? `${method} ${opts.path}`
-  const homolog = isHomologation()
+  const homolog = isAppHomologation(app)
 
   let retries = 0
   let lastStatus = 0
@@ -90,7 +94,7 @@ export async function fetchIfood<T = unknown>(
     // (Re)obtém token a cada tentativa (cache cuida disso)
     let token: string
     try {
-      token = await getIfoodToken()
+      token = await getIfoodToken(app)
     } catch (e) {
       lastError = e instanceof Error ? e.message : "Falha ao obter token"
       lastStatus = 0
@@ -134,7 +138,7 @@ export async function fetchIfood<T = unknown>(
     lastStatus = res.status
     // 401: força re-auth e tenta 1×
     if (res.status === 401 && retries === 0) {
-      clearIfoodTokenCache()
+      clearIfoodTokenCache(app)
       retries++
       continue
     }
