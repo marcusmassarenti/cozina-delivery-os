@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import {
   AlertTriangle,
   Bike,
@@ -68,10 +69,12 @@ import {
   daysElapsedInMonth,
   decomposeRangeByMonth,
 } from "@/lib/period"
-import { getAttentionItems } from "@/lib/data/attention"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { isSuperadmin } from "@/lib/auth/permissions"
-import { AttentionPanel } from "@/components/dashboard/attention-panel"
+import {
+  AttentionSection,
+  AttentionSkeleton,
+} from "@/components/dashboard/attention-section"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { createClient } from "@/lib/supabase/server"
 
@@ -174,18 +177,27 @@ export default async function Home({
       ? activeUnitIds
       : undefined
 
-  // Fase 2a: resumos por unidade + cobertura + entrega + atenção (escopo).
+  // Helper das queries de rede (funil, cancelamentos, top itens, avaliações das
+  // 3 plataformas) — escopo por parâmetro, pra dar pra disparar cedo.
+  const runNetwork = (scopeIds: string[] | undefined) =>
+    Promise.all([
+      getNetworkFunnelForMonth(year, month, scopeIds),
+      getNetworkCancelamentosPorMotivo(year, month, 5, scopeIds),
+      getNetworkTopItemsForMonth(year, month, 5, scopeIds),
+      getNetworkAvaliacoesForMonth(year, month, scopeIds),
+      getNetworkNinefoodCancelamentosForMonth(year, month, 5, scopeIds),
+      getNetworkNinefoodTopItemsForMonth(year, month, 5, scopeIds),
+      getNetworkNinefoodAvaliacoesForMonth(year, month, scopeIds),
+      getNetworkKeetaCancelamentosForMonth(year, month, 5, scopeIds),
+      getNetworkKeetaTopItemsForMonth(year, month, 5, scopeIds),
+      getNetworkKeetaAvaliacoesForMonth(year, month, scopeIds),
+    ])
+
+  // Fase 2a: resumos por unidade + cobertura + entrega.
   // Mês inteiro → caminho legado (1 chamada por plataforma).
   // Range custom → wrappers ForRange que decompõem cross-month e agregam.
-  // Cobertura e atenção seguem mensal (próxima iteração).
-  const [
-    finByUnit,
-    ninefoodByUnit,
-    keetaByUnit,
-    importCoverage,
-    deliveryFee,
-    attention,
-  ] = await Promise.all([
+  // Nota: "Precisa de atenção" virou Suspense próprio (AttentionSection).
+  const fase2aP = Promise.all([
     isFullMonth
       ? getFinanceiroResumoByUnits(activeUnitIds, year, month)
       : getFinanceiroResumoByUnitsForRange(activeUnitIds, periodRange),
@@ -199,8 +211,15 @@ export default async function Home({
     isFullMonth
       ? getNetworkDeliveryFee(activeUnitIds, year, month)
       : getNetworkDeliveryFeeForRange(activeUnitIds, periodRange),
-    getAttentionItems(units, year, month),
   ])
+
+  // No caso comum (sem filtro "Com faturamento") o escopo da rede já é conhecido
+  // (= filterUnitIds) → a rede roda EM PARALELO com a Fase 2a. Só o filtro "Com
+  // faturamento" precisa dos resumos antes (pra saber qual loja tem pedido).
+  const earlyNetworkP = onlyComFaturamento ? null : runNetwork(filterUnitIds)
+
+  const [finByUnit, ninefoodByUnit, keetaByUnit, importCoverage, deliveryFee] =
+    await fase2aP
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
   // a UnitsTable mostra dados reais sem precisar de prop nova.
@@ -228,7 +247,8 @@ export default async function Home({
       : NO_UNITS
     : filterUnitIds
 
-  // Fase 2b: queries de rede no escopo já filtrado.
+  // Fase 2b: usa o batch já disparado em paralelo (caso comum) ou dispara agora
+  // com o escopo "Com faturamento" recém-calculado.
   const [
     networkFunnel,
     networkCancels,
@@ -240,18 +260,7 @@ export default async function Home({
     networkCancelsKeeta,
     networkTopItemsKeeta,
     networkAvaliacoesKeeta,
-  ] = await Promise.all([
-    getNetworkFunnelForMonth(year, month, networkScopeIds),
-    getNetworkCancelamentosPorMotivo(year, month, 5, networkScopeIds),
-    getNetworkTopItemsForMonth(year, month, 5, networkScopeIds),
-    getNetworkAvaliacoesForMonth(year, month, networkScopeIds),
-    getNetworkNinefoodCancelamentosForMonth(year, month, 5, networkScopeIds),
-    getNetworkNinefoodTopItemsForMonth(year, month, 5, networkScopeIds),
-    getNetworkNinefoodAvaliacoesForMonth(year, month, networkScopeIds),
-    getNetworkKeetaCancelamentosForMonth(year, month, 5, networkScopeIds),
-    getNetworkKeetaTopItemsForMonth(year, month, 5, networkScopeIds),
-    getNetworkKeetaAvaliacoesForMonth(year, month, networkScopeIds),
-  ])
+  ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
 
   // Network = totais da rede MESCLADOS (do array filtrado)
   const network = networkTotalsMerged(
@@ -489,7 +498,14 @@ export default async function Home({
 
       {status.ok && units.length > 0 && (
         <DashboardSection id="atencao">
-          <AttentionPanel items={attention} lojasLabel={lojasNoun} />
+          <Suspense fallback={<AttentionSkeleton />}>
+            <AttentionSection
+              units={units}
+              year={year}
+              month={month}
+              lojasLabel={lojasNoun}
+            />
+          </Suspense>
         </DashboardSection>
       )}
 
