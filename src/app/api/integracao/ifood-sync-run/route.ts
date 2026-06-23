@@ -18,7 +18,9 @@ export async function POST() {
     return new Response("Unauthorized", { status: 401 })
   }
   try {
-    const out = await syncIfoodAll()
+    // Disparo manual sempre força (ignora o throttle de 6h) — o operador
+    // clicou "Sincronizar agora" de propósito.
+    const out = await syncIfoodAll({ force: true })
     return Response.json({ ok: true, ...out })
   } catch (e) {
     return Response.json(

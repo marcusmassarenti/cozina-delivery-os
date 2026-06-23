@@ -1,11 +1,20 @@
+"use client"
+
 import { AlertTriangle, CircleCheck, Download } from "lucide-react"
 import Link from "next/link"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { ImportCoverage, PlatformCoverage } from "@/lib/data/relatorio-diario"
 import { nowParts } from "@/lib/period"
 
 import { Ninefood99QuickSync } from "./ninefood99-quick-sync"
+import { SyncIfoodButton } from "./sync-ifood-button"
 
 const MES_ABREV = [
   "jan", "fev", "mar", "abr", "mai", "jun",
@@ -20,22 +29,33 @@ function parseYmd(s: string): Date {
   return new Date(y, m - 1, d)
 }
 
+const PLAT_LABEL: Record<PlatformId, string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+}
+
 /**
  * Banner de cobertura de importação no Dashboard. Mostra, por plataforma, até
  * que dia tem dado no mês. Cada plataforma é julgada contra um ALVO ABSOLUTO
  * de frescor (último dia do mês OU ontem, o que for menor) — não comparando as
  * plataformas entre si. Atrasado = dado mais de 2 dias atrás do alvo.
+ *
+ * `canSyncIfood` (superadmin) habilita o botão "Sincronizar iFood" ao lado do
+ * "Sincronizar 99" — os dois controles de sync ficam juntos aqui.
  */
 export function ImportCoverageBanner({
   coverage,
   year,
   month,
   periodLabel,
+  canSyncIfood = false,
 }: {
   coverage: ImportCoverage
   year: number
   month: number
   periodLabel: string
+  canSyncIfood?: boolean
 }) {
   // Alvo: menor entre fim do mês e ontem (D-1). "Ontem" é calculado em horário
   // de Brasília — senão, na Vercel (UTC), depois das 21h o D-1 pula um dia.
@@ -64,11 +84,6 @@ export function ImportCoverageBanner({
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
   const noData = withData.length === 0
   const anyBehind = platforms.some((p) => isBehind(p.cov))
-  const PLAT_LABEL: Record<PlatformId, string> = {
-    ifood: "iFood",
-    "99food": "99 Food",
-    keeta: "Keeta",
-  }
   const faltantes = platforms
     .filter((p) => p.cov.lastDay === null)
     .map((p) => PLAT_LABEL[p.id])
@@ -80,72 +95,139 @@ export function ImportCoverageBanner({
       : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400"
 
   return (
-    <div
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2 text-xs ${tone}`}
-    >
-      <span className="inline-flex items-center gap-1.5 font-medium">
-        {noData || anyBehind ? (
-          <AlertTriangle className="size-3.5" />
+    <TooltipProvider delay={150}>
+      <div
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2 text-xs ${tone}`}
+      >
+        <span className="inline-flex items-center gap-1.5 font-medium">
+          {noData || anyBehind ? (
+            <AlertTriangle className="size-3.5" />
+          ) : (
+            <CircleCheck className="size-3.5" />
+          )}
+          Cobertura de importação · {periodLabel}
+        </span>
+
+        {noData ? (
+          <span>nenhum dado importado neste mês — suba os relatórios em /importacao</span>
         ) : (
-          <CircleCheck className="size-3.5" />
+          <div className="flex flex-wrap items-center gap-2">
+            {platforms.map((p) => {
+              const behind = isBehind(p.cov)
+              const lag = lagDays(p.cov)
+              const semDados = p.cov.lastDay === null
+              const ateLabel = semDados
+                ? "sem dados"
+                : `até ${String(p.cov.lastDay).padStart(2, "0")}/${MES_ABREV[month - 1]}`
+
+              return (
+                <Tooltip key={p.id}>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        className={`inline-flex cursor-default items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-[11px] font-medium ${
+                          behind
+                            ? "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400"
+                            : "border-border text-foreground"
+                        }`}
+                      >
+                        <PlatformLogo platform={p.id} size="sm" />
+                        {ateLabel}
+                        {behind && (
+                          <AlertTriangle className="size-3 text-amber-600" />
+                        )}
+                      </span>
+                    }
+                  />
+                  <TooltipContent className="max-w-[18rem] text-left">
+                    <PillTooltip
+                      platform={p.id}
+                      semDados={semDados}
+                      behind={behind}
+                      lag={lag}
+                    />
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </div>
         )}
-        Cobertura de importação · {periodLabel}
-      </span>
 
-      {noData ? (
-        <span>nenhum dado importado neste mês — suba os relatórios em /importacao</span>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          {platforms.map((p) => {
-            const behind = isBehind(p.cov)
-            const lag = lagDays(p.cov)
-            // O iFood publica o financeiro em ciclos semanais com defasagem
-            // (vendas só viram lançamento ~7 dias depois). Por isso a pílula
-            // do iFood mede a cobertura do FINANCEIRO (que alimenta a DRE),
-            // não do Relatório de Vendas — que costuma estar mais à frente.
-            const ifoodCycleNote =
-              p.id === "ifood"
-                ? " · iFood publica o financeiro semanalmente com defasagem de ~7 dias; o Relatório de Vendas (pedidos) costuma estar mais à frente"
-                : ""
-            return (
-              <span
-                key={p.id}
-                title={
-                  p.cov.lastDay === null
-                    ? "Sem dados neste mês"
-                    : behind
-                      ? `Atrasado ${lag} dia${lag === 1 ? "" : "s"} em relação a ontem${ifoodCycleNote}`
-                      : `Em dia${ifoodCycleNote}`
-                }
-                className={`inline-flex items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-[11px] font-medium ${
-                  behind
-                    ? "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400"
-                    : "border-border text-foreground"
-                }`}
-              >
-                <PlatformLogo platform={p.id} size="sm" />
-                {p.cov.lastDay !== null
-                  ? `até ${String(p.cov.lastDay).padStart(2, "0")}/${MES_ABREV[month - 1]}`
-                  : "sem dados"}
-                {behind && <AlertTriangle className="size-3 text-amber-600" />}
-              </span>
-            )
-          })}
+        {faltantes.length > 0 ? (
+          <Link
+            href="/importacao"
+            title="Baixe e importe os relatórios faltantes"
+            className="inline-flex items-center gap-1 rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-semibold transition-colors hover:bg-card/60"
+          >
+            <Download className="size-3" />
+            Falta importar: {faltantes.join(", ")}
+          </Link>
+        ) : null}
+
+        {/* Controles de sincronização juntos (iFood é superadmin-only). */}
+        <div className="ml-auto flex items-center gap-1.5">
+          {canSyncIfood && <SyncIfoodButton />}
+          <Ninefood99QuickSync year={year} month={month} />
         </div>
-      )}
+      </div>
+    </TooltipProvider>
+  )
+}
 
-      {faltantes.length > 0 ? (
-        <Link
-          href="/importacao"
-          title="Baixe e importe os relatórios faltantes"
-          className="inline-flex items-center gap-1 rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-semibold transition-colors hover:bg-card/60"
-        >
-          <Download className="size-3" />
-          Falta importar: {faltantes.join(", ")}
-        </Link>
-      ) : null}
+/** Texto do tooltip de cada pílula — explica o status e o porquê do alerta. */
+function PillTooltip({
+  platform,
+  semDados,
+  behind,
+  lag,
+}: {
+  platform: PlatformId
+  semDados: boolean
+  behind: boolean
+  lag: number | null
+}) {
+  if (semDados) {
+    return (
+      <span>
+        Sem dados de <b>{PLAT_LABEL[platform]}</b> neste mês — importe o relatório
+        em /importacao.
+      </span>
+    )
+  }
 
-      <Ninefood99QuickSync year={year} month={month} />
-    </div>
+  if (platform === "ifood") {
+    // O iFood publica o financeiro em ciclos SEMANAIS (vira lançamento ~7 dias
+    // depois da venda). Por isso a pílula mede o FINANCEIRO (que alimenta a DRE)
+    // e fica naturalmente atrás das vendas e das outras plataformas.
+    return (
+      <span>
+        {behind ? (
+          <>
+            <b>Por que o alerta:</b> o iFood publica o <b>financeiro</b> em ciclos
+            semanais, com defasagem de ~7 dias.{" "}
+          </>
+        ) : (
+          <b>Financeiro em dia. </b>
+        )}
+        Esta pílula mede a conciliação financeira (a que alimenta a DRE) — não o
+        Relatório de Vendas, que costuma estar mais à frente. Não é erro de
+        importação.
+      </span>
+    )
+  }
+
+  if (behind) {
+    return (
+      <span>
+        <b>{PLAT_LABEL[platform]}</b> está atrasado{" "}
+        {lag != null ? `${lag} dia${lag === 1 ? "" : "s"}` : ""} em relação a
+        ontem. Sincronize ou importe o relatório mais recente.
+      </span>
+    )
+  }
+  return (
+    <span>
+      <b>{PLAT_LABEL[platform]}</b> em dia.
+    </span>
   )
 }

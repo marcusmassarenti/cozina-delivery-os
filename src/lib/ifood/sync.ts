@@ -30,6 +30,7 @@ import { checkThrottle, recordCall } from "./throttle"
 export type UnitSyncResult = {
   unitId: string
   unitCode: string
+  unitName: string
   merchantId: string
   reconciliation: {
     competencia: string
@@ -74,7 +75,7 @@ async function listIfoodUnits() {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("unit_platforms")
-    .select("unit_id, api_store_id, units!inner(id, code)")
+    .select("unit_id, api_store_id, units!inner(id, code, name)")
     .eq("platform", "ifood")
     .eq("active", true)
     .not("api_store_id", "is", null)
@@ -84,18 +85,27 @@ async function listIfoodUnits() {
     .map((r) => ({
       unitId: (r.units as unknown as { id: string }).id,
       unitCode: (r.units as unknown as { code: string }).code,
+      unitName: (r.units as unknown as { name: string }).name,
       merchantId: r.api_store_id as string,
     }))
     .filter((r) => !!r.merchantId)
 }
 
-/** Executa um sync end-to-end pra TODAS as unidades. */
-export async function syncIfoodAll(): Promise<{
+/**
+ * Executa um sync end-to-end pra TODAS as unidades.
+ *
+ * `force` ignora o throttle de 6h — usado pelo botão manual "Sincronizar agora"
+ * (o cron diário chama sem force, respeitando o gate pra não martelar a API).
+ */
+export async function syncIfoodAll(
+  opts: { force?: boolean } = {},
+): Promise<{
   ranAt: string
   unitsProcessed: number
   unitsSkippedNoMerchant: number
   results: UnitSyncResult[]
 }> {
+  const force = opts.force === true
   const units = await listIfoodUnits()
   const admin = createAdminClient()
   const results: UnitSyncResult[] = []
@@ -104,6 +114,7 @@ export async function syncIfoodAll(): Promise<{
     const r: UnitSyncResult = {
       unitId: u.unitId,
       unitCode: u.unitCode,
+      unitName: u.unitName,
       merchantId: u.merchantId,
       reconciliation: [],
     }
@@ -117,10 +128,12 @@ export async function syncIfoodAll(): Promise<{
 
     for (const competencia of competencias) {
       const ep = `reconciliation:${competencia}`
-      const gate = await checkThrottle(u.merchantId, ep, 6)
-      if (!gate.ok) {
-        r.reconciliation.push({ competencia, skipped: gate.reason })
-        continue
+      if (!force) {
+        const gate = await checkThrottle(u.merchantId, ep, 6)
+        if (!gate.ok) {
+          r.reconciliation.push({ competencia, skipped: gate.reason })
+          continue
+        }
       }
       try {
         const recon = await downloadReconciliationRows(u.merchantId, competencia)
@@ -185,7 +198,9 @@ export async function syncIfoodAll(): Promise<{
     begin.setDate(begin.getDate() - 6)
 
     const epEv = "financial-events:weekly"
-    const gateEv = await checkThrottle(u.merchantId, epEv, 6)
+    const gateEv = force
+      ? ({ ok: true } as const)
+      : await checkThrottle(u.merchantId, epEv, 6)
     if (!gateEv.ok) {
       r.events = { skipped: gateEv.reason }
     } else {
