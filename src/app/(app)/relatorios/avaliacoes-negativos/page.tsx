@@ -3,6 +3,7 @@ import { AlertTriangle, MessageSquare } from "lucide-react"
 import { PlatformLogo } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -60,7 +61,7 @@ export default async function AvaliacoesNegativosPage({
   const piorLoja = [...porLoja.entries()].sort((a, b) => b[1] - a[1])[0]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -72,13 +73,14 @@ export default async function AvaliacoesNegativosPage({
             {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-print="hide">
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={periodRange}
             options={availablePeriods}
             enableRange
           />
+          <ExportPdfButton />
         </div>
       </div>
 

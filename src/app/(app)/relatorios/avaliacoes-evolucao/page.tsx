@@ -2,6 +2,7 @@ import { AlertTriangle, LineChart } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -88,7 +89,7 @@ export default async function AvaliacoesEvolucaoPage({
     last?.nota != null && prev?.nota != null ? last.nota - prev.nota : null
 
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -99,13 +100,14 @@ export default async function AvaliacoesEvolucaoPage({
             Nota média da rede mês a mês · até {formatPeriodLabel({ year, month })}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-print="hide">
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={periodRange}
             options={availablePeriods}
             enableRange
           />
+          <ExportPdfButton />
         </div>
       </div>
 
