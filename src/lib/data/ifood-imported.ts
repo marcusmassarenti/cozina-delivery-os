@@ -1154,6 +1154,39 @@ export async function getFinanceiroResumoForMonth(
   )
 }
 
+// ─── Antecipação (taxa de receber adiantado) ─────────────────────────
+
+/**
+ * Taxa de antecipação do iFood por loja no mês (de ifood_antecipacoes,
+ * populada pelo sync). É o juro de receber o repasse adiantado — NÃO vem na
+ * Conciliação. O DRE da loja mostra como "Recebido real no caixa" = líquido −
+ * esta taxa. Retorna Map<unitId, feeAmount> (R$, positivo). Loja sem dado = 0.
+ */
+export async function getAntecipacaoFeeByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (unitIds.length === 0) return out
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from("ifood_antecipacoes")
+    .select("unit_id, fee_amount")
+    .in("unit_id", unitIds)
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+  if (error) {
+    // Tabela pode não existir ainda (migration não aplicada) — degrada pra 0.
+    console.error("getAntecipacaoFeeByUnits:", error.message)
+    return out
+  }
+  for (const r of data ?? []) {
+    out.set(r.unit_id, Number(r.fee_amount) || 0)
+  }
+  return out
+}
+
 // ─── Cancelamentos por motivo ────────────────────────────────────────
 
 export async function getCancelamentosPorMotivo(

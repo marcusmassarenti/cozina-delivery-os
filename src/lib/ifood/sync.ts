@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { parseFinanceiroRows } from "@/lib/import/ifood/parse-financeiro"
 import { persistFinanceiro } from "@/lib/import/ifood/persist-financeiro"
 
+import { getAnticipations, summarizeAnticipations } from "./anticipations"
 import { fetchAllFinancialEvents } from "./events"
 import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
@@ -158,6 +159,61 @@ async function syncReconciliationCompetencia(
   }
 }
 
+/**
+ * Grava a TAXA DE ANTECIPAÇÃO de UMA competência em ifood_antecipacoes.
+ *
+ * A antecipação (juro por receber o repasse adiantado) NÃO vem na Conciliação —
+ * é o endpoint Anticipation API v3. Buscamos por janela de data de cálculo do
+ * mês e somamos `feeAmount`. Idempotente (upsert por unit+competência).
+ *
+ * Erro/empty NÃO derruba o sync: grava 0 ou pula. O DRE só mostra a linha quando
+ * fee > 0, então degradar pra 0 é seguro.
+ */
+async function syncAntecipacaoCompetencia(
+  u: UnitLite,
+  competencia: string,
+  force: boolean,
+  admin: Admin,
+): Promise<void> {
+  const ep = `antecipacao:${competencia}`
+  if (!force) {
+    const gate = await checkThrottle(u.merchantId, ep, 6)
+    if (!gate.ok) return
+  }
+  const m = competencia.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return
+  const year = Number(m[1])
+  const month = Number(m[2])
+  const lastDay = new Date(year, month, 0).getDate()
+  const begin = `${competencia}-01`
+  const end = `${competencia}-${String(lastDay).padStart(2, "0")}`
+
+  try {
+    const res = await getAnticipations(u.merchantId, begin, end)
+    await recordCall(u.merchantId, ep, res.status)
+    if (!res.ok || !res.data) return
+    const s = summarizeAnticipations(res.data)
+    await admin.from("ifood_antecipacoes").upsert(
+      {
+        unit_id: u.unitId,
+        competencia,
+        ref_year: year,
+        ref_month: month,
+        merchant_id: u.merchantId,
+        fee_amount: s.sumFee,
+        original_amount: s.sumOriginal,
+        anticipated_amount: s.sumAnticipated,
+        items_count: s.countItems,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "unit_id,competencia" },
+    )
+  } catch {
+    await recordCall(u.merchantId, ep)
+    // silencioso: antecipação é complementar, não pode quebrar o sync financeiro.
+  }
+}
+
 /** Sincroniza UMA unidade: reconciliations (competências em paralelo) + events. */
 async function syncOneUnit(
   u: UnitLite,
@@ -176,6 +232,12 @@ async function syncOneUnit(
   // As competências rodam em paralelo (cada On Demand leva ~30–60s gerando).
   r.reconciliation = await Promise.all(
     competencias.map((c) => syncReconciliationCompetencia(u, c, force, admin)),
+  )
+
+  // Taxa de antecipação por competência (complementar) — grava em
+  // ifood_antecipacoes pro DRE; não entra no resultado retornado.
+  await Promise.all(
+    competencias.map((c) => syncAntecipacaoCompetencia(u, c, force, admin)),
   )
 
   // ---- Financial Events: últimos 7 dias (D-7 a D-1) ----

@@ -50,6 +50,7 @@ export function DreDetalhado({
   cmv,
   operacao,
   vrInfo,
+  antecipacaoIfood = 0,
   title = "DRE da loja · mês",
   totalLabel = "Resultado total da loja",
 }: {
@@ -59,6 +60,10 @@ export function DreDetalhado({
   cmv: number
   operacao: number
   vrInfo?: VrInfo
+  /** Taxa de antecipação do iFood (R$, positivo). Juro por receber o repasse
+   *  adiantado — exibida como custo financeiro que leva ao "Recebido real no
+   *  caixa". NÃO entra na margem (que segue no líquido do repasse). */
+  antecipacaoIfood?: number
   /** Cabeçalho do card (default "DRE da loja · mês"). */
   title?: string
   /** Rótulo da linha de resultado final (default "Resultado total da loja"). */
@@ -85,6 +90,11 @@ export function DreDetalhado({
   const recebidoDireto = isTodas
     ? recebidoDiretoTotal
     : plat?.recebidoDireto ?? 0
+  // Antecipação é exclusiva do iFood — aparece em "Todas" ou com o iFood
+  // selecionado. É custo financeiro: leva ao "Recebido real no caixa" SEM
+  // alterar a margem abaixo (que continua no líquido do repasse).
+  const antecip =
+    isTodas || sel === "ifood" ? Math.max(0, antecipacaoIfood) : 0
   const share = totalBruto > 0 ? bruto / totalBruto : 0
   const cmvScope = isTodas ? cmv : cmv * share
   const opScope = isTodas ? operacao : operacao * share
@@ -168,6 +178,27 @@ export function DreDetalhado({
         bold
         pct={pctOf(liquido)}
       />
+
+      {antecip > 0 && (
+        <div className="my-1 ml-1 rounded-md border-l-2 border-amber-300 bg-amber-50/60 py-0.5 pl-3 pr-2 dark:border-amber-800 dark:bg-amber-950/20">
+          <Row
+            label="(−) Taxa de antecipação iFood"
+            value={`− ${fmtBRL(antecip)}`}
+            muted
+            pct={pctOf(antecip)}
+          />
+          <Row
+            label="= Recebido real no caixa"
+            value={fmtBRL(liquido - antecip)}
+            bold
+          />
+          <p className="pb-1 text-[10px] leading-snug text-muted-foreground">
+            Juro por receber o repasse adiantado (antecipação automática do
+            iFood). É custo financeiro — <b>não entra na margem abaixo</b>, que
+            usa o líquido do repasse.
+          </p>
+        </div>
+      )}
 
       {recebidoDireto > 0 && (
         <Row

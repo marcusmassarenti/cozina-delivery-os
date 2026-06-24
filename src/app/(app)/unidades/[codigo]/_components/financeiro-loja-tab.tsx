@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
@@ -58,14 +59,17 @@ export async function FinanceiroLojaTab({
   month: number
 }) {
   const m = monthly
-  const [pagamento, deliveryFee, daily, nineResumo] = await Promise.all([
-    getPagamentoResumoForMonth(unitId, year, month),
-    getDeliveryFeeForMonth(unitId, year, month),
-    getDailyReportMatrix(year, month, "todas", [
-      { id: unitId, code: "", name: "" },
-    ]),
-    getNinefoodResumoForMonth(unitId, year, month),
-  ])
+  const [pagamento, deliveryFee, daily, nineResumo, antecipMap] =
+    await Promise.all([
+      getPagamentoResumoForMonth(unitId, year, month),
+      getDeliveryFeeForMonth(unitId, year, month),
+      getDailyReportMatrix(year, month, "todas", [
+        { id: unitId, code: "", name: "" },
+      ]),
+      getNinefoodResumoForMonth(unitId, year, month),
+      getAntecipacaoFeeByUnits([unitId], year, month),
+    ])
+  const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
 
   const bruto = m.faturamentoBruto
@@ -188,6 +192,7 @@ export async function FinanceiroLojaTab({
             cmv={cmv}
             operacao={operacao}
             vrInfo={vrInfo}
+            antecipacaoIfood={antecipFee}
           />
         </div>
 

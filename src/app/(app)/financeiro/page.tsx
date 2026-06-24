@@ -15,7 +15,10 @@ import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { DailyTrendChart } from "./_components/daily-trend-chart"
 import { PlatformLogo } from "@/components/platform-logo"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import {
+  getAntecipacaoFeeByUnits,
+  getAvailablePeriods,
+} from "@/lib/data/ifood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView, userCan } from "@/lib/auth/permissions"
@@ -126,6 +129,20 @@ export default async function ResultadoPage({
     : { ifood: 0, ninefood: 0, keeta: 0, total: 0 }
   const entregaPctBruto =
     totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
+
+  // Taxa de antecipação iFood somada na rede — alimenta o "Recebido real no
+  // caixa" do DRE detalhado (não altera margem/KPIs).
+  const antecipFeeMap = hasData
+    ? await getAntecipacaoFeeByUnits(
+        rows.map((r) => r.unitId),
+        year,
+        month,
+      )
+    : new Map<string, number>()
+  const antecipTotal = Array.from(antecipFeeMap.values()).reduce(
+    (a, b) => a + b,
+    0,
+  )
 
   // VR por bandeira (iFood) — surfa da tela Pedidos
   const pagamento = hasData
@@ -239,6 +256,7 @@ export default async function ResultadoPage({
                 cmv={totals.cmvTotal}
                 operacao={totals.custoOperacao}
                 vrInfo={vrInfoRede}
+                antecipacaoIfood={antecipTotal}
                 title={`DRE da rede · ${formatPeriodLabel({ year, month })}`}
                 totalLabel="Resultado total da rede"
               />
