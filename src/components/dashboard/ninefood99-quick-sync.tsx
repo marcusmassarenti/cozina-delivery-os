@@ -59,6 +59,9 @@ export function Ninefood99QuickSync({
     ...(state.financeiro ?? []).filter((r) => r.error),
     ...(state.cardapio ?? []).filter((r) => r.error),
   ]
+  // Falha TOTAL = não rodou nada (ex.: sem permissão, competência inválida).
+  // Quando rodou mas teve erro por loja, mostramos os cards (incl. "Com erro").
+  const totalFailure = !state.financeiro && !state.cardapio && !!state.message
 
   return (
     <>
@@ -94,13 +97,13 @@ export function Ninefood99QuickSync({
               Sincronização 99 Food
             </DialogTitle>
             <DialogDescription>
-              {!state.ok && state.message
+              {totalFailure
                 ? "A sincronização falhou."
                 : "Financeiro + cardápio das lojas vinculadas via API."}
             </DialogDescription>
           </DialogHeader>
 
-          {!state.ok && state.message ? (
+          {totalFailure ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
               {state.message}
             </div>
