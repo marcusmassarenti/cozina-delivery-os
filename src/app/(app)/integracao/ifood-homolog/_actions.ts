@@ -9,7 +9,7 @@ import {
   type IfoodAnticipationItem,
 } from "@/lib/ifood/anticipations"
 import { getFinancialEventsPage } from "@/lib/ifood/events"
-import { getReconciliationLink } from "@/lib/ifood/reconciliation"
+import { requestReconciliation } from "@/lib/ifood/reconciliation"
 import {
   fetchAllFinancialEvents,
   type IfoodFinancialEvent,
@@ -515,20 +515,19 @@ export async function validateAll(
     const t0 = Date.now()
     const competencia = ym(lastMonth)
     try {
-      const r = await getReconciliationLink(merchantId, competencia)
-      const isOk = r.ok && !!(r.data?.downloadPath ?? r.data?.downloadUrl)
+      const r = await requestReconciliation(merchantId, competencia)
       steps.push({
-        endpoint: `GET /financial/v3.0/merchants/{id}/reconciliation?competence=${competencia}`,
-        label: "Reconciliation — link do CSV.gz",
-        ok: isOk || r.status === 404,
+        endpoint: `POST /financial/v3.0/merchants/{id}/reconciliation/on-demand (${competencia})`,
+        label: "Reconciliation On Demand — solicita geração",
+        ok: r.ok,
         status: r.status,
         durationMs: Date.now() - t0,
-        detail: isOk
-          ? "downloadPath emitido"
-          : r.status === 404
-            ? "Sem dados pro período (auth OK)"
-            : undefined,
-        error: !isOk && r.status !== 404 ? r.error ?? `HTTP ${r.status}` : undefined,
+        detail: r.ok
+          ? r.status === 409
+            ? `reusando pedido recente (${r.requestId?.slice(0, 8)}…)`
+            : `requestId emitido (${r.requestId?.slice(0, 8)}…)`
+          : undefined,
+        error: !r.ok ? r.error ?? `HTTP ${r.status}` : undefined,
       })
     } catch (e) {
       steps.push({

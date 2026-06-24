@@ -1,68 +1,100 @@
 /**
- * Reconciliation API v3 — iFood Merchant API.
+ * Reconciliation On Demand — iFood Merchant API (financial).
  *
- * Fluxo:
- *   1. GET /v3/reconciliation?merchantId=X&competencia=YYYY-MM
- *      → retorna { downloadUrl } (link S3 com expiração de 24h)
- *   2. GET no downloadUrl (sem auth — é URL presigned)
- *      → arquivo CSV.gz
- *   3. gunzip + parse CSV (separador ";")
- *      → linhas com 30+ campos financeiros
- *   4. UPSERT em ifood_financeiro_lancamentos
+ * ⚠️ A API antiga (GET .../reconciliation?competence=) foi DESCONTINUADA pelo
+ * iFood. Agora o extrato é gerado SOB DEMANDA, de forma assíncrona:
  *
- * Critérios de homologação atendidos:
- *   - Consulta por competência específica ✓
- *   - Download + descompactação ✓
- *   - Parse linha-por-linha (streaming via split, não JSON.parse de tudo) ✓
- *   - Filtro impacto_no_repasse = SIM pra valor líquido (no caller) ✓
+ *   1. POST /financial/v3.0/merchants/{id}/reconciliation/on-demand {competence}
+ *      → 202 { requestId }   (ou 409 se já houver pedido recente → reusa o id)
+ *   2. GET  /financial/v3.0/merchants/{id}/reconciliation/on-demand/{requestId}
+ *      → { status: created → processing → processed, filePath }   (~30–60s)
+ *   3. baixa filePath (S3 presigned, .gz CSV ";") → gunzip → parse
+ *   4. persiste em ifood_financeiro_lancamentos (no caller)
  *
- * Doc: https://developer.ifood.com.br/pt-BR/docs/guides/modules/financial/api-reconciliation/
+ * Limite: 1 pedido novo por competência a cada 6h (409 devolve o requestId
+ * vigente, que pode ser consultado/baixado normalmente). Vantagem: gera o
+ * arquivo até pra lojas que NÃO têm extrato pré-gerado (o que dava 404 no antigo).
+ *
+ * Doc: https://developer.ifood.com.br/pt-BR/docs/guides/modules/financial/api-reconciliation-ondemand/
  */
 import "server-only"
 
 import { gunzipSync } from "node:zlib"
 
-import { fetchIfood } from "./client"
+import { fetchIfood, type IfoodFetchResult } from "./client"
 
-// Doc literal diz "/v3/reconciliation" (mas o gateway responde "no Route
-// matched"). Padrão da Merchant API: {módulo}/{versão}/merchants/{id}/{recurso}
-// (ex: /order/v1.0/orders/{id}, /merchant/v1.0/merchants/{id}). Por isso o
-// merchantId vai no PATH e a competência fica como query.
-const RECON_ENDPOINT_PATH_TPL = "/financial/v3.0/merchants/{merchantId}/reconciliation"
+const ON_DEMAND_TPL =
+  "/financial/v3.0/merchants/{merchantId}/reconciliation/on-demand"
 
-export type ReconciliationLinkResponse = {
-  /** Campo real retornado pelo iFood — S3 presigned do .gz */
-  downloadPath?: string
-  /** Aliases observados em outras versões / fallback */
-  downloadUrl?: string
-  url?: string
-  link?: string
-  expiresAt?: string
+function onDemandPath(merchantId: string): string {
+  return ON_DEMAND_TPL.replace("{merchantId}", encodeURIComponent(merchantId))
 }
 
-/** Resposta do iFood: URL temporária pro arquivo .gz */
-export async function getReconciliationLink(
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+type OnDemandRequest = {
+  ok: boolean
+  requestId?: string
+  /** 202 = pedido novo; 409 = reusando pedido recente das últimas 6h */
+  status: number
+  error?: string
+}
+
+/**
+ * Solicita a geração do extrato (POST). Em 409 (já existe pedido recente nas
+ * últimas 6h), o iFood devolve o requestId vigente na mensagem — reusamos.
+ */
+export async function requestReconciliation(
   merchantId: string,
   competencia: string,
-) {
+): Promise<OnDemandRequest> {
   if (!/^\d{4}-\d{2}$/.test(competencia)) {
     throw new Error(
       `competencia deve estar no formato YYYY-MM (recebido: ${competencia})`,
     )
   }
-  const path = RECON_ENDPOINT_PATH_TPL.replace(
-    "{merchantId}",
-    encodeURIComponent(merchantId),
-  )
-  // A doc do iFood (pt-BR) diz `competencia`, mas a API real espera
-  // `competence` (inglês) — descoberto via 400 BAD_REQUEST do próprio iFood.
-  return fetchIfood<ReconciliationLinkResponse>({
-    path,
-    method: "GET",
-    query: { competence: competencia },
+  const r = await fetchIfood<{ requestId?: string }>({
+    path: onDemandPath(merchantId),
+    method: "POST",
+    body: { competence: competencia },
     responseType: "json",
     merchantId,
-    endpointLabel: "GET /financial/v3.0/merchants/{id}/reconciliation",
+    endpointLabel: "POST /financial/v3.0/merchants/{id}/reconciliation/on-demand",
+  })
+  if (r.status === 202 && r.data?.requestId) {
+    return { ok: true, requestId: r.data.requestId, status: 202 }
+  }
+  // 409: "There is already a recent and valid request Id: <uuid>. ..."
+  if (r.status === 409) {
+    const m = r.raw.match(/request Id:\s*([0-9a-fA-F-]{36})/)
+    if (m) return { ok: true, requestId: m[1], status: 409 }
+  }
+  return { ok: false, status: r.status, error: r.error ?? r.raw.slice(0, 200) }
+}
+
+export type OnDemandStatus = {
+  id?: string
+  /** created | processing | processed | failed | … */
+  status?: string
+  filePath?: string
+  downloadPath?: string
+  metadata?: { total_linhas?: string; sha256?: string } | null
+}
+
+/** Consulta o pedido pelo requestId (status + filePath quando processado). */
+export async function getReconciliationRequest(
+  merchantId: string,
+  requestId: string,
+): Promise<IfoodFetchResult<OnDemandStatus>> {
+  return fetchIfood<OnDemandStatus>({
+    path: `${onDemandPath(merchantId)}/${encodeURIComponent(requestId)}`,
+    method: "GET",
+    responseType: "json",
+    merchantId,
+    endpointLabel:
+      "GET /financial/v3.0/merchants/{id}/reconciliation/on-demand/{requestId}",
   })
 }
 
@@ -176,56 +208,83 @@ export type ReconciliationRowsResult =
 export async function downloadReconciliationRows(
   merchantId: string,
   competencia: string,
+  opts: { maxWaitMs?: number; pollMs?: number } = {},
 ): Promise<ReconciliationRowsResult> {
-  const linkRes = await getReconciliationLink(merchantId, competencia)
-  if (!linkRes.ok || !linkRes.data) {
+  const t0 = Date.now()
+  const maxWaitMs = opts.maxWaitMs ?? 150_000
+  const pollMs = opts.pollMs ?? 5_000
+
+  // 1. Solicita (ou reusa, via 409) a geração do extrato.
+  const req = await requestReconciliation(merchantId, competencia)
+  if (!req.ok || !req.requestId) {
     return {
       ok: false,
-      linkStatus: linkRes.status,
-      linkRaw: linkRes.raw,
-      linkError: linkRes.error,
-      retries: linkRes.retries,
-      durationMs: linkRes.durationMs,
-    }
-  }
-  const downloadUrl =
-    linkRes.data.downloadPath ??
-    linkRes.data.downloadUrl ??
-    linkRes.data.url ??
-    linkRes.data.link
-  if (!downloadUrl) {
-    return {
-      ok: false,
-      linkStatus: linkRes.status,
-      linkRaw: linkRes.raw,
-      linkError: "Resposta sem campo downloadPath/downloadUrl/url/link",
-      retries: linkRes.retries,
-      durationMs: linkRes.durationMs,
+      linkStatus: req.status,
+      linkError: req.error,
+      retries: 0,
+      durationMs: Date.now() - t0,
     }
   }
 
+  // 2. Faz polling até o status virar "processed" (ou estourar o tempo).
+  let filePath: string | undefined
+  let lastStatus = 0
+  let lastRaw = ""
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const st = await getReconciliationRequest(merchantId, req.requestId)
+    lastStatus = st.status
+    lastRaw = st.raw
+    const s = (st.data?.status ?? "").toLowerCase()
+    if (st.ok && s === "processed") {
+      filePath = st.data?.filePath ?? st.data?.downloadPath
+      break
+    }
+    if (s === "failed" || s === "error" || s === "expired") {
+      return {
+        ok: false,
+        linkStatus: st.status,
+        linkRaw: st.raw,
+        linkError: `Geração do extrato falhou (status "${s}")`,
+        retries: 0,
+        durationMs: Date.now() - t0,
+      }
+    }
+    await sleep(pollMs)
+  }
+  if (!filePath) {
+    return {
+      ok: false,
+      linkStatus: lastStatus,
+      linkRaw: lastRaw,
+      linkError: `Tempo esgotado esperando a geração do extrato (requestId ${req.requestId})`,
+      retries: 0,
+      durationMs: Date.now() - t0,
+    }
+  }
+
+  // 3. Baixa o .gz presigned e descompacta.
   let dl: { csv: string; sizeBytes: number; durationMs: number }
   try {
-    dl = await downloadAndDecompress(downloadUrl)
+    dl = await downloadAndDecompress(filePath)
   } catch (e) {
     return {
       ok: false,
-      linkStatus: linkRes.status,
-      linkRaw: linkRes.raw,
-      downloadUrl,
+      linkStatus: 200,
+      downloadUrl: filePath,
       linkError: e instanceof Error ? e.message : String(e),
-      retries: linkRes.retries,
-      durationMs: linkRes.durationMs,
+      retries: 0,
+      durationMs: Date.now() - t0,
     }
   }
 
   const parsed = parseCsvSemicolon(dl.csv)
   return {
     ok: true,
-    linkStatus: linkRes.status,
-    downloadUrl,
-    retries: linkRes.retries,
-    durationMs: linkRes.durationMs,
+    linkStatus: 200,
+    downloadUrl: filePath,
+    retries: 0,
+    durationMs: Date.now() - t0,
     sizeBytes: dl.sizeBytes,
     decompressedDurationMs: dl.durationMs,
     headers: parsed.headers,

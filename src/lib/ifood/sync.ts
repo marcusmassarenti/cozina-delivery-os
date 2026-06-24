@@ -91,11 +91,127 @@ async function listIfoodUnits() {
     .filter((r) => !!r.merchantId)
 }
 
+type ReconLine = UnitSyncResult["reconciliation"][number]
+type UnitLite = {
+  unitId: string
+  unitCode: string
+  unitName: string
+  merchantId: string
+}
+type Admin = ReturnType<typeof createAdminClient>
+
+/**
+ * Sincroniza UMA competência (On Demand: POST → poll → baixa → grava).
+ * Idempotente: persistFinanceiro dedupe por competência.
+ */
+async function syncReconciliationCompetencia(
+  u: UnitLite,
+  competencia: string,
+  force: boolean,
+  admin: Admin,
+): Promise<ReconLine> {
+  const ep = `reconciliation:${competencia}`
+  if (!force) {
+    const gate = await checkThrottle(u.merchantId, ep, 6)
+    if (!gate.ok) return { competencia, skipped: gate.reason }
+  }
+  try {
+    const recon = await downloadReconciliationRows(u.merchantId, competencia)
+    await recordCall(u.merchantId, ep, recon.linkStatus)
+    if (!recon.ok) {
+      return {
+        competencia,
+        ok: false,
+        status: recon.linkStatus,
+        error: recon.linkError,
+      }
+    }
+    // Mês sem operação devolve CSV vazio (só cabeçalho) — sucesso, 0 linhas.
+    if (recon.rows.length === 0) {
+      return { competencia, ok: true, status: recon.linkStatus, rowCount: 0, persisted: 0 }
+    }
+    // Mesmo parser/persistência da importação manual (dedupe por competência).
+    const parsed = parseFinanceiroRows(recon.rows)
+    const saved = await persistFinanceiro(
+      parsed,
+      { unitId: u.unitId, code: u.unitCode },
+      { filename: `API Reconciliation ${competencia}`, importedBy: null, cadencia: "mensal" },
+      admin,
+    )
+    return {
+      competencia,
+      ok: true,
+      status: recon.linkStatus,
+      rowCount: recon.rows.length,
+      persisted: saved.rowsImported,
+      substituido: saved.substituido,
+    }
+  } catch (e) {
+    await recordCall(u.merchantId, ep)
+    return { competencia, ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/** Sincroniza UMA unidade: reconciliations (competências em paralelo) + events. */
+async function syncOneUnit(
+  u: UnitLite,
+  competencias: string[],
+  force: boolean,
+  admin: Admin,
+): Promise<UnitSyncResult> {
+  const r: UnitSyncResult = {
+    unitId: u.unitId,
+    unitCode: u.unitCode,
+    unitName: u.unitName,
+    merchantId: u.merchantId,
+    reconciliation: [],
+  }
+
+  // As competências rodam em paralelo (cada On Demand leva ~30–60s gerando).
+  r.reconciliation = await Promise.all(
+    competencias.map((c) => syncReconciliationCompetencia(u, c, force, admin)),
+  )
+
+  // ---- Financial Events: últimos 7 dias (D-7 a D-1) ----
+  const end = new Date()
+  end.setDate(end.getDate() - 1)
+  const begin = new Date(end)
+  begin.setDate(begin.getDate() - 6)
+  const epEv = "financial-events:weekly"
+  const gateEv = force
+    ? ({ ok: true } as const)
+    : await checkThrottle(u.merchantId, epEv, 6)
+  if (!gateEv.ok) {
+    r.events = { skipped: gateEv.reason }
+  } else {
+    try {
+      const ev = await fetchAllFinancialEvents(u.merchantId, ymd(begin), ymd(end))
+      await recordCall(u.merchantId, epEv, ev.firstStatus)
+      r.events = {
+        ok: ev.ok,
+        status: ev.firstStatus,
+        totalEvents: ev.totalEvents,
+        pagesFetched: ev.pagesFetched,
+        netTransfer: ev.netTransfer,
+        error: ev.error,
+      }
+    } catch (e) {
+      await recordCall(u.merchantId, epEv)
+      r.events = { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+  return r
+}
+
 /**
  * Executa um sync end-to-end pra TODAS as unidades.
  *
  * `force` ignora o throttle de 6h — usado pelo botão manual "Sincronizar agora"
  * (o cron diário chama sem force, respeitando o gate pra não martelar a API).
+ *
+ * As unidades rodam EM PARALELO: como o On Demand é assíncrono (gera o arquivo
+ * sob demanda, ~30–60s cada), fazer sequencial estouraria o timeout. No 2º run
+ * dentro de 6h o iFood devolve 409 e o arquivo já está pronto → fica rápido.
  */
 export async function syncIfoodAll(
   opts: { force?: boolean } = {},
@@ -108,124 +224,17 @@ export async function syncIfoodAll(
   const force = opts.force === true
   const units = await listIfoodUnits()
   const admin = createAdminClient()
-  const results: UnitSyncResult[] = []
 
-  for (const u of units) {
-    const r: UnitSyncResult = {
-      unitId: u.unitId,
-      unitCode: u.unitCode,
-      unitName: u.unitName,
-      merchantId: u.merchantId,
-      reconciliation: [],
-    }
+  // Reconciliation: mês corrente + mês anterior (mesmas competências pra todos).
+  const now = new Date()
+  const competencias = [
+    ym(now),
+    ym(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+  ]
 
-    // ---- Reconciliation: mês corrente + mês anterior ------------------------
-    const now = new Date()
-    const competencias = [
-      ym(now),
-      ym(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-    ]
-
-    for (const competencia of competencias) {
-      const ep = `reconciliation:${competencia}`
-      if (!force) {
-        const gate = await checkThrottle(u.merchantId, ep, 6)
-        if (!gate.ok) {
-          r.reconciliation.push({ competencia, skipped: gate.reason })
-          continue
-        }
-      }
-      try {
-        const recon = await downloadReconciliationRows(u.merchantId, competencia)
-        await recordCall(u.merchantId, ep, recon.linkStatus)
-        if (!recon.ok) {
-          r.reconciliation.push({
-            competencia,
-            ok: false,
-            status: recon.linkStatus,
-            error: recon.linkError,
-          })
-          continue
-        }
-
-        // Mês sem operação devolve CSV vazio (só cabeçalho) — sucesso, 0 linhas.
-        if (recon.rows.length === 0) {
-          r.reconciliation.push({
-            competencia,
-            ok: true,
-            status: recon.linkStatus,
-            rowCount: 0,
-            persisted: 0,
-          })
-          continue
-        }
-
-        // Mesmo parser e mesma persistência da importação manual de XLSX —
-        // API e planilha gravam idêntico (dedupe por competência, idempotente).
-        const parsed = parseFinanceiroRows(recon.rows)
-        const saved = await persistFinanceiro(
-          parsed,
-          { unitId: u.unitId, code: u.unitCode },
-          {
-            filename: `API Reconciliation ${competencia}`,
-            importedBy: null,
-            cadencia: "mensal",
-          },
-          admin,
-        )
-        r.reconciliation.push({
-          competencia,
-          ok: true,
-          status: recon.linkStatus,
-          rowCount: recon.rows.length,
-          persisted: saved.rowsImported,
-          substituido: saved.substituido,
-        })
-      } catch (e) {
-        await recordCall(u.merchantId, ep)
-        r.reconciliation.push({
-          competencia,
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        })
-      }
-    }
-
-    // ---- Financial Events: últimos 7 dias (D-7 a D-1) -----------------------
-    const end = new Date()
-    end.setDate(end.getDate() - 1)
-    const begin = new Date(end)
-    begin.setDate(begin.getDate() - 6)
-
-    const epEv = "financial-events:weekly"
-    const gateEv = force
-      ? ({ ok: true } as const)
-      : await checkThrottle(u.merchantId, epEv, 6)
-    if (!gateEv.ok) {
-      r.events = { skipped: gateEv.reason }
-    } else {
-      try {
-        const ev = await fetchAllFinancialEvents(u.merchantId, ymd(begin), ymd(end))
-        await recordCall(u.merchantId, epEv, ev.firstStatus)
-        r.events = {
-          ok: ev.ok,
-          status: ev.firstStatus,
-          totalEvents: ev.totalEvents,
-          pagesFetched: ev.pagesFetched,
-          netTransfer: ev.netTransfer,
-          error: ev.error,
-        }
-      } catch (e) {
-        await recordCall(u.merchantId, epEv)
-        r.events = {
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        }
-      }
-    }
-
-    results.push(r)
-  }
+  const results = await Promise.all(
+    units.map((u) => syncOneUnit(u, competencias, force, admin)),
+  )
 
   return {
     ranAt: new Date().toISOString(),
