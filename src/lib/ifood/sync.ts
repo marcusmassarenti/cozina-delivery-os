@@ -42,6 +42,10 @@ export type UnitSyncResult = {
     persisted?: number
     /** true se substituiu lançamentos pré-existentes da competência. */
     substituido?: boolean
+    /** Linhas da competência que JÁ existiam antes desta sync (0 = período novo). */
+    jaExistia?: number
+    /** Variação líquida de linhas vs a sync anterior (persisted − jaExistia, ≥0). */
+    novas?: number
     error?: string
   }[]
   events?: {
@@ -145,6 +149,8 @@ async function syncReconciliationCompetencia(
       rowCount: recon.rows.length,
       persisted: saved.rowsImported,
       substituido: saved.substituido,
+      jaExistia: saved.jaExistia,
+      novas: Math.max(0, saved.rowsImported - saved.jaExistia),
     }
   } catch (e) {
     await recordCall(u.merchantId, ep)

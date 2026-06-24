@@ -36,6 +36,8 @@ export type ShopSyncResult = {
   unitId: string | null
   unitCreated: boolean
   count: number
+  /** Lançamentos (order_id+order_type) que NÃO existiam antes desta sync. */
+  novos: number
   /** Σ valor dos pedidos de receita (orderType 1), em R$ */
   bruto: number
   /** Σ líquido a repassar (settlementAmount, todos os tipos), em R$ */
@@ -150,6 +152,7 @@ export async function syncNinefoodFinanceiro(opts: {
       unitId: link.unit_id,
       unitCreated: false,
       count: 0,
+      novos: 0,
       bruto: 0,
       liquido: 0,
     }
@@ -165,6 +168,25 @@ export async function syncNinefoodFinanceiro(opts: {
       res.unitCreated = created
 
       const records = rows.map((r) => toRecord(link.app_shop_id, r))
+
+      // "Dado novo": antes de gravar, descobre quais (order_id, order_type) já
+      // existiam pra essa loja. O que sobrar é genuinamente novo (a tabela é
+      // upsert, então rodar de novo não infla — só reescreve os já-presentes).
+      const existing = new Set<string>()
+      for (let i = 0; i < records.length; i += 500) {
+        const ids = records.slice(i, i + 500).map((r) => r.order_id)
+        const { data: ex } = await admin
+          .from("ninefood_api_bill")
+          .select("order_id, order_type")
+          .eq("app_shop_id", link.app_shop_id)
+          .in("order_id", ids)
+        for (const e of ((ex as any[]) ?? []))
+          existing.add(`${e.order_id}|${e.order_type}`)
+      }
+      res.novos = records.filter(
+        (r) => !existing.has(`${r.order_id}|${r.order_type}`),
+      ).length
+
       for (let i = 0; i < records.length; i += 500) {
         const { error } = await admin
           .from("ninefood_api_bill")

@@ -36,6 +36,9 @@ export type PersistFinanceiroResult = {
   substituido: boolean
   /** Quantidade de linhas gravadas. */
   rowsImported: number
+  /** Quantas linhas da(s) competência(s) JÁ existiam antes desta gravação.
+   *  0 = competência nova (dado 100% novo). >0 = refresh (delta = gravadas − essas). */
+  jaExistia: number
   /** id do registro em platform_imports (auditoria). */
   importId: string
 }
@@ -155,6 +158,7 @@ export async function persistFinanceiro(
   return {
     substituido,
     rowsImported: rows.length,
+    jaExistia: existingCount ?? 0,
     importId: importLog.id as string,
   }
 }

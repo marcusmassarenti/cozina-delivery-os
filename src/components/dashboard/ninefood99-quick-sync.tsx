@@ -20,6 +20,19 @@ import { fmtBRL } from "@/lib/format"
 
 const initial: Ninefood99SyncAllState = { ok: false }
 
+const MESES = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
+
+/** "2026-06" → "junho/2026". */
+function fmtCompetencia(comp?: string): string | null {
+  const m = (comp ?? "").match(/^(\d{4})-(\d{2})$/)
+  if (!m) return null
+  const mes = MESES[Number(m[2]) - 1]
+  return mes ? `${mes}/${m[1]}` : null
+}
+
 /**
  * Botão pra sincronizar o 99 (financeiro + cardápio) direto do banner de
  * cobertura do Dashboard. Ao concluir, abre um popup mostrando o que foi
@@ -55,6 +68,8 @@ export function Ninefood99QuickSync({
 
   const fin = (state.financeiro ?? []).filter((r) => !r.error)
   const card = (state.cardapio ?? []).filter((r) => !r.error && r.items > 0)
+  const periodoLabel = fmtCompetencia(state.competencia)
+  const totalNovos = fin.reduce((s, r) => s + (r.novos ?? 0), 0)
   const erros = [
     ...(state.financeiro ?? []).filter((r) => r.error),
     ...(state.cardapio ?? []).filter((r) => r.error),
@@ -109,6 +124,24 @@ export function Ninefood99QuickSync({
             </div>
           ) : (
             <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+              {/* Período importado + quanto entrou de dado novo. */}
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                <span className="font-medium text-foreground">
+                  Período importado:
+                </span>{" "}
+                {periodoLabel ?? "—"}
+                {" · "}
+                {totalNovos > 0 ? (
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                    {totalNovos.toLocaleString("pt-BR")} lançamento
+                    {totalNovos === 1 ? "" : "s"} novo{totalNovos === 1 ? "" : "s"}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    nada novo (o período já estava sincronizado)
+                  </span>
+                )}
+              </div>
               <Group
                 tone="emerald"
                 icon={<CheckCircle2 className="size-4" />}
@@ -117,13 +150,17 @@ export function Ninefood99QuickSync({
                 rows={fin.map((r) => ({
                   key: r.appShopId,
                   name: r.name ?? r.appShopId.slice(0, 8),
-                  detail: `${r.count.toLocaleString("pt-BR")} pedidos · ${fmtBRL(r.bruto)} bruto`,
+                  detail:
+                    `${r.count.toLocaleString("pt-BR")} pedidos · ` +
+                    `${(r.novos ?? 0) > 0 ? `+${(r.novos ?? 0).toLocaleString("pt-BR")} novos · ` : ""}` +
+                    `${fmtBRL(r.bruto)} bruto`,
                 }))}
               />
               <Group
                 tone="sky"
                 icon={<ShoppingBag className="size-4" />}
                 title="Cardápio atualizado"
+                subtitle="Snapshot do cardápio atual (não depende do período)"
                 empty="Nenhum item de cardápio agora"
                 rows={card.map((r) => ({
                   key: r.appShopId,
@@ -156,12 +193,14 @@ function Group({
   tone,
   icon,
   title,
+  subtitle,
   empty,
   rows,
 }: {
   tone: "emerald" | "sky" | "rose"
   icon: React.ReactNode
   title: string
+  subtitle?: string
   empty: string
   rows: { key: string; name: string; detail: string }[]
 }) {
@@ -179,6 +218,9 @@ function Group({
         {title}
         <span className="text-muted-foreground">({rows.length})</span>
       </div>
+      {subtitle ? (
+        <p className="mt-0.5 pl-5 text-[11px] text-muted-foreground">{subtitle}</p>
+      ) : null}
       {rows.length === 0 ? (
         empty ? (
           <p className="mt-1 pl-5 text-xs text-muted-foreground">{empty}</p>

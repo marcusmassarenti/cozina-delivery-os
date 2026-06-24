@@ -20,8 +20,31 @@ type ReconLine = {
   rowCount?: number
   persisted?: number
   substituido?: boolean
+  /** Linhas da competência que já existiam (0 = período novo). */
+  jaExistia?: number
+  /** Variação líquida de linhas vs a sync anterior (persisted − jaExistia). */
+  novas?: number
   skipped?: string
   error?: string
+}
+
+const MES_CURTO = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+]
+
+/** "2026-06" → "jun/26". */
+function fmtMesCurto(comp: string): string {
+  const m = comp.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return comp
+  return `${MES_CURTO[Number(m[2]) - 1] ?? m[2]}/${m[1].slice(2)}`
+}
+
+/** Rótulo do que entrou numa competência: "novo", "+N", "atualizado". */
+function deltaLabel(r: ReconLine): string {
+  if ((r.jaExistia ?? 0) === 0) return "novo"
+  const novas = r.novas ?? 0
+  return novas > 0 ? `+${novas.toLocaleString("pt-BR")}` : "atualizado"
 }
 type UnitResult = {
   unitCode: string
@@ -52,9 +75,8 @@ type StoreVerdict = {
 function classify(u: UnitResult): StoreVerdict {
   const recon = u.reconciliation ?? []
   const persisted = recon.reduce((s, r) => s + (r.persisted ?? 0), 0)
-  const okMonths = recon
-    .filter((r) => r.ok && (r.rowCount ?? 0) > 0)
-    .map((r) => r.competencia)
+  const okLines = recon.filter((r) => r.ok && (r.rowCount ?? 0) > 0)
+  const okMonths = okLines.map((r) => r.competencia)
   const errs = recon.filter((r) => r.error)
   // "No reconciliation file" / 404 = o iFood não gera o arquivo de conciliação
   // externa pra esse merchant → segue por importação manual.
@@ -76,7 +98,13 @@ function classify(u: UnitResult): StoreVerdict {
       bucket: "online",
       persisted,
       months: okMonths,
-      detail: `${persisted.toLocaleString("pt-BR")} lançamentos · ${okMonths.join(", ")}`,
+      // Por competência: "jun/26: 7.650 (+51) · mai/26: 6.040 (atualizado)".
+      detail: okLines
+        .map(
+          (r) =>
+            `${fmtMesCurto(r.competencia)}: ${(r.persisted ?? 0).toLocaleString("pt-BR")} (${deltaLabel(r)})`,
+        )
+        .join(" · "),
     }
   }
   if (semArquivo) {
@@ -127,6 +155,29 @@ export function SyncIfoodButton() {
   const erro = verdicts.filter((v) => v.bucket === "erro")
   const done = !!result?.ok && !result?.error && !open
 
+  // Resumo de período: quais competências foram sincronizadas e onde entrou
+  // dado novo (período inédito OU linhas a mais vs a última sync).
+  const byComp = new Map<string, { novas: number; novo: boolean }>()
+  for (const u of result?.results ?? []) {
+    for (const l of u.reconciliation ?? []) {
+      if (!l.ok || (l.rowCount ?? 0) <= 0) continue
+      const cur = byComp.get(l.competencia) ?? { novas: 0, novo: false }
+      cur.novas += l.novas ?? 0
+      if ((l.jaExistia ?? 0) === 0) cur.novo = true
+      byComp.set(l.competencia, cur)
+    }
+  }
+  const comps = [...byComp.keys()].sort().reverse()
+  const periodoLabel = comps.map(fmtMesCurto).join(" + ")
+  const novoComps = comps
+    .filter((c) => byComp.get(c)!.novo || byComp.get(c)!.novas > 0)
+    .map((c) => {
+      const v = byComp.get(c)!
+      return v.novo
+        ? `${fmtMesCurto(c)} (período novo)`
+        : `${fmtMesCurto(c)} (+${v.novas.toLocaleString("pt-BR")} linhas)`
+    })
+
   return (
     <>
       {/* Pill no mesmo estilo do "Sincronizar 99" pra os dois ficarem juntos. */}
@@ -171,6 +222,29 @@ export function SyncIfoodButton() {
             </div>
           ) : (
             <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+              {/* Período sincronizado + onde entrou dado novo. */}
+              {comps.length > 0 && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                  <div>
+                    <span className="font-medium text-foreground">
+                      Período sincronizado:
+                    </span>{" "}
+                    {periodoLabel}
+                  </div>
+                  <div className="mt-0.5">
+                    <span className="font-medium text-foreground">Dado novo:</span>{" "}
+                    {novoComps.length > 0 ? (
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        {novoComps.join(", ")}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        nenhum (refresh — o período já estava sincronizado)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
               <Group
                 tone="emerald"
                 icon={<CheckCircle2 className="size-4" />}
