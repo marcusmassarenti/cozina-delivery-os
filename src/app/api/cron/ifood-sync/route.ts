@@ -25,7 +25,18 @@ export async function GET(req: Request) {
   }
 
   try {
-    const out = await syncIfoodAll()
+    // Backfill manual: ?competences=2026-01,2026-02 força meses específicos.
+    // ?force=1 ignora o throttle de 6h. Sem params = mês corrente + anterior.
+    const url = new URL(req.url)
+    const competences = (url.searchParams.get("competences") ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter((c) => /^\d{4}-\d{2}$/.test(c))
+    const force = url.searchParams.get("force") === "1"
+    const out = await syncIfoodAll({
+      force,
+      competences: competences.length > 0 ? competences : undefined,
+    })
     return Response.json({ ok: true, ...out })
   } catch (e) {
     return Response.json(

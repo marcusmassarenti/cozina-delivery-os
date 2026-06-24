@@ -214,7 +214,7 @@ async function syncOneUnit(
  * dentro de 6h o iFood devolve 409 e o arquivo já está pronto → fica rápido.
  */
 export async function syncIfoodAll(
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; competences?: string[] } = {},
 ): Promise<{
   ranAt: string
   unitsProcessed: number
@@ -225,12 +225,18 @@ export async function syncIfoodAll(
   const units = await listIfoodUnits()
   const admin = createAdminClient()
 
-  // Reconciliation: mês corrente + mês anterior (mesmas competências pra todos).
-  const now = new Date()
-  const competencias = [
-    ym(now),
-    ym(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-  ]
+  // Competências: por padrão mês corrente + anterior; ou as passadas em
+  // `opts.competences` (ex.: backfill de um intervalo). Mesmas pra todas as lojas.
+  const competencias =
+    opts.competences && opts.competences.length > 0
+      ? opts.competences
+      : (() => {
+          const now = new Date()
+          return [
+            ym(now),
+            ym(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+          ]
+        })()
 
   const results = await Promise.all(
     units.map((u) => syncOneUnit(u, competencias, force, admin)),
