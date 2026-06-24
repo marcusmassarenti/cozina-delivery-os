@@ -191,10 +191,11 @@
     display: block !important;
   }
 
-  /* ── "Infos Diária Venda": cabe em 1 página A4 paisagem ── */
+  /* ── "Infos Diária Venda": tabela larga → paisagem (exceção do padrão) ── */
   .acomp-print {
     display: block !important;
     gap: 0 !important;
+    page: landscapeReport;
   }
   /* deixa a tabela FLUIR (evita 1ª página em branco do break-inside global) */
   [data-print="page"].acomp-print > * {
@@ -232,7 +233,12 @@
     break-inside: avoid;
   }
 
+  /* Padrão: RETRATO. A4 paisagem fica só pro .acomp-print (page: landscapeReport). */
   @page {
+    margin: 8mm;
+    size: A4 portrait;
+  }
+  @page landscapeReport {
     margin: 8mm;
     size: A4 landscape;
   }

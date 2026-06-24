@@ -4,6 +4,7 @@ import { PlatformLogo } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -65,7 +66,9 @@ export default async function AvaliacoesComparativoPage({
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+        <div className="flex items-center gap-3">
+          <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
+          <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Star className="size-6 text-primary" />
             Comparativo de nota
@@ -74,6 +77,7 @@ export default async function AvaliacoesComparativoPage({
             Nota média loja × loja, por plataforma ·{" "}
             {formatRangeLabel(periodRange)}
           </p>
+        </div>
         </div>
         <div className="flex flex-wrap items-center gap-2" data-print="hide">
           <LojaFilter units={allUnits} />

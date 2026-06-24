@@ -1,6 +1,7 @@
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { AvaliacoesTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-keeta-tab"
@@ -101,16 +102,19 @@ export default async function AvaliacoesPage({
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Avaliações</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {selectedUnit
-              ? `#${selectedUnit.code} ${selectedUnit.name}`
-              : `Visão da rede · ${
-                  plataformaParam ? PLATAFORMA_LABEL[plataformaParam] : "todas as plataformas"
-                }`}{" "}
-            · {formatRangeLabel(periodRange)}
-          </p>
+        <div className="flex items-center gap-3">
+          <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Avaliações</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {selectedUnit
+                ? `#${selectedUnit.code} ${selectedUnit.name}`
+                : `Visão da rede · ${
+                    plataformaParam ? PLATAFORMA_LABEL[plataformaParam] : "todas as plataformas"
+                  }`}{" "}
+              · {formatRangeLabel(periodRange)}
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2" data-print="hide">
           <PeriodSelector
