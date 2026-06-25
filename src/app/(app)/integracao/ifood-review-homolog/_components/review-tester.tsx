@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   probeAll,
+  probeOversizePage,
   probeReply,
   probeReviewDetail,
   probeReviews,
@@ -65,7 +66,7 @@ export function ReviewTester() {
       <Scenario
         n={1}
         title="Listar Avaliações"
-        desc="Listar ≥3 com os campos obrigatórios · filtro por data · teste de limite de página (o iFood limita a 50/página)"
+        desc="Listar ≥3 com os campos obrigatórios · filtro por data · teste de limite de página (pedir >50 deve dar 400)"
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Field label="dateFrom (YYYY-MM-DD)">
@@ -110,14 +111,10 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending}
             onClick={() =>
-              run("Teste de limite de página (pageSize=50)", probeReviews, {
-                size: "50",
-                dateFrom,
-                dateTo,
-              })
+              run("Teste de limite (pageSize=100 → deve dar 400)", probeOversizePage)
             }
           >
-            Testar página máx (50)
+            Testar limite (&gt;50 → 400)
           </Button>
         </div>
       </Scenario>

@@ -70,6 +70,9 @@ export type ReviewListOpts = {
   dateTo?: string
   /** ASC | DESC */
   sort?: "ASC" | "DESC"
+  /** Só pra HOMOLOGAÇÃO: envia o `size` cru, sem clampar a 50 — pra demonstrar
+   *  o 400 "page size can't exceed 50". Em produção NUNCA usar (sempre clampa). */
+  unclamped?: boolean
 }
 
 /**
@@ -96,8 +99,11 @@ export async function getReviewsPage(
     method: "GET",
     query: {
       page: Math.max(1, opts.page ?? 1),
-      // ⚠️ É `pageSize` (não `size`) e clampado a 1..50 — a API recusa >50.
-      pageSize: Math.min(50, Math.max(1, opts.size ?? 10)),
+      // ⚠️ É `pageSize` (não `size`). Clampado a 1..50 — a API recusa >50.
+      // `unclamped` envia cru SÓ pra homologação demonstrar o 400.
+      pageSize: opts.unclamped
+        ? opts.size ?? 10
+        : Math.min(50, Math.max(1, opts.size ?? 10)),
       addCount: opts.addCount ?? true,
       dateFrom: toIsoDay(opts.dateFrom, "start"),
       dateTo: toIsoDay(opts.dateTo, "end"),

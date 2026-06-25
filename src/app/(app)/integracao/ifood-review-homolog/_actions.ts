@@ -80,6 +80,36 @@ export async function probeReviews(
   }
 }
 
+/**
+ * Critério de homologação: pedir MAIS de 50 por página deve devolver
+ * 400 "page size can't exceed 50". Aqui o 400 é o resultado ESPERADO (ok=true).
+ */
+export async function probeOversizePage(
+  _prev: ReviewProbeState,
+  formData: FormData,
+): Promise<ReviewProbeState> {
+  await guard()
+  const merchantId =
+    String(formData.get("merchantId") ?? "").trim() || REVIEW_TEST_MERCHANT
+  try {
+    const r = await getReviewsPage(merchantId, {
+      page: 1,
+      size: 100,
+      addCount: true,
+      unclamped: true, // envia pageSize=100 cru pra forçar o 400
+    })
+    const esperado = r.status === 400
+    return {
+      ok: esperado,
+      status: r.status,
+      raw: r.raw.slice(0, 2000),
+      error: esperado ? undefined : `Esperava HTTP 400 (limite 50), veio ${r.status}`,
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 /** Detalhe de uma avaliação. */
 export async function probeReviewDetail(
   _prev: ReviewProbeState,
