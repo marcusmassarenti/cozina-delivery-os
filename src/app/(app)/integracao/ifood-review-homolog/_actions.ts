@@ -31,6 +31,10 @@ export type ReviewProbeState = {
     visibilities?: string[]
     firstReviewId?: string | null
     hasReplies?: boolean
+    /** Eco dos parâmetros usados na listagem (pro vídeo mostrar o filtro). */
+    sizeUsed?: number
+    dateFrom?: string
+    dateTo?: string
   }
   error?: string
 }
@@ -43,11 +47,18 @@ export async function probeReviews(
   await guard()
   const merchantId =
     String(formData.get("merchantId") ?? "").trim() || REVIEW_TEST_MERCHANT
+  // size: livre (o checklist pede testar o limite de página = 100). dateFrom/
+  // dateTo: filtro por data (YYYY-MM-DD), opcionais.
+  const size = Math.max(1, Math.min(100, Number(formData.get("size")) || 10))
+  const dateFrom = String(formData.get("dateFrom") ?? "").trim() || undefined
+  const dateTo = String(formData.get("dateTo") ?? "").trim() || undefined
   try {
     const r = await getReviewsPage(merchantId, {
       page: 1,
-      size: 10,
+      size,
       addCount: true,
+      dateFrom,
+      dateTo,
     })
     if (!r.ok || !r.data) {
       return { ok: false, status: r.status, raw: r.raw, error: r.error }
@@ -57,7 +68,12 @@ export async function probeReviews(
       ok: true,
       status: r.status,
       raw: r.raw.slice(0, 4000),
-      meta: deriveMeta(reviews, r.data.total, r.data.pageCount),
+      meta: {
+        ...deriveMeta(reviews, r.data.total, r.data.pageCount),
+        sizeUsed: size,
+        dateFrom,
+        dateTo,
+      },
     }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -118,9 +134,10 @@ export async function probeReply(
   const merchantId =
     String(formData.get("merchantId") ?? "").trim() || REVIEW_TEST_MERCHANT
   const reviewId = String(formData.get("reviewId") ?? "").trim()
-  const text = String(formData.get("text") ?? "").trim()
+  // NÃO faz trim aqui: o caso "texto inválido" do checklist precisa enviar
+  // texto vazio/inválido pra demonstrar a recusa DA API (não um bloqueio nosso).
+  const text = String(formData.get("text") ?? "")
   if (!reviewId) return { ok: false, error: "Informe o reviewId." }
-  if (!text) return { ok: false, error: "Escreva a resposta." }
   try {
     const r = await replyToReview(merchantId, reviewId, text)
     return {
