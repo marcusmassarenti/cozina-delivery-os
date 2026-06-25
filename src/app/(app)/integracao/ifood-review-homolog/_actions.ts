@@ -47,9 +47,9 @@ export async function probeReviews(
   await guard()
   const merchantId =
     String(formData.get("merchantId") ?? "").trim() || REVIEW_TEST_MERCHANT
-  // size: livre (o checklist pede testar o limite de página = 100). dateFrom/
-  // dateTo: filtro por data (YYYY-MM-DD), opcionais.
-  const size = Math.max(1, Math.min(100, Number(formData.get("size")) || 10))
+  // size: a API limita a 50 por página (param `pageSize`; >50 → HTTP 400).
+  // dateFrom/dateTo: filtro por data, opcionais (o lib normaliza pra ISO).
+  const size = Math.max(1, Math.min(50, Number(formData.get("size")) || 10))
   const dateFrom = String(formData.get("dateFrom") ?? "").trim() || undefined
   const dateTo = String(formData.get("dateTo") ?? "").trim() || undefined
   try {

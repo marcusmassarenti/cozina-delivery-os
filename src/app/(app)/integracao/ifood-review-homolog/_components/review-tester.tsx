@@ -65,7 +65,7 @@ export function ReviewTester() {
       <Scenario
         n={1}
         title="Listar Avaliações"
-        desc="Listar ≥3 com os campos obrigatórios · filtro por data · teste de limite de página (100)"
+        desc="Listar ≥3 com os campos obrigatórios · filtro por data · teste de limite de página (o iFood limita a 50/página)"
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Field label="dateFrom (YYYY-MM-DD)">
@@ -84,11 +84,11 @@ export function ReviewTester() {
               className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
             />
           </Field>
-          <Field label="size (por página)">
+          <Field label="pageSize (máx 50)">
             <input
               type="number"
               min={1}
-              max={100}
+              max={50}
               value={size}
               onChange={(e) => setSize(e.target.value)}
               className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
@@ -110,14 +110,14 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending}
             onClick={() =>
-              run("Teste de limite de página (size=100)", probeReviews, {
-                size: "100",
+              run("Teste de limite de página (pageSize=50)", probeReviews, {
+                size: "50",
                 dateFrom,
                 dateTo,
               })
             }
           >
-            Testar limite (size=100)
+            Testar página máx (50)
           </Button>
         </div>
       </Scenario>
@@ -163,12 +163,13 @@ export function ReviewTester() {
       <Scenario
         n={3}
         title="Responder Avaliações"
-        desc="Status correto (NOT_REPLIED) → responde · PUBLISHED → recusa · texto inválido → recusa"
+        desc="Status correto (NOT_REPLIED) → responde · PUBLISHED → recusa (422) · texto inválido → recusa"
       >
         <p className="text-[11px] text-muted-foreground">
-          Usa o <b>reviewId</b> do Cenário 2. Pros 3 casos: pegue um id{" "}
-          <b>NOT_REPLIED</b> (responde ok), um <b>PUBLISHED</b> (deve recusar), e
-          teste o <b>texto vazio</b> (deve recusar).
+          Usa o <b>reviewId</b> do Cenário 2. Pros 3 casos: um id{" "}
+          <b>NOT_REPLIED</b> (responde ok), um <b>PUBLISHED</b> (deve recusar com{" "}
+          <b>422</b>), e um <b>texto inválido</b> (&lt; 10 caracteres → recusa). O
+          texto válido tem de 10 a 300 caracteres.
         </p>
         <Field label="Resposta">
           <textarea
@@ -191,13 +192,13 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending || !reviewId}
             onClick={() =>
-              run("Responder com texto inválido (vazio)", probeReply, {
+              run("Responder com texto inválido (< 10 caracteres)", probeReply, {
                 reviewId,
-                text: "",
+                text: "ok",
               })
             }
           >
-            Texto inválido (vazio)
+            Texto inválido (curto)
           </Button>
         </div>
       </Scenario>

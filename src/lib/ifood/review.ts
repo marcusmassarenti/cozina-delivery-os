@@ -59,7 +59,9 @@ export type IfoodReviewsPage = {
 
 export type ReviewListOpts = {
   page?: number
-  /** O iFood aceita 1..10 por página no V2. */
+  /** Itens por página. ⚠️ A API envia como `pageSize` (não `size` — esse é
+   *  ignorado!) e o MÁX é 50 (acima → HTTP 400 "page size can't exceed 50").
+   *  Validado ao vivo contra a sandbox. Clampado pra 1..50 antes de enviar. */
   size?: number
   /** Inclui total/pageCount na resposta. */
   addCount?: boolean
@@ -68,6 +70,19 @@ export type ReviewListOpts = {
   dateTo?: string
   /** ASC | DESC */
   sort?: "ASC" | "DESC"
+}
+
+/**
+ * O filtro de data do GET /reviews exige ISO-8601 com HORA (`...T00:00:00.000Z`).
+ * Mandar só `YYYY-MM-DD` devolve HTTP 400 (validado contra a sandbox). Por isso
+ * normalizamos: data-only vira início (from) ou fim (to) do dia, em UTC.
+ */
+function toIsoDay(d: string | undefined, edge: "start" | "end"): string | undefined {
+  if (!d) return undefined
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    return edge === "start" ? `${d}T00:00:00.000Z` : `${d}T23:59:59.999Z`
+  }
+  return d // já veio com hora — repassa como está
 }
 
 /** GET de uma página de avaliações. */
@@ -80,11 +95,12 @@ export async function getReviewsPage(
     path: `${BASE}/${encodeURIComponent(merchantId)}/reviews`,
     method: "GET",
     query: {
-      page: opts.page ?? 1,
-      size: opts.size ?? 10,
+      page: Math.max(1, opts.page ?? 1),
+      // ⚠️ É `pageSize` (não `size`) e clampado a 1..50 — a API recusa >50.
+      pageSize: Math.min(50, Math.max(1, opts.size ?? 10)),
       addCount: opts.addCount ?? true,
-      dateFrom: opts.dateFrom,
-      dateTo: opts.dateTo,
+      dateFrom: toIsoDay(opts.dateFrom, "start"),
+      dateTo: toIsoDay(opts.dateTo, "end"),
       sort: opts.sort,
     },
     responseType: "json",
@@ -107,7 +123,9 @@ export async function fetchAllReviews(
   merchantId: string,
   opts: { size?: number; maxPages?: number; dateFrom?: string; dateTo?: string } = {},
 ): Promise<FetchAllReviewsResult> {
-  const size = opts.size ?? 10
+  // Clampa a 50 (máx da API). Sem isso, pedir size>50 quebraria o break de
+  // paginação (batch.length < size nunca falsearia → para na 1ª página).
+  const size = Math.min(50, Math.max(1, opts.size ?? 10))
   const maxPages = opts.maxPages ?? 50
   const reviews: IfoodReview[] = []
   let page = 1
