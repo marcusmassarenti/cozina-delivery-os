@@ -89,18 +89,16 @@ export default async function AcompanhamentoPage({
     iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—"
 
   const num = (n: number) => (n === 0 ? "—" : fmtBRL(n))
+  // Falta = quanto ainda falta pra bater a meta. Vermelho quando falta;
+  // quando bate/passa, mostra "✓ bateu" (sem número verde confuso na coluna).
   const faltaCell = (meta: number, falta: number) => {
     if (meta <= 0) return <span className="text-muted-foreground">—</span>
+    if (falta > 0)
+      return (
+        <span className="text-rose-600 dark:text-rose-400">{fmtBRL(falta)}</span>
+      )
     return (
-      <span
-        className={
-          falta > 0
-            ? "text-rose-600 dark:text-rose-400"
-            : "text-emerald-600 dark:text-emerald-400"
-        }
-      >
-        {fmtBRL(falta)}
-      </span>
+      <span className="text-emerald-600 dark:text-emerald-400">✓ bateu</span>
     )
   }
   // Δ% da diária vs a MESMA faixa de dias do mês anterior (▲ subiu / ▼ caiu).

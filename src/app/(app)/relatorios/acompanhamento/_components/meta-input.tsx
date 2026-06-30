@@ -29,10 +29,12 @@ export function MetaInput({
 }) {
   const router = useRouter()
   const [value, setValue] = React.useState(initial > 0 ? String(initial) : "")
+  const [editing, setEditing] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const lastSaved = React.useRef(initial)
 
   async function commit() {
+    setEditing(false)
     const meta = parseBr(value)
     if (meta === lastSaved.current) return
     setSaving(true)
@@ -45,6 +47,9 @@ export function MetaInput({
   }
 
   const numeric = parseBr(value)
+  // Ao focar mostra o número cru (fácil de editar); fora de foco mostra
+  // formatado "R$ 300.000,00".
+  const display = editing ? value : numeric > 0 ? fmtBRL(numeric) : ""
 
   return (
     <>
@@ -52,16 +57,17 @@ export function MetaInput({
       <input
         type="text"
         inputMode="decimal"
-        value={value}
+        value={display}
         disabled={saving}
         onChange={(e) => setValue(e.target.value)}
+        onFocus={() => setEditing(true)}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur()
         }}
         placeholder="definir"
         title="Clique e digite a meta de faturamento do mês"
-        className="w-24 rounded border border-input bg-muted/40 px-1.5 py-0.5 text-right text-xs tabular-nums placeholder:text-muted-foreground/60 placeholder:italic hover:border-primary/60 focus:border-primary focus:bg-background focus:outline-none disabled:opacity-50 print:hidden print:border-none print:bg-transparent"
+        className="w-28 rounded border border-input bg-muted/40 px-1.5 py-0.5 text-right text-xs tabular-nums placeholder:text-muted-foreground/60 placeholder:italic hover:border-primary/60 focus:border-primary focus:bg-background focus:outline-none disabled:opacity-50 print:hidden print:border-none print:bg-transparent"
       />
       {/* Só texto no PDF (sem a caixa do input, pra a linha ficar baixa) */}
       <span className="hidden tabular-nums print:inline">
