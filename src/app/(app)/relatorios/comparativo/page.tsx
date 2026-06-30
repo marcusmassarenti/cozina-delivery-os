@@ -100,6 +100,15 @@ export default async function ComparativoPage({
   // --- Dados ---
   const ymA = mesA ? keyToYM(mesA) : null
   const ymB = mesB ? keyToYM(mesB) : null
+  // Qual slot tem o mês mais ANTIGO? O Δ é sempre o crescimento CRONOLÓGICO
+  // (base = mês antigo, valor = mês recente), então "▲ crescimento / ▼ queda"
+  // reflete o tempo real — não importa se o usuário pôs o mês novo em "atual"
+  // ou em "comparar com".
+  const aIsOlder =
+    !ymA || !ymB
+      ? true
+      : ymA.year < ymB.year ||
+        (ymA.year === ymB.year && ymA.month < ymB.month)
   const [metricsA, metricsB] = await Promise.all([
     ymA
       ? getUnitMetricsForMonth(selectedIds, plataformas, ymA.year, ymA.month)
@@ -192,7 +201,9 @@ export default async function ComparativoPage({
                 {rows.map(({ unit, a, b }) => {
                   const va = a?.[metrica] ?? 0
                   const vb = b?.[metrica] ?? 0
-                  const d = deltaPct(va, vb)
+                  // Crescimento cronológico (base = mês mais antigo), indep. de
+                  // qual slot é o "atual". Ex.: caiu de Maio→Junho = ▼ vermelho.
+                  const d = aIsOlder ? deltaPct(vb, va) : deltaPct(va, vb)
                   const cresceu = d !== null && d > 0
                   const caiu = d !== null && d < 0
                   // bom = subiu quando maiorMelhor, ou caiu quando menorMelhor
