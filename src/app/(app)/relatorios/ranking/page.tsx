@@ -103,7 +103,9 @@ export default async function RankingPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Lojas ordenadas por {METRICA_LABEL[metrica].toLowerCase()} ·{" "}
-            {formatRangeLabel(periodRange)}
+            {isFullMonth
+              ? formatRangeLabel(periodRange)
+              : formatPeriodLabel({ year, month })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

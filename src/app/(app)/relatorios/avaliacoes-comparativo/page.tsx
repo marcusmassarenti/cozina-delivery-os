@@ -75,7 +75,9 @@ export default async function AvaliacoesComparativoPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Nota média loja × loja, por plataforma ·{" "}
-            {formatRangeLabel(periodRange)}
+            {isFullMonth
+              ? formatRangeLabel(periodRange)
+              : formatPeriodLabel({ year, month })}
           </p>
         </div>
         </div>

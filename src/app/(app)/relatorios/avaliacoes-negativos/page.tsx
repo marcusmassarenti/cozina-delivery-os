@@ -73,7 +73,9 @@ export default async function AvaliacoesNegativosPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Avaliações de 1 e 2 ★ com comentário, pra agir rápido ·{" "}
-            {formatRangeLabel(periodRange)}
+            {isFullMonth
+              ? formatRangeLabel(periodRange)
+              : formatPeriodLabel({ year, month })}
           </p>
         </div>
         </div>

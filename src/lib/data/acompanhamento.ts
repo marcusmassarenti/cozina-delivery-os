@@ -150,9 +150,13 @@ export async function getAcompanhamentoVendas(
     // marca continuar aparecendo.
     const units = brandTotal > 0 ? all.filter((u) => u.total > 0) : all
     units.sort((a, b) => b.total - a.total)
-    const diaria = units.reduce((s, u) => s + u.diaria, 0)
-    const total = units.reduce((s, u) => s + u.total, 0)
-    const meta = units.reduce((s, u) => s + u.meta, 0)
+    // Totais/meta da marca somam SEMPRE todas as lojas (all), não só as exibidas:
+    // uma loja com meta lançada mas sem venda importada ainda no mês não pode
+    // sumir da meta consolidada (senão a "Falta" da marca/grupo fica otimista).
+    // diaria/total não mudam (lojas zeradas contribuem 0), mas meta sim.
+    const diaria = all.reduce((s, u) => s + u.diaria, 0)
+    const total = all.reduce((s, u) => s + u.total, 0)
+    const meta = all.reduce((s, u) => s + u.meta, 0)
     return {
       brandId,
       brandName: brandName.get(brandId) ?? "Marca",

@@ -240,7 +240,7 @@ export default async function RelatoriosPage({
         >
           <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
           <span>
-            Relatório consolidado é mensal (DRE com custos). Mostrando dados de <strong>{formatRangeLabel(periodRange)}</strong> usando o mês <strong>{periodLabel}</strong> como referência.
+            Você selecionou <strong>{formatRangeLabel(periodRange)}</strong>, mas o relatório consolidado é mensal (DRE com custos) — o período não recorta os valores. Mostrando o mês inteiro de <strong>{periodLabel}</strong>.
           </span>
         </div>
       )}

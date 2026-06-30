@@ -282,16 +282,23 @@ async function loadIfoodPaginated(
 
   // Vendas (bruto + pedidos únicos) — 1 linha "Entrada Financeira" por pedido.
   // Pagina por causa do hard-cap de 1000 linhas do Supabase.
+  // Bruto = valor_cesta_final (GMV/cesta), MESMA definição do DRE e do Portal.
+  // O campo `valor` da Entrada Financeira já vem líquido das promoções custeadas
+  // pela loja, então subestimaria o faturamento (ex.: Itaim −24%). Fallback pro
+  // `valor` só se a cesta não tiver sido importada naquela linha.
   type VendaRow = {
     unit_id: string
     data_fato_gerador: string | null
     valor: number | string
+    valor_cesta_final: number | string | null
     pedido_associado_ifood: string | null
   }
   const vendas = await fetchAllPages<VendaRow>((from, to) => {
     let q = admin
       .from("ifood_financeiro_lancamentos")
-      .select("unit_id, data_fato_gerador, valor, pedido_associado_ifood")
+      .select(
+        "unit_id, data_fato_gerador, valor, valor_cesta_final, pedido_associado_ifood",
+      )
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
@@ -311,7 +318,12 @@ async function loadIfoodPaginated(
     if (!r.data_fato_gerador) continue
     const day = dateStrDay(String(r.data_fato_gerador))
     if (!day) continue
-    add(b.faturamento, r.unit_id, day, Number(r.valor) || 0)
+    add(
+      b.faturamento,
+      r.unit_id,
+      day,
+      Number(r.valor_cesta_final ?? r.valor) || 0,
+    )
     if (r.pedido_associado_ifood) {
       const key = `${r.unit_id}|${day}`
       const set = pedidoSet.get(key) ?? new Set<string>()
@@ -578,6 +590,6 @@ async function getDailyReportMatrixUncached(
  */
 export const getDailyReportMatrix = unstable_cache(
   getDailyReportMatrixUncached,
-  ["daily-report-matrix-v1"],
+  ["daily-report-matrix-v2"],
   { revalidate: 60, tags: ["reports"] },
 )
