@@ -161,7 +161,10 @@ async function getDeliveryFeeByUnitsPaginated(
     ensure(r.unit_id).ifood += Math.abs(Number(r.valor) || 0)
   }
 
-  // 99 Food: custo logístico + frete grátis bancado pela loja (por pedido)
+  // 99 Food: custo logístico + frete grátis bancado pela loja.
+  // Fonte 1 (preferida) = relatório manual (ninefood_pedidos). Fonte 2 (fallback
+  // automático) = extrato da API (ninefood_api_bill.raw), pra lojas/meses só-API.
+  const manualNine = new Map<string, number>()
   const nine = await pageAll<{
     unit_id: string
     custos_logisticos: number | string | null
@@ -179,9 +182,64 @@ async function getDeliveryFeeByUnitsPaginated(
     return q.order("id").range(a, b)
   })
   for (const r of nine) {
-    ensure(r.unit_id).ninefood +=
-      Math.abs(Number(r.custos_logisticos) || 0) +
-      Math.abs(Number(r.custo_loja_oferta_entrega_gratis) || 0)
+    manualNine.set(
+      r.unit_id,
+      (manualNine.get(r.unit_id) ?? 0) +
+        Math.abs(Number(r.custos_logisticos) || 0) +
+        Math.abs(Number(r.custo_loja_oferta_entrega_gratis) || 0),
+    )
+  }
+
+  // API: mapeia app_shop_id → unit_id e soma o custo do extrato (centavos).
+  const apiNine = new Map<string, number>()
+  const { data: links } = await admin
+    .from("ninefood_store_links")
+    .select("app_shop_id, unit_id")
+    .in("unit_id", unitIds)
+  const shopToUnit = new Map<string, string>()
+  for (const l of links ?? [])
+    shopToUnit.set(l.app_shop_id as string, l.unit_id as string)
+  const shopIds = [...shopToUnit.keys()]
+  if (shopIds.length > 0) {
+    const bills = await pageAll<{
+      app_shop_id: string
+      business_date: string
+      raw: Record<string, unknown> | null
+    }>((a, b) => {
+      let q = admin
+        .from("ninefood_api_bill")
+        .select("app_shop_id, business_date, raw")
+        .in("app_shop_id", shopIds)
+      if (dateRange) {
+        q = q
+          .gte("business_date", dateRange.start)
+          .lte("business_date", dateRange.end)
+      } else {
+        const last = new Date(year, month, 0).getDate()
+        q = q
+          .gte("business_date", `${year}-${String(month).padStart(2, "0")}-01`)
+          .lte("business_date", `${year}-${String(month).padStart(2, "0")}-${last}`)
+      }
+      return q.order("id").range(a, b)
+    })
+    const num = (raw: Record<string, unknown> | null, k: string) =>
+      Number((raw?.[k] as string | number | undefined) ?? 0) || 0
+    for (const r of bills) {
+      const unitId = shopToUnit.get(r.app_shop_id)
+      if (!unitId) continue
+      const cents =
+        Math.abs(num(r.raw, "b2pDeliveryAmount")) +
+        Math.abs(num(r.raw, "freeDeliveryOutcome")) -
+        num(r.raw, "freeDeliverySubsidy")
+      apiNine.set(unitId, (apiNine.get(unitId) ?? 0) + cents / 100)
+    }
+  }
+
+  // Preferência: manual quando > 0, senão API.
+  for (const unitId of unitIds) {
+    const m = manualNine.get(unitId) ?? 0
+    const value = m > 0 ? m : (apiNine.get(unitId) ?? 0)
+    if (value > 0) ensure(unitId).ninefood += value
   }
 
   // Keeta: taxa_entrega por pedido
