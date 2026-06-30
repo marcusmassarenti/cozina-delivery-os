@@ -70,7 +70,6 @@ import {
   decomposeRangeByMonth,
 } from "@/lib/period"
 import { getCurrentUserContext } from "@/lib/auth/context"
-import { isSuperadmin } from "@/lib/auth/permissions"
 import {
   AttentionSection,
   AttentionSkeleton,
@@ -130,13 +129,12 @@ export default async function Home({
 
   // Fase 1: precisa de allUnits pra resolver unidadesFilter ANTES de chamar
   // as queries de rede (que agora respeitam o filtro de unidades)
-  const [status, allUnits, availablePeriods, accessibleIds, canSyncIfood] =
+  const [status, allUnits, availablePeriods, accessibleIds] =
     await Promise.all([
       checkSupabase(),
       getVisibleUnits(),
       getAvailablePeriods(),
       getAccessibleUnitIds(),
-      isSuperadmin(),
     ])
   // accessibleIds === null → admin/gerente (vê a rede toda).
   // accessibleIds !== null → franqueado (só as lojas dele; allUnits já vem
@@ -487,7 +485,6 @@ export default async function Home({
           year={year}
           month={month}
           periodLabel={formatPeriodLabel({ year, month })}
-          canSyncIfood={canSyncIfood}
         />
       ) : (
         <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">

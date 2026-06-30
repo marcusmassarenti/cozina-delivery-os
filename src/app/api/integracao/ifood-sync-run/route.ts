@@ -1,12 +1,13 @@
 /**
  * Dispara manualmente o sync iFood (mesma lógica do cron diário).
  *
- * Útil pra testar a integração sob demanda sem precisar do CRON_SECRET — só
- * usuário admin logado consegue chamar.
+ * Útil pra testar a integração sob demanda sem precisar do CRON_SECRET —
+ * liberado pra qualquer usuário que vê o dashboard (mesmo nível do botão
+ * "Sincronizar 99"); exige login, não é público.
  *
  * NÃO substitui o cron — o cron continua rodando às 06h BRT via vercel.json.
  */
-import { isSuperadmin } from "@/lib/auth/permissions"
+import { userCan } from "@/lib/auth/permissions"
 import { syncIfoodAll } from "@/lib/ifood/sync"
 
 export const runtime = "nodejs"
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
 export async function POST() {
-  if (!(await isSuperadmin())) {
+  if (!(await userCan("dashboard", "view"))) {
     return new Response("Unauthorized", { status: 401 })
   }
   try {

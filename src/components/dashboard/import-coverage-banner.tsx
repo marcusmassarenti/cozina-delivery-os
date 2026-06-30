@@ -41,21 +41,19 @@ const PLAT_LABEL: Record<PlatformId, string> = {
  * de frescor (último dia do mês OU ontem, o que for menor) — não comparando as
  * plataformas entre si. Atrasado = dado mais de 2 dias atrás do alvo.
  *
- * `canSyncIfood` (superadmin) habilita o botão "Sincronizar iFood" ao lado do
- * "Sincronizar 99" — os dois controles de sync ficam juntos aqui.
+ * Os botões "Sincronizar iFood" e "Sincronizar 99" ficam juntos aqui,
+ * liberados pra qualquer usuário que vê o dashboard.
  */
 export function ImportCoverageBanner({
   coverage,
   year,
   month,
   periodLabel,
-  canSyncIfood = false,
 }: {
   coverage: ImportCoverage
   year: number
   month: number
   periodLabel: string
-  canSyncIfood?: boolean
 }) {
   // Alvo: menor entre fim do mês e ontem (D-1). "Ontem" é calculado em horário
   // de Brasília — senão, na Vercel (UTC), depois das 21h o D-1 pula um dia.
@@ -164,9 +162,9 @@ export function ImportCoverageBanner({
           </Link>
         ) : null}
 
-        {/* Controles de sincronização juntos (iFood é superadmin-only). */}
+        {/* Controles de sincronização juntos — liberados pra quem vê o dashboard. */}
         <div className="ml-auto flex items-center gap-1.5">
-          {canSyncIfood && <SyncIfoodButton />}
+          <SyncIfoodButton />
           <Ninefood99QuickSync year={year} month={month} />
         </div>
       </div>
