@@ -6,15 +6,25 @@ import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
-import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
+import { getRankingData, type RankingRow } from "@/lib/data/ranking"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
-import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
-import { readPeriod } from "@/lib/period-helpers"
-import { AlertTriangle } from "lucide-react"
+import {
+  formatRangeLabel,
+  parsePeriodParam,
+  rangeDays,
+  rangeFromPeriod,
+  type DateRange,
+} from "@/lib/period"
 import {
   RankingSwitcher,
   type RankingMetrica,
 } from "./_components/ranking-switcher"
+import {
+  BarEmpilhadaPlataforma,
+  BarFaturamentoPorLoja,
+  LinhaEvolucaoRede,
+  PizzaPlataforma,
+} from "./_components/ranking-charts"
 
 const VALID_METRICAS: RankingMetrica[] = [
   "faturamento",
@@ -30,14 +40,50 @@ const METRICA_LABEL: Record<RankingMetrica, string> = {
   pedidos: "Pedidos",
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Range do Ranking. Diferente do readPeriod padrão (cap de 92 dias, pensado pras
+ * telas de matriz diária), aqui aceita até ~1 ano — o Ranking AGREGA por mês, então
+ * ano inteiro é válido. Fallback pro mês (?periodo) ou mês corrente.
+ */
+function parseRankingRange(sp: {
+  periodo?: string
+  inicio?: string
+  fim?: string
+}): DateRange {
+  const { inicio, fim } = sp
+  if (inicio && fim && ISO_DAY.test(inicio) && ISO_DAY.test(fim) && fim >= inicio) {
+    const r = { start: inicio, end: fim }
+    if (rangeDays(r) <= 366) return r
+  }
+  return rangeFromPeriod(parsePeriodParam(sp.periodo))
+}
+
+/** Label amigável do período (mês, ano inteiro ou range). */
+function periodLabel(range: { start: string; end: string }): string {
+  const sy = range.start.slice(0, 4)
+  // Ano inteiro: YYYY-01-01 → YYYY-12-31
+  if (range.start === `${sy}-01-01` && range.end === `${sy}-12-31`) {
+    return `${sy} · ano inteiro`
+  }
+  return formatRangeLabel(range)
+}
+
 export default async function RankingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; lojas?: string; metrica?: string }>
+  searchParams: Promise<{
+    periodo?: string
+    inicio?: string
+    fim?: string
+    lojas?: string
+    metrica?: string
+  }>
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
+  const range = parseRankingRange(sp)
   const metrica: RankingMetrica = VALID_METRICAS.includes(
     sp.metrica as RankingMetrica,
   )
@@ -49,52 +95,64 @@ export default async function RankingPage({
     .map((u) => ({ id: u.id, code: u.code, name: u.name }))
   const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
   const accessibleIds = await getAccessibleUnitIds()
-  const filterIds =
+  // Unidades no escopo: filtro de loja > acesso do perfil > todas.
+  const scopedUnits =
     lojaCodes.length > 0
-      ? allUnits.filter((u) => lojaCodes.includes(u.code)).map((u) => u.id)
+      ? allUnits.filter((u) => lojaCodes.includes(u.code))
       : accessibleIds === null
-        ? undefined
-        : allUnits.map((u) => u.id)
+        ? allUnits
+        : allUnits.filter((u) => accessibleIds.includes(u.id))
 
-  const [resultado, availablePeriods] = await Promise.all([
-    getNetworkResultadoForMonth(year, month, filterIds),
+  const [data, availablePeriods] = await Promise.all([
+    getRankingData(range, scopedUnits),
     getAvailablePeriods(),
   ])
 
-  const ticket = (bruto: number, pedidos: number) =>
-    pedidos > 0 ? bruto / pedidos : 0
-  const valueOf = (r: (typeof resultado.rows)[number]) => {
+  const years = [...new Set(availablePeriods.map((p) => p.year))].sort(
+    (a, b) => b - a,
+  )
+
+  const valueOf = (r: RankingRow): number => {
     switch (metrica) {
       case "ticket":
-        return ticket(r.bruto, r.pedidos)
+        return r.ticket
       case "margem":
-        // Margem real só existe com CMV lançado. Sem custo, margemPct é só
-        // repasse/bruto — não é margem. Sentinela -Infinity joga essas lojas
-        // pro fim do ranking e a coluna mostra "—" (igual à coluna dedicada).
-        return r.temCusto ? r.margemPct : Number.NEGATIVE_INFINITY
+        return r.margemPct ?? Number.NEGATIVE_INFINITY
       case "pedidos":
         return r.pedidos
       default:
         return r.bruto
     }
   }
-  const fmtMetrica = (n: number) => {
-    if (metrica === "margem") return Number.isFinite(n) ? fmtPct(n) : "—"
-    if (metrica === "pedidos") return fmtNum(n)
-    return fmtBRL(n)
-  }
 
-  // Só lojas com faturamento entram no ranking; ordena desc pela métrica.
-  const ranked = resultado.rows
+  const ranked = data.rows
     .filter((r) => r.bruto > 0)
-    .map((r) => ({ row: r, value: valueOf(r) }))
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => valueOf(b) - valueOf(a))
 
   const medal = (pos: number) =>
     pos === 0 ? "🥇" : pos === 1 ? "🥈" : pos === 2 ? "🥉" : null
 
+  // Destaque da coluna ordenada (substitui a antiga coluna métrica duplicada)
+  const isCol = (c: RankingMetrica) =>
+    metrica === c
+      ? "font-semibold text-foreground"
+      : "text-muted-foreground"
+  const colBg = (c: RankingMetrica) => (metrica === c ? "bg-primary/5" : "")
+
+  const t = data.totals
+  // Margem da rede = média ponderada SÓ das lojas com custo lançado (senão a
+  // margem de 1 loja sobre o bruto de todas ficaria enganosamente baixa).
+  const comCusto = ranked.filter((r) => r.margemPct != null)
+  const brutoComCusto = comCusto.reduce((s, r) => s + r.bruto, 0)
+  const margemRede =
+    data.marginAvailable && brutoComCusto > 0
+      ? comCusto.reduce((s, r) => s + (r.margemPct! / 100) * r.bruto, 0) /
+          brutoComCusto *
+        100
+      : null
+
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -103,26 +161,27 @@ export default async function RankingPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Lojas ordenadas por {METRICA_LABEL[metrica].toLowerCase()} ·{" "}
-            {isFullMonth
-              ? formatRangeLabel(periodRange)
-              : formatPeriodLabel({ year, month })}
+            {periodLabel(range)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-print="hide">
           <LojaFilter units={allUnits} />
           <PeriodSelector
-            current={periodRange}
+            current={range}
             options={availablePeriods}
             enableRange
+            enableYear
+            years={years}
           />
         </div>
       </div>
 
-      {!isFullMonth && (
+      {!data.marginAvailable && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
-          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
           <span>
-            O ranking depende do DRE (que precisa do mês inteiro pra CMV e margem). Mostrando dados do mês <strong>{formatPeriodLabel({ year, month })}</strong>.
+            Período parcial: faturamento, ticket e pedidos somam os dias
+            escolhidos. <strong>Margem</strong> fica indisponível (o custo/CMV é
+            lançado por mês inteiro).
           </span>
         </div>
       )}
@@ -131,7 +190,7 @@ export default async function RankingPage({
 
       {ranked.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
-          <p className="text-sm font-medium">Sem faturamento neste mês</p>
+          <p className="text-sm font-medium">Sem faturamento neste período</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Importe os relatórios das plataformas em{" "}
             <a href="/importacao" className="underline">
@@ -141,62 +200,111 @@ export default async function RankingPage({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
-                <th className="w-16 px-3 py-2.5 text-center font-medium">#</th>
-                <th className="px-3 py-2.5 text-left font-medium">Loja</th>
-                <th className="px-3 py-2.5 text-right font-medium">
-                  {METRICA_LABEL[metrica]}
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium">
-                  Faturamento
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium">Ticket</th>
-                <th className="px-3 py-2.5 text-right font-medium">Pedidos</th>
-                <th className="px-3 py-2.5 text-right font-medium">Margem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranked.map(({ row: r, value }, i) => (
-                <tr
-                  key={r.unitId}
-                  className="border-b last:border-0 hover:bg-muted/30"
-                >
-                  <td className="px-3 py-2.5 text-center tabular-nums">
-                    {medal(i) ?? (
-                      <span className="text-muted-foreground">{i + 1}</span>
-                    )}
+        <>
+          <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
+                  <th className="w-16 px-3 py-2.5 text-center font-medium">#</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Loja</th>
+                  <th className={`px-3 py-2.5 text-right font-medium ${colBg("faturamento")}`}>
+                    Faturamento
+                  </th>
+                  <th className={`px-3 py-2.5 text-right font-medium ${colBg("ticket")}`}>
+                    Ticket
+                  </th>
+                  <th className={`px-3 py-2.5 text-right font-medium ${colBg("pedidos")}`}>
+                    Pedidos
+                  </th>
+                  <th className={`px-3 py-2.5 text-right font-medium ${colBg("margem")}`}>
+                    Margem
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {ranked.map((r, i) => (
+                  <tr
+                    key={r.unitId}
+                    className="border-b last:border-0 hover:bg-muted/30"
+                  >
+                    <td className="px-3 py-2.5 text-center tabular-nums">
+                      {medal(i) ?? (
+                        <span className="text-muted-foreground">{i + 1}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <a
+                        href={`/unidades/${r.unitCode}`}
+                        className="font-medium hover:underline"
+                      >
+                        #{r.unitCode} · {r.unitName}
+                      </a>
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("faturamento")} ${isCol("faturamento")}`}>
+                      {fmtBRL(r.bruto)}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("ticket")} ${isCol("ticket")}`}>
+                      {fmtBRL(r.ticket)}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("pedidos")} ${isCol("pedidos")}`}>
+                      {fmtNum(r.pedidos)}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("margem")} ${isCol("margem")}`}>
+                      {r.margemPct != null ? fmtPct(r.margemPct) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 bg-muted/30 font-semibold">
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5 text-sm">
+                    Total · {ranked.length} loja
+                    {ranked.length === 1 ? "" : "s"}
                   </td>
-                  <td className="px-3 py-2.5">
-                    <a
-                      href={`/unidades/${r.unitCode}`}
-                      className="font-medium hover:underline"
-                    >
-                      #{r.unitCode} · {r.unitName}
-                    </a>
+                  <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("faturamento")}`}>
+                    {fmtBRL(t.bruto)}
                   </td>
-                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums">
-                    {fmtMetrica(value)}
+                  <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("ticket")}`}>
+                    {fmtBRL(t.ticket)}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {fmtBRL(r.bruto)}
+                  <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("pedidos")}`}>
+                    {fmtNum(t.pedidos)}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {fmtBRL(ticket(r.bruto, r.pedidos))}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {fmtNum(r.pedidos)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {r.temCusto ? fmtPct(r.margemPct) : "—"}
+                  <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("margem")}`}>
+                    {margemRede != null ? fmtPct(margemRede) : "—"}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Gráficos */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BarFaturamentoPorLoja
+              data={ranked.map((r) => ({
+                code: r.unitCode,
+                name: r.unitName,
+                value: r.bruto,
+              }))}
+            />
+            <PizzaPlataforma perPlatform={data.platformTotals} />
+            <BarEmpilhadaPlataforma
+              data={ranked.map((r) => ({
+                code: r.unitCode,
+                name: r.unitName,
+                perPlatform: r.perPlatform,
+                total: r.bruto,
+              }))}
+            />
+            {data.evolution.length > 0 && (
+              <LinhaEvolucaoRede
+                data={data.evolution}
+                year={data.evolution[0].year}
+              />
+            )}
+          </div>
+        </>
       )}
     </div>
   )

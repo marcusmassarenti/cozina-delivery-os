@@ -43,11 +43,17 @@ export function PeriodSelector({
   options: _options,
   className,
   enableRange: _enableRange,
+  enableYear,
+  years,
 }: {
   current: Period | DateRange
   options?: AvailablePeriodOption[]
   className?: string
   enableRange?: boolean
+  /** Mostra atalhos de "ano inteiro" (Jan–Dez). Só faz sentido em telas que
+   *  agregam o range (ex.: Ranking) — não nas que clampam pro 1º mês. */
+  enableYear?: boolean
+  years?: number[]
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -130,6 +136,7 @@ export function PeriodSelector({
           onApply={applyRange}
           onClear={clearToCurrentMonth}
           onClose={() => setOpen(false)}
+          years={enableYear ? years : undefined}
         />
       )}
     </div>
@@ -147,11 +154,13 @@ function RangePickerPanel({
   onApply,
   onClear,
   onClose,
+  years,
 }: {
   initial: DateRange
   onApply: (start: string, end: string) => void
   onClear: () => void
   onClose: () => void
+  years?: number[]
 }) {
   // Estado interno do picker — só "commita" pra URL no Aplicar / atalho
   const [start, setStart] = React.useState<string | null>(initial.start)
@@ -286,6 +295,20 @@ function RangePickerPanel({
             applyShortcut(s, todayIso)
           }}
         />
+        {years && years.length > 0 && (
+          <div className="mt-2 border-t pt-2">
+            <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Ano inteiro
+            </div>
+            {years.map((y) => (
+              <ShortcutItem
+                key={y}
+                label={`${y} · Jan–Dez`}
+                onClick={() => applyShortcut(`${y}-01-01`, `${y}-12-31`)}
+              />
+            ))}
+          </div>
+        )}
         <div className="mt-auto border-t pt-2">
           <ShortcutItem
             label="Limpar"
