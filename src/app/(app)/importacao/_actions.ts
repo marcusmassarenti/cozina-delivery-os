@@ -2702,6 +2702,7 @@ export async function createUnitAndImport(
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
+  try {
   const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "Arquivo não recebido. Selecione de novo." }
@@ -2852,6 +2853,16 @@ export async function createUnitAndImport(
   revalidatePath("/unidades")
   revalidatePath("/")
   return { ok: result.ok, result }
+  } catch (e) {
+    console.error("createUnitAndImport falhou:", e)
+    return {
+      ok: false,
+      message:
+        e instanceof Error
+          ? `Falha ao criar/importar: ${e.message}`
+          : "Falha ao criar a unidade e importar o arquivo.",
+    }
+  }
 }
 
 // ─── Re-checar se a loja já foi vinculada (em outra rota/aba) ───────
@@ -2953,6 +2964,7 @@ export async function linkUnitAndImport(
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
+  try {
   const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "Arquivo não recebido. Selecione de novo." }
@@ -3050,6 +3062,18 @@ export async function linkUnitAndImport(
   revalidatePath("/unidades")
   revalidatePath("/")
   return { ok: result.ok, result }
+  } catch (e) {
+    // Sem isto, qualquer exceção (parse do arquivo, query, etc.) subia sem ser
+    // capturada → o botão "Vincular e importar" resetava sem mostrar nada.
+    console.error("linkUnitAndImport falhou:", e)
+    return {
+      ok: false,
+      message:
+        e instanceof Error
+          ? `Falha ao vincular/importar: ${e.message}`
+          : "Falha ao vincular e importar o arquivo.",
+    }
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
