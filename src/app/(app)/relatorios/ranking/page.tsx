@@ -1,7 +1,5 @@
-import { Fragment } from "react"
 import { Trophy } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
@@ -27,13 +25,7 @@ import {
   LinhaEvolucaoRede,
   PizzaPlataforma,
 } from "./_components/ranking-charts"
-
-const PLATS_ORDER: PlatformId[] = ["ifood", "99food", "keeta"]
-const PLAT_LABEL: Record<PlatformId, string> = {
-  ifood: "iFood",
-  "99food": "99 Food",
-  keeta: "Keeta",
-}
+import { RankingRows } from "./_components/ranking-rows"
 
 const VALID_METRICAS: RankingMetrica[] = [
   "faturamento",
@@ -138,14 +130,7 @@ export default async function RankingPage({
     .filter((r) => r.bruto > 0)
     .sort((a, b) => valueOf(b) - valueOf(a))
 
-  const medal = (pos: number) =>
-    pos === 0 ? "🥇" : pos === 1 ? "🥈" : pos === 2 ? "🥉" : null
-
   // Destaque da coluna ordenada (substitui a antiga coluna métrica duplicada)
-  const isCol = (c: RankingMetrica) =>
-    metrica === c
-      ? "font-semibold text-foreground"
-      : "text-muted-foreground"
   const colBg = (c: RankingMetrica) => (metrica === c ? "bg-primary/5" : "")
 
   const t = data.totals
@@ -230,65 +215,7 @@ export default async function RankingPage({
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {ranked.map((r, i) => (
-                  <Fragment key={r.unitId}>
-                    <tr className="border-t hover:bg-muted/30">
-                      <td className="px-3 py-2.5 text-center tabular-nums">
-                        {medal(i) ?? (
-                          <span className="text-muted-foreground">{i + 1}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <a
-                          href={`/unidades/${r.unitCode}`}
-                          className="font-medium hover:underline"
-                        >
-                          #{r.unitCode} · {r.unitName}
-                        </a>
-                      </td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("faturamento")} ${isCol("faturamento")}`}>
-                        {fmtBRL(r.bruto)}
-                      </td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("ticket")} ${isCol("ticket")}`}>
-                        {fmtBRL(r.ticket)}
-                      </td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("pedidos")} ${isCol("pedidos")}`}>
-                        {fmtNum(r.pedidos)}
-                      </td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("margem")} ${isCol("margem")}`}>
-                        {r.margemPct != null ? fmtPct(r.margemPct) : "—"}
-                      </td>
-                    </tr>
-                    {/* Sub-linhas por plataforma (faturamento + % da loja) */}
-                    {PLATS_ORDER.filter((p) => r.perPlatform[p] > 0).map((p) => (
-                      <tr
-                        key={p}
-                        className="text-xs text-muted-foreground hover:bg-muted/20"
-                      >
-                        <td />
-                        <td className="py-1 pl-9 pr-3">
-                          <span className="inline-flex items-center gap-1.5">
-                            <PlatformLogo platform={p} size="sm" />
-                            {PLAT_LABEL[p]}
-                          </span>
-                        </td>
-                        <td className={`px-3 py-1 text-right tabular-nums ${colBg("faturamento")}`}>
-                          {fmtBRL(r.perPlatform[p])}
-                          <span className="ml-1.5 text-[10px] text-muted-foreground/70">
-                            {r.bruto > 0
-                              ? fmtPct((r.perPlatform[p] / r.bruto) * 100)
-                              : ""}
-                          </span>
-                        </td>
-                        <td />
-                        <td />
-                        <td />
-                      </tr>
-                    ))}
-                  </Fragment>
-                ))}
-              </tbody>
+              <RankingRows rows={ranked} metrica={metrica} />
               <tfoot>
                 <tr className="border-t-2 bg-muted/30 font-semibold">
                   <td className="px-3 py-2.5" />
