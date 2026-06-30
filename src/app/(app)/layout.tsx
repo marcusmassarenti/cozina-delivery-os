@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { HelpFab } from "@/components/help-fab"
+import { NavigationProgress } from "@/components/shared/navigation-progress"
 import { TopBar } from "@/components/top-bar"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
 import { WhatsNewModal } from "@/components/whats-new-modal"
@@ -68,7 +69,7 @@ export default async function AppLayout({
               </span>
             </div>
           )}
-          {children}
+          <NavigationProgress>{children}</NavigationProgress>
         </SidebarInset>
         <HelpFab />
         <WelcomeTour

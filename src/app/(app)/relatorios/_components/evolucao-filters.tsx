@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { usePathname } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Store } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -32,7 +33,7 @@ export function EvolucaoFilters({
     metrica: ComparativoMetric
   }
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
 
   const [plataformas, setPlataformas] = React.useState<Set<PlatformId>>(
@@ -76,7 +77,7 @@ export function EvolucaoFilters({
     params.set("de", a)
     params.set("ate", b)
     params.set("metrica", metrica)
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   const lojasLabel =

@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useSearchParams, usePathname } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { Star } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -42,7 +43,7 @@ export function AvaliacoesFilters({
   unidadeSelected: string | null
   plataformaSelected: PlatformId | null
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -52,7 +53,7 @@ export function AvaliacoesFilters({
       if (value === null || value === "") params.delete(key)
       else params.set(key, value)
     }
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   function onUnidadeChange(code: string | null) {

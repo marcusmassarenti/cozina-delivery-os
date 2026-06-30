@@ -1,6 +1,7 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 
@@ -14,7 +15,7 @@ export function PedidosPlataformaSwitcher({
 }: {
   current: "ifood" | "99food" | "keeta"
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const sp = useSearchParams()
 
   const go = (p: "ifood" | "99food" | "keeta") => {
@@ -22,7 +23,7 @@ export function PedidosPlataformaSwitcher({
     if (p === "ifood") params.delete("plataforma")
     else params.set("plataforma", p)
     const qs = params.toString()
-    router.push(qs ? `/pedidos?${qs}` : "/pedidos")
+    navigate(qs ? `/pedidos?${qs}` : "/pedidos")
   }
 
   const opts: { id: PlatformId; label: string }[] = [

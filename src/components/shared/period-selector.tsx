@@ -1,8 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useSearchParams, usePathname } from "next/navigation"
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
+
+import { useNavigate } from "@/components/shared/navigation-progress"
 
 import {
   firstDayOfMonth,
@@ -55,7 +57,7 @@ export function PeriodSelector({
   enableYear?: boolean
   years?: number[]
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const searchParams = useSearchParams()
   const pathname = usePathname()
   const range: DateRange = isPeriod(current) ? rangeFromPeriod(current) : current
@@ -103,7 +105,7 @@ export function PeriodSelector({
       params.set("fim", end)
       params.delete("periodo")
     }
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
     setOpen(false)
   }
 

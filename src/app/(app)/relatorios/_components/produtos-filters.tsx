@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { usePathname } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Store, X } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -33,7 +34,7 @@ export function ProdutosFilters({
     metrica: string
   }
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
 
   const [plataforma, setPlataforma] = React.useState<PlatformId>(
@@ -64,7 +65,7 @@ export function ProdutosFilters({
     params.set("mesA", mesA)
     if (comparar && mesB && mesB !== mesA) params.set("mesB", mesB)
     params.set("metrica", metrica)
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   const lojasLabel =

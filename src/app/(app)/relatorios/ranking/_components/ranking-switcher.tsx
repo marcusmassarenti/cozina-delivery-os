@@ -1,6 +1,7 @@
 "use client"
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 
 import { cn } from "@/lib/utils"
 
@@ -14,14 +15,14 @@ export const RANKING_METRICAS = [
 export type RankingMetrica = (typeof RANKING_METRICAS)[number]["key"]
 
 export function RankingSwitcher({ current }: { current: RankingMetrica }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
   const sp = useSearchParams()
 
   const go = (m: string) => {
     const params = new URLSearchParams(sp.toString())
     params.set("metrica", m)
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   return (

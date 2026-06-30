@@ -1,11 +1,12 @@
 "use client"
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { Store } from "lucide-react"
 
 export function LojaSelector({ units }: { units: { id: string; name: string }[] }) {
   const sp = useSearchParams()
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
   const loja = sp.get("loja") ?? "todas"
 
@@ -14,7 +15,7 @@ export function LojaSelector({ units }: { units: { id: string; name: string }[] 
     if (v === "todas") params.delete("loja")
     else params.set("loja", v)
     const qs = params.toString()
-    router.push(qs ? `${pathname}?${qs}` : pathname)
+    navigate(qs ? `${pathname}?${qs}` : pathname)
   }
 
   return (

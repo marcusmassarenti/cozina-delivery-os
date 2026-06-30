@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useSearchParams, usePathname } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Store } from "lucide-react"
 
 export type LojaOption = { code: string; name: string }
@@ -18,7 +19,7 @@ export function LojaFilter({
   units: LojaOption[]
   param?: string
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const searchParams = useSearchParams()
   const pathname = usePathname()
 
@@ -46,7 +47,7 @@ export function LojaFilter({
     const params = new URLSearchParams(searchParams.toString())
     if (sel.size > 0) params.set(param, Array.from(sel).join(","))
     else params.delete(param)
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
     setOpen(false)
   }
 

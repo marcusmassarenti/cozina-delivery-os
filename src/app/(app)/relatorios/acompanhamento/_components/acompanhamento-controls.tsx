@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { usePathname } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 
 import type { PeriodOption } from "../../_components/comparativo-filters"
 
@@ -12,7 +13,7 @@ export function AcompanhamentoControls({
   periods: PeriodOption[]
   initial: { mes: string; de: number; ate: number; diasNoMes: number }
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
 
   const [mes, setMes] = React.useState(initial.mes)
@@ -26,7 +27,7 @@ export function AcompanhamentoControls({
     params.set("mes", mes)
     params.set("de", String(Math.min(de, ate)))
     params.set("ate", String(Math.max(de, ate)))
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   return (

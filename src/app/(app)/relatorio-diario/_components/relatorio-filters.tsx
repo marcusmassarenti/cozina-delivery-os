@@ -1,6 +1,7 @@
 "use client"
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import {
@@ -21,14 +22,14 @@ export function RelatorioFilters({
   metric: DailyMetric
   platform: ReportPlatform
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   function pushWith(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.set(key, value)
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   return (

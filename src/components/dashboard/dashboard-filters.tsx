@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Filter, Store, TrendingUp, X } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -33,7 +34,7 @@ export function DashboardFilters({
   unidadesSelected: string[]
   plataformaSelected: PlatformId | null
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [unitsOpen, setUnitsOpen] = React.useState(false)
@@ -46,7 +47,7 @@ export function DashboardFilters({
     } else {
       params.set(key, value)
     }
-    router.push(`${pathname}?${params.toString()}`)
+    navigate(`${pathname}?${params.toString()}`)
   }
 
   function toggleAtivo() {
@@ -222,7 +223,7 @@ export function DashboardFilters({
             params.delete("ativo")
             params.delete("unidades")
             params.delete("plataforma")
-            router.push(`${pathname}?${params.toString()}`)
+            navigate(`${pathname}?${params.toString()}`)
           }}
           className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
