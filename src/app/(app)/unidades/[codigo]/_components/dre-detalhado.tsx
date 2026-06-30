@@ -200,14 +200,6 @@ export function DreDetalhado({
         </div>
       )}
 
-      {recebidoDireto > 0 && (
-        <Row
-          label="(+) Recebido direto pela loja (PIX/dinheiro/VR/maquininha)"
-          value={`+ ${fmtBRL(recebidoDireto)}`}
-          pct={pctOf(recebidoDireto)}
-        />
-      )}
-
       <Row
         label="(−) CMV"
         value={cmvScope > 0 ? `− ${fmtBRL(cmvScope)}` : "sem custo lançado"}
@@ -228,7 +220,7 @@ export function DreDetalhado({
           </span>
         }
         bold
-        highlight={opScope <= 0 && vr <= 0}
+        highlight={opScope <= 0 && vr <= 0 && recebidoDireto <= 0}
       />
       {opScope > 0 && (
         <>
@@ -256,13 +248,21 @@ export function DreDetalhado({
               </span>
             }
             bold
-            highlight={vr <= 0}
+            highlight={vr <= 0 && recebidoDireto <= 0}
           />
         </>
       )}
-      {vr > 0 && (
+      {(vr > 0 || recebidoDireto > 0) && (
         <>
-          <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />
+          {recebidoDireto > 0 && (
+            <Row
+              label="(+) Recebido direto pela loja (PIX/dinheiro/VR/maquininha)"
+              value={`+ ${fmtBRL(recebidoDireto)}`}
+              tone="pos"
+              pct={pctOf(recebidoDireto)}
+            />
+          )}
+          {vr > 0 && <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />}
           <Divider />
           <Row
             label={`= ${totalLabel}`}
@@ -276,8 +276,9 @@ export function DreDetalhado({
 
       <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
         A <b>margem</b> é só das vendas das plataformas (mesma do Resumo). O{" "}
-        <b>VR</b> é pago à parte pelo iFood e cai na conta da loja (líquido =
-        recebido − 8%), então aparece como ganho extra no resultado total.
+        <b>VR</b> (líquido = recebido − 8%) e o <b>recebido direto pela loja</b>{" "}
+        são pagos/recebidos à parte, então entram como ganhos extras no{" "}
+        resultado total — não na margem.
         {!isTodas && cmv > 0 && (
           <> CMV e operação rateados pela fatia do bruto desta plataforma.</>
         )}
