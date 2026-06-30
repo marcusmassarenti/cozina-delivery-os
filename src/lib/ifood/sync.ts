@@ -116,7 +116,12 @@ async function syncReconciliationCompetencia(
   admin: Admin,
 ): Promise<ReconLine> {
   const ep = `reconciliation:${competencia}`
-  if (!force) {
+  // O MÊS CORRENTE sempre regenera (ignora o throttle de 6h): a conciliação do
+  // mês em aberto muda todo dia conforme o iFood liquida, e reaproveitar a versão
+  // velha deixava o dashboard travado em dias passados (ex.: junho parou em 13/06).
+  // Meses fechados seguem com throttle (são estáveis).
+  const forceEff = force || competencia === ym(new Date())
+  if (!forceEff) {
     const gate = await checkThrottle(u.merchantId, ep, 6)
     if (!gate.ok) return { competencia, skipped: gate.reason }
   }
@@ -176,7 +181,9 @@ async function syncAntecipacaoCompetencia(
   admin: Admin,
 ): Promise<void> {
   const ep = `antecipacao:${competencia}`
-  if (!force) {
+  // Mês corrente sempre regenera (mesma razão do reconciliation acima).
+  const forceEff = force || competencia === ym(new Date())
+  if (!forceEff) {
     const gate = await checkThrottle(u.merchantId, ep, 6)
     if (!gate.ok) return
   }
