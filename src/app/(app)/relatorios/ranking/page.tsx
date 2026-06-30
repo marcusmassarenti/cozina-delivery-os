@@ -1,5 +1,7 @@
+import { Fragment } from "react"
 import { Trophy } from "lucide-react"
 
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
@@ -25,6 +27,13 @@ import {
   LinhaEvolucaoRede,
   PizzaPlataforma,
 } from "./_components/ranking-charts"
+
+const PLATS_ORDER: PlatformId[] = ["ifood", "99food", "keeta"]
+const PLAT_LABEL: Record<PlatformId, string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+}
 
 const VALID_METRICAS: RankingMetrica[] = [
   "faturamento",
@@ -223,36 +232,61 @@ export default async function RankingPage({
               </thead>
               <tbody>
                 {ranked.map((r, i) => (
-                  <tr
-                    key={r.unitId}
-                    className="border-b last:border-0 hover:bg-muted/30"
-                  >
-                    <td className="px-3 py-2.5 text-center tabular-nums">
-                      {medal(i) ?? (
-                        <span className="text-muted-foreground">{i + 1}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <a
-                        href={`/unidades/${r.unitCode}`}
-                        className="font-medium hover:underline"
+                  <Fragment key={r.unitId}>
+                    <tr className="border-t hover:bg-muted/30">
+                      <td className="px-3 py-2.5 text-center tabular-nums">
+                        {medal(i) ?? (
+                          <span className="text-muted-foreground">{i + 1}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <a
+                          href={`/unidades/${r.unitCode}`}
+                          className="font-medium hover:underline"
+                        >
+                          #{r.unitCode} · {r.unitName}
+                        </a>
+                      </td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("faturamento")} ${isCol("faturamento")}`}>
+                        {fmtBRL(r.bruto)}
+                      </td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("ticket")} ${isCol("ticket")}`}>
+                        {fmtBRL(r.ticket)}
+                      </td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("pedidos")} ${isCol("pedidos")}`}>
+                        {fmtNum(r.pedidos)}
+                      </td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("margem")} ${isCol("margem")}`}>
+                        {r.margemPct != null ? fmtPct(r.margemPct) : "—"}
+                      </td>
+                    </tr>
+                    {/* Sub-linhas por plataforma (faturamento + % da loja) */}
+                    {PLATS_ORDER.filter((p) => r.perPlatform[p] > 0).map((p) => (
+                      <tr
+                        key={p}
+                        className="text-xs text-muted-foreground hover:bg-muted/20"
                       >
-                        #{r.unitCode} · {r.unitName}
-                      </a>
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("faturamento")} ${isCol("faturamento")}`}>
-                      {fmtBRL(r.bruto)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("ticket")} ${isCol("ticket")}`}>
-                      {fmtBRL(r.ticket)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("pedidos")} ${isCol("pedidos")}`}>
-                      {fmtNum(r.pedidos)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${colBg("margem")} ${isCol("margem")}`}>
-                      {r.margemPct != null ? fmtPct(r.margemPct) : "—"}
-                    </td>
-                  </tr>
+                        <td />
+                        <td className="py-1 pl-9 pr-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <PlatformLogo platform={p} size="sm" />
+                            {PLAT_LABEL[p]}
+                          </span>
+                        </td>
+                        <td className={`px-3 py-1 text-right tabular-nums ${colBg("faturamento")}`}>
+                          {fmtBRL(r.perPlatform[p])}
+                          <span className="ml-1.5 text-[10px] text-muted-foreground/70">
+                            {r.bruto > 0
+                              ? fmtPct((r.perPlatform[p] / r.bruto) * 100)
+                              : ""}
+                          </span>
+                        </td>
+                        <td />
+                        <td />
+                        <td />
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
