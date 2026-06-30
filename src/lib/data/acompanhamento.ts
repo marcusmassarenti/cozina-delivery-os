@@ -23,6 +23,8 @@ export type AcompUnit = {
   name: string
   platforms: AcompPlatform[]
   diaria: number
+  /** Mesma faixa de dias no MÊS ANTERIOR (pra o Δ% subindo/caindo). */
+  prevDiaria: number
   total: number
   meta: number
   falta: number
@@ -32,6 +34,7 @@ export type AcompBrand = {
   brandName: string
   units: AcompUnit[]
   diaria: number
+  prevDiaria: number
   total: number
   meta: number
   falta: number
@@ -39,10 +42,13 @@ export type AcompBrand = {
 export type Acompanhamento = {
   brands: AcompBrand[]
   grupoDiaria: number
+  grupoPrevDiaria: number
   grupoTotal: number
   grupoMeta: number
   grupoFalta: number
   diasNoMes: number
+  /** Label do mês anterior comparado (ex.: "maio/2026"). */
+  prevMesLabel: string
 }
 
 export async function getAcompanhamentoVendas(
@@ -71,6 +77,25 @@ export async function getAcompanhamentoVendas(
     plat,
     map: new Map(matrices[i].units.map((u) => [u.unitId, u])),
   }))
+
+  // Mês ANTERIOR (mesma faixa de dias) pra o Δ% subindo/caindo.
+  const prevDate = new Date(year, month - 2, 1) // month é 1-based; -2 = mês anterior
+  const pYear = prevDate.getFullYear()
+  const pMonth = prevDate.getMonth() + 1
+  const prevDiasNoMes = new Date(pYear, pMonth, 0).getDate()
+  const pTo = Math.min(to, prevDiasNoMes) // não passa do último dia do mês anterior
+  const prevMatrices = await Promise.all(
+    PLATS.map((p) => getDailyReportMatrix(pYear, pMonth, p, unitsLite)),
+  )
+  const prevByPlat = PLATS.map((plat, i) => ({
+    plat,
+    map: new Map(prevMatrices[i].units.map((u) => [u.unitId, u])),
+  }))
+  const MESES = [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  ]
+  const prevMesLabel = `${MESES[pMonth - 1]}/${pYear}`
 
   // Nomes das marcas.
   const { data: brandsData } = await admin.from("brands").select("id, name")
@@ -102,11 +127,23 @@ export async function getAcompanhamentoVendas(
     for (let d = from; d <= to; d++) s += row.faturamento[d] ?? 0
     return s
   }
+  // Mesma faixa de dias, mas no mês anterior (clampada ao último dia dele).
+  const sumPrevRange = (
+    row: { faturamento: Record<number, number> } | undefined,
+  ): number => {
+    if (!row) return 0
+    let s = 0
+    for (let d = from; d <= pTo; d++) s += row.faturamento[d] ?? 0
+    return s
+  }
+
+  const prevMapByPlat = new Map(prevByPlat.map((b) => [b.plat, b.map]))
 
   // Constrói por loja.
   const unitsBuilt = allUnits.map((u) => {
     const platforms: AcompPlatform[] = []
     let diaria = 0
+    let prevDiaria = 0
     let total = 0
     for (const { plat, map } of byPlat) {
       // só plataformas que a loja tem vinculada (evita 3 linhas zeradas em loja
@@ -118,6 +155,7 @@ export async function getAcompanhamentoVendas(
       platforms.push({ platform: plat, diaria: d, total: t })
       diaria += d
       total += t
+      prevDiaria += sumPrevRange(prevMapByPlat.get(plat)?.get(u.id))
     }
     const meta = metaByUnit.get(u.id) ?? 0
     return {
@@ -128,6 +166,7 @@ export async function getAcompanhamentoVendas(
         name: u.name,
         platforms,
         diaria,
+        prevDiaria,
         total,
         meta,
         falta: meta - total,
@@ -155,6 +194,7 @@ export async function getAcompanhamentoVendas(
     // sumir da meta consolidada (senão a "Falta" da marca/grupo fica otimista).
     // diaria/total não mudam (lojas zeradas contribuem 0), mas meta sim.
     const diaria = all.reduce((s, u) => s + u.diaria, 0)
+    const prevDiaria = all.reduce((s, u) => s + u.prevDiaria, 0)
     const total = all.reduce((s, u) => s + u.total, 0)
     const meta = all.reduce((s, u) => s + u.meta, 0)
     return {
@@ -162,6 +202,7 @@ export async function getAcompanhamentoVendas(
       brandName: brandName.get(brandId) ?? "Marca",
       units,
       diaria,
+      prevDiaria,
       total,
       meta,
       falta: meta - total,
@@ -178,15 +219,18 @@ export async function getAcompanhamentoVendas(
   )
 
   const grupoDiaria = brands.reduce((s, b) => s + b.diaria, 0)
+  const grupoPrevDiaria = brands.reduce((s, b) => s + b.prevDiaria, 0)
   const grupoTotal = brands.reduce((s, b) => s + b.total, 0)
   const grupoMeta = brands.reduce((s, b) => s + b.meta, 0)
 
   return {
     brands,
     grupoDiaria,
+    grupoPrevDiaria,
     grupoTotal,
     grupoMeta,
     grupoFalta: grupoMeta - grupoTotal,
     diasNoMes,
+    prevMesLabel,
   }
 }

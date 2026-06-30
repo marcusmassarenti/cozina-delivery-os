@@ -59,8 +59,9 @@ export function MetaInput({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur()
         }}
-        placeholder="—"
-        className="w-24 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-xs tabular-nums hover:border-input focus:border-primary focus:outline-none disabled:opacity-50 print:hidden"
+        placeholder="definir"
+        title="Clique e digite a meta de faturamento do mês"
+        className="w-24 rounded border border-input bg-muted/40 px-1.5 py-0.5 text-right text-xs tabular-nums placeholder:text-muted-foreground/60 placeholder:italic hover:border-primary/60 focus:border-primary focus:bg-background focus:outline-none disabled:opacity-50 print:hidden print:border-none print:bg-transparent"
       />
       {/* Só texto no PDF (sem a caixa do input, pra a linha ficar baixa) */}
       <span className="hidden tabular-nums print:inline">

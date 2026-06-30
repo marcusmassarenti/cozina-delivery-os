@@ -8,7 +8,7 @@ import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAcompanhamentoVendas } from "@/lib/data/acompanhamento"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { assertCanView } from "@/lib/auth/permissions"
-import { fmtBRL } from "@/lib/format"
+import { fmtBRL, fmtPct } from "@/lib/format"
 import {
   currentPeriod,
   formatPeriodKey,
@@ -48,12 +48,16 @@ export default async function AcompanhamentoPage({
     label: formatPeriodLabel(p),
   }))
 
+  // Sempre abre no MÊS ATUAL (pedido do Marcus). Garante que ele apareça no
+  // seletor mesmo que ainda não tenha dado (mês recém-começado).
   const currentKey = formatPeriodKey(currentPeriod())
-  let defaultMes = periodOptions[0]?.key ?? null
-  if (defaultMes === currentKey && periodOptions.length > 1) {
-    defaultMes = periodOptions[1].key
+  if (!periodOptions.some((p) => p.key === currentKey)) {
+    periodOptions.unshift({
+      key: currentKey,
+      label: formatPeriodLabel(currentPeriod()),
+    })
   }
-  const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : defaultMes
+  const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : currentKey
 
   if (!mes) {
     return (
@@ -89,6 +93,23 @@ export default async function AcompanhamentoPage({
         }
       >
         {fmtBRL(falta)}
+      </span>
+    )
+  }
+  // Δ% da diária vs a MESMA faixa de dias do mês anterior (▲ subiu / ▼ caiu).
+  const deltaCell = (cur: number, prev: number) => {
+    if (prev <= 0) return <span className="text-muted-foreground">—</span>
+    const d = ((cur - prev) / prev) * 100
+    const up = d >= 0
+    return (
+      <span
+        className={`tabular-nums ${
+          up
+            ? "text-emerald-600 dark:text-emerald-400"
+            : "text-rose-600 dark:text-rose-400"
+        }`}
+      >
+        {up ? "▲" : "▼"} {fmtPct(Math.abs(d))}
       </span>
     )
   }
@@ -145,6 +166,9 @@ export default async function AcompanhamentoPage({
                   Diária ({diariaLabel})
                 </th>
                 <th className="px-3 py-2 text-right font-semibold">
+                  vs {acomp.prevMesLabel}
+                </th>
+                <th className="px-3 py-2 text-right font-semibold">
                   Total ({periodLabel})
                 </th>
                 <th className="px-3 py-2 text-right font-semibold">Meta</th>
@@ -153,13 +177,21 @@ export default async function AcompanhamentoPage({
             </thead>
             <tbody>
               {acomp.brands.map((brand) => (
-                <BrandBlock key={brand.brandId} brand={brand} num={num}>
+                <BrandBlock
+                  key={brand.brandId}
+                  brand={brand}
+                  num={num}
+                  deltaCell={deltaCell}
+                >
                   {brand.units.map((u) => (
                     <Fragment key={u.unitId}>
                       <tr className="border-t bg-card font-medium">
                         <td className="px-3 py-1.5">{u.name}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">
                           {num(u.diaria)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right text-xs">
+                          {deltaCell(u.diaria, u.prevDiaria)}
                         </td>
                         <td className="px-3 py-1.5 text-right tabular-nums">
                           {num(u.total)}
@@ -195,6 +227,7 @@ export default async function AcompanhamentoPage({
                           <td className="px-3 py-1 text-right tabular-nums">
                             {num(p.diaria)}
                           </td>
+                          <td />
                           <td className="px-3 py-1 text-right tabular-nums">
                             {num(p.total)}
                           </td>
@@ -225,6 +258,9 @@ export default async function AcompanhamentoPage({
                   Diária ({diariaLabel})
                 </th>
                 <th className="px-3 py-2 text-right font-semibold">
+                  vs {acomp.prevMesLabel}
+                </th>
+                <th className="px-3 py-2 text-right font-semibold">
                   Total ({periodLabel})
                 </th>
                 <th className="px-3 py-2 text-right font-semibold">Meta</th>
@@ -239,6 +275,9 @@ export default async function AcompanhamentoPage({
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {num(b.diaria)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs">
+                    {deltaCell(b.diaria, b.prevDiaria)}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {num(b.total)}
@@ -255,6 +294,9 @@ export default async function AcompanhamentoPage({
                 <td className="px-3 py-2">TOTAL GRUPOS</td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {num(acomp.grupoDiaria)}
+                </td>
+                <td className="px-3 py-2 text-right text-xs">
+                  {deltaCell(acomp.grupoDiaria, acomp.grupoPrevDiaria)}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {num(acomp.grupoTotal)}
@@ -278,10 +320,12 @@ export default async function AcompanhamentoPage({
 function BrandBlock({
   brand,
   num,
+  deltaCell,
   children,
 }: {
   brand: import("@/lib/data/acompanhamento").AcompBrand
   num: (n: number) => string
+  deltaCell: (cur: number, prev: number) => React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -292,6 +336,9 @@ function BrandBlock({
         </td>
         <td className="px-3 py-1.5 text-right tabular-nums">
           {num(brand.diaria)}
+        </td>
+        <td className="px-3 py-1.5 text-right text-xs">
+          {deltaCell(brand.diaria, brand.prevDiaria)}
         </td>
         <td className="px-3 py-1.5 text-right tabular-nums">
           {num(brand.total)}
