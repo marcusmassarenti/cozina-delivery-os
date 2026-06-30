@@ -100,6 +100,15 @@ export default async function AcompanhamentoPage({
   const deltaCell = (cur: number, prev: number) => {
     if (prev <= 0) return <span className="text-muted-foreground">—</span>
     const d = ((cur - prev) / prev) * 100
+    // Loja recém-integrada: mês passado ~zero → % explode (ex.: +2000%). Em vez
+    // de poluir, mostra um selo "novo".
+    if (d >= 400) {
+      return (
+        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+          novo
+        </span>
+      )
+    }
     const up = d >= 0
     return (
       <span
@@ -182,6 +191,7 @@ export default async function AcompanhamentoPage({
                   brand={brand}
                   num={num}
                   deltaCell={deltaCell}
+                  faltaCell={faltaCell}
                 >
                   {brand.units.map((u) => (
                     <Fragment key={u.unitId}>
@@ -227,7 +237,11 @@ export default async function AcompanhamentoPage({
                           <td className="px-3 py-1 text-right tabular-nums">
                             {num(p.diaria)}
                           </td>
-                          <td />
+                          <td className="px-3 py-1 text-right text-xs">
+                            {p.diaria > 0 || p.prevDiaria > 0
+                              ? deltaCell(p.diaria, p.prevDiaria)
+                              : null}
+                          </td>
                           <td className="px-3 py-1 text-right tabular-nums">
                             {num(p.total)}
                           </td>
@@ -285,8 +299,8 @@ export default async function AcompanhamentoPage({
                   <td className="px-3 py-2 text-right tabular-nums">
                     {num(b.meta)}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {b.meta > 0 ? fmtBRL(b.falta) : "—"}
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                    {faltaCell(b.meta, b.falta)}
                   </td>
                 </tr>
               ))}
@@ -304,8 +318,8 @@ export default async function AcompanhamentoPage({
                 <td className="px-3 py-2 text-right tabular-nums">
                   {num(acomp.grupoMeta)}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  {acomp.grupoMeta > 0 ? fmtBRL(acomp.grupoFalta) : "—"}
+                <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                  {faltaCell(acomp.grupoMeta, acomp.grupoFalta)}
                 </td>
               </tr>
             </tbody>
@@ -321,11 +335,13 @@ function BrandBlock({
   brand,
   num,
   deltaCell,
+  faltaCell,
   children,
 }: {
   brand: import("@/lib/data/acompanhamento").AcompBrand
   num: (n: number) => string
   deltaCell: (cur: number, prev: number) => React.ReactNode
+  faltaCell: (meta: number, falta: number) => React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -346,8 +362,8 @@ function BrandBlock({
         <td className="px-3 py-1.5 text-right tabular-nums">
           {num(brand.meta)}
         </td>
-        <td className="px-3 py-1.5 text-right tabular-nums">
-          {brand.meta > 0 ? fmtBRL(brand.falta) : "—"}
+        <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+          {faltaCell(brand.meta, brand.falta)}
         </td>
       </tr>
       {children}

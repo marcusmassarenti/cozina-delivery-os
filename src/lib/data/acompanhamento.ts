@@ -15,6 +15,8 @@ const PLATS: PlatformId[] = ["ifood", "99food", "keeta"]
 export type AcompPlatform = {
   platform: PlatformId
   diaria: number
+  /** Mesma faixa de dias no mês anterior (pra o Δ% por plataforma). */
+  prevDiaria: number
   total: number
 }
 export type AcompUnit = {
@@ -152,10 +154,11 @@ export async function getAcompanhamentoVendas(
       const row = map.get(u.id)
       const d = sumRange(row)
       const t = row ? row.totalFaturamento : 0
-      platforms.push({ platform: plat, diaria: d, total: t })
+      const pd = sumPrevRange(prevMapByPlat.get(plat)?.get(u.id))
+      platforms.push({ platform: plat, diaria: d, prevDiaria: pd, total: t })
       diaria += d
       total += t
-      prevDiaria += sumPrevRange(prevMapByPlat.get(plat)?.get(u.id))
+      prevDiaria += pd
     }
     const meta = metaByUnit.get(u.id) ?? 0
     return {
