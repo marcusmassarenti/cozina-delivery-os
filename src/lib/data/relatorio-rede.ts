@@ -91,3 +91,88 @@ export async function getNetworkReportForMonth(
     coverage,
   }
 }
+
+/**
+ * Consolidado da rede AGREGADO sobre vários meses (período/ano). Soma os meses
+ * inteiros do range — o DRE é mensal (CMV/operação por mês), então não recorta
+ * dias; cada mês entra inteiro. A cobertura fica a do mês mais recente do range.
+ */
+export async function getNetworkReportForRange(
+  months: { year: number; month: number }[],
+  filterUnitIds?: string[],
+): Promise<NetworkReport> {
+  // Concorrência LIMITADA a 2 meses por vez: cada mês já dispara ~10 RPCs
+  // pesadas (resumos das 3 plataformas, ~1,5s cada). Rodar todos os meses em
+  // paralelo satura o Postgres (statement timeout); 2 por vez é seguro e ~2×
+  // mais rápido que sequencial.
+  const parts: NetworkReport[] = []
+  for (let i = 0; i < months.length; i += 2) {
+    const chunk = months.slice(i, i + 2)
+    const res = await Promise.all(
+      chunk.map((p) => getNetworkReportForMonth(p.year, p.month, filterUnitIds)),
+    )
+    parts.push(...res)
+  }
+
+  const totals: ResultadoTotals = {
+    pedidos: 0,
+    bruto: 0,
+    taxasPlataforma: 0,
+    promocoesLoja: 0,
+    liquidoPlataformas: 0,
+    vrLiquido: 0,
+    totalLiquido: 0,
+    cmvTotal: 0,
+    margemLiquida: 0,
+    margemPct: 0,
+    custoOperacao: 0,
+    resultadoOperacional: 0,
+    resultadoPct: 0,
+    repassePct: 0,
+  }
+  let custoEntrega = 0
+  let diasConsiderados = 0
+  let totalAvaliacoes = 0
+  let notaPond = 0
+  let unitsComFaturamento = 0
+  let unitsTotal = 0
+  for (const r of parts) {
+    totals.pedidos += r.totals.pedidos
+    totals.bruto += r.totals.bruto
+    totals.taxasPlataforma += r.totals.taxasPlataforma
+    totals.promocoesLoja += r.totals.promocoesLoja
+    totals.liquidoPlataformas += r.totals.liquidoPlataformas
+    totals.vrLiquido += r.totals.vrLiquido
+    totals.totalLiquido += r.totals.totalLiquido
+    totals.cmvTotal += r.totals.cmvTotal
+    totals.margemLiquida += r.totals.margemLiquida
+    totals.custoOperacao += r.totals.custoOperacao
+    totals.resultadoOperacional += r.totals.resultadoOperacional
+    custoEntrega += r.custoEntrega
+    diasConsiderados += r.diasConsiderados
+    totalAvaliacoes += r.totalAvaliacoes
+    if (r.notaMedia != null) notaPond += r.notaMedia * r.totalAvaliacoes
+    unitsComFaturamento = Math.max(unitsComFaturamento, r.unitsComFaturamento)
+    unitsTotal = Math.max(unitsTotal, r.unitsTotal)
+  }
+  totals.margemPct = totals.bruto > 0 ? (totals.margemLiquida / totals.bruto) * 100 : 0
+  totals.resultadoPct =
+    totals.bruto > 0 ? (totals.resultadoOperacional / totals.bruto) * 100 : 0
+  totals.repassePct =
+    totals.bruto > 0 ? (totals.liquidoPlataformas / totals.bruto) * 100 : 0
+
+  return {
+    totals,
+    ticketMedio: totals.pedidos > 0 ? totals.bruto / totals.pedidos : 0,
+    mediaPedidosDia:
+      diasConsiderados > 0 ? Math.round(totals.pedidos / diasConsiderados) : 0,
+    diasConsiderados,
+    unitsComFaturamento,
+    unitsTotal,
+    notaMedia: totalAvaliacoes > 0 ? notaPond / totalAvaliacoes : null,
+    totalAvaliacoes,
+    custoEntrega,
+    // cobertura do mês mais recente do range (a mais relevante p/ "falta importar")
+    coverage: parts[parts.length - 1]!.coverage,
+  }
+}

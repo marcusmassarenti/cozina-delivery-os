@@ -1,5 +1,6 @@
 import Link from "next/link"
 import {
+  AlertTriangle,
   ArrowRight,
   Bike,
   CalendarRange,
@@ -18,21 +19,49 @@ import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { getAvailablePeriods, getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkReportForMonth } from "@/lib/data/relatorio-rede"
+import { getNetworkDrePlatforms } from "@/lib/data/resultado"
+import {
+  DreDetalhado,
+  type VrInfo,
+} from "@/app/(app)/unidades/[codigo]/_components/dre-detalhado"
+import { BrutoBreakdown } from "@/app/(app)/unidades/[codigo]/_components/bruto-breakdown"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import {
   formatPeriodKey,
   formatPeriodLabel,
   formatRangeLabel,
+  monthsInRange,
+  nowParts,
+  parsePeriodParam,
+  rangeDays,
+  rangeFromPeriod,
+  type DateRange,
 } from "@/lib/period"
-import { readPeriod } from "@/lib/period-helpers"
-import { AlertTriangle } from "lucide-react"
 
 const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Range do consolidado. Aceita mês, range de dias OU ano inteiro (até ~366 dias —
+ * o cap de 92 dias do readPeriod é só pras telas de matriz diária). Como o DRE é
+ * mensal, o range é agregado por MESES INTEIROS (ver monthsInRange).
+ */
+function parseWideRange(sp: {
+  periodo?: string
+  inicio?: string
+  fim?: string
+}): DateRange {
+  const { inicio, fim } = sp
+  if (inicio && fim && ISO_DAY.test(inicio) && ISO_DAY.test(fim) && fim >= inicio) {
+    if (rangeDays({ start: inicio, end: fim }) <= 366) return { start: inicio, end: fim }
+  }
+  return rangeFromPeriod(parsePeriodParam(sp.periodo))
+}
 
 export default async function RelatoriosPage({
   searchParams,
@@ -41,10 +70,21 @@ export default async function RelatoriosPage({
 }) {
   const sp = await searchParams
   await assertCanView("relatorios")
-  const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
-  const period = { year, month }
-  const periodKey = formatPeriodKey(period)
-  const periodLabel = formatPeriodLabel(period)
+  const range = parseWideRange(sp)
+  const months = monthsInRange(range)
+  // Mês de referência = o mais recente do período, mas nunca além do mês atual
+  // (senão "ano inteiro" cairia em dezembro vazio).
+  const now = nowParts()
+  const nowKey = now.year * 12 + now.month
+  const refMonth =
+    [...months].reverse().find((p) => p.year * 12 + p.month <= nowKey) ??
+    months[months.length - 1]
+  const periodKey = formatPeriodKey(refMonth)
+
+  const multiMonth = months.length > 1
+  // O DRE mostrado é sempre de 1 mês (o de referência = mais recente do período).
+  const periodLabel = formatPeriodLabel(refMonth)
+  const rangeLabel = formatRangeLabel(range)
 
   const allUnits = (await getVisibleUnits())
     .filter((u) => u.active)
@@ -57,12 +97,34 @@ export default async function RelatoriosPage({
       : accessibleIds === null
         ? undefined // admin/gerente: rede inteira
         : allUnits.map((u) => u.id) // franqueado: só as lojas dele
+  const scopedIds = filterIds ?? allUnits.map((u) => u.id)
+  const years = [
+    ...new Set((await getAvailablePeriods()).map((p) => p.year)),
+  ].sort((a, b) => b - a)
 
-  const [report, availablePeriods] = await Promise.all([
-    getNetworkReportForMonth(year, month, filterIds),
+  // O DRE consolidado é MENSAL (CMV/operação por mês) e a apuração por plataforma
+  // do iFood é pesada (~1,5s/mês). Mostra o mês de referência (mais recente do
+  // período) — rápido. A soma de vários meses depende de uma query agregada
+  // dedicada (a fazer); por ora o multi-mês exibe o mês de referência com aviso.
+  const [report, drePlats, availablePeriods, antecipMap] = await Promise.all([
+    getNetworkReportForMonth(refMonth.year, refMonth.month, filterIds),
+    getNetworkDrePlatforms(refMonth.year, refMonth.month, filterIds),
     getAvailablePeriods(),
+    getAntecipacaoFeeByUnits(scopedIds, refMonth.year, refMonth.month),
   ])
   const t = report.totals
+  const antecipTotal = Array.from(antecipMap.values()).reduce((a, b) => a + b, 0)
+
+  // VR da rede pro DRE detalhado (mesma regra do /financeiro e do detalhe da loja)
+  const vrInfoRede: VrInfo | undefined =
+    t.vrLiquido > 0
+      ? {
+          liquido: t.vrLiquido,
+          bruto: t.vrLiquido / 0.92,
+          taxa: t.vrLiquido / 0.92 - t.vrLiquido,
+          porBandeira: [],
+        }
+      : undefined
 
   const custoEntregaPct =
     t.bruto > 0 ? (report.custoEntrega / t.bruto) * 100 : 0
@@ -120,49 +182,6 @@ export default async function RelatoriosPage({
           : "sem avaliações",
       tone: "neutral",
       icon: Star,
-    },
-  ]
-
-  // Cascata do DRE (consistente: bruto − taxas = líquido; etc.).
-  const dre: Array<{
-    label: string
-    value: number
-    kind: "base" | "minus" | "plus" | "sum"
-    pct?: number
-    note?: string
-    strong?: boolean
-  }> = [
-    { label: "Receita bruta", value: t.bruto, kind: "base" },
-    {
-      label: "Taxas das plataformas",
-      value: -t.taxasPlataforma,
-      kind: "minus",
-      note:
-        t.promocoesLoja > 0
-          ? `inclui ${fmtBRL(t.promocoesLoja)} de promoções da loja`
-          : undefined,
-    },
-    {
-      label: "Líquido das plataformas",
-      value: t.liquidoPlataformas,
-      kind: "sum",
-    },
-    { label: "VR líquido", value: t.vrLiquido, kind: "plus" },
-    { label: "Total líquido", value: t.totalLiquido, kind: "sum", strong: true },
-    { label: "CMV", value: -t.cmvTotal, kind: "minus" },
-    {
-      label: "Margem líquida",
-      value: t.margemLiquida,
-      kind: "sum",
-      pct: t.margemPct,
-    },
-    { label: "Custo de operação", value: -t.custoOperacao, kind: "minus" },
-    {
-      label: "Resultado operacional",
-      value: t.resultadoOperacional,
-      kind: "sum",
-      pct: t.resultadoPct,
-      strong: true,
     },
   ]
 
@@ -225,32 +244,39 @@ export default async function RelatoriosPage({
         >
           <LojaFilter units={allUnits} />
           <PeriodSelector
-            current={periodRange}
+            current={range}
             options={availablePeriods}
             enableRange
+            enableYear
+            years={years}
           />
           <ExportPdfButton />
         </div>
       </div>
 
-      {!isFullMonth && (
+      {multiMonth && (
         <div
           className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400"
           data-print="hide"
         >
           <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
           <span>
-            Você selecionou <strong>{formatRangeLabel(periodRange)}</strong>, mas o relatório consolidado é mensal (DRE com custos) — o período não recorta os valores. Mostrando o mês inteiro de <strong>{periodLabel}</strong>.
+            Você selecionou <strong>{rangeLabel}</strong>, mas o DRE consolidado é
+            mensal (CMV/operação por mês). Mostrando o mês mais recente do período
+            (<strong>{periodLabel}</strong>). Pra ver mês a mês, use o seletor de
+            período no modo Mês.
           </span>
         </div>
       )}
 
-      <ImportCoverageBanner
-        coverage={report.coverage}
-        year={year}
-        month={month}
-        periodLabel={periodLabel}
-      />
+      {!multiMonth && (
+        <ImportCoverageBanner
+          coverage={report.coverage}
+          year={refMonth.year}
+          month={refMonth.month}
+          periodLabel={periodLabel}
+        />
+      )}
 
       {/* 1 — Consolidado */}
       <SectionDivider number={1} label="Consolidado da rede" />
@@ -260,73 +286,44 @@ export default async function RelatoriosPage({
         ))}
       </div>
 
-      {/* DRE em cascata */}
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="border-b px-5 py-3">
-          <p className="text-sm font-semibold">Resultado da rede · {periodLabel}</p>
-          <p className="text-[11px] text-muted-foreground">
-            Do faturamento bruto ao resultado operacional
-          </p>
+      {/* DRE detalhado por plataforma (mesmo componente do detalhe da loja) */}
+      {drePlats.length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <DreDetalhado
+              platforms={drePlats}
+              totalBruto={t.bruto}
+              totalLiquido={t.liquidoPlataformas}
+              cmv={t.cmvTotal}
+              operacao={t.custoOperacao}
+              vrInfo={vrInfoRede}
+              antecipacaoIfood={antecipTotal}
+              title={`DRE da rede · ${periodLabel}`}
+              totalLabel="Resultado total da rede"
+            />
+          </div>
+          <BrutoBreakdown
+            platforms={drePlats.map((p) => ({
+              id: p.id,
+              bruto: p.bruto,
+              liquido: p.liquido,
+              promocoesLoja: p.promocoesLoja ?? 0,
+            }))}
+            totalBruto={t.bruto}
+            totalLiquido={t.liquidoPlataformas}
+            cmv={t.cmvTotal}
+            operacao={t.custoOperacao}
+          />
         </div>
-        <div className="divide-y">
-          {dre.map((line) => (
-            <div
-              key={line.label}
-              className={`flex items-center justify-between gap-3 px-5 py-2.5 ${
-                line.kind === "sum" ? "bg-muted/30" : ""
-              }`}
-            >
-              <div className="min-w-0">
-                <p
-                  className={`truncate text-sm ${
-                    line.strong
-                      ? "font-bold"
-                      : line.kind === "sum"
-                        ? "font-semibold"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {line.kind === "minus" && (
-                    <span className="mr-1 text-rose-500">−</span>
-                  )}
-                  {line.kind === "plus" && (
-                    <span className="mr-1 text-emerald-500">+</span>
-                  )}
-                  {line.kind === "sum" && <span className="mr-1">=</span>}
-                  {line.label}
-                </p>
-                {line.note && (
-                  <p className="text-[10px] text-muted-foreground">{line.note}</p>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                {line.pct !== undefined && (
-                  <span
-                    className={`text-[11px] font-medium ${
-                      line.value >= 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-600 dark:text-rose-400"
-                    }`}
-                  >
-                    {fmtPct(line.pct)}
-                  </span>
-                )}
-                <span
-                  className={`text-sm ${
-                    line.strong ? "font-bold" : "font-medium"
-                  } ${
-                    line.kind === "minus"
-                      ? "text-rose-600 dark:text-rose-400"
-                      : ""
-                  }`}
-                >
-                  {fmtBRL(line.value)}
-                </span>
-              </div>
-            </div>
-          ))}
+      ) : (
+        <div className="rounded-xl border border-dashed bg-card p-10 text-center text-sm text-muted-foreground">
+          Sem faturamento no período. Importe os relatórios em{" "}
+          <a href="/importacao" className="underline">
+            /importacao
+          </a>
+          .
         </div>
-      </div>
+      )}
 
       {/* 2 — Atalhos pros relatórios detalhados */}
       <SectionDivider number={2} label="Relatórios detalhados" />

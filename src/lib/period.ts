@@ -149,6 +149,29 @@ export function rangeFromPeriod(p: Period): DateRange {
 }
 
 /**
+ * Meses INTEIROS que um range toca (do mês do início ao mês do fim).
+ * Ex.: 2026-01-01..2026-06-29 → [jan, fev, mar, abr, mai, jun].
+ * Usado por telas que agregam o período por mês (DRE consolidado).
+ */
+export function monthsInRange(range: DateRange): Period[] {
+  let y = Number(range.start.slice(0, 4))
+  let m = Number(range.start.slice(5, 7))
+  const ey = Number(range.end.slice(0, 4))
+  const em = Number(range.end.slice(5, 7))
+  const out: Period[] = []
+  for (let i = 0; i < 36; i++) {
+    out.push({ year: y, month: m })
+    if (y === ey && m === em) break
+    m += 1
+    if (m > 12) {
+      m = 1
+      y += 1
+    }
+  }
+  return out
+}
+
+/**
  * True se o range cobre EXATAMENTE o mês completo (1º ao último dia).
  * Pro UI saber se está em modo "Mês" ou "Período custom".
  */

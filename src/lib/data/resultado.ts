@@ -423,3 +423,78 @@ export async function getNetworkDrePlatforms(
     make("keeta", "Keeta", a.ke.bruto, a.ke.liq, [], 0, a.ke.promo),
   ].filter((p): p is NetworkDrePlat => p !== null)
 }
+
+/**
+ * DRE por plataforma da rede AGREGADO sobre vários meses (período/ano). Soma os
+ * meses inteiros do range, mesclando os itens de taxa por rótulo. Reaproveita o
+ * `getNetworkDrePlatforms` mensal (tela /financeiro), então bate com ele.
+ */
+export async function getNetworkDrePlatformsForRange(
+  months: { year: number; month: number }[],
+  filterUnitIds?: string[],
+): Promise<NetworkDrePlat[]> {
+  // Concorrência limitada a 2 meses por vez (resumos pesados ~1,5s cada); em
+  // paralelo nos 6+ meses satura o Postgres (statement timeout).
+  const parts: NetworkDrePlat[][] = []
+  for (let i = 0; i < months.length; i += 2) {
+    const chunk = months.slice(i, i + 2)
+    const res = await Promise.all(
+      chunk.map((p) => getNetworkDrePlatforms(p.year, p.month, filterUnitIds)),
+    )
+    parts.push(...res)
+  }
+  const ORDER: NetworkDrePlat["id"][] = ["ifood", "99food", "keeta"]
+  const byId = new Map<
+    NetworkDrePlat["id"],
+    {
+      name: string
+      bruto: number
+      liquido: number
+      taxaTotal: number
+      vrLiquido: number
+      promocoesLoja: number
+      itens: Map<string, { value: number; credit?: boolean }>
+    }
+  >()
+  for (const monthPlats of parts) {
+    for (const p of monthPlats) {
+      const cur = byId.get(p.id) ?? {
+        name: p.name,
+        bruto: 0,
+        liquido: 0,
+        taxaTotal: 0,
+        vrLiquido: 0,
+        promocoesLoja: 0,
+        itens: new Map<string, { value: number; credit?: boolean }>(),
+      }
+      cur.bruto += p.bruto
+      cur.liquido += p.liquido
+      cur.taxaTotal += p.taxaTotal
+      cur.vrLiquido += p.vrLiquido
+      cur.promocoesLoja += p.promocoesLoja
+      for (const it of p.itens) {
+        const e = cur.itens.get(it.label) ?? { value: 0, credit: it.credit }
+        e.value += it.value
+        cur.itens.set(it.label, e)
+      }
+      byId.set(p.id, cur)
+    }
+  }
+  return ORDER.filter((id) => byId.has(id)).map((id) => {
+    const c = byId.get(id)!
+    return {
+      id,
+      name: c.name,
+      bruto: c.bruto,
+      liquido: c.liquido,
+      taxaTotal: c.taxaTotal,
+      vrLiquido: c.vrLiquido,
+      promocoesLoja: c.promocoesLoja,
+      itens: [...c.itens].map(([label, e]) => ({
+        label,
+        value: e.value,
+        credit: e.credit,
+      })),
+    }
+  })
+}
