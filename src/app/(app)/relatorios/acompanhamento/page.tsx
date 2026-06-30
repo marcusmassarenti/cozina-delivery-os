@@ -6,6 +6,7 @@ import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAcompanhamentoVendas } from "@/lib/data/acompanhamento"
+import { getLastSyncedDates } from "@/lib/data/sync-status"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRL, fmtPct } from "@/lib/format"
@@ -77,9 +78,15 @@ export default async function AcompanhamentoPage({
   const de = clamp(parseInt(sp.de ?? "1", 10) || 1, 1, diasNoMes)
   const ate = clamp(parseInt(sp.ate ?? String(diasNoMes), 10) || diasNoMes, de, diasNoMes)
 
-  const acomp = await getAcompanhamentoVendas(year, month, de, ate)
+  const [acomp, syncStatus] = await Promise.all([
+    getAcompanhamentoVendas(year, month, de, ate),
+    getLastSyncedDates(),
+  ])
   const periodLabel = formatPeriodLabel({ year, month })
   const diariaLabel = `${de} a ${ate}/${MES_ABREV[month - 1]}`
+  // dd/mm a partir de YYYY-MM-DD (sem fuso, é só string)
+  const ddmm = (iso: string | null) =>
+    iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—"
 
   const num = (n: number) => (n === 0 ? "—" : fmtBRL(n))
   const faltaCell = (meta: number, falta: number) => {
@@ -151,6 +158,28 @@ export default async function AcompanhamentoPage({
         <div data-print="hide">
           <ExportPdfButton />
         </div>
+      </div>
+
+      {/* Alerta: até qual data cada plataforma está sincronizada */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
+        <span className="font-semibold">Dados sincronizados até:</span>
+        {(["ifood", "99food", "keeta"] as const).map((plat) => (
+          <span key={plat} className="inline-flex items-center gap-1.5">
+            <PlatformLogo platform={plat} size="sm" />
+            <span className="tabular-nums">
+              {ddmm(
+                plat === "ifood"
+                  ? syncStatus.ifood
+                  : plat === "99food"
+                    ? syncStatus.ninefood
+                    : syncStatus.keeta,
+              )}
+            </span>
+          </span>
+        ))}
+        <span className="text-[10px] text-sky-700/70 dark:text-sky-300/60">
+          (iFood: financeiro liquidado · 99/Keeta: extrato/loja)
+        </span>
       </div>
 
       <AcompanhamentoControls
