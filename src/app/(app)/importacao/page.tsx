@@ -6,7 +6,7 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
-import { assertCanView } from "@/lib/auth/permissions"
+import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
 
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
@@ -43,7 +43,11 @@ async function getRecentImports(page: number): Promise<{
   const admin = createAdminClient()
   const offset = Math.max(0, (page - 1) * HISTORICO_PAGE_SIZE)
 
-  const { data: imports, count } = await admin
+  // Isolamento multi-tenant: só o histórico das lojas da empresa do usuário.
+  const allowed = await getAccessibleUnitIds()
+  if (allowed && allowed.length === 0) return { items: [], total: 0 }
+
+  let q = admin
     .from("platform_imports")
     .select(
       "id, unit_id, platform, report_type, cadencia, ref_date, ref_year, ref_month, source_filename, source, rows_imported, status, imported_at",
@@ -52,6 +56,8 @@ async function getRecentImports(page: number): Promise<{
     .order("imported_at", { ascending: false })
     .order("id", { ascending: false })
     .range(offset, offset + HISTORICO_PAGE_SIZE - 1)
+  if (allowed) q = q.in("unit_id", allowed)
+  const { data: imports, count } = await q
 
   if (!imports || imports.length === 0) {
     return { items: [], total: count ?? 0 }

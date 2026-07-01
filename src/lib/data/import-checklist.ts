@@ -22,6 +22,7 @@ import {
   shouldExpectDataForMonth,
 } from "@/lib/data/coverage-helper"
 import { getUnits } from "@/lib/data/units"
+import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import type { PlatformId } from "@/components/platform-logo"
 
 export type Cadencia = "diario" | "semanal" | "mensal"
@@ -95,7 +96,13 @@ export async function getImportChecklistForMonth(
   month: number,
 ): Promise<ImportChecklist> {
   const admin = createAdminClient()
-  const units = (await getUnits()).filter((u) => u.active)
+  // Isolamento multi-tenant: só as lojas da empresa do usuário (null =
+  // super-admin de plataforma sem vínculo → vê tudo).
+  const allowed = await getAccessibleUnitIds()
+  const allowSet = allowed ? new Set(allowed) : null
+  const units = (await getUnits()).filter(
+    (u) => u.active && (!allowSet || allowSet.has(u.id)),
+  )
   const idToCode = new Map(units.map((u) => [u.id, u.code]))
 
   const startIso = `${year}-${pad2(month)}-01`
@@ -120,6 +127,7 @@ export async function getImportChecklistForMonth(
   const linkedByPlatform = new Map<PlatformId, Set<string>>()
   for (const r of platRows ?? []) {
     const p = r.platform as PlatformId
+    if (allowSet && !allowSet.has(r.unit_id)) continue
     if (!shouldExpectDataForMonth(coverage, r.unit_id, p, year, month)) {
       continue
     }
@@ -128,12 +136,14 @@ export async function getImportChecklistForMonth(
   }
 
   // Log de importação do mês (só perStore iFood — pequeno e rápido).
-  const { data: impRows } = await admin
+  let impQuery = admin
     .from("platform_imports")
     .select("unit_id, platform, report_type")
     .eq("ref_year", year)
     .eq("ref_month", month)
     .eq("status", "success")
+  if (allowed) impQuery = impQuery.in("unit_id", allowed)
+  const { data: impRows } = await impQuery
   const importedByKey = new Map<string, Set<string>>() // `${platform}/${report_type}` → unit_ids
   for (const r of impRows ?? []) {
     const k = `${r.platform}/${r.report_type}`
@@ -177,14 +187,17 @@ export async function getImportChecklistForMonth(
         }
       }
 
-      // Rede: última data com dado no mês (order desc limit 1).
-      const { data: last } = await admin
+      // Rede: última data com dado no mês (order desc limit 1) — só das
+      // lojas da empresa do usuário.
+      let freshQ = admin
         .from(rep.table!)
         .select(rep.dateCol!)
         .gte(rep.dateCol!, startIso)
         .lt(rep.dateCol!, endExcl)
         .order(rep.dateCol!, { ascending: false })
         .limit(1)
+      if (allowed) freshQ = freshQ.in("unit_id", allowed)
+      const { data: last } = await freshQ
       const lastRaw = (last?.[0] as Record<string, string> | undefined)?.[
         rep.dateCol!
       ]
