@@ -76,11 +76,27 @@ export async function signUp(
   })
 
   if (signUpErr) {
+    const code = signUpErr.code ?? ""
     const m = signUpErr.message.toLowerCase()
-    if (m.includes("already") || m.includes("registered"))
+    if (
+      code === "user_already_exists" ||
+      m.includes("already") ||
+      m.includes("registered")
+    )
       return { ok: false, message: "Esse e-mail já tem conta. Faça login." }
-    if (m.includes("password"))
-      return { ok: false, message: "Senha fraca — use pelo menos 6 caracteres." }
+    if (code === "weak_password" || m.includes("weak") || m.includes("leaked"))
+      return {
+        ok: false,
+        message:
+          "Essa senha aparece em vazamentos conhecidos — escolha uma mais difícil de adivinhar.",
+      }
+    if (m.includes("at least") || m.includes("characters"))
+      return { ok: false, message: "Senha muito curta — use pelo menos 6 caracteres." }
+    if (code === "over_email_send_rate_limit" || m.includes("rate limit"))
+      return {
+        ok: false,
+        message: "Muitas tentativas agora. Espera um minuto e tenta de novo.",
+      }
     return { ok: false, message: "Não foi possível criar a conta. Tenta de novo." }
   }
 
