@@ -290,7 +290,7 @@ export function Landing() {
             <span className="text-[17px] tracking-tight">Delivery OS</span>
           </a>
           <div className="hidden items-center gap-7 text-sm text-[oklch(0.45_0.01_48)] md:flex">
-            <a href="#como" className="transition-colors hover:text-[var(--brand)]">Como funciona</a>
+            <a href="#experimente" className="transition-colors hover:text-[var(--brand)]">Como funciona</a>
             <a href="#sistema" className="transition-colors hover:text-[var(--brand)]">O sistema</a>
             <a href="#precos" className="transition-colors hover:text-[var(--brand)]">Preços</a>
           </div>
@@ -333,7 +333,7 @@ export function Landing() {
                   Descobrir meu lucro agora
                   <ArrowRight className="arrow-slide size-[18px]" strokeWidth={2.2} />
                 </a>
-                <a href="#como" className="btn-ghost inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 text-[15px] font-medium text-white hover:bg-white/5">
+                <a href="#experimente" className="btn-ghost inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 text-[15px] font-medium text-white hover:bg-white/5">
                   Ver como funciona
                 </a>
               </div>
