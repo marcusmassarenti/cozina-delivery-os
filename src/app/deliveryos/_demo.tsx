@@ -12,16 +12,28 @@ import {
   Upload,
 } from "lucide-react"
 
+import type { NinefoodParseResult } from "@/lib/import/ninefood/types"
+import type { KeetaParseResult } from "@/lib/import/keeta/types"
+
+type Platform = "ifood" | "99food" | "keeta"
+
+const PLAT_LABEL: Record<Platform, string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+}
+
+type BreakdownItem = { l: string; v: number }
+
 type ResultData = {
+  platform: Platform
+  platformLabel: string
   competencia: string
   bruto: number
   liquido: number
   pct: number
   taxas: number
-  comissao: number
-  entrega: number
-  transacao: number
-  promo: number
+  breakdown: BreakdownItem[]
   pedidos: number
   ticket: number
 }
@@ -35,6 +47,159 @@ type DemoState =
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
+const ERR_GENERIC =
+  "Não reconhecemos esse arquivo. O teste funciona com o financeiro do iFood (Conciliação) ou os relatórios de pedidos do 99 Food e da Keeta. Baixa um desses e tenta de novo."
+
+const MESES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+]
+
+// ─── helpers de soma / mês dominante ─────────────────────────────────
+const sum = <T,>(arr: T[], f: (x: T) => number | null | undefined) =>
+  arr.reduce((a, x) => a + (f(x) || 0), 0)
+const sumAbs = <T,>(arr: T[], f: (x: T) => number | null | undefined) =>
+  arr.reduce((a, x) => a + Math.abs(f(x) || 0), 0)
+
+function mesLabel(dates: Array<Date | null | undefined>): string {
+  const valid = dates.filter(
+    (d): d is Date => d instanceof Date && !isNaN(d.getTime()),
+  )
+  if (!valid.length) return ""
+  const counts = new Map<string, number>()
+  for (const d of valid) {
+    const k = `${d.getFullYear()}-${d.getMonth()}`
+    counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  let best = ""
+  let bestN = -1
+  for (const [k, n] of counts) if (n > bestN) [bestN, best] = [n, k]
+  const [y, m] = best.split("-").map(Number)
+  return `${MESES[m]}/${y}`
+}
+
+function build(
+  platform: Platform,
+  bruto: number,
+  liquido: number,
+  pedidos: number,
+  breakdown: BreakdownItem[],
+  competencia: string,
+): ResultData {
+  const taxas = Math.max(0, bruto - liquido)
+  // Trava de honestidade do breakdown: a soma das linhas nunca pode estourar
+  // as taxas reais (senão parece que a loja pagou mais do que perdeu). Se
+  // estourar (mapa de taxa errado pra aquele relatório), esconde o breakdown
+  // e mostra só o headline (que é sempre correto: taxas = bruto − líquido).
+  // Se sobrar diferença relevante, completa com "Outras taxas".
+  let items = breakdown.filter((b) => b.v > 0)
+  const known = items.reduce((a, b) => a + b.v, 0)
+  if (known > taxas * 1.15) {
+    items = []
+  } else if (taxas - known > Math.max(1, taxas * 0.05)) {
+    items = [...items, { l: "Outras taxas", v: taxas - known }]
+  }
+  return {
+    platform,
+    platformLabel: PLAT_LABEL[platform],
+    competencia,
+    bruto,
+    liquido,
+    pct: bruto > 0 ? Math.min(100, (liquido / bruto) * 100) : 0,
+    taxas,
+    breakdown: items,
+    pedidos,
+    ticket: pedidos > 0 ? bruto / pedidos : 0,
+  }
+}
+
+// ─── normalização por plataforma → mesma forma da tela ───────────────
+function normNine(r: NinefoodParseResult): ResultData {
+  if (r.reportType === "dados_loja") {
+    const dias = r.porLoja.flatMap((g) => g.dias)
+    if (!dias.length) throw new Error(ERR_GENERIC)
+    return build(
+      "99food",
+      sum(dias, (d) => d.bruto),
+      sum(dias, (d) => d.liquido),
+      sum(dias, (d) => d.pedidos),
+      [
+        { l: "Comissão", v: sumAbs(dias, (d) => d.comissaoRs) },
+        { l: "Taxa de pagamento", v: sumAbs(dias, (d) => d.taxaCanalPagamentoRs) },
+        { l: "Promoções da loja", v: sumAbs(dias, (d) => d.promocoesRs) },
+      ],
+      mesLabel(dias.map((d) => d.data)),
+    )
+  }
+  if (r.reportType === "dados_pedido") {
+    const peds = r.porLoja.flatMap((g) => g.pedidos)
+    if (!peds.length) throw new Error(ERR_GENERIC)
+    return build(
+      "99food",
+      sum(peds, (p) => p.receitaVendas),
+      sum(peds, (p) => p.receitaRealLoja),
+      peds.length,
+      [
+        { l: "Comissão", v: sumAbs(peds, (p) => p.despesasComissao) },
+        { l: "Taxa de pagamento", v: sumAbs(peds, (p) => p.taxaCanalPagamento) },
+        { l: "Custos logísticos", v: sumAbs(peds, (p) => p.custosLogisticos) },
+        { l: "Promoções da loja", v: sumAbs(peds, (p) => p.despesasOfertas) },
+      ],
+      mesLabel(peds.map((p) => p.data)),
+    )
+  }
+  throw new Error(
+    'Esse é o relatório de itens (cardápio) do 99 Food. Pro cálculo do lucro, sobe o "Dados da loja" ou o "Dados do pedido".',
+  )
+}
+
+function normKeeta(r: KeetaParseResult): ResultData {
+  if (r.reportType === "pedido") {
+    const peds = r.porLoja.flatMap((g) => g.pedidos)
+    if (!peds.length) throw new Error(ERR_GENERIC)
+    return build(
+      "keeta",
+      sum(peds, (p) => p.vendasItens),
+      sum(peds, (p) => p.ganhosLiquidos),
+      peds.length,
+      [
+        { l: "Comissão", v: sumAbs(peds, (p) => p.comissao) },
+        { l: "Taxas da plataforma", v: sumAbs(peds, (p) => p.despesasPlataforma) },
+      ],
+      mesLabel(peds.map((p) => p.data)),
+    )
+  }
+  if (r.reportType === "pedido_recente") {
+    const peds = r.porLoja.flatMap((g) => g.pedidos)
+    if (!peds.length) throw new Error(ERR_GENERIC)
+    return build(
+      "keeta",
+      sum(peds, (p) => p.valorPagoCliente),
+      sum(peds, (p) => p.ganhos),
+      peds.length,
+      [
+        { l: "Comissão", v: sumAbs(peds, (p) => p.comissaoBasica) },
+        { l: "Taxa de pagamento online", v: sumAbs(peds, (p) => p.taxaPagamentoOnline) },
+        { l: "Saque antecipado", v: sumAbs(peds, (p) => p.taxaSaqueAntecipado) },
+      ],
+      mesLabel(peds.map((p) => p.data)),
+    )
+  }
+  throw new Error(
+    'Esse relatório da Keeta não tem os valores de repasse. Pro cálculo do lucro, sobe o de "Pedidos" ou "Pedidos recentes" da Keeta.',
+  )
+}
+
 export function ExperimenteDemo() {
   const [state, setState] = useState<DemoState>({ s: "idle" })
   const [dragging, setDragging] = useState(false)
@@ -44,40 +209,57 @@ export function ExperimenteDemo() {
     setState({ s: "parsing", name: file.name })
     try {
       const buf = await file.arrayBuffer()
-      // Carrega xlsx + o parser real do app só agora (não pesa a página).
-      const XLSX = await import("xlsx")
-      const { parseIfoodFinanceiro } = await import(
-        "@/lib/import/ifood/parse-financeiro"
-      )
-      const wb = XLSX.read(new Uint8Array(buf), { type: "array" })
-      const parsed = parseIfoodFinanceiro(wb)
-      const t = parsed.totals
-      if (!t.bruto || t.bruto <= 0) {
-        throw new Error("SEM_BRUTO")
+      // Carrega xlsx + os parsers reais do app só agora (não pesa a página).
+      const [XLSX, keetaMod, nineMod, ifoodMod] = await Promise.all([
+        import("xlsx"),
+        import("@/lib/import/keeta"),
+        import("@/lib/import/ninefood"),
+        import("@/lib/import/ifood/parse-financeiro"),
+      ])
+
+      let data: ResultData
+
+      // Detecta a plataforma: cada parser devolve "unknown" (sem lançar) se
+      // o arquivo não for dele. Ordem: Keeta → 99 → iFood.
+      const keeta = keetaMod.parseKeetaReport(buf)
+      const nine =
+        keeta.reportType === "unknown"
+          ? nineMod.parseNinefoodReport(buf)
+          : null
+
+      if (keeta.reportType !== "unknown") {
+        data = normKeeta(keeta)
+      } else if (nine && nine.reportType !== "unknown") {
+        data = normNine(nine)
+      } else {
+        // iFood (Conciliação) — qualquer falha aqui vira erro genérico.
+        try {
+          const wb = XLSX.read(new Uint8Array(buf), { type: "array" })
+          const parsed = ifoodMod.parseIfoodFinanceiro(wb)
+          const t = parsed.totals
+          if (!t.bruto || t.bruto <= 0) throw new Error(ERR_GENERIC)
+          data = build(
+            "ifood",
+            t.bruto,
+            t.liquido,
+            t.pedidosUnicos,
+            [
+              { l: "Comissão do iFood", v: Math.abs(t.comissaoIfood) },
+              { l: "Taxa de entrega", v: Math.abs(t.taxaEntrega) },
+              { l: "Taxa de transação", v: Math.abs(t.taxaTransacao) },
+              { l: "Promoções da loja", v: Math.abs(t.promocaoLoja) },
+            ],
+            parsed.competencia,
+          )
+        } catch {
+          throw new Error(ERR_GENERIC)
+        }
       }
-      const taxas = Math.max(0, t.bruto - t.liquido)
-      setState({
-        s: "result",
-        name: file.name,
-        data: {
-          competencia: parsed.competencia,
-          bruto: t.bruto,
-          liquido: t.liquido,
-          pct: t.bruto > 0 ? (t.liquido / t.bruto) * 100 : 0,
-          taxas,
-          comissao: Math.abs(t.comissaoIfood),
-          entrega: Math.abs(t.taxaEntrega),
-          transacao: Math.abs(t.taxaTransacao),
-          promo: Math.abs(t.promocaoLoja),
-          pedidos: t.pedidosUnicos,
-          ticket: t.pedidosUnicos > 0 ? t.bruto / t.pedidosUnicos : 0,
-        },
-      })
-    } catch {
-      setState({
-        s: "error",
-        msg: "Não reconhecemos esse arquivo como o relatório financeiro do iFood (Conciliação). Por enquanto o teste é só com o do iFood — baixa o de Conciliação e tenta de novo.",
-      })
+
+      setState({ s: "result", name: file.name, data })
+    } catch (e) {
+      const msg = e instanceof Error && e.message ? e.message : ERR_GENERIC
+      setState({ s: "error", msg })
     }
   }, [])
 
@@ -150,10 +332,12 @@ export function ExperimenteDemo() {
                 <Upload className="size-7" strokeWidth={2} />
               </span>
               <p className="mt-5 text-lg font-medium">
-                Arraste o relatório do iFood aqui
+                Arraste seu relatório aqui
               </p>
               <p className="mt-1.5 max-w-sm text-sm text-[oklch(0.5_0.01_48)]">
-                O financeiro (Conciliação), em <span className="font-mono">.xlsx</span> ou <span className="font-mono">.csv</span>. Ou clique pra escolher.
+                iFood (Conciliação), 99 Food (Dados da loja/pedido) ou Keeta
+                (Pedidos), em <span className="font-mono">.xlsx</span> ou{" "}
+                <span className="font-mono">.csv</span>. Ou clique pra escolher.
               </p>
               <span className="btn-brand mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium">
                 <FileSpreadsheet className="size-4" strokeWidth={2.2} />
@@ -182,13 +366,6 @@ function ResultPanel({
   name: string
   onReset: () => void
 }) {
-  const itens = [
-    { l: "Comissão do iFood", v: data.comissao },
-    { l: "Taxa de entrega", v: data.entrega },
-    { l: "Taxa de transação", v: data.transacao },
-    { l: "Promoções da loja", v: data.promo },
-  ].filter((i) => i.v > 0)
-
   return (
     <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-[oklch(0.175_0.004_60)] text-left shadow-[0_30px_70px_-30px_rgba(0,0,0,.7)]">
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-6 py-4">
@@ -197,7 +374,8 @@ function ResultPanel({
           <span className="truncate font-mono text-xs text-[oklch(0.62_0_0)]">{name}</span>
         </div>
         <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-[oklch(0.65_0_0)]">
-          {data.competencia}
+          {data.platformLabel}
+          {data.competencia ? ` · ${data.competencia}` : ""}
         </span>
       </div>
 
@@ -209,7 +387,8 @@ function ResultPanel({
         <div className="mt-5 rounded-2xl border border-[oklch(0.4_0.08_25/0.4)] bg-[oklch(0.26_0.06_25)] p-4">
           <p className="flex items-center gap-2 text-sm text-[oklch(0.85_0.1_25)]">
             <TrendingDown className="size-4" strokeWidth={2.2} />
-            As taxas do iFood comeram
+            As taxas {data.platform === "keeta" ? "da" : "do"}{" "}
+            {data.platformLabel} comeram
           </p>
           <p className="mt-1 text-2xl font-medium text-[oklch(0.82_0.14_25)] sm:text-3xl">
             −{brl(data.taxas)}
@@ -231,12 +410,12 @@ function ResultPanel({
         </div>
 
         {/* Breakdown */}
-        {itens.length > 0 && (
+        {data.breakdown.length > 0 && (
           <div className="mt-5 space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-wider text-[oklch(0.55_0_0)]">
               Pra onde foi o dinheiro
             </p>
-            {itens.map((i) => (
+            {data.breakdown.map((i) => (
               <div key={i.l} className="flex items-center justify-between text-[13px]">
                 <span className="text-[oklch(0.7_0_0)]">{i.l}</span>
                 <span className="tabular-nums text-[oklch(0.78_0.1_25)]">−{brl(i.v)}</span>
@@ -264,7 +443,7 @@ function ResultPanel({
             className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-white/5"
           >
             <RefreshCw className="size-4" strokeWidth={2} />
-            Testar outro mês
+            Testar outro relatório
           </button>
         </div>
         <p className="mt-3 flex items-center gap-2 text-[11px] text-[oklch(0.55_0_0)]">
