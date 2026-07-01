@@ -51,6 +51,7 @@ const REPORTS: ReportDef[] = [
   { platform: "99food", key: "pedido", label: "Dados do pedido", cadencia: "diario", perStore: false, table: "ninefood_pedidos", dateCol: "data" },
   { platform: "keeta", key: "restaurante", label: "Dados do restaurante", cadencia: "diario", perStore: false, table: "keeta_daily_loja", dateCol: "data" },
   { platform: "keeta", key: "pedido", label: "Dados do pedido", cadencia: "diario", perStore: false, table: "keeta_pedidos", dateCol: "data" },
+  { platform: "keeta", key: "pedido_recente", label: "Pedidos recentes", cadencia: "diario", perStore: false, table: "keeta_pedidos_recentes", dateCol: "data" },
   { platform: "keeta", key: "item", label: "Dados do item", cadencia: "diario", perStore: false, table: "keeta_daily_item", dateCol: "data" },
 ]
 
