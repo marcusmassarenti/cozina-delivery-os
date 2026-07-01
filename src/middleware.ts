@@ -2,7 +2,21 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { updateSession } from "@/lib/supabase/middleware"
 
+// Domínio da landing do SaaS. A raiz desse domínio mostra a landing
+// (/deliveryos) em vez do app. Trocar aqui se o domínio mudar.
+const LANDING_HOSTS = new Set(["deliveryos.food", "www.deliveryos.food"])
+
 export async function middleware(request: NextRequest) {
+  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase()
+
+  // deliveryos.food/  → serve a landing (rewrite, mantém a URL na barra).
+  // O app principal (delivery.cozinafoods.com) não é afetado.
+  if (LANDING_HOSTS.has(host) && request.nextUrl.pathname === "/") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/deliveryos"
+    return NextResponse.rewrite(url)
+  }
+
   // Sondas de readiness (preview do Claude, monitores de uptime) batem em
   // `HEAD /`. Como o layout do grupo (app) redireciona quem não tem sessão
   // pro /login (307), essas sondas ficam penduradas esperando um 2xx. Aqui
