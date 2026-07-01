@@ -14,6 +14,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
+import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 
 /**
  * Pagina uma query do Supabase via .range() em loop. O hard-cap de 1000
@@ -694,12 +695,18 @@ export async function getNinefoodCoverageMatrix(
   const endLastDay = new Date(endYear, endMonth, 0).getDate()
   const rangeEnd = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endLastDay).padStart(2, "0")}`
 
+  // Isolamento multi-tenant: só as lojas da empresa do usuário (null =
+  // super-admin de plataforma sem vínculo → vê tudo). Empresa sem lojas → set
+  // vazio → matriz vazia.
+  const allowed = await getAccessibleUnitIds()
+  const allowSet = allowed ? new Set(allowed) : null
+
   // Todas unidades
   const { data: unitsRows } = await admin
     .from("units")
     .select("id, code, name, active, data_inauguracao, data_encerramento")
     .order("code")
-  const units = unitsRows ?? []
+  const units = (unitsRows ?? []).filter((u) => !allowSet || allowSet.has(u.id))
 
   // Lojas vinculadas ao 99 Food + datas por plataforma (fallback: unidade).
   const { data: platRows } = await admin

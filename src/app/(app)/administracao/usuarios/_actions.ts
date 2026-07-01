@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdmin, requireModulePermission } from "@/lib/auth/guards"
@@ -9,6 +9,42 @@ import {
   getCurrentHoldingId,
   getRolesConfig,
 } from "@/lib/auth/permissions"
+import { getDefaultBrand } from "@/lib/data/units"
+
+/** Máximo de usuários por loja (franqueado + equipe da unidade). */
+const MAX_USERS_PER_UNIT = 5
+
+/**
+ * Bloqueia passar do limite de usuários por loja. Uma loja já com
+ * MAX_USERS_PER_UNIT vínculos não aceita mais um. Loja nova (0) sempre passa.
+ */
+async function assertUnitUserLimit(
+  supabase: ReturnType<typeof createAdminClient>,
+  unitIds: string[],
+): Promise<string | null> {
+  for (const uid of unitIds) {
+    const { count } = await supabase
+      .from("user_unit_access")
+      .select("user_id", { count: "exact", head: true })
+      .eq("scope_type", "unit")
+      .eq("scope_id", uid)
+    if ((count ?? 0) >= MAX_USERS_PER_UNIT)
+      return `Essa loja já atingiu o limite de ${MAX_USERS_PER_UNIT} usuários.`
+  }
+  return null
+}
+
+/** Próximo código numérico sequencial pra uma loja nova (mesma regra do /unidades). */
+async function nextUnitCode(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<string> {
+  const { data } = await supabase.from("units").select("code")
+  let max = 0
+  for (const row of data ?? []) {
+    if (/^\d+$/.test(row.code)) max = Math.max(max, parseInt(row.code, 10))
+  }
+  return String(max + 1).padStart(2, "0")
+}
 
 /** Escopo de dados do perfil (vem da tela de Permissões). Default: holding. */
 async function roleScope(perfilKey: string): Promise<"holding" | "unit"> {
@@ -202,6 +238,14 @@ export async function createUser(
     .map(String)
     .map((s) => s.trim())
     .filter(Boolean)
+  // Franqueado: "nova loja" (cria a unidade inline) ou "existente" (vincula).
+  const storeMode = String(formData.get("storeMode") ?? "existing")
+  const storeName = String(formData.get("storeName") ?? "").trim()
+  const storeCity = String(formData.get("storeCity") ?? "").trim()
+  const storeUf = String(formData.get("storeUf") ?? "").trim().toUpperCase()
+
+  const scope = await roleScope(perfil)
+  const criandoLoja = scope === "unit" && storeMode === "new"
 
   const fieldErrors: Record<string, string> = {}
   if (!fullName) fieldErrors.fullName = "Nome obrigatório"
@@ -210,10 +254,18 @@ export async function createUser(
   if (pwErr) fieldErrors.password = pwErr
   if (!(await isPerfilValido(perfil)))
     fieldErrors.perfil = "Perfil inválido."
-  if ((await roleScope(perfil)) === "unit" && unitIds.length === 0)
-    fieldErrors.unitId = "Selecione ao menos uma loja vinculada ao perfil"
-  const scopeErr = await assertUnitsInScope(unitIds)
-  if (scopeErr) fieldErrors.unitId = scopeErr
+  if (scope === "unit") {
+    if (criandoLoja) {
+      if (!storeName) fieldErrors.storeName = "Nome da loja obrigatório"
+      if (storeUf && storeUf.length !== 2)
+        fieldErrors.storeUf = "UF deve ter 2 letras"
+    } else {
+      if (unitIds.length === 0)
+        fieldErrors.unitId = "Selecione a loja do franqueado"
+      const scopeErr = await assertUnitsInScope(unitIds)
+      if (scopeErr) fieldErrors.unitId = scopeErr
+    }
+  }
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -223,6 +275,37 @@ export async function createUser(
     // Só admin cria usuários (não basta usuarios:edit — evita escalonamento via
     // role custom com edit ligado).
     const { admin: supabase } = await requireAdmin()
+
+    // Franqueado com "nova loja": cria a unidade na empresa do admin.
+    let effectiveUnitIds = unitIds
+    let lojaCriada = false
+    if (criandoLoja) {
+      const brand = await getDefaultBrand()
+      const code = await nextUnitCode(supabase)
+      const { data: unit, error: uErr } = await supabase
+        .from("units")
+        .insert({
+          brand_id: brand.id,
+          code,
+          name: storeName,
+          city: storeCity || null,
+          state: storeUf || null,
+          active: true,
+        })
+        .select("id")
+        .single()
+      if (uErr || !unit)
+        return { ok: false, message: `Erro ao criar a loja: ${uErr?.message ?? ""}` }
+      effectiveUnitIds = [unit.id]
+      lojaCriada = true
+    }
+
+    // Limite de 5 usuários por loja (loja nova = 0, sempre passa).
+    if (scope === "unit") {
+      const limitErr = await assertUnitUserLimit(supabase, effectiveUnitIds)
+      if (limitErr) return { ok: false, message: limitErr }
+    }
+
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -242,9 +325,15 @@ export async function createUser(
         .update({ full_name: fullName, perfil })
         .eq("user_id", data.user.id)
 
-      await syncAccess(supabase, data.user.id, perfil, unitIds)
+      await syncAccess(supabase, data.user.id, perfil, effectiveUnitIds)
     }
 
+    if (lojaCriada) {
+      revalidateTag("units", "max")
+      revalidateTag("reports", "max")
+      revalidatePath("/unidades")
+      revalidatePath("/")
+    }
     revalidatePath("/administracao/usuarios")
     return { ok: true }
   } catch (err) {

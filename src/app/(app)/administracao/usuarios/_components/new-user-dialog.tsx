@@ -49,6 +49,7 @@ export function NewUserDialog({
   const [state, formAction] = useActionState(createUser, initial)
   const [perfil, setPerfil] = React.useState<string>(defaultRole)
   const [unitIds, setUnitIds] = React.useState<string[]>([])
+  const [storeMode, setStoreMode] = React.useState<"new" | "existing">("new")
   const router = useRouter()
 
   React.useEffect(() => {
@@ -56,6 +57,7 @@ export function NewUserDialog({
       setOpen(false)
       setPerfil(defaultRole)
       setUnitIds([])
+      setStoreMode("new")
       router.refresh()
     }
   }, [state, router, defaultRole])
@@ -139,22 +141,70 @@ export function NewUserDialog({
           </Field>
 
           {showUnit && (
-            <Field
-              label="Lojas vinculadas"
-              error={state.fieldErrors?.unitId}
-            >
-              <UnitMultiSelect
-                units={units}
-                selected={unitIds}
-                onToggle={(id) =>
-                  setUnitIds((prev) =>
-                    prev.includes(id)
-                      ? prev.filter((x) => x !== id)
-                      : [...prev, id],
-                  )
-                }
-              />
-            </Field>
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+              <input type="hidden" name="storeMode" value={storeMode} />
+              <div className="grid grid-cols-2 gap-1.5 rounded-md bg-muted p-1">
+                {(["new", "existing"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setStoreMode(m)}
+                    className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                      storeMode === m
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "new" ? "Nova loja" : "Loja existente"}
+                  </button>
+                ))}
+              </div>
+
+              {storeMode === "new" ? (
+                <>
+                  <Field
+                    label="Nome da loja"
+                    error={state.fieldErrors?.storeName}
+                  >
+                    <Input name="storeName" placeholder="ex.: Unidade Centro" />
+                  </Field>
+                  <div className="grid grid-cols-[1fr_5rem] gap-3">
+                    <Field label="Cidade">
+                      <Input name="storeCity" placeholder="São Paulo" />
+                    </Field>
+                    <Field label="UF" error={state.fieldErrors?.storeUf}>
+                      <Input
+                        name="storeUf"
+                        placeholder="SP"
+                        maxLength={2}
+                        className="uppercase"
+                      />
+                    </Field>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Cria a loja e vincula o franqueado a ela — acesso só a essa
+                    unidade. Cada loja aceita até 5 usuários.
+                  </p>
+                </>
+              ) : (
+                <Field
+                  label="Loja do franqueado"
+                  error={state.fieldErrors?.unitId}
+                >
+                  <UnitMultiSelect
+                    units={units}
+                    selected={unitIds}
+                    onToggle={(id) =>
+                      setUnitIds((prev) =>
+                        prev.includes(id)
+                          ? prev.filter((x) => x !== id)
+                          : [...prev, id],
+                      )
+                    }
+                  />
+                </Field>
+              )}
+            </div>
           )}
 
           {state.message && !state.ok && (
