@@ -31,6 +31,7 @@ import type {
   ParsedKeetaItem,
   ParsedKeetaPedidos,
   ParsedKeetaPedidosRecentes,
+  ParsedKeetaPromocoes,
 } from "@/lib/import/keeta"
 
 export type ImportFileResult = {
@@ -200,6 +201,20 @@ export type ImportSummary =
       cancelados: number
       promoKeeta: number
       promoLoja: number
+      novos: number
+      atualizados: number
+    }
+  | {
+      kind: "keeta_promocao"
+      unitCode: string
+      unitName: string
+      storeId: string
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      linhas: number
+      campanhas: number
+      pedidos: number
+      despesa: number
       novos: number
       atualizados: number
     }
@@ -448,6 +463,15 @@ async function processFile(
     }
     if (parsed.reportType === "pedido_recente") {
       return await processKeetaPedidosRecentes(
+        parsed,
+        storeMaps.keeta,
+        file.name,
+        userId,
+        admin,
+      )
+    }
+    if (parsed.reportType === "promocao") {
+      return await processKeetaPromocoes(
         parsed,
         storeMaps.keeta,
         file.name,
@@ -2334,6 +2358,148 @@ async function saveKeetaPedidosRecentes(
     cancelados,
     promoKeeta: Math.round(promoKeeta * 100) / 100,
     promoLoja: Math.round(promoLoja * 100) / 100,
+    novos,
+    atualizados,
+  }
+}
+
+// ─── Keeta: Dados da promoção (ROI por campanha) ─────────────────────
+
+async function processKeetaPromocoes(
+  parsed: ParsedKeetaPromocoes,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  const isMulti = parsed.porLoja.length > 1
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push(
+        keetaUnmapped(grupo, filename, isMulti, "Keeta — Dados da promoção"),
+      )
+      continue
+    }
+    try {
+      const summary = await saveKeetaPromocoes(
+        grupo,
+        unit,
+        filename,
+        userId,
+        admin,
+      )
+      results.push(keetaOk(unit, filename, isMulti, summary))
+    } catch (e) {
+      results.push(keetaErr(unit, filename, isMulti, e, "Dados da promoção"))
+    }
+  }
+  return results
+}
+
+async function saveKeetaPromocoes(
+  grupo: ParsedKeetaPromocoes["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  if (grupo.promocoes.length === 0)
+    throw new Error("Nenhuma linha de promoção válida nessa loja.")
+
+  const sortedTs = grupo.promocoes
+    .map((p) => p.data.getTime())
+    .sort((a, b) => a - b)
+  const periodoInicio = new Date(sortedTs[0])
+  const periodoFim = new Date(sortedTs[sortedTs.length - 1])
+
+  // novos × atualizados pela chave natural (data, ato_id).
+  const keyOf = (dataIso: string, ato: string) => `${dataIso}|${ato}`
+  const fileKeys = new Set(
+    grupo.promocoes.map((p) => keyOf(formatDateOnly(p.data), p.atoId)),
+  )
+  const { data: existing } = await admin
+    .from("keeta_promocoes")
+    .select("data, ato_id")
+    .eq("unit_id", unit.unitId)
+    .gte("data", formatDateOnly(periodoInicio))
+    .lte("data", formatDateOnly(periodoFim))
+  const existingKeys = new Set(
+    (existing ?? []).map((r) =>
+      keyOf(String(r.data).slice(0, 10), String(r.ato_id)),
+    ),
+  )
+  let atualizados = 0
+  for (const k of fileKeys) if (existingKeys.has(k)) atualizados++
+  const novos = fileKeys.size - atualizados
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "keeta",
+      report_type: "promocao",
+      cadencia: "diario",
+      ref_date: formatDateOnly(periodoFim),
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: grupo.promocoes.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const rows = grupo.promocoes.map((p) => ({
+    unit_id: unit.unitId,
+    data: formatDateOnly(p.data),
+    ref_year: p.data.getFullYear(),
+    ref_month: p.data.getMonth() + 1,
+    ato_id: p.atoId,
+    regra_desconto: p.regraDesconto,
+    store_name: grupo.storeName,
+    pedidos_campanha: p.pedidosCampanha,
+    pedidos_validos: p.pedidosValidos,
+    vendas_promo_itens: p.vendasPromoItens,
+    vendas_itens: p.vendasItens,
+    despesa_campanha: p.despesaCampanha,
+    despesa: p.despesa,
+    despesa_media_campanha: p.despesaMediaCampanha,
+    despesa_unidade: p.despesaUnidade,
+    import_id: importLog.id,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("keeta_promocoes")
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: "unit_id,data,ato_id" })
+    if (error)
+      throw new Error(
+        `Falha ao gravar Dados da promoção (chunk ${i / CHUNK + 1}): ${error.message}`,
+      )
+  }
+
+  const campanhas = new Set(grupo.promocoes.map((p) => p.atoId)).size
+  let pedidos = 0
+  let despesa = 0
+  for (const p of grupo.promocoes) {
+    pedidos += p.pedidosCampanha ?? 0
+    despesa += Math.abs(p.despesaCampanha ?? 0)
+  }
+
+  return {
+    kind: "keeta_promocao",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    periodoInicio: formatDateOnly(periodoInicio),
+    periodoFim: formatDateOnly(periodoFim),
+    linhas: grupo.promocoes.length,
+    campanhas,
+    pedidos: Math.round(pedidos),
+    despesa: Math.round(despesa * 100) / 100,
     novos,
     atualizados,
   }

@@ -54,6 +54,7 @@ export function detectKeetaReportType(
   const set = new Set(readHeader(sheet))
 
   // Colunas exclusivas de cada relatório
+  if (set.has("ID do ato") && set.has("Regras de desconto")) return "promocao"
   if (set.has("Número do pedido") && set.has("Promoção financiada pela Keeta"))
     return "pedido_recente"
   if (set.has("ID do pedido") && set.has("Ganhos líquidos")) return "pedido"

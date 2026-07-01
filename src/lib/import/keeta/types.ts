@@ -10,6 +10,7 @@ export type KeetaReportType =
   | "item" // "Itens diário" — 1 linha por item por dia
   | "pedido" // "Pedidos" — 1 linha por pedido (financeiro + cancel + avaliação)
   | "pedido_recente" // "Pedidos recentes" — 1 linha por pedido (promoção Keeta×loja + taxas granulares + campanha)
+  | "promocao" // "Dados da promoção" — 1 linha por campanha × loja × dia (ROI da promoção)
   | "unknown"
 
 // ─── Loja diária ─────────────────────────────────────────────────────
@@ -150,9 +151,35 @@ export type ParsedKeetaPedidosRecentes = {
   }>
 }
 
+// ─── Dados da promoção ───────────────────────────────────────────────
+
+export type ParsedKeetaPromocaoLinha = {
+  data: Date
+  atoId: string
+  regraDesconto: string | null
+  pedidosCampanha: number | null
+  pedidosValidos: number | null
+  vendasPromoItens: number | null
+  vendasItens: number | null
+  despesaCampanha: number | null
+  despesa: number | null
+  despesaMediaCampanha: number | null
+  despesaUnidade: number | null
+}
+
+export type ParsedKeetaPromocoes = {
+  reportType: "promocao"
+  porLoja: Array<{
+    storeId: string
+    storeName: string | null
+    promocoes: ParsedKeetaPromocaoLinha[]
+  }>
+}
+
 export type KeetaParseResult =
   | ParsedKeetaLoja
   | ParsedKeetaItem
   | ParsedKeetaPedidos
   | ParsedKeetaPedidosRecentes
+  | ParsedKeetaPromocoes
   | { reportType: "unknown"; error: string }

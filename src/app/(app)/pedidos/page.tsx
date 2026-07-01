@@ -15,6 +15,7 @@ import {
   getKeetaPedidoUnitsWithData,
   getNetworkKeetaPedidoResumo,
 } from "@/lib/data/keeta-pedidos"
+import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import {
   getNinefoodPedidoPorLoja,
@@ -103,19 +104,21 @@ export default async function PedidosPage({
   const keeta =
     plataforma === "keeta"
       ? await (async () => {
-          const [resumo, unitsWithData, porLoja, fatMap] = await Promise.all([
-            getNetworkKeetaPedidoResumo(ids, year, month),
-            getKeetaPedidoUnitsWithData(year, month),
-            getKeetaPedidoPorLoja(ids, year, month),
-            getKeetaResumoByUnits(ids, year, month, queryRange),
-          ])
+          const [resumo, unitsWithData, porLoja, fatMap, promocoes] =
+            await Promise.all([
+              getNetworkKeetaPedidoResumo(ids, year, month),
+              getKeetaPedidoUnitsWithData(year, month),
+              getKeetaPedidoPorLoja(ids, year, month),
+              getKeetaResumoByUnits(ids, year, month, queryRange),
+              getKeetaPromocaoResumo(ids, year, month),
+            ])
           const enriched = porLoja
             .map((u) => ({
               ...u,
               faturamento: fatMap?.get(u.unitId)?.bruto || u.precoOriginal,
             }))
             .sort((a, b) => b.faturamento - a.faturamento)
-          return { resumo, unitsWithData, porLoja: enriched }
+          return { resumo, unitsWithData, porLoja: enriched, promocoes }
         })()
       : null
   const ninefood =
@@ -194,6 +197,7 @@ export default async function PedidosPage({
         <PedidosKeetaView
           resumo={keeta!.resumo}
           porLoja={keeta!.porLoja}
+          promocoes={keeta!.promocoes}
           periodoParam={periodoParam}
         />
       ) : plataforma === "99food" ? (
