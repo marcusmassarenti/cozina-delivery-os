@@ -7,8 +7,8 @@ import { getCurrentHoldingBilling } from "@/lib/data/billing"
 import { signOut } from "@/app/login/_actions"
 import { Button } from "@/components/ui/button"
 
-const WHATSAPP =
-  "https://wa.me/5511995125139?text=Quero%20assinar%20o%20Delivery%20OS"
+const ASSINAR_EMAIL =
+  "mailto:suporte@deliveryos.food?subject=Quero%20assinar%20o%20Delivery%20OS"
 
 export default async function SuspensoPage() {
   const supabase = await createClient()
@@ -47,21 +47,20 @@ export default async function SuspensoPage() {
               ficam guardados.
             </p>
             <a
-              href={WHATSAPP}
-              target="_blank"
-              rel="noreferrer"
+              href={ASSINAR_EMAIL}
               className="btn-brand mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold"
             >
-              Assinar pelo WhatsApp
+              Quero assinar
             </a>
             <p className="mt-3 text-xs text-muted-foreground">
-              ou escreva pra{" "}
+              Escreva pra{" "}
               <a
                 href="mailto:suporte@deliveryos.food"
                 className="underline hover:text-foreground"
               >
                 suporte@deliveryos.food
-              </a>
+              </a>{" "}
+              que a gente te ajuda.
             </p>
           </>
         ) : (

@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
  */
 const SUPPORT = {
   email: "suporte@deliveryos.food",
-  whatsapp: "5511995125139", // só dígitos com DDI
+  whatsapp: "", // só dígitos com DDI. Vazio = esconde a opção (sem número ainda).
   helpUrl: "/seguranca",
 }
 

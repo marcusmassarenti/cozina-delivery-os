@@ -83,9 +83,7 @@ export default async function AppLayout({
                   : `Teste grátis — ${trialDaysLeft} dia${trialDaysLeft === 1 ? "" : "s"} restante${trialDaysLeft === 1 ? "" : "s"}.`}
               </span>
               <a
-                href="https://wa.me/5511995125139?text=Quero%20assinar%20o%20Delivery%20OS"
-                target="_blank"
-                rel="noreferrer"
+                href="mailto:suporte@deliveryos.food?subject=Quero%20assinar%20o%20Delivery%20OS"
                 className="font-semibold underline underline-offset-2 hover:opacity-80"
               >
                 Assinar agora
