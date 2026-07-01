@@ -6,13 +6,14 @@
  * relatório mostrava "1". Traduzimos aqui, na exibição. O import manual já vem
  * com texto ("Entrega da plataforma", "Retirada na loja") e passa direto.
  *
- * Códigos confirmados nos dados reais: 1 = entrega feita pela logística da 99.
- * Os demais entram quando a 99 mandar a tabela completa (aí é só ampliar o mapa).
+ * Tabela oficial (doc da 99Food, Order API → Get Order Details):
+ * 1 = entrega feita pela 99Food; 2 = entrega feita pela loja.
  */
 
-/** Códigos de delivery_type que já conhecemos. */
+/** Códigos de delivery_type (doc oficial da 99). */
 export const DELIVERY_TYPE_LABEL: Record<string, string> = {
   "1": "Entrega da plataforma",
+  "2": "Entrega pela loja",
 }
 
 export function metodoEntregaLabel(metodo: string | null): string {

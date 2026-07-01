@@ -12,13 +12,41 @@
  * original ("Pagamento online" / "Pagamento em dinheiro").
  */
 
-/** Códigos de pay_channel que já conhecemos (dados reais + doc da 99). */
+/**
+ * Tabela oficial de pay_channel da doc da 99Food (Order API → Get Order Details).
+ * https://developer-food.99app.com → Order API. Rótulos em pt-BR, compactos pro
+ * relatório; os vales-refeição ficam com prefixo "VR" pra agruparem visualmente.
+ */
 export const PAY_CHANNEL_LABEL: Record<number, string> = {
+  110: "Cupom",
+  120: "Carteira 99Food",
   150: "Cartão",
-  212: "PIX",
-  280: "PIX",
-  259: "VR",
   153: "Dinheiro",
+  154: "POS",
+  167: "Cartão (pré-autorização)",
+  182: "PayPay",
+  184: "PayPay",
+  190: "99Pay",
+  212: "PIX",
+  219: "99Food Cuenta",
+  229: "NuPay",
+  234: "Apple Pay",
+  235: "Apple Pay",
+  257: "VR Pluxee",
+  258: "VR Ticket",
+  259: "VR",
+  260: "VR Alelo",
+  261: "NEQUI",
+  262: "Crédito (POS)",
+  263: "Débito (POS)",
+  264: "VR (POS)",
+  272: "Google Pay",
+  273: "Google Pay",
+  280: "PIX",
+  310: "Yape",
+  311: "Plin",
+  901: "Benefício",
+  2008: "Marketing",
 }
 
 /**
