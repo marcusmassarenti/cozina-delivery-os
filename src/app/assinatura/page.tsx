@@ -8,6 +8,12 @@ import { daysUntil } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
 import { SubscribeForm } from "./_components/subscribe-form"
+import { CancelButton } from "./_components/cancel-button"
+
+function fmtDataBR(iso: string | null): string {
+  if (!iso) return "—"
+  return iso.split("-").reverse().join("/")
+}
 
 export const dynamic = "force-dynamic"
 
@@ -44,12 +50,37 @@ export default async function AssinaturaPage() {
             <p className="mt-2 text-center text-sm text-muted-foreground">
               Sua assinatura está em dia. Obrigado por fazer parte! 🎉
             </p>
+
+            <div className="mt-6 space-y-2 rounded-xl border bg-muted/30 p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Valor</span>
+                <span className="font-medium tabular-nums">
+                  {plano ? `${fmtBRL(plano.mensalidade)}/mês` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Próxima cobrança</span>
+                <span className="font-medium tabular-nums">
+                  {fmtDataBR(plano?.dueDate ?? null)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Pagamento</span>
+                <span className="font-medium">
+                  {plano?.paymentMethod ?? "Asaas"}
+                </span>
+              </div>
+            </div>
+
             <Link
               href="/"
               className="btn-brand mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold"
             >
               Voltar pro sistema
             </Link>
+            {plano?.subscriptionId && (
+              <CancelButton fimPeriodo={plano.dueDate} />
+            )}
           </>
         ) : plano ? (
           <>

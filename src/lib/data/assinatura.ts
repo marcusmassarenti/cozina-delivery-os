@@ -61,6 +61,8 @@ export type PlanoAtual = {
   extraUnits: number
   /** Preço custom definido pelo dono? (senão, PLANO_PADRAO) */
   precoCustom: boolean
+  dueDate: string | null
+  paymentMethod: string | null
   customerId: string | null
   subscriptionId: string | null
 }
@@ -127,6 +129,8 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     activeUnits,
     extraUnits,
     precoCustom,
+    dueDate: (h.due_date as string | null) ?? null,
+    paymentMethod: (h.payment_method as string | null) ?? null,
     customerId: (h.asaas_customer_id as string | null) ?? null,
     subscriptionId: (h.asaas_subscription_id as string | null) ?? null,
   }

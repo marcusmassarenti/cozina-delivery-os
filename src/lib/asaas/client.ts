@@ -28,6 +28,18 @@ function apiKey(): string {
  */
 const BILLING_TYPE = (process.env.ASAAS_BILLING_TYPE ?? "UNDEFINED").toUpperCase()
 
+/**
+ * Modo simulado: sem ASAAS_API_KEY, não batemos na API real — geramos IDs
+ * falsos e um "checkout" interno (/assinatura/simulado) pra percorrer o fluxo
+ * inteiro sem cobrar de ninguém. Assim que a chave entrar, some sozinho.
+ */
+export function asaasIsMock(): boolean {
+  return !process.env.ASAAS_API_KEY
+}
+
+const mockId = (prefix: string) =>
+  `mock_${prefix}_${globalThis.crypto.randomUUID().slice(0, 8)}`
+
 type AsaasErrorBody = { errors?: Array<{ code?: string; description?: string }> }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -59,6 +71,7 @@ export async function asaasCreateCustomer(input: {
   mobilePhone?: string
   externalReference?: string
 }): Promise<AsaasCustomer> {
+  if (asaasIsMock()) return { id: mockId("cus") }
   return call<AsaasCustomer>("/customers", {
     method: "POST",
     body: JSON.stringify(input),
@@ -75,6 +88,7 @@ export async function asaasCreateSubscription(input: {
   description?: string
   externalReference?: string
 }): Promise<AsaasSubscription> {
+  if (asaasIsMock()) return { id: mockId("sub") }
   return call<AsaasSubscription>("/subscriptions", {
     method: "POST",
     body: JSON.stringify({ billingType: BILLING_TYPE, ...input }),
@@ -89,6 +103,8 @@ type AsaasPaymentList = {
 export async function asaasFirstInvoiceUrl(
   subscriptionId: string,
 ): Promise<string | null> {
+  // Simulado: manda pro checkout interno de teste.
+  if (asaasIsMock()) return `/assinatura/simulado?sub=${subscriptionId}`
   const list = await call<AsaasPaymentList>(
     `/subscriptions/${subscriptionId}/payments?limit=10`,
   )
@@ -97,4 +113,12 @@ export async function asaasFirstInvoiceUrl(
     if (p.bankSlipUrl) return p.bankSlipUrl
   }
   return null
+}
+
+/** Cancela a assinatura recorrente no Asaas (para de cobrar). */
+export async function asaasCancelSubscription(
+  subscriptionId: string,
+): Promise<void> {
+  if (asaasIsMock()) return
+  await call(`/subscriptions/${subscriptionId}`, { method: "DELETE" })
 }
