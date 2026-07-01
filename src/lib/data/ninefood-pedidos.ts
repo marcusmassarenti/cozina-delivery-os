@@ -13,6 +13,10 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { formaPagamentoLabel } from "@/lib/ninefood/pagamento"
 import { metodoEntregaLabel } from "@/lib/ninefood/entrega"
+import {
+  motivoCancelamentoLabel,
+  responsavelCancelamentoLabel,
+} from "@/lib/ninefood/cancelamento"
 
 export type FormaMix = { forma: string; pedidos: number }
 export type MixItem = { label: string; pedidos: number }
@@ -162,10 +166,11 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   for (const row of rows) {
     if (row.horario_cancelamento) {
       r.cancelados++
-      const resp =
-        (row.parte_responsavel_cancelamento ?? "").trim() || "Não informado"
+      const resp = responsavelCancelamentoLabel(
+        row.parte_responsavel_cancelamento,
+      )
       cancResp.set(resp, (cancResp.get(resp) ?? 0) + 1)
-      const mot = (row.motivos_cancelamento_comerciante ?? "").trim()
+      const mot = motivoCancelamentoLabel(row.motivos_cancelamento_comerciante)
       if (mot) cancMot.set(mot, (cancMot.get(mot) ?? 0) + 1)
     }
     if (row.preparacao_atrasada === true) atrasados++
