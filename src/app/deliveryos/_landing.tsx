@@ -436,15 +436,15 @@ export function Landing() {
               </Reveal>
               <Reveal delay={140}>
                 <p className="mt-4 max-w-lg text-[oklch(0.5_0.01_48)]">
-                  Baixa o relatório financeiro do iFood, joga aqui do lado e veja na hora quanto as taxas comem e o que de fato entra na sua conta. Sem cadastro, sem senha.
+                  Baixa o relatório do iFood, 99 Food ou Keeta, joga aqui do lado e veja na hora quanto as taxas comem e o que de fato entra na sua conta. Sem cadastro, sem senha.
                 </p>
               </Reveal>
 
               <Reveal delay={180}>
                 <div className="mt-7 space-y-3">
                   {[
-                    { n: 1, t: "Entra no Portal do iFood", d: "Financeiro → Conciliação" },
-                    { n: 2, t: "Baixa o relatório do mês", d: "em .xlsx ou .csv" },
+                    { n: 1, t: "Baixa o relatório da sua plataforma", d: "iFood (Conciliação), 99 Food (Dados da loja) ou Keeta (Pedidos)" },
+                    { n: 2, t: "Do mês que você quer ver", d: "em .xlsx ou .csv" },
                     { n: 3, t: "Arrasta a planilha aqui", d: "o resultado aparece na hora" },
                   ].map((s) => (
                     <div key={s.n} className="flex items-start gap-3 rounded-xl border border-black/[0.06] bg-[var(--cream)] px-4 py-3">
