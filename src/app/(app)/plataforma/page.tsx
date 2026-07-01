@@ -106,9 +106,8 @@ export default async function PlataformaPage() {
         </div>
         <div className="flex items-center gap-2">
           <PlanSettingsDialog
-            monthlyFee={defaultPlan.mensalidade}
-            pricePerUnit={defaultPlan.porLojaExtra}
-            includedUnits={defaultPlan.lojasInclusas}
+            essencial={defaultPlan.essencial}
+            pro={defaultPlan.pro}
           />
           <NovoClienteDialog />
         </div>

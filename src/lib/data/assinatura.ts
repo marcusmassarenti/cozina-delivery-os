@@ -5,47 +5,58 @@ import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { computeBillingStatus, type BillingStatus } from "@/lib/data/billing"
 
 /**
- * Plano do cliente (holding) logado, pro fluxo de assinatura self-service.
+ * Preço da assinatura self-service — POR LOJA, em dois planos (bate com a
+ * landing): Essencial e Pro. Mensalidade = preço-por-loja × nº de lojas ativas.
  *
- * O preço vem de DUAS fontes, nesta ordem:
- *  1) Se o dono já definiu um preço custom pra empresa (holdings.monthly_fee),
- *     usamos ele + lojas extras (mesma conta do /plataforma).
- *  2) Senão, cai no preço padrão editável (tabela platform_settings), que o
- *     dono ajusta na tela /plataforma. O PLANO_PADRAO abaixo é só o fallback
- *     caso a tabela ainda não exista.
+ * Clientes que o DONO cobra na mão (holdings.monthly_fee preenchido) seguem
+ * pela conta antiga (base + lojas extras) e não escolhem plano.
  */
-export const PLANO_PADRAO = {
-  /** Mensalidade base (inclui a 1ª loja). */
-  mensalidade: 49,
-  lojasInclusas: 1,
-  /** Valor por loja além da inclusa. */
-  porLojaExtra: 99,
+export type PlanId = "essencial" | "pro"
+
+export const PLANOS_META: Record<PlanId, { label: string; desc: string }> = {
+  essencial: { label: "Essencial", desc: "Pra ver seu lucro no delivery" },
+  pro: { label: "Pro", desc: "Gestão financeira completa" },
 }
 
-export type PlanoPadrao = {
-  mensalidade: number
-  lojasInclusas: number
-  porLojaExtra: number
-}
+/** Preços por loja/mês — fallback caso a tabela ainda não exista. */
+export const PRECO_PADRAO: Record<PlanId, number> = { essencial: 49, pro: 99 }
 
-/** Preço do plano padrão do self-service (editável em /plataforma). */
-export async function getDefaultPlan(): Promise<PlanoPadrao> {
+export type PrecosPlano = Record<PlanId, number>
+
+/** Preços por loja dos planos (editáveis pelo dono em /plataforma). */
+export async function getDefaultPlan(): Promise<PrecosPlano> {
   try {
     const admin = createAdminClient()
     const { data } = await admin
       .from("platform_settings")
-      .select("default_monthly_fee, default_price_per_unit, default_included_units")
+      .select("essencial_per_unit, pro_per_unit")
       .eq("id", 1)
       .maybeSingle()
-    if (!data) return PLANO_PADRAO
+    if (!data) return PRECO_PADRAO
     return {
-      mensalidade: Number(data.default_monthly_fee),
-      lojasInclusas: Number(data.default_included_units),
-      porLojaExtra: Number(data.default_price_per_unit),
+      essencial: Number(data.essencial_per_unit),
+      pro: Number(data.pro_per_unit),
     }
   } catch {
-    return PLANO_PADRAO
+    return PRECO_PADRAO
   }
+}
+
+/** Mensalidade de um plano = preço-por-loja × lojas (mínimo 1 loja). */
+export function precoDoPlano(
+  precos: PrecosPlano,
+  plan: PlanId,
+  activeUnits: number,
+): number {
+  return precos[plan] * Math.max(1, activeUnits)
+}
+
+export type PlanoOption = {
+  id: PlanId
+  label: string
+  desc: string
+  perUnit: number
+  total: number
 }
 
 export type PlanoAtual = {
@@ -53,14 +64,15 @@ export type PlanoAtual = {
   name: string
   status: BillingStatus
   trialEndsAt: string | null
-  /** Valor a cobrar por mês (base + lojas extras). */
-  mensalidade: number
-  lojasInclusas: number
-  porLojaExtra: number
   activeUnits: number
-  extraUnits: number
-  /** Preço custom definido pelo dono? (senão, PLANO_PADRAO) */
+  /** Preço custom definido pelo dono? (então ignora os planos por loja) */
   precoCustom: boolean
+  /** Planos por loja disponíveis (self-service). */
+  planos: PlanoOption[]
+  /** Plano já escolhido pela empresa (null = ainda não escolheu). */
+  selectedPlan: PlanId | null
+  /** Valor mensal a cobrar agora (custom, ou plano selecionado/Essencial). */
+  mensalidade: number
   dueDate: string | null
   paymentMethod: string | null
   customerId: string | null
@@ -75,13 +87,13 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   const { data: h } = await admin
     .from("holdings")
     .select(
-      "id, name, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
+      "id, name, monthly_fee, price_per_unit, included_units, plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
     )
     .eq("id", holdingId)
     .maybeSingle()
   if (!h) return null
 
-  // Lojas ativas da holding (base do cálculo de lojas extras).
+  // Lojas ativas da holding (base do cálculo por loja).
   const { data: brands } = await admin
     .from("brands")
     .select("id")
@@ -97,17 +109,30 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     activeUnits = count ?? 0
   }
 
+  const precos = await getDefaultPlan()
+  const planos: PlanoOption[] = (Object.keys(PLANOS_META) as PlanId[]).map(
+    (id) => ({
+      id,
+      label: PLANOS_META[id].label,
+      desc: PLANOS_META[id].desc,
+      perUnit: precos[id],
+      total: precoDoPlano(precos, id, activeUnits),
+    }),
+  )
+
   const precoCustom = h.monthly_fee != null
-  const padrao = precoCustom ? null : await getDefaultPlan()
-  const lojasInclusas = precoCustom
-    ? (h.included_units ?? 1)
-    : padrao!.lojasInclusas
-  const porLojaExtra = precoCustom
-    ? Number(h.price_per_unit ?? 0)
-    : padrao!.porLojaExtra
-  const base = precoCustom ? Number(h.monthly_fee) : padrao!.mensalidade
-  const extraUnits = Math.max(0, activeUnits - lojasInclusas)
-  const mensalidade = base + extraUnits * porLojaExtra
+  const selectedPlan = (h.plan_tier as PlanId | null) ?? null
+
+  let mensalidade: number
+  if (precoCustom) {
+    // Cliente cobrado na mão: base + lojas extras (conta antiga).
+    const includedUnits = (h.included_units as number | null) ?? 1
+    const pricePerUnit = Number(h.price_per_unit ?? 0)
+    const extraUnits = Math.max(0, activeUnits - includedUnits)
+    mensalidade = Number(h.monthly_fee) + extraUnits * pricePerUnit
+  } else {
+    mensalidade = precoDoPlano(precos, selectedPlan ?? "essencial", activeUnits)
+  }
 
   const status = computeBillingStatus({
     paymentMethod: (h.payment_method as string | null) ?? null,
@@ -123,12 +148,11 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     name: h.name,
     status,
     trialEndsAt: (h.trial_ends_at as string | null) ?? null,
-    mensalidade,
-    lojasInclusas,
-    porLojaExtra,
     activeUnits,
-    extraUnits,
     precoCustom,
+    planos,
+    selectedPlan,
+    mensalidade,
     dueDate: (h.due_date as string | null) ?? null,
     paymentMethod: (h.payment_method as string | null) ?? null,
     customerId: (h.asaas_customer_id as string | null) ?? null,

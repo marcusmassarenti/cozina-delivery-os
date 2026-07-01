@@ -28,17 +28,15 @@ function SubmitBtn() {
 }
 
 /**
- * Edita o preço do plano PADRÃO do self-service (o que vale pra quem se cadastra
- * sozinho e ainda não tem preço custom). Só super-admin.
+ * Edita o preço POR LOJA dos planos Essencial e Pro do self-service (o que vale
+ * pra quem se cadastra sozinho e ainda não tem preço custom). Só super-admin.
  */
 export function PlanSettingsDialog({
-  monthlyFee,
-  pricePerUnit,
-  includedUnits,
+  essencial,
+  pro,
 }: {
-  monthlyFee: number
-  pricePerUnit: number
-  includedUnits: number
+  essencial: number
+  pro: number
 }) {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
@@ -74,60 +72,43 @@ export function PlanSettingsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Tag className="size-5 text-muted-foreground" />
-            Preço do plano padrão
+            Preço dos planos (por loja)
           </DialogTitle>
           <DialogDescription>
-            Vale pra quem se cadastra sozinho (self-service). Clientes com preço
-            custom definido na cobrança não são afetados.
+            Valor por loja/mês de cada plano do self-service. A mensalidade do
+            cliente = preço × nº de lojas ativas. Clientes com preço combinado
+            não são afetados.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="monthlyFee" className="text-xs font-medium">
-                Mensalidade base (R$)
+              <label htmlFor="essencial" className="text-xs font-medium">
+                Essencial (R$/loja)
               </label>
               <input
-                id="monthlyFee"
-                name="monthlyFee"
+                id="essencial"
+                name="essencial"
                 inputMode="decimal"
-                defaultValue={String(monthlyFee).replace(".", ",")}
+                defaultValue={String(essencial).replace(".", ",")}
                 required
                 className={inputCls}
               />
             </div>
             <div>
-              <label htmlFor="pricePerUnit" className="text-xs font-medium">
-                Por loja extra (R$)
+              <label htmlFor="pro" className="text-xs font-medium">
+                Pro (R$/loja)
               </label>
               <input
-                id="pricePerUnit"
-                name="pricePerUnit"
+                id="pro"
+                name="pro"
                 inputMode="decimal"
-                defaultValue={String(pricePerUnit).replace(".", ",")}
+                defaultValue={String(pro).replace(".", ",")}
                 required
                 className={inputCls}
               />
             </div>
-          </div>
-          <div>
-            <label htmlFor="includedUnits" className="text-xs font-medium">
-              Lojas inclusas na base
-            </label>
-            <input
-              id="includedUnits"
-              name="includedUnits"
-              type="number"
-              min={1}
-              step={1}
-              defaultValue={includedUnits}
-              className={inputCls}
-            />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Quantas lojas já vêm na mensalidade base antes de cobrar por loja
-              extra.
-            </p>
           </div>
 
           {state.message && (

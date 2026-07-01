@@ -3,7 +3,7 @@ import Link from "next/link"
 import { ArrowLeft, CheckCircle2, Sparkles, Store } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/server"
-import { getPlanoAtual } from "@/lib/data/assinatura"
+import { getPlanoAtual, type PlanId } from "@/lib/data/assinatura"
 import { daysUntil } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
@@ -17,7 +17,11 @@ function fmtDataBR(iso: string | null): string {
 
 export const dynamic = "force-dynamic"
 
-export default async function AssinaturaPage() {
+export default async function AssinaturaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plano?: string }>
+}) {
   const supabase = await createClient()
   const { data: auth } = await supabase.auth.getUser()
   if (!auth.user) redirect("/login")
@@ -28,6 +32,14 @@ export default async function AssinaturaPage() {
     plano?.status === "trial" && plano.trialEndsAt
       ? Math.max(0, daysUntil(plano.trialEndsAt))
       : null
+
+  const { plano: planoQuery } = await searchParams
+  const defaultPlan: PlanId =
+    planoQuery === "pro"
+      ? "pro"
+      : planoQuery === "essencial"
+        ? "essencial"
+        : (plano?.selectedPlan ?? "essencial")
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 p-6">
@@ -92,37 +104,33 @@ export default async function AssinaturaPage() {
                   : "Continue com o lucro real da sua operação sempre à mão."}
             </p>
 
-            {/* Resumo do plano */}
-            <div className="mt-6 rounded-xl border bg-muted/30 p-4">
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-medium">Plano mensal</span>
-                <span className="text-2xl font-semibold tabular-nums">
-                  {fmtBRL(plano.mensalidade)}
-                  <span className="text-sm font-normal text-muted-foreground">
-                    /mês
+            {plano.precoCustom && (
+              <div className="mt-6 rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-medium">Plano mensal</span>
+                  <span className="text-2xl font-semibold tabular-nums">
+                    {fmtBRL(plano.mensalidade)}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      /mês
+                    </span>
                   </span>
-                </span>
-              </div>
-              <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <Store className="size-3.5" />
                   {plano.activeUnits} loja{plano.activeUnits === 1 ? "" : "s"}{" "}
-                  ativa{plano.activeUnits === 1 ? "" : "s"}
-                  {plano.extraUnits > 0
-                    ? ` · ${plano.lojasInclusas} inclusa${plano.lojasInclusas === 1 ? "" : "s"} + ${plano.extraUnits}×${fmtBRL(plano.porLojaExtra)}`
-                    : ""}
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-3.5" />
-                  Renova todo mês · cancele quando quiser
+                  ativa{plano.activeUnits === 1 ? "" : "s"} · preço combinado
                 </div>
               </div>
-            </div>
+            )}
 
             <SubscribeForm
-              mensalidade={plano.mensalidade}
+              planos={plano.planos}
+              precoCustom={plano.precoCustom}
+              customMensalidade={plano.mensalidade}
+              activeUnits={plano.activeUnits}
               jaTemCliente={!!plano.customerId}
               defaultNome={plano.name}
+              defaultPlan={defaultPlan}
             />
           </>
         ) : (

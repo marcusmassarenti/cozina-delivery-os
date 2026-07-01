@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { getPlanoAtual } from "@/lib/data/assinatura"
+import {
+  getDefaultPlan,
+  getPlanoAtual,
+  precoDoPlano,
+  type PlanId,
+} from "@/lib/data/assinatura"
 import { todayISO } from "@/lib/data/billing"
 import {
   asaasCancelSubscription,
@@ -47,7 +52,16 @@ export async function assinar(
 
   const plano = await getPlanoAtual()
   if (!plano) return { ok: false, message: "Não foi possível carregar seu plano." }
-  if (plano.mensalidade <= 0)
+
+  // Plano escolhido (self-service). Clientes com preço custom não escolhem.
+  const planEscolhido = String(formData.get("plano") ?? "")
+  const planId: PlanId = planEscolhido === "pro" ? "pro" : "essencial"
+  let valor = plano.mensalidade
+  if (!plano.precoCustom) {
+    const precos = await getDefaultPlan()
+    valor = precoDoPlano(precos, planId, plano.activeUnits)
+  }
+  if (valor <= 0)
     return {
       ok: false,
       message: "Plano sem valor definido. Fale com o suporte.",
@@ -93,10 +107,10 @@ export async function assinar(
         plano.trialEndsAt && plano.trialEndsAt > hoje ? plano.trialEndsAt : hoje
       const sub = await asaasCreateSubscription({
         customer: customerId,
-        value: plano.mensalidade,
+        value: valor,
         nextDueDate,
         cycle: "MONTHLY",
-        description: `Delivery OS — assinatura mensal (${plano.name})`,
+        description: `Delivery OS — plano ${planId} (${plano.name})`,
         externalReference: holdingId,
       })
       subscriptionId = sub.id
@@ -105,6 +119,7 @@ export async function assinar(
         .update({
           asaas_subscription_id: subscriptionId,
           payment_method: "Asaas",
+          ...(plano.precoCustom ? {} : { plan_tier: planId }),
         })
         .eq("id", holdingId)
     }
