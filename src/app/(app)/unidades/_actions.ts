@@ -50,8 +50,14 @@ function isValidCnpj(cnpj: string): boolean {
  */
 async function generateNextCode(
   supabase: ReturnType<typeof createAdminClient>,
+  brandId: string,
 ): Promise<string> {
-  const { data } = await supabase.from("units").select("code")
+  // Escopado à marca (código é unique por brand) → cada empresa começa no #01,
+  // não herda o maior da plataforma inteira.
+  const { data } = await supabase
+    .from("units")
+    .select("code")
+    .eq("brand_id", brandId)
   let max = 0
   for (const row of data ?? []) {
     const n = parseInt(row.code, 10)
@@ -95,7 +101,7 @@ export async function createUnit(
     await requireModulePermission("unidades", "edit")
     const brand = await getDefaultBrand()
     const supabase = createAdminClient()
-    const code = await generateNextCode(supabase)
+    const code = await generateNextCode(supabase, brand.id)
 
     const { data: unit, error } = await supabase
       .from("units")

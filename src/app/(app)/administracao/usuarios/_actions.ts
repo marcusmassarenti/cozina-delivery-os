@@ -34,11 +34,19 @@ async function assertUnitUserLimit(
   return null
 }
 
-/** Próximo código numérico sequencial pra uma loja nova (mesma regra do /unidades). */
+/**
+ * Próximo código numérico sequencial pra uma loja nova — ESCOPADO à marca
+ * (código é unique por brand). Assim cada empresa começa no #01, não pega o
+ * maior da plataforma inteira.
+ */
 async function nextUnitCode(
   supabase: ReturnType<typeof createAdminClient>,
+  brandId: string,
 ): Promise<string> {
-  const { data } = await supabase.from("units").select("code")
+  const { data } = await supabase
+    .from("units")
+    .select("code")
+    .eq("brand_id", brandId)
   let max = 0
   for (const row of data ?? []) {
     if (/^\d+$/.test(row.code)) max = Math.max(max, parseInt(row.code, 10))
@@ -281,7 +289,7 @@ export async function createUser(
     let lojaCriada = false
     if (criandoLoja) {
       const brand = await getDefaultBrand()
-      const code = await nextUnitCode(supabase)
+      const code = await nextUnitCode(supabase, brand.id)
       const { data: unit, error: uErr } = await supabase
         .from("units")
         .insert({
