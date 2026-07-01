@@ -11,6 +11,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { formaPagamentoLabel } from "@/lib/ninefood/pagamento"
 
 export type FormaMix = { forma: string; pedidos: number }
 export type MixItem = { label: string; pedidos: number }
@@ -98,6 +99,7 @@ type Row = {
   tempo_preparo_min: number | string | null
   duracao_entrega_seg: number | null
   forma_pagamento: string | null
+  pay_channel: number | null
   horario_cancelamento: string | null
   metodo_entrega: string | null
   parte_responsavel_cancelamento: string | null
@@ -108,7 +110,7 @@ type Row = {
 }
 
 const SELECT =
-  "receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg"
+  "receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, pay_channel, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg"
 
 const num = (v: number | string | null) => Math.abs(Number(v) || 0)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -206,7 +208,10 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
       somaEntrega += row.duracao_entrega_seg
       nEntrega++
     }
-    const forma = (row.forma_pagamento ?? "Outros").trim() || "Outros"
+    const forma = formaPagamentoLabel({
+      payChannel: row.pay_channel,
+      formaPagamentoText: row.forma_pagamento,
+    })
     formas.set(forma, (formas.get(forma) ?? 0) + 1)
   }
 

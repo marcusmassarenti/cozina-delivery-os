@@ -140,6 +140,10 @@ export async function GET(req: Request) {
         : 0,
       cliente_id: recv.uid != null ? String(recv.uid) : null,
       forma_pagamento: info.pay_method != null ? String(info.pay_method) : null,
+      pay_channel:
+        info.pay_channel != null && !Number.isNaN(Number(info.pay_channel))
+          ? Number(info.pay_channel)
+          : null,
       metodo_entrega:
         info.delivery_type != null ? String(info.delivery_type) : null,
     })
