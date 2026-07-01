@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache"
 
 import { guard, requireSuperadmin } from "@/lib/auth/guards"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
 export type CriarClienteState = {
   ok: boolean
@@ -282,4 +283,72 @@ export async function deletePayment(paymentId: string): Promise<BillingActionSta
     revalidatePath("/plataforma")
     return { ok: true }
   })
+}
+
+/**
+ * Exclui um CLIENTE (holding) inteiro: usuários (auth, cascata profiles +
+ * acessos), lojas (cascata dos dados), marcas e a empresa. Só super-admin.
+ * Guarda: não deixa excluir a PRÓPRIA empresa do super-admin (evita apagar a
+ * Cozina sem querer). Ordem FK-safe: units → brands → users → holding.
+ */
+export async function deleteClient(
+  holdingId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!holdingId) return { ok: false, message: "Cliente inválido." }
+  try {
+    const { admin } = await requireSuperadmin()
+    const myHolding = await getCurrentHoldingId()
+    if (holdingId === myHolding)
+      return {
+        ok: false,
+        message: "Não dá pra excluir a sua própria empresa por aqui.",
+      }
+
+    const { data: brandsData } = await admin
+      .from("brands")
+      .select("id")
+      .eq("holding_id", holdingId)
+    const brandIds = (brandsData ?? []).map((b) => b.id)
+
+    let unitIds: string[] = []
+    if (brandIds.length > 0) {
+      const { data: unitsData } = await admin
+        .from("units")
+        .select("id")
+        .in("brand_id", brandIds)
+      unitIds = (unitsData ?? []).map((u) => u.id)
+    }
+
+    // usuários vinculados à empresa (qualquer escopo que aponte pra ela)
+    const scopeIds = [holdingId, ...brandIds, ...unitIds]
+    const { data: accessData } = await admin
+      .from("user_unit_access")
+      .select("user_id")
+      .in("scope_id", scopeIds)
+    const userIds = [...new Set((accessData ?? []).map((a) => a.user_id))]
+
+    // lojas (cascata dos dados) → marcas → usuários (cascata acessos) → empresa
+    if (unitIds.length > 0) {
+      const { error } = await admin.from("units").delete().in("id", unitIds)
+      if (error)
+        return { ok: false, message: `Erro ao excluir as lojas: ${error.message}` }
+    }
+    if (brandIds.length > 0)
+      await admin.from("brands").delete().in("id", brandIds)
+    for (const uid of userIds) await admin.auth.admin.deleteUser(uid)
+    const { error: hErr } = await admin
+      .from("holdings")
+      .delete()
+      .eq("id", holdingId)
+    if (hErr) return { ok: false, message: hErr.message }
+
+    revalidatePath("/plataforma")
+    revalidatePath("/", "layout")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro ao excluir cliente.",
+    }
+  }
 }

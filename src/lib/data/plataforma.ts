@@ -35,6 +35,8 @@ export type ClientOverview = {
   units: number
   activeUnits: number
   users: number
+  /** Último acesso (max last_sign_in_at dos usuários da empresa). */
+  lastLogin: string | null
   establishmentType: string | null
   // Cobrança
   paymentMethod: string | null
@@ -126,6 +128,19 @@ export async function getClientsOverview(): Promise<{
   const brands = brandsRes.data ?? []
   const units = unitsRes.data ?? []
   const accesses = accessRes.data ?? []
+
+  // Último acesso por usuário (auth). Lista tudo (poucos usuários na plataforma).
+  const lastLoginByUser = new Map<string, string | null>()
+  try {
+    const { data: authList } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    for (const u of authList?.users ?? [])
+      lastLoginByUser.set(u.id, u.last_sign_in_at ?? null)
+  } catch {
+    // sem auth admin → deixa vazio (coluna mostra "—")
+  }
 
   // pagamentos por holding (tabela pode não existir ainda → vazio)
   const paymentsByHolding = new Map<string, HoldingPayment[]>()
@@ -221,6 +236,12 @@ export async function getClientsOverview(): Promise<{
     const billableUnits = activeUnits
     const extraUnits = Math.max(0, billableUnits - includedUnits)
     const computedMonthly = (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
+    // Último acesso = max last_sign_in_at dos usuários da empresa.
+    let lastLogin: string | null = null
+    for (const uid of usersByHolding.get(h.id) ?? []) {
+      const ll = lastLoginByUser.get(uid)
+      if (ll && (!lastLogin || ll > lastLogin)) lastLogin = ll
+    }
     return {
       id: h.id,
       name: h.name,
@@ -231,6 +252,7 @@ export async function getClientsOverview(): Promise<{
       units: unitCount.get(h.id) ?? 0,
       activeUnits,
       users: usersByHolding.get(h.id)?.size ?? 0,
+      lastLogin,
       ...billing,
       pricePerUnit,
       includedUnits,

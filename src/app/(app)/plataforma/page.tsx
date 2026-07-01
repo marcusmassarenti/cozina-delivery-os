@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { AlertTriangle, Building2, CheckCircle2, Clock, Wallet } from "lucide-react"
 
-import { isSuperadmin } from "@/lib/auth/permissions"
+import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
@@ -10,6 +10,7 @@ import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
 import { EditBillingDialog } from "./_components/edit-billing-dialog"
 import { UnitsDialog } from "./_components/units-dialog"
 import { PaymentsDialog } from "./_components/payments-dialog"
+import { DeleteClientButton } from "./_components/delete-client-button"
 
 const STATUS: Record<BillingStatus, { label: string; cls: string }> = {
   trial: {
@@ -41,9 +42,23 @@ function fmtDate(d: string | null): string {
   return `${day}/${m}/${y}`
 }
 
+/** Último acesso: "DD/MM/AA HH:mm" (SP) ou "nunca". */
+function fmtLastLogin(iso: string | null): string {
+  if (!iso) return "nunca"
+  return new Date(iso).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export default async function PlataformaPage() {
   if (!(await isSuperadmin())) notFound()
   const { clients, totals } = await getClientsOverview()
+  const myHoldingId = await getCurrentHoldingId()
 
   const emAtraso = clients.filter(
     (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
@@ -108,6 +123,7 @@ export default async function PlataformaPage() {
                 <th className="px-4 py-2.5 font-semibold">Pagamento</th>
                 <th className="px-4 py-2.5 font-semibold">Vencimento</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Lojas</th>
+                <th className="px-4 py-2.5 font-semibold">Último acesso</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Ação</th>
               </tr>
             </thead>
@@ -142,6 +158,13 @@ export default async function PlataformaPage() {
                     <td className="px-4 py-3 tabular-nums">{fmtDate(c.dueDate)}</td>
                     <td className="px-4 py-3 text-right">
                       <UnitsDialog name={c.name} units={c.unitsList} />
+                      <div className="text-[11px] text-muted-foreground">
+                        {c.activeUnits} ativa{c.activeUnits !== 1 ? "s" : ""}
+                        {c.units !== c.activeUnits ? ` de ${c.units}` : ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">
+                      {fmtLastLogin(c.lastLogin)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
@@ -169,6 +192,11 @@ export default async function PlataformaPage() {
                             suspendOn: c.suspendOn,
                           }}
                         />
+                        <DeleteClientButton
+                          id={c.id}
+                          name={c.name}
+                          canDelete={c.id !== myHoldingId}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -176,7 +204,7 @@ export default async function PlataformaPage() {
               })}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
                     Nenhum cliente ainda.
                   </td>
                 </tr>
