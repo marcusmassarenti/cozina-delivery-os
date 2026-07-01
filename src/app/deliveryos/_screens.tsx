@@ -869,7 +869,7 @@ export function PainBreakdown() {
       className="overflow-hidden rounded-3xl border border-white/[0.08] bg-[oklch(0.185_0.008_45)] p-6 text-white shadow-[0_30px_70px_-30px_rgba(0,0,0,.6)] sm:p-9"
     >
       <p className="text-center text-sm text-[oklch(0.68_0_0)]">
-        De cada <span className="font-medium text-white">R$ 100</span> que entram no iFood…
+        De cada <span className="font-medium text-white">R$ 100</span> que entram pelo delivery…
       </p>
 
       <div className="mx-auto mt-5 flex h-14 max-w-2xl overflow-hidden rounded-2xl bg-white/[0.04]">
