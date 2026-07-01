@@ -90,7 +90,7 @@ const DORES = [
 const RELATORIOS: { id: PlatId; itens: string[] }[] = [
   { id: "ifood", itens: ["Financeiro / Conciliação", "Cardápio", "Pedidos", "Avaliações"] },
   { id: "99food", itens: ["Dados da loja", "Itens", "Pedidos"] },
-  { id: "keeta", itens: ["Loja diária", "Itens", "Pedidos", "Pedidos recentes", "Dados da promoção"] },
+  { id: "keeta", itens: ["Loja diária", "Itens", "Pedidos", "Dados da promoção"] },
 ]
 
 const MODULOS = [
