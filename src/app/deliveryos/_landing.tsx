@@ -294,9 +294,17 @@ export function Landing() {
             <a href="#sistema" className="transition-colors hover:text-[var(--brand)]">O sistema</a>
             <a href="#precos" className="transition-colors hover:text-[var(--brand)]">Preços</a>
           </div>
-          <a href="/cadastro" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
-            Testar grátis
-          </a>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <a
+              href="/login"
+              className="text-sm font-medium text-[oklch(0.45_0.01_48)] transition-colors hover:text-[var(--brand)]"
+            >
+              Entrar
+            </a>
+            <a href="/cadastro" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
+              Testar grátis
+            </a>
+          </div>
         </div>
       </nav>
 
