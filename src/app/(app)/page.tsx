@@ -22,7 +22,6 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { UnitsTable } from "@/components/dashboard/units-table"
-import { KeetaRoiMini } from "@/components/keeta/keeta-roi-card"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
 import { SectionDivider } from "@/components/shared/section-divider"
@@ -48,7 +47,6 @@ import {
 } from "@/lib/data/ninefood-imported"
 import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
-import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import {
   getFinanceiroResumoByUnitsForRange,
   getKeetaResumoByUnitsForRange,
@@ -211,9 +209,6 @@ export default async function Home({
     isFullMonth
       ? getNetworkDeliveryFee(activeUnitIds, year, month)
       : getNetworkDeliveryFeeForRange(activeUnitIds, periodRange),
-    isFullMonth
-      ? getKeetaPromocaoResumo(activeUnitIds, year, month)
-      : Promise.resolve(null),
   ])
 
   // No caso comum (sem filtro "Com faturamento") o escopo da rede já é conhecido
@@ -221,14 +216,8 @@ export default async function Home({
   // faturamento" precisa dos resumos antes (pra saber qual loja tem pedido).
   const earlyNetworkP = onlyComFaturamento ? null : runNetwork(filterUnitIds)
 
-  const [
-    finByUnit,
-    ninefoodByUnit,
-    keetaByUnit,
-    importCoverage,
-    deliveryFee,
-    keetaPromo,
-  ] = await fase2aP
+  const [finByUnit, ninefoodByUnit, keetaByUnit, importCoverage, deliveryFee] =
+    await fase2aP
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
   // a UnitsTable mostra dados reais sem precisar de prop nova.
@@ -601,11 +590,6 @@ export default async function Home({
               </div>
             ))}
           </div>
-          {keetaPromo?.hasData && (
-            <div className="mt-3 md:max-w-xs">
-              <KeetaRoiMini promocoes={keetaPromo} />
-            </div>
-          )}
           </DashboardSection>
 
           {(hasFunnelData ||

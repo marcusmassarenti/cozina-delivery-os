@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { Megaphone } from "lucide-react"
 
 import type { KeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
@@ -119,56 +118,3 @@ export function KeetaRoiCard({
   )
 }
 
-/**
- * Versão discreta (dashboard): 1 card pequeno com o custo total de promoções
- * Keeta no mês + custo/pedido, e a campanha mais eficiente. Clica → Pedidos.
- * Não renderiza nada quando não há dado.
- */
-export function KeetaRoiMini({ promocoes }: { promocoes: KeetaPromocaoResumo }) {
-  if (!promocoes.hasData || promocoes.campanhas.length === 0) return null
-
-  // Mais eficiente = menor custo/pedido entre campanhas com CUSTO real
-  // (despesa > 0, pra não eleger o balde "Sem regra" de custo zero) e volume
-  // relevante (>= 20 pedidos, pra não pegar uma campanha de 1 pedido barata).
-  const comCusto = promocoes.campanhas.filter((c) => c.despesa > 0)
-  const comVolume = comCusto.filter((c) => c.pedidos >= 20)
-  const base = comVolume.length > 0 ? comVolume : comCusto
-  const eficiente =
-    base.length > 0
-      ? base.reduce((best, c) =>
-          c.custoPorPedido < best.custoPorPedido ? c : best,
-        )
-      : null
-
-  return (
-    <Link
-      href="/pedidos?plataforma=keeta"
-      className="group flex flex-col justify-between rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-50/40 dark:hover:bg-violet-950/20"
-    >
-      <div className="flex items-center gap-2">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400">
-          <Megaphone className="size-4" />
-        </div>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Promoções Keeta
-        </span>
-      </div>
-      <div className="mt-3">
-        <p className="text-xl font-bold tracking-tight tabular-nums">
-          {fmtBRL(promocoes.totalDespesa)}
-        </p>
-        <p className="text-[11px] text-muted-foreground">
-          de custo · {fmtBRL(promocoes.custoPorPedidoMedio)}/pedido
-        </p>
-      </div>
-      {eficiente && (
-        <p
-          className="mt-2 line-clamp-1 text-[10px] text-muted-foreground"
-          title={eficiente.regra}
-        >
-          + eficiente: {eficiente.regra} ({fmtBRL(eficiente.custoPorPedido)}/ped)
-        </p>
-      )}
-    </Link>
-  )
-}
