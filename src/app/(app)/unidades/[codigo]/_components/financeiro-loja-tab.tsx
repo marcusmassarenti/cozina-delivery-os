@@ -10,8 +10,10 @@ import {
 } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { KeetaRoiCard } from "@/components/keeta/keeta-roi-card"
 import { getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
+import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
@@ -59,7 +61,7 @@ export async function FinanceiroLojaTab({
   month: number
 }) {
   const m = monthly
-  const [pagamento, deliveryFee, daily, nineResumo, antecipMap] =
+  const [pagamento, deliveryFee, daily, nineResumo, antecipMap, keetaPromo] =
     await Promise.all([
       getPagamentoResumoForMonth(unitId, year, month),
       getDeliveryFeeForMonth(unitId, year, month),
@@ -68,6 +70,7 @@ export async function FinanceiroLojaTab({
       ]),
       getNinefoodResumoForMonth(unitId, year, month),
       getAntecipacaoFeeByUnits([unitId], year, month),
+      getKeetaPromocaoResumo([unitId], year, month),
     ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -400,6 +403,11 @@ export async function FinanceiroLojaTab({
             />
           </div>
         </div>
+      )}
+
+      {/* ROI das campanhas da Keeta (só se a loja tiver "Dados da promoção") */}
+      {keetaPromo.hasData && (
+        <KeetaRoiCard promocoes={keetaPromo} showEmptyCta={false} />
       )}
     </div>
   )

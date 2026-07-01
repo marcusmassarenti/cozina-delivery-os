@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   LineChart,
   type LucideIcon,
+  Megaphone,
   MessageSquare,
   Package,
   Receipt,
@@ -147,6 +148,18 @@ const CATEGORIAS: Categoria[] = [
         desc: "O que cada loja já tem importado, mês a mês.",
         icon: LayoutGrid,
         href: "/importacao/cobertura",
+      },
+    ],
+  },
+  {
+    label: "Promoções",
+    icon: Megaphone,
+    reports: [
+      {
+        title: "ROI por campanha (Keeta)",
+        desc: "Custo de cada promoção vs pedidos que ela trouxe — o custo por pedido mostra qual campanha vale a pena.",
+        icon: Target,
+        href: "/pedidos?plataforma=keeta",
       },
     ],
   },
