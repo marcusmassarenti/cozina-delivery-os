@@ -12,6 +12,10 @@ import { UnitsDialog } from "./_components/units-dialog"
 import { PaymentsDialog } from "./_components/payments-dialog"
 
 const STATUS: Record<BillingStatus, { label: string; cls: string }> = {
+  trial: {
+    label: "Teste grátis",
+    cls: "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-400",
+  },
   paid: {
     label: "Pago",
     cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400",

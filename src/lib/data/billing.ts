@@ -3,7 +3,13 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
-export type BillingStatus = "paid" | "pending" | "overdue" | "suspended" | "none"
+export type BillingStatus =
+  | "trial"
+  | "paid"
+  | "pending"
+  | "overdue"
+  | "suspended"
+  | "none"
 
 export type HoldingBilling = {
   paymentMethod: string | null
@@ -11,6 +17,8 @@ export type HoldingBilling = {
   dueDate: string | null
   paid: boolean
   suspendOn: string | null
+  /** Fim do teste grátis (YYYY-MM-DD). NULL = sem trial. */
+  trialEndsAt: string | null
 }
 
 /** Hoje em America/Sao_Paulo, formato YYYY-MM-DD (pra comparar com date). */
@@ -23,12 +31,23 @@ export function todayISO(): string {
   }).format(new Date())
 }
 
+/** Dias entre hoje e uma data YYYY-MM-DD (positivo = no futuro). */
+export function daysUntil(dateISO: string, today = todayISO()): number {
+  const a = new Date(`${today}T00:00:00-03:00`).getTime()
+  const b = new Date(`${dateISO}T00:00:00-03:00`).getTime()
+  return Math.round((b - a) / 86_400_000)
+}
+
 /** Status de cobrança a partir dos campos + a data de hoje. */
 export function computeBillingStatus(
   b: HoldingBilling,
   today = todayISO(),
 ): BillingStatus {
   if (b.paid) return "paid"
+  // Teste grátis: dentro do prazo libera; vencido e sem pagar → suspende.
+  if (b.trialEndsAt) {
+    return today <= b.trialEndsAt ? "trial" : "suspended"
+  }
   if (b.suspendOn && today >= b.suspendOn) return "suspended"
   if (b.dueDate && today > b.dueDate) return "overdue"
   if (b.dueDate) return "pending"
@@ -44,6 +63,7 @@ export async function getCurrentHoldingBilling(): Promise<{
   status: BillingStatus
   dueDate: string | null
   suspendOn: string | null
+  trialEndsAt: string | null
 } | null> {
   try {
     const holdingId = await getCurrentHoldingId()
@@ -51,7 +71,9 @@ export async function getCurrentHoldingBilling(): Promise<{
     const admin = createAdminClient()
     const { data } = await admin
       .from("holdings")
-      .select("payment_method, monthly_fee, due_date, paid, suspend_on")
+      .select(
+        "payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at",
+      )
       .eq("id", holdingId)
       .maybeSingle()
     if (!data) return null
@@ -62,11 +84,13 @@ export async function getCurrentHoldingBilling(): Promise<{
       dueDate: (data.due_date as string | null) ?? null,
       paid: (data.paid as boolean | null) ?? true,
       suspendOn: (data.suspend_on as string | null) ?? null,
+      trialEndsAt: (data.trial_ends_at as string | null) ?? null,
     }
     return {
       status: computeBillingStatus(b),
       dueDate: b.dueDate,
       suspendOn: b.suspendOn,
+      trialEndsAt: b.trialEndsAt,
     }
   } catch {
     return null

@@ -98,7 +98,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -119,6 +119,7 @@ export async function getClientsOverview(): Promise<{
         due_date: null,
         paid: true,
         suspend_on: null,
+        trial_ends_at: null,
       }))
     : (hFull.data ?? [])
 
@@ -203,6 +204,7 @@ export async function getClientsOverview(): Promise<{
       due_date: string | null
       paid: boolean | null
       suspend_on: string | null
+      trial_ends_at: string | null
     }
     const billing = {
       paymentMethod: hh.payment_method ?? null,
@@ -210,6 +212,7 @@ export async function getClientsOverview(): Promise<{
       dueDate: hh.due_date ?? null,
       paid: hh.paid ?? true,
       suspendOn: hh.suspend_on ?? null,
+      trialEndsAt: hh.trial_ends_at ?? null,
     }
     // Mensalidade = base + (lojas ativas além das inclusas × valor por loja)
     const activeUnits = activeUnitCount.get(h.id) ?? 0

@@ -294,7 +294,7 @@ export function Landing() {
             <a href="#sistema" className="transition-colors hover:text-[var(--brand)]">O sistema</a>
             <a href="#precos" className="transition-colors hover:text-[var(--brand)]">Preços</a>
           </div>
-          <a href="#experimente" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
+          <a href="/cadastro" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
             Testar grátis
           </a>
         </div>
@@ -774,11 +774,11 @@ export function Landing() {
                   ))}
                 </ul>
                 <div className="mt-auto pt-7">
-                  <a href="#experimente" className="btn-brand grp flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-base font-medium">
-                    Descobrir meu lucro agora
+                  <a href="/cadastro" className="btn-brand grp flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-base font-medium">
+                    Começar 7 dias grátis
                     <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
                   </a>
-                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Sem cartão pra testar · resultado em 2 minutos</p>
+                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Sem cartão pra testar · cancela quando quiser</p>
                 </div>
               </div>
             </Reveal>
@@ -813,7 +813,7 @@ export function Landing() {
                   ))}
                 </ul>
                 <div className="mt-auto pt-7">
-                  <a href="#" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-white/20 px-5 py-3.5 text-base font-medium text-white hover:bg-white/5">
+                  <a href="/cadastro" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-white/20 px-5 py-3.5 text-base font-medium text-white hover:bg-white/5">
                     Quero o Pro
                   </a>
                   <p className="mt-3 text-center text-xs text-[oklch(0.6_0_0)]">Por loja · cancela quando quiser</p>

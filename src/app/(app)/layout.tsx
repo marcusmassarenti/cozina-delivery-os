@@ -10,7 +10,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { MODULES, userCan, isSuperadmin } from "@/lib/auth/permissions"
-import { getCurrentHoldingBilling } from "@/lib/data/billing"
+import { daysUntil, getCurrentHoldingBilling } from "@/lib/data/billing"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({
@@ -43,6 +43,11 @@ export default async function AppLayout({
     redirect("/suspenso")
   }
   const overdue = billing?.status === "overdue"
+  // Teste grátis em andamento → banner com os dias restantes.
+  const trialDaysLeft =
+    billing?.status === "trial" && billing.trialEndsAt
+      ? Math.max(0, daysUntil(billing.trialEndsAt))
+      : null
 
   return (
     <TooltipProvider>
@@ -67,6 +72,24 @@ export default async function AppLayout({
                   ? ` — regularize até ${billing.suspendOn.split("-").reverse().join("/")} pra não suspender o acesso.`
                   : " — regularize pra manter o acesso."}
               </span>
+            </div>
+          )}
+          {trialDaysLeft !== null && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-violet-300 bg-violet-50 px-6 py-2.5 text-xs font-medium text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-300">
+              <span className="text-base leading-none">🎁</span>
+              <span>
+                {trialDaysLeft === 0
+                  ? "Seu teste grátis termina hoje."
+                  : `Teste grátis — ${trialDaysLeft} dia${trialDaysLeft === 1 ? "" : "s"} restante${trialDaysLeft === 1 ? "" : "s"}.`}
+              </span>
+              <a
+                href="https://wa.me/5511995125139?text=Quero%20assinar%20o%20Delivery%20OS"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold underline underline-offset-2 hover:opacity-80"
+              >
+                Assinar agora
+              </a>
             </div>
           )}
           <NavigationProgress>{children}</NavigationProgress>
