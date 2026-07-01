@@ -7,9 +7,6 @@ import { getCurrentHoldingBilling } from "@/lib/data/billing"
 import { signOut } from "@/app/login/_actions"
 import { Button } from "@/components/ui/button"
 
-const ASSINAR_EMAIL =
-  "mailto:suporte@deliveryos.food?subject=Quero%20assinar%20o%20Delivery%20OS"
-
 export default async function SuspensoPage() {
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
@@ -47,7 +44,7 @@ export default async function SuspensoPage() {
               ficam guardados.
             </p>
             <a
-              href={ASSINAR_EMAIL}
+              href="/assinatura"
               className="btn-brand mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold"
             >
               Quero assinar
@@ -71,6 +68,12 @@ export default async function SuspensoPage() {
               pendência de pagamento. Assim que for regularizado, volta
               automaticamente.
             </p>
+            <a
+              href="/assinatura"
+              className="btn-brand mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold"
+            >
+              Regularizar pagamento
+            </a>
             <p className="mt-3 text-sm text-muted-foreground">
               Dúvidas ou comprovante:{" "}
               <a

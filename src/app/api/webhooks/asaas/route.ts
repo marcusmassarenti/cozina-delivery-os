@@ -1,0 +1,159 @@
+/**
+ * Webhook do Asaas — recebe os eventos de cobrança da assinatura e sincroniza
+ * o status de pagamento da holding (libera / bloqueia o acesso).
+ *
+ * Segurança: se ASAAS_WEBHOOK_TOKEN estiver definido, exigimos que o Asaas
+ * envie o mesmo valor no header `asaas-access-token` (configurado no painel do
+ * Asaas). Respondemos sempre 200 pra não entrar em loop de reenvio; erros ficam
+ * no log.
+ *
+ * Eventos que importam:
+ *  - PAGO (confirmado/recebido) → paid=true, encerra o trial, limpa suspensão.
+ *  - VENCIDO (overdue)          → paid=false, agenda suspensão (vencimento + 7).
+ *  - ESTORNADO/removido         → paid=false.
+ */
+import { createAdminClient } from "@/lib/supabase/admin"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+const CONFIRMADO = new Set([
+  "PAYMENT_CONFIRMED",
+  "PAYMENT_RECEIVED",
+  "PAYMENT_RECEIVED_IN_CASH",
+])
+const VENCIDO = new Set(["PAYMENT_OVERDUE"])
+const ESTORNADO = new Set([
+  "PAYMENT_REFUNDED",
+  "PAYMENT_DELETED",
+  "PAYMENT_REVERSED",
+  "PAYMENT_CHARGEBACK_REQUESTED",
+])
+
+/** Soma dias a uma data YYYY-MM-DD (fuso SP) e devolve YYYY-MM-DD. */
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00-03:00`)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+type AsaasPayment = {
+  id?: string
+  customer?: string
+  subscription?: string
+  value?: number
+  dueDate?: string
+  paymentDate?: string
+  confirmedDate?: string
+  billingType?: string
+  status?: string
+}
+
+export async function GET() {
+  return Response.json({ ok: true, webhook: "asaas" })
+}
+
+export async function POST(req: Request) {
+  const expected = process.env.ASAAS_WEBHOOK_TOKEN
+  if (expected && req.headers.get("asaas-access-token") !== expected) {
+    return new Response("unauthorized", { status: 401 })
+  }
+
+  let body: { event?: string; payment?: AsaasPayment } = {}
+  try {
+    body = (await req.json()) as typeof body
+  } catch {
+    return Response.json({ ok: true })
+  }
+
+  const event = String(body.event ?? "")
+  const payment = body.payment ?? {}
+  const subscriptionId = payment.subscription ? String(payment.subscription) : null
+  const customerId = payment.customer ? String(payment.customer) : null
+
+  try {
+    const admin = createAdminClient()
+
+    // Acha a holding pela assinatura (ou, no pior caso, pelo cliente).
+    let holdingId: string | null = null
+    if (subscriptionId) {
+      const { data } = await admin
+        .from("holdings")
+        .select("id")
+        .eq("asaas_subscription_id", subscriptionId)
+        .maybeSingle()
+      holdingId = data?.id ?? null
+    }
+    if (!holdingId && customerId) {
+      const { data } = await admin
+        .from("holdings")
+        .select("id")
+        .eq("asaas_customer_id", customerId)
+        .maybeSingle()
+      holdingId = data?.id ?? null
+    }
+    if (!holdingId) {
+      console.warn("asaas webhook: holding não encontrada", {
+        event,
+        subscriptionId,
+        customerId,
+      })
+      return Response.json({ ok: true })
+    }
+
+    const patch: Record<string, unknown> = {
+      asaas_last_event: {
+        event,
+        at: new Date().toISOString(),
+        paymentId: payment.id ?? null,
+      },
+    }
+
+    if (CONFIRMADO.has(event)) {
+      patch.paid = true
+      patch.trial_ends_at = null // deixou de ser trial, virou pagante
+      patch.suspend_on = null
+      patch.payment_method = "Asaas"
+      if (payment.dueDate) patch.due_date = String(payment.dueDate)
+    } else if (VENCIDO.has(event)) {
+      patch.paid = false
+      if (payment.dueDate) {
+        patch.due_date = String(payment.dueDate)
+        patch.suspend_on = addDays(String(payment.dueDate), 7) // 7 dias de tolerância
+      }
+    } else if (ESTORNADO.has(event)) {
+      patch.paid = false
+    }
+
+    await admin.from("holdings").update(patch).eq("id", holdingId)
+
+    // Histórico de pagamento (dedupe pelo id da cobrança do Asaas).
+    if (CONFIRMADO.has(event) && payment.id) {
+      const note = `Asaas ${payment.id}`
+      const { data: exists } = await admin
+        .from("holding_payments")
+        .select("id")
+        .eq("holding_id", holdingId)
+        .eq("note", note)
+        .maybeSingle()
+      if (!exists) {
+        await admin.from("holding_payments").insert({
+          holding_id: holdingId,
+          paid_on: String(
+            payment.paymentDate ??
+              payment.confirmedDate ??
+              payment.dueDate ??
+              new Date().toISOString().slice(0, 10),
+          ),
+          amount: Number(payment.value ?? 0),
+          method: `Asaas${payment.billingType ? ` (${payment.billingType})` : ""}`,
+          note,
+        })
+      }
+    }
+  } catch (e) {
+    console.error("asaas webhook: erro", e)
+  }
+
+  return Response.json({ ok: true })
+}
