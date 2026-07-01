@@ -146,9 +146,39 @@ export async function signUp(
     .eq("user_id", userId)
 
   // Se o projeto NÃO exige confirmação de e-mail, o Supabase já devolve sessão
-  // → entra direto. Se exige, não há sessão → mostra "confira seu e-mail".
+  // → entra direto. Se exige, não há sessão → tela "confira seu e-mail".
   if (signUpData.session) {
     redirect("/")
   }
-  return { ok: true, needsConfirmation: true, email }
+  redirect(`/cadastro/confirme?email=${encodeURIComponent(email)}`)
+}
+
+/** Reenvia o e-mail de confirmação (botão na tela /cadastro/confirme). */
+export async function resendConfirmation(
+  _prev: { ok: boolean; message?: string },
+  formData: FormData,
+): Promise<{ ok: boolean; message?: string }> {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
+  if (!email.includes("@")) return { ok: false, message: "E-mail inválido." }
+
+  const hdrs = await headers()
+  const host = hdrs.get("host") ?? "deliveryos.food"
+  const proto =
+    hdrs.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") ? "http" : "https")
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${proto}://${host}/auth/callback` },
+  })
+  if (error) {
+    if ((error.code ?? "").includes("rate") || error.message.toLowerCase().includes("rate"))
+      return { ok: false, message: "Espera um minuto antes de reenviar." }
+    return { ok: false, message: "Não foi possível reenviar agora." }
+  }
+  return { ok: true, message: "E-mail reenviado! Confira a caixa (e o spam)." }
 }

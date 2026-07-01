@@ -8,7 +8,6 @@ import {
   Building2,
   Lock,
   Mail,
-  MailCheck,
   MessageCircle,
   User,
 } from "lucide-react"
@@ -21,35 +20,9 @@ import { signUp, type SignUpState } from "../_actions"
 const initial: SignUpState = { ok: false }
 
 export function SignupForm() {
+  // Sucesso do cadastro redireciona pra /cadastro/confirme — aqui só tratamos
+  // o form e os erros.
   const [state, formAction] = useActionState(signUp, initial)
-
-  // Sucesso → conta criada, falta confirmar o e-mail.
-  if (state.ok && state.needsConfirmation) {
-    return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-900/40 dark:bg-emerald-950/20">
-        <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
-          <MailCheck className="size-6" />
-        </span>
-        <h3 className="mt-4 text-lg font-semibold">Confirme seu e-mail</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Enviamos um link de confirmação para{" "}
-          <span className="font-medium text-foreground">{state.email}</span>.
-          Clique nele pra ativar sua conta e começar seus{" "}
-          <span className="font-medium text-foreground">7 dias grátis</span>.
-        </p>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Não chegou em alguns minutos? Confira a caixa de spam.
-        </p>
-        <Link
-          href="/login"
-          className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-        >
-          Já confirmei — fazer login
-          <ArrowRight className="size-4" />
-        </Link>
-      </div>
-    )
-  }
 
   return (
     <form action={formAction} className="flex flex-col gap-4">

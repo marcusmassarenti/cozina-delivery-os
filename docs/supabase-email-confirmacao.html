@@ -1,0 +1,91 @@
+<!--
+  Template de e-mail de CONFIRMAÇÃO de cadastro (Delivery OS).
+  Onde colar: Supabase → Authentication → Emails → Templates → "Confirm signup".
+  ASSUNTO (campo "Subject"):  Ative sua conta no Delivery OS — confirme seu e-mail
+  Variável do Supabase usada: {{ .ConfirmationURL }}
+  HTML "email-safe": tabelas + estilos inline (renderiza bem no Gmail/Outlook).
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light only" />
+    <title>Confirme seu e-mail</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f5f3ef; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f3ef;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <!-- Card -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+            <!-- Marca -->
+            <tr>
+              <td style="padding:28px 32px 0 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="width:32px; height:32px; background-color:#ff4d1c; border-radius:8px; text-align:center; vertical-align:middle; color:#ffffff; font-size:16px; font-weight:700;">D</td>
+                    <td style="padding-left:10px; font-size:11px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#7a7a7a;">Delivery OS</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Conteúdo -->
+            <tr>
+              <td style="padding:24px 32px 8px 32px;">
+                <h1 style="margin:0 0 12px 0; font-size:22px; line-height:1.3; color:#1a1a1a; font-weight:700;">
+                  Confirme seu e-mail pra ativar sua conta
+                </h1>
+                <p style="margin:0 0 8px 0; font-size:15px; line-height:1.6; color:#4a4a4a;">
+                  Falta só um passo pra você começar seus
+                  <strong style="color:#1a1a1a;">7 dias grátis</strong> no
+                  Delivery OS. Clique no botão abaixo pra confirmar que este
+                  e-mail é seu:
+                </p>
+              </td>
+            </tr>
+            <!-- Botão -->
+            <tr>
+              <td align="center" style="padding:16px 32px 8px 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background-color:#ff4d1c; border-radius:9999px;">
+                      <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:14px 32px; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:9999px;">
+                        Confirmar meu e-mail
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Link alternativo -->
+            <tr>
+              <td style="padding:12px 32px 24px 32px;">
+                <p style="margin:0 0 6px 0; font-size:12px; line-height:1.5; color:#8a8a8a;">
+                  Se o botão não funcionar, copie e cole este link no navegador:
+                </p>
+                <p style="margin:0; font-size:12px; line-height:1.5; word-break:break-all;">
+                  <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#ff4d1c; text-decoration:underline;">{{ .ConfirmationURL }}</a>
+                </p>
+              </td>
+            </tr>
+            <!-- Rodapé -->
+            <tr>
+              <td style="padding:20px 32px; border-top:1px solid #eeeae4;">
+                <p style="margin:0; font-size:12px; line-height:1.6; color:#9a9a9a;">
+                  Você recebeu este e-mail porque criou uma conta no Delivery OS.
+                  Se não foi você, pode ignorar — nada será ativado sem esta
+                  confirmação.
+                </p>
+              </td>
+            </tr>
+          </table>
+          <!-- Assinatura fora do card -->
+          <p style="margin:16px 0 0 0; font-size:11px; color:#b0aca6;">
+            Delivery OS · deliveryos.food
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
