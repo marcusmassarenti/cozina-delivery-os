@@ -236,9 +236,8 @@ export function PedidosKeetaView({
             </div>
             {promocoes.hasData && (
               <span className="text-[10px] text-muted-foreground">
-                {fmtNum(promocoes.totalPedidos)} pedidos ·{" "}
-                {fmtBRL(promocoes.totalDespesa)} de custo ·{" "}
-                {fmtBRL(promocoes.custoPorPedidoMedio)}/pedido
+                {fmtBRL(promocoes.totalDespesa)} de custo em promoções ·{" "}
+                {fmtBRL(promocoes.custoPorPedidoMedio)} por pedido de campanha
               </span>
             )}
           </div>
@@ -260,9 +259,6 @@ export function PedidosKeetaView({
                       <th className="px-5 py-2 font-medium">Campanha</th>
                       <th className="px-3 py-2 text-right font-medium">
                         Pedidos
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Vendas promo
                       </th>
                       <th className="px-3 py-2 text-right font-medium">
                         Custo (loja)
@@ -291,9 +287,6 @@ export function PedidosKeetaView({
                         <td className="px-3 py-2 text-right tabular-nums">
                           {fmtNum(c.pedidos)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                          {fmtBRL(c.vendasPromo)}
-                        </td>
                         <td className="px-3 py-2 text-right tabular-nums text-rose-700 dark:text-rose-400">
                           {fmtBRL(c.despesa)}
                         </td>
@@ -313,9 +306,6 @@ export function PedidosKeetaView({
                         {fmtNum(promocoes.totalPedidos)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {fmtBRL(promocoes.totalVendasPromo)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
                         {fmtBRL(promocoes.totalDespesa)}
                       </td>
                       <td className="px-5 py-2 text-right tabular-nums">
@@ -328,7 +318,11 @@ export function PedidosKeetaView({
               <p className="border-t px-5 py-2 text-[11px] text-muted-foreground">
                 Cada linha é uma regra de desconto.{" "}
                 <strong>Custo/pedido</strong> = quanto a loja gastou pra cada
-                pedido que a campanha trouxe — quanto menor, mais eficiente.
+                pedido que a campanha trouxe — quanto menor, mais eficiente. O{" "}
+                <strong>custo</strong> é dinheiro real (bate com o subsídio da
+                loja acima). Já os <strong>pedidos</strong> somam por campanha —
+                um mesmo pedido pode entrar em várias, então o total não é o
+                número de pedidos da Keeta.
               </p>
             </>
           )}
