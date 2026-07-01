@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Check, Loader2, Pencil } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+import { useNavigate } from "@/components/shared/navigation-progress"
 import type { ResultadoUnitRow, ResultadoTotals } from "@/lib/data/resultado"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
@@ -37,6 +38,7 @@ export function ResultadoTable({
   canEdit?: boolean
 }) {
   const router = useRouter()
+  const navigate = useNavigate()
   const href = (code: string) =>
     `/unidades/${code}${periodo ? `?periodo=${periodo}` : ""}`
 
@@ -137,7 +139,7 @@ export function ResultadoTable({
               return (
                 <tr
                   key={r.unitId}
-                  onClick={() => router.push(href(r.unitCode))}
+                  onClick={() => navigate(href(r.unitCode))}
                   className="cursor-pointer hover:bg-muted/40"
                 >
                   <td className="px-3 py-2">

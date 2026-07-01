@@ -52,6 +52,45 @@ export function NavigationProgress({
     safety.current = setTimeout(() => setNavigating(false), 20000)
   }, [])
 
+  // Interceptador GLOBAL: qualquer clique num link interno que troca de tela
+  // liga a barra — cobre menu lateral, cards, linhas-link etc. em TODA tela,
+  // sem precisar tocar em cada componente. Os controles que navegam via
+  // router.push continuam usando navigate()/start().
+  React.useEffect(() => {
+    function onClick(e: MouseEvent) {
+      // Ignora clique com modificador (abrir em nova aba), botão do meio/direito.
+      if (
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      )
+        return
+      const anchor = (e.target as HTMLElement | null)?.closest("a")
+      if (!anchor) return
+      const href = anchor.getAttribute("href")
+      if (!href || href.startsWith("#")) return
+      if (anchor.target && anchor.target !== "_self") return
+      if (anchor.hasAttribute("download")) return
+      let url: URL
+      try {
+        url = new URL(anchor.href, window.location.href)
+      } catch {
+        return
+      }
+      if (url.origin !== window.location.origin) return // link externo
+      // Mesma tela (só âncora/hash ou URL idêntica) → não é navegação.
+      const alvo = url.pathname + url.search
+      const atual = window.location.pathname + window.location.search
+      if (alvo === atual) return
+      start()
+    }
+    document.addEventListener("click", onClick, true)
+    return () => document.removeEventListener("click", onClick, true)
+  }, [start])
+
   const navigate = React.useCallback(
     (url: string) => {
       start()

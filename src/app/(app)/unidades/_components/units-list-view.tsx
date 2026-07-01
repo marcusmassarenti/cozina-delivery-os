@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { ChevronRight, Filter, Search, X } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
@@ -33,7 +33,7 @@ export function UnitsListView({
   /** Logo da empresa (white-label) pro avatar das lojas. */
   brandLogoUrl?: string | null
 }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const [search, setSearch] = React.useState("")
   const [cityFilter, setCityFilter] = React.useState<string>("")
   const [platformFilter, setPlatformFilter] = React.useState<PlatformId[]>([])
@@ -212,13 +212,13 @@ export function UnitsListView({
           {filtered.map((unit) => (
             <div
               key={unit.code}
-              onClick={() => router.push(`/unidades/${unit.code}`)}
+              onClick={() => navigate(`/unidades/${unit.code}`)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault()
-                  router.push(`/unidades/${unit.code}`)
+                  navigate(`/unidades/${unit.code}`)
                 }
               }}
               className={`group relative flex cursor-pointer flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md ${

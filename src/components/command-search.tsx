@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "@/components/shared/navigation-progress"
 import { CornerDownLeft, Search } from "lucide-react"
 
 import { NAV_ITEMS } from "@/lib/nav"
@@ -19,7 +19,7 @@ function norm(s: string): string {
  * Filtra os itens do menu e navega no Enter/clique.
  */
 export function CommandSearch() {
-  const router = useRouter()
+  const navigate = useNavigate()
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const [active, setActive] = React.useState(0)
@@ -60,7 +60,7 @@ export function CommandSearch() {
 
   function go(href: string) {
     setOpen(false)
-    router.push(href)
+    navigate(href)
   }
 
   function onInputKey(e: React.KeyboardEvent) {
