@@ -12,6 +12,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { formaPagamentoLabel } from "@/lib/ninefood/pagamento"
+import { metodoEntregaLabel } from "@/lib/ninefood/entrega"
 
 export type FormaMix = { forma: string; pedidos: number }
 export type MixItem = { label: string; pedidos: number }
@@ -179,7 +180,7 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
       somaEspera += row.tempo_espera_retirada_seg
       nEspera++
     }
-    const metodo = (row.metodo_entrega ?? "").trim() || "Outros"
+    const metodo = metodoEntregaLabel(row.metodo_entrega)
     metodos.set(metodo, (metodos.get(metodo) ?? 0) + 1)
 
     r.receitaVendas += Number(row.receita_vendas) || 0
