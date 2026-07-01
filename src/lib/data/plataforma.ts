@@ -49,6 +49,7 @@ export type ClientOverview = {
   dueDate: string | null
   paid: boolean
   suspendOn: string | null
+  trialEndsAt: string | null
   billingStatus: BillingStatus
   unitsList: HoldingUnit[]
   payments: HoldingPayment[]

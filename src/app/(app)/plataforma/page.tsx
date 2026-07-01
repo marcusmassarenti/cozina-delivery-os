@@ -3,6 +3,7 @@ import { AlertTriangle, Building2, CheckCircle2, Clock, Wallet } from "lucide-re
 
 import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
+import { daysUntil } from "@/lib/data/billing"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
 
@@ -40,6 +41,15 @@ function fmtDate(d: string | null): string {
   if (!d) return "—"
   const [y, m, day] = d.split("-")
   return `${day}/${m}/${y}`
+}
+
+/** "vence em X dias" / "vence hoje" / "venceu" pro teste grátis. */
+function trialLabel(iso: string | null): string {
+  if (!iso) return ""
+  const d = daysUntil(iso)
+  if (d < 0) return "venceu"
+  if (d === 0) return "vence hoje"
+  return `vence em ${d} dia${d === 1 ? "" : "s"}`
 }
 
 /** Último acesso: "DD/MM/AA HH:mm" (SP) ou "nunca". */
@@ -145,6 +155,11 @@ export default async function PlataformaPage() {
                       >
                         {st.label}
                       </span>
+                      {c.billingStatus === "trial" && c.trialEndsAt && (
+                        <div className="mt-1 text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                          {trialLabel(c.trialEndsAt)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div>{c.paymentMethod ?? "—"}</div>
