@@ -3,11 +3,13 @@ import { AlertTriangle, Building2, CheckCircle2, Clock, Wallet } from "lucide-re
 
 import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
+import { getDefaultPlan } from "@/lib/data/assinatura"
 import { daysUntil } from "@/lib/data/billing"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
 
 import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
+import { PlanSettingsDialog } from "./_components/plan-settings-dialog"
 import { EditBillingDialog } from "./_components/edit-billing-dialog"
 import { UnitsDialog } from "./_components/units-dialog"
 import { PaymentsDialog } from "./_components/payments-dialog"
@@ -69,6 +71,7 @@ export default async function PlataformaPage() {
   if (!(await isSuperadmin())) notFound()
   const { clients, totals } = await getClientsOverview()
   const myHoldingId = await getCurrentHoldingId()
+  const defaultPlan = await getDefaultPlan()
 
   const emAtraso = clients.filter(
     (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
@@ -101,7 +104,14 @@ export default async function PlataformaPage() {
             {fmtNum(totals.users)} usuários
           </p>
         </div>
-        <NovoClienteDialog />
+        <div className="flex items-center gap-2">
+          <PlanSettingsDialog
+            monthlyFee={defaultPlan.mensalidade}
+            pricePerUnit={defaultPlan.porLojaExtra}
+            includedUnits={defaultPlan.lojasInclusas}
+          />
+          <NovoClienteDialog />
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

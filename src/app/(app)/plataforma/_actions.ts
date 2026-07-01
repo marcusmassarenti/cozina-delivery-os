@@ -185,6 +185,45 @@ export async function criarCliente(
 
 export type BillingActionState = { ok: boolean; message?: string }
 
+/** Salva o preço do plano padrão do self-service (super-admin). */
+export async function setPlatformPlan(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const money = (key: string): number | null => {
+      const raw = String(formData.get(key) ?? "").replace(/\./g, "").replace(",", ".").trim()
+      const n = raw ? Number(raw) : null
+      return n != null && !Number.isNaN(n) && n >= 0 ? n : null
+    }
+    const monthlyFee = money("monthlyFee")
+    const pricePerUnit = money("pricePerUnit")
+    if (monthlyFee == null) return { ok: false, message: "Informe a mensalidade base." }
+    if (pricePerUnit == null) return { ok: false, message: "Informe o valor por loja extra." }
+    const includedRaw = String(formData.get("includedUnits") ?? "").trim()
+    const includedUnits =
+      includedRaw && !Number.isNaN(Number(includedRaw))
+        ? Math.max(1, Math.trunc(Number(includedRaw)))
+        : 1
+
+    const { error } = await admin.from("platform_settings").upsert(
+      {
+        id: 1,
+        default_monthly_fee: monthlyFee,
+        default_price_per_unit: pricePerUnit,
+        default_included_units: includedUnits,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    )
+    if (error) return { ok: false, message: error.message }
+
+    revalidatePath("/plataforma")
+    return { ok: true }
+  })
+}
+
 function dateOrNull(v: FormDataEntryValue | null): string | null {
   const s = String(v ?? "").trim()
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null

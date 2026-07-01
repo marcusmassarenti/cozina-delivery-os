@@ -10,14 +10,42 @@ import { computeBillingStatus, type BillingStatus } from "@/lib/data/billing"
  * O preço vem de DUAS fontes, nesta ordem:
  *  1) Se o dono já definiu um preço custom pra empresa (holdings.monthly_fee),
  *     usamos ele + lojas extras (mesma conta do /plataforma).
- *  2) Senão, cai no PLANO_PADRAO abaixo (preço público do self-service).
+ *  2) Senão, cai no preço padrão editável (tabela platform_settings), que o
+ *     dono ajusta na tela /plataforma. O PLANO_PADRAO abaixo é só o fallback
+ *     caso a tabela ainda não exista.
  */
 export const PLANO_PADRAO = {
-  /** Mensalidade base (inclui a 1ª loja). Ajuste aqui o preço público. */
-  mensalidade: 197,
+  /** Mensalidade base (inclui a 1ª loja). */
+  mensalidade: 49,
   lojasInclusas: 1,
   /** Valor por loja além da inclusa. */
-  porLojaExtra: 97,
+  porLojaExtra: 99,
+}
+
+export type PlanoPadrao = {
+  mensalidade: number
+  lojasInclusas: number
+  porLojaExtra: number
+}
+
+/** Preço do plano padrão do self-service (editável em /plataforma). */
+export async function getDefaultPlan(): Promise<PlanoPadrao> {
+  try {
+    const admin = createAdminClient()
+    const { data } = await admin
+      .from("platform_settings")
+      .select("default_monthly_fee, default_price_per_unit, default_included_units")
+      .eq("id", 1)
+      .maybeSingle()
+    if (!data) return PLANO_PADRAO
+    return {
+      mensalidade: Number(data.default_monthly_fee),
+      lojasInclusas: Number(data.default_included_units),
+      porLojaExtra: Number(data.default_price_per_unit),
+    }
+  } catch {
+    return PLANO_PADRAO
+  }
 }
 
 export type PlanoAtual = {
@@ -68,13 +96,14 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   }
 
   const precoCustom = h.monthly_fee != null
+  const padrao = precoCustom ? null : await getDefaultPlan()
   const lojasInclusas = precoCustom
     ? (h.included_units ?? 1)
-    : PLANO_PADRAO.lojasInclusas
+    : padrao!.lojasInclusas
   const porLojaExtra = precoCustom
     ? Number(h.price_per_unit ?? 0)
-    : PLANO_PADRAO.porLojaExtra
-  const base = precoCustom ? Number(h.monthly_fee) : PLANO_PADRAO.mensalidade
+    : padrao!.porLojaExtra
+  const base = precoCustom ? Number(h.monthly_fee) : padrao!.mensalidade
   const extraUnits = Math.max(0, activeUnits - lojasInclusas)
   const mensalidade = base + extraUnits * porLojaExtra
 
