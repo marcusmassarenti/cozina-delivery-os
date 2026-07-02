@@ -3227,7 +3227,25 @@ export async function linkUnitAndImport(
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   revalidatePath("/")
-  return { ok: result.ok, result }
+
+  // O VÍNCULO já foi salvo acima. Se o reprocesso do arquivo não concluiu
+  // (erro ao gravar OU não bateu com o vínculo), NÃO deixa o diálogo congelado
+  // sem feedback: devolve o motivo. Assim o usuário vê o que aconteceu e sabe
+  // que o vínculo persistiu (pode clicar "Atualizar" pra reimportar).
+  if (!result.ok) {
+    console.error(
+      `linkUnitAndImport: vínculo salvo mas reprocesso falhou (loja ${storeId}):`,
+      result.message ?? (result.unmapped ? "voltou unmapped" : "sem detalhe"),
+    )
+    return {
+      ok: false,
+      message:
+        result.message ??
+        `Vínculo salvo, mas não deu pra importar o arquivo agora (loja ${storeId}). Clique em "Atualizar" pra reimportar, ou reenvie o arquivo.`,
+      result,
+    }
+  }
+  return { ok: true, result }
   } catch (e) {
     // Sem isto, qualquer exceção (parse do arquivo, query, etc.) subia sem ser
     // capturada → o botão "Vincular e importar" resetava sem mostrar nada.
