@@ -85,11 +85,25 @@ export async function assinar(
           ok: false,
           message: "CPF (11 dígitos) ou CNPJ (14 dígitos) inválido.",
         }
+      // Endereço (pra Nota Fiscal). Obrigatório CEP + número; resto opcional.
+      const cep = onlyDigits(String(formData.get("cep") ?? ""))
+      const addressNumber = String(formData.get("numero") ?? "").trim()
+      if (cep.length !== 8)
+        return { ok: false, message: "Informe um CEP válido (8 dígitos)." }
+      if (!addressNumber)
+        return { ok: false, message: "Informe o número do endereço." }
+      const telefone = onlyDigits(String(formData.get("telefone") ?? ""))
       const customer = await asaasCreateCustomer({
         name: nome,
         cpfCnpj,
         email: auth.user.email ?? undefined,
         externalReference: holdingId,
+        postalCode: cep,
+        address: String(formData.get("logradouro") ?? "").trim() || undefined,
+        addressNumber,
+        complement: String(formData.get("complemento") ?? "").trim() || undefined,
+        province: String(formData.get("bairro") ?? "").trim() || undefined,
+        mobilePhone: telefone || undefined,
       })
       customerId = customer.id
       await admin

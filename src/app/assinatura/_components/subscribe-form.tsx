@@ -41,9 +41,41 @@ export function SubscribeForm({
   })
   const [plan, setPlan] = React.useState<PlanId>(defaultPlan)
 
+  // Endereço (pra Nota Fiscal) — CEP autopreenche o resto via ViaCEP.
+  const [cep, setCep] = React.useState("")
+  const [logradouro, setLogradouro] = React.useState("")
+  const [bairro, setBairro] = React.useState("")
+  const [cidadeUf, setCidadeUf] = React.useState("")
+  const [cepMsg, setCepMsg] = React.useState<string | null>(null)
+  const [buscandoCep, setBuscandoCep] = React.useState(false)
+
   React.useEffect(() => {
     if (state.ok && state.checkoutUrl) window.location.href = state.checkoutUrl
   }, [state])
+
+  async function buscarCep(valor: string) {
+    const digits = valor.replace(/\D/g, "")
+    if (digits.length !== 8) return
+    setBuscandoCep(true)
+    setCepMsg(null)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
+      const data = await res.json()
+      if (data.erro) {
+        setCepMsg("CEP não encontrado.")
+        return
+      }
+      setLogradouro(data.logradouro ?? "")
+      setBairro(data.bairro ?? "")
+      setCidadeUf(
+        [data.localidade, data.uf].filter(Boolean).join(" - ") || "",
+      )
+    } catch {
+      setCepMsg("Não deu pra buscar o CEP — preencha o endereço manualmente.")
+    } finally {
+      setBuscandoCep(false)
+    }
+  }
 
   const inputCls =
     "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
@@ -141,6 +173,101 @@ export function SubscribeForm({
             <p className="mt-1 text-[11px] text-muted-foreground">
               Necessário pra emitir a cobrança e a nota.
             </p>
+          </div>
+
+          {/* Endereço — pra emissão de Nota Fiscal */}
+          <div className="rounded-lg border border-dashed p-3">
+            <p className="text-xs font-medium">Endereço (para nota fiscal)</p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label htmlFor="cep" className="text-[11px] font-medium">
+                  CEP
+                </label>
+                <input
+                  id="cep"
+                  name="cep"
+                  value={cep}
+                  onChange={(e) => setCep(e.target.value)}
+                  onBlur={(e) => buscarCep(e.target.value)}
+                  required
+                  inputMode="numeric"
+                  placeholder="00000-000"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label htmlFor="numero" className="text-[11px] font-medium">
+                  Número
+                </label>
+                <input
+                  id="numero"
+                  name="numero"
+                  required
+                  inputMode="numeric"
+                  placeholder="123"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            {(buscandoCep || cepMsg) && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {buscandoCep ? "Buscando CEP..." : cepMsg}
+              </p>
+            )}
+            <div className="mt-2">
+              <label htmlFor="logradouro" className="text-[11px] font-medium">
+                Rua / logradouro
+              </label>
+              <input
+                id="logradouro"
+                name="logradouro"
+                value={logradouro}
+                onChange={(e) => setLogradouro(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="bairro" className="text-[11px] font-medium">
+                  Bairro
+                </label>
+                <input
+                  id="bairro"
+                  name="bairro"
+                  value={bairro}
+                  onChange={(e) => setBairro(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label htmlFor="complemento" className="text-[11px] font-medium">
+                  Complemento
+                </label>
+                <input
+                  id="complemento"
+                  name="complemento"
+                  placeholder="opcional"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            {cidadeUf && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Cidade: <b className="text-foreground">{cidadeUf}</b>
+              </p>
+            )}
+            <div className="mt-2">
+              <label htmlFor="telefone" className="text-[11px] font-medium">
+                Telefone / WhatsApp
+              </label>
+              <input
+                id="telefone"
+                name="telefone"
+                inputMode="numeric"
+                placeholder="(00) 00000-0000"
+                className={inputCls}
+              />
+            </div>
           </div>
         </>
       )}

@@ -71,6 +71,13 @@ export async function asaasCreateCustomer(input: {
   email?: string
   mobilePhone?: string
   externalReference?: string
+  // Endereço (necessário pra emissão de Nota Fiscal). Asaas resolve
+  // cidade/estado a partir do postalCode.
+  postalCode?: string
+  address?: string
+  addressNumber?: string
+  complement?: string
+  province?: string
 }): Promise<AsaasCustomer> {
   if (asaasIsMock()) return { id: mockId("cus") }
   return call<AsaasCustomer>("/customers", {
