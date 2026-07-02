@@ -1,11 +1,14 @@
 "use client"
 
+import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import Link from "next/link"
 import {
   ArrowRight,
   Building2,
+  Eye,
+  EyeOff,
   Lock,
   Mail,
   MessageCircle,
@@ -71,6 +74,7 @@ export function SignupForm() {
         placeholder="mínimo 6 caracteres"
         autoComplete="new-password"
         icon={<Lock className="size-4" />}
+        revealable
       />
 
       {state.message && !state.ok && (
@@ -100,6 +104,7 @@ function Field({
   autoComplete,
   icon,
   required = true,
+  revealable = false,
 }: {
   id: string
   name: string
@@ -109,7 +114,12 @@ function Field({
   autoComplete: string
   icon: React.ReactNode
   required?: boolean
+  /** Campo de senha: mostra um botão de olho pra revelar o que foi digitado. */
+  revealable?: boolean
 }) {
+  const [show, setShow] = React.useState(false)
+  const inputType = revealable ? (show ? "text" : "password") : type
+
   return (
     <div className="flex flex-col gap-1.5">
       <Label
@@ -125,12 +135,23 @@ function Field({
         <Input
           id={id}
           name={name}
-          type={type}
+          type={inputType}
           placeholder={placeholder}
           autoComplete={autoComplete}
           required={required}
-          className="h-11 pl-9"
+          className={`h-11 pl-9 ${revealable ? "pr-10" : ""}`}
         />
+        {revealable && (
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+            title={show ? "Ocultar senha" : "Mostrar senha"}
+            className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        )}
       </div>
     </div>
   )
