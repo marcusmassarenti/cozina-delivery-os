@@ -27,6 +27,48 @@ export type AssinarState = {
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "")
 
+/**
+ * Link de pagamento da assinatura JÁ CRIADA (pendente). Não recria nada —
+ * só busca a fatura da 1ª cobrança pra o cliente pagar. Evita refazer o
+ * cadastro/assinatura quando falta só pagar.
+ */
+export async function linkPagamentoPendente(): Promise<{
+  ok: boolean
+  message?: string
+  checkoutUrl?: string
+}> {
+  const supabase = await createClient()
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user) return { ok: false, message: "Sessão expirada." }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
+
+  const admin = createAdminClient()
+  const { data: h } = await admin
+    .from("holdings")
+    .select("asaas_subscription_id")
+    .eq("id", holdingId)
+    .maybeSingle()
+  const subscriptionId = h?.asaas_subscription_id as string | null
+  if (!subscriptionId)
+    return { ok: false, message: "Nenhuma assinatura pra pagar." }
+
+  try {
+    const checkoutUrl = await asaasFirstInvoiceUrl(subscriptionId)
+    if (!checkoutUrl)
+      return {
+        ok: false,
+        message: "O link de pagamento ainda está sendo gerado. Tente de novo em instantes.",
+      }
+    return { ok: true, checkoutUrl }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro ao buscar o pagamento.",
+    }
+  }
+}
+
 /** Soma meses a uma data YYYY-MM-DD (fuso SP) e devolve YYYY-MM-DD. */
 function addMonths(iso: string, months: number): string {
   const d = new Date(`${iso}T00:00:00-03:00`)
