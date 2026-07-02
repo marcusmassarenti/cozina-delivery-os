@@ -2,7 +2,11 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSuperadmin } from "@/lib/auth/permissions"
-import { computeBillingStatus, type BillingStatus } from "@/lib/data/billing"
+import {
+  computeBillingStatus,
+  effectiveTrialEnd,
+  type BillingStatus,
+} from "@/lib/data/billing"
 
 /**
  * Painel de Dono (super-admin) — visão de TODOS os clientes (holdings) da
@@ -239,7 +243,8 @@ export async function getClientsOverview(): Promise<{
       dueDate: hh.due_date ?? null,
       paid: hh.paid ?? true,
       suspendOn: hh.suspend_on ?? null,
-      trialEndsAt: hh.trial_ends_at ?? null,
+      // Trial ANCORADO no cadastro (não renova ao cancelar).
+      trialEndsAt: effectiveTrialEnd(hh.trial_ends_at ?? null, h.created_at),
     }
     // Mensalidade = base + (lojas ativas além das inclusas × valor por loja)
     const activeUnits = activeUnitCount.get(h.id) ?? 0

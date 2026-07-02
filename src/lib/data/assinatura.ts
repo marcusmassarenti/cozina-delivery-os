@@ -2,7 +2,11 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { computeBillingStatus, type BillingStatus } from "@/lib/data/billing"
+import {
+  computeBillingStatus,
+  effectiveTrialEnd,
+  type BillingStatus,
+} from "@/lib/data/billing"
 
 /**
  * Preço da assinatura self-service — POR LOJA, em dois planos (bate com a
@@ -91,7 +95,7 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   const { data: h } = await admin
     .from("holdings")
     .select(
-      "id, name, monthly_fee, price_per_unit, included_units, plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
+      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
     )
     .eq("id", holdingId)
     .maybeSingle()
@@ -138,13 +142,18 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     mensalidade = precoDoPlano(precos, selectedPlan ?? "essencial", activeUnits)
   }
 
+  // Trial ANCORADO no cadastro (createdAt + 7): não renova ao cancelar.
+  const trialEndsAt = effectiveTrialEnd(
+    (h.trial_ends_at as string | null) ?? null,
+    (h.created_at as string | null) ?? null,
+  )
   const status = computeBillingStatus({
     paymentMethod: (h.payment_method as string | null) ?? null,
     monthlyFee: h.monthly_fee != null ? Number(h.monthly_fee) : null,
     dueDate: (h.due_date as string | null) ?? null,
     paid: (h.paid as boolean | null) ?? true,
     suspendOn: (h.suspend_on as string | null) ?? null,
-    trialEndsAt: (h.trial_ends_at as string | null) ?? null,
+    trialEndsAt,
   })
 
   // Histórico de pagamentos da empresa (últimos 12).
@@ -170,7 +179,7 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     holdingId,
     name: h.name,
     status,
-    trialEndsAt: (h.trial_ends_at as string | null) ?? null,
+    trialEndsAt,
     activeUnits,
     precoCustom,
     planos,

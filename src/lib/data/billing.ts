@@ -38,6 +38,32 @@ export function daysUntil(dateISO: string, today = todayISO()): number {
   return Math.round((b - a) / 86_400_000)
 }
 
+export const TRIAL_DAYS = 7
+
+/** Soma dias a uma data YYYY-MM-DD (fuso SP) e devolve YYYY-MM-DD. */
+function addDaysToDate(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T00:00:00-03:00`)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Fim EFETIVO do teste grátis: ANCORADO na data do cadastro
+ * (createdAt + TRIAL_DAYS) e nunca além disso. Assim o trial não pode ser
+ * estendido nem reiniciado — cancelar a assinatura NÃO renova o teste (evita
+ * burlar: assinar → cancelar → ganhar 7 dias de novo). `createdAt` pode vir
+ * como timestamp ou date; usamos só a parte da data.
+ */
+export function effectiveTrialEnd(
+  trialEndsAt: string | null,
+  createdAt: string | null | undefined,
+): string | null {
+  if (!trialEndsAt) return null
+  if (!createdAt) return trialEndsAt
+  const cap = addDaysToDate(createdAt.slice(0, 10), TRIAL_DAYS)
+  return trialEndsAt < cap ? trialEndsAt : cap
+}
+
 /** Status de cobrança a partir dos campos + a data de hoje. */
 export function computeBillingStatus(
   b: HoldingBilling,
@@ -72,7 +98,7 @@ export async function getCurrentHoldingBilling(): Promise<{
     const { data } = await admin
       .from("holdings")
       .select(
-        "payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at",
+        "created_at, payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at",
       )
       .eq("id", holdingId)
       .maybeSingle()
@@ -84,7 +110,11 @@ export async function getCurrentHoldingBilling(): Promise<{
       dueDate: (data.due_date as string | null) ?? null,
       paid: (data.paid as boolean | null) ?? true,
       suspendOn: (data.suspend_on as string | null) ?? null,
-      trialEndsAt: (data.trial_ends_at as string | null) ?? null,
+      // Trial ANCORADO no cadastro (não renova ao cancelar).
+      trialEndsAt: effectiveTrialEnd(
+        (data.trial_ends_at as string | null) ?? null,
+        (data.created_at as string | null) ?? null,
+      ),
     }
     return {
       status: computeBillingStatus(b),
