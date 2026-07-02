@@ -47,8 +47,8 @@ const STEPS: {
     key: "import",
     icon: Upload,
     title: "Faça a 1ª importação",
-    desc: "Comece pelo iFood (o maior do Brasil): baixe os relatórios (Cardápio, Financeiro e Avaliações) e suba em Importação — vira lucro real na hora.",
-    href: "/importacao",
+    desc: "Comece pelo iFood: baixe os relatórios (Cardápio, Financeiro e Avaliações) e suba em Importação — vira lucro real na hora.",
+    href: "/importacao?guia=1",
     cta: "Importar",
   },
 ]

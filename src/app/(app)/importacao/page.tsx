@@ -11,6 +11,7 @@ import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
+import { ImportTour } from "./_components/import-tour"
 
 // O Server Action de importação roda no contexto desta rota. A Conciliação do
 // iFood traz dezenas de milhares de lançamentos por lote (9 lojas ≈ 60k linhas),
@@ -130,11 +131,19 @@ export default async function ImportacaoPage({
         </Link>
       </div>
 
-      <DownloadGuide />
-
-      <Suspense fallback={<ChecklistSkeleton />}>
-        <ImportChecklist />
+      <Suspense fallback={null}>
+        <ImportTour />
       </Suspense>
+
+      <div data-tour="download">
+        <DownloadGuide />
+      </div>
+
+      <div data-tour="checklist">
+        <Suspense fallback={<ChecklistSkeleton />}>
+          <ImportChecklist />
+        </Suspense>
+      </div>
 
       <SectionDivider number={1} label="Subir relatório" />
       <div className="rounded-xl border bg-card p-5">

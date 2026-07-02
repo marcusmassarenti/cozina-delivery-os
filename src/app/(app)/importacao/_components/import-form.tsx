@@ -218,6 +218,7 @@ export function ImportForm({
       {/* Dropzone */}
       <label
         htmlFor="files"
+        data-tour="dropzone"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
         className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-background px-4 py-10 transition-colors hover:border-primary/60 hover:bg-muted/40"
@@ -295,7 +296,11 @@ export function ImportForm({
             {progress.done}/{progress.total} arquivos
           </span>
         )}
-        <Button type="submit" disabled={submitting || files.length === 0}>
+        <Button
+          type="submit"
+          data-tour="import-btn"
+          disabled={submitting || files.length === 0}
+        >
           {submitting
             ? progress
               ? `Importando ${progress.done + 1}/${progress.total}...`
