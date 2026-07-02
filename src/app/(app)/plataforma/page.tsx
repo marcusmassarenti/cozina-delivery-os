@@ -54,6 +54,20 @@ function trialLabel(iso: string | null): string {
   return `vence em ${d} dia${d === 1 ? "" : "s"}`
 }
 
+/** Nome amigável do último evento de webhook do Asaas. */
+function asaasEventLabel(event: string): string {
+  const map: Record<string, string> = {
+    PAYMENT_CONFIRMED: "Pagamento confirmado",
+    PAYMENT_RECEIVED: "Pagamento recebido",
+    PAYMENT_RECEIVED_IN_CASH: "Pago em dinheiro",
+    SIMULATED_PAYMENT_CONFIRMED: "Pago (teste)",
+    PAYMENT_OVERDUE: "Cobrança vencida",
+    PAYMENT_REFUNDED: "Estornado",
+    SUBSCRIPTION_CANCELED: "Assinatura cancelada",
+  }
+  return map[event] ?? event
+}
+
 /** Último acesso: "DD/MM/AA HH:mm" (SP) ou "nunca". */
 function fmtLastLogin(iso: string | null): string {
   if (!iso) return "nunca"
@@ -76,6 +90,7 @@ export default async function PlataformaPage() {
   const emAtraso = clients.filter(
     (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
   ).length
+  const assinaturasAsaas = clients.filter((c) => c.asaasActive).length
 
   const kpis = [
     { label: "Receita mensal (MRR)", value: fmtBRL(totals.mrr), icon: Wallet },
@@ -102,6 +117,9 @@ export default async function PlataformaPage() {
             Visão de dono · {fmtNum(totals.clients)} cliente
             {totals.clients !== 1 ? "s" : ""} · {fmtNum(totals.units)} lojas ·{" "}
             {fmtNum(totals.users)} usuários
+            {assinaturasAsaas > 0 && (
+              <> · {fmtNum(assinaturasAsaas)} assinatura{assinaturasAsaas !== 1 ? "s" : ""} Asaas</>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -171,13 +189,33 @@ export default async function PlataformaPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div>{c.paymentMethod ?? "—"}</div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{c.paymentMethod ?? "—"}</span>
+                        {c.planTier && (
+                          <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                            {c.planTier}
+                          </span>
+                        )}
+                        {c.asaasActive && (
+                          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                            Asaas ✓
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-muted-foreground">
                         {c.computedMonthly > 0 ? `${fmtBRL(c.computedMonthly)}/mês` : "—"}
                         {c.extraUnits > 0 && c.pricePerUnit
                           ? ` · base + ${c.extraUnits}×${fmtBRL(c.pricePerUnit)}`
                           : ""}
                       </div>
+                      {c.asaasLastEvent && (
+                        <div className="text-[10px] text-muted-foreground">
+                          {asaasEventLabel(c.asaasLastEvent)}
+                          {c.asaasLastEventAt
+                            ? ` · ${fmtLastLogin(c.asaasLastEventAt)}`
+                            : ""}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 tabular-nums">{fmtDate(c.dueDate)}</td>
                     <td className="px-4 py-3 text-right">

@@ -51,6 +51,11 @@ export type ClientOverview = {
   suspendOn: string | null
   trialEndsAt: string | null
   billingStatus: BillingStatus
+  // Assinatura Asaas
+  planTier: "essencial" | "pro" | null
+  asaasActive: boolean // tem assinatura recorrente no Asaas
+  asaasLastEvent: string | null // último evento do webhook (ex.: PAYMENT_CONFIRMED)
+  asaasLastEventAt: string | null
   unitsList: HoldingUnit[]
   payments: HoldingPayment[]
 }
@@ -101,7 +106,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, asaas_subscription_id, asaas_last_event",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -123,6 +128,9 @@ export async function getClientsOverview(): Promise<{
         paid: true,
         suspend_on: null,
         trial_ends_at: null,
+        plan_tier: null,
+        asaas_subscription_id: null,
+        asaas_last_event: null,
       }))
     : (hFull.data ?? [])
 
@@ -221,6 +229,9 @@ export async function getClientsOverview(): Promise<{
       paid: boolean | null
       suspend_on: string | null
       trial_ends_at: string | null
+      plan_tier: string | null
+      asaas_subscription_id: string | null
+      asaas_last_event: { event?: string; at?: string } | null
     }
     const billing = {
       paymentMethod: hh.payment_method ?? null,
@@ -261,6 +272,13 @@ export async function getClientsOverview(): Promise<{
       extraUnits,
       computedMonthly,
       billingStatus: computeBillingStatus(billing),
+      planTier:
+        hh.plan_tier === "essencial" || hh.plan_tier === "pro"
+          ? hh.plan_tier
+          : null,
+      asaasActive: !!hh.asaas_subscription_id,
+      asaasLastEvent: hh.asaas_last_event?.event ?? null,
+      asaasLastEventAt: hh.asaas_last_event?.at ?? null,
       unitsList: unitsByHolding.get(h.id) ?? [],
       payments: paymentsByHolding.get(h.id) ?? [],
     }
