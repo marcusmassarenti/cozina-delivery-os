@@ -71,7 +71,7 @@ export function ReviewTester() {
   return (
     <div className="flex flex-col gap-4">
       {/* Loja de teste (sandbox do app de teste) */}
-      <div className="flex flex-col gap-1">
+      <div className="order-[-2] flex flex-col gap-1">
         <label className="text-xs font-medium text-muted-foreground">
           Merchant (loja de teste)
         </label>
@@ -269,7 +269,8 @@ export function ReviewTester() {
         </Button>
       </div>
 
-      {/* Resultado */}
+      {/* Resultado — posto no topo (order) pra ficar sempre visível ao clicar. */}
+      <div className="order-[-1] flex flex-col gap-4 empty:hidden">
       {pending && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" /> Rodando {activeLabel}…
@@ -277,7 +278,7 @@ export function ReviewTester() {
       )}
       {result && !pending && (
         <div
-          className={`rounded-md border p-3 text-xs ${
+          className={`scroll-mt-4 rounded-md border p-3 text-xs ${
             result.ok
               ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20"
               : "border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20"
@@ -345,6 +346,7 @@ export function ReviewTester() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }
