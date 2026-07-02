@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { Flame } from "lucide-react"
+import { BarChart3 } from "lucide-react"
 
 import { DeliveryOsMark } from "@/components/delivery-os-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -91,7 +91,7 @@ export default async function LoginPage() {
 
             <div className="mt-auto max-w-xl">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/70">
-                <Flame className="size-3 text-[#ff4d1c]" />
+                <BarChart3 className="size-3 text-[#ff4d1c]" />
                 Gestão de Delivery
               </div>
               <h1 className="text-[1.75rem] font-bold leading-[1.2] text-white drop-shadow-lg xl:text-[2.5rem]">
@@ -125,7 +125,7 @@ export default async function LoginPage() {
 
             <div className="mb-8 flex items-center gap-2.5">
               <div className="flex size-9 items-center justify-center rounded-md bg-accent text-accent-foreground">
-                <Flame className="size-4" />
+                <BarChart3 className="size-4" />
               </div>
               <h2 className="text-xl font-semibold">Acesso Administrativo</h2>
             </div>
