@@ -73,10 +73,14 @@ export type PlanoAtual = {
   selectedPlan: PlanId | null
   /** Valor mensal a cobrar agora (custom, ou plano selecionado/Essencial). */
   mensalidade: number
+  /** Nome do plano escolhido (ex.: "Essencial"), se houver. */
+  planLabel: string | null
   dueDate: string | null
   paymentMethod: string | null
   customerId: string | null
   subscriptionId: string | null
+  /** Histórico de pagamentos da empresa (mais recentes primeiro). */
+  payments: { paidOn: string; amount: number; method: string | null }[]
 }
 
 export async function getPlanoAtual(): Promise<PlanoAtual | null> {
@@ -143,6 +147,25 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     trialEndsAt: (h.trial_ends_at as string | null) ?? null,
   })
 
+  // Histórico de pagamentos da empresa (últimos 12).
+  const { data: pagamentos } = await admin
+    .from("holding_payments")
+    .select("paid_on, amount, method")
+    .eq("holding_id", holdingId)
+    .order("paid_on", { ascending: false })
+    .limit(12)
+  const payments = (pagamentos ?? []).map((p) => ({
+    paidOn: p.paid_on as string,
+    amount: Number(p.amount),
+    method: (p.method as string | null) ?? null,
+  }))
+
+  const planLabel = selectedPlan
+    ? PLANOS_META[selectedPlan].label
+    : precoCustom
+      ? "Personalizado"
+      : null
+
   return {
     holdingId,
     name: h.name,
@@ -153,9 +176,11 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     planos,
     selectedPlan,
     mensalidade,
+    planLabel,
     dueDate: (h.due_date as string | null) ?? null,
     paymentMethod: (h.payment_method as string | null) ?? null,
     customerId: (h.asaas_customer_id as string | null) ?? null,
     subscriptionId: (h.asaas_subscription_id as string | null) ?? null,
+    payments,
   }
 }

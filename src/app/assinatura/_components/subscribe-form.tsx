@@ -139,7 +139,7 @@ export function SubscribeForm({
               className={inputCls}
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Necessário pra emitir a cobrança (Pix/boleto/nota).
+              Necessário pra emitir a cobrança e a nota.
             </p>
           </div>
         </>
@@ -160,8 +160,8 @@ export function SubscribeForm({
       />
 
       <p className="text-center text-[11px] text-muted-foreground">
-        Pagamento seguro via Asaas · Pix, boleto ou cartão · cancele quando
-        quiser.
+        Pagamento seguro via Asaas · cartão de crédito (renova automático) ·
+        cancele quando quiser.
       </p>
     </form>
   )

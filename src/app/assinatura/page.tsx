@@ -65,6 +65,12 @@ export default async function AssinaturaPage({
 
             <div className="mt-6 space-y-2 rounded-xl border bg-muted/30 p-4 text-sm">
               <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Plano</span>
+                <span className="font-medium">
+                  {plano?.planLabel ?? "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Valor</span>
                 <span className="font-medium tabular-nums">
                   {plano ? `${fmtBRL(plano.mensalidade)}/mês` : "—"}
@@ -83,6 +89,31 @@ export default async function AssinaturaPage({
                 </span>
               </div>
             </div>
+
+            {/* Histórico de pagamentos */}
+            {plano && plano.payments.length > 0 && (
+              <div className="mt-4 rounded-xl border bg-card p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Histórico de pagamentos
+                </p>
+                <div className="mt-2 divide-y">
+                  {plano.payments.map((p, i) => (
+                    <div
+                      key={`${p.paidOn}-${i}`}
+                      className="flex items-center justify-between py-2 text-sm"
+                    >
+                      <span className="tabular-nums">{fmtDataBR(p.paidOn)}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {p.method ?? "—"}
+                      </span>
+                      <span className="font-medium tabular-nums">
+                        {fmtBRL(p.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <Link
               href="/"

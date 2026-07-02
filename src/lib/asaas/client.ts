@@ -21,12 +21,13 @@ function apiKey(): string {
 }
 
 /**
- * Método de cobrança oferecido ao cliente. UNDEFINED = o Asaas exibe todos os
- * métodos habilitados na SUA conta (Pix / boleto / cartão) e o cliente escolhe.
- * Pra forçar um único método, defina ASAAS_BILLING_TYPE = PIX | BOLETO |
- * CREDIT_CARD.
+ * Método de cobrança da assinatura. Padrão CREDIT_CARD: é o único que cobra
+ * SOZINHO todo mês (cartão fica salvo, Asaas debita automático) — boleto/Pix
+ * comum geram uma cobrança que o cliente teria que pagar manualmente a cada
+ * ciclo, e boleto ainda leva dias pra compensar. Pra mudar, defina
+ * ASAAS_BILLING_TYPE = CREDIT_CARD | PIX | BOLETO | UNDEFINED (todos).
  */
-const BILLING_TYPE = (process.env.ASAAS_BILLING_TYPE ?? "UNDEFINED").toUpperCase()
+const BILLING_TYPE = (process.env.ASAAS_BILLING_TYPE ?? "CREDIT_CARD").toUpperCase()
 
 /**
  * Modo simulado: sem ASAAS_API_KEY, não batemos na API real — geramos IDs
