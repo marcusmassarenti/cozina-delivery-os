@@ -175,9 +175,9 @@ export function SubscribeForm({
             </p>
           </div>
 
-          {/* Endereço — pra emissão de Nota Fiscal */}
+          {/* Endereço do comprador */}
           <div className="rounded-lg border border-dashed p-3">
-            <p className="text-xs font-medium">Endereço (para nota fiscal)</p>
+            <p className="text-xs font-medium">Endereço</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
               <div className="col-span-2">
                 <label htmlFor="cep" className="text-[11px] font-medium">
