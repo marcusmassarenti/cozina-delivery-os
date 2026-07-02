@@ -278,76 +278,132 @@ export function ReviewTester() {
       )}
       {result && !pending && (
         <div
-          className={`scroll-mt-4 rounded-md border p-3 text-xs ${
+          className={`scroll-mt-4 overflow-hidden rounded-xl border p-4 ${
             result.ok
-              ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20"
-              : "border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20"
+              ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+              : "border-rose-300 bg-rose-50/50 dark:border-rose-900/50 dark:bg-rose-950/20"
           }`}
         >
-          <p className="flex items-center gap-1.5 font-medium">
-            {result.ok ? (
-              <CheckCircle2 className="size-4 text-emerald-600" />
-            ) : (
-              <XCircle className="size-4 text-rose-600" />
-            )}
-            {activeLabel} · HTTP {result.status ?? "—"}
-          </p>
+          {/* Cabeçalho: badge de HTTP + o que foi testado */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold ${
+                result.ok
+                  ? "bg-emerald-600 text-white"
+                  : "bg-rose-600 text-white"
+              }`}
+            >
+              {result.ok ? (
+                <CheckCircle2 className="size-4" />
+              ) : (
+                <XCircle className="size-4" />
+              )}
+              HTTP {result.status ?? "—"}
+            </span>
+            <span className="text-sm font-semibold">{activeLabel}</span>
+          </div>
 
           {result.error && (
-            <p className="mt-1 text-rose-700 dark:text-rose-400">{result.error}</p>
+            <p className="mt-2 text-sm font-medium text-rose-700 dark:text-rose-400">
+              {result.error}
+            </p>
           )}
 
           {result.meta && (
-            <ul className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
-              <li>
-                total: <b>{result.meta.total ?? "—"}</b> · pageCount:{" "}
-                <b>{result.meta.pageCount ?? "—"}</b> · nesta resposta:{" "}
-                <b>{result.meta.count ?? 0}</b>
+            <div className="mt-3 flex flex-col gap-2 text-sm">
+              {/* Chips de métricas */}
+              <div className="flex flex-wrap gap-2">
+                <Chip label="Total" value={result.meta.total ?? "—"} strong />
+                <Chip label="Nesta página" value={result.meta.count ?? 0} />
+                <Chip label="Páginas" value={result.meta.pageCount ?? "—"} />
                 {result.meta.sizeUsed != null && (
-                  <> · size pedido: <b>{result.meta.sizeUsed}</b></>
+                  <Chip label="pageSize" value={result.meta.sizeUsed} />
                 )}
-              </li>
+              </div>
               {(result.meta.dateFrom || result.meta.dateTo) && (
-                <li>
-                  filtro de data:{" "}
-                  <b>{result.meta.dateFrom ?? "—"}</b> →{" "}
-                  <b>{result.meta.dateTo ?? "—"}</b>
-                </li>
+                <p className="text-[13px] text-muted-foreground">
+                  <b className="text-foreground">Filtro de data:</b>{" "}
+                  {result.meta.dateFrom ?? "—"} → {result.meta.dateTo ?? "—"}
+                </p>
               )}
-              <li>
-                status presentes:{" "}
-                <b>{result.meta.statuses?.join(", ") || "—"}</b>
-              </li>
-              <li>
-                visibility:{" "}
-                <b>{result.meta.visibilities?.join(", ") || "—"}</b> · tem
-                respostas: <b>{result.meta.hasReplies ? "sim" : "não"}</b>
-              </li>
+              {result.meta.statuses && result.meta.statuses.length > 0 && (
+                <p className="text-[13px] text-muted-foreground">
+                  <b className="text-foreground">Status:</b>{" "}
+                  {result.meta.statuses.join(", ")}
+                </p>
+              )}
+              {result.meta.visibilities && result.meta.visibilities.length > 0 && (
+                <p className="text-[13px] text-muted-foreground">
+                  <b className="text-foreground">Visibility:</b>{" "}
+                  {result.meta.visibilities.join(", ")} ·{" "}
+                  <b className="text-foreground">Tem respostas:</b>{" "}
+                  {result.meta.hasReplies ? "sim" : "não"}
+                </p>
+              )}
               {result.meta.firstReviewId && (
-                <li>
-                  1º reviewId:{" "}
-                  <button
-                    type="button"
-                    onClick={() => setReviewId(result.meta!.firstReviewId!)}
-                    className="font-mono underline"
-                  >
+                <button
+                  type="button"
+                  onClick={() => setReviewId(result.meta!.firstReviewId!)}
+                  className="w-fit rounded-md border border-foreground/20 bg-background px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-muted"
+                >
+                  <span className="text-muted-foreground">
+                    Usar este reviewId nos Cenários 2/3:
+                  </span>{" "}
+                  <span className="font-mono font-medium underline">
                     {result.meta.firstReviewId}
-                  </button>{" "}
-                  (clique pra usar no Cenário 2/3)
-                </li>
+                  </span>
+                </button>
               )}
-            </ul>
+            </div>
           )}
 
           {result.raw && (
-            <pre className="mt-2 max-h-64 overflow-auto rounded bg-background/60 p-2 text-[10px] leading-relaxed">
-              {result.raw}
-            </pre>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[13px] font-medium text-muted-foreground hover:text-foreground">
+                Ver resposta completa (JSON)
+              </summary>
+              <pre className="mt-2 max-h-72 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-background/70 p-3 text-xs leading-relaxed">
+                {prettyJson(result.raw)}
+              </pre>
+            </details>
           )}
         </div>
       )}
       </div>
     </div>
+  )
+}
+
+/** Formata o JSON pra leitura; se veio truncado/ inválido, devolve como está. */
+function prettyJson(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
+/** Chip de métrica (número grande + rótulo) pro painel de resultado. */
+function Chip({
+  label,
+  value,
+  strong,
+}: {
+  label: string
+  value: React.ReactNode
+  strong?: boolean
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 rounded-lg border bg-background px-2.5 py-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={`tabular-nums ${strong ? "text-base font-bold" : "text-sm font-semibold"}`}
+      >
+        {value}
+      </span>
+    </span>
   )
 }
 
