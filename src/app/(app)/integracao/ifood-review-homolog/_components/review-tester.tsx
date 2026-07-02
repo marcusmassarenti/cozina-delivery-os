@@ -382,7 +382,38 @@ function ResultCard({
                   {result.meta.hasReplies ? "sim" : "não"}
                 </p>
               )}
-              {result.meta.firstReviewId && (
+              {result.meta.reviews && result.meta.reviews.length > 0 ? (
+                <div className="mt-1 flex flex-col gap-1.5">
+                  <p className="text-[13px] font-medium">
+                    Escolha a avaliação pra testar nos Cenários 2 e 3:
+                  </p>
+                  {result.meta.reviews.map((rv) => (
+                    <div
+                      key={rv.id}
+                      className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5"
+                    >
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">
+                        {rv.score ?? "—"}★
+                      </span>
+                      <StatusBadge status={rv.status} />
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+                        {rv.comment || "—"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onUseReviewId(rv.id)}
+                        className="shrink-0 rounded-md border border-foreground/20 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                      >
+                        usar
+                      </button>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-muted-foreground">
+                    Pro Cenário 3: <b>NOT_REPLIED</b> → responde (201);{" "}
+                    <b>REPLIED/PUBLISHED</b> → recusa (422).
+                  </p>
+                </div>
+              ) : result.meta.firstReviewId ? (
                 <button
                   type="button"
                   onClick={() => onUseReviewId(result.meta!.firstReviewId!)}
@@ -395,7 +426,7 @@ function ResultCard({
                     {result.meta.firstReviewId}
                   </span>
                 </button>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -420,6 +451,24 @@ function prettyJson(raw: string): string {
   } catch {
     return raw
   }
+}
+
+/** Badge do status da avaliação (verde = respondível, cinza = não). */
+function StatusBadge({ status }: { status?: string }) {
+  const s = status ?? "—"
+  const cls =
+    s === "NOT_REPLIED"
+      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+      : s === "REPLIED"
+        ? "bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+        : "bg-muted text-muted-foreground"
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}
+    >
+      {s}
+    </span>
+  )
 }
 
 /** Chip de métrica (número grande + rótulo) pro painel de resultado. */

@@ -31,6 +31,13 @@ export type ReviewProbeState = {
     visibilities?: string[]
     firstReviewId?: string | null
     hasReplies?: boolean
+    /** Lista enxuta das avaliações pra escolher a certa em cada cenário. */
+    reviews?: {
+      id: string
+      score?: number
+      status?: string
+      comment?: string
+    }[]
     /** Eco dos parâmetros usados na listagem (pro vídeo mostrar o filtro). */
     sizeUsed?: number
     dateFrom?: string
@@ -257,5 +264,11 @@ function deriveMeta(
     visibilities,
     firstReviewId: reviews[0]?.id ?? null,
     hasReplies: reviews.some((r) => (r.replies?.length ?? 0) > 0),
+    reviews: reviews.slice(0, 10).map((r) => ({
+      id: r.id,
+      score: r.score,
+      status: r.status,
+      comment: r.comment,
+    })),
   }
 }
