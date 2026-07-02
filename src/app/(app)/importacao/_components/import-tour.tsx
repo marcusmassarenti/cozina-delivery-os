@@ -1,10 +1,9 @@
 "use client"
 
-import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
 import { Download, ListChecks, Play, Upload } from "lucide-react"
 
-import { CoachTour, type CoachStep } from "@/components/onboarding/coach-tour"
+import { type CoachStep } from "@/components/onboarding/coach-tour"
+import { TourButton } from "@/components/onboarding/tour-button"
 
 const STEPS: CoachStep[] = [
   {
@@ -33,25 +32,7 @@ const STEPS: CoachStep[] = [
   },
 ]
 
-/** Dispara o tour guiado quando a URL tem ?guia=1 (vindo dos Primeiros passos). */
+/** Botão "Como funciona" + tour da Importação (auto-abre com ?guia=1). */
 export function ImportTour() {
-  const params = useSearchParams()
-  const router = useRouter()
-  const [open, setOpen] = React.useState(false)
-
-  React.useEffect(() => {
-    if (params.get("guia") === "1") {
-      // Pequeno atraso pra a página montar antes de medir os elementos.
-      const t = setTimeout(() => setOpen(true), 400)
-      return () => clearTimeout(t)
-    }
-  }, [params])
-
-  function close() {
-    setOpen(false)
-    // Tira o ?guia da URL pra não reabrir no refresh.
-    router.replace("/importacao")
-  }
-
-  return <CoachTour steps={STEPS} open={open} onClose={close} />
+  return <TourButton steps={STEPS} autoOpenParam="guia" />
 }

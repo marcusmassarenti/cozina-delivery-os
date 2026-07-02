@@ -3,10 +3,12 @@
 import * as React from "react"
 import Link from "next/link"
 import { useNavigate } from "@/components/shared/navigation-progress"
-import { ChevronRight, Filter, Search, X } from "lucide-react"
+import { ChevronRight, Filter, LayoutGrid, Plus, Search, X } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { type CoachStep } from "@/components/onboarding/coach-tour"
+import { TourButton } from "@/components/onboarding/tour-button"
 import type { Unit } from "@/lib/data/units"
 import { DeleteUnitButton } from "./delete-unit-button"
 import { EditUnitDialog } from "./edit-unit-dialog"
@@ -16,6 +18,27 @@ const ALL_PLATFORMS: { id: PlatformId; label: string }[] = [
   { id: "ifood", label: "iFood" },
   { id: "99food", label: "99 Food" },
   { id: "keeta", label: "Keeta" },
+]
+
+const TOUR_STEPS: CoachStep[] = [
+  {
+    selector: '[data-tour="un-novo"]',
+    icon: <Plus className="size-4" />,
+    title: "Cadastre suas lojas",
+    body: "Clica em 'Nova unidade' pra adicionar uma loja — nome, cidade e plataformas (iFood, 99, Keeta).",
+  },
+  {
+    selector: '[data-tour="un-filtros"]',
+    icon: <Filter className="size-4" />,
+    title: "Filtre e busque",
+    body: "Filtre por cidade, plataforma ou status, ou busque pelo nome da loja.",
+  },
+  {
+    selector: '[data-tour="un-lista"]',
+    icon: <LayoutGrid className="size-4" />,
+    title: "Suas lojas",
+    body: "Cada card é uma loja com seus números do mês. Clica numa pra ver os detalhes e configurar (logo, plataformas, IDs).",
+  },
 ]
 
 export function UnitsListView({
@@ -92,19 +115,20 @@ export function UnitsListView({
       {/* Toolbar */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">Unidades</h1>
             {units.length > 0 && (
               <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-foreground">
                 {units.length} no total · {activeCount} ativas
               </span>
             )}
+            <TourButton steps={TOUR_STEPS} />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Escolhe uma unidade pra ver detalhes do mês
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-tour="un-novo" className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -121,7 +145,10 @@ export function UnitsListView({
 
       {/* Filters row */}
       {units.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
+        <div
+          data-tour="un-filtros"
+          className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3"
+        >
           <Filter className="size-3.5 text-muted-foreground" />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Filtros
@@ -208,7 +235,10 @@ export function UnitsListView({
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div
+          data-tour="un-lista"
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        >
           {filtered.map((unit) => (
             <div
               key={unit.code}

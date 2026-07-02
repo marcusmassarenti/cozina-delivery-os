@@ -122,18 +122,19 @@ export default async function ImportacaoPage({
             Itens / Pedidos) e o sistema converte em lançamentos.
           </p>
         </div>
-        <Link
-          href="/importacao/cobertura"
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
-        >
-          <LayoutGrid className="size-3.5" />
-          Ver cobertura
-        </Link>
+        <div className="flex items-center gap-2">
+          <Suspense fallback={null}>
+            <ImportTour />
+          </Suspense>
+          <Link
+            href="/importacao/cobertura"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
+          >
+            <LayoutGrid className="size-3.5" />
+            Ver cobertura
+          </Link>
+        </div>
       </div>
-
-      <Suspense fallback={null}>
-        <ImportTour />
-      </Suspense>
 
       <div data-tour="download">
         <DownloadGuide />

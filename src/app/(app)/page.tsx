@@ -33,6 +33,7 @@ import {
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getOnboardingProgress } from "@/lib/data/onboarding"
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist"
+import { DashboardTour } from "@/components/dashboard/dashboard-tour"
 import {
   getAvailablePeriods,
   getFinanceiroResumoByUnits,
@@ -443,7 +444,10 @@ export default async function Home({
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <DashboardTour />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {unidadesFilter
               ? `${activeCount} loja${activeCount !== 1 ? "s" : ""} selecionada${activeCount !== 1 ? "s" : ""}`
@@ -455,7 +459,7 @@ export default async function Home({
             · {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-tour="db-filtros" className="flex flex-wrap items-center gap-2">
           <PeriodSelector
             current={periodRange}
             options={availablePeriods}
@@ -552,6 +556,7 @@ export default async function Home({
             )}
           </div>
           <div
+            data-tour="db-kpis"
             className={`grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 ${
               kpis.length >= 8
                 ? "xl:grid-cols-4"
@@ -571,7 +576,7 @@ export default async function Home({
             number={2}
             label={`Visão Geral por Plataforma (${scopeLabel})`}
           />
-          <div className="grid gap-3 md:grid-cols-3">
+          <div data-tour="db-plataformas" className="grid gap-3 md:grid-cols-3">
             {platforms.map((p) => (
               <div
                 key={p.id}
@@ -1100,7 +1105,9 @@ export default async function Home({
               number={hasAvaliacoesData ? 5 : 4}
               label="Detalhamento por Unidade"
             />
-            <UnitsTable units={unitsToShow} brandLogoUrl={brandLogoUrl} />
+            <div data-tour="db-lojas">
+              <UnitsTable units={unitsToShow} brandLogoUrl={brandLogoUrl} />
+            </div>
           </DashboardSection>
         </>
       )}
