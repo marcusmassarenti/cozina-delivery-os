@@ -132,6 +132,14 @@ export default async function AssinaturaPage({
               defaultNome={plano.name}
               defaultPlan={defaultPlan}
             />
+            {plano.subscriptionId && (
+              <div className="mt-4 border-t pt-4">
+                <p className="text-center text-[11px] text-muted-foreground">
+                  Você já tem uma assinatura ativa (com pendência).
+                </p>
+                <CancelButton fimPeriodo={plano.dueDate} />
+              </div>
+            )}
           </>
         ) : (
           <p className="mt-4 text-center text-sm text-muted-foreground">
