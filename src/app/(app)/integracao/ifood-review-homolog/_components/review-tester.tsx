@@ -8,6 +8,7 @@ import {
   probeAll,
   probeOversizePage,
   probeReply,
+  probeReplyInvalid,
   probeReviewDetail,
   probeReviews,
   probeSummary,
@@ -36,6 +37,25 @@ export function ReviewTester() {
   const [result, setResult] = React.useState<ReviewProbeState | null>(null)
   const [activeLabel, setActiveLabel] = React.useState<string | null>(null)
   const [pending, startTransition] = React.useTransition()
+
+  // Janela padrão VÁLIDA (60 dias) — a API recusa intervalo > 90 dias.
+  // Setado no cliente (evita mismatch de hidratação com new Date()).
+  React.useEffect(() => {
+    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    const to = new Date()
+    const from = new Date(to.getTime() - 60 * 864e5)
+    setDateTo((v) => v || iso(to))
+    setDateFrom((v) => v || iso(from))
+  }, [])
+
+  // Guard dos 90 dias: a API devolve 400 se (dateTo - dateFrom) > 90 dias.
+  const dateSpanDays =
+    dateFrom && dateTo
+      ? Math.round(
+          (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 864e5,
+        )
+      : null
+  const dateInvalid = dateSpanDays != null && (dateSpanDays < 0 || dateSpanDays > 90)
 
   function run(label: string, action: Action, extra?: Record<string, string>) {
     const fd = new FormData()
@@ -96,10 +116,25 @@ export function ReviewTester() {
             />
           </Field>
         </div>
+        {dateSpanDays != null && (
+          <p
+            className={`text-[11px] ${
+              dateInvalid
+                ? "text-rose-600 dark:text-rose-400"
+                : "text-muted-foreground"
+            }`}
+          >
+            {dateInvalid
+              ? dateSpanDays < 0
+                ? "⚠️ A data inicial está depois da final."
+                : `⚠️ Intervalo de ${dateSpanDays} dias — a API do iFood recusa acima de 90 dias. Reduza a janela.`
+              : `Janela de ${dateSpanDays} dia${dateSpanDays === 1 ? "" : "s"} (válida · máx 90).`}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            disabled={pending}
+            disabled={pending || dateInvalid}
             onClick={() =>
               run("Listar avaliações", probeReviews, { size, dateFrom, dateTo })
             }
@@ -160,13 +195,13 @@ export function ReviewTester() {
       <Scenario
         n={3}
         title="Responder Avaliações"
-        desc="Status correto (NOT_REPLIED) → responde · PUBLISHED → recusa (422) · texto inválido → recusa"
+        desc="Avaliação NOT_REPLIED → responde (201) · texto inválido → recusa (400)"
       >
         <p className="text-[11px] text-muted-foreground">
-          Usa o <b>reviewId</b> do Cenário 2. Pros 3 casos: um id{" "}
-          <b>NOT_REPLIED</b> (responde ok), um <b>PUBLISHED</b> (deve recusar com{" "}
-          <b>422</b>), e um <b>texto inválido</b> (&lt; 10 caracteres → recusa). O
-          texto válido tem de 10 a 300 caracteres.
+          Usa o <b>reviewId</b> do Cenário 2. Texto válido: de <b>10 a 300</b>{" "}
+          caracteres → <b>201</b>. Texto vazio ou &lt; 10 caracteres → a API
+          recusa com <b>400</b> (&quot;reply should not be blank&quot; /
+          &quot;minimum of 10 and a max of 300&quot;).
         </p>
         <Field label="Resposta">
           <textarea
@@ -189,13 +224,27 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending || !reviewId}
             onClick={() =>
-              run("Responder com texto inválido (< 10 caracteres)", probeReply, {
+              run(
+                "Texto inválido: curto (< 10) → 400 esperado",
+                probeReplyInvalid,
+                { reviewId, text: "ok" },
+              )
+            }
+          >
+            Texto curto (&lt; 10)
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending || !reviewId}
+            onClick={() =>
+              run("Texto inválido: vazio → 400 esperado", probeReplyInvalid, {
                 reviewId,
-                text: "ok",
+                text: "",
               })
             }
           >
-            Texto inválido (curto)
+            Texto vazio
           </Button>
         </div>
       </Scenario>

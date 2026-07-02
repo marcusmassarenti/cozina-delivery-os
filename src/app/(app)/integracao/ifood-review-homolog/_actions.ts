@@ -181,6 +181,36 @@ export async function probeReply(
   }
 }
 
+/**
+ * Responder com texto inválido — aqui o 400 é o resultado ESPERADO (ok=true):
+ * a API recusa "reply should not be blank" / "minimum of 10 and a max of 300".
+ */
+export async function probeReplyInvalid(
+  _prev: ReviewProbeState,
+  formData: FormData,
+): Promise<ReviewProbeState> {
+  await guard()
+  const merchantId =
+    String(formData.get("merchantId") ?? "").trim() || REVIEW_TEST_MERCHANT
+  const reviewId = String(formData.get("reviewId") ?? "").trim()
+  const text = String(formData.get("text") ?? "")
+  if (!reviewId) return { ok: false, error: "Informe o reviewId." }
+  try {
+    const r = await replyToReview(merchantId, reviewId, text)
+    const esperado = r.status === 400
+    return {
+      ok: esperado,
+      status: r.status,
+      raw: r.raw.slice(0, 2000),
+      error: esperado
+        ? undefined
+        : `Esperava HTTP 400 (texto inválido recusado), veio ${r.status}`,
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 /** Roda tudo (paginação completa) e devolve um panorama dos critérios. */
 export async function probeAll(
   _prev: ReviewProbeState,
