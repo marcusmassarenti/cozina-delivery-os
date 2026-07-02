@@ -36,6 +36,7 @@ export function ReviewTester() {
   )
   const [result, setResult] = React.useState<ReviewProbeState | null>(null)
   const [activeLabel, setActiveLabel] = React.useState<string | null>(null)
+  const [activeScenario, setActiveScenario] = React.useState<number | null>(null)
   const [pending, startTransition] = React.useTransition()
 
   // Janela padrão VÁLIDA (60 dias) — a API recusa intervalo > 90 dias.
@@ -57,21 +58,48 @@ export function ReviewTester() {
       : null
   const dateInvalid = dateSpanDays != null && (dateSpanDays < 0 || dateSpanDays > 90)
 
-  function run(label: string, action: Action, extra?: Record<string, string>) {
+  function run(
+    scenario: number,
+    label: string,
+    action: Action,
+    extra?: Record<string, string>,
+  ) {
     const fd = new FormData()
     fd.set("merchantId", merchantId)
     if (extra) for (const [k, v] of Object.entries(extra)) fd.set(k, v)
     setActiveLabel(label)
+    setActiveScenario(scenario)
+    setResult(null)
     startTransition(async () => {
       const r = await action({ ok: false }, fd)
       setResult(r)
     })
   }
 
+  /** Resultado logo ABAIXO do cenário `n` que foi clicado (não confunde). */
+  function slot(n: number) {
+    if (activeScenario !== n) return null
+    if (pending)
+      return (
+        <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Rodando {activeLabel}…
+        </p>
+      )
+    if (result)
+      return (
+        <ResultCard
+          result={result}
+          activeLabel={activeLabel}
+          onUseReviewId={setReviewId}
+        />
+      )
+    return null
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Loja de teste (sandbox do app de teste) */}
-      <div className="order-[-2] flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-muted-foreground">
           Merchant (loja de teste)
         </label>
@@ -136,7 +164,7 @@ export function ReviewTester() {
             size="sm"
             disabled={pending || dateInvalid}
             onClick={() =>
-              run("Listar avaliações", probeReviews, { size, dateFrom, dateTo })
+              run(1, "Listar avaliações", probeReviews, { size, dateFrom, dateTo })
             }
           >
             Listar avaliações
@@ -146,12 +174,13 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending}
             onClick={() =>
-              run("Teste de limite (pageSize=100 → deve dar 400)", probeOversizePage)
+              run(1, "Teste de limite (pageSize=100 → deve dar 400)", probeOversizePage)
             }
           >
             Testar limite (&gt;50 → 400)
           </Button>
         </div>
+        {slot(1)}
       </Scenario>
 
       {/* ───────── Cenário 2 — Obter Detalhes ───────── */}
@@ -172,7 +201,7 @@ export function ReviewTester() {
           <Button
             size="sm"
             disabled={pending || !reviewId}
-            onClick={() => run("Detalhe da avaliação", probeReviewDetail, { reviewId })}
+            onClick={() => run(2, "Detalhe da avaliação", probeReviewDetail, { reviewId })}
           >
             Ver detalhe
           </Button>
@@ -181,7 +210,7 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending}
             onClick={() =>
-              run("Detalhe de ID inexistente", probeReviewDetail, {
+              run(2, "Detalhe de ID inexistente", probeReviewDetail, {
                 reviewId: FAKE_ID,
               })
             }
@@ -189,6 +218,7 @@ export function ReviewTester() {
             Testar ID inexistente
           </Button>
         </div>
+        {slot(2)}
       </Scenario>
 
       {/* ───────── Cenário 3 — Responder Avaliações ───────── */}
@@ -215,7 +245,7 @@ export function ReviewTester() {
           <Button
             size="sm"
             disabled={pending || !reviewId}
-            onClick={() => run("Responder avaliação", probeReply, { reviewId, text })}
+            onClick={() => run(3, "Responder avaliação", probeReply, { reviewId, text })}
           >
             Responder
           </Button>
@@ -225,6 +255,7 @@ export function ReviewTester() {
             disabled={pending || !reviewId}
             onClick={() =>
               run(
+                3,
                 "Texto inválido: curto (< 10) → 400 esperado",
                 probeReplyInvalid,
                 { reviewId, text: "ok" },
@@ -238,7 +269,7 @@ export function ReviewTester() {
             variant="outline"
             disabled={pending || !reviewId}
             onClick={() =>
-              run("Texto inválido: vazio → 400 esperado", probeReplyInvalid, {
+              run(3, "Texto inválido: vazio → 400 esperado", probeReplyInvalid, {
                 reviewId,
                 text: "",
               })
@@ -247,38 +278,49 @@ export function ReviewTester() {
             Texto vazio
           </Button>
         </div>
+        {slot(3)}
       </Scenario>
 
       {/* Extras (não exigidos pelo checklist, mas úteis) */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          onClick={() => run("Rodar tudo (paginação completa)", probeAll)}
-        >
-          Rodar tudo
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          onClick={() => run("Summary", probeSummary)}
-        >
-          Summary
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => run(0, "Rodar tudo (paginação completa)", probeAll)}
+          >
+            Rodar tudo
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => run(0, "Summary", probeSummary)}
+          >
+            Summary
+          </Button>
+        </div>
+        {slot(0)}
       </div>
 
-      {/* Resultado — posto no topo (order) pra ficar sempre visível ao clicar. */}
-      <div className="order-[-1] flex flex-col gap-4 empty:hidden">
-      {pending && (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" /> Rodando {activeLabel}…
-        </p>
-      )}
-      {result && !pending && (
+    </div>
+  )
+}
+
+/** Painel de resultado — renderizado embaixo do cenário que foi clicado. */
+function ResultCard({
+  result,
+  activeLabel,
+  onUseReviewId,
+}: {
+  result: ReviewProbeState
+  activeLabel: string | null
+  onUseReviewId: (id: string) => void
+}) {
+  return (
         <div
-          className={`scroll-mt-4 overflow-hidden rounded-xl border p-4 ${
+          className={`mt-3 overflow-hidden rounded-xl border p-4 ${
             result.ok
               ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
               : "border-rose-300 bg-rose-50/50 dark:border-rose-900/50 dark:bg-rose-950/20"
@@ -343,7 +385,7 @@ export function ReviewTester() {
               {result.meta.firstReviewId && (
                 <button
                   type="button"
-                  onClick={() => setReviewId(result.meta!.firstReviewId!)}
+                  onClick={() => onUseReviewId(result.meta!.firstReviewId!)}
                   className="w-fit rounded-md border border-foreground/20 bg-background px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-muted"
                 >
                   <span className="text-muted-foreground">
@@ -368,9 +410,6 @@ export function ReviewTester() {
             </details>
           )}
         </div>
-      )}
-      </div>
-    </div>
   )
 }
 
