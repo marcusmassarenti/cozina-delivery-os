@@ -36,8 +36,8 @@ function addMonths(iso: string, months: number): string {
 
 /**
  * Cria (ou reaproveita) o cliente + a assinatura recorrente no Asaas e devolve
- * o link de pagamento da 1ª cobrança. O cliente paga na página do Asaas
- * (Pix/boleto/cartão); o webhook confirma e libera o acesso.
+ * o link de pagamento da 1ª cobrança. O cliente paga no cartão de crédito
+ * (que renova sozinho todo mês); o webhook confirma e libera o acesso.
  */
 export async function assinar(
   _prev: AssinarState,
