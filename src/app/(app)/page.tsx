@@ -31,6 +31,8 @@ import {
   platformTotalsFromUnits,
 } from "@/lib/data/units"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
+import { getOnboardingProgress } from "@/lib/data/onboarding"
+import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist"
 import {
   getAvailablePeriods,
   getFinanceiroResumoByUnits,
@@ -434,6 +436,8 @@ export default async function Home({
     })
   }
 
+  // Primeiros passos (onboarding guiado) — some quando os 3 passos estão feitos.
+  const onboarding = await getOnboardingProgress()
 
   return (
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -469,6 +473,10 @@ export default async function Home({
           />
         </div>
       </div>
+
+      {onboarding && onboarding.done < onboarding.total && (
+        <OnboardingChecklist progress={onboarding} />
+      )}
 
       {!isFullMonth && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
