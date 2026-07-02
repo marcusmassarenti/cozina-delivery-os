@@ -4,7 +4,7 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import Link from "next/link"
-import { ArrowRight, Lock, User } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, Lock, User } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ const initial: SignInState = { ok: false }
 export function LoginForm() {
   const [state, formAction] = useActionState(signIn, initial)
   const [remember, setRemember] = React.useState(false)
+  const [showPassword, setShowPassword] = React.useState(false)
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
@@ -46,12 +47,25 @@ export function LoginForm() {
           <Input
             id="password"
             name="password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             placeholder="••••••••••••"
             autoComplete="current-password"
             required
-            className="h-11 pl-9"
+            className="h-11 pl-9 pr-10"
           />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+            title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+            className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {showPassword ? (
+              <EyeOff className="size-4" />
+            ) : (
+              <Eye className="size-4" />
+            )}
+          </button>
         </div>
       </div>
 
