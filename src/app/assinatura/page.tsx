@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, CheckCircle2, Sparkles, Store } from "lucide-react"
+import { ArrowLeft, BarChart3, CheckCircle2, Sparkles, Store } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/server"
 import { getPlanoAtual, type PlanId } from "@/lib/data/assinatura"
@@ -9,6 +9,14 @@ import { fmtBRL } from "@/lib/format"
 
 import { SubscribeForm } from "./_components/subscribe-form"
 import { CancelButton } from "./_components/cancel-button"
+
+// Cores da marca Delivery OS (mesmas da landing).
+const BRAND = "oklch(0.65 0.21 35)"
+const BRAND_STRONG = "oklch(0.57 0.2 33)"
+const BRAND_SOFT = "oklch(0.96 0.035 55)"
+/** Botão principal na cor da marca (o btn-brand só existe na landing). */
+const BRAND_BTN =
+  "inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_oklch(0.65_0.21_35/.65)] transition-all hover:-translate-y-0.5"
 
 function fmtDataBR(iso: string | null): string {
   if (!iso) return "—"
@@ -42,10 +50,30 @@ export default async function AssinaturaPage({
         : (plano?.selectedPlan ?? "essencial")
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 p-6">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-muted/30 p-6">
+      {/* Glow da marca no fundo */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/3 h-80 w-[28rem] -translate-x-1/2 rounded-full blur-3xl"
+        style={{ background: "oklch(0.65 0.21 35 / 0.14)" }}
+      />
+
+      {/* Logo Delivery OS */}
+      <div className="relative z-10 mb-6 flex items-center gap-2">
+        <span
+          className="flex size-9 items-center justify-center rounded-xl text-white shadow-[0_8px_20px_-8px_oklch(0.65_0.21_35/.8)]"
+          style={{ background: BRAND }}
+        >
+          <BarChart3 className="size-5" strokeWidth={2.4} />
+        </span>
+        <span className="text-lg font-medium tracking-tight">Delivery OS</span>
+      </div>
+
+      <div className="relative z-10 w-full max-w-md rounded-2xl border bg-card p-8 shadow-xl">
         <div className="text-center">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400">
+          <div
+            className="mx-auto flex size-14 items-center justify-center rounded-2xl"
+            style={{ background: BRAND_SOFT, color: BRAND_STRONG }}
+          >
             {jaAtivo ? (
               <CheckCircle2 className="size-7" />
             ) : (
@@ -117,7 +145,8 @@ export default async function AssinaturaPage({
 
             <Link
               href="/"
-              className="btn-brand mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold"
+              className={`${BRAND_BTN} mt-6`}
+              style={{ background: BRAND }}
             >
               Voltar pro sistema
             </Link>
