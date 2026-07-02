@@ -5,12 +5,8 @@ import {
   BarChart3,
   Check,
   Clock,
-  CreditCard,
-  MessageCircle,
-  Mail,
   Sparkles,
   Store,
-  Wallet,
   Zap,
 } from "lucide-react"
 
@@ -30,7 +26,6 @@ const INK = "oklch(0.2 0.01 48)"
 const BRAND_BTN =
   "inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_oklch(0.65_0.21_35/.65)] transition-all hover:-translate-y-0.5"
 
-const WHATSAPP = "https://wa.me/5511995125139"
 const EMAIL = "mailto:suporte@deliveryos.food"
 
 const FEATS: Record<PlanId, string[]> = {
@@ -66,9 +61,9 @@ export default async function AssinaturaPage({
 
   const plano = await getPlanoAtual()
 
-  // Assinatura ATIVA → painel de gestão (controle dos gastos).
+  // Assinatura ATIVA → painel de gestão DENTRO do app (com menu/sidebar).
   if (plano?.status === "paid") {
-    return <PainelAtivo plano={plano} />
+    redirect("/plano")
   }
 
   // Senão → checkout (assinar ou finalizar pagamento).
@@ -333,184 +328,6 @@ function Checkout({
           </div>
         </div>
       </main>
-    </div>
-  )
-}
-
-/* ─────────────────────── PAINEL ATIVO (gestão) ─────────────────────────── */
-
-function PainelAtivo({ plano }: { plano: PlanoAtual }) {
-  const proximaBRL = fmtBRL(plano.mensalidade)
-  return (
-    <div className="min-h-screen bg-muted/20">
-      {/* Top bar */}
-      <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2">
-            <span
-              className="flex size-8 items-center justify-center rounded-lg text-white"
-              style={{ background: BRAND }}
-            >
-              <BarChart3 className="size-[18px]" strokeWidth={2.4} />
-            </span>
-            <span className="font-medium tracking-tight">Delivery OS</span>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Voltar pro sistema
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-4xl px-5 py-8">
-        {/* Título */}
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {plano.planLabel ? `Plano ${plano.planLabel}` : "Sua assinatura"}
-          </h1>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            Ativa
-          </span>
-        </div>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Seu plano atual · controle seus gastos aqui.
-        </p>
-
-        {/* Cards de resumo */}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <InfoCard
-            icon={<Wallet className="size-4" />}
-            label="Valor mensal"
-            value={`${proximaBRL}`}
-            sub="por mês"
-          />
-          <InfoCard
-            icon={<Clock className="size-4" />}
-            label="Próxima cobrança"
-            value={fmtDataBR(plano.dueDate)}
-            sub={proximaBRL}
-          />
-          <InfoCard
-            icon={<CreditCard className="size-4" />}
-            label="Pagamento"
-            value={plano.paymentMethod ?? "Asaas"}
-            sub="renova automático"
-          />
-          <InfoCard
-            icon={<Store className="size-4" />}
-            label="Lojas"
-            value={String(plano.activeUnits)}
-            sub={plano.activeUnits === 1 ? "loja ativa" : "lojas ativas"}
-          />
-        </div>
-
-        {/* Suporte */}
-        <div className="mt-4 rounded-xl border bg-card p-5">
-          <p className="text-sm font-semibold">Dúvidas sobre seu plano?</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Fale com a gente pra verificar cobranças, notas ou qualquer detalhe
-            do seu plano. Estamos aqui pra ajudar.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <a
-              href={WHATSAPP}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
-            >
-              <MessageCircle className="size-4" />
-              WhatsApp
-            </a>
-            <a
-              href={EMAIL}
-              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            >
-              <Mail className="size-4" />
-              suporte@deliveryos.food
-            </a>
-          </div>
-        </div>
-
-        {/* Histórico de pagamentos */}
-        <div className="mt-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Histórico de pagamentos
-          </h2>
-          <div className="mt-2 overflow-hidden rounded-xl border bg-card">
-            {plano.payments.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Ainda não há pagamentos registrados.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">Data</th>
-                      <th className="px-4 py-2.5 font-semibold">Método</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">
-                        Valor
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plano.payments.map((p, i) => (
-                      <tr
-                        key={`${p.paidOn}-${i}`}
-                        className="border-b last:border-0"
-                      >
-                        <td className="px-4 py-2.5 tabular-nums">
-                          {fmtDataBR(p.paidOn)}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted-foreground">
-                          {p.method ?? "—"}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-medium tabular-nums">
-                          {fmtBRL(p.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Cancelar */}
-        {plano.subscriptionId && (
-          <div className="mt-8 flex justify-center">
-            <CancelButton fimPeriodo={plano.dueDate} />
-          </div>
-        )}
-      </main>
-    </div>
-  )
-}
-
-function InfoCard({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  sub?: string
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <span className="text-muted-foreground">{icon}</span>
-        {label}
-      </div>
-      <p className="mt-1.5 text-xl font-semibold tabular-nums">{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   )
 }

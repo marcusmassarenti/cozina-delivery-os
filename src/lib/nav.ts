@@ -145,7 +145,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         label: "Assinatura",
-        href: "/assinatura",
+        href: "/plano",
         icon: CreditCard,
         module: "usuarios",
       },
