@@ -6,6 +6,7 @@ import {
   Coins,
   Factory,
   FileUp,
+  HelpCircle,
   LayoutDashboard,
   type LucideIcon,
   Receipt,
@@ -129,6 +130,7 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "usuarios",
       },
       { label: "Novidades", href: "/novidades", icon: Sparkles },
+      { label: "Ajuda", href: "/ajuda", icon: HelpCircle },
     ],
   },
 ]
