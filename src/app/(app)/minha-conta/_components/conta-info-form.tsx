@@ -22,13 +22,7 @@ const inputCls =
   "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 const labelCls = "text-xs font-medium"
 
-export function ContaInfoForm({
-  info,
-  mock,
-}: {
-  info: ContaInfo
-  mock: boolean
-}) {
+export function ContaInfoForm({ info }: { info: ContaInfo }) {
   const [cpfCnpj, setCpfCnpj] = React.useState(info.cpfCnpj)
   const [cep, setCep] = React.useState(info.cep)
   const [logradouro, setLogradouro] = React.useState(info.logradouro)
@@ -257,12 +251,6 @@ export function ContaInfoForm({
           </div>
         </section>
 
-        {mock && (
-          <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-            Modo simulado (sem chave Asaas): salva no banco, mas não sincroniza
-            com o Asaas de verdade.
-          </p>
-        )}
         {state.message && (
           <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
             {state.message}

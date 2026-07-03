@@ -2,7 +2,6 @@ import { redirect } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
 import { getContaInfo } from "@/lib/data/conta"
-import { asaasIsMock } from "@/lib/asaas/client"
 import { ContaInfoForm } from "../_components/conta-info-form"
 
 export const dynamic = "force-dynamic"
@@ -20,5 +19,5 @@ export default async function InformacoesTab() {
       </div>
     )
 
-  return <ContaInfoForm info={info} mock={asaasIsMock()} />
+  return <ContaInfoForm info={info} />
 }
