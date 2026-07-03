@@ -1,6 +1,9 @@
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
-import { Cable, Plug, Webhook } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, Cable, Plug, Star, Webhook } from "lucide-react"
+
+import { PlatformLogo } from "@/components/platform-logo"
 
 import { listApiClients } from "@/lib/data/api-clients"
 import { isSuperadmin } from "@/lib/auth/permissions"
@@ -132,6 +135,29 @@ export default async function ConexoesPage() {
         <PlataformasStatus />
       </section>
 
+      {/* Ferramentas de homologação (interno) */}
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <Star className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Homologação</h2>
+        </div>
+        <Link
+          href="/integracao/ifood-review-homolog"
+          className="flex items-center gap-3 rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/40"
+        >
+          <PlatformLogo platform="ifood" size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">
+              Avaliações (Review) · homologação
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Painel de testes do módulo Review v2.0 contra a loja sandbox —
+              listar, detalhar e responder avaliações.
+            </p>
+          </div>
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+        </Link>
+      </section>
     </div>
   )
 }
