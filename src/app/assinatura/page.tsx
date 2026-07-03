@@ -61,9 +61,9 @@ export default async function AssinaturaPage({
 
   const plano = await getPlanoAtual()
 
-  // Assinatura ATIVA → painel de gestão DENTRO do app (com menu/sidebar).
+  // Assinatura ATIVA → painel de gestão DENTRO do app (aba da Minha conta).
   if (plano?.status === "paid") {
-    redirect("/plano")
+    redirect("/minha-conta/assinatura")
   }
 
   // Senão → checkout (assinar ou finalizar pagamento).

@@ -86,6 +86,62 @@ export async function asaasCreateCustomer(input: {
   })
 }
 
+/** Dados que compõem a Nota Fiscal (guardados no cliente do Asaas). */
+export type AsaasNfFields = {
+  name?: string
+  cpfCnpj?: string
+  email?: string
+  mobilePhone?: string
+  postalCode?: string
+  address?: string
+  addressNumber?: string
+  complement?: string
+  province?: string
+}
+
+export type AsaasCustomerFull = AsaasNfFields & {
+  id: string
+  city?: number | string
+  cityName?: string
+  state?: string
+}
+
+/** Lê o cadastro completo do cliente no Asaas (pra exibir os dados de NF). */
+export async function asaasGetCustomer(
+  id: string,
+): Promise<AsaasCustomerFull | null> {
+  if (asaasIsMock()) {
+    return {
+      id,
+      name: "Cliente (simulado)",
+      cpfCnpj: "00000000000",
+      postalCode: "00000000",
+      address: "Rua Exemplo",
+      addressNumber: "123",
+      province: "Centro",
+      cityName: "São Paulo",
+      state: "SP",
+    }
+  }
+  try {
+    return await call<AsaasCustomerFull>(`/customers/${id}`)
+  } catch {
+    return null
+  }
+}
+
+/** Atualiza os dados do cliente no Asaas (Asaas usa POST em /customers/{id}). */
+export async function asaasUpdateCustomer(
+  id: string,
+  input: AsaasNfFields,
+): Promise<void> {
+  if (asaasIsMock()) return
+  await call(`/customers/${id}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
 export type AsaasSubscription = { id: string }
 
 export async function asaasCreateSubscription(input: {

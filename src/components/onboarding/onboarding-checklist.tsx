@@ -32,7 +32,7 @@ const STEPS: {
     icon: Palette,
     title: "Personalize sua conta",
     desc: "Suba o logo da sua empresa e ajuste o nome em Personalização.",
-    href: "/personalizacao",
+    href: "/minha-conta/personalizacao",
     cta: "Personalizar",
   },
   {
