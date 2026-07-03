@@ -1,7 +1,6 @@
 "use client"
 
-import Link from "next/link"
-import { HelpCircle, LogOut, RefreshCw } from "lucide-react"
+import { HelpCircle, LogOut } from "lucide-react"
 
 import { CommandSearch } from "@/components/command-search"
 import { DashboardCustomizeButton } from "@/components/dashboard/dashboard-customize-button"
@@ -9,6 +8,10 @@ import { DashboardPrivacyToggle } from "@/components/dashboard/dashboard-privacy
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import {
+  HelpDialog,
+  OPEN_HELP_EVENT,
+} from "@/app/(app)/ajuda/_components/help-dialog"
 import { signOut } from "@/app/login/_actions"
 
 export function TopBar({
@@ -36,18 +39,14 @@ export function TopBar({
         <div className="flex items-center gap-0.5">
           <DashboardPrivacyToggle />
           <DashboardCustomizeButton />
-          <Link
-            href="/ajuda"
+          <IconButton
             aria-label="Central de ajuda"
             title="Central de ajuda"
-            className="relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={() => window.dispatchEvent(new Event(OPEN_HELP_EVENT))}
           >
             <HelpCircle className="size-4" />
-          </Link>
-          <ThemeToggle />
-          <IconButton aria-label="Recarregar">
-            <RefreshCw className="size-4" />
           </IconButton>
+          <ThemeToggle />
           <form action={signOut}>
             <button
               type="submit"
@@ -59,6 +58,8 @@ export function TopBar({
           </form>
         </div>
       </div>
+
+      <HelpDialog />
     </header>
   )
 }

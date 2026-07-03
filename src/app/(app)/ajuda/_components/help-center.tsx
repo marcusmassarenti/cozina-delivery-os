@@ -39,7 +39,7 @@ function norm(s: string): string {
     .replace(/[̀-ͯ]/g, "")
 }
 
-export function HelpCenter() {
+export function HelpCenter({ compact = false }: { compact?: boolean }) {
   const [q, setQ] = React.useState("")
   const [selected, setSelected] = React.useState<FlatItem | null>(null)
   const query = norm(q.trim())
@@ -59,26 +59,49 @@ export function HelpCenter() {
 
   return (
     <div className="flex-1">
-      {/* Hero */}
-      <div className="bg-[linear-gradient(135deg,oklch(0.62_0.2_32),oklch(0.7_0.19_48))] px-6 py-12 text-center text-white">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Central de ajuda
-        </h1>
-        <div className="relative mx-auto mt-5 max-w-xl">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Pesquisar (ex.: CMV, importar, avaliações)..."
-            className="w-full rounded-full border-0 bg-white py-3.5 pl-12 pr-4 text-sm text-foreground shadow-lg outline-none ring-2 ring-transparent focus:ring-white/60"
-          />
+      {compact ? (
+        /* Cabeçalho compacto (dentro do modal) */
+        <div className="sticky top-0 z-10 border-b bg-background px-5 py-4">
+          <h2 className="text-base font-semibold tracking-tight">
+            Central de ajuda
+          </h2>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Pesquisar (ex.: CMV, importar, avaliações)..."
+              className="w-full rounded-lg border bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
         </div>
-        <p className="mx-auto mt-4 max-w-md text-sm text-white/85">
-          Encontre em poucos cliques o que cada tela faz e como usar.
-        </p>
-      </div>
+      ) : (
+        /* Hero (página cheia) */
+        <div className="bg-[linear-gradient(135deg,oklch(0.62_0.2_32),oklch(0.7_0.19_48))] px-6 py-12 text-center text-white">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Central de ajuda
+          </h1>
+          <div className="relative mx-auto mt-5 max-w-xl">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Pesquisar (ex.: CMV, importar, avaliações)..."
+              className="w-full rounded-full border-0 bg-white py-3.5 pl-12 pr-4 text-sm text-foreground shadow-lg outline-none ring-2 ring-transparent focus:ring-white/60"
+            />
+          </div>
+          <p className="mx-auto mt-4 max-w-md text-sm text-white/85">
+            Encontre em poucos cliques o que cada tela faz e como usar.
+          </p>
+        </div>
+      )}
 
-      <div className="mx-auto max-w-5xl px-6 py-8">
+      <div
+        className={
+          compact ? "px-5 py-5" : "mx-auto max-w-5xl px-6 py-8"
+        }
+      >
         {matches ? (
           matches.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">

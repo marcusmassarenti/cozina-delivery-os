@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useFavorites } from "@/hooks/use-favorites"
 import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "@/lib/nav"
+import { OPEN_HELP_EVENT } from "@/app/(app)/ajuda/_components/help-dialog"
 
 function isItemActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/"
@@ -59,6 +60,22 @@ function MenuItems({
                 <span className="ml-auto rounded-full bg-muted-foreground/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground group-data-[collapsible=icon]:hidden">
                   em breve
                 </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )
+        }
+        // "Ajuda" abre a central como MODAL (na mesma tela), não navega.
+        if (item.href === "/ajuda") {
+          return (
+            <SidebarMenuItem key={item.href}>
+              <SidebarMenuButton
+                tooltip={item.label}
+                onClick={() =>
+                  window.dispatchEvent(new Event(OPEN_HELP_EVENT))
+                }
+              >
+                <item.icon />
+                <span>{item.label}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )
