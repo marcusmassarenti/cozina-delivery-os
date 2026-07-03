@@ -191,6 +191,25 @@
     display: block !important;
   }
 
+  /* ── Exportar SÓ a DRE em PDF (botão "PDF" do card DreDetalhado) ──
+     O card é clonado num #dre-print-overlay (filho direto do body). Escondemos
+     todo o resto com display:none pra o layout colapsar (sem páginas em branco)
+     e sobra só a DRE. */
+  body.printing-dre > *:not(#dre-print-overlay) {
+    display: none !important;
+  }
+  #dre-print-overlay {
+    display: block !important;
+    padding: 0 !important;
+  }
+  #dre-print-overlay .rounded-xl {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .dre-print-hide {
+    display: none !important;
+  }
+
   /* ── "Infos Diária Venda": tabela larga → paisagem (exceção do padrão) ── */
   .acomp-print {
     display: block !important;

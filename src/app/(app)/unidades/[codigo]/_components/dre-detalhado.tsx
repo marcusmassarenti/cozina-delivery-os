@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, Wallet } from "lucide-react"
+import { ChevronDown, FileDown, Wallet } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
@@ -49,6 +49,9 @@ export function DreDetalhado({
   totalLiquido,
   cmv,
   operacao,
+  cmvCats = [],
+  operacaoCats = [],
+  periodo,
   vrInfo,
   antecipacaoIfood = 0,
   title = "DRE da loja · mês",
@@ -59,6 +62,12 @@ export function DreDetalhado({
   totalLiquido: number
   cmv: number
   operacao: number
+  /** Categorias que compõem o CMV (abre ao clicar na linha). */
+  cmvCats?: { nome: string; valor: number }[]
+  /** Categorias que compõem os custos operacionais (abre ao clicar). */
+  operacaoCats?: { nome: string; valor: number }[]
+  /** Período pro cabeçalho do PDF (ex.: "Julho de 2026"). */
+  periodo?: string
   vrInfo?: VrInfo
   /** Taxa de antecipação do iFood (R$, positivo). Juro por receber o repasse
    *  adiantado — exibida como custo financeiro que leva ao "Recebido real no
@@ -70,7 +79,36 @@ export function DreDetalhado({
   totalLabel?: string
 }) {
   const [sel, setSel] = React.useState<"todas" | PlatformId>("todas")
+  const cardRef = React.useRef<HTMLDivElement>(null)
   const multi = platforms.length > 1
+
+  // Exporta a DRE em PDF via impressão do navegador (Salvar como PDF). Clona só
+  // este card num overlay filho direto do <body> e esconde todo o resto com
+  // display:none (regras em globals.css) — assim o layout colapsa e o PDF sai
+  // enxuto, só com a DRE. Limpa o overlay depois de imprimir.
+  function exportarPdf() {
+    const el = cardRef.current
+    if (!el) return
+    const clone = el.cloneNode(true) as HTMLElement
+    clone.querySelectorAll(".dre-print-hide").forEach((n) => n.remove())
+    clone
+      .querySelectorAll("details")
+      .forEach((d) => d.setAttribute("open", ""))
+    const overlay = document.createElement("div")
+    overlay.id = "dre-print-overlay"
+    overlay.appendChild(clone)
+    document.body.appendChild(overlay)
+    document.body.classList.add("printing-dre")
+    const cleanup = () => {
+      overlay.remove()
+      document.body.classList.remove("printing-dre")
+      window.removeEventListener("afterprint", cleanup)
+    }
+    window.addEventListener("afterprint", cleanup)
+    // Espera o browser pintar o overlay recém-inserido antes de imprimir —
+    // sem isso o Chrome captura a folha antes do conteúdo e o PDF sai em branco.
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()))
+  }
   const vrTotal = platforms.reduce((a, p) => a + p.vrLiquido, 0)
   const recebidoDiretoTotal = platforms.reduce(
     (a, p) => a + (p.recebidoDireto ?? 0),
@@ -105,17 +143,32 @@ export function DreDetalhado({
   const margemPct = bruto > 0 ? (margem / bruto) * 100 : 0
   const resultadoOperacional = margem - opScope
   const resultadoOpPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
-  const resultadoTotal =
-    (opScope > 0 ? resultadoOperacional : margem) + vr + recebidoDireto
+  // Operacional sempre entra no resultado (é 0 quando não há custo lançado, aí
+  // o resultado operacional = margem).
+  const resultadoTotal = resultadoOperacional + vr + recebidoDireto
   // Análise vertical: cada linha como % do faturamento bruto do escopo.
   const pctOf = (v: number) => (bruto > 0 ? (v / bruto) * 100 : 0)
 
   return (
-    <div className="rounded-xl border bg-card p-5 shadow-sm">
+    <div ref={cardRef} className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Wallet className="size-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold">{title}</h3>
-        <div className="ml-auto flex items-center gap-1">
+        {periodo && (
+          <span className="hidden text-xs text-muted-foreground print:inline">
+            · {periodo}
+          </span>
+        )}
+        <div className="dre-print-hide ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={exportarPdf}
+            title="Exportar em PDF"
+            className="mr-1 flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <FileDown className="size-3.5" />
+            PDF
+          </button>
           {multi && (
             <button
               type="button"
@@ -200,11 +253,12 @@ export function DreDetalhado({
         </div>
       )}
 
-      <Row
+      <CostRow
         label="(−) CMV"
-        value={cmvScope > 0 ? `− ${fmtBRL(cmvScope)}` : "sem custo lançado"}
-        muted
-        pct={cmvScope > 0 ? pctOf(cmvScope) : undefined}
+        scopeTotal={cmvScope}
+        cats={cmvCats}
+        share={share}
+        base={bruto}
       />
       <Divider />
       <Row
@@ -213,45 +267,55 @@ export function DreDetalhado({
           <span className="flex items-baseline gap-2">
             {fmtBRL(margem)}
             {cmvScope > 0 && (
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+              <span
+                className={`text-xs font-semibold ${
+                  margem >= 0
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-rose-700 dark:text-rose-400"
+                }`}
+              >
                 ({fmtPct(margemPct)})
               </span>
             )}
           </span>
         }
         bold
-        highlight={opScope <= 0 && vr <= 0 && recebidoDireto <= 0}
+        negative={margem < 0}
       />
-      {opScope > 0 && (
-        <>
-          <Row
-            label="(−) Custo da operação"
-            value={`− ${fmtBRL(opScope)}`}
-            muted
-            pct={pctOf(opScope)}
-          />
-          <Divider />
-          <Row
-            label="= Resultado operacional"
-            value={
-              <span className="flex items-baseline gap-2">
-                {fmtBRL(resultadoOperacional)}
-                <span
-                  className={`text-xs font-semibold ${
-                    resultadoOperacional >= 0
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-rose-700 dark:text-rose-400"
-                  }`}
-                >
-                  ({fmtPct(resultadoOpPct)})
-                </span>
+
+      {/* Custos operacionais (aluguel, folha, etc.) — sempre visível; subtrai da
+          margem pra chegar no resultado operacional. Clica pra abrir as
+          categorias. */}
+      <CostRow
+        label="(−) Custos operacionais"
+        scopeTotal={opScope}
+        cats={operacaoCats}
+        share={share}
+        base={bruto}
+      />
+      <Divider />
+      <Row
+        label="= Resultado operacional"
+        value={
+          <span className="flex items-baseline gap-2">
+            {fmtBRL(resultadoOperacional)}
+            {(cmvScope > 0 || opScope > 0) && (
+              <span
+                className={`text-xs font-semibold ${
+                  resultadoOperacional >= 0
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-rose-700 dark:text-rose-400"
+                }`}
+              >
+                ({fmtPct(resultadoOpPct)})
               </span>
-            }
-            bold
-            highlight={vr <= 0 && recebidoDireto <= 0}
-          />
-        </>
-      )}
+            )}
+          </span>
+        }
+        bold
+        highlight={vr <= 0 && recebidoDireto <= 0}
+        negative={resultadoOperacional < 0}
+      />
       {(vr > 0 || recebidoDireto > 0) && (
         <>
           {recebidoDireto > 0 && (
@@ -269,6 +333,7 @@ export function DreDetalhado({
             value={fmtBRL(resultadoTotal)}
             bold
             highlight
+            negative={resultadoTotal < 0}
             pct={pctOf(resultadoTotal)}
           />
         </>
@@ -401,6 +466,86 @@ function PlatTaxa({ plat, base }: { plat: DrePlat; base: number }) {
   )
 }
 
+/** Linha de custo (CMV / operacional). Se houver categorias, vira clicável e
+ * abre a abertura por categoria; senão é uma linha simples. Prorateia pela
+ * fatia da plataforma selecionada (share). */
+function CostRow({
+  label,
+  scopeTotal,
+  cats,
+  share,
+  base,
+}: {
+  label: string
+  scopeTotal: number
+  cats: { nome: string; valor: number }[]
+  share: number
+  base: number
+}) {
+  const pctOf = (v: number) => (base > 0 ? (v / base) * 100 : 0)
+
+  // Sem custo lançado → linha simples.
+  if (scopeTotal <= 0) {
+    return <Row label={label} value="sem custo lançado" muted />
+  }
+
+  const itens = cats
+    .filter((c) => c.valor > 0)
+    .map((c) => ({ nome: c.nome, valor: c.valor * share }))
+  const catSum = itens.reduce((a, i) => a + i.valor, 0)
+  const resto = scopeTotal - catSum
+  if (resto > 0.5) itens.push({ nome: "Outros", valor: resto })
+
+  // Com valor mas sem categorias detalhadas → linha simples (não expande).
+  if (itens.length === 0) {
+    return (
+      <Row
+        label={label}
+        value={`− ${fmtBRL(scopeTotal)}`}
+        muted
+        pct={pctOf(scopeTotal)}
+      />
+    )
+  }
+
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="ml-auto flex items-baseline gap-1.5">
+          <span className="text-sm font-medium tabular-nums text-muted-foreground">
+            − {fmtBRL(scopeTotal)}
+          </span>
+          <span className="w-11 text-right text-[10px] font-normal tabular-nums text-muted-foreground">
+            {fmtPct(pctOf(scopeTotal))}
+          </span>
+        </span>
+      </summary>
+      <div className="ml-6 border-l pl-4 pr-1">
+        {itens.map((it) => (
+          <div
+            key={it.nome}
+            className="flex items-baseline justify-between gap-2 py-0.5"
+          >
+            <span className="truncate text-[11px] text-muted-foreground">
+              {it.nome}
+            </span>
+            <span className="flex shrink-0 items-baseline gap-1.5">
+              <span className="text-[11px] tabular-nums text-rose-700 dark:text-rose-400">
+                − {fmtBRL(it.valor)}
+              </span>
+              <span className="w-10 text-right text-[9px] font-normal tabular-nums text-muted-foreground">
+                {fmtPct(pctOf(it.valor))}
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
+
 function ItemList({
   itens,
   total,
@@ -457,6 +602,7 @@ function Row({
   bold,
   muted,
   highlight,
+  negative,
   tone,
   pct,
 }: {
@@ -465,6 +611,8 @@ function Row({
   bold?: boolean
   muted?: boolean
   highlight?: boolean
+  /** Resultado negativo → tudo em vermelho (fundo + texto quando destacado). */
+  negative?: boolean
   tone?: "pos"
   /** % do bruto (análise vertical) — mostrado em cinza ao lado do valor. */
   pct?: number
@@ -472,7 +620,11 @@ function Row({
   return (
     <div
       className={`flex items-baseline justify-between gap-2 py-1.5 ${
-        highlight ? "-mx-2 rounded-md bg-emerald-50 px-2 dark:bg-emerald-950/30" : ""
+        highlight
+          ? negative
+            ? "-mx-2 rounded-md bg-rose-50 px-2 dark:bg-rose-950/30"
+            : "-mx-2 rounded-md bg-emerald-50 px-2 dark:bg-emerald-950/30"
+          : ""
       }`}
     >
       <span
@@ -487,13 +639,15 @@ function Row({
           className={`text-sm tabular-nums ${
             bold ? "font-bold" : "font-medium"
           } ${
-            tone === "pos"
-              ? "text-emerald-700 dark:text-emerald-400"
-              : muted
-                ? "text-muted-foreground"
-                : highlight
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : ""
+            negative
+              ? "text-rose-700 dark:text-rose-400"
+              : tone === "pos"
+                ? "text-emerald-700 dark:text-emerald-400"
+                : muted
+                  ? "text-muted-foreground"
+                  : highlight
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : ""
           }`}
         >
           {value}

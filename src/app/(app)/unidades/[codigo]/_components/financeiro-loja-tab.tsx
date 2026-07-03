@@ -17,12 +17,28 @@ import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
+import { getUnitCostBreakdown } from "@/lib/data/unit-costs"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 import { UnitCostsEditor } from "./unit-costs-editor"
 import { BrutoBreakdown } from "./bruto-breakdown"
 import { DreDetalhado, type DrePlat } from "./dre-detalhado"
+
+const MESES_PT = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+]
 
 // Ordem cronológica dos turnos (o iFood manda fora de ordem / por volume).
 const TURNO_ORDEM = [
@@ -61,17 +77,25 @@ export async function FinanceiroLojaTab({
   month: number
 }) {
   const m = monthly
-  const [pagamento, deliveryFee, daily, nineResumo, antecipMap, keetaPromo] =
-    await Promise.all([
-      getPagamentoResumoForMonth(unitId, year, month),
-      getDeliveryFeeForMonth(unitId, year, month),
-      getDailyReportMatrix(year, month, "todas", [
-        { id: unitId, code: "", name: "" },
-      ]),
-      getNinefoodResumoForMonth(unitId, year, month),
-      getAntecipacaoFeeByUnits([unitId], year, month),
-      getKeetaPromocaoResumo([unitId], year, month),
-    ])
+  const [
+    pagamento,
+    deliveryFee,
+    daily,
+    nineResumo,
+    antecipMap,
+    keetaPromo,
+    costBreakdown,
+  ] = await Promise.all([
+    getPagamentoResumoForMonth(unitId, year, month),
+    getDeliveryFeeForMonth(unitId, year, month),
+    getDailyReportMatrix(year, month, "todas", [
+      { id: unitId, code: "", name: "" },
+    ]),
+    getNinefoodResumoForMonth(unitId, year, month),
+    getAntecipacaoFeeByUnits([unitId], year, month),
+    getKeetaPromocaoResumo([unitId], year, month),
+    getUnitCostBreakdown(unitId, year, month),
+  ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
 
@@ -194,6 +218,13 @@ export async function FinanceiroLojaTab({
             totalLiquido={liquido}
             cmv={cmv}
             operacao={operacao}
+            cmvCats={costBreakdown.categories
+              .filter((c) => c.tipo === "cmv")
+              .map((c) => ({ nome: c.nome, valor: c.valor }))}
+            operacaoCats={costBreakdown.categories
+              .filter((c) => c.tipo === "operacao")
+              .map((c) => ({ nome: c.nome, valor: c.valor }))}
+            periodo={`${MESES_PT[month - 1]} de ${year}`}
             vrInfo={vrInfo}
             antecipacaoIfood={antecipFee}
           />
@@ -202,20 +233,22 @@ export async function FinanceiroLojaTab({
         {/* Custos editáveis */}
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold">Custos da loja</h3>
-          {/* key inclui os valores salvos → quando o servidor re-renderiza
-              com o lançamento novo (após salvar / trocar de mês), o editor
-              remonta e o campo SEMPRE reflete o que está salvo (o useState do
-              editor só lê a prop na montagem). */}
+          {/* key estável (só unidade/mês): o editor é otimista e dono do próprio
+              estado. Assim o router.refresh (que atualiza a DRE ao lado) NÃO
+              remonta o card nem fecha a seção aberta. Só remonta ao trocar de
+              mês/unidade, quando deve reler os dados. */}
           <UnitCostsEditor
-            key={`${unitId}-${year}-${month}-${m.custoProdutosCozina}-${operacao}`}
+            key={`${unitId}-${year}-${month}`}
             unitId={unitId}
             year={year}
             month={month}
-            cozina={m.custoProdutosCozina}
-            operacao={operacao}
+            cmvLegacy={m.custoProdutosCozina}
+            operacaoLegacy={operacao}
+            breakdown={costBreakdown}
           />
           <p className="mt-3 text-[11px] text-muted-foreground">
-            O bruto/líquido vêm dos relatórios; CMV e operação você lança aqui.
+            O bruto/líquido vêm dos relatórios; CMV e operação você lança aqui —
+            crie categorias pra detalhar (ex.: bebidas, aluguel, funcionários).
           </p>
         </div>
       </div>
