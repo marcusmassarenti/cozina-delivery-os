@@ -1,6 +1,7 @@
 "use client"
 
-import { LogOut, RefreshCw } from "lucide-react"
+import Link from "next/link"
+import { HelpCircle, LogOut, RefreshCw } from "lucide-react"
 
 import { CommandSearch } from "@/components/command-search"
 import { DashboardCustomizeButton } from "@/components/dashboard/dashboard-customize-button"
@@ -35,6 +36,14 @@ export function TopBar({
         <div className="flex items-center gap-0.5">
           <DashboardPrivacyToggle />
           <DashboardCustomizeButton />
+          <Link
+            href="/ajuda"
+            aria-label="Central de ajuda"
+            title="Central de ajuda"
+            className="relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <HelpCircle className="size-4" />
+          </Link>
           <ThemeToggle />
           <IconButton aria-label="Recarregar">
             <RefreshCw className="size-4" />
