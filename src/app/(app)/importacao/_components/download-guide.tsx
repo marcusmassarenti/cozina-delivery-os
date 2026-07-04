@@ -70,19 +70,18 @@ const IFOOD_ENTRIES: GuideEntry[] = [
   {
     icon: UtensilsCrossed,
     title: "Cardápio",
-    badge: "Diário ou Mensal",
+    badge: "Mensal",
     badgeTone: "blue",
-    scope: "Loja única ou rede",
-    path: ["Portal iFood", "Relatórios", "Cardápio"],
+    scope: "1 por loja",
+    path: ["Portal iFood", "Relatórios da loja", "Cardápio"],
     steps:
-      'Loja única → portal do lojista; rede/franquia → portal de redes. Escolhe período → "Exportar" → XLSX.',
-    feeds: "Funil de conversão, top itens, top complementos.",
+      'SEMPRE individual da loja, uma por vez → período → "Exportar" → XLSX. ⚠️ Pelo portal de REDES vem só o consolidado (funil por loja, mas os produtos só no TOTAL da marca — sem item por loja).',
+    feeds: "Funil de conversão, top itens vendidos e complementos — por loja.",
     links: [
       {
-        label: "Loja única",
+        label: "Cardápio por loja",
         href: "https://portal.ifood.com.br/reports-for-merchant",
       },
-      { label: "Rede / franquia", href: "https://portal.ifood.com.br/chains/reports" },
     ],
   },
   {
@@ -273,11 +272,13 @@ export function DownloadGuide() {
                 <strong>
                   Faturamento vem do relatório Financeiro / Conciliação
                 </strong>{" "}
-                — não do relatório de Pedidos (que serve só pra forma de
-                pagamento / VR). E atenção:{" "}
-                <strong>Financeiro e Pedidos</strong> são sempre{" "}
-                <strong>loja por loja</strong> (não têm no portal de redes); só
-                Cardápio e Avaliações têm a opção de rede.
+                — não do de Pedidos (esse é só forma de pagamento / VR). E
+                atenção: <strong>Financeiro, Pedidos e Cardápio</strong> são{" "}
+                <strong>loja por loja</strong>. No <strong>Cardápio</strong>, o
+                portal de redes traz só o consolidado da marca (funil, mas{" "}
+                <strong>sem produtos por loja</strong>) — pra ver os produtos de
+                cada loja, use o Cardápio individual da loja. Só{" "}
+                <strong>Avaliações</strong> funciona de verdade por rede.
               </>
             )}
             {active === "99food" && (
