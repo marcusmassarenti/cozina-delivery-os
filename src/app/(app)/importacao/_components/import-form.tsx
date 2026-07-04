@@ -228,9 +228,9 @@ export function ImportForm({
         </div>
         <p className="text-sm font-medium">Arrasta XLSX, CSV ou ZIP aqui ou clica</p>
         <p className="text-xs text-muted-foreground">
-          Vários ao mesmo tempo · iFood (Cardápio · Financeiro · Avaliações),
-          99 Food (Dados da loja · item · pedido) e Keeta (Loja diária · Itens ·
-          Pedidos)
+          Vários ao mesmo tempo · iFood (Financeiro · Pedidos · Cardápio ·
+          Avaliações), 99 Food (loja · item · pedido) e Keeta (restaurante ·
+          pedido · item · promoção)
         </p>
         <p className="text-[10px] text-muted-foreground">
           A plataforma e a unidade são detectadas automaticamente pelo arquivo

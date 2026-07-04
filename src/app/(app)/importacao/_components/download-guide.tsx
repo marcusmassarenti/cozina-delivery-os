@@ -105,86 +105,97 @@ const IFOOD_ENTRIES: GuideEntry[] = [
   },
 ]
 
+const NINE_URL = "https://merchant.99app.com/pt-BR/manager/report"
+const NINE_LINK = [{ label: "Relatórios 99 Food", href: NINE_URL }]
+
 const NINEFOOD_ENTRIES: GuideEntry[] = [
   {
     icon: Receipt,
     title: "Dados da loja",
-    badge: "Diário (agregado)",
+    badge: "Mensal",
     badgeTone: "amber",
-    scope: "1 da rede",
-    path: ["99 Food Merchant", "Baixar dados", "Dados da loja"],
+    scope: "1 por loja",
+    path: ["Portal 99 Food", "Relatórios"],
     steps:
-      "Marca lojas + datas + métricas → exporta. O sistema separa por loja.",
+      'Período mensal → escolhe a loja (a 99 não tem "todas") → "Selecionar todos os dados" → Enviar. Na aba "Baixar relatório", baixa. Pode subir o .zip.',
     feeds: "Faturamento, comissão, avaliação, taxa de aceitação, preparo.",
+    links: NINE_LINK,
   },
   {
     icon: UtensilsCrossed,
     title: "Dados do item",
-    badge: "Diário",
+    badge: "Mensal",
     badgeTone: "blue",
-    scope: "1 da rede",
-    path: ["99 Food Merchant", "Baixar dados", "Dados do item"],
-    steps: 'Marca "Dados do item" → lojas + datas. As métricas vêm padrão.',
+    scope: "1 por loja",
+    path: ["Portal 99 Food", "Relatórios"],
+    steps:
+      'Mesmo fluxo, tipo "Dados do item" → loja + período → todos os dados → Enviar → baixar.',
     feeds: "Top itens, funil de carrinho, preço médio por loja.",
+    links: NINE_LINK,
   },
   {
     icon: Star,
     title: "Dados do pedido",
-    badge: "Por período",
+    badge: "Mensal",
     badgeTone: "emerald",
-    scope: "1 da rede",
-    path: ["99 Food Merchant", "Baixar dados", "Dados do pedido"],
+    scope: "1 por loja",
+    path: ["Portal 99 Food", "Relatórios"],
     steps:
-      'Marca "Dados do pedido" → lojas + período. Inclui avaliação e cliente novo/recorrente.',
+      'Mesmo fluxo, tipo "Dados do pedido" → loja + período → todos os dados → Enviar → baixar.',
     feeds: "Notas, top tags, comentários, % clientes novos.",
+    links: NINE_LINK,
   },
 ]
+
+const KEETA_URL = "https://merchant.mykeeta.com/m/web/app/bizdata#/dataDownload"
+const KEETA_LINK = [{ label: "Baixar dados Keeta", href: KEETA_URL }]
+const KEETA_FLOW =
+  'Período mensal → restaurante (ou todos, se for rede) → "Selecionar todos os dados" → Enviar. Na aba "Downloads", baixa.'
 
 const KEETA_ENTRIES: GuideEntry[] = [
   {
     icon: Receipt,
     title: "Dados do restaurante",
-    badge: "Diário (agregado)",
+    badge: "Mensal",
     badgeTone: "amber",
-    scope: "1 da rede",
-    path: ["Keeta Merchant", "Relatórios", "Config. de dados"],
-    steps:
-      'Chip "Dados do restaurante" → todos os restaurantes → período → "Selecionar todos os dados". Baixa na aba "Downloads".',
+    scope: "Todos ou por loja",
+    path: ["Keeta", "Relatórios", "Baixar dados"],
+    steps: KEETA_FLOW,
     feeds: "Faturamento, pedidos, cancelados, funil, preparo.",
+    links: KEETA_LINK,
   },
   {
     icon: Star,
     title: "Dados do pedido",
-    badge: "Por período",
+    badge: "Mensal",
     badgeTone: "emerald",
-    scope: "1 da rede",
-    path: ["Keeta Merchant", "Relatórios", "Config. de dados"],
-    steps:
-      'Chip "Dados do pedido" → todos → período → todos os dados → "Downloads".',
+    scope: "Todos ou por loja",
+    path: ["Keeta", "Relatórios", "Baixar dados"],
+    steps: KEETA_FLOW,
     feeds: "Faturamento líquido, cancelamentos, notas e comentários.",
+    links: KEETA_LINK,
   },
   {
     icon: UtensilsCrossed,
     title: "Dados do item",
-    badge: "Diário",
+    badge: "Mensal",
     badgeTone: "blue",
-    scope: "1 da rede",
-    path: ["Keeta Merchant", "Relatórios", "Config. de dados"],
-    steps:
-      'Chip "Dados do item" → todos → período → todos os dados → "Downloads".',
+    scope: "Todos ou por loja",
+    path: ["Keeta", "Relatórios", "Baixar dados"],
+    steps: KEETA_FLOW,
     feeds: "Top produtos, preço médio, alcance por item.",
+    links: KEETA_LINK,
   },
   {
     icon: Ticket,
-    title: "Pedidos recentes",
-    badge: "Por período",
+    title: "Dados da promoção",
+    badge: "Mensal",
     badgeTone: "emerald",
-    scope: "1 da rede",
-    path: ["Keeta Merchant", "Pedidos", "Pedidos recentes"],
-    steps:
-      'Em "Pedidos recentes" → escolhe o período → "Exportar" (XLSX). 1 arquivo cobre todas as lojas.',
-    feeds:
-      "Subsídio Keeta×loja, taxas granulares e campanhas — alimenta a tela de Pedidos.",
+    scope: "Todos ou por loja",
+    path: ["Keeta", "Relatórios", "Baixar dados"],
+    steps: KEETA_FLOW,
+    feeds: "ROI das campanhas, subsídio Keeta×loja, vendas em promoção.",
+    links: KEETA_LINK,
   },
 ]
 
@@ -256,15 +267,37 @@ export function DownloadGuide() {
             })}
           </div>
 
-          {active === "ifood" && (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-              <strong>Faturamento vem do relatório Financeiro / Conciliação</strong>{" "}
-              — não do relatório de Pedidos. O de Pedidos serve só pra forma de
-              pagamento / VR. E atenção: <strong>Financeiro e Pedidos</strong> são
-              sempre <strong>loja por loja</strong> (não têm no portal de redes);
-              só Cardápio e Avaliações têm a opção de rede.
-            </div>
-          )}
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            {active === "ifood" && (
+              <>
+                <strong>
+                  Faturamento vem do relatório Financeiro / Conciliação
+                </strong>{" "}
+                — não do relatório de Pedidos (que serve só pra forma de
+                pagamento / VR). E atenção:{" "}
+                <strong>Financeiro e Pedidos</strong> são sempre{" "}
+                <strong>loja por loja</strong> (não têm no portal de redes); só
+                Cardápio e Avaliações têm a opção de rede.
+              </>
+            )}
+            {active === "99food" && (
+              <>
+                A 99 <strong>não deixa selecionar todas as lojas</strong> — baixe
+                os <strong>3 relatórios de cada loja</strong>, uma por uma
+                (período mensal → todos os dados → Enviar → aba "Baixar
+                relatório"). Pode subir o <strong>.zip</strong> direto, o sistema
+                lê.
+              </>
+            )}
+            {active === "keeta" && (
+              <>
+                Baixe os <strong>4 relatórios</strong> (restaurante, pedido, item
+                e promoção) pra ter a info completa. É um fluxo só: período mensal
+                → restaurante (ou todos, se for rede) → "Selecionar todos os
+                dados" → Enviar → aba <strong>Downloads</strong> → Baixar.
+              </>
+            )}
+          </div>
 
           <div
             className={`grid gap-3 ${
