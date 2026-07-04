@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   ChevronDown,
+  ExternalLink,
   Receipt,
   Star,
   Ticket,
@@ -28,52 +29,79 @@ type GuideEntry = {
   path: string[]
   steps: string
   feeds: string
+  /** Links diretos pro portal do iFood (loja única e/ou portal de redes). */
+  links?: { label: string; href: string }[]
 }
 
 const IFOOD_ENTRIES: GuideEntry[] = [
+  {
+    icon: Receipt,
+    title: "Financeiro / Conciliação",
+    badge: "Mensal",
+    badgeTone: "amber",
+    scope: "1 por loja",
+    path: ["Portal iFood", "Financeiro", "Exportar"],
+    steps:
+      'Seleciona a competência (mês) → botão "Exportar" → XLSX. É SEMPRE loja por loja (não existe no portal de redes). Repete por loja.',
+    feeds:
+      "Faturamento bruto/líquido, quebra de taxas, cancelamentos — a base FINANCEIRA oficial (bate com a tela Financeiro do iFood).",
+    links: [
+      {
+        label: "Financeiro (loja por loja)",
+        href: "https://portal.ifood.com.br/revenue/billaas/home",
+      },
+    ],
+  },
+  {
+    icon: Ticket,
+    title: "Pedidos (VR / pagamento)",
+    badge: "Por período",
+    badgeTone: "amber",
+    scope: "1 por loja",
+    path: ["Portal iFood", "Pedidos", "Exportar"],
+    steps:
+      'Escolhe o período → "Exportar" → XLSX. SEMPRE loja por loja (não existe no portal de redes). Repete por loja.',
+    feeds:
+      "Forma de pagamento, Vale-Refeição por bandeira, operação. NÃO é a base de faturamento — pra faturamento use o Financeiro.",
+    links: [
+      { label: "Pedidos (loja por loja)", href: "https://portal.ifood.com.br/orders" },
+    ],
+  },
   {
     icon: UtensilsCrossed,
     title: "Cardápio",
     badge: "Diário ou Mensal",
     badgeTone: "blue",
-    scope: "1 por dia ou rede",
-    path: ["iFood Gestor", "Operação", "Cardápio"],
+    scope: "Loja única ou rede",
+    path: ["Portal iFood", "Relatórios", "Cardápio"],
     steps:
-      'Escolhe período e loja → "Exportar dados" → XLSX. Diário = 1 dia; mensal = rede inteira.',
+      'Loja única → portal do lojista; rede/franquia → portal de redes. Escolhe período → "Exportar" → XLSX.',
     feeds: "Funil de conversão, top itens, top complementos.",
-  },
-  {
-    icon: Receipt,
-    title: "Conciliação / Repasse",
-    badge: "Mensal",
-    badgeTone: "amber",
-    scope: "1 por loja",
-    path: ["iFood Gestor", "Financeiro", "Conciliação"],
-    steps:
-      'Filtra loja → competência → "Baixar relatório completo" (XLSX). Repete por loja.',
-    feeds: "Faturamento bruto/líquido, quebra de taxas, cancelamentos.",
+    links: [
+      {
+        label: "Loja única",
+        href: "https://portal.ifood.com.br/reports-for-merchant",
+      },
+      { label: "Rede / franquia", href: "https://portal.ifood.com.br/chains/reports" },
+    ],
   },
   {
     icon: Star,
     title: "Avaliações",
     badge: "Semanal ou Mensal",
     badgeTone: "emerald",
-    scope: "1 da rede",
-    path: ["iFood Gestor", "Operação", "Avaliações"],
+    scope: "Loja única ou rede",
+    path: ["Portal iFood", "Relatórios", "Avaliações"],
     steps:
-      '"Comentários e avaliações" → período → "Exportar" (XLSX). 1 arquivo cobre as 10 lojas.',
+      'Loja única → portal do lojista; rede/franquia → portal de redes. Período → "Exportar" → XLSX.',
     feeds: "Nota média, top elogios/reclamações, comentários.",
-  },
-  {
-    icon: Ticket,
-    title: "Pedidos (VR)",
-    badge: "Mensal",
-    badgeTone: "amber",
-    scope: "1 por loja",
-    path: ["iFood Gestor", "Financeiro", "Pedidos"],
-    steps:
-      '"Relatório de pedidos" → loja + período → "Exportar" (XLSX). Repete por loja.',
-    feeds: "Vale-Refeição por bandeira, mix de pagamento, VR no Resultado.",
+    links: [
+      {
+        label: "Loja única",
+        href: "https://portal.ifood.com.br/reports-for-merchant",
+      },
+      { label: "Rede / franquia", href: "https://portal.ifood.com.br/chains/reports" },
+    ],
   },
 ]
 
@@ -228,6 +256,16 @@ export function DownloadGuide() {
             })}
           </div>
 
+          {active === "ifood" && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+              <strong>Faturamento vem do relatório Financeiro / Conciliação</strong>{" "}
+              — não do relatório de Pedidos. O de Pedidos serve só pra forma de
+              pagamento / VR. E atenção: <strong>Financeiro e Pedidos</strong> são
+              sempre <strong>loja por loja</strong> (não têm no portal de redes);
+              só Cardápio e Avaliações têm a opção de rede.
+            </div>
+          )}
+
           <div
             className={`grid gap-3 ${
               current.entries.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"
@@ -285,6 +323,23 @@ function EntryCard({ entry: e }: { entry: GuideEntry }) {
         <span className="font-medium text-foreground/80">Alimenta: </span>
         {e.feeds}
       </p>
+
+      {e.links && e.links.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {e.links.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/10"
+            >
+              <ExternalLink className="size-3" />
+              {l.label}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
