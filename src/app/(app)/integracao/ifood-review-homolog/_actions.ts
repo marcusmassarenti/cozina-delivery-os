@@ -17,6 +17,22 @@ async function guard() {
   if (!(await isSuperadmin())) throw new Error("Sem permissão")
 }
 
+/** Avaliação estruturada pra RENDERIZAR na tela (homologação exige tudo visual,
+ * não JSON). Achata os aninhados (customer/order) pra facilitar o componente. */
+export type ReviewDetail = {
+  id: string
+  orderId?: string
+  orderShortId?: string
+  score?: number
+  comment?: string
+  status?: string
+  visibility?: string
+  createdAt?: string
+  publishedAt?: string
+  customerName?: string
+  replies?: { text?: string; addedAt?: string }[]
+}
+
 export type ReviewProbeState = {
   ok: boolean
   status?: number
@@ -31,19 +47,35 @@ export type ReviewProbeState = {
     visibilities?: string[]
     firstReviewId?: string | null
     hasReplies?: boolean
-    /** Lista enxuta das avaliações pra escolher a certa em cada cenário. */
-    reviews?: {
-      id: string
-      score?: number
-      status?: string
-      comment?: string
-    }[]
+    /** Lista das avaliações — completa o suficiente pra exibir cada uma. */
+    reviews?: ReviewDetail[]
+    /** Detalhe de UMA avaliação (Cenário 2) — renderizado visualmente. */
+    detail?: ReviewDetail
+    /** Texto da resposta que acabou de ser enviada (Cenário 3). */
+    sentReply?: string
     /** Eco dos parâmetros usados na listagem (pro vídeo mostrar o filtro). */
     sizeUsed?: number
     dateFrom?: string
     dateTo?: string
   }
   error?: string
+}
+
+/** IfoodReview (com aninhados) → ReviewDetail achatado pra a tela. */
+function toDetail(r: IfoodReview): ReviewDetail {
+  return {
+    id: r.id,
+    orderId: r.orderId ?? r.order?.id,
+    orderShortId: r.order?.shortId,
+    score: r.score,
+    comment: r.comment,
+    status: r.status,
+    visibility: r.visibility,
+    createdAt: r.createdAt ?? r.order?.createdAt,
+    publishedAt: r.publishedAt,
+    customerName: r.customer?.name,
+    replies: (r.replies ?? []).map((x) => ({ text: x.text, addedAt: x.addedAt })),
+  }
 }
 
 /** Lista avaliações (página 1, addCount) e deriva os critérios de homologação. */
@@ -134,6 +166,7 @@ export async function probeReviewDetail(
       status: r.status,
       raw: r.raw.slice(0, 4000),
       error: r.ok ? undefined : r.error,
+      meta: r.ok && r.data ? { detail: toDetail(r.data) } : undefined,
     }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -177,11 +210,23 @@ export async function probeReply(
   if (!reviewId) return { ok: false, error: "Informe o reviewId." }
   try {
     const r = await replyToReview(merchantId, reviewId, text)
+    // Deu certo → relê a avaliação pra mostrar na tela o status REPLIED + a
+    // resposta publicada (fluxo completo visível, sem depender de JSON).
+    let detail: ReviewDetail | undefined
+    if (r.ok) {
+      try {
+        const d = await getReview(merchantId, reviewId)
+        if (d.ok && d.data) detail = toDetail(d.data)
+      } catch {
+        /* se falhar a releitura, mantém o resto do resultado */
+      }
+    }
     return {
       ok: r.ok,
       status: r.status,
       raw: r.raw.slice(0, 4000),
       error: r.ok ? undefined : r.error,
+      meta: r.ok ? { sentReply: text, detail } : undefined,
     }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -264,11 +309,6 @@ function deriveMeta(
     visibilities,
     firstReviewId: reviews[0]?.id ?? null,
     hasReplies: reviews.some((r) => (r.replies?.length ?? 0) > 0),
-    reviews: reviews.slice(0, 10).map((r) => ({
-      id: r.id,
-      score: r.score,
-      status: r.status,
-      comment: r.comment,
-    })),
+    reviews: reviews.slice(0, 10).map(toDetail),
   }
 }

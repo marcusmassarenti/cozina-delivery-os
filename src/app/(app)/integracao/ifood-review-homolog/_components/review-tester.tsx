@@ -1,7 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { CheckCircle2, Loader2, XCircle } from "lucide-react"
+import {
+  CalendarDays,
+  CheckCircle2,
+  Loader2,
+  Reply,
+  ShoppingBag,
+  Star,
+  XCircle,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -12,8 +20,23 @@ import {
   probeReviewDetail,
   probeReviews,
   probeSummary,
+  type ReviewDetail,
   type ReviewProbeState,
 } from "../_actions"
+
+/** Data ISO → "dd/mm/aaaa hh:mm" (pt-BR). */
+function fmtDate(iso?: string): string {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
 
 const SANDBOX = "500f2b4d-1807-4a9c-9e7d-93e87c128891"
 /** UUID claramente inexistente — pro teste do Cenário 2. */
@@ -352,88 +375,86 @@ function ResultCard({
           )}
 
           {result.meta && (
-            <div className="mt-3 flex flex-col gap-2 text-sm">
-              {/* Chips de métricas */}
-              <div className="flex flex-wrap gap-2">
-                <Chip label="Total" value={result.meta.total ?? "—"} strong />
-                <Chip label="Nesta página" value={result.meta.count ?? 0} />
-                <Chip label="Páginas" value={result.meta.pageCount ?? "—"} />
-                {result.meta.sizeUsed != null && (
-                  <Chip label="pageSize" value={result.meta.sizeUsed} />
-                )}
-              </div>
-              {(result.meta.dateFrom || result.meta.dateTo) && (
-                <p className="text-[13px] text-muted-foreground">
-                  <b className="text-foreground">Filtro de data:</b>{" "}
-                  {result.meta.dateFrom ?? "—"} → {result.meta.dateTo ?? "—"}
-                </p>
+            <div className="mt-3 flex flex-col gap-3 text-sm">
+              {/* Métricas + filtros (só na listagem) */}
+              {result.meta.reviews && (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Chip label="Total" value={result.meta.total ?? "—"} strong />
+                    <Chip label="Nesta página" value={result.meta.count ?? 0} />
+                    <Chip label="Páginas" value={result.meta.pageCount ?? "—"} />
+                    {result.meta.sizeUsed != null && (
+                      <Chip label="pageSize" value={result.meta.sizeUsed} />
+                    )}
+                  </div>
+                  {(result.meta.dateFrom || result.meta.dateTo) && (
+                    <p className="text-[13px] text-muted-foreground">
+                      <b className="text-foreground">Filtro de data:</b>{" "}
+                      {result.meta.dateFrom ?? "—"} → {result.meta.dateTo ?? "—"}
+                    </p>
+                  )}
+                </>
               )}
-              {result.meta.statuses && result.meta.statuses.length > 0 && (
-                <p className="text-[13px] text-muted-foreground">
-                  <b className="text-foreground">Status:</b>{" "}
-                  {result.meta.statuses.join(", ")}
-                </p>
+
+              {/* Resposta enviada (Cenário 3) */}
+              {result.meta.sentReply && (
+                <div className="rounded-lg border border-sky-300 bg-sky-50/60 px-3 py-2 dark:border-sky-900/50 dark:bg-sky-950/20">
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold text-sky-800 dark:text-sky-300">
+                    <Reply className="size-3.5" /> Resposta enviada com sucesso
+                  </p>
+                  <p className="mt-0.5 text-sm">“{result.meta.sentReply}”</p>
+                </div>
               )}
-              {result.meta.visibilities && result.meta.visibilities.length > 0 && (
-                <p className="text-[13px] text-muted-foreground">
-                  <b className="text-foreground">Visibility:</b>{" "}
-                  {result.meta.visibilities.join(", ")} ·{" "}
-                  <b className="text-foreground">Tem respostas:</b>{" "}
-                  {result.meta.hasReplies ? "sim" : "não"}
-                </p>
+
+              {/* Detalhe de UMA avaliação (Cenário 2 / pós-resposta) */}
+              {result.meta.detail && (
+                <ReviewCard rv={result.meta.detail} detailed />
               )}
-              {result.meta.reviews && result.meta.reviews.length > 0 ? (
-                <div className="mt-1 flex flex-col gap-1.5">
+
+              {/* Lista de avaliações (Cenário 1) */}
+              {result.meta.reviews && result.meta.reviews.length > 0 && (
+                <div className="flex flex-col gap-2">
                   <p className="text-[13px] font-medium">
-                    Escolha a avaliação pra testar nos Cenários 2 e 3:
+                    Avaliações — clique “usar” pra abrir o detalhe / responder:
                   </p>
                   {result.meta.reviews.map((rv) => (
-                    <div
+                    <ReviewCard
                       key={rv.id}
-                      className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5"
-                    >
-                      <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        {rv.score ?? "—"}★
-                      </span>
-                      <StatusBadge status={rv.status} />
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
-                        {rv.comment || "—"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onUseReviewId(rv.id)}
-                        className="shrink-0 rounded-md border border-foreground/20 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
-                      >
-                        usar
-                      </button>
-                    </div>
+                      rv={rv}
+                      onUse={() => onUseReviewId(rv.id)}
+                    />
                   ))}
                   <p className="text-[11px] text-muted-foreground">
                     Pro Cenário 3: <b>NOT_REPLIED</b> → responde (201);{" "}
                     <b>REPLIED/PUBLISHED</b> → recusa (422).
                   </p>
                 </div>
-              ) : result.meta.firstReviewId ? (
-                <button
-                  type="button"
-                  onClick={() => onUseReviewId(result.meta!.firstReviewId!)}
-                  className="w-fit rounded-md border border-foreground/20 bg-background px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-muted"
-                >
-                  <span className="text-muted-foreground">
-                    Usar este reviewId nos Cenários 2/3:
-                  </span>{" "}
-                  <span className="font-mono font-medium underline">
-                    {result.meta.firstReviewId}
-                  </span>
-                </button>
-              ) : null}
+              )}
+
+              {/* Fallback: só um id (sem lista estruturada) */}
+              {!result.meta.reviews?.length &&
+                !result.meta.detail &&
+                result.meta.firstReviewId && (
+                  <button
+                    type="button"
+                    onClick={() => onUseReviewId(result.meta!.firstReviewId!)}
+                    className="w-fit rounded-md border border-foreground/20 bg-background px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-muted"
+                  >
+                    <span className="text-muted-foreground">
+                      Usar este reviewId:
+                    </span>{" "}
+                    <span className="font-mono font-medium underline">
+                      {result.meta.firstReviewId}
+                    </span>
+                  </button>
+                )}
             </div>
           )}
 
           {result.raw && (
             <details className="mt-3">
               <summary className="cursor-pointer text-[13px] font-medium text-muted-foreground hover:text-foreground">
-                Ver resposta completa (JSON)
+                Resposta técnica (JSON) — opcional
               </summary>
               <pre className="mt-2 max-h-72 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-background/70 p-3 text-xs leading-relaxed">
                 {prettyJson(result.raw)}
@@ -451,6 +472,107 @@ function prettyJson(raw: string): string {
   } catch {
     return raw
   }
+}
+
+/** Renderiza UMA avaliação VISUALMENTE — a homologação do iFood exige que todos
+ * os campos apareçam na tela (não em JSON). Usada na lista e no detalhe. */
+function ReviewCard({
+  rv,
+  detailed,
+  onUse,
+}: {
+  rv: ReviewDetail
+  detailed?: boolean
+  onUse?: () => void
+}) {
+  const reply = rv.replies?.[0]
+  const inicial = (rv.customerName || "?").slice(0, 1).toUpperCase()
+  return (
+    <div className={`rounded-xl border bg-background ${detailed ? "p-4" : "p-3"}`}>
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          {inicial}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-sm font-semibold">
+              {rv.customerName || "Cliente"}
+            </span>
+            <Stars score={rv.score} />
+            <StatusBadge status={rv.status} />
+            {rv.visibility && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {rv.visibility}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+            {rv.createdAt && (
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="size-3" /> {fmtDate(rv.createdAt)}
+              </span>
+            )}
+            {(rv.orderShortId || rv.orderId) && (
+              <span className="inline-flex items-center gap-1">
+                <ShoppingBag className="size-3" /> Pedido{" "}
+                {rv.orderShortId ?? rv.orderId}
+              </span>
+            )}
+          </div>
+          {rv.comment ? (
+            <p className="mt-2 text-sm leading-relaxed">{rv.comment}</p>
+          ) : (
+            <p className="mt-2 text-sm italic text-muted-foreground">
+              (avaliação sem comentário)
+            </p>
+          )}
+          {reply?.text && (
+            <div className="mt-2 rounded-lg border-l-2 border-sky-400 bg-sky-50/50 py-1.5 pl-3 pr-2 dark:bg-sky-950/20">
+              <p className="flex items-center gap-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300">
+                <Reply className="size-3" /> Resposta da loja
+                {reply.addedAt ? ` · ${fmtDate(reply.addedAt)}` : ""}
+              </p>
+              <p className="mt-0.5 text-[13px]">{reply.text}</p>
+            </div>
+          )}
+          {detailed && (
+            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+              ID: {rv.id}
+            </p>
+          )}
+        </div>
+        {onUse && (
+          <button
+            type="button"
+            onClick={onUse}
+            className="shrink-0 rounded-md border border-foreground/20 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+          >
+            usar
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Nota em estrelas (1..5) + o número. */
+function Stars({ score }: { score?: number }) {
+  const n = Math.round(score ?? 0)
+  return (
+    <span className="inline-flex items-center gap-0.5" title={`${score ?? "—"} de 5`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`size-3.5 ${
+            i <= n ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
+          }`}
+        />
+      ))}
+      <span className="ml-0.5 text-xs font-semibold tabular-nums">
+        {score ?? "—"}
+      </span>
+    </span>
+  )
 }
 
 /** Badge do status da avaliação (verde = respondível, cinza = não). */
