@@ -50,7 +50,7 @@ const EDIT_STEPS: CoachStep[] = [
     selector: '[data-tour="u-nome"]',
     icon: <Store className="size-4" />,
     title: "Identificação da loja",
-    body: "Nome (como aparece no sistema), cidade e UF. O CNPJ é opcional — serve pra emissão de nota.",
+    body: "Nome da loja (como aparece no sistema), cidade e UF. O CNPJ é opcional — serve só de registro da unidade.",
   },
   {
     selector: '[data-tour="u-inauguracao"]',
