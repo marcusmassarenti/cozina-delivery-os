@@ -55,6 +55,7 @@ export default async function AppLayout({
         <AppSidebar
           allowedModules={allowedModules}
           isSuperadmin={superadmin}
+          isPro={superadmin || billing?.planTier === "pro"}
           logoUrl={userContext.logoUrl}
           companyName={userContext.companyName}
         />

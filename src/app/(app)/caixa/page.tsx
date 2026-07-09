@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { fmtBRL } from "@/lib/format"
+import { isProPlan } from "@/lib/data/billing"
 import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -43,6 +44,33 @@ export default async function VisaoGeralPage({
 }) {
   const holdingId = await getCaixaHoldingId()
   if (!holdingId) return null
+
+  // Módulo do plano Pro — cliente no Essencial vê o convite de upgrade.
+  if (!(await isProPlan())) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Wallet className="size-7" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">
+            Fluxo de Caixa é um recurso do plano Pro
+          </h1>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Contas a pagar e a receber, contas bancárias, cartões, categorias e
+            importação OFX dos bancos — tudo num lugar. Faça o upgrade pra
+            liberar.
+          </p>
+        </div>
+        <Link
+          href="/minha-conta/assinatura"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          Ver o plano Pro
+        </Link>
+      </div>
+    )
+  }
 
   const sp = await searchParams
   const loja = sp.loja

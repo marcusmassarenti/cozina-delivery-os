@@ -28,6 +28,8 @@ export type NavItem = {
   module?: string
   /** Só aparece pro super-admin da plataforma (dono do SaaS). */
   superadminOnly?: boolean
+  /** Módulo do plano Pro — só aparece pra quem tem o plano Pro (ou super-admin). */
+  proOnly?: boolean
 }
 
 export type NavGroup = {
@@ -84,6 +86,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/caixa",
         icon: Coins,
         module: "financeiro",
+        proOnly: true,
       },
     ],
   },

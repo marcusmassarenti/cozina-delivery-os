@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 
 export type BillingStatus =
   | "trial"
@@ -90,6 +90,7 @@ export async function getCurrentHoldingBilling(): Promise<{
   dueDate: string | null
   suspendOn: string | null
   trialEndsAt: string | null
+  planTier: string | null
 } | null> {
   try {
     const holdingId = await getCurrentHoldingId()
@@ -98,7 +99,7 @@ export async function getCurrentHoldingBilling(): Promise<{
     const { data } = await admin
       .from("holdings")
       .select(
-        "created_at, payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at",
+        "created_at, payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at, plan_tier",
       )
       .eq("id", holdingId)
       .maybeSingle()
@@ -121,8 +122,19 @@ export async function getCurrentHoldingBilling(): Promise<{
       dueDate: b.dueDate,
       suspendOn: b.suspendOn,
       trialEndsAt: b.trialEndsAt,
+      planTier: (data.plan_tier as string | null) ?? null,
     }
   } catch {
     return null
   }
+}
+
+/**
+ * True quando a conta tem acesso aos módulos Pro (Fluxo de Caixa etc.).
+ * Super-admin (dono do SaaS) sempre; cliente só com plano "pro".
+ */
+export async function isProPlan(): Promise<boolean> {
+  if (await isSuperadmin()) return true
+  const b = await getCurrentHoldingBilling()
+  return b?.planTier === "pro"
 }

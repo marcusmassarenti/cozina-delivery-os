@@ -120,11 +120,13 @@ function MenuItems({
 export function AppSidebar({
   allowedModules,
   isSuperadmin = false,
+  isPro = false,
   logoUrl = null,
   companyName = "",
 }: {
   allowedModules: string[]
   isSuperadmin?: boolean
+  isPro?: boolean
   logoUrl?: string | null
   companyName?: string
 }) {
@@ -132,14 +134,17 @@ export function AppSidebar({
   const { isFav, toggle, ready } = useFavorites()
 
   const allowed = new Set(allowedModules)
-  // Item visível se: passa no gate de super-admin (quando exigido) E (é "em
-  // breve", não tem módulo, ou o perfil pode "Ver" aquele módulo).
+  // Item visível se: passa no gate de super-admin (quando exigido), no gate do
+  // plano Pro (quando exigido) E (é "em breve", não tem módulo, ou o perfil pode
+  // "Ver" aquele módulo).
   const canSee = (item: {
     module?: string
     comingSoon?: boolean
     superadminOnly?: boolean
+    proOnly?: boolean
   }) =>
     (!item.superadminOnly || isSuperadmin) &&
+    (!item.proOnly || isPro) &&
     (!!item.comingSoon || !item.module || allowed.has(item.module))
 
   const favItems = NAV_ITEMS.filter((i) => isFav(i.href) && canSee(i))
