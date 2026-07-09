@@ -62,7 +62,7 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <Coins className="size-6 text-muted-foreground" />
-          Fluxo de Caixa
+          Financeiro
         </h1>
         <div className="flex items-center gap-2">
           {units.length > 0 && <LojaSelector units={units} />}
