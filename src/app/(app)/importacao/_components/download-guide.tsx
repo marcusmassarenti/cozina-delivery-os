@@ -222,7 +222,16 @@ const PLATFORMS: {
   videos?: Video[]
 }[] = [
   { id: "ifood", label: "iFood", entries: IFOOD_ENTRIES },
-  { id: "99food", label: "99 Food", entries: NINEFOOD_ENTRIES },
+  {
+    id: "99food",
+    label: "99 Food",
+    entries: NINEFOOD_ENTRIES,
+    videos: [
+      { title: "Dados da loja", src: `${TUT}99-loja.mp4` },
+      { title: "Dados do item", src: `${TUT}99-item.mp4` },
+      { title: "Dados do pedido", src: `${TUT}99-pedido.mp4` },
+    ],
+  },
   {
     id: "keeta",
     label: "Keeta",
