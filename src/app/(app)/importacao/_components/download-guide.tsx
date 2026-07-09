@@ -6,10 +6,12 @@ import {
   Calendar,
   ChevronDown,
   ExternalLink,
+  PlayCircle,
   Receipt,
   Star,
   Ticket,
   UtensilsCrossed,
+  X,
 } from "lucide-react"
 
 import {
@@ -206,17 +208,41 @@ const toneClass: Record<GuideEntry["badgeTone"], string> = {
     "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400",
 }
 
-const PLATFORMS: { id: PlatformId; label: string; entries: GuideEntry[] }[] = [
+/** Base pública dos vídeos tutoriais (Supabase Storage, bucket "tutoriais"). */
+const TUT =
+  "https://srgmmqihgvkmwjkorkva.supabase.co/storage/v1/object/public/tutoriais/"
+
+type Video = { title: string; src: string }
+
+const PLATFORMS: {
+  id: PlatformId
+  label: string
+  entries: GuideEntry[]
+  videos?: Video[]
+}[] = [
   { id: "ifood", label: "iFood", entries: IFOOD_ENTRIES },
   { id: "99food", label: "99 Food", entries: NINEFOOD_ENTRIES },
-  { id: "keeta", label: "Keeta", entries: KEETA_ENTRIES },
+  {
+    id: "keeta",
+    label: "Keeta",
+    entries: KEETA_ENTRIES,
+    videos: [
+      {
+        title: "Baixar os relatórios (Restaurante · Pedido · Item · Promoção)",
+        src: `${TUT}keeta-baixar-dados.mp4`,
+      },
+      { title: "Baixar Pedidos", src: `${TUT}keeta-pedidos.mp4` },
+    ],
+  },
 ]
 
 export function DownloadGuide() {
   const [active, setActive] = React.useState<PlatformId>("ifood")
+  const [video, setVideo] = React.useState<Video | null>(null)
   const current = PLATFORMS.find((p) => p.id === active) ?? PLATFORMS[0]
 
   return (
+    <>
     <Collapsible className="group/guide rounded-xl border bg-card">
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/40">
         <div className="flex items-center gap-2.5">
@@ -300,6 +326,27 @@ export function DownloadGuide() {
             )}
           </div>
 
+          {current.videos && current.videos.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Vídeos tutoriais
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {current.videos.map((v) => (
+                  <button
+                    key={v.src}
+                    type="button"
+                    onClick={() => setVideo(v)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+                  >
+                    <PlayCircle className="size-4" />
+                    {v.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div
             className={`grid gap-3 ${
               current.entries.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"
@@ -320,6 +367,38 @@ export function DownloadGuide() {
         </div>
       </CollapsibleContent>
     </Collapsible>
+
+    {video && (
+      <div
+        className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4"
+        onClick={() => setVideo(null)}
+      >
+        <div
+          className="w-full max-w-3xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-2 flex items-center justify-between gap-3 text-white">
+            <p className="text-sm font-medium">{video.title}</p>
+            <button
+              type="button"
+              onClick={() => setVideo(null)}
+              aria-label="Fechar"
+              className="rounded-md p-1 transition-colors hover:bg-white/10"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={video.src}
+            controls
+            autoPlay
+            className="max-h-[80vh] w-full rounded-lg bg-black"
+          />
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
