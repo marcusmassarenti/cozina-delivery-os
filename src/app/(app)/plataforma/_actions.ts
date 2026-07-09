@@ -292,18 +292,46 @@ export async function recordPayment(
     const amount = amtRaw ? Number(amtRaw) : NaN
     if (Number.isNaN(amount) || amount <= 0) return { ok: false, message: "Informe um valor válido." }
 
+    const method = String(formData.get("method") ?? "").trim() || null
     const { error } = await admin.from("holding_payments").insert({
       holding_id: holdingId,
       paid_on: paidOn,
       amount,
-      method: String(formData.get("method") ?? "").trim() || null,
+      method,
       ref_month: String(formData.get("refMonth") ?? "").trim() || null,
       note: String(formData.get("note") ?? "").trim() || null,
     })
     if (error) return { ok: false, message: error.message }
+
+    // Registrar pagamento TAMBÉM marca o cliente como pago (tira do teste, limpa
+    // suspensão, define o próximo vencimento) — a não ser que desmarcado. Antes
+    // isso só entrava no histórico e o cliente ficava "em teste" (confuso).
+    if (formData.get("markPaid") === "on") {
+      const patch: Record<string, unknown> = {
+        paid: true,
+        trial_ends_at: null,
+        suspend_on: null,
+        due_date: addMonth(paidOn),
+      }
+      if (method) patch.payment_method = method
+      const { error: upErr } = await admin
+        .from("holdings")
+        .update(patch)
+        .eq("id", holdingId)
+      if (upErr) return { ok: false, message: upErr.message }
+    }
+
     revalidatePath("/plataforma")
     return { ok: true }
   })
+}
+
+/** Soma 1 mês a uma data "YYYY-MM-DD" (próximo vencimento). */
+function addMonth(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCMonth(dt.getUTCMonth() + 1)
+  return dt.toISOString().slice(0, 10)
 }
 
 /** Remove um pagamento registrado (super-admin). */

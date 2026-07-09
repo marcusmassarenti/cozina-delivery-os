@@ -125,6 +125,23 @@ export function PaymentsDialog({
             <Field label="Observação (opcional)">
               <Input name="note" placeholder="ex.: referente a julho" />
             </Field>
+            <label className="flex items-start gap-2 rounded-md border bg-background p-2.5 text-xs">
+              <input
+                type="checkbox"
+                name="markPaid"
+                defaultChecked
+                className="mt-0.5 size-4 shrink-0 rounded border-input accent-primary"
+              />
+              <span>
+                <span className="font-medium">
+                  Marcar cliente como pago e atualizar o vencimento
+                </span>
+                <span className="block text-[11px] text-muted-foreground">
+                  Tira do teste, remove suspensão e define o próximo vencimento
+                  (~1 mês). Desmarque se for só lançar um pagamento no histórico.
+                </span>
+              </span>
+            </label>
             {state.message && !state.ok && (
               <p className="text-xs text-rose-600">{state.message}</p>
             )}
