@@ -347,16 +347,21 @@ export function DownloadGuide() {
                   · assista o passo a passo
                 </span>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div
+                className="grid gap-2"
+                style={{
+                  gridTemplateColumns: `repeat(${current.videos.length}, minmax(0, 1fr))`,
+                }}
+              >
                 {current.videos.map((v) => (
                   <button
                     key={v.src}
                     type="button"
                     onClick={() => setVideo(v)}
-                    className="group flex items-center gap-3 rounded-lg border bg-card p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
+                    className="group flex items-center gap-2.5 rounded-lg border bg-card p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
                   >
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-transform group-hover:scale-105">
-                      <Play className="size-5 fill-current" />
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-transform group-hover:scale-105">
+                      <Play className="size-4 fill-current" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold leading-tight">
