@@ -1,5 +1,7 @@
-import { Coins } from "lucide-react"
+import Link from "next/link"
+import { Coins, Wallet } from "lucide-react"
 
+import { isProPlan } from "@/lib/data/billing"
 import {
   getAccounts,
   getCaixaHoldingId,
@@ -8,7 +10,6 @@ import {
   getContacts,
 } from "@/lib/data/caixa"
 
-import { CaixaTabs } from "./_components/caixa-tabs"
 import { LancamentoDialog } from "./_components/lancamento-dialog"
 import { LojaSelector } from "./_components/loja-selector"
 
@@ -18,6 +19,33 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
     return (
       <div className="flex flex-1 items-center justify-center p-10 text-sm text-muted-foreground">
         Nenhum cliente associado ao seu usuário.
+      </div>
+    )
+  }
+
+  // Módulo do plano Pro — gateia todas as sub-rotas do caixa de uma vez.
+  if (!(await isProPlan())) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Wallet className="size-7" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">
+            Financeiro é um recurso do plano Pro
+          </h1>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Contas a pagar e a receber, contas bancárias, cartões, categorias e
+            importação OFX dos bancos — tudo num lugar. Faça o upgrade pra
+            liberar.
+          </p>
+        </div>
+        <Link
+          href="/minha-conta/assinatura"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          Ver o plano Pro
+        </Link>
       </div>
     )
   }
@@ -46,8 +74,6 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
           />
         </div>
       </div>
-
-      <CaixaTabs />
 
       {children}
     </div>

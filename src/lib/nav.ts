@@ -4,16 +4,20 @@ import {
   CalendarRange,
   ClipboardList,
   Coins,
+  CreditCard,
   Factory,
   FileUp,
   HelpCircle,
   LayoutDashboard,
+  ListOrdered,
   type LucideIcon,
   Receipt,
   Sparkles,
   Star,
   Store,
+  Tag,
   UserCog,
+  Users,
   Wallet,
 } from "lucide-react"
 
@@ -30,6 +34,8 @@ export type NavItem = {
   superadminOnly?: boolean
   /** Módulo do plano Pro — só aparece pra quem tem o plano Pro (ou super-admin). */
   proOnly?: boolean
+  /** Ativo só no path exato (ex.: /caixa não fica ativo em /caixa/lancamentos). */
+  exact?: boolean
 }
 
 export type NavGroup = {
@@ -65,7 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Financeiro",
+    label: "Gestão",
     defaultOpen: true,
     items: [
       {
@@ -81,10 +87,54 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "relatorios",
       },
       { label: "DRE Grupo", href: "/financeiro", icon: Wallet, module: "financeiro" },
+    ],
+  },
+  {
+    // Módulo Pro (Fluxo de Caixa): as abas viram itens do menu. Todos proOnly,
+    // então o grupo inteiro some pra quem está no Essencial.
+    label: "Financeiro",
+    defaultOpen: true,
+    items: [
       {
-        label: "Fluxo de Caixa",
+        label: "Visão Geral",
         href: "/caixa",
         icon: Coins,
+        module: "financeiro",
+        proOnly: true,
+        exact: true,
+      },
+      {
+        label: "Lançamentos",
+        href: "/caixa/lancamentos",
+        icon: ListOrdered,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
+        label: "Contas",
+        href: "/caixa/contas",
+        icon: Wallet,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
+        label: "Cartões",
+        href: "/caixa/cartoes",
+        icon: CreditCard,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
+        label: "Categorias",
+        href: "/caixa/categorias",
+        icon: Tag,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
+        label: "Cadastros",
+        href: "/caixa/cadastros",
+        icon: Users,
         module: "financeiro",
         proOnly: true,
       },
@@ -144,6 +194,8 @@ export type FlatNavItem = {
   icon: LucideIcon
   group?: string
   module?: string
+  proOnly?: boolean
+  exact?: boolean
 }
 
 /** Lista achatada dos itens navegáveis (pra busca e favoritos). */
@@ -156,5 +208,7 @@ export const NAV_ITEMS: FlatNavItem[] = NAV_GROUPS.flatMap((g) =>
       icon: i.icon,
       group: g.label,
       module: i.module,
+      proOnly: i.proOnly,
+      exact: i.exact,
     })),
 )

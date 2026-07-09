@@ -26,8 +26,8 @@ import { useFavorites } from "@/hooks/use-favorites"
 import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "@/lib/nav"
 import { OPEN_HELP_EVENT } from "@/app/(app)/ajuda/_components/help-dialog"
 
-function isItemActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/"
+function isItemActive(pathname: string, href: string, exact?: boolean) {
+  if (href === "/" || exact) return pathname === href
   return pathname === href || pathname.startsWith(href + "/")
 }
 
@@ -45,7 +45,7 @@ function MenuItems({
   return (
     <SidebarMenu>
       {items.map((item) => {
-        const active = isItemActive(pathname, item.href)
+        const active = isItemActive(pathname, item.href, item.exact)
         // Itens "em breve": botão estático, sem Link nem estrela.
         if (item.comingSoon) {
           return (
@@ -212,6 +212,7 @@ export function AppSidebar({
                   label: i.label,
                   href: i.href,
                   icon: i.icon,
+                  exact: i.exact,
                 }))}
                 pathname={pathname}
                 isFav={isFav}
