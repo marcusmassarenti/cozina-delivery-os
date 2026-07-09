@@ -56,6 +56,7 @@ export function DreDetalhado({
   antecipacaoIfood = 0,
   title = "DRE da loja · mês",
   totalLabel = "Resultado total da loja",
+  showPdf = true,
 }: {
   platforms: DrePlat[]
   totalBruto: number
@@ -77,6 +78,9 @@ export function DreDetalhado({
   title?: string
   /** Rótulo da linha de resultado final (default "Resultado total da loja"). */
   totalLabel?: string
+  /** Mostra o botão "PDF" no card. Off na unidade (lá o completo é o
+   *  "Relatório do mês"); on no DRE Grupo / Resultado. */
+  showPdf?: boolean
 }) {
   const [sel, setSel] = React.useState<"todas" | PlatformId>("todas")
   const cardRef = React.useRef<HTMLDivElement>(null)
@@ -160,15 +164,17 @@ export function DreDetalhado({
           </span>
         )}
         <div className="dre-print-hide ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={exportarPdf}
-            title="Exportar em PDF"
-            className="mr-1 flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <FileDown className="size-3.5" />
-            PDF
-          </button>
+          {showPdf && (
+            <button
+              type="button"
+              onClick={exportarPdf}
+              title="Exportar em PDF"
+              className="mr-1 flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <FileDown className="size-3.5" />
+              PDF
+            </button>
+          )}
           {multi && (
             <button
               type="button"

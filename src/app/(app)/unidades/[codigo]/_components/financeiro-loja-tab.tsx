@@ -227,6 +227,7 @@ export async function FinanceiroLojaTab({
             periodo={`${MESES_PT[month - 1]} de ${year}`}
             vrInfo={vrInfo}
             antecipacaoIfood={antecipFee}
+            showPdf={false}
           />
         </div>
 
