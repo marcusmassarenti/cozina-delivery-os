@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, ListChecks, Play, Upload } from "lucide-react"
+import { Download, LayoutGrid, ListChecks, Play, Upload } from "lucide-react"
 
 import { type CoachStep } from "@/components/onboarding/coach-tour"
 import { TourButton } from "@/components/onboarding/tour-button"
@@ -29,6 +29,12 @@ const STEPS: CoachStep[] = [
     icon: <ListChecks className="size-4" />,
     title: "Acompanhe o que falta",
     body: "Aqui você vê, por plataforma, o que já entrou e o que ainda falta importar no mês.",
+  },
+  {
+    selector: '[data-tour="cobertura"]',
+    icon: <LayoutGrid className="size-4" />,
+    title: "Ver cobertura",
+    body: "Abre a matriz de cobertura: por loja e plataforma, quais meses já foram importados e o que ainda falta — pra não esquecer nenhum relatório de nenhuma loja.",
   },
 ]
 

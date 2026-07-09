@@ -4,8 +4,9 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Pencil } from "lucide-react"
+import { Cable, Calendar, Compass, Pencil, Power, Store } from "lucide-react"
 
+import { CoachTour, type CoachStep } from "@/components/onboarding/coach-tour"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
 import {
@@ -43,6 +44,34 @@ const PLATFORMS: { id: PlatformId; label: string }[] = [
 
 const initial: CreateUnitState = { ok: false }
 
+/** Passos do "Como funciona" do cadastro/edição da unidade. */
+const EDIT_STEPS: CoachStep[] = [
+  {
+    selector: '[data-tour="u-nome"]',
+    icon: <Store className="size-4" />,
+    title: "Identificação da loja",
+    body: "Nome (como aparece no sistema), cidade e UF. O CNPJ é opcional — serve pra emissão de nota.",
+  },
+  {
+    selector: '[data-tour="u-inauguracao"]',
+    icon: <Calendar className="size-4" />,
+    title: "Inauguração da unidade",
+    body: "É a DATA DE ABERTURA da loja. O sistema ignora os meses antes dela existir — assim a Cobertura não cobra relatório de um período em que a loja nem operava.",
+  },
+  {
+    selector: '[data-tour="u-plataformas"]',
+    icon: <Cable className="size-4" />,
+    title: "Plataformas e IDs das lojas",
+    body: "Marque onde a loja opera e cole o ID dela em cada plataforma (iFood, 99, Keeta). É pelo ID que a importação reconhece a loja automaticamente — sem ele, ela aparece como 'loja desconhecida' na hora de importar.",
+  },
+  {
+    selector: '[data-tour="u-ativa"]',
+    icon: <Power className="size-4" />,
+    title: "Unidade ativa",
+    body: "Marcada = recebendo pedidos e contando nos relatórios. Desmarque se a loja fechou ou pausou.",
+  },
+]
+
 function maskCnpj(v: string) {
   const digits = v.replace(/\D/g, "").slice(0, 14)
   return digits
@@ -79,6 +108,7 @@ export function EditUnitDialog({
   inline?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
+  const [tourOpen, setTourOpen] = React.useState(false)
   const [state, formAction] = useActionState(updateUnit, initial)
   const [cnpj, setCnpj] = React.useState(unit.cnpj ? maskCnpj(unit.cnpj) : "")
   const [uf, setUf] = React.useState(unit.state ?? "SP")
@@ -114,7 +144,17 @@ export function EditUnitDialog({
       <DialogTrigger render={trigger} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Editar unidade</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-7">
+            <DialogTitle>Editar unidade</DialogTitle>
+            <button
+              type="button"
+              onClick={() => setTourOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Compass className="size-3.5" />
+              Como funciona
+            </button>
+          </div>
           <DialogDescription>
             Código <span className="font-mono font-semibold">#{unit.code}</span>
             {" "}— não pode ser alterado.
@@ -130,14 +170,16 @@ export function EditUnitDialog({
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="unitId" value={unit.unitId} />
 
-          <Field label="Nome" error={state.fieldErrors?.name}>
-            <Input
-              name="name"
-              defaultValue={unit.name}
-              placeholder="ex.: Loja Centro"
-              required
-            />
-          </Field>
+          <div data-tour="u-nome">
+            <Field label="Nome" error={state.fieldErrors?.name}>
+              <Input
+                name="name"
+                defaultValue={unit.name}
+                placeholder="ex.: Loja Centro"
+                required
+              />
+            </Field>
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
@@ -179,8 +221,8 @@ export function EditUnitDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Inauguração">
+          <div data-tour="u-inauguracao" className="grid grid-cols-2 gap-3">
+            <Field label="Inauguração da unidade">
               <Input
                 name="data_inauguracao"
                 type="date"
@@ -200,7 +242,7 @@ export function EditUnitDialog({
             (não cobra dado que não tinha como ter).
           </p>
 
-          <div className="flex flex-col gap-2">
+          <div data-tour="u-plataformas" className="flex flex-col gap-2">
             <Label className="text-xs font-medium">Plataformas ativas</Label>
             <div className="grid grid-cols-3 gap-2">
               {PLATFORMS.map((p) => (
@@ -217,7 +259,7 @@ export function EditUnitDialog({
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div data-tour="u-ativa" className="flex items-center gap-2">
             <input
               id="active"
               name="active"
@@ -251,6 +293,12 @@ export function EditUnitDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <CoachTour
+        steps={EDIT_STEPS}
+        open={tourOpen}
+        onClose={() => setTourOpen(false)}
+      />
     </Dialog>
   )
 }

@@ -128,6 +128,7 @@ export default async function ImportacaoPage({
           </Suspense>
           <Link
             href="/importacao/cobertura"
+            data-tour="cobertura"
             className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted"
           >
             <LayoutGrid className="size-3.5" />

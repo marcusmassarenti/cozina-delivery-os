@@ -134,7 +134,7 @@ export function NewUnitDialog() {
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Inauguração">
+            <Field label="Inauguração da unidade">
               <Input name="data_inauguracao" type="date" />
             </Field>
             <Field label="Encerramento (se fechou)">
