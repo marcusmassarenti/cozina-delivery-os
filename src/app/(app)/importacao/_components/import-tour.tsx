@@ -9,8 +9,8 @@ const STEPS: CoachStep[] = [
   {
     selector: '[data-tour="download"]',
     icon: <Download className="size-4" />,
-    title: "Baixe os relatórios",
-    body: "Aqui você pega os relatórios das plataformas. Comece pelo iFood — baixe Cardápio, Financeiro e Avaliações.",
+    title: "Guia pra baixar os relatórios",
+    body: "Clica pra abrir: mostra, por plataforma, o passo a passo de cada relatório — com vídeos tutoriais (▶) e links diretos que já abrem o portal de download do iFood, 99 e Keeta.",
   },
   {
     selector: '[data-tour="dropzone"]',
