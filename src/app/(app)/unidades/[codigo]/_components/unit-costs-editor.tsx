@@ -176,9 +176,13 @@ function CostSection({
             open ? "" : "-rotate-90"
           }`}
         />
-        <span className="text-sm font-medium">{title}</span>
-        <span className="text-[10px] text-muted-foreground">· {hint}</span>
-        <span className="ml-auto text-sm font-semibold tabular-nums">
+        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5">
+          <span className="text-sm font-medium">{title}</span>
+          <span className="truncate text-[10px] text-muted-foreground">
+            · {hint}
+          </span>
+        </span>
+        <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums">
           {total > 0 ? fmtBRL(total) : "—"}
         </span>
       </button>
