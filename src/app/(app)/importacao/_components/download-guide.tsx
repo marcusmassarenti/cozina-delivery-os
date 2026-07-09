@@ -221,7 +221,17 @@ const PLATFORMS: {
   entries: GuideEntry[]
   videos?: Video[]
 }[] = [
-  { id: "ifood", label: "iFood", entries: IFOOD_ENTRIES },
+  {
+    id: "ifood",
+    label: "iFood",
+    entries: IFOOD_ENTRIES,
+    videos: [
+      { title: "Financeiro / Conciliação", src: `${TUT}ifood-financeiro.mp4` },
+      { title: "Pedidos", src: `${TUT}ifood-pedidos.mp4` },
+      { title: "Cardápio", src: `${TUT}ifood-cardapio.mp4` },
+      { title: "Avaliações", src: `${TUT}ifood-avaliacoes.mp4` },
+    ],
+  },
   {
     id: "99food",
     label: "99 Food",
