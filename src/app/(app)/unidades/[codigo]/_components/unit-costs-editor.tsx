@@ -176,13 +176,13 @@ function CostSection({
             open ? "" : "-rotate-90"
           }`}
         />
-        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5">
-          <span className="text-sm font-medium">{title}</span>
-          <span className="truncate text-[10px] text-muted-foreground">
-            · {hint}
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium leading-tight">{title}</span>
+          <span className="block truncate text-[10px] text-muted-foreground">
+            {hint}
           </span>
         </span>
-        <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums">
+        <span className="shrink-0 whitespace-nowrap pl-1 text-sm font-semibold tabular-nums">
           {total > 0 ? fmtBRL(total) : "—"}
         </span>
       </button>

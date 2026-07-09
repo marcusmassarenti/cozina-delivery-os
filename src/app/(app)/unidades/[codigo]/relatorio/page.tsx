@@ -84,7 +84,7 @@ export default async function RelatorioMensalUnidade({
   return (
     <div
       data-print="page"
-      className="relatorio-mensal mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 bg-muted/30 p-6 print:max-w-none print:gap-3 print:bg-white print:p-0"
+      className="relatorio-mensal mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 bg-muted/30 p-6 print:max-w-none print:gap-3 print:bg-white print:p-0"
     >
       {/* Ajustes de impressão. O globals.css força break-inside:avoid em TODO
           filho direto de [data-print=page] (linha ~50) — o que empurrava o bloco
