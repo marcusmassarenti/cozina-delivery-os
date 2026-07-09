@@ -31,11 +31,28 @@ export function CoachTour({
   const [i, setI] = React.useState(0)
   const [rect, setRect] = React.useState<DOMRect | null>(null)
   const [mounted, setMounted] = React.useState(false)
+  const uid = React.useId()
+  const onCloseRef = React.useRef(onClose)
+  onCloseRef.current = onClose
 
   React.useEffect(() => setMounted(true), [])
   React.useEffect(() => {
     if (open) setI(0)
   }, [open])
+
+  // Só UM tour por vez: ao abrir, avisa os outros; quem estiver aberto fecha.
+  React.useEffect(() => {
+    if (!open) return
+    window.dispatchEvent(new CustomEvent("cozina:coach-open", { detail: uid }))
+  }, [open, uid])
+  React.useEffect(() => {
+    const onOther = (e: Event) => {
+      if ((e as CustomEvent).detail !== uid) onCloseRef.current()
+    }
+    window.addEventListener("cozina:coach-open", onOther as EventListener)
+    return () =>
+      window.removeEventListener("cozina:coach-open", onOther as EventListener)
+  }, [uid])
 
   React.useEffect(() => {
     if (!open) return
