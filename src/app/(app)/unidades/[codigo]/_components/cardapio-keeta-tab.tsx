@@ -32,6 +32,7 @@ export async function CardapioKeetaTab({
 
   const totalQtd = itens.reduce((s, it) => s + it.qtdVendida, 0)
   const totalReceita = itens.reduce((s, it) => s + it.receita, 0)
+  const maxReceita = Math.max(0, ...itens.map((it) => it.receita))
   const top = itens[0]
 
   return (
@@ -70,54 +71,64 @@ export async function CardapioKeetaTab({
             {itens.length} itens · ordenado por receita
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold">#</th>
-                <th className="px-3 py-2 text-left font-semibold">Item</th>
-                <th className="px-3 py-2 text-right font-semibold">Qtd</th>
-                <th className="px-3 py-2 text-right font-semibold">Receita</th>
-                <th className="px-3 py-2 text-right font-semibold">
-                  Preço médio
-                </th>
-                <th className="px-3 py-2 text-right font-semibold">
-                  Conv. carrinho
-                </th>
-                <th className="px-3 py-2 text-right font-semibold">Dias</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {itens.map((it, idx) => (
-                <tr key={`${it.nomeItem}-${idx}`} className="hover:bg-muted/30">
-                  <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
-                    {idx + 1}
-                  </td>
-                  <td className="px-3 py-1.5 font-medium">{it.nomeItem}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">
-                    {fmtNum(it.qtdVendida)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+        <div className="flex flex-col divide-y">
+          {itens.map((it, idx) => {
+            const share = maxReceita > 0 ? (it.receita / maxReceita) * 100 : 0
+            return (
+              <div
+                key={`${it.nomeItem}-${idx}`}
+                className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/30"
+              >
+                <KeetaRank n={idx + 1} />
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-1 text-xs font-medium">
+                    {it.nomeItem}
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-emerald-500/70"
+                        style={{ width: `${share}%` }}
+                      />
+                    </div>
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      {fmtNum(it.qtdVendida)} un
+                      {it.precoMedio > 0 ? ` · ${fmtBRL(it.precoMedio)}` : ""}
+                      {it.conversaoMedia != null
+                        ? ` · ${fmtPct(it.conversaoMedia)} carrinho`
+                        : ""}
+                    </span>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs font-bold tabular-nums">
                     {fmtBRL(it.receita)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                    {it.precoMedio > 0 ? fmtBRL(it.precoMedio) : "—"}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                    {it.conversaoMedia != null
-                      ? fmtPct(it.conversaoMedia)
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                    {it.diasComVenda}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground">
+                    {it.diasComVenda} dias
+                  </p>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
+  )
+}
+
+/** Selo de posição no ranking — top 3 em destaque. */
+function KeetaRank({ n }: { n: number }) {
+  return (
+    <span
+      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${
+        n <= 3
+          ? "bg-primary/15 text-primary"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      {n}
+    </span>
   )
 }
 

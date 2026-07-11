@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown, Star } from "lucide-react"
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react"
 
 import { DeliveryOsMark } from "@/components/delivery-os-logo"
 import {
@@ -21,6 +21,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useFavorites } from "@/hooks/use-favorites"
 import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "@/lib/nav"
@@ -132,6 +133,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
+  const { toggleSidebar, state } = useSidebar()
 
   const allowed = new Set(allowedModules)
   // Item visível se: passa no gate de super-admin (quando exigido), no gate do
@@ -266,8 +268,23 @@ export function AppSidebar({
         })}
       </SidebarContent>
       <SidebarFooter>
-        <SidebarSeparator className="group-data-[collapsible=icon]:hidden" />
-        <div className="px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
+        <SidebarSeparator />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={toggleSidebar}
+              tooltip={state === "expanded" ? "Recolher menu" : "Expandir menu"}
+            >
+              {state === "expanded" ? (
+                <PanelLeftClose />
+              ) : (
+                <PanelLeftOpen />
+              )}
+              <span>Recolher menu</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <div className="px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
           V2.2026
         </div>
       </SidebarFooter>

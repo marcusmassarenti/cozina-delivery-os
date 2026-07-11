@@ -7,7 +7,6 @@ import {
   CreditCard,
   Factory,
   FileUp,
-  HelpCircle,
   LayoutDashboard,
   ListOrdered,
   type LucideIcon,
@@ -183,7 +182,6 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "usuarios",
       },
       { label: "Novidades", href: "/novidades", icon: Sparkles },
-      { label: "Ajuda", href: "/ajuda", icon: HelpCircle },
     ],
   },
 ]

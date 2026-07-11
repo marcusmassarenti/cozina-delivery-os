@@ -319,17 +319,36 @@ export async function FinanceiroLojaTab({
             </span>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {descontos.map((d) => (
-              <div
-                key={d.label}
-                className="flex items-center justify-between rounded-lg border bg-card px-3 py-2"
-              >
-                <span className="text-xs text-muted-foreground">{d.label}</span>
-                <span className="text-sm font-semibold tabular-nums text-rose-700 dark:text-rose-400">
-                  − {fmtBRL(d.value)}
-                </span>
-              </div>
-            ))}
+            {descontos.map((d) => {
+              const totalTaxas = descontos.reduce((a, x) => a + x.value, 0)
+              const share = totalTaxas > 0 ? (d.value / totalTaxas) * 100 : 0
+              return (
+                <div
+                  key={d.label}
+                  className="rounded-lg border bg-muted/20 p-3 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      {d.label}
+                    </span>
+                    <span className="text-sm font-bold tabular-nums text-rose-700 dark:text-rose-400">
+                      − {fmtBRL(d.value)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-rose-400/70"
+                        style={{ width: `${share}%` }}
+                      />
+                    </div>
+                    <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                      {share.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
           <TotalRow
             label="Total das taxas"
@@ -513,17 +532,22 @@ function DailyChart({
   }
   return (
     <div>
-      <div className="flex h-28 items-end gap-px">
+      <div className="relative flex h-28 items-end gap-px">
         {dias.map((d) => {
           const v = valores[d] ?? 0
           const h = v > 0 ? Math.max(3, (v / max) * 100) : 0
           return (
             <div
               key={d}
-              className="flex-1 rounded-t bg-emerald-500/70 transition-colors hover:bg-emerald-500"
+              className="group/bar relative flex-1 rounded-t bg-emerald-500/70 transition-colors hover:z-20 hover:bg-emerald-500"
               style={{ height: `${h}%` }}
-              title={`Dia ${String(d).padStart(2, "0")}: ${fmtBRL(v)}`}
-            />
+            >
+              {v > 0 && (
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md border bg-card px-2 py-1 text-[11px] font-medium text-foreground shadow-md group-hover/bar:block">
+                  Dia {String(d).padStart(2, "0")}: {fmtBRL(v)}
+                </div>
+              )}
+            </div>
           )
         })}
       </div>

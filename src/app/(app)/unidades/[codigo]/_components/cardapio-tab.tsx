@@ -1,12 +1,4 @@
-import {
-  CalendarRange,
-  Eye,
-  MousePointerClick,
-  ShoppingBag,
-  ShoppingCart,
-  CheckCircle2,
-  TrendingUp,
-} from "lucide-react"
+import { CalendarRange, TrendingUp } from "lucide-react"
 
 import {
   getCardapioPeriodoForMonth,
@@ -15,6 +7,7 @@ import {
   getItemsRankingForMonth,
 } from "@/lib/data/ifood-imported"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
+import { FunnelCard } from "./funnel-card"
 
 export async function CardapioTab({
   unitId,
@@ -47,6 +40,10 @@ export async function CardapioTab({
     )
   }
 
+  // Máximos pras barras relativas do ranking.
+  const maxItemValor = Math.max(0, ...items.map((it) => it.valorTotal))
+  const maxCompPedidos = Math.max(0, ...complementos.map((c) => c.pedidos))
+
   return (
     <div className="flex flex-col gap-6">
       {/* Funil de conversão do PERÍODO (mês inteiro) — fonte preferida. */}
@@ -58,38 +55,45 @@ export async function CardapioTab({
               Funil de conversão · {periodoSnapshot.periodLabel}
             </h3>
           </div>
-          <div className="grid gap-3 md:grid-cols-5">
-            <PeriodStat
-              icon={Eye}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+            <FunnelCard
               label="Visitas"
               value={periodoSnapshot.visitas}
-              anterior={periodoSnapshot.visitasAnterior}
+              base={periodoSnapshot.visitas}
+              legenda="Visitaram o cardápio"
+              deltaPct={pctDelta(
+                periodoSnapshot.visitas,
+                periodoSnapshot.visitasAnterior,
+              )}
             />
-            <PeriodStat
-              icon={MousePointerClick}
+            <FunnelCard
               label="Visualizações"
               value={periodoSnapshot.visualizacoes}
               base={periodoSnapshot.visitas}
+              legenda="Viram algum item"
             />
-            <PeriodStat
-              icon={ShoppingBag}
+            <FunnelCard
               label="Sacola"
               value={periodoSnapshot.sacola}
               base={periodoSnapshot.visitas}
+              legenda="Adicionaram à sacola"
             />
-            <PeriodStat
-              icon={ShoppingCart}
+            <FunnelCard
               label="Revisão"
               value={periodoSnapshot.revisao}
               base={periodoSnapshot.visitas}
+              legenda="Revisaram o pedido"
             />
-            <PeriodStat
-              icon={CheckCircle2}
+            <FunnelCard
               label="Concluídos"
               value={periodoSnapshot.concluidos}
-              anterior={periodoSnapshot.concluidosAnterior}
               base={periodoSnapshot.visitas}
+              legenda="Concluíram o pedido"
               positive
+              deltaPct={pctDelta(
+                periodoSnapshot.concluidos,
+                periodoSnapshot.concluidosAnterior,
+              )}
             />
           </div>
           <div className="mt-3 flex items-center justify-between rounded-md bg-indigo-50 px-3 py-2 dark:bg-indigo-950/30">
@@ -121,40 +125,37 @@ export async function CardapioTab({
             {funnel.diasComDado} dia{funnel.diasComDado > 1 ? "s" : ""} com dado
           </span>
         </div>
-        <div className="grid gap-3 md:grid-cols-5">
-          <FunnelStep
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+          <FunnelCard
             label="Visitas"
             value={funnel.visitas}
-            icon={Eye}
-            tone="neutral"
+            base={funnel.visitas}
+            legenda="Visitaram o cardápio"
           />
-          <FunnelStep
+          <FunnelCard
             label="Visualizações"
             value={funnel.visualizacoes}
-            icon={MousePointerClick}
             base={funnel.visitas}
-            tone="neutral"
+            legenda="Viram algum item"
           />
-          <FunnelStep
+          <FunnelCard
             label="Sacola"
             value={funnel.sacola}
-            icon={ShoppingBag}
             base={funnel.visitas}
-            tone="neutral"
+            legenda="Adicionaram à sacola"
           />
-          <FunnelStep
+          <FunnelCard
             label="Revisão"
             value={funnel.revisao}
-            icon={ShoppingCart}
             base={funnel.visitas}
-            tone="neutral"
+            legenda="Revisaram o pedido"
           />
-          <FunnelStep
+          <FunnelCard
             label="Concluídos"
             value={funnel.concluidos}
-            icon={CheckCircle2}
             base={funnel.visitas}
-            tone="positive"
+            legenda="Concluíram o pedido"
+            positive
           />
         </div>
         <div className="mt-4 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
@@ -192,212 +193,138 @@ export async function CardapioTab({
         </div>
       )}
 
-      {/* Top itens + complementos lado a lado (vem do período se houver, senão do diário) */}
+      {/* Top itens + complementos lado a lado (ranking com barra relativa) */}
       {(items.length > 0 || complementos.length > 0) && (
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="border-b px-5 py-3">
-            <h3 className="text-sm font-semibold">Top itens vendidos</h3>
-            <p className="text-[11px] text-muted-foreground">
-              Por valor total no período
-            </p>
-          </div>
-          {items.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              Sem itens registrados
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <div className="border-b px-5 py-3">
+              <h3 className="text-sm font-semibold">Top itens vendidos</h3>
+              <p className="text-[11px] text-muted-foreground">
+                Por valor total no período
+              </p>
             </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium">Item</th>
-                  <th className="px-4 py-2 text-right font-medium">Qtd</th>
-                  <th className="px-4 py-2 text-right font-medium">Conv.</th>
-                  <th className="px-4 py-2 text-right font-medium">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
+            {items.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                Sem itens registrados
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y">
                 {items.map((it, i) => (
-                  <tr key={`${it.nomeItem}-${i}`} className="border-t">
-                    <td className="px-4 py-2.5">
+                  <div
+                    key={`${it.nomeItem}-${i}`}
+                    className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40"
+                  >
+                    <RankBadge n={i + 1} />
+                    <div className="min-w-0 flex-1">
                       <p className="line-clamp-1 text-xs font-medium">
                         {it.nomeItem}
                       </p>
-                      {it.qtdComPromocao > 0 && (
-                        <p className="text-[10px] text-amber-700 dark:text-amber-400">
-                          {it.qtdComPromocao} c/ promoção
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs tabular-nums">
-                      {fmtNum(it.qtdVendida)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs tabular-nums text-muted-foreground">
-                      {fmtPct(it.conversaoPctMedia)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums">
-                      {fmtBRL(it.valorTotal)}
-                    </td>
-                  </tr>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-emerald-500/70"
+                            style={{
+                              width: `${maxItemValor > 0 ? (it.valorTotal / maxItemValor) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                        {it.qtdComPromocao > 0 && (
+                          <span className="shrink-0 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                            {it.qtdComPromocao} c/ promo
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs font-bold tabular-nums">
+                        {fmtBRL(it.valorTotal)}
+                      </p>
+                      <p className="text-[10px] tabular-nums text-muted-foreground">
+                        {fmtNum(it.qtdVendida)} un · {fmtPct(it.conversaoPctMedia)}
+                      </p>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="border-b px-5 py-3">
-            <h3 className="text-sm font-semibold">Top complementos</h3>
-            <p className="text-[11px] text-muted-foreground">
-              O que o cliente mais escolhe junto
-            </p>
+              </div>
+            )}
           </div>
-          {complementos.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              Sem complementos registrados
+
+          <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <div className="border-b px-5 py-3">
+              <h3 className="text-sm font-semibold">Top complementos</h3>
+              <p className="text-[11px] text-muted-foreground">
+                O que o cliente mais escolhe junto
+              </p>
             </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium">
-                    Complemento
-                  </th>
-                  <th className="px-4 py-2 text-right font-medium">Pedidos</th>
-                  <th className="px-4 py-2 text-right font-medium">Qtd</th>
-                </tr>
-              </thead>
-              <tbody>
+            {complementos.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                Sem complementos registrados
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y">
                 {complementos.map((c, i) => (
-                  <tr key={`${c.nomeComplemento}-${i}`} className="border-t">
-                    <td className="px-4 py-2.5">
+                  <div
+                    key={`${c.nomeComplemento}-${i}`}
+                    className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40"
+                  >
+                    <RankBadge n={i + 1} />
+                    <div className="min-w-0 flex-1">
                       <p className="line-clamp-1 text-xs font-medium">
                         {c.nomeComplemento}
                       </p>
-                      {c.classificacao && (
-                        <p className="text-[10px] text-muted-foreground">
-                          {c.classificacao}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums">
-                      {fmtNum(c.pedidos)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs tabular-nums text-muted-foreground">
-                      {fmtNum(c.qtdVendida)}
-                    </td>
-                  </tr>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-indigo-500/70"
+                            style={{
+                              width: `${maxCompPedidos > 0 ? (c.pedidos / maxCompPedidos) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                        {c.classificacao && (
+                          <span className="line-clamp-1 shrink-0 text-[10px] text-muted-foreground">
+                            {c.classificacao}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs font-bold tabular-nums">
+                        {fmtNum(c.pedidos)}
+                      </p>
+                      <p className="text-[10px] tabular-nums text-muted-foreground">
+                        {fmtNum(c.qtdVendida)} un
+                      </p>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       )}
     </div>
   )
 }
 
-function PeriodStat({
-  icon: Icon,
-  label,
-  value,
-  anterior,
-  base,
-  positive,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: number
-  anterior?: number | null
-  base?: number
-  positive?: boolean
-}) {
-  const pct = base && base > 0 ? (value / base) * 100 : null
-  const diff =
-    anterior != null && anterior > 0
-      ? ((value - anterior) / anterior) * 100
-      : null
-  return (
-    <div
-      className={`rounded-lg border p-3 ${
-        positive
-          ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20"
-          : "bg-muted/30"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <Icon className="size-3.5 text-muted-foreground" />
-        {pct !== null && (
-          <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
-            {pct.toFixed(1)}%
-          </span>
-        )}
-      </div>
-      <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={`mt-0.5 text-xl font-bold tabular-nums ${
-          positive ? "text-emerald-700 dark:text-emerald-400" : ""
-        }`}
-      >
-        {value.toLocaleString("pt-BR")}
-      </p>
-      {diff != null && (
-        <p
-          className={`mt-0.5 text-[10px] tabular-nums ${
-            diff >= 0 ? "text-emerald-600" : "text-rose-600"
-          }`}
-        >
-          {diff >= 0 ? "+" : ""}
-          {diff.toFixed(1)}% vs ant.
-        </p>
-      )}
-    </div>
-  )
+/** Variação % de `value` vs `anterior` (null quando não dá pra calcular). */
+function pctDelta(value: number, anterior?: number | null): number | null {
+  return anterior != null && anterior > 0
+    ? ((value - anterior) / anterior) * 100
+    : null
 }
 
-function FunnelStep({
-  label,
-  value,
-  icon: Icon,
-  base,
-  tone,
-}: {
-  label: string
-  value: number
-  icon: React.ComponentType<{ className?: string }>
-  base?: number
-  tone: "neutral" | "positive"
-}) {
-  const pct = base && base > 0 ? (value / base) * 100 : null
+/** Selo de posição no ranking — top 3 em destaque. */
+function RankBadge({ n }: { n: number }) {
   return (
-    <div
-      className={`rounded-lg border p-3 ${
-        tone === "positive"
-          ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20"
-          : "bg-muted/30"
+    <span
+      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${
+        n <= 3
+          ? "bg-primary/15 text-primary"
+          : "bg-muted text-muted-foreground"
       }`}
     >
-      <div className="flex items-center justify-between">
-        <Icon className="size-3.5 text-muted-foreground" />
-        {pct !== null && (
-          <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
-            {pct.toFixed(1)}%
-          </span>
-        )}
-      </div>
-      <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={`mt-0.5 text-xl font-bold tabular-nums ${
-          tone === "positive" ? "text-emerald-700 dark:text-emerald-400" : ""
-        }`}
-      >
-        {fmtNum(value)}
-      </p>
-    </div>
+      {n}
+    </span>
   )
 }

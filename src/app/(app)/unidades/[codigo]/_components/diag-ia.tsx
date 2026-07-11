@@ -62,24 +62,32 @@ export function DiagIA({
 
   return (
     <section className="rounded-xl border border-l-4 border-l-primary bg-card p-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <Sparkles className="size-4 text-primary" />
-        <h3 className="text-sm font-semibold">Plano de ação (IA)</h3>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          {plano ? "gerado pelo Claude" : "a IA lê a loja e sugere o que fazer"}
-        </span>
-        {podeUsar && plano && (
-          <button
-            type="button"
-            onClick={gerar}
-            disabled={carregando}
-            title="Regenera o plano do mês (limite diário pra controlar custo)"
-            className="diag-print-hide ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-          >
-            <RotateCw className={`size-3.5 ${carregando ? "animate-spin" : ""}`} />
-            Regenerar
-          </button>
-        )}
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Sparkles className="size-4 text-primary" />
+          <h3 className="text-sm font-semibold">Plano de ação</h3>
+          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
+            DeliveryOS AI
+          </span>
+          {podeUsar && plano && (
+            <button
+              type="button"
+              onClick={gerar}
+              disabled={carregando}
+              title="Regenera o plano do mês (limite diário pra controlar custo)"
+              className="diag-print-hide ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+            >
+              <RotateCw className={`size-3.5 ${carregando ? "animate-spin" : ""}`} />
+              Regenerar
+            </button>
+          )}
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          A IA lê os dados da loja — funil, avaliações, cancelamentos, marketing
+          e produtos — e aponta as{" "}
+          <b className="text-foreground">3 ações mais importantes do mês</b>: o
+          problema, o que está em jogo e como resolver.
+        </p>
       </div>
 
       {erro && (

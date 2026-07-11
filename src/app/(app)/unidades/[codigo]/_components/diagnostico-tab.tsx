@@ -36,6 +36,7 @@ import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 
 import { DiagPdfButton } from "./diag-pdf-button"
+import { FunnelCard } from "./funnel-card"
 import { DiagIA } from "./diag-ia"
 import { DiagEvolucao, type EvoSerie } from "./diag-evolucao"
 import { DiagShareChart } from "./diag-share-chart"
@@ -769,6 +770,7 @@ export async function DiagnosticoTab({
                       : undefined
                   }
                   highlight
+                  explicacao="Quanto a loja tirou do próprio bolso em promoções e anúncios no iFood. Acima de ~20% do faturamento começa a comer a margem."
                 />
                 <Kpi
                   icon={TrendingUp}
@@ -779,6 +781,7 @@ export async function DiagnosticoTab({
                       : "—"
                   }
                   hint="vendas por R$ investido"
+                  explicacao="Quanto de venda cada R$ 1 investido em promoção trouxe. 6× = pra cada R$ 1, R$ 6 em vendas. Abaixo de ~3× a campanha rende pouco — vale rever."
                 />
                 <Kpi
                   icon={ShoppingBag}
@@ -787,12 +790,14 @@ export async function DiagnosticoTab({
                     promocoes.investimentoIfood + promocoes.investimentoIndustria,
                   )}
                   hint="iFood + indústria"
+                  explicacao="Parte das promoções bancada pelo iFood e pela indústria — dinheiro de marketing que impulsiona suas vendas mas NÃO saiu do seu bolso."
                 />
                 <Kpi
                   icon={Receipt}
                   label="Investimento total"
                   value={fmtBRL(promocoes.investimentoTotal)}
                   hint="loja + rede + parceiros"
+                  explicacao="Soma de tudo investido em promoção no período: o que a loja pôs + a rede + iFood/indústria. É o esforço de marketing total por trás das vendas."
                 />
               </div>
             </section>
@@ -896,6 +901,7 @@ export async function DiagnosticoTab({
                   value={fmtNum(negociacoes.cancelamentosEvitados)}
                   hint={`${fmtBRL(negociacoes.valorEvitado)} em vendas salvas`}
                   highlight
+                  explicacao="Pedidos que dariam cancelamento/reembolso, mas você negociou com o cliente e SALVOU a venda. Ao lado, o valor em vendas recuperadas."
                 />
                 <Kpi
                   icon={MousePointerClick}
@@ -906,18 +912,21 @@ export async function DiagnosticoTab({
                       : "—"
                   }
                   hint="das negociações"
+                  explicacao="Das reclamações abertas pelo cliente, quantas você respondeu no prazo. Não responder = reembolso automático e cliente insatisfeito. Ideal perto de 100%."
                 />
                 <Kpi
                   icon={Wallet}
                   label="Reembolsos"
                   value={fmtBRL(negociacoes.reembolsoTotal)}
                   hint="devolvido ao cliente"
+                  explicacao="Total devolvido ao cliente quando não deu pra resolver de outro jeito. É venda perdida — quanto menor, melhor a operação."
                 />
                 <Kpi
                   icon={Megaphone}
                   label="Cupons concedidos"
                   value={fmtBRL(negociacoes.cupomTotal)}
                   hint="pra reter o cliente"
+                  explicacao="Valor em cupons que você deu pra reter o cliente insatisfeito — alternativa ao reembolso: em vez de devolver dinheiro, incentiva um novo pedido."
                 />
               </div>
               {motivosNeg.length > 0 && (
@@ -982,32 +991,46 @@ export async function DiagnosticoTab({
   )
 }
 
+/** Ícone de info (i) que mostra a explicação SÓ ao passar o mouse nele. */
+function InfoTip({ texto }: { texto: string }) {
+  return (
+    <span className="group/info relative inline-flex cursor-help">
+      <Info className="size-3 opacity-50 transition-opacity hover:opacity-100" />
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 hidden w-52 -translate-x-1/2 rounded-lg border bg-card p-2.5 text-left text-[11px] font-normal normal-case leading-snug tracking-normal text-muted-foreground shadow-lg group-hover/info:block">
+        {texto}
+      </div>
+    </span>
+  )
+}
+
 function Kpi({
   icon: Icon,
   label,
   value,
   hint,
   highlight,
+  explicacao,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
   hint?: string
   highlight?: boolean
+  /** Quando presente, mostra ícone de info + tooltip no hover (igual à Saúde). */
+  explicacao?: string
 }) {
   return (
     <div
       className={`diag-hover rounded-lg border p-3 ${
-        highlight
-          ? "border-primary/30 bg-primary/5"
-          : "bg-muted/30"
-      }`}
+        explicacao ? "relative hover:z-10 " : ""
+      }${highlight ? "border-primary/30 bg-primary/5" : "bg-muted/30"}`}
     >
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <Icon className="size-3.5" />
         <span className="text-[10px] font-semibold uppercase tracking-wide">
           {label}
         </span>
+        {explicacao && <InfoTip texto={explicacao} />}
       </div>
       <p className="mt-1.5 text-lg font-bold tabular-nums">{value}</p>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
@@ -1109,57 +1132,6 @@ function Veredito({
  * quem chegou até ali (estilo iFood): topo com contagem+rótulo, base preenchida
  * com o %.
  */
-function FunnelCard({
-  label,
-  value,
-  base,
-  legenda,
-  positive,
-}: {
-  label: string
-  value: number
-  base: number
-  legenda: string
-  positive?: boolean
-}) {
-  const pct = base > 0 ? Math.max(0, Math.min(100, (value / base) * 100)) : 0
-  // O preenchimento fica SÓ na metade de baixo (30%-50% da altura): o topo
-  // com o número/rótulo continua sempre no fundo do card = legível. O % em
-  // branco fica sempre sobre a cor.
-  const fill = Math.max(30, Math.min(50, pct * 0.5))
-  return (
-    <div className="diag-hover relative flex h-44 flex-col overflow-hidden rounded-xl border bg-card">
-      {/* Preenchimento (fundo, sobe de baixo — nunca alcança o texto do topo) */}
-      <div
-        className={`absolute inset-x-0 bottom-0 ${positive ? "bg-emerald-500" : "bg-[#EF4444]"}`}
-        style={{ height: `${fill}%` }}
-        aria-hidden
-      />
-      {/* Topo: contagem + rótulo (sempre no fundo do card) */}
-      <div className="relative z-10 p-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">
-          {value.toLocaleString("pt-BR")}
-        </p>
-        <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">
-          {legenda}
-        </p>
-      </div>
-      {/* Base: % sobre o preenchimento (branco com sombra, sempre legível) */}
-      <div className="relative z-10 mt-auto p-3 text-center">
-        <p
-          className="text-lg font-bold tabular-nums text-white"
-          style={{ textShadow: "0 1px 3px rgb(0 0 0 / 0.3)" }}
-        >
-          {pct.toFixed(0)}%
-        </p>
-      </div>
-    </div>
-  )
-}
-
 /** Selo do programa Super Restaurante do iFood. Dourado quando é Super; cinza
  *  quando "Não elegível". */
 function SuperBadge({ status }: { status: string }) {
@@ -1278,12 +1250,12 @@ function Health({
   const Icon = T.alerta ? AlertTriangle : CheckCircle2
   return (
     <div
-      className={`diag-hover group relative cursor-help rounded-xl border p-3 hover:z-10 ${T.card}`}
+      className={`diag-hover relative rounded-xl border p-3 hover:z-10 ${T.card}`}
     >
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
-          <Info className="size-3 opacity-50" />
+          <InfoTip texto={explicacao} />
         </p>
         <Icon className={`size-3.5 shrink-0 ${T.ic}`} />
       </div>
@@ -1298,10 +1270,6 @@ function Health({
           className={`diag-bar-fill h-full rounded-full ${T.bar}`}
           style={{ width: `${fill}%` }}
         />
-      </div>
-      {/* Explicação no hover */}
-      <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-52 -translate-x-1/2 rounded-lg border bg-card p-2.5 text-left text-[11px] font-normal normal-case leading-snug tracking-normal text-muted-foreground shadow-lg group-hover:block">
-        {explicacao}
       </div>
     </div>
   )
