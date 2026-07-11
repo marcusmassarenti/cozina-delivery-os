@@ -275,6 +275,26 @@ function ProFeature({
   )
 }
 
+/** Ícone do Instagram (o lucide desta versão não exporta um). */
+function IgIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 /** Print real do sistema numa moldura leve (borda + sombra). */
 function Shot({ src, alt }: { src: string; alt: string }) {
   return (
@@ -345,11 +365,13 @@ export function Landing() {
           </a>
           <div className="hidden items-center gap-7 text-sm text-[oklch(0.45_0.01_48)] md:flex">
             <a href="#experimente" className="transition-colors hover:text-[var(--brand)]">Como funciona</a>
+            <a href="#relatorios" className="transition-colors hover:text-[var(--brand)]">Relatórios</a>
             <a href="#sistema" className="transition-colors hover:text-[var(--brand)]">O sistema</a>
             <a href="#ia" className="inline-flex items-center gap-1 transition-colors hover:text-[var(--brand)]">
               <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
               IA
             </a>
+            <a href="#seguranca" className="transition-colors hover:text-[var(--brand)]">Segurança</a>
             <a href="#precos" className="transition-colors hover:text-[var(--brand)]">Preços</a>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
@@ -529,7 +551,7 @@ export function Landing() {
       </section>
 
       {/* RELATÓRIOS DISPONÍVEIS */}
-      <section className="mx-auto max-w-6xl px-5 pb-24 pt-12">
+      <section id="relatorios" className="mx-auto max-w-6xl px-5 pb-24 pt-12">
         <Reveal>
           <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">
             Todos os relatórios, num lugar só
@@ -798,7 +820,7 @@ export function Landing() {
       </section>
 
       {/* SEGURANÇA */}
-      <section className="bg-[var(--ink)] py-24 text-white">
+      <section id="seguranca" className="bg-[var(--ink)] py-24 text-white">
         <div className="mx-auto max-w-5xl px-5">
           <Reveal>
             <div className="flex flex-col items-center gap-4 text-center">
@@ -878,34 +900,24 @@ export function Landing() {
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="mt-12">
-            <p className="text-center text-xs font-medium uppercase tracking-wider text-[oklch(0.55_0.01_48)]">
-              Restaurantes que já rodam no Delivery OS
-            </p>
-            <div
-              className="marquee-mask relative mt-6 overflow-hidden"
-              style={{
-                maskImage: "linear-gradient(to right, transparent, #000 12%, #000 88%, transparent)",
-                WebkitMaskImage: "linear-gradient(to right, transparent, #000 12%, #000 88%, transparent)",
-              }}
-            >
-              {/* TODO: trocar os placeholders pelos logos reais dos clientes */}
-              <div className="marquee-track gap-4 py-2">
-                {[
-                  "Burger House", "Pizza Express", "Sushi Place", "Açaí & Cia", "Don Taco", "Café Central",
-                  "Burger House", "Pizza Express", "Sushi Place", "Açaí & Cia", "Don Taco", "Café Central",
-                ].map((m, i) => (
-                  <span
-                    key={i}
-                    className="flex shrink-0 items-center gap-2.5 rounded-2xl border border-black/[0.06] bg-white px-5 py-3 text-[15px] font-medium text-[oklch(0.45_0.01_48)] shadow-sm"
-                  >
-                    <Store className="size-4 text-[oklch(0.6_0.01_48)]" strokeWidth={2} />
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
+          <figure className="mx-auto mt-10 max-w-2xl rounded-3xl border border-black/[0.06] bg-white p-7 text-center shadow-sm sm:p-9">
+            <blockquote className="text-balance text-lg font-medium leading-relaxed text-[oklch(0.3_0.02_45)] sm:text-xl">
+              &ldquo;Eu fecho 9 lojas em 3 plataformas todo mês. Cansei do achismo
+              e construí o Delivery OS pra enxergar, de verdade, onde ganho e onde
+              perco — é a ferramenta que eu queria ter.&rdquo;
+            </blockquote>
+            <figcaption className="mt-6 flex items-center justify-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-sm font-bold text-[var(--brand-strong)]">
+                MM
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-semibold">Marcus Massarenti</span>
+                <span className="block text-xs text-[oklch(0.5_0.01_48)]">
+                  Fundador · rede Churrasco no Pote
+                </span>
+              </span>
+            </figcaption>
+          </figure>
         </Reveal>
       </section>
 
@@ -1145,8 +1157,30 @@ export function Landing() {
               <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
             </a>
           </Reveal>
-          <Reveal delay={240}>
-            <p className="mt-6 font-mono text-sm text-[oklch(0.7_0.05_55)]">deliveryos.food</p>
+          <Reveal delay={220}>
+            <p className="mt-5 text-xs text-[oklch(0.65_0.01_60)]">
+              Sem cartão pra testar · 7 dias grátis · cancele quando quiser
+            </p>
+          </Reveal>
+          <Reveal delay={300}>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-[oklch(0.72_0.012_60)]">
+              <a
+                href="https://instagram.com/deliveryos.food"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 transition-colors hover:text-white"
+              >
+                <IgIcon className="size-4" />
+                @deliveryos.food
+              </a>
+              <a
+                href="mailto:contato@deliveryos.food"
+                className="inline-flex items-center gap-2 transition-colors hover:text-white"
+              >
+                <Mail className="size-4" strokeWidth={2} />
+                contato@deliveryos.food
+              </a>
+            </div>
           </Reveal>
         </div>
       </section>
@@ -1154,11 +1188,31 @@ export function Landing() {
       {/* FOOTER */}
       <footer className="bg-[var(--ink2)] py-8 text-white/70">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 px-5 sm:flex-row">
-          <div className="flex items-center gap-2 font-medium text-white">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand)] text-white">
-              <BarChart3 className="size-4" strokeWidth={2.4} />
-            </span>
-            Delivery OS
+          <div className="flex flex-col items-center gap-3 sm:items-start">
+            <div className="flex items-center gap-2 font-medium text-white">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand)] text-white">
+                <BarChart3 className="size-4" strokeWidth={2.4} />
+              </span>
+              Delivery OS
+            </div>
+            <div className="flex items-center gap-2.5">
+              <a
+                href="https://instagram.com/deliveryos.food"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="flex size-8 items-center justify-center rounded-lg border border-white/10 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                <IgIcon className="size-4" />
+              </a>
+              <a
+                href="mailto:contato@deliveryos.food"
+                aria-label="E-mail"
+                className="flex size-8 items-center justify-center rounded-lg border border-white/10 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                <Mail className="size-4" strokeWidth={2} />
+              </a>
+            </div>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs">
             <a href="/seguranca" className="transition-colors hover:text-white">Segurança</a>
