@@ -510,3 +510,9 @@
   transform: none !important;
   box-shadow: none !important;
 }
+
+/* No PDF do Diagnóstico os colapsáveis abrem (diag-pdf-button força `open`);
+   a setinha do chevron não faz sentido num documento estático. */
+#diag-print-overlay .lucide-chevron-down {
+  display: none;
+}

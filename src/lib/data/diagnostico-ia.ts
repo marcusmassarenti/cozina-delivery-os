@@ -6,6 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { isProPlan } from "@/lib/data/billing"
 import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
+import { getMonthlyGeneral } from "@/lib/data/lancamentos"
+import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
+import { getTopProdutos } from "@/lib/data/produtos"
 import { askClaudeJson, diagnosticoModel } from "@/lib/anthropic/client"
 import {
   getCardapioPeriodoForMonth,
@@ -41,16 +44,68 @@ async function montarSnapshot(
   month: number,
   unitName: string,
 ) {
-  const [funnel, periodo, operacao, promocoes, superAval, negociacoes, consol] =
-    await Promise.all([
-      getFunnelForMonth(unitId, year, month),
-      getCardapioPeriodoForMonth(unitId, year, month),
-      getOperacaoForMonth(unitId, year, month),
-      getPromocoesForMonth(unitId, year, month),
-      getSuperForMonth(unitId, year, month),
-      getNegociacoesForMonth(unitId, year, month),
-      getOperacaoConsolidada(unitId, year, month),
-    ])
+  const [
+    funnel,
+    periodo,
+    operacao,
+    promocoes,
+    superAval,
+    negociacoes,
+    consol,
+    geral,
+    comentarios,
+    topIf,
+    top99,
+    topKe,
+  ] = await Promise.all([
+    getFunnelForMonth(unitId, year, month),
+    getCardapioPeriodoForMonth(unitId, year, month),
+    getOperacaoForMonth(unitId, year, month),
+    getPromocoesForMonth(unitId, year, month),
+    getSuperForMonth(unitId, year, month),
+    getNegociacoesForMonth(unitId, year, month),
+    getOperacaoConsolidada(unitId, year, month),
+    getMonthlyGeneral(unitId, year, month),
+    getComentariosNegativos(year, month, [unitId], 2),
+    getTopProdutos("ifood", [unitId], year, month, 15),
+    getTopProdutos("99food", [unitId], year, month, 15),
+    getTopProdutos("keeta", [unitId], year, month, 15),
+  ])
+
+  // CMV (manual) — só entra se foi lançado (senão o plano da IA acharia 0% ótimo).
+  const cmvValor = geral.custoProdutosCozina + (geral.custoProdutosLoja || 0)
+  const cmvPct =
+    cmvValor > 0 && consol.total.bruto > 0
+      ? (cmvValor / consol.total.bruto) * 100
+      : null
+
+  // Top produtos da operação: soma as 3 plataformas por nome do item.
+  const prodMap = new Map<string, { item: string; qtd: number; valor: number }>()
+  for (const p of [...topIf, ...top99, ...topKe]) {
+    const chave = p.nomeItem.trim().toLowerCase()
+    if (!chave) continue
+    const cur = prodMap.get(chave)
+    if (cur) {
+      cur.qtd += p.qtdVendida
+      cur.valor += p.valorTotal
+    } else {
+      prodMap.set(chave, {
+        item: p.nomeItem.trim(),
+        qtd: p.qtdVendida,
+        valor: p.valorTotal,
+      })
+    }
+  }
+  const topProdutos = [...prodMap.values()]
+    .sort((a, b) => b.qtd - a.qtd)
+    .slice(0, 8)
+
+  // Reclamações reais (texto do cliente, nota ≤ 2) — as piores primeiro.
+  const reclamacoesTexto = comentarios.slice(0, 6).map((c) => ({
+    nota: c.nota,
+    plataforma: c.plataforma,
+    texto: c.comentario.slice(0, 180),
+  }))
 
   const funil = periodo ?? funnel
   const conversao =
@@ -128,6 +183,19 @@ async function montarSnapshot(
           topMotivos: topTags(negociacoes.topMotivos),
         }
       : null,
+    // Custo da mercadoria vendida (manual). null = não lançado (não assuma 0%).
+    cmv:
+      cmvPct != null
+        ? { valor: round(cmvValor), pctSobreFaturamento: round(cmvPct) }
+        : null,
+    // Itens mais vendidos da operação (soma das plataformas), por quantidade.
+    top_produtos: topProdutos.map((p) => ({
+      item: p.item,
+      qtd: p.qtd,
+      faturamento: round(p.valor),
+    })),
+    // Reclamações REAIS dos clientes (texto, nota ≤ 2) — a voz do cliente.
+    reclamacoes_clientes: reclamacoesTexto,
   }
 
   const hash = createHash("sha1").update(JSON.stringify(snap)).digest("hex")
@@ -233,6 +301,7 @@ const SYSTEM = `Você é um consultor de delivery experiente e direto, que fala 
 Recebe os dados REAIS da OPERAÇÃO de uma loja (todas as plataformas que ela usa: iFood, 99 Food, Keeta) e devolve um PLANO DE AÇÃO da operação como um todo. Regras:
 - Use SOMENTE os números fornecidos. NUNCA invente dado que não está no JSON.
 - Pense na operação inteira: "operacao_total" é a soma, "por_plataforma" é a quebra. As métricas profundas (funil, tempo online, chamados, Super) existem só no iFood — trate-as como iFood.
+- Use "reclamacoes_clientes" (texto REAL do cliente) pra achar a CAUSA RAIZ dos problemas de qualidade — cite o padrão que se repete. Use "top_produtos" pra pensar em cardápio/destaque/upsell. Se "cmv" existir, avalie a margem; se "cmv" for null, NÃO comente CMV (não foi lançado — não assuma que está ótimo).
 - EXATAMENTE as 3 ações mais importantes, da mais urgente pra menos. Operação saudável → foque em crescer.
 - Seja CONCISO: cada campo em 1 frase curta (máx ~20 palavras). Cite o número real quando ajudar.
 - Responda APENAS com JSON válido, sem texto fora dele:
