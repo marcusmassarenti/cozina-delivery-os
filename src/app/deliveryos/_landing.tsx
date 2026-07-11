@@ -41,13 +41,9 @@ import {
 import { ExperimenteDemo } from "./_demo"
 import { CountUp, Reveal, useScrolled } from "./_motion"
 import {
-  AvaliacoesMock,
   CaixaCarousel,
-  DashboardScroll,
-  DreMock,
   PainBreakdown,
   PlatLogo,
-  UnidadeMock,
   type PlatId,
 } from "./_screens"
 
@@ -114,24 +110,7 @@ const MODULOS = [
   { icon: FileUp, n: "Importação", d: "Suba os XLSX" },
 ]
 
-/* DeliveryOS AI — o plano de ação que a IA escreve, e o que ela cruza. */
-const AI_ACOES = [
-  {
-    t: "Cancelamentos acima da meta",
-    jogo: "≈ R$ 1.240 no mês",
-    como: "60% dos cancelados saíram entre 20h e 22h — reforce o preparo no pico ou pause o cardápio quando a fila estourar.",
-  },
-  {
-    t: "Nota do iFood começando a cair",
-    jogo: "risco de perder o Super",
-    como: "3 das últimas 5 reclamações citam “faltou item”. Confira o pedido antes de despachar.",
-  },
-  {
-    t: "Promoção queimando margem",
-    jogo: "R$ 890 gastos, só +4% de pedidos",
-    como: "A oferta não traz cliente novo — troque o gatilho ou corte e realoque no que converte.",
-  },
-]
+/* DeliveryOS AI — o que a IA cruza pra montar o plano de ação. */
 const AI_ANALISA: { i: LucideIcon; t: string; d: string }[] = [
   { i: TrendingUp, t: "Funil das 3 plataformas", d: "De visita a pedido — onde o cliente desiste em cada uma." },
   { i: Star, t: "Avaliações e reclamações reais", d: "Lê o texto dos comentários, não só a nota." },
@@ -180,7 +159,7 @@ const FAQ = [
 
 const FEATURE_ROWS = [
   {
-    Comp: UnidadeMock,
+    img: "/landing/dre.png",
     icon: Store,
     tag: "Cada loja por dentro",
     titulo: "O raio-x de cada loja, num lugar só",
@@ -194,20 +173,20 @@ const FEATURE_ROWS = [
     ],
   },
   {
-    Comp: DreMock,
+    img: "/landing/dre1.png",
     icon: Wallet,
-    tag: "DRE da rede",
+    tag: "DRE da loja",
     titulo: "Do faturamento ao lucro, linha por linha",
     texto:
-      "A demonstração de resultado da rede inteira — bruto, taxas, CMV e a margem real — sem você abrir uma planilha.",
+      "A demonstração de resultado da loja — bruto, taxas de cada plataforma, CMV e a margem real — sem você abrir uma planilha.",
     bullets: [
-      "Taxas de cada plataforma, abertas",
-      "CMV e operação descontados",
-      "Margem real, no fim da conta",
+      "Taxas de cada plataforma, abertas linha por linha",
+      "CMV e custos operacionais descontados",
+      "Margem e resultado real, no fim da conta",
     ],
   },
   {
-    Comp: AvaliacoesMock,
+    img: "/landing/avaliacoes.png",
     icon: Star,
     tag: "Reputação",
     titulo: "Saiba o que falam — e o que melhorar",
@@ -216,7 +195,20 @@ const FEATURE_ROWS = [
     bullets: [
       "Nota e distribuição consolidadas",
       "O que elogiam e o que reclamam",
-      "Por loja e por plataforma",
+      "Comentários reais dos clientes",
+    ],
+  },
+  {
+    img: "/landing/cardapio.png",
+    icon: Utensils,
+    tag: "Cardápio & produtos",
+    titulo: "O que vende — e onde o cliente desiste",
+    texto:
+      "O funil de conversão (de visita a pedido) e os itens que mais saem, com o que puxa e o que trava a venda.",
+    bullets: [
+      "Funil: visita → sacola → pedido",
+      "Top itens vendidos e complementos",
+      "Onde o cliente abandona o carrinho",
     ],
   },
 ]
@@ -284,6 +276,16 @@ function ProFeature({
         ) : null}
       </p>
       <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">{d}</p>
+    </div>
+  )
+}
+
+/** Print real do sistema numa moldura leve (borda + sombra). */
+function Shot({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_30px_60px_-30px_rgba(40,20,10,.5)]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} loading="lazy" className="block w-full" />
     </div>
   )
 }
@@ -416,9 +418,9 @@ export function Landing() {
 
           <Reveal delay={420} y={40}>
             <div className="w-full">
-              <DashboardScroll />
+              <Shot src="/landing/dashboard.png" alt="Painel da rede no Delivery OS" />
               <p className="mt-3 text-center text-xs text-[oklch(0.62_0.01_60)] lg:text-left">
-                Esse é o painel inicial — rola sozinho. Passe o mouse e role pra explorar.
+                O painel da rede — faturamento, taxas e lucro de todas as lojas, consolidados.
               </p>
             </div>
           </Reveal>
@@ -596,13 +598,13 @@ export function Landing() {
           </Reveal>
 
           <div className="mt-16 space-y-20 lg:space-y-28">
-            {FEATURE_ROWS.map(({ Comp, icon: Icon, tag, titulo, texto, bullets }, i) => {
+            {FEATURE_ROWS.map(({ img, icon: Icon, tag, titulo, texto, bullets }, i) => {
               const reverse = i % 2 === 1
               return (
                 <Reveal key={titulo} y={36}>
                   <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
                     <div className={`lift ${reverse ? "lg:order-2" : ""}`}>
-                      <Comp />
+                      <Shot src={img} alt={titulo} />
                     </div>
                     <div className={reverse ? "lg:order-1" : ""}>
                       <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">
@@ -655,43 +657,12 @@ export function Landing() {
           </Reveal>
 
           <div className="mt-14 grid items-center gap-10 lg:grid-cols-[1.05fr_.95fr] lg:gap-14">
-            {/* Mock do Plano de ação */}
+            {/* Print real do Diagnóstico + Plano de ação */}
             <Reveal y={36}>
-              <div className="lift rounded-3xl border border-white/10 bg-white p-5 text-[var(--ink)] shadow-[0_30px_70px_-30px_rgba(0,0,0,.6)] sm:p-6">
-                <div className="flex items-center justify-between gap-3 border-b border-black/[0.06] pb-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex size-8 items-center justify-center rounded-lg bg-[var(--ink)] text-[var(--brand)]">
-                      <Sparkles className="size-4" strokeWidth={2.4} />
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold leading-tight">Plano de ação</p>
-                      <p className="text-[11px] text-[oklch(0.5_0.01_48)]">Julho · unidade JK</p>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-strong)]">
-                    DeliveryOS AI
-                  </span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {AI_ACOES.map((a, i) => (
-                    <div key={a.t} className="rounded-2xl border border-black/[0.06] bg-[var(--cream)] p-4">
-                      <div className="flex items-start gap-3">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-[12px] font-semibold text-white">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight">{a.t}</p>
-                          <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[oklch(0.95_0.04_30)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-strong)]">
-                            <Target className="size-3" strokeWidth={2.4} />
-                            Em jogo: {a.jogo}
-                          </p>
-                          <p className="mt-2 text-[13px] leading-relaxed text-[oklch(0.4_0.02_45)]">{a.como}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Shot
+                src="/landing/diagnostico.png"
+                alt="Diagnóstico da loja com o plano de ação gerado pela IA"
+              />
             </Reveal>
 
             {/* O que a IA analisa */}
