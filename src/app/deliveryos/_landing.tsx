@@ -825,6 +825,24 @@ export function Landing() {
               </Reveal>
             ))}
           </div>
+
+          <Reveal delay={400}>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+              <a
+                href="/seguranca"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/5"
+              >
+                <ShieldCheck className="size-4" strokeWidth={2.2} />
+                Como protegemos seus dados
+              </a>
+              <a
+                href="/privacidade"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/5"
+              >
+                Política de Privacidade
+              </a>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -1135,13 +1153,18 @@ export function Landing() {
 
       {/* FOOTER */}
       <footer className="bg-[var(--ink2)] py-8 text-white/70">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 sm:flex-row">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 px-5 sm:flex-row">
           <div className="flex items-center gap-2 font-medium text-white">
             <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand)] text-white">
               <BarChart3 className="size-4" strokeWidth={2.4} />
             </span>
             Delivery OS
           </div>
+          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs">
+            <a href="/seguranca" className="transition-colors hover:text-white">Segurança</a>
+            <a href="/privacidade" className="transition-colors hover:text-white">Política de Privacidade</a>
+            <a href="/termos" className="transition-colors hover:text-white">Termos de Uso</a>
+          </nav>
           <p className="text-xs text-white/50">© 2026 Delivery OS · deliveryos.food</p>
         </div>
       </footer>
