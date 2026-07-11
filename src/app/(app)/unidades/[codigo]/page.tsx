@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, FileText, Sparkles } from "lucide-react"
+import { ArrowLeft, FileText } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { PlatformLogo } from "@/components/platform-logo"
@@ -36,6 +36,7 @@ import { getCurrentUserContext } from "@/lib/auth/context"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
+import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
 import {
   parseRangeFromSp,
   rangeIsFullMonth,
@@ -55,6 +56,7 @@ import { DiagnosticoTab } from "./_components/diagnostico-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
+import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
 import { getFechamentos, type Fechamento } from "@/lib/data/fechamentos"
@@ -105,6 +107,7 @@ export default async function UnidadeDetalhePage({
     avalKeeta,
     availablePeriods,
     monthlyByUnit,
+    coverage,
   ] = await Promise.all([
     getUnitPlatforms(unit.id),
     getFinanceiroResumoForMonth(unit.id, year, month, queryRange),
@@ -120,6 +123,8 @@ export default async function UnidadeDetalhePage({
     isFullMonth
       ? getRealMonthlyForUnits([unit.id], year, month)
       : getRealMonthlyForUnitsForRange([unit.id], periodRange),
+    // Cobertura de importação DESTA loja no mês (até que dia cada plataforma).
+    getImportCoverageForMonth(year, month, [unit.id]),
   ])
 
   // Nota média da loja = média ponderada (por nº de avaliações) das 3
@@ -157,7 +162,6 @@ export default async function UnidadeDetalhePage({
   // ou com "sem dados". Considera os 2 tipos pra cobertura ficar coerente.
   const usa99 = nine.hasData || nine99HasAny
   const usaKeeta = keeta.hasData
-  const usaImportado = usaIfood || usa99 || usaKeeta
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -242,16 +246,12 @@ export default async function UnidadeDetalhePage({
 
       {hasData || isJK ? (
         <>
-          {usaImportado && (
-            <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <Sparkles className="size-3" />
-              KPIs vindos de{" "}
-              {[usaIfood && "iFood", usa99 && "99 Food", usaKeeta && "Keeta"]
-                .filter(Boolean)
-                .join(" + ")}{" "}
-              · {String(month).padStart(2, "0")}/{year}
-            </div>
-          )}
+          <UnitCoverageStrip
+            coverage={coverage}
+            month={month}
+            periodLabel={formatPeriodLabel({ year, month })}
+            platforms={["ifood", "99food", "keeta"]}
+          />
           <HeroKpis
             monthly={m}
             notaMedia={notaMediaMerged}
