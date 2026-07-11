@@ -209,6 +209,132 @@ export async function getNinefoodResumoByUnits(
     })
   }
 
+  // Fallback: lojas SEM relatório diário (`ninefood_daily_loja`) importado, mas
+  // que já têm o financeiro da API (`ninefood_api_bill`, via ninefood_store_links).
+  // Igual ao Keeta, deriva bruto/líquido/pedidos do settlement real da 99 pra
+  // que a receita apareça mesmo antes de subir o XLSX diário. O relatório diário,
+  // quando existir, sempre tem prioridade (é mais rico: avaliação, aceitação, etc).
+  const faltam = unitIds.filter((id) => !out.get(id)?.hasData)
+  if (faltam.length > 0) {
+    const viaApi = await deriveNinefoodFromApiBill(faltam, year, month, dateRange)
+    for (const [unitId, resumo] of viaApi) out.set(unitId, resumo)
+  }
+
+  return out
+}
+
+// ─── Fallback via financeiro da API (ninefood_api_bill) ─────────────
+//
+// Deriva o resumo do mês a partir do settlement real da 99, agregado por loja
+// (app_shop_id ← ninefood_store_links). Usado só quando o relatório diário não
+// foi importado. Dedup por order_id: o api_bill às vezes traz >1 linha por
+// pedido (ajustes), e somar sem dedup infla o bruto.
+async function deriveNinefoodFromApiBill(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<Map<string, NinefoodResumo>> {
+  const out = new Map<string, NinefoodResumo>()
+  if (unitIds.length === 0) return out
+
+  const admin = createAdminClient()
+
+  // unit_id → app_shop_id
+  const { data: links, error: linkErr } = await admin
+    .from("ninefood_store_links")
+    .select("unit_id, app_shop_id")
+    .in("unit_id", unitIds)
+  if (linkErr) {
+    console.error("deriveNinefoodFromApiBill links error:", linkErr.message)
+    return out
+  }
+  const shopToUnit = new Map<string, string>()
+  for (const l of links ?? []) {
+    if (l.app_shop_id && l.unit_id) shopToUnit.set(l.app_shop_id, l.unit_id)
+  }
+  const shopIds = [...shopToUnit.keys()]
+  if (shopIds.length === 0) return out
+
+  // Janela do mês (business_date é date). dateRange custom tem prioridade.
+  const mm = String(month).padStart(2, "0")
+  const startIso = dateRange?.start ?? `${year}-${mm}-01`
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const endExclIso = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+
+  const rows = await pageAll<{
+    app_shop_id: string
+    order_id: string
+    meal_original_amount: number | null
+    settlement_amount: number | null
+    pay_commission_amount: number | null
+    business_date: string
+  }>((from, to) => {
+    let q = admin
+      .from("ninefood_api_bill")
+      .select(
+        "app_shop_id, order_id, meal_original_amount, settlement_amount, pay_commission_amount, business_date",
+      )
+      .in("app_shop_id", shopIds)
+      .gte("business_date", startIso)
+    q = dateRange?.end
+      ? q.lte("business_date", dateRange.end)
+      : q.lt("business_date", endExclIso)
+    return q.order("order_id").range(from, to)
+  })
+
+  type Acc = {
+    pedidos: number
+    bruto: number
+    liquido: number
+    comissao: number
+    dias: Set<string>
+  }
+  const accs = new Map<string, Acc>()
+  const seenOrders = new Set<string>()
+
+  for (const row of rows) {
+    if (row.order_id && seenOrders.has(row.order_id)) continue
+    if (row.order_id) seenOrders.add(row.order_id)
+    const unitId = shopToUnit.get(row.app_shop_id)
+    if (!unitId) continue
+    let acc = accs.get(unitId)
+    if (!acc) {
+      acc = { pedidos: 0, bruto: 0, liquido: 0, comissao: 0, dias: new Set() }
+      accs.set(unitId, acc)
+    }
+    acc.pedidos += 1
+    acc.bruto += Number(row.meal_original_amount ?? 0)
+    acc.liquido += Number(row.settlement_amount ?? 0)
+    // Comissão vem negativa no api_bill (débito) — guarda em valor absoluto.
+    acc.comissao += Math.abs(Number(row.pay_commission_amount ?? 0))
+    if (row.business_date) acc.dias.add(row.business_date)
+  }
+
+  for (const [unitId, acc] of accs) {
+    const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
+    const pctLoja = acc.bruto > 0 ? (acc.liquido / acc.bruto) * 100 : 0
+    out.set(unitId, {
+      pedidos: acc.pedidos,
+      bruto: acc.bruto,
+      liquido: acc.liquido,
+      comissaoRs: acc.comissao,
+      // api_bill não separa taxa de canal / promoções — só comissão e settlement.
+      taxaCanalPagamentoRs: 0,
+      promocoesRs: 0,
+      cancelamentosQtd: 0,
+      // Métricas de qualidade não existem no financeiro da API.
+      avaliacaoMedia: null,
+      taxaAceitacaoMedia: null,
+      tempoPreparoMedio: null,
+      diasComDados: acc.dias.size,
+      ticketMedio,
+      pctLoja,
+      hasData: acc.bruto > 0 || acc.pedidos > 0,
+    })
+  }
+
   return out
 }
 
