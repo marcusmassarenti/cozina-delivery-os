@@ -13,7 +13,7 @@ import { PlataformasStatus } from "./_components/plataformas-status"
 
 /**
  * Conexões — hub de integrações.
- *  1) API do Cozina Delivery OS (saída): sistemas externos (ERP) puxam dados.
+ *  1) API do Delivery OS (saída): sistemas externos (ERP) puxam dados.
  *  2) Plataformas de delivery (entrada): iFood / 99 / Keeta — em breve.
  */
 export default async function ConexoesPage() {
@@ -60,7 +60,7 @@ export default async function ConexoesPage() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold">
-              API do Cozina Delivery OS
+              API do Delivery OS
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Sistemas externos (ex.: ERP do Cozina Foods) puxam dados da rede

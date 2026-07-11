@@ -358,7 +358,7 @@ export async function DiagnosticoTab({
 
       {/* Rodapé de marca (repete em cada página do PDF) */}
       <div className="diag-foot hidden" aria-hidden>
-        Cozina Delivery OS · Diagnóstico · {unitName} #{unitCode} · {mesLabel}
+        Delivery OS · Diagnóstico · {unitName} #{unitCode} · {mesLabel}
       </div>
 
       {/* Cabeçalho */}

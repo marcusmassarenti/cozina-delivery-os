@@ -200,7 +200,7 @@ export default async function RelatorioMensalUnidade({
       )}
 
       <p className="mt-1 text-[10px] text-muted-foreground print:mt-2">
-        Gerado pelo Cozina Delivery OS · {periodLabel} · dados do iFood, 99 Food e
+        Gerado pelo Delivery OS · {periodLabel} · dados do iFood, 99 Food e
         Keeta importados. Líquido = repasse que entra na conta. VR é recebido à
         parte do iFood (não entra no faturamento).
       </p>

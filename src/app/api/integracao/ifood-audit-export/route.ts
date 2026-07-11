@@ -33,7 +33,7 @@ export async function GET() {
 
   const payload = {
     exportedAt: new Date().toISOString(),
-    source: "Cozina Delivery OS — Homologação iFood Merchant API",
+    source: "Delivery OS — Homologação iFood Merchant API",
     count: data?.length ?? 0,
     logs: data ?? [],
   }

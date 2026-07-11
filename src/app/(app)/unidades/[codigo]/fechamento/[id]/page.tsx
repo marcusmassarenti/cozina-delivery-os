@@ -264,7 +264,7 @@ export default async function FechamentoPrintPage({
         )}
 
         <p className="mt-3 text-center text-[10px] text-muted-foreground">
-          Cozina Foods · documento gerado pelo Cozina Delivery OS
+          Cozina Foods · documento gerado pelo Delivery OS
         </p>
       </div>
     </div>

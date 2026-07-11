@@ -2,8 +2,8 @@
  * Autenticação na API do iFood — modelo CENTRALIZADO (client_credentials).
  *
  * A rede tem MAIS DE UM app no iFood (cada app = uma categoria de módulos):
- *   - "financial" → conciliação + merchant  (app Cozina Delivery OS)
- *   - "review"    → avaliações              (app Cozina Delivery OS — Avaliações)
+ *   - "financial" → conciliação + merchant  (app Delivery OS)
+ *   - "review"    → avaliações              (app Delivery OS — Avaliações)
  *
  * Cada app tem credenciais próprias. Em homologação, o app é trocado pelo
  * "app de teste" do iFood (que tem TODOS os módulos + a loja sandbox), via as
