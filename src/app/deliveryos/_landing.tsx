@@ -567,6 +567,23 @@ export function Landing() {
             </Reveal>
           ))}
         </div>
+
+        {/* Hub de relatórios — print real, faixa larga */}
+        <Reveal delay={140} y={36}>
+          <div className="mx-auto mt-14 max-w-5xl px-5">
+            <p className="mb-5 text-center text-[oklch(0.5_0.01_48)]">
+              E a rede inteira vira{" "}
+              <b className="font-medium text-foreground">relatório pronto</b> —
+              comparativo entre lojas, ranking, evolução, ROI de campanha e mais,
+              num hub só.
+            </p>
+            <Shot
+              src="/landing/relatorios.png"
+              alt="Hub de relatórios da rede no Delivery OS"
+            />
+          </div>
+        </Reveal>
+
         <Reveal delay={120}>
           <div className="mt-10 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[oklch(0.65_0.21_35/.4)] bg-[var(--brand-soft)] px-4 py-2 text-sm font-medium text-[var(--brand-strong)]">
