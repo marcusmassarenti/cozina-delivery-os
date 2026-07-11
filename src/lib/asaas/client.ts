@@ -27,7 +27,9 @@ function apiKey(): string {
  * ciclo, e boleto ainda leva dias pra compensar. Pra mudar, defina
  * ASAAS_BILLING_TYPE = CREDIT_CARD | PIX | BOLETO | UNDEFINED (todos).
  */
-const BILLING_TYPE = (process.env.ASAAS_BILLING_TYPE ?? "CREDIT_CARD").toUpperCase()
+// Pagamento é SEMPRE cartão de crédito (renova sozinho todo mês). Boleto/Pix
+// ficam de fora por decisão de produto — não dependemos de env pra isso.
+const BILLING_TYPE = "CREDIT_CARD"
 
 /**
  * Modo simulado: sem ASAAS_API_KEY, não batemos na API real — geramos IDs

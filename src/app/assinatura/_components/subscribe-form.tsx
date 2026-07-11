@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { Check, Zap } from "lucide-react"
+import { Check, Sparkles, Zap } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { fmtBRL } from "@/lib/format"
@@ -106,6 +106,9 @@ export function SubscribeForm({
                     <span className="flex items-center gap-1.5 text-sm font-medium">
                       {p.id === "pro" && (
                         <Zap className="size-3.5 text-amber-500" />
+                      )}
+                      {p.id === "ai" && (
+                        <Sparkles className="size-3.5 text-amber-500" />
                       )}
                       {p.label}
                     </span>
@@ -272,6 +275,29 @@ export function SubscribeForm({
         </>
       )}
 
+      {/* Resumo do que vai ser cobrado — plano escolhido sempre visível */}
+      <div className="rounded-xl border bg-muted/30 p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Plano escolhido</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            {plan === "pro" && <Zap className="size-3.5 text-amber-500" />}
+            {plan === "ai" && <Sparkles className="size-3.5 text-amber-500" />}
+            {precoCustom ? "Personalizado" : (selected?.label ?? "—")}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between border-t pt-1.5">
+          <span className="text-xs text-muted-foreground">Total mensal</span>
+          <span className="text-base font-bold tabular-nums">
+            {fmtBRL(total)}
+            <span className="text-xs font-normal text-muted-foreground">/mês</span>
+          </span>
+        </div>
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Check className="size-3 text-emerald-600" strokeWidth={3} />
+          Pagamento no cartão de crédito · renova automático · cancele quando quiser
+        </p>
+      </div>
+
       {state.message && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
           {state.message}
@@ -281,14 +307,15 @@ export function SubscribeForm({
       <SubmitBtn
         label={
           jaTemCliente
-            ? "Ir para o pagamento"
-            : `Assinar por ${fmtBRL(total)}/mês`
+            ? "Ir para o pagamento no cartão"
+            : precoCustom
+              ? `Assinar por ${fmtBRL(total)}/mês`
+              : `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(total)}/mês`
         }
       />
 
       <p className="text-center text-[11px] text-muted-foreground">
-        Pagamento seguro via Asaas · cartão de crédito (renova automático) ·
-        cancele quando quiser.
+        Pagamento seguro via Asaas · só cartão de crédito · cancele quando quiser.
       </p>
     </form>
   )
