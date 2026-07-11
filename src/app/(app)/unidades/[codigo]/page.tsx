@@ -51,6 +51,7 @@ import { AvaliacoesTab } from "./_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "./_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "./_components/avaliacoes-keeta-tab"
 import { CardapioTab } from "./_components/cardapio-tab"
+import { DiagnosticoTab } from "./_components/diagnostico-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
@@ -518,6 +519,7 @@ function DetailTabs({
         <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
         <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
         <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
+        <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
         {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
       </TabsList>
 
@@ -541,6 +543,20 @@ function DetailTabs({
       {/* Avaliações */}
       <TabsContent value="avaliacoes" className="mt-4">
         <PlatformSwitcher slots={avaliacoesSlots} />
+      </TabsContent>
+
+      {/* Diagnóstico da loja (estilo plano de ação) */}
+      <TabsContent value="diagnostico" className="mt-4">
+        <Suspense fallback={<TabSkeleton />}>
+          <DiagnosticoTab
+            unitId={unit.id}
+            unitName={unit.name}
+            unitCode={unit.code}
+            monthly={m}
+            year={year}
+            month={month}
+          />
+        </Suspense>
       </TabsContent>
 
       {/* Fechamento de sociedade (só JK) */}

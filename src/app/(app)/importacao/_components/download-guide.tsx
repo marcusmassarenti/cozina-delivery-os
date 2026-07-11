@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ExternalLink,
   Film,
+  Gauge,
   Play,
   Receipt,
   Star,
@@ -21,8 +22,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import type { ReportKey } from "@/lib/reports-catalog"
 
 type GuideEntry = {
+  /** Casa com a key do catálogo — usada pra filtrar pelos relatórios ligados. */
+  key: ReportKey
   icon: React.ComponentType<{ className?: string }>
   title: string
   badge: string
@@ -38,6 +42,7 @@ type GuideEntry = {
 
 const IFOOD_ENTRIES: GuideEntry[] = [
   {
+    key: "ifood_financeiro",
     icon: Receipt,
     title: "Financeiro / Conciliação",
     badge: "Mensal",
@@ -56,6 +61,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     ],
   },
   {
+    key: "ifood_pedidos",
     icon: Ticket,
     title: "Pedidos (VR / pagamento)",
     badge: "Por período",
@@ -71,6 +77,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     ],
   },
   {
+    key: "ifood_cardapio",
     icon: UtensilsCrossed,
     title: "Cardápio",
     badge: "Mensal",
@@ -88,6 +95,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     ],
   },
   {
+    key: "ifood_avaliacoes",
     icon: Star,
     title: "Avaliações",
     badge: "Semanal ou Mensal",
@@ -105,6 +113,58 @@ const IFOOD_ENTRIES: GuideEntry[] = [
       { label: "Rede / franquia", href: "https://portal.ifood.com.br/chains/reports" },
     ],
   },
+  {
+    key: "ifood_qualidade",
+    icon: Gauge,
+    title: "Qualidade da operação",
+    badge: "Rede (1 arquivo)",
+    badgeTone: "blue",
+    scope: "Rede ou por loja",
+    path: ["Portal iFood", "Relatórios", "Operação", "Qualidade da operação"],
+    steps:
+      'Em Relatórios → seção "Operação" → "Qualidade da operação" → período → "Exportar". No modo REDE vem 1 arquivo com todas as lojas.',
+    feeds: "Tempo online, chamados, cancelamentos, tempo de preparo, atrasos e nível Super.",
+    links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
+  },
+  {
+    key: "ifood_promocoes",
+    icon: Ticket,
+    title: "Promoções",
+    badge: "Rede (1 arquivo)",
+    badgeTone: "emerald",
+    scope: "Rede ou por loja",
+    path: ["Portal iFood", "Relatórios", "Operação", "Promoções e marketing"],
+    steps:
+      'Relatórios → "Promoções e marketing" → período → "Exportar". No modo rede traz todas as lojas de uma vez.',
+    feeds: "Investimento e retorno (ROI) por campanha, subsídio iFood × loja.",
+    links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
+  },
+  {
+    key: "ifood_super",
+    icon: Star,
+    title: "Super Restaurante",
+    badge: "Rede (1 arquivo)",
+    badgeTone: "amber",
+    scope: "Rede ou por loja",
+    path: ["Portal iFood", "Relatórios", "Operação", "Super restaurante"],
+    steps:
+      'Relatórios → "Super restaurante" → "Exportar". Traz o nível atual de cada loja.',
+    feeds: "Nível Super, plano de ação do iFood e tags de sentimento das avaliações.",
+    links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
+  },
+  {
+    key: "ifood_negociacoes",
+    icon: Receipt,
+    title: "Negociações e chamados",
+    badge: "Rede (1 arquivo)",
+    badgeTone: "blue",
+    scope: "Rede ou por loja",
+    path: ["Portal iFood", "Relatórios", "Operação", "Negociações e chamados"],
+    steps:
+      'Relatórios → "Negociações e chamados" → período → "Exportar".',
+    feeds: "Cancelamentos evitados, motivos de reclamação, reembolsos e cupons.",
+    links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
+  },
 ]
 
 const NINE_URL = "https://merchant.99app.com/pt-BR/manager/report"
@@ -112,6 +172,7 @@ const NINE_LINK = [{ label: "Relatórios 99 Food", href: NINE_URL }]
 
 const NINEFOOD_ENTRIES: GuideEntry[] = [
   {
+    key: "99food_loja",
     icon: Receipt,
     title: "Dados da loja",
     badge: "Mensal",
@@ -124,6 +185,7 @@ const NINEFOOD_ENTRIES: GuideEntry[] = [
     links: NINE_LINK,
   },
   {
+    key: "99food_item",
     icon: UtensilsCrossed,
     title: "Dados do item",
     badge: "Mensal",
@@ -136,6 +198,7 @@ const NINEFOOD_ENTRIES: GuideEntry[] = [
     links: NINE_LINK,
   },
   {
+    key: "99food_pedido",
     icon: Star,
     title: "Dados do pedido",
     badge: "Mensal",
@@ -156,6 +219,7 @@ const KEETA_FLOW =
 
 const KEETA_ENTRIES: GuideEntry[] = [
   {
+    key: "keeta_loja",
     icon: Receipt,
     title: "Dados do restaurante",
     badge: "Mensal",
@@ -167,6 +231,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     links: KEETA_LINK,
   },
   {
+    key: "keeta_pedido",
     icon: Star,
     title: "Dados do pedido",
     badge: "Mensal",
@@ -178,6 +243,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     links: KEETA_LINK,
   },
   {
+    key: "keeta_item",
     icon: UtensilsCrossed,
     title: "Dados do item",
     badge: "Mensal",
@@ -189,6 +255,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     links: KEETA_LINK,
   },
   {
+    key: "keeta_promocao",
     icon: Ticket,
     title: "Dados da promoção",
     badge: "Mensal",
@@ -256,10 +323,25 @@ const PLATFORMS: {
   },
 ]
 
-export function DownloadGuide() {
-  const [active, setActive] = React.useState<PlatformId>("ifood")
+export function DownloadGuide({ enabled }: { enabled: ReportKey[] }) {
+  const enabledSet = React.useMemo(() => new Set(enabled), [enabled])
+  // Só as plataformas com pelo menos 1 relatório ligado, e só os relatórios
+  // ligados dentro de cada uma.
+  const platforms = React.useMemo(
+    () =>
+      PLATFORMS.map((p) => ({
+        ...p,
+        entries: p.entries.filter((e) => enabledSet.has(e.key)),
+      })).filter((p) => p.entries.length > 0),
+    [enabledSet],
+  )
+  const [active, setActive] = React.useState<PlatformId>(
+    platforms[0]?.id ?? "ifood",
+  )
   const [video, setVideo] = React.useState<Video | null>(null)
-  const current = PLATFORMS.find((p) => p.id === active) ?? PLATFORMS[0]
+  const current = platforms.find((p) => p.id === active) ?? platforms[0]
+
+  if (!current) return null
 
   return (
     <>
@@ -285,7 +367,7 @@ export function DownloadGuide() {
       <CollapsibleContent>
         <div className="border-t p-4">
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            {PLATFORMS.map((p) => {
+            {platforms.map((p) => {
               const isActive = p.id === active
               return (
                 <button

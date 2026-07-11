@@ -3,48 +3,44 @@
 import * as React from "react"
 import Link from "next/link"
 import {
+  HelpCircle,
   LifeBuoy,
   Mail,
   MessageCircle,
   Rocket,
-  Headphones,
-  X,
   type LucideIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { OPEN_HELP_EVENT } from "@/app/(app)/ajuda/_components/help-dialog"
 
 /**
  * Contatos de suporte — AJUSTE AQUI.
  *  - whatsapp: só dígitos, com DDI (ex.: "5511999999999"). Vazio = esconde.
  *  - email: e-mail de atendimento.
- *  - helpUrl: link da central de ajuda (interno ou externo).
  */
 const SUPPORT = {
   email: "suporte@deliveryos.food",
-  whatsapp: "", // só dígitos com DDI. Vazio = esconde a opção (sem número ainda).
-  helpUrl: "/seguranca",
+  whatsapp: "", // só dígitos com DDI. Vazio = esconde a opção.
 }
 
 type Action = {
   icon: LucideIcon
   label: string
   href: string
-  /** abre em nova aba / link externo */
   external?: boolean
-  /** dispara um evento em vez de navegar */
   onClick?: () => void
 }
 
 /**
- * Botão flutuante de ajuda (canto inferior direito), sempre visível no app.
- * Abre um menu com: mensagem, WhatsApp, central de ajuda e "começando".
+ * Menu de ajuda ANCORADO NO TOPO (substitui o antigo botão flutuante do canto
+ * inferior direito, que atrapalhava). Abre um dropdown com: central de ajuda,
+ * mensagem, WhatsApp e o tour "Começando".
  */
-export function HelpFab() {
+export function HelpMenu() {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
 
-  // Fecha ao clicar fora ou apertar Esc.
   React.useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
@@ -62,7 +58,24 @@ export function HelpFab() {
   }, [open])
 
   const actions: Action[] = [
-    { icon: Mail, label: "Deixe uma mensagem", href: `mailto:${SUPPORT.email}`, external: true },
+    {
+      icon: LifeBuoy,
+      label: "Central de ajuda",
+      href: "#",
+      onClick: () => window.dispatchEvent(new Event(OPEN_HELP_EVENT)),
+    },
+    {
+      icon: Rocket,
+      label: "Começando no Delivery OS",
+      href: "#",
+      onClick: () => window.dispatchEvent(new Event("deliveryos:open-tour")),
+    },
+    {
+      icon: Mail,
+      label: "Deixe uma mensagem",
+      href: `mailto:${SUPPORT.email}`,
+      external: true,
+    },
     ...(SUPPORT.whatsapp
       ? [
           {
@@ -73,34 +86,30 @@ export function HelpFab() {
           } as Action,
         ]
       : []),
-    { icon: LifeBuoy, label: "Central de ajuda", href: SUPPORT.helpUrl },
-    {
-      icon: Rocket,
-      label: "Começando no Delivery OS",
-      href: "#",
-      onClick: () => window.dispatchEvent(new Event("deliveryos:open-tour")),
-    },
   ]
 
   return (
-    <div
-      ref={ref}
-      className="fixed bottom-5 right-5 z-50 flex flex-col items-end print:hidden"
-    >
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Central de ajuda"
+        title="Central de ajuda"
+        aria-expanded={open}
+        className={cn(
+          "relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          open && "bg-muted text-foreground",
+        )}
+      >
+        <HelpCircle className="size-4" />
+      </button>
+
       {open && (
-        <div className="mb-3 w-72 origin-bottom-right rounded-2xl border bg-card p-3 shadow-2xl">
-          <div className="mb-2 flex items-center justify-between px-1">
+        <div className="absolute right-0 top-11 z-50 w-64 origin-top-right rounded-2xl border bg-card p-3 shadow-2xl">
+          <div className="mb-2 px-1">
             <span className="text-xs font-semibold text-muted-foreground">
               Precisa de ajuda?
             </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Fechar"
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {actions.map((a) => (
@@ -109,15 +118,6 @@ export function HelpFab() {
           </div>
         </div>
       )}
-
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Ajuda"
-        className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95"
-      >
-        {open ? <X className="size-6" /> : <Headphones className="size-6" />}
-      </button>
     </div>
   )
 }
@@ -152,7 +152,13 @@ function HelpCard({ action, onDone }: { action: Action; onDone: () => void }) {
   }
   if (action.external) {
     return (
-      <a href={action.href} target="_blank" rel="noopener noreferrer" onClick={onDone} className={cls}>
+      <a
+        href={action.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onDone}
+        className={cls}
+      >
         {inner}
       </a>
     )

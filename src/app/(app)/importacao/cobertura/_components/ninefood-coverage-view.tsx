@@ -1,9 +1,16 @@
-import { CreditCard, Receipt, Star, UtensilsCrossed } from "lucide-react"
+import {
+  CreditCard,
+  Receipt,
+  Star,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react"
 
 import type {
   NinefoodCoverageCell,
   NinefoodCoverageMatrix,
 } from "@/lib/data/ninefood-imported"
+import type { CoverageStatus } from "@/lib/data/ifood-imported"
 
 import { GapsByUnit, type UnitGap } from "./gaps-by-unit"
 import {
@@ -13,83 +20,153 @@ import {
   StatusLegend,
 } from "./coverage-shared"
 
+type Tone = "blue" | "amber" | "emerald" | "rose" | "violet"
+type ColId = "loja" | "item" | "pedido" | "recentes"
+
+export type NineShow = Record<ColId, boolean>
+
+type NineCol = {
+  id: ColId
+  label: string
+  name: string
+  tone: Tone
+  icon: LucideIcon
+  status: (c: NinefoodCoverageCell) => CoverageStatus
+  partialGap: (c: NinefoodCoverageCell) => string | null
+  tooltip: (c: NinefoodCoverageCell) => string
+  gapLabel: string
+}
+
+const ALL_COLS: NineCol[] = [
+  {
+    id: "loja",
+    label: "L",
+    name: "Dados da loja",
+    tone: "amber",
+    icon: Receipt,
+    status: (c) => c.loja.status,
+    partialGap: (c) =>
+      c.loja.status === "partial"
+        ? `Loja parcial (${c.loja.diasImportados}/${c.loja.diasNoMes}d)`
+        : null,
+    tooltip: (c) =>
+      c.loja.diasImportados === 0
+        ? "Sem Dados da loja importado"
+        : `Loja: ${c.loja.diasImportados} de ${c.loja.diasNoMes} dias importados`,
+    gapLabel: "Dados da loja",
+  },
+  {
+    id: "item",
+    label: "I",
+    name: "Dados do item",
+    tone: "blue",
+    icon: UtensilsCrossed,
+    status: (c) => c.item.status,
+    partialGap: (c) =>
+      c.item.status === "partial"
+        ? `Item parcial (${c.item.diasImportados}d)`
+        : null,
+    tooltip: (c) =>
+      c.item.diasImportados === 0
+        ? "Sem Dados do item importado"
+        : `Item: ${c.item.diasImportados} dia${c.item.diasImportados !== 1 ? "s" : ""} com cardápio`,
+    gapLabel: "Dados do item",
+  },
+  {
+    id: "pedido",
+    label: "P",
+    name: "Dados do pedido",
+    tone: "emerald",
+    icon: Star,
+    status: (c) => c.pedido.status,
+    partialGap: (c) =>
+      c.pedido.status === "partial"
+        ? `Pedido parcial (${c.pedido.diasComPedido}/${c.pedido.diasNoMes}d)`
+        : null,
+    tooltip: (c) =>
+      c.pedido.totalPedidos === 0
+        ? "Sem Dados do pedido importado"
+        : `Pedido: ${c.pedido.totalPedidos} pedidos em ${c.pedido.diasComPedido} de ${c.pedido.diasNoMes} dias`,
+    gapLabel: "Dados do pedido",
+  },
+  {
+    id: "recentes",
+    label: "R",
+    name: "Pedidos recentes",
+    tone: "violet",
+    icon: CreditCard,
+    status: (c) => c.recentes?.status ?? "empty",
+    partialGap: () => null,
+    tooltip: (c) =>
+      (c.recentes?.totalPedidos ?? 0) > 0
+        ? `Pedidos recentes: ${c.recentes!.totalPedidos} pedidos`
+        : "Sem Pedidos recentes importado",
+    gapLabel: "Pedidos recentes",
+  },
+]
+
 /**
- * View da matriz 99 Food. 3 categorias:
- *  - L = Loja (financeiro diário) → ninefood_daily_loja
- *  - I = Item (cardápio diário) → ninefood_daily_item
- *  - P = Pedido (avaliações + cliente) → ninefood_pedidos
+ * View da matriz 99 Food / Keeta. Mostra só as colunas cujos relatórios a
+ * operação habilitou (Minha conta → Relatórios).
  */
 export function NinefoodCoverageView({
   matrix,
-  showRecentes = false,
+  show,
 }: {
   matrix: NinefoodCoverageMatrix
-  /** Keeta: renderiza a 4ª coluna "Pedidos recentes" (R). 99 Food deixa false. */
-  showRecentes?: boolean
+  /** Quais colunas exibir (por relatório habilitado). */
+  show: NineShow
 }) {
+  const cols = ALL_COLS.filter((c) => show[c.id])
   const activeUnits = matrix.units.filter((u) => u.active)
-  // Denominador = só meses em que a loja operou (N/A não conta).
+
   let totalCells = 0
-  let lojaComplete = 0
-  let lojaPartial = 0
-  let itemComplete = 0
-  let itemPartial = 0
-  let pedidoComplete = 0
-  let pedidoPartial = 0
-  let recentesComplete = 0
+  const complete: Record<string, number> = {}
+  const partial: Record<string, number> = {}
+  for (const c of cols) {
+    complete[c.id] = 0
+    partial[c.id] = 0
+  }
   for (const u of activeUnits) {
     for (const m of matrix.months) {
-      const c = u.cells[m.key]
-      if (!c.applicable) continue
+      const cell = u.cells[m.key]
+      if (!cell.applicable) continue
       totalCells++
-      if (c.loja.status === "complete") lojaComplete++
-      if (c.loja.status === "partial") lojaPartial++
-      if (c.item.status === "complete") itemComplete++
-      if (c.item.status === "partial") itemPartial++
-      if (c.pedido.status === "complete") pedidoComplete++
-      if (c.pedido.status === "partial") pedidoPartial++
-      if (c.recentes?.status === "complete") recentesComplete++
+      for (const col of cols) {
+        const s = col.status(cell)
+        if (s === "complete") complete[col.id]++
+        else if (s === "partial") partial[col.id]++
+      }
     }
+  }
+
+  if (cols.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+        Nenhum relatório dessa plataforma habilitado. Ligue em{" "}
+        <a href="/minha-conta/relatorios" className="underline">
+          Minha conta → Relatórios
+        </a>
+        .
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-6">
       {/* Stats */}
-      <div className={`grid gap-3 sm:grid-cols-2 ${showRecentes ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-        <StatCard
-          icon={Receipt}
-          label="Dados da loja"
-          complete={lojaComplete}
-          partial={lojaPartial}
-          total={totalCells}
-          color="amber"
-        />
-        <StatCard
-          icon={UtensilsCrossed}
-          label="Dados do item"
-          complete={itemComplete}
-          partial={itemPartial}
-          total={totalCells}
-          color="blue"
-        />
-        <StatCard
-          icon={Star}
-          label="Dados do pedido"
-          complete={pedidoComplete}
-          partial={pedidoPartial}
-          total={totalCells}
-          color="emerald"
-        />
-        {showRecentes && (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {cols.map((c) => (
           <StatCard
-            icon={CreditCard}
-            label="Pedidos recentes"
-            complete={recentesComplete}
-            partial={0}
+            key={c.id}
+            icon={c.icon}
+            label={c.name}
+            complete={complete[c.id]}
+            partial={partial[c.id]}
             total={totalCells}
-            color="violet"
+            color={c.tone}
           />
-        )}
+        ))}
       </div>
 
       {/* Matriz */}
@@ -130,13 +207,13 @@ export function NinefoodCoverageView({
                   </div>
                 </td>
                 {matrix.months.map((m) => {
-                  const c = u.cells[m.key]
-                  if (!c.applicable) {
+                  const cell = u.cells[m.key]
+                  if (!cell.applicable) {
                     return (
                       <td key={m.key} className="px-2 py-2 text-center">
                         <span
                           className="text-[10px] text-muted-foreground/40"
-                          title="Não se aplica: loja não usa essa plataforma, ou está fora do período de operação (inauguração/encerramento)."
+                          title="Não se aplica: loja não usa essa plataforma, ou está fora do período de operação."
                         >
                           N/A
                         </span>
@@ -145,37 +222,16 @@ export function NinefoodCoverageView({
                   }
                   return (
                     <td key={m.key} className="px-2 py-2 text-center">
-                      <div className="flex items-center justify-center gap-0.5">
-                        <CoverageBadge
-                          status={c.loja.status}
-                          label="L"
-                          tone="amber"
-                          tooltip={lojaTooltip(c)}
-                        />
-                        <CoverageBadge
-                          status={c.item.status}
-                          label="I"
-                          tone="blue"
-                          tooltip={itemTooltip(c)}
-                        />
-                        <CoverageBadge
-                          status={c.pedido.status}
-                          label="P"
-                          tone="emerald"
-                          tooltip={pedidoTooltip(c)}
-                        />
-                        {showRecentes && (
+                      <div className="flex flex-wrap items-center justify-center gap-0.5">
+                        {cols.map((col) => (
                           <CoverageBadge
-                            status={c.recentes?.status ?? "empty"}
-                            label="R"
-                            tone="violet"
-                            tooltip={
-                              (c.recentes?.totalPedidos ?? 0) > 0
-                                ? `Pedidos recentes: ${c.recentes!.totalPedidos} pedidos`
-                                : "Sem Pedidos recentes importado"
-                            }
+                            key={col.id}
+                            status={col.status(cell)}
+                            label={col.label}
+                            tone={col.tone}
+                            tooltip={col.tooltip(cell)}
                           />
-                        )}
+                        ))}
                       </div>
                     </td>
                   )
@@ -192,10 +248,9 @@ export function NinefoodCoverageView({
           <span className="font-semibold uppercase tracking-wider text-muted-foreground">
             Tipo
           </span>
-          <LegendItem label="L" name="Loja (financeiro)" />
-          <LegendItem label="I" name="Item (cardápio)" />
-          <LegendItem label="P" name="Pedido (avaliação)" />
-          {showRecentes && <LegendItem label="R" name="Pedidos recentes" />}
+          {cols.map((c) => (
+            <LegendItem key={c.id} label={c.label} name={c.name} />
+          ))}
         </div>
         <div className="flex items-center gap-3 border-l pl-4">
           <span className="font-semibold uppercase tracking-wider text-muted-foreground">
@@ -211,14 +266,14 @@ export function NinefoodCoverageView({
       </div>
 
       {/* Lacunas */}
-      <GapsByUnit gaps={buildGapsByUnit(matrix, showRecentes)} />
+      <GapsByUnit gaps={buildGapsByUnit(matrix, cols)} />
     </div>
   )
 }
 
 function buildGapsByUnit(
   matrix: NinefoodCoverageMatrix,
-  showRecentes: boolean,
+  cols: NineCol[],
 ): UnitGap[] {
   const out: UnitGap[] = []
   for (const u of matrix.units) {
@@ -228,38 +283,16 @@ function buildGapsByUnit(
     let totalPartial = 0
     for (const m of matrix.months) {
       const c = u.cells[m.key]
-      if (!c.applicable) continue // mês fora de operação → não é lacuna
+      if (!c.applicable) continue
       const items: UnitGap["months"][number]["items"] = []
-      // Loja
-      if (c.loja.status === "empty") {
-        items.push({ label: "Dados da loja", severity: "missing" })
-      } else if (c.loja.status === "partial") {
-        items.push({
-          label: `Loja parcial (${c.loja.diasImportados}/${c.loja.diasNoMes}d)`,
-          severity: "partial",
-        })
-      }
-      // Item
-      if (c.item.status === "empty") {
-        items.push({ label: "Dados do item", severity: "missing" })
-      } else if (c.item.status === "partial") {
-        items.push({
-          label: `Item parcial (${c.item.diasImportados}d)`,
-          severity: "partial",
-        })
-      }
-      // Pedido
-      if (c.pedido.status === "empty") {
-        items.push({ label: "Dados do pedido", severity: "missing" })
-      } else if (c.pedido.status === "partial") {
-        items.push({
-          label: `Pedido parcial (${c.pedido.diasComPedido}/${c.pedido.diasNoMes}d)`,
-          severity: "partial",
-        })
-      }
-      // Pedidos recentes (só Keeta)
-      if (showRecentes && c.recentes?.status === "empty") {
-        items.push({ label: "Pedidos recentes", severity: "missing" })
+      for (const col of cols) {
+        const s = col.status(c)
+        if (s === "empty") {
+          items.push({ label: col.gapLabel, severity: "missing" })
+        } else if (s === "partial") {
+          const pg = col.partialGap(c)
+          if (pg) items.push({ label: pg, severity: "partial" })
+        }
       }
       if (items.length === 0) continue
       for (const it of items) {
@@ -278,24 +311,8 @@ function buildGapsByUnit(
     })
   }
   out.sort((a, b) => {
-    if (a.totalMissing !== b.totalMissing)
-      return b.totalMissing - a.totalMissing
+    if (a.totalMissing !== b.totalMissing) return b.totalMissing - a.totalMissing
     return b.totalPartial - a.totalPartial
   })
   return out
-}
-
-function lojaTooltip(c: NinefoodCoverageCell): string {
-  if (c.loja.diasImportados === 0) return "Sem Dados da loja importado"
-  return `Loja: ${c.loja.diasImportados} de ${c.loja.diasNoMes} dias importados`
-}
-
-function itemTooltip(c: NinefoodCoverageCell): string {
-  if (c.item.diasImportados === 0) return "Sem Dados do item importado"
-  return `Item: ${c.item.diasImportados} dia${c.item.diasImportados !== 1 ? "s" : ""} com cardápio`
-}
-
-function pedidoTooltip(c: NinefoodCoverageCell): string {
-  if (c.pedido.totalPedidos === 0) return "Sem Dados do pedido importado"
-  return `Pedido: ${c.pedido.totalPedidos} pedidos em ${c.pedido.diasComPedido} de ${c.pedido.diasNoMes} dias`
 }

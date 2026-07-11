@@ -7,7 +7,11 @@ export type IfoodReportType =
   | "financeiro"
   | "avaliacoes"
   | "pedidos" // relatório de pedidos (forma de pagamento / VR)
-  | "vendas" // futuro
+  | "vendas" // resumo de vendas (sem dado novo)
+  | "qualidade" // "Qualidade da operação" (tempo online, chamados, ranqueamento…)
+  | "promocoes" // "Promoções" (investimento + ROI por campanha)
+  | "super" // "Super restaurante" (nível + plano de ação + sentimento)
+  | "negociacoes" // "Negociações" (cancelamentos evitados + motivos + reembolsos)
   | "cancelamentos" // futuro
   | "unknown"
 
@@ -228,10 +232,138 @@ export type ParsedVendasResumo = {
   stores: ParsedVendasStore[]
 }
 
+// ─── Qualidade da operação ───────────────────────────────────────────
+
+/** Indicadores de operação de UMA loja, já agregados do período. */
+export type ParsedQualidadeLoja = {
+  storeId: string
+  storeName: string | null
+  periodStart: string // YYYY-MM-DD
+  periodEnd: string // YYYY-MM-DD
+  periodLabel: string // "09/06/2026 - 08/07/2026"
+  nivelSuper: string | null
+  pedidosTotais: number
+  cancelamentoValor: number
+  negociacoes: number
+  pctNegociacoes: number | null
+  pctRespostasNegociacoes: number | null
+  cancelamentos: number
+  pctCancelamento: number | null
+  pedidosAtrasados: number
+  pctAtrasados: number | null
+  tempoMedioAtrasoMin: number | null
+  tempoMedioPreparoMin: number | null
+  pctEntregadorAguardo5: number | null
+  pctEntregadorAguardo15: number | null
+  qtdAvaliacoes: number
+  mediaAvaliacoes: number | null
+  pctTempoOnline: number | null
+  mediaTempoOnlineDia: number | null
+  tempoPausasMin: number
+  varCancelamentos: number | null
+  varChamados: number | null
+  varAvaliacoes: number | null
+  varTempoOnline: number | null
+  topMotivosCancelamento: string | null
+  topMotivosChamados: string | null
+}
+
+export type ParsedQualidade = {
+  reportType: "qualidade"
+  /** 1 linha por (loja, dia) no XLSX → agregado por loja aqui. */
+  porLoja: ParsedQualidadeLoja[]
+}
+
+// ─── Promoções ───────────────────────────────────────────────────────
+
+/** Promoções de UMA loja, já somadas do período (1 linha/campanha no XLSX). */
+export type ParsedPromocoesLoja = {
+  storeId: string
+  storeName: string | null
+  periodStart: string // YYYY-MM-DD
+  periodEnd: string // YYYY-MM-DD
+  periodLabel: string
+  nCampanhas: number
+  pedidos: number // pode duplicar em combos
+  valorItens: number
+  investimentoTotal: number
+  investimentoLojas: number
+  investimentoRede: number
+  investimentoIfood: number
+  investimentoIndustria: number
+  roasLojas: number | null // valor_itens / investimento_lojas
+}
+
+export type ParsedPromocoes = {
+  reportType: "promocoes"
+  porLoja: ParsedPromocoesLoja[]
+}
+
+// ─── Super restaurante ───────────────────────────────────────────────
+
+export type ParsedSuperLoja = {
+  storeId: string
+  storeName: string | null
+  periodStart: string // YYYY-MM-DD
+  periodEnd: string // YYYY-MM-DD
+  periodLabel: string
+  status: string | null
+  eSuper: boolean | null
+  eElegivel: boolean | null
+  totalPedidos: number
+  pedidosAvaliados: number
+  mediaAvaliacoes: number | null
+  pctCancelamento: number | null
+  pctChamados: number | null
+  totalChamados: number
+  chamadosAtraso: number
+  chamadosPosEntrega: number
+  chamadosItemErrado: number
+  planoDeAcao: string | null
+  /** { dimensão: contagem } — ex.: { "bem temperada": 37 } */
+  tagsPos: Record<string, number>
+  tagsNeg: Record<string, number>
+}
+
+export type ParsedSuper = {
+  reportType: "super"
+  porLoja: ParsedSuperLoja[]
+}
+
+// ─── Negociações ─────────────────────────────────────────────────────
+
+export type ParsedNegociacoesLoja = {
+  storeId: string
+  storeName: string | null
+  periodStart: string // YYYY-MM-DD
+  periodEnd: string // YYYY-MM-DD
+  periodLabel: string
+  totalNegociacoes: number
+  cancelamentosEvitados: number
+  valorEvitado: number
+  reembolsoTotal: number
+  cupomTotal: number
+  respondidas: number
+  pctRespondidas: number | null
+  impactouSuper: number
+  topMotivos: Record<string, number>
+}
+
+export type ParsedNegociacoes = {
+  reportType: "negociacoes"
+  porLoja: ParsedNegociacoesLoja[]
+}
+
+// ─── Resultado unificado ─────────────────────────────────────────────
+
 export type ParseResult =
   | ParsedCardapio
   | ParsedFinanceiro
   | ParsedAvaliacoes
   | ParsedPedidos
   | ParsedVendasResumo
+  | ParsedQualidade
+  | ParsedPromocoes
+  | ParsedSuper
+  | ParsedNegociacoes
   | { reportType: "unknown"; error: string }

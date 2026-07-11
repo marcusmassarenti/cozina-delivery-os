@@ -6,7 +6,28 @@ import {
   type Cadencia,
   type ReportStatus,
 } from "@/lib/data/import-checklist"
+import { getEnabledReports } from "@/lib/data/report-prefs"
+import type { ReportKey } from "@/lib/reports-catalog"
 import { currentPeriod, formatPeriodLabel } from "@/lib/period"
+
+/** Mapeia (plataforma, key do checklist) → key do catálogo de relatórios. */
+function toCatalogKey(platform: PlatformId, key: string): ReportKey | null {
+  const m: Record<string, ReportKey> = {
+    "ifood:conciliacao": "ifood_financeiro",
+    "ifood:pedidos": "ifood_pedidos",
+    "ifood:avaliacoes": "ifood_avaliacoes",
+    "ifood:cardapio": "ifood_cardapio",
+    "99food:loja": "99food_loja",
+    "99food:item": "99food_item",
+    "99food:pedido": "99food_pedido",
+    "keeta:restaurante": "keeta_loja",
+    "keeta:pedido": "keeta_pedido",
+    "keeta:pedido_recente": "keeta_pedido",
+    "keeta:promocao": "keeta_promocao",
+    "keeta:item": "keeta_item",
+  }
+  return m[`${platform}:${key}`] ?? null
+}
 
 const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
@@ -37,10 +58,22 @@ function fmtDia(d: string): string {
  */
 export async function ImportChecklist() {
   const { year, month } = currentPeriod()
-  const data = await getImportChecklistForMonth(year, month)
+  const [data, enabled] = await Promise.all([
+    getImportChecklistForMonth(year, month),
+    getEnabledReports(),
+  ])
 
-  const pendentes = data.reports.length - data.okCount
-  const platforms: PlatformId[] = ["ifood", "99food", "keeta"]
+  // Só os relatórios habilitados (desligados somem da saúde da importação).
+  const reports = data.reports.filter((r) => {
+    const k = toCatalogKey(r.platform, r.key)
+    return !k || enabled.has(k)
+  })
+  const okCount = reports.filter((r) => r.status === "ok").length
+  const atrasadoCount = reports.filter((r) => r.status === "atrasado").length
+  const faltaCount = reports.filter((r) => r.status === "falta").length
+  const pendentes = reports.length - okCount
+  const platforms: PlatformId[] = (["ifood", "99food", "keeta"] as PlatformId[])
+    .filter((p) => reports.some((r) => r.platform === p))
 
   return (
     <div className="rounded-xl border bg-card">
@@ -53,8 +86,8 @@ export async function ImportChecklist() {
             Saúde da importação · {formatPeriodLabel({ year, month })}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            {data.okCount} em dia · {data.atrasadoCount} a atualizar ·{" "}
-            {data.faltaCount} faltando · {data.totalUnits} lojas ativas
+            {okCount} em dia · {atrasadoCount} a atualizar · {faltaCount}{" "}
+            faltando · {data.totalUnits} lojas ativas
           </p>
         </div>
         <span
@@ -64,7 +97,7 @@ export async function ImportChecklist() {
               : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
           }`}
         >
-          {data.okCount}/{data.reports.length}
+          {okCount}/{reports.length}
         </span>
       </div>
 
@@ -76,7 +109,7 @@ export async function ImportChecklist() {
               <span className="text-xs font-semibold">{PLAT_LABEL[p]}</span>
             </div>
             <div className="space-y-1.5">
-              {data.reports
+              {reports
                 .filter((r) => r.platform === p)
                 .map((r) => (
                   <ReportRow key={r.key} r={r} />

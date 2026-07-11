@@ -5,6 +5,7 @@ import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { getCoverageMatrix } from "@/lib/data/ifood-imported"
 import { getNinefoodCoverageMatrix } from "@/lib/data/ninefood-imported"
 import { getKeetaCoverageMatrix } from "@/lib/data/keeta-imported"
+import { getEnabledReports } from "@/lib/data/report-prefs"
 import { currentPeriod } from "@/lib/period"
 
 import { IfoodCoverageView } from "./_components/ifood-coverage-view"
@@ -15,11 +16,32 @@ export default async function CoberturaPage() {
   const startYear = 2026
   const startMonth = 1
 
-  const [ifoodMatrix, ninefoodMatrix, keetaMatrix] = await Promise.all([
-    getCoverageMatrix(startYear, startMonth, endYear, endMonth),
-    getNinefoodCoverageMatrix(startYear, startMonth, endYear, endMonth),
-    getKeetaCoverageMatrix(startYear, startMonth, endYear, endMonth),
-  ])
+  const [ifoodMatrix, ninefoodMatrix, keetaMatrix, enabledSet] =
+    await Promise.all([
+      getCoverageMatrix(startYear, startMonth, endYear, endMonth),
+      getNinefoodCoverageMatrix(startYear, startMonth, endYear, endMonth),
+      getKeetaCoverageMatrix(startYear, startMonth, endYear, endMonth),
+      getEnabledReports(),
+    ])
+  const enabled = [...enabledSet]
+  const enabledFor = (prefix: string) =>
+    enabled.filter((k) => k.startsWith(prefix))
+  const ifoodEnabled = enabledFor("ifood_")
+  const nineEnabled = enabledFor("99food_")
+  const keetaEnabled = enabledFor("keeta_")
+  const has = (k: string) => enabledSet.has(k as never)
+  const nineShow = {
+    loja: has("99food_loja"),
+    item: has("99food_item"),
+    pedido: has("99food_pedido"),
+    recentes: false,
+  }
+  const keetaShow = {
+    loja: has("keeta_loja"),
+    item: has("keeta_item"),
+    pedido: has("keeta_pedido"),
+    recentes: has("keeta_pedido"),
+  }
 
   const activeIfood = ifoodMatrix.units.filter((u) => u.active).length
   const ninefoodHasAnyData = ninefoodMatrix.units.some((u) =>
@@ -78,18 +100,24 @@ export default async function CoberturaPage() {
         slots={[
           {
             platform: "ifood",
-            empty: !ifoodHasAnyData,
-            content: <IfoodCoverageView matrix={ifoodMatrix} />,
+            empty: ifoodEnabled.length === 0 || !ifoodHasAnyData,
+            content: (
+              <IfoodCoverageView matrix={ifoodMatrix} enabled={ifoodEnabled} />
+            ),
           },
           {
             platform: "99food",
-            empty: !ninefoodHasAnyData,
-            content: <NinefoodCoverageView matrix={ninefoodMatrix} />,
+            empty: nineEnabled.length === 0 || !ninefoodHasAnyData,
+            content: (
+              <NinefoodCoverageView matrix={ninefoodMatrix} show={nineShow} />
+            ),
           },
           {
             platform: "keeta",
-            empty: !keetaHasAnyData,
-            content: <NinefoodCoverageView matrix={keetaMatrix} showRecentes />,
+            empty: keetaEnabled.length === 0 || !keetaHasAnyData,
+            content: (
+              <NinefoodCoverageView matrix={keetaMatrix} show={keetaShow} />
+            ),
           },
         ]}
       />

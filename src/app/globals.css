@@ -210,6 +210,195 @@
     display: none !important;
   }
 
+  /* ── Exportar SÓ o Diagnóstico da loja em PDF (botão "PDF" da aba
+     Diagnóstico) — layout de relatório: capa + seções numeradas + rodapé.
+     O card é clonado num #diag-print-overlay (filho direto do body). */
+  body.printing-diag > *:not(#diag-print-overlay) {
+    display: none !important;
+  }
+  body.printing-diag {
+    background: #fff !important;
+  }
+  #diag-print-overlay {
+    display: block !important;
+    padding: 0 !important;
+    color: #18181b;
+    counter-reset: diagsec;
+  }
+  /* Tabela de impressão: thead/tfoot REPETEM em cada página (espaçadores de
+     topo/base). A célula recebe a margem lateral (padding). É o jeito confiável
+     de margem vertical no "Salvar como PDF" do Chrome. */
+  .diag-ptable {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .diag-ptable thead {
+    display: table-header-group;
+  }
+  .diag-ptable tfoot {
+    display: table-footer-group;
+  }
+  .diag-ptable td {
+    padding: 0;
+  }
+  .diag-ptop {
+    height: 12mm;
+  }
+  .diag-pbot {
+    height: 14mm;
+  }
+  .diag-pcell {
+    padding: 0 10mm !important;
+  }
+  #diag-print-overlay .rounded-xl {
+    box-shadow: none !important;
+  }
+  /* Esconde o cabeçalho de tela e o botão PDF no PDF. Escopado no overlay
+     (id) pra vencer qualquer utilitário do Tailwind com folga. */
+  .diag-print-hide {
+    display: none !important;
+  }
+  #diag-print-overlay .diag-screen-head {
+    display: none !important;
+  }
+
+  /* Topo/base de CADA página vêm do @page geral (18mm vertical). As laterais
+     do diagnóstico ganham +10mm de padding no overlay → 18mm em volta. */
+
+  /* Capa — 1ª página inteira (o .hidden do Tailwind é vencido pelo id) */
+  #diag-print-overlay .diag-cover {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 240mm;
+    page-break-after: always;
+    break-after: page;
+    padding: 6mm 2mm;
+  }
+  #diag-print-overlay .diag-cover .dc-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: oklch(0.55 0.2 30);
+  }
+  #diag-print-overlay .diag-cover .dc-logo {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+  }
+  #diag-print-overlay .diag-cover .dc-kicker {
+    margin-top: 40px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #71717a;
+  }
+  #diag-print-overlay .diag-cover .dc-title {
+    margin-top: 6px;
+    font-size: 52px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  #diag-print-overlay .diag-cover .dc-store {
+    margin-top: 28px;
+    font-size: 26px;
+    font-weight: 700;
+  }
+  #diag-print-overlay .diag-cover .dc-store .dc-code {
+    color: #a1a1aa;
+    font-weight: 600;
+  }
+  #diag-print-overlay .diag-cover .dc-meta {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #52525b;
+  }
+  #diag-print-overlay .diag-cover .dc-date {
+    margin-top: 28px;
+    border-top: 2px solid oklch(0.65 0.21 35);
+    padding-top: 10px;
+    font-size: 12px;
+    color: #71717a;
+  }
+
+  /* Rodapé fixo (repete em cada página) */
+  #diag-print-overlay .diag-foot {
+    display: block !important;
+    position: fixed;
+    bottom: 6mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: #a1a1aa;
+  }
+
+  /* Seções = blocos editoriais (sem caixa dupla). O número vira selo e o
+     título ganha uma régua embaixo — cara de relatório, não de tela. */
+  #diag-print-overlay section {
+    counter-increment: diagsec;
+    margin: 0 0 8mm !important;
+  }
+  #diag-print-overlay section:not(.diag-foco) {
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  /* Cabeçalho da seção (h3 direto OU dentro do 1º div) — régua + selo nº */
+  #diag-print-overlay section:not(.diag-foco) > h3:first-child,
+  #diag-print-overlay section:not(.diag-foco) > div:first-child {
+    border-bottom: 1.5px solid #e4e4e7;
+    padding-bottom: 5px;
+    margin-bottom: 10px !important;
+    break-after: avoid;
+  }
+  #diag-print-overlay section > h3:first-child::before,
+  #diag-print-overlay section > div:first-child > h3::before {
+    content: counter(diagsec, decimal-leading-zero);
+    display: inline-block;
+    background: oklch(0.6 0.21 35);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.82em;
+    line-height: 1.2;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-right: 8px;
+    vertical-align: 1px;
+  }
+  /* Foco prioritário: mantém o destaque colorido, só numera */
+  #diag-print-overlay section.diag-foco {
+    break-inside: avoid;
+    margin-bottom: 6mm !important;
+  }
+  /* Cards internos: leves (sem sombra, borda finíssima) */
+  #diag-print-overlay section .rounded-lg,
+  #diag-print-overlay section .rounded-xl {
+    box-shadow: none !important;
+    border-color: #ececf0 !important;
+  }
+  /* Funil sempre em linha (a folha é estreita e o md: não dispara) */
+  #diag-print-overlay .diag-funnel {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+  #diag-print-overlay .diag-funnel .rounded-lg {
+    padding: 8px !important;
+  }
+  /* Evita órfãos: título/subtítulo não ficam sozinhos no fim da página */
+  #diag-print-overlay section > h3,
+  #diag-print-overlay section > div:first-child + p {
+    break-after: avoid;
+  }
+
   /* ── "Infos Diária Venda": tabela larga → paisagem (exceção do padrão) ── */
   .acomp-print {
     display: block !important;
@@ -261,4 +450,63 @@
     margin: 8mm;
     size: A4 landscape;
   }
+}
+
+/* ─── Diagnóstico: animações (entrada, barras, hover) ─────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes diagUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes diagBarGrow {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  .diag-in {
+    opacity: 0;
+    animation: diagUp 0.5s ease both;
+    animation-delay: var(--diag-delay, 0s);
+  }
+  .diag-bar-fill {
+    transform-origin: left center;
+    animation: diagBarGrow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: 0.15s;
+  }
+}
+.diag-hover {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.diag-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px -14px rgb(0 0 0 / 0.28);
+}
+
+/* PDF/print: nada some por causa de animação — sai tudo visível */
+@media print {
+  .diag-in,
+  .diag-bar-fill {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+#diag-print-overlay .diag-in,
+#diag-print-overlay .diag-bar-fill,
+#diag-print-overlay .diag-hover {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  box-shadow: none !important;
 }

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { requireModulePermission } from "@/lib/auth/guards"
 import { asaasUpdateCustomer } from "@/lib/asaas/client"
+import { ALL_REPORT_KEYS } from "@/lib/reports-catalog"
 
 export type ContaState = { ok: boolean; message?: string }
 
@@ -94,5 +95,50 @@ export async function saveContaInfo(
   }
 
   revalidatePath("/minha-conta/informacoes")
+  return { ok: true }
+}
+
+/**
+ * Salva quais relatórios a operação usa (mapa report_key → bool em
+ * holdings.enabled_reports). Os desligados somem do guia, cobertura e do
+ * "não integrado" do Diagnóstico.
+ */
+export async function saveReportPrefs(
+  _prev: ContaState,
+  formData: FormData,
+): Promise<ContaState> {
+  await requireModulePermission("usuarios", "edit")
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Conta não encontrada." }
+
+  const map: Record<string, boolean> = {}
+  for (const key of ALL_REPORT_KEYS) map[key] = formData.get(key) === "on"
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("holdings")
+    .update({ enabled_reports: map })
+    .eq("id", holdingId)
+  if (error) return { ok: false, message: error.message }
+
+  // Não revalida a própria tela (o form já reflete o estado local e assim o
+  // aviso "Salvo" não é engolido por um remount). Revalida onde o efeito aparece.
+  revalidatePath("/importacao")
+  revalidatePath("/importacao/cobertura")
+  return { ok: true }
+}
+
+/** Liga/desliga a IA (plano de ação por Claude) na conta. */
+export async function saveIaHabilitada(habilitada: boolean): Promise<ContaState> {
+  await requireModulePermission("usuarios", "edit")
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Conta não encontrada." }
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("holdings")
+    .update({ ia_habilitada: habilitada })
+    .eq("id", holdingId)
+  if (error) return { ok: false, message: error.message }
+  revalidatePath("/minha-conta/relatorios")
   return { ok: true }
 }

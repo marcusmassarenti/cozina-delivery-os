@@ -21,6 +21,29 @@ export function detectIfoodReportType(workbook: XLSX.WorkBook): IfoodReportType 
     return "cardapio"
   }
 
+  // Qualidade da operação: aba "Indicadores principais" (tempo online,
+  // chamados/negociações, nível super, atrasos, motivos de cancelamento).
+  if (sheets.has("Indicadores principais")) {
+    return "qualidade"
+  }
+
+  // Promoções: aba "Promoção" com coluna "Campaign_id" (investimento + ROI).
+  if (sheets.has("Promoção") && sheetHasHeader(workbook.Sheets["Promoção"], "Campaign_id")) {
+    return "promocoes"
+  }
+
+  // Super restaurante: aba "Nível Atual" com coluna "plano_de_acao".
+  const nivelSheet = workbook.SheetNames.find((n) => /n[íi]vel atual/i.test(n))
+  if (nivelSheet && sheetHasHeader(workbook.Sheets[nivelSheet], "plano_de_acao")) {
+    return "super"
+  }
+
+  // Negociações: aba "...negociações" com coluna "Cancelamento evitado".
+  const negSheet = workbook.SheetNames.find((n) => /negocia/i.test(n))
+  if (negSheet && sheetHasHeader(workbook.Sheets[negSheet], "Cancelamento evitado")) {
+    return "negociacoes"
+  }
+
   // Relatório de Vendas (resumido) — abas "Vendas" + "Horário com mais vendas"
   // + "Formas de pagamento utilizadas" + "Dias com mais vendas". Não traz
   // dado novo: tudo isso já vem pela Conciliação (financeiro) e pelo
@@ -97,6 +120,18 @@ export function openWorkbook(buf: ArrayBuffer): {
   }
   const reportType = detectIfoodReportType(workbook)
   return { workbook, reportType }
+}
+
+/** true se a 1a linha da aba tem alguma coluna contendo `needle`. */
+function sheetHasHeader(sheet: XLSX.WorkSheet | undefined, needle: string): boolean {
+  if (!sheet?.["!ref"]) return false
+  const range = XLSX.utils.decode_range(sheet["!ref"])
+  const low = needle.toLowerCase()
+  for (let c = range.s.c; c <= Math.min(range.s.c + 40, range.e.c); c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c })]
+    if (cell?.v != null && String(cell.v).toLowerCase().includes(low)) return true
+  }
+  return false
 }
 
 /** XLSX começa com "PK" (ZIP); .xls antigo com 0xD0CF. Senão, é texto/CSV. */

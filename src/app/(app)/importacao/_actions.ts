@@ -12,6 +12,10 @@ import type {
   ParsedCardapio,
   ParsedFinanceiro,
   ParsedPedidos,
+  ParsedNegociacoes,
+  ParsedPromocoes,
+  ParsedQualidade,
+  ParsedSuper,
 } from "@/lib/import/ifood"
 import {
   isNinefoodWorkbook,
@@ -603,6 +607,50 @@ async function processFile(
     )
   }
 
+  // Qualidade da operação → multi-loja (agregado por loja no período)
+  if (parsed.reportType === "qualidade") {
+    return await processQualidadeMultiloja(
+      parsed,
+      storeMap,
+      file.name,
+      userId,
+      admin,
+    )
+  }
+
+  // Promoções → multi-loja (investimento + ROI somados por loja)
+  if (parsed.reportType === "promocoes") {
+    return await processPromocoesMultiloja(
+      parsed,
+      storeMap,
+      file.name,
+      userId,
+      admin,
+    )
+  }
+
+  // Super restaurante → multi-loja (1 avaliação por loja)
+  if (parsed.reportType === "super") {
+    return await processSuperMultiloja(
+      parsed,
+      storeMap,
+      file.name,
+      userId,
+      admin,
+    )
+  }
+
+  // Negociações → multi-loja (agregado por loja no período)
+  if (parsed.reportType === "negociacoes") {
+    return await processNegociacoesMultiloja(
+      parsed,
+      storeMap,
+      file.name,
+      userId,
+      admin,
+    )
+  }
+
   // Cardapio diário e Financeiro: 1 loja por arquivo
   const storeId = parsed.storeId
   const unit = storeMap.get(storeId)
@@ -1045,6 +1093,478 @@ async function saveCardapioPeriodo(
   if (error) throw new Error(`Falha ao gravar snapshot: ${error.message}`)
 
   return { substituido, importId: importLog.id }
+}
+
+/**
+ * Qualidade da operação: 1 arquivo traz N lojas (diário agregado por loja).
+ * Cada loja vira um result; lojas não mapeadas viram unmapped.
+ */
+async function processQualidadeMultiloja(
+  parsed: ParsedQualidade,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  for (const loja of parsed.porLoja) {
+    const unit = storeMap.get(loja.storeId)
+    if (!unit) {
+      results.push({
+        filename: `${filename} · loja ${loja.storeName ?? loja.storeId}`,
+        originalFilename: filename,
+        ok: false,
+        unmapped: {
+          storeId: loja.storeId,
+          platform: "ifood",
+          cnpj: null,
+          suggestedName: loja.storeName ? formatStoreName(loja.storeName) : null,
+          suggestedCity: extractCityFromStoreName(loja.storeName),
+          reportTypeLabel: "Qualidade da operação iFood",
+        },
+      })
+      continue
+    }
+    try {
+      const { substituido } = await saveQualidade(loja, unit, filename, userId, admin)
+      const online =
+        loja.pctTempoOnline != null
+          ? ` · ${loja.pctTempoOnline.toFixed(1)}% online`
+          : ""
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: true,
+        message: `Qualidade da operação importada${substituido ? " (substituída)" : ""}: ${loja.nivelSuper ?? "sem nível"}${online}. Período ${loja.periodLabel}.`,
+      })
+    } catch (e) {
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: false,
+        message:
+          e instanceof Error
+            ? e.message
+            : `Erro ao gravar Qualidade da loja ${loja.storeId}`,
+      })
+    }
+  }
+  return results
+}
+
+async function saveQualidade(
+  loja: ParsedQualidade["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ substituido: boolean }> {
+  const { data: existing } = await admin
+    .from("ifood_operacao_periodo")
+    .select("id")
+    .eq("unit_id", unit.unitId)
+    .eq("period_start", loja.periodStart)
+    .eq("period_end", loja.periodEnd)
+    .maybeSingle()
+  const substituido = !!existing
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "ifood",
+      report_type: "qualidade",
+      cadencia: "mensal",
+      ref_date: loja.periodEnd,
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: 1,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const payload = {
+    unit_id: unit.unitId,
+    period_start: loja.periodStart,
+    period_end: loja.periodEnd,
+    period_label: loja.periodLabel,
+    nivel_super: loja.nivelSuper,
+    pedidos_totais: loja.pedidosTotais,
+    cancelamento_valor: loja.cancelamentoValor,
+    negociacoes: loja.negociacoes,
+    pct_negociacoes: loja.pctNegociacoes,
+    pct_respostas_negociacoes: loja.pctRespostasNegociacoes,
+    cancelamentos: loja.cancelamentos,
+    pct_cancelamento: loja.pctCancelamento,
+    pedidos_atrasados: loja.pedidosAtrasados,
+    pct_atrasados: loja.pctAtrasados,
+    tempo_medio_atraso_min: loja.tempoMedioAtrasoMin,
+    tempo_medio_preparo_min: loja.tempoMedioPreparoMin,
+    pct_entregador_aguardo_5: loja.pctEntregadorAguardo5,
+    pct_entregador_aguardo_15: loja.pctEntregadorAguardo15,
+    qtd_avaliacoes: loja.qtdAvaliacoes,
+    media_avaliacoes: loja.mediaAvaliacoes,
+    pct_tempo_online: loja.pctTempoOnline,
+    media_tempo_online_dia: loja.mediaTempoOnlineDia,
+    tempo_pausas_min: loja.tempoPausasMin,
+    var_cancelamentos: loja.varCancelamentos,
+    var_chamados: loja.varChamados,
+    var_avaliacoes: loja.varAvaliacoes,
+    var_tempo_online: loja.varTempoOnline,
+    top_motivos_cancelamento: loja.topMotivosCancelamento,
+    top_motivos_chamados: loja.topMotivosChamados,
+    import_id: importLog.id,
+  }
+
+  const { error } = await admin
+    .from("ifood_operacao_periodo")
+    .upsert(payload, { onConflict: "unit_id,period_start,period_end" })
+  if (error) throw new Error(`Falha ao gravar Qualidade: ${error.message}`)
+
+  return { substituido }
+}
+
+/**
+ * Promoções: 1 arquivo traz N lojas (1 linha/campanha, somado por loja).
+ */
+async function processPromocoesMultiloja(
+  parsed: ParsedPromocoes,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  for (const loja of parsed.porLoja) {
+    const unit = storeMap.get(loja.storeId)
+    if (!unit) {
+      results.push({
+        filename: `${filename} · loja ${loja.storeName ?? loja.storeId}`,
+        originalFilename: filename,
+        ok: false,
+        unmapped: {
+          storeId: loja.storeId,
+          platform: "ifood",
+          cnpj: null,
+          suggestedName: loja.storeName ? formatStoreName(loja.storeName) : null,
+          suggestedCity: extractCityFromStoreName(loja.storeName),
+          reportTypeLabel: "Promoções iFood",
+        },
+      })
+      continue
+    }
+    try {
+      const { substituido } = await savePromocoes(loja, unit, filename, userId, admin)
+      const invBRL = loja.investimentoLojas.toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        maximumFractionDigits: 0,
+      })
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: true,
+        message: `Promoções importadas${substituido ? " (substituídas)" : ""}: ${loja.nCampanhas} campanha(s), ${invBRL} investido pela loja. Período ${loja.periodLabel}.`,
+      })
+    } catch (e) {
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: false,
+        message:
+          e instanceof Error
+            ? e.message
+            : `Erro ao gravar Promoções da loja ${loja.storeId}`,
+      })
+    }
+  }
+  return results
+}
+
+async function savePromocoes(
+  loja: ParsedPromocoes["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ substituido: boolean }> {
+  const { data: existing } = await admin
+    .from("ifood_promocoes_periodo")
+    .select("id")
+    .eq("unit_id", unit.unitId)
+    .eq("period_start", loja.periodStart)
+    .eq("period_end", loja.periodEnd)
+    .maybeSingle()
+  const substituido = !!existing
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "ifood",
+      report_type: "promocoes",
+      cadencia: "mensal",
+      ref_date: loja.periodEnd,
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: loja.nCampanhas,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const payload = {
+    unit_id: unit.unitId,
+    period_start: loja.periodStart,
+    period_end: loja.periodEnd,
+    period_label: loja.periodLabel,
+    n_campanhas: loja.nCampanhas,
+    pedidos: loja.pedidos,
+    valor_itens: loja.valorItens,
+    investimento_total: loja.investimentoTotal,
+    investimento_lojas: loja.investimentoLojas,
+    investimento_rede: loja.investimentoRede,
+    investimento_ifood: loja.investimentoIfood,
+    investimento_industria: loja.investimentoIndustria,
+    roas_lojas: loja.roasLojas,
+    import_id: importLog.id,
+  }
+
+  const { error } = await admin
+    .from("ifood_promocoes_periodo")
+    .upsert(payload, { onConflict: "unit_id,period_start,period_end" })
+  if (error) throw new Error(`Falha ao gravar Promoções: ${error.message}`)
+
+  return { substituido }
+}
+
+/**
+ * Super restaurante: 1 arquivo traz N lojas (1 avaliação por loja).
+ */
+async function processSuperMultiloja(
+  parsed: ParsedSuper,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  for (const loja of parsed.porLoja) {
+    const unit = storeMap.get(loja.storeId)
+    if (!unit) {
+      results.push({
+        filename: `${filename} · loja ${loja.storeName ?? loja.storeId}`,
+        originalFilename: filename,
+        ok: false,
+        unmapped: {
+          storeId: loja.storeId,
+          platform: "ifood",
+          cnpj: null,
+          suggestedName: loja.storeName ? formatStoreName(loja.storeName) : null,
+          suggestedCity: extractCityFromStoreName(loja.storeName),
+          reportTypeLabel: "Super restaurante iFood",
+        },
+      })
+      continue
+    }
+    try {
+      const { substituido } = await saveSuper(loja, unit, filename, userId, admin)
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: true,
+        message: `Super restaurante importado${substituido ? " (substituído)" : ""}: ${loja.status ?? "sem nível"}. Avaliação ${loja.periodLabel}.`,
+      })
+    } catch (e) {
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: false,
+        message:
+          e instanceof Error
+            ? e.message
+            : `Erro ao gravar Super da loja ${loja.storeId}`,
+      })
+    }
+  }
+  return results
+}
+
+async function saveSuper(
+  loja: ParsedSuper["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ substituido: boolean }> {
+  const { data: existing } = await admin
+    .from("ifood_super_avaliacao")
+    .select("id")
+    .eq("unit_id", unit.unitId)
+    .eq("period_start", loja.periodStart)
+    .eq("period_end", loja.periodEnd)
+    .maybeSingle()
+  const substituido = !!existing
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "ifood",
+      report_type: "super",
+      cadencia: "mensal",
+      ref_date: loja.periodEnd,
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: 1,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const payload = {
+    unit_id: unit.unitId,
+    period_start: loja.periodStart,
+    period_end: loja.periodEnd,
+    period_label: loja.periodLabel,
+    status: loja.status,
+    e_super: loja.eSuper,
+    e_elegivel: loja.eElegivel,
+    total_pedidos: loja.totalPedidos,
+    pedidos_avaliados: loja.pedidosAvaliados,
+    media_avaliacoes: loja.mediaAvaliacoes,
+    pct_cancelamento: loja.pctCancelamento,
+    pct_chamados: loja.pctChamados,
+    total_chamados: loja.totalChamados,
+    chamados_atraso: loja.chamadosAtraso,
+    chamados_pos_entrega: loja.chamadosPosEntrega,
+    chamados_item_errado: loja.chamadosItemErrado,
+    plano_de_acao: loja.planoDeAcao,
+    tags_pos: loja.tagsPos,
+    tags_neg: loja.tagsNeg,
+    import_id: importLog.id,
+  }
+
+  const { error } = await admin
+    .from("ifood_super_avaliacao")
+    .upsert(payload, { onConflict: "unit_id,period_start,period_end" })
+  if (error) throw new Error(`Falha ao gravar Super: ${error.message}`)
+
+  return { substituido }
+}
+
+/**
+ * Negociações: 1 arquivo traz N lojas (1 linha/negociação, agregado por loja).
+ */
+async function processNegociacoesMultiloja(
+  parsed: ParsedNegociacoes,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  for (const loja of parsed.porLoja) {
+    const unit = storeMap.get(loja.storeId)
+    if (!unit) {
+      results.push({
+        filename: `${filename} · loja ${loja.storeName ?? loja.storeId}`,
+        originalFilename: filename,
+        ok: false,
+        unmapped: {
+          storeId: loja.storeId,
+          platform: "ifood",
+          cnpj: null,
+          suggestedName: loja.storeName ? formatStoreName(loja.storeName) : null,
+          suggestedCity: extractCityFromStoreName(loja.storeName),
+          reportTypeLabel: "Negociações iFood",
+        },
+      })
+      continue
+    }
+    try {
+      const { substituido } = await saveNegociacoes(loja, unit, filename, userId, admin)
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: true,
+        message: `Negociações importadas${substituido ? " (substituídas)" : ""}: ${loja.totalNegociacoes} negociação(ões), ${loja.cancelamentosEvitados} cancelamento(s) evitado(s). Período ${loja.periodLabel}.`,
+      })
+    } catch (e) {
+      results.push({
+        filename: `${filename} · ${unit.code} ${unit.name}`,
+        originalFilename: filename,
+        ok: false,
+        message:
+          e instanceof Error
+            ? e.message
+            : `Erro ao gravar Negociações da loja ${loja.storeId}`,
+      })
+    }
+  }
+  return results
+}
+
+async function saveNegociacoes(
+  loja: ParsedNegociacoes["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ substituido: boolean }> {
+  const { data: existing } = await admin
+    .from("ifood_negociacoes_periodo")
+    .select("id")
+    .eq("unit_id", unit.unitId)
+    .eq("period_start", loja.periodStart)
+    .eq("period_end", loja.periodEnd)
+    .maybeSingle()
+  const substituido = !!existing
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "ifood",
+      report_type: "negociacoes",
+      cadencia: "mensal",
+      ref_date: loja.periodEnd,
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: loja.totalNegociacoes,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const payload = {
+    unit_id: unit.unitId,
+    period_start: loja.periodStart,
+    period_end: loja.periodEnd,
+    period_label: loja.periodLabel,
+    total_negociacoes: loja.totalNegociacoes,
+    cancelamentos_evitados: loja.cancelamentosEvitados,
+    valor_evitado: loja.valorEvitado,
+    reembolso_total: loja.reembolsoTotal,
+    cupom_total: loja.cupomTotal,
+    respondidas: loja.respondidas,
+    pct_respondidas: loja.pctRespondidas,
+    impactou_super: loja.impactouSuper,
+    top_motivos: loja.topMotivos,
+    import_id: importLog.id,
+  }
+
+  const { error } = await admin
+    .from("ifood_negociacoes_periodo")
+    .upsert(payload, { onConflict: "unit_id,period_start,period_end" })
+  if (error) throw new Error(`Falha ao gravar Negociações: ${error.message}`)
+
+  return { substituido }
 }
 
 /**

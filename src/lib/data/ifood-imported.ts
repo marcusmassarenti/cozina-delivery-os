@@ -154,6 +154,11 @@ export type CoverageCell = {
     status: CoverageStatus
     imported: boolean
   }
+  // Relatórios de período (1 por mês) — status binário (tem/não tem).
+  qualidade: { status: CoverageStatus }
+  promocoes: { status: CoverageStatus }
+  super: { status: CoverageStatus }
+  negociacoes: { status: CoverageStatus }
   /** A loja operou nesse mês? false = N/A (antes de inaugurar / após fechar). */
   applicable: boolean
 }
@@ -391,6 +396,41 @@ export async function getCoverageMatrix(
     }
   }
 
+  // 6) Relatórios de período novos (Qualidade, Promoções, Super, Negociações):
+  // 1 linha por (unit, período). Presença por mês do period_end (status binário).
+  const buildPresence = async (
+    table:
+      | "ifood_operacao_periodo"
+      | "ifood_promocoes_periodo"
+      | "ifood_super_avaliacao"
+      | "ifood_negociacoes_periodo",
+  ): Promise<Map<string, Set<string>>> => {
+    const map = new Map<string, Set<string>>()
+    if (unitIds.length === 0) return map
+    const rows = await fetchAllRows<{ unit_id: string; period_end: string }>(
+      (from, to) =>
+        admin
+          .from(table)
+          .select("unit_id, period_end")
+          .in("unit_id", unitIds)
+          .gte("period_end", rangeStart)
+          .lte("period_end", rangeEnd)
+          .order("id")
+          .range(from, to),
+      `${table} cobertura`,
+    )
+    for (const r of rows) {
+      const set = map.get(r.unit_id) ?? new Set<string>()
+      set.add(dateToKey(r.period_end))
+      map.set(r.unit_id, set)
+    }
+    return map
+  }
+  const qualidadeMap = await buildPresence("ifood_operacao_periodo")
+  const promocoesMap = await buildPresence("ifood_promocoes_periodo")
+  const superMap = await buildPresence("ifood_super_avaliacao")
+  const negociacoesMap = await buildPresence("ifood_negociacoes_periodo")
+
   // Mês corrente — pra ele, qualquer dado já é "completo" (não dá pra
   // exigir mais até o mês acabar)
   const todayLocal = new Date()
@@ -476,6 +516,26 @@ export async function getCoverageMatrix(
               ? "complete"
               : "empty") as CoverageStatus,
             imported: pedidosByUnitMonth.get(u.id)?.has(month.key) ?? false,
+          },
+          qualidade: {
+            status: (qualidadeMap.get(u.id)?.has(month.key)
+              ? "complete"
+              : "empty") as CoverageStatus,
+          },
+          promocoes: {
+            status: (promocoesMap.get(u.id)?.has(month.key)
+              ? "complete"
+              : "empty") as CoverageStatus,
+          },
+          super: {
+            status: (superMap.get(u.id)?.has(month.key)
+              ? "complete"
+              : "empty") as CoverageStatus,
+          },
+          negociacoes: {
+            status: (negociacoesMap.get(u.id)?.has(month.key)
+              ? "complete"
+              : "empty") as CoverageStatus,
           },
           applicable: isLinked && win.applicable,
         }
@@ -1825,4 +1885,274 @@ export async function getNetworkCancelamentosPorMotivo(
     }))
     .sort((a, b) => b.pedidos - a.pedidos)
     .slice(0, limit)
+}
+
+// ─── Qualidade da operação (snapshot de período) ─────────────────────
+
+export type OperacaoSnapshot = {
+  periodLabel: string
+  periodStart: string
+  periodEnd: string
+  nivelSuper: string | null
+  pedidosTotais: number
+  pctTempoOnline: number | null
+  mediaTempoOnlineDia: number | null
+  pctCancelamento: number | null
+  pctNegociacoes: number | null
+  pctRespostasNegociacoes: number | null
+  pctAtrasados: number | null
+  tempoMedioPreparoMin: number | null
+  tempoMedioAtrasoMin: number | null
+  mediaAvaliacoes: number | null
+  qtdAvaliacoes: number
+  varCancelamentos: number | null
+  varChamados: number | null
+  varTempoOnline: number | null
+  topMotivosCancelamento: string | null
+  topMotivosChamados: string | null
+}
+
+/**
+ * Indicadores de operação do iFood (relatório "Qualidade da operação")
+ * cujo período termina dentro do mês selecionado. 1 por (unidade, período).
+ */
+export async function getOperacaoForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<OperacaoSnapshot | null> {
+  const admin = createAdminClient()
+  const { start, end } = monthRange(year, month)
+  const { data } = await admin
+    .from("ifood_operacao_periodo")
+    .select(
+      "period_label, period_start, period_end, nivel_super, pedidos_totais, pct_tempo_online, media_tempo_online_dia, pct_cancelamento, pct_negociacoes, pct_respostas_negociacoes, pct_atrasados, tempo_medio_preparo_min, tempo_medio_atraso_min, media_avaliacoes, qtd_avaliacoes, var_cancelamentos, var_chamados, var_tempo_online, top_motivos_cancelamento, top_motivos_chamados",
+    )
+    .eq("unit_id", unitId)
+    // Janela do relatório de Qualidade é rolante (~30d) e pode terminar no mês
+    // seguinte. Casa qualquer janela que SOBREPÕE o mês (mesma regra do de
+    // Promoções) — senão em muitos meses `operacao` vinha null e a Saúde caía
+    // num fallback que superestima o cancelamento.
+    .lte("period_start", end)
+    .gte("period_end", start)
+    .order("period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return null
+  const num = (v: number | string | null) => (v == null ? null : Number(v))
+  return {
+    periodLabel: data.period_label,
+    periodStart: data.period_start,
+    periodEnd: data.period_end,
+    nivelSuper: data.nivel_super,
+    pedidosTotais: data.pedidos_totais ?? 0,
+    pctTempoOnline: num(data.pct_tempo_online),
+    mediaTempoOnlineDia: num(data.media_tempo_online_dia),
+    pctCancelamento: num(data.pct_cancelamento),
+    pctNegociacoes: num(data.pct_negociacoes),
+    pctRespostasNegociacoes: num(data.pct_respostas_negociacoes),
+    pctAtrasados: num(data.pct_atrasados),
+    tempoMedioPreparoMin: num(data.tempo_medio_preparo_min),
+    tempoMedioAtrasoMin: num(data.tempo_medio_atraso_min),
+    mediaAvaliacoes: num(data.media_avaliacoes),
+    qtdAvaliacoes: data.qtd_avaliacoes ?? 0,
+    varCancelamentos: num(data.var_cancelamentos),
+    varChamados: num(data.var_chamados),
+    varTempoOnline: num(data.var_tempo_online),
+    topMotivosCancelamento: data.top_motivos_cancelamento,
+    topMotivosChamados: data.top_motivos_chamados,
+  }
+}
+
+// ─── Promoções (snapshot de período) ─────────────────────────────────
+
+export type PromocoesSnapshot = {
+  periodLabel: string
+  periodStart: string
+  periodEnd: string
+  nCampanhas: number
+  pedidos: number
+  valorItens: number
+  investimentoTotal: number
+  investimentoLojas: number
+  investimentoRede: number
+  investimentoIfood: number
+  investimentoIndustria: number
+  roasLojas: number | null
+}
+
+/**
+ * Investimento e retorno de promoções do iFood cujo período termina dentro
+ * do mês selecionado. 1 por (unidade, período).
+ */
+export async function getPromocoesForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<PromocoesSnapshot | null> {
+  const admin = createAdminClient()
+  const { start, end } = monthRange(year, month)
+  const { data } = await admin
+    .from("ifood_promocoes_periodo")
+    .select(
+      "period_label, period_start, period_end, n_campanhas, pedidos, valor_itens, investimento_total, investimento_lojas, investimento_rede, investimento_ifood, investimento_industria, roas_lojas",
+    )
+    .eq("unit_id", unitId)
+    // A janela do relatório de Promoções é rolante (~30d) e pode terminar no mês
+    // seguinte. Casa qualquer janela que SOBREPÕE o mês (start ≤ fimDoMês E
+    // end ≥ inícioDoMês), pegando a mais recente.
+    .lte("period_start", end)
+    .gte("period_end", start)
+    .order("period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return null
+  const num = (v: number | string | null) => (v == null ? 0 : Number(v))
+  return {
+    periodLabel: data.period_label,
+    periodStart: data.period_start,
+    periodEnd: data.period_end,
+    nCampanhas: data.n_campanhas ?? 0,
+    pedidos: data.pedidos ?? 0,
+    valorItens: num(data.valor_itens),
+    investimentoTotal: num(data.investimento_total),
+    investimentoLojas: num(data.investimento_lojas),
+    investimentoRede: num(data.investimento_rede),
+    investimentoIfood: num(data.investimento_ifood),
+    investimentoIndustria: num(data.investimento_industria),
+    roasLojas: data.roas_lojas == null ? null : Number(data.roas_lojas),
+  }
+}
+
+// ─── Super restaurante (avaliação mais recente) ──────────────────────
+
+export type SuperSnapshot = {
+  periodLabel: string
+  periodStart: string
+  periodEnd: string
+  status: string | null
+  eSuper: boolean | null
+  eElegivel: boolean | null
+  totalPedidos: number
+  pedidosAvaliados: number
+  mediaAvaliacoes: number | null
+  pctCancelamento: number | null
+  pctChamados: number | null
+  totalChamados: number
+  chamadosAtraso: number
+  chamadosPosEntrega: number
+  chamadosItemErrado: number
+  planoDeAcao: string | null
+  tagsPos: Record<string, number>
+  tagsNeg: Record<string, number>
+}
+
+/**
+ * Avaliação Super mais recente cuja janela termina até o fim do mês
+ * selecionado. Como o Super é uma nota trimestral rolante, mostramos o
+ * "estado atual" (não filtramos por período dentro do mês).
+ */
+export async function getSuperForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<SuperSnapshot | null> {
+  const admin = createAdminClient()
+  const { end } = monthRange(year, month)
+  const { data } = await admin
+    .from("ifood_super_avaliacao")
+    .select(
+      "period_label, period_start, period_end, status, e_super, e_elegivel, total_pedidos, pedidos_avaliados, media_avaliacoes, pct_cancelamento, pct_chamados, total_chamados, chamados_atraso, chamados_pos_entrega, chamados_item_errado, plano_de_acao, tags_pos, tags_neg",
+    )
+    .eq("unit_id", unitId)
+    .lte("period_end", end)
+    .order("period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return null
+  const num = (v: number | string | null) => (v == null ? null : Number(v))
+  const tags = (v: unknown): Record<string, number> =>
+    v && typeof v === "object" ? (v as Record<string, number>) : {}
+  return {
+    periodLabel: data.period_label,
+    periodStart: data.period_start,
+    periodEnd: data.period_end,
+    status: data.status,
+    eSuper: data.e_super,
+    eElegivel: data.e_elegivel,
+    totalPedidos: data.total_pedidos ?? 0,
+    pedidosAvaliados: data.pedidos_avaliados ?? 0,
+    mediaAvaliacoes: num(data.media_avaliacoes),
+    pctCancelamento: num(data.pct_cancelamento),
+    pctChamados: num(data.pct_chamados),
+    totalChamados: data.total_chamados ?? 0,
+    chamadosAtraso: data.chamados_atraso ?? 0,
+    chamadosPosEntrega: data.chamados_pos_entrega ?? 0,
+    chamadosItemErrado: data.chamados_item_errado ?? 0,
+    planoDeAcao: data.plano_de_acao,
+    tagsPos: tags(data.tags_pos),
+    tagsNeg: tags(data.tags_neg),
+  }
+}
+
+// ─── Negociações (snapshot de período) ───────────────────────────────
+
+export type NegociacoesSnapshot = {
+  periodLabel: string
+  periodStart: string
+  periodEnd: string
+  totalNegociacoes: number
+  cancelamentosEvitados: number
+  valorEvitado: number
+  reembolsoTotal: number
+  cupomTotal: number
+  respondidas: number
+  pctRespondidas: number | null
+  impactouSuper: number
+  topMotivos: Record<string, number>
+}
+
+/**
+ * Negociações do iFood cujo período termina dentro do mês selecionado.
+ */
+export async function getNegociacoesForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<NegociacoesSnapshot | null> {
+  const admin = createAdminClient()
+  const { start, end } = monthRange(year, month)
+  const { data } = await admin
+    .from("ifood_negociacoes_periodo")
+    .select(
+      "period_label, period_start, period_end, total_negociacoes, cancelamentos_evitados, valor_evitado, reembolso_total, cupom_total, respondidas, pct_respondidas, impactou_super, top_motivos",
+    )
+    .eq("unit_id", unitId)
+    .gte("period_end", start)
+    .lte("period_end", end)
+    .order("period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return null
+  const num = (v: number | string | null) => (v == null ? 0 : Number(v))
+  const tags = (v: unknown): Record<string, number> =>
+    v && typeof v === "object" ? (v as Record<string, number>) : {}
+  return {
+    periodLabel: data.period_label,
+    periodStart: data.period_start,
+    periodEnd: data.period_end,
+    totalNegociacoes: data.total_negociacoes ?? 0,
+    cancelamentosEvitados: data.cancelamentos_evitados ?? 0,
+    valorEvitado: num(data.valor_evitado),
+    reembolsoTotal: num(data.reembolso_total),
+    cupomTotal: num(data.cupom_total),
+    respondidas: data.respondidas ?? 0,
+    pctRespondidas: data.pct_respondidas == null ? null : Number(data.pct_respondidas),
+    impactouSuper: data.impactou_super ?? 0,
+    topMotivos: tags(data.top_motivos),
+  }
 }

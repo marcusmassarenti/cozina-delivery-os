@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 
 import { AppSidebar } from "@/components/app-sidebar"
-import { HelpFab } from "@/components/help-fab"
 import { NavigationProgress } from "@/components/shared/navigation-progress"
 import { TopBar } from "@/components/top-bar"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
@@ -93,7 +92,6 @@ export default async function AppLayout({
           )}
           <NavigationProgress>{children}</NavigationProgress>
         </SidebarInset>
-        <HelpFab />
         <WelcomeTour
           initialOnboarded={userContext.onboarded}
           brandName={userContext.companyName || userContext.brandName}

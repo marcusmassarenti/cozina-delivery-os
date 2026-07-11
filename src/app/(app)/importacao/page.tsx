@@ -6,6 +6,7 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
+import { getEnabledReports } from "@/lib/data/report-prefs"
 import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
 
 import { DownloadGuide } from "./_components/download-guide"
@@ -91,6 +92,7 @@ export default async function ImportacaoPage({
   const sp = await searchParams
   await assertCanView("importacao")
   const histPage = Math.max(1, parseInt(sp.historico ?? "1", 10) || 1)
+  const enabledReports = [...(await getEnabledReports())]
   const units = await getVisibleUnits()
   const activeUnits = units.filter((u) => u.active)
   const availableUnitsLite = activeUnits.map((u) => ({
@@ -138,7 +140,7 @@ export default async function ImportacaoPage({
       </div>
 
       <div data-tour="download">
-        <DownloadGuide />
+        <DownloadGuide enabled={enabledReports} />
       </div>
 
       <div data-tour="checklist">

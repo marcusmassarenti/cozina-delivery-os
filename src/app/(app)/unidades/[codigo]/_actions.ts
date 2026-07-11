@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import {
+  requireAuth,
   requireAuthWithAdmin,
   requireModulePermission,
 } from "@/lib/auth/guards"
@@ -15,8 +16,53 @@ import {
   type VinagreteRef,
 } from "@/lib/data/produtos-vendidos"
 import { parseProdutosVendidos } from "@/lib/import/produtos-vendidos"
+import {
+  consumirCotaIA,
+  gerarDiagnosticoIA,
+  getIaStatus,
+  type PlanoIA,
+} from "@/lib/data/diagnostico-ia"
 
 export type FechamentoState = { ok: boolean; message?: string }
+
+export type PlanoIAState =
+  | { ok: true; plano: PlanoIA }
+  | { ok: false; message: string }
+
+/**
+ * Gera (ou regenera) o plano de ação por IA da loja no mês, e cacheia.
+ * Chamada pelo botão na aba Diagnóstico.
+ */
+export async function gerarPlanoIA(
+  unitId: string,
+  unitName: string,
+  year: number,
+  month: number,
+): Promise<PlanoIAState> {
+  try {
+    await assertUnitAccess(unitId)
+    const { userId } = await requireAuth()
+    const status = await getIaStatus()
+    if (!status.podeUsar || !status.holdingId) {
+      return {
+        ok: false,
+        message:
+          status.motivo === "pro"
+            ? "A IA é um recurso do plano Pro."
+            : "A IA está desabilitada na sua conta (Minha conta → Relatórios).",
+      }
+    }
+    await consumirCotaIA(status.holdingId) // limite diário (anti-gasto)
+    const plano = await gerarDiagnosticoIA(unitId, year, month, unitName, userId)
+    revalidatePath(`/unidades`)
+    return { ok: true, plano }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Falha ao gerar o plano.",
+    }
+  }
+}
 
 /**
  * Garante que o usuário tem acesso à unidade (anti cross-tenant). RLS é

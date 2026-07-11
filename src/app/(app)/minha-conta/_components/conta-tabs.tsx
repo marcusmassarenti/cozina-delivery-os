@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  ClipboardList,
   CreditCard,
   FileText,
   Palette,
@@ -18,6 +19,7 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
     label: "Personalização",
     icon: Palette,
   },
+  { href: "/minha-conta/relatorios", label: "Relatórios", icon: ClipboardList },
   { href: "/minha-conta/assinatura", label: "Assinatura", icon: CreditCard },
   { href: "/minha-conta/permissoes", label: "Permissões", icon: ShieldCheck },
   { href: "/minha-conta/usuarios", label: "Usuários", icon: Users },
