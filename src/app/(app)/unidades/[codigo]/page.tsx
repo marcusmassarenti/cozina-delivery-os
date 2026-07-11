@@ -308,6 +308,16 @@ function HeroKpis({
     m.pedidos > 0 ? (m.pedidosCancelados / m.pedidos) * 100 : 0
   const repassePct =
     m.faturamentoBruto > 0 ? (m.totalLiquido / m.faturamentoBruto) * 100 : 0
+  // VR é pago à parte pelo iFood (fora do repasse) — é receita real que entra
+  // na conta. O "Resultado" da loja = margem operacional + VR líquido, mesma
+  // definição do /resultado (que já soma o VR). Assim as duas telas batem.
+  // Se o "recebido real" foi lançado manualmente, ele JÁ inclui o VR — não
+  // soma de novo (evita double-count). Senão, soma o VR líquido por cima.
+  const vrLiquido =
+    m.totalRecebidoReal > 0 ? 0 : Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
+  const resultadoComVr = m.margemLiquida + vrLiquido
+  const resultadoPct =
+    m.faturamentoBruto > 0 ? (resultadoComVr / m.faturamentoBruto) * 100 : 0
 
   const stats: {
     label: string
@@ -327,10 +337,17 @@ function HeroKpis({
       tone: "pos",
     },
     {
-      label: "Margem",
-      value: fmtBRL(m.margemLiquida),
-      sub: m.custoProdutosCozina > 0 ? fmtPct(m.margemLucroPct) : "lance o CMV",
-      tone: m.margemLiquida >= 0 ? "pos" : "neg",
+      label: "Resultado",
+      value: fmtBRL(resultadoComVr),
+      sub:
+        vrLiquido > 0
+          ? m.custoProdutosCozina > 0
+            ? `${fmtPct(resultadoPct)} · c/ VR`
+            : "c/ VR · lance o CMV"
+          : m.custoProdutosCozina > 0
+            ? fmtPct(m.margemLucroPct)
+            : "lance o CMV",
+      tone: resultadoComVr >= 0 ? "pos" : "neg",
     },
     { label: "Ticket médio", value: fmtBRL(m.ticketMedio) },
     {

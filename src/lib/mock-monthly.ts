@@ -45,6 +45,9 @@ export type UnitMonthly = {
   custoProdutosLoja: number | null
   /** Custo da operação (aluguel, folha, etc.) — opcional, manual */
   custoOperacao: number
+  /** "Recebido real no caixa" lançado manualmente. Quando > 0, JÁ inclui o VR
+   *  (é o que de fato entrou), então o VR não deve ser somado de novo. */
+  totalRecebidoReal: number
   margemLiquida: number
   margemLucroPct: number
   notaMedia: number
@@ -71,6 +74,7 @@ export const emptyMonthly: UnitMonthly = {
   custoProdutosCozina: 0,
   custoProdutosLoja: null,
   custoOperacao: 0,
+  totalRecebidoReal: 0,
   margemLiquida: 0,
   margemLucroPct: 0,
   notaMedia: 0,
@@ -137,6 +141,7 @@ export function mockMonthlyFor(code: string): UnitMonthly {
     custoProdutosCozina,
     custoProdutosLoja: null,
     custoOperacao: 0,
+    totalRecebidoReal: 0,
     margemLiquida,
     margemLucroPct,
     notaMedia: Number((4.4 + seed * 0.4).toFixed(1)),

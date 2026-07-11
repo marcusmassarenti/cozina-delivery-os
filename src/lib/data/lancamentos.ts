@@ -444,6 +444,7 @@ export async function getRealMonthlyForUnits(
       custoProdutosCozina: custoCozina,
       custoProdutosLoja: custoLoja > 0 ? custoLoja : null,
       custoOperacao,
+      totalRecebidoReal,
       margemLiquida,
       margemLucroPct,
       notaMedia: m ? Number(m.nota_media) : 0,
