@@ -130,11 +130,30 @@ export async function getCurrentHoldingBilling(): Promise<{
 }
 
 /**
+ * Hierarquia dos planos self-service. Cada tier é superset do anterior:
+ * essencial (delivery) < pro (+ financeiro) < ai (+ DeliveryOS AI).
+ */
+const PLAN_RANK: Record<string, number> = { essencial: 0, pro: 1, ai: 2 }
+function planRank(tier: string | null): number {
+  return PLAN_RANK[tier ?? "essencial"] ?? 0
+}
+
+/**
  * True quando a conta tem acesso aos módulos Pro (Fluxo de Caixa etc.).
- * Super-admin (dono do SaaS) sempre; cliente só com plano "pro".
+ * Super-admin (dono do SaaS) sempre; cliente do Pro pra cima (pro ou ai).
  */
 export async function isProPlan(): Promise<boolean> {
   if (await isSuperadmin()) return true
   const b = await getCurrentHoldingBilling()
-  return b?.planTier === "pro"
+  return planRank(b?.planTier ?? null) >= PLAN_RANK.pro
+}
+
+/**
+ * True quando a conta tem o DeliveryOS AI (diagnóstico + plano de ação por IA).
+ * Só o tier "ai" (acima do Pro). Super-admin sempre.
+ */
+export async function isAiPlan(): Promise<boolean> {
+  if (await isSuperadmin()) return true
+  const b = await getCurrentHoldingBilling()
+  return planRank(b?.planTier ?? null) >= PLAN_RANK.ai
 }

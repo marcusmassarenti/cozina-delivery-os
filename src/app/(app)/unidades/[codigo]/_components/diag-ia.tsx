@@ -45,7 +45,7 @@ export function DiagIA({
   month: number
   inicial: PlanoIA | null
   podeUsar: boolean
-  motivo: null | "pro" | "off"
+  motivo: null | "ai" | "off"
 }) {
   const [plano, setPlano] = React.useState<PlanoIA | null>(inicial)
   const [erro, setErro] = React.useState<string | null>(null)
@@ -102,10 +102,14 @@ export function DiagIA({
         <div className="mt-2 flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
           <Lock className="mt-0.5 size-4 shrink-0" />
           <span>
-            {motivo === "pro" ? (
+            {motivo === "ai" ? (
               <>
                 O <b className="text-foreground">plano de ação por IA</b> é um
-                recurso do plano <b className="text-foreground">Pro</b>.
+                recurso do plano{" "}
+                <a href="/plano" className="font-semibold text-foreground underline">
+                  DeliveryOS AI
+                </a>
+                .
               </>
             ) : (
               <>

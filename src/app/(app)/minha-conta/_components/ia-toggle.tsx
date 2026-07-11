@@ -7,16 +7,16 @@ import { saveIaHabilitada } from "../_actions"
 
 export function IaToggle({
   inicial,
-  isPro,
+  isAi,
 }: {
   inicial: boolean
-  isPro: boolean
+  isAi: boolean
 }) {
   const [on, setOn] = React.useState(inicial)
   const [salvando, setSalvando] = React.useState(false)
 
   async function alternar() {
-    if (!isPro || salvando) return
+    if (!isAi || salvando) return
     const novo = !on
     setOn(novo)
     setSalvando(true)
@@ -35,7 +35,7 @@ export function IaToggle({
           <div className="flex flex-wrap items-center gap-1.5">
             <h3 className="text-sm font-semibold">Plano de ação por IA</h3>
             <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-              Pro
+              DeliveryOS AI
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -43,7 +43,7 @@ export function IaToggle({
             Diagnóstico. Gerado sob demanda e com limite diário.
           </p>
         </div>
-        {isPro ? (
+        {isAi ? (
           <button
             type="button"
             role="switch"
@@ -63,7 +63,7 @@ export function IaToggle({
         ) : (
           <span className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">
             <Lock className="size-3.5" />
-            Plano Pro
+            Plano DeliveryOS AI
           </span>
         )}
       </div>

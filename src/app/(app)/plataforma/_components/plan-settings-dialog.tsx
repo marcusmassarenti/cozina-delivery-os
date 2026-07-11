@@ -34,9 +34,11 @@ function SubmitBtn() {
 export function PlanSettingsDialog({
   essencial,
   pro,
+  ai,
 }: {
   essencial: number
   pro: number
+  ai: number
 }) {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
@@ -82,7 +84,7 @@ export function PlanSettingsDialog({
         </DialogHeader>
 
         <form action={action} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label htmlFor="essencial" className="text-xs font-medium">
                 Essencial (R$/loja)
@@ -105,6 +107,19 @@ export function PlanSettingsDialog({
                 name="pro"
                 inputMode="decimal"
                 defaultValue={String(pro).replace(".", ",")}
+                required
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label htmlFor="ai" className="text-xs font-medium">
+                DeliveryOS AI (R$/loja)
+              </label>
+              <input
+                id="ai"
+                name="ai"
+                inputMode="decimal"
+                defaultValue={String(ai).replace(".", ",")}
                 required
                 className={inputCls}
               />

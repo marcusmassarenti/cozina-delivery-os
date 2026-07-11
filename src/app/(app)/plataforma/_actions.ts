@@ -199,14 +199,17 @@ export async function setPlatformPlan(
     }
     const essencial = money("essencial")
     const pro = money("pro")
+    const ai = money("ai")
     if (essencial == null) return { ok: false, message: "Informe o valor do Essencial (por loja)." }
     if (pro == null) return { ok: false, message: "Informe o valor do Pro (por loja)." }
+    if (ai == null) return { ok: false, message: "Informe o valor do DeliveryOS AI (por loja)." }
 
     const { error } = await admin.from("platform_settings").upsert(
       {
         id: 1,
         essencial_per_unit: essencial,
         pro_per_unit: pro,
+        ai_per_unit: ai,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },

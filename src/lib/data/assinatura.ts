@@ -9,21 +9,27 @@ import {
 } from "@/lib/data/billing"
 
 /**
- * Preço da assinatura self-service — POR LOJA, em dois planos (bate com a
- * landing): Essencial e Pro. Mensalidade = preço-por-loja × nº de lojas ativas.
+ * Preço da assinatura self-service — POR LOJA, em três planos (bate com a
+ * landing): Essencial, Pro e DeliveryOS AI. Mensalidade = preço-por-loja ×
+ * nº de lojas ativas.
  *
  * Clientes que o DONO cobra na mão (holdings.monthly_fee preenchido) seguem
  * pela conta antiga (base + lojas extras) e não escolhem plano.
  */
-export type PlanId = "essencial" | "pro"
+export type PlanId = "essencial" | "pro" | "ai"
 
 export const PLANOS_META: Record<PlanId, { label: string; desc: string }> = {
   essencial: { label: "Essencial", desc: "Pra ver seu lucro no delivery" },
   pro: { label: "Pro", desc: "Gestão financeira completa" },
+  ai: { label: "DeliveryOS AI", desc: "IA que lê a loja e monta o plano de ação" },
 }
 
 /** Preços por loja/mês — fallback caso a tabela ainda não exista. */
-export const PRECO_PADRAO: Record<PlanId, number> = { essencial: 49, pro: 99 }
+export const PRECO_PADRAO: Record<PlanId, number> = {
+  essencial: 49,
+  pro: 99,
+  ai: 159,
+}
 
 export type PrecosPlano = Record<PlanId, number>
 
@@ -33,13 +39,15 @@ export async function getDefaultPlan(): Promise<PrecosPlano> {
     const admin = createAdminClient()
     const { data } = await admin
       .from("platform_settings")
-      .select("essencial_per_unit, pro_per_unit")
+      .select("essencial_per_unit, pro_per_unit, ai_per_unit")
       .eq("id", 1)
       .maybeSingle()
     if (!data) return PRECO_PADRAO
     return {
       essencial: Number(data.essencial_per_unit),
       pro: Number(data.pro_per_unit),
+      // Coluna ai_per_unit é nova — fallback pro padrão se ainda não existir.
+      ai: data.ai_per_unit != null ? Number(data.ai_per_unit) : PRECO_PADRAO.ai,
     }
   } catch {
     return PRECO_PADRAO

@@ -41,6 +41,12 @@ const FEATS: Record<PlanId, string[]> = {
     "Importação OFX dos bancos",
     "DRE + todos os módulos",
   ],
+  ai: [
+    "Tudo do Pro",
+    "Diagnóstico inteligente por loja",
+    "Plano de ação por IA (3 prioridades/mês)",
+    "Exporta o diagnóstico em PDF",
+  ],
 }
 
 function fmtDataBR(iso: string | null): string {
@@ -88,9 +94,11 @@ function Checkout({
   const defaultPlan: PlanId =
     planoQuery === "pro"
       ? "pro"
-      : planoQuery === "essencial"
-        ? "essencial"
-        : (plano?.selectedPlan ?? "essencial")
+      : planoQuery === "ai"
+        ? "ai"
+        : planoQuery === "essencial"
+          ? "essencial"
+          : (plano?.selectedPlan ?? "essencial")
 
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-[1.05fr_minmax(0,560px)]">
@@ -179,6 +187,9 @@ function Checkout({
                   <span className="flex items-center gap-1.5 text-base font-semibold">
                     {p.id === "pro" && (
                       <Zap className="size-4 text-amber-400" />
+                    )}
+                    {p.id === "ai" && (
+                      <Sparkles className="size-4 text-amber-400" />
                     )}
                     {p.label}
                   </span>

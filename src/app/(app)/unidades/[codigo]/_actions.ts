@@ -47,8 +47,8 @@ export async function gerarPlanoIA(
       return {
         ok: false,
         message:
-          status.motivo === "pro"
-            ? "A IA é um recurso do plano Pro."
+          status.motivo === "ai"
+            ? "O plano de ação por IA é um recurso do plano DeliveryOS AI."
             : "A IA está desabilitada na sua conta (Minha conta → Relatórios).",
       }
     }

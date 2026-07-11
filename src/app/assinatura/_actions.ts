@@ -97,7 +97,12 @@ export async function assinar(
 
   // Plano escolhido (self-service). Clientes com preço custom não escolhem.
   const planEscolhido = String(formData.get("plano") ?? "")
-  const planId: PlanId = planEscolhido === "pro" ? "pro" : "essencial"
+  const planId: PlanId =
+    planEscolhido === "pro"
+      ? "pro"
+      : planEscolhido === "ai"
+        ? "ai"
+        : "essencial"
   let valor = plano.mensalidade
   if (!plano.precoCustom) {
     const precos = await getDefaultPlan()

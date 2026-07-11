@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getReportPrefs } from "@/lib/data/report-prefs"
-import { isProPlan } from "@/lib/data/billing"
+import { isAiPlan } from "@/lib/data/billing"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { ReportPrefsForm } from "../_components/report-prefs-form"
 import { IaToggle } from "../_components/ia-toggle"
@@ -15,9 +15,9 @@ export default async function RelatoriosTab() {
   const { data: auth } = await supabase.auth.getUser()
   if (!auth.user) redirect("/login")
 
-  const [prefs, isPro, holdingId] = await Promise.all([
+  const [prefs, isAi, holdingId] = await Promise.all([
     getReportPrefs(),
-    isProPlan(),
+    isAiPlan(),
     getCurrentHoldingId(),
   ])
   let iaOn = true
@@ -33,7 +33,7 @@ export default async function RelatoriosTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      <IaToggle inicial={iaOn} isPro={isPro} />
+      <IaToggle inicial={iaOn} isAi={isAi} />
       <ReportPrefsForm prefs={prefs} />
     </div>
   )

@@ -984,7 +984,7 @@ export function Landing() {
                 </h3>
                 <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
                 <div className="relative mt-5 flex items-baseline gap-1.5">
-                  <span className="text-5xl font-medium tracking-tight">R$ 129</span>
+                  <span className="text-5xl font-medium tracking-tight">R$ 159</span>
                   <span className="text-sm text-[oklch(0.62_0_0)]">/loja · mês</span>
                 </div>
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>

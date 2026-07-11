@@ -56,7 +56,7 @@ export type ClientOverview = {
   trialEndsAt: string | null
   billingStatus: BillingStatus
   // Assinatura Asaas
-  planTier: "essencial" | "pro" | null
+  planTier: "essencial" | "pro" | "ai" | null
   asaasActive: boolean // tem assinatura recorrente no Asaas
   asaasLastEvent: string | null // último evento do webhook (ex.: PAYMENT_CONFIRMED)
   asaasLastEventAt: string | null
@@ -278,7 +278,9 @@ export async function getClientsOverview(): Promise<{
       computedMonthly,
       billingStatus: computeBillingStatus(billing),
       planTier:
-        hh.plan_tier === "essencial" || hh.plan_tier === "pro"
+        hh.plan_tier === "essencial" ||
+        hh.plan_tier === "pro" ||
+        hh.plan_tier === "ai"
           ? hh.plan_tier
           : null,
       asaasActive: !!hh.asaas_subscription_id,

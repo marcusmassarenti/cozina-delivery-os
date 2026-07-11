@@ -126,6 +126,7 @@ export default async function PlataformaPage() {
           <PlanSettingsDialog
             essencial={defaultPlan.essencial}
             pro={defaultPlan.pro}
+            ai={defaultPlan.ai}
           />
           <NovoClienteDialog />
         </div>

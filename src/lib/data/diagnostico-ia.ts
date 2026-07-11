@@ -4,7 +4,7 @@ import { createHash } from "node:crypto"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { isProPlan } from "@/lib/data/billing"
+import { isAiPlan } from "@/lib/data/billing"
 import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
 import { getMonthlyGeneral } from "@/lib/data/lancamentos"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
@@ -238,15 +238,15 @@ export async function getDiagnosticoIA(
 export type IaStatus = {
   podeUsar: boolean
   /** null quando pode; senão o motivo do bloqueio. */
-  motivo: null | "pro" | "off"
+  motivo: null | "ai" | "off"
   holdingId: string | null
 }
 
-/** A IA é recurso do plano Pro E precisa estar ligada na conta. */
+/** A IA é recurso do plano DeliveryOS AI E precisa estar ligada na conta. */
 export async function getIaStatus(): Promise<IaStatus> {
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return { podeUsar: false, motivo: "off", holdingId: null }
-  if (!(await isProPlan())) return { podeUsar: false, motivo: "pro", holdingId }
+  if (!(await isAiPlan())) return { podeUsar: false, motivo: "ai", holdingId }
   const admin = createAdminClient()
   const { data } = await admin
     .from("holdings")
