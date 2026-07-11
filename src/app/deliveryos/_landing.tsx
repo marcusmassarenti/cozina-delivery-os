@@ -5,6 +5,7 @@ import Lenis from "lenis"
 import {
   ArrowRight,
   BarChart3,
+  Building2,
   CalendarRange,
   Check,
   ChevronDown,
@@ -19,6 +20,8 @@ import {
   Landmark,
   LayoutDashboard,
   Lock,
+  Mail,
+  Network,
   Receipt,
   ShieldCheck,
   Sparkles,
@@ -135,6 +138,26 @@ const AI_ANALISA: { i: LucideIcon; t: string; d: string }[] = [
   { i: Gauge, t: "Cancelamentos, CMV e margem", d: "O que está fora da meta e quanto isso custa." },
   { i: Target, t: "Marketing e promoções", d: "Quanto você gastou e o que de fato voltou." },
   { i: Utensils, t: "Produtos que puxam (ou travam)", d: "Top itens, complementos e o que sai junto." },
+]
+
+/* Rede / franqueador — benefícios do plano sob medida (fale conosco). */
+const REDE: { icon: LucideIcon; t: string; d: string; tag?: string }[] = [
+  {
+    icon: Network,
+    t: "Todas as lojas num painel",
+    d: "Faturamento, pedidos e ranking de cada unidade, lado a lado e em tempo real.",
+  },
+  {
+    icon: Wallet,
+    t: "Financeiro da rede",
+    d: "DRE do grupo, comparativo entre lojas e o resultado somado da operação inteira.",
+  },
+  {
+    icon: Sparkles,
+    t: "Consultor IA da rede",
+    d: "Uma IA que analisa TODAS as lojas de uma vez: semáforo de saúde, benchmark, alertas e o plano da rede.",
+    tag: "em breve",
+  },
 ]
 
 const TRUST = [
@@ -1018,6 +1041,62 @@ export function Landing() {
             <p className="mx-auto mt-8 max-w-2xl text-center text-xs leading-relaxed text-[oklch(0.5_0.01_48)]">
               Comece no Essencial e veja seu lucro hoje. Suba pro Pro pra rodar todo o financeiro da operação — ou pro DeliveryOS AI pra ter a inteligência que lê a loja e escreve o plano de ação todo mês.
             </p>
+          </Reveal>
+
+          {/* REDE / FRANQUEADOR — fale conosco */}
+          <Reveal delay={260} y={32}>
+            <div className="relative mx-auto mt-10 max-w-5xl overflow-hidden rounded-3xl border border-[oklch(0.65_0.21_35/.25)] bg-gradient-to-br from-[var(--brand-soft)] via-white to-white p-7 shadow-[0_30px_60px_-34px_oklch(0.65_0.21_35/.5)] sm:p-9">
+              <div className="glow-blob -right-16 -top-16 h-56 w-56" />
+              <div className="relative grid gap-8 lg:grid-cols-[1fr_15rem] lg:items-center">
+                <div>
+                  <span className="inline-flex items-center gap-2 rounded-full bg-[var(--ink)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white">
+                    <Building2 className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
+                    Para redes e franqueadores
+                  </span>
+                  <h3 className="mt-4 text-2xl font-medium tracking-tight sm:text-3xl">
+                    É franqueador? Tem uma rede de lojas?
+                  </h3>
+                  <p className="mt-2 max-w-xl text-[oklch(0.45_0.02_45)]">
+                    Preço sob medida por volume — e um painel feito pra quem olha
+                    a rede inteira, não uma loja só.
+                  </p>
+
+                  <div className="mt-6 grid gap-5 sm:grid-cols-3">
+                    {REDE.map((r) => (
+                      <div key={r.t}>
+                        <span className="flex size-10 items-center justify-center rounded-xl bg-white text-[var(--brand-strong)] shadow-sm ring-1 ring-black/[0.05]">
+                          <r.icon className="size-5" strokeWidth={2} />
+                        </span>
+                        <p className="mt-3 flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                          {r.t}
+                          {r.tag ? (
+                            <span className="rounded-full bg-[var(--brand-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--brand-strong)]">
+                              {r.tag}
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-1 text-[13px] leading-relaxed text-[oklch(0.5_0.01_48)]">
+                          {r.d}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-stretch gap-3">
+                  <a
+                    href="mailto:suporte@deliveryos.food?subject=Sou%20franqueador%20—%20quero%20conhecer%20o%20plano%20rede"
+                    className="btn-brand grp inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-medium"
+                  >
+                    <Mail className="size-[18px]" strokeWidth={2.2} />
+                    Fale conosco
+                  </a>
+                  <p className="text-center text-xs leading-relaxed text-[oklch(0.5_0.01_48)]">
+                    Valores sob medida pra sua rede — quanto mais lojas, melhor a conta.
+                  </p>
+                </div>
+              </div>
+            </div>
           </Reveal>
         </div>
       </section>
