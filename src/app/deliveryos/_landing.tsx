@@ -40,12 +40,7 @@ import {
 
 import { ExperimenteDemo } from "./_demo"
 import { CountUp, Reveal, useScrolled } from "./_motion"
-import {
-  CaixaCarousel,
-  PainBreakdown,
-  PlatLogo,
-  type PlatId,
-} from "./_screens"
+import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
 
 const STYLES = `
 .dos-root{--brand:oklch(0.65 0.21 35);--brand-strong:oklch(0.57 0.2 33);--ink:oklch(0.2 0.01 48);--ink2:oklch(0.27 0.014 48);--cream:oklch(0.99 0.005 75);--brand-soft:oklch(0.96 0.035 55);color:oklch(0.22 0.01 48);background-color:var(--cream);background-image:radial-gradient(oklch(0.65 0.21 35/.045) 1px,transparent 1px);background-size:24px 24px;}
@@ -744,10 +739,13 @@ export function Landing() {
             </p>
           </Reveal>
 
-          {/* Carrossel das telas, centralizado */}
+          {/* Print real do financeiro (lançamentos / contas a pagar e receber) */}
           <Reveal y={36}>
-            <div className="mx-auto mt-12 max-w-3xl">
-              <CaixaCarousel />
+            <div className="mx-auto mt-12 max-w-5xl">
+              <Shot
+                src="/landing/financeiro.png"
+                alt="Financeiro do Delivery OS — lançamentos, contas a pagar e a receber"
+              />
             </div>
           </Reveal>
 
