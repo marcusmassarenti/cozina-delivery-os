@@ -13,6 +13,7 @@ import {
   EyeOff,
   FileSpreadsheet,
   FileUp,
+  Gauge,
   HelpCircle,
   KeyRound,
   Landmark,
@@ -20,11 +21,15 @@ import {
   Lock,
   Receipt,
   ShieldCheck,
+  Sparkles,
   Star,
   Store,
   Tags,
+  Target,
   Trash2,
+  TrendingUp,
   Upload,
+  Utensils,
   Wallet,
   Zap,
   type LucideIcon,
@@ -88,7 +93,7 @@ const DORES = [
 ]
 
 const RELATORIOS: { id: PlatId; itens: string[] }[] = [
-  { id: "ifood", itens: ["Financeiro / Conciliação", "Cardápio", "Pedidos", "Avaliações"] },
+  { id: "ifood", itens: ["Financeiro / Conciliação", "Cardápio", "Pedidos", "Avaliações", "Qualidade e Super", "Promoções e negociações"] },
   { id: "99food", itens: ["Dados da loja", "Itens", "Pedidos"] },
   { id: "keeta", itens: ["Loja diária", "Itens", "Pedidos", "Dados da promoção"] },
 ]
@@ -97,11 +102,39 @@ const MODULOS = [
   { icon: LayoutDashboard, n: "Dashboard", d: "Visão geral da rede" },
   { icon: CalendarRange, n: "Relatório Diário", d: "Vendas dia a dia" },
   { icon: Wallet, n: "DRE / Resultado", d: "Seu lucro de verdade" },
+  { icon: Gauge, n: "Diagnóstico", d: "Plano de ação por IA" },
   { icon: Coins, n: "Fluxo de Caixa", d: "Entradas e saídas" },
   { icon: Star, n: "Avaliações", d: "Notas e comentários" },
+  { icon: Utensils, n: "Cardápio", d: "Top itens e ROI" },
   { icon: Receipt, n: "Pedidos", d: "Pagamento, VR, ticket" },
   { icon: Store, n: "Unidades", d: "DRE por loja" },
   { icon: FileUp, n: "Importação", d: "Suba os XLSX" },
+]
+
+/* DeliveryOS AI — o plano de ação que a IA escreve, e o que ela cruza. */
+const AI_ACOES = [
+  {
+    t: "Cancelamentos acima da meta",
+    jogo: "≈ R$ 1.240 no mês",
+    como: "60% dos cancelados saíram entre 20h e 22h — reforce o preparo no pico ou pause o cardápio quando a fila estourar.",
+  },
+  {
+    t: "Nota do iFood começando a cair",
+    jogo: "risco de perder o Super",
+    como: "3 das últimas 5 reclamações citam “faltou item”. Confira o pedido antes de despachar.",
+  },
+  {
+    t: "Promoção queimando margem",
+    jogo: "R$ 890 gastos, só +4% de pedidos",
+    como: "A oferta não traz cliente novo — troque o gatilho ou corte e realoque no que converte.",
+  },
+]
+const AI_ANALISA: { i: LucideIcon; t: string; d: string }[] = [
+  { i: TrendingUp, t: "Funil das 3 plataformas", d: "De visita a pedido — onde o cliente desiste em cada uma." },
+  { i: Star, t: "Avaliações e reclamações reais", d: "Lê o texto dos comentários, não só a nota." },
+  { i: Gauge, t: "Cancelamentos, CMV e margem", d: "O que está fora da meta e quanto isso custa." },
+  { i: Target, t: "Marketing e promoções", d: "Quanto você gastou e o que de fato voltou." },
+  { i: Utensils, t: "Produtos que puxam (ou travam)", d: "Top itens, complementos e o que sai junto." },
 ]
 
 const TRUST = [
@@ -118,6 +151,7 @@ const FAQ = [
   { q: "Meus dados ficam seguros?", a: "Sim. Ficam só na sua conta, isolados e criptografados, e você apaga quando quiser. Nunca compartilhamos com ninguém." },
   { q: "Preciso instalar alguma coisa?", a: "Não. É tudo no navegador — abre, sobe a planilha e vê o painel na hora." },
   { q: "O que vem no plano Pro?", a: "Tudo do Essencial mais o financeiro completo: fluxo de caixa com contas a pagar e a receber, contas bancárias, cartões e categorias, importação OFX dos bancos pra conciliar o extrato e todos os módulos do sistema. É pra quem quer rodar todo o financeiro da operação num lugar só." },
+  { q: "O que é o DeliveryOS AI?", a: "É a camada de inteligência do sistema. Ao abrir o diagnóstico de uma loja, a IA cruza funil, avaliações (com o texto das reclamações), cancelamentos, CMV, marketing e produtos, e escreve um plano de ação com as 3 prioridades do mês — o problema, o que está em jogo e como resolver. Você exporta tudo em PDF. Está no plano DeliveryOS AI, que inclui tudo do Pro." },
   { q: "Posso cancelar quando quiser?", a: "Pode, sem multa nem fidelidade. Cancela e pronto." },
 ]
 
@@ -292,6 +326,10 @@ export function Landing() {
           <div className="hidden items-center gap-7 text-sm text-[oklch(0.45_0.01_48)] md:flex">
             <a href="#experimente" className="transition-colors hover:text-[var(--brand)]">Como funciona</a>
             <a href="#sistema" className="transition-colors hover:text-[var(--brand)]">O sistema</a>
+            <a href="#ia" className="inline-flex items-center gap-1 transition-colors hover:text-[var(--brand)]">
+              <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
+              IA
+            </a>
             <a href="#precos" className="transition-colors hover:text-[var(--brand)]">Preços</a>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
@@ -569,6 +607,109 @@ export function Landing() {
         </div>
       </section>
 
+      {/* DELIVERYOS AI — diagnóstico + plano de ação por IA */}
+      <section id="ia" className="relative overflow-hidden bg-[var(--ink)] py-24 text-white">
+        <div className="hero-glow pointer-events-none absolute inset-0 opacity-70" />
+        <div className="dot-grid pointer-events-none absolute inset-0 opacity-40" />
+        <div className="relative mx-auto max-w-6xl px-5">
+          <Reveal>
+            <span className="mx-auto flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-[oklch(0.85_0.08_60)]">
+              <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
+              DeliveryOS AI · Novo
+            </span>
+          </Reveal>
+          <Reveal delay={70}>
+            <h2 className="mt-4 text-center text-3xl font-medium tracking-tight sm:text-4xl">
+              A IA lê a sua loja e diz o que fazer
+            </h2>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mx-auto mt-4 max-w-2xl text-center text-[oklch(0.78_0.012_60)]">
+              Todo mês, o DeliveryOS AI cruza funil, avaliações, cancelamentos,
+              marketing e produtos de cada loja — e aponta as 3 ações que mais
+              mexem no seu resultado. Não é mais um dashboard: é plano de ação.
+            </p>
+          </Reveal>
+
+          <div className="mt-14 grid items-center gap-10 lg:grid-cols-[1.05fr_.95fr] lg:gap-14">
+            {/* Mock do Plano de ação */}
+            <Reveal y={36}>
+              <div className="lift rounded-3xl border border-white/10 bg-white p-5 text-[var(--ink)] shadow-[0_30px_70px_-30px_rgba(0,0,0,.6)] sm:p-6">
+                <div className="flex items-center justify-between gap-3 border-b border-black/[0.06] pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex size-8 items-center justify-center rounded-lg bg-[var(--ink)] text-[var(--brand)]">
+                      <Sparkles className="size-4" strokeWidth={2.4} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold leading-tight">Plano de ação</p>
+                      <p className="text-[11px] text-[oklch(0.5_0.01_48)]">Julho · unidade JK</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-strong)]">
+                    DeliveryOS AI
+                  </span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {AI_ACOES.map((a, i) => (
+                    <div key={a.t} className="rounded-2xl border border-black/[0.06] bg-[var(--cream)] p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-[12px] font-semibold text-white">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-tight">{a.t}</p>
+                          <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[oklch(0.95_0.04_30)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-strong)]">
+                            <Target className="size-3" strokeWidth={2.4} />
+                            Em jogo: {a.jogo}
+                          </p>
+                          <p className="mt-2 text-[13px] leading-relaxed text-[oklch(0.4_0.02_45)]">{a.como}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
+
+            {/* O que a IA analisa */}
+            <div>
+              <Reveal>
+                <h3 className="text-xl font-medium tracking-tight sm:text-2xl">
+                  Ela cruza o que você não tem tempo de cruzar
+                </h3>
+              </Reveal>
+              <div className="mt-6 space-y-3.5">
+                {AI_ANALISA.map((f, i) => (
+                  <Reveal key={f.t} delay={i * 70}>
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[oklch(0.82_0.14_55)]">
+                        <f.i className="size-4" strokeWidth={2.2} />
+                      </span>
+                      <div>
+                        <p className="font-medium leading-tight">{f.t}</p>
+                        <p className="mt-0.5 text-sm text-[oklch(0.72_0.012_60)]">{f.d}</p>
+                      </div>
+                    </div>
+                  </Reveal>
+                ))}
+              </div>
+              <Reveal delay={340}>
+                <div className="mt-7 flex flex-wrap gap-2.5 text-xs text-[oklch(0.72_0.01_60)]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5">
+                    <FileUp className="size-3.5" strokeWidth={2.2} />
+                    Exporta em PDF com o plano junto
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5">
+                    <Sparkles className="size-3.5" strokeWidth={2.2} />
+                    Gerado sob demanda, em 1 clique
+                  </span>
+                </div>
+              </Reveal>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* PLANO PRO — gestão financeira / multi-loja */}
       <section className="relative overflow-hidden border-t border-black/[0.05] bg-white py-24">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-60" />
@@ -745,7 +886,7 @@ export function Landing() {
       <section id="precos" className="relative overflow-hidden bg-white py-24">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-10 h-72 w-[44rem] -translate-x-1/2" />
-        <div className="relative mx-auto max-w-4xl px-5">
+        <div className="relative mx-auto max-w-6xl px-5">
           <Reveal>
             <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">Escolha o seu plano</h2>
           </Reveal>
@@ -753,10 +894,10 @@ export function Landing() {
             <p className="mt-3 text-center text-[oklch(0.5_0.01_48)]">Por loja, por mês. Sem fidelidade — cancela quando quiser.</p>
           </Reveal>
 
-          <div className="mx-auto mt-12 grid items-stretch gap-6 md:grid-cols-2">
+          <div className="mx-auto mt-12 grid items-stretch gap-6 md:grid-cols-3">
             {/* ESSENCIAL */}
             <Reveal delay={120}>
-              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border-2 border-[var(--brand)] bg-white p-7 shadow-[0_30px_60px_-30px_oklch(0.65_0.21_35/.55)]">
+              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-7">
                 <span className="absolute right-6 top-6 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">Comece aqui</span>
                 <h3 className="text-lg font-medium">Essencial</h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Pra ver seu lucro no delivery</p>
@@ -782,35 +923,77 @@ export function Landing() {
                   ))}
                 </ul>
                 <div className="mt-auto pt-7">
-                  <a href="/cadastro" className="btn-brand grp flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-base font-medium">
+                  <a href="/cadastro" className="btn-ghost grp flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3.5 text-base font-medium hover:bg-black/[0.02]">
                     Começar 7 dias grátis
                     <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
                   </a>
-                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Sem cartão pra testar · cancela quando quiser</p>
+                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Sem cartão pra testar</p>
                 </div>
               </div>
             </Reveal>
 
             {/* PRO */}
             <Reveal delay={180}>
-              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-[oklch(0.2_0.01_48)] p-7 text-white shadow-[0_30px_60px_-30px_rgba(0,0,0,.55)]">
-                <span className="absolute right-6 top-6 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-[oklch(0.82_0.14_55)]">Completo</span>
+              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-7">
+                <span className="absolute right-6 top-6 rounded-full bg-[oklch(0.94_0.005_48)] px-3 py-1 text-xs font-medium text-[oklch(0.45_0.01_48)]">Completo</span>
                 <h3 className="flex items-center gap-2 text-lg font-medium">
-                  <Zap className="size-4 text-[oklch(0.82_0.14_55)]" strokeWidth={2.4} />
+                  <Zap className="size-4 text-[var(--brand)]" strokeWidth={2.4} />
                   Pro
                 </h3>
-                <p className="mt-1 text-sm text-[oklch(0.68_0_0)]">Gestão financeira completa</p>
+                <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Gestão financeira completa</p>
                 <div className="mt-5 flex items-baseline gap-1.5">
                   <span className="text-5xl font-medium tracking-tight">R$ 99</span>
-                  <span className="text-sm text-[oklch(0.62_0_0)]">/loja · mês</span>
+                  <span className="text-sm text-[oklch(0.5_0.01_48)]">/loja · mês</span>
                 </div>
-                <p className="mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Essencial, e mais:</p>
-                <ul className="mt-3 space-y-3 text-[15px] text-[oklch(0.86_0_0)]">
+                <p className="mt-5 text-[13px] font-medium text-[var(--brand-strong)]">Tudo do Essencial, e mais:</p>
+                <ul className="mt-3 space-y-3 text-[15px]">
                   {[
                     { i: Coins, t: "Fluxo de caixa: contas a pagar e a receber" },
                     { i: Wallet, t: "Contas bancárias, cartões e categorias" },
                     { i: Landmark, t: "Importação OFX dos bancos (concilia o extrato)" },
                     { i: LayoutDashboard, t: "DRE completo e todos os módulos" },
+                  ].map((f) => (
+                    <li key={f.t} className="flex items-start gap-2.5">
+                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+                        <f.i className="size-3" strokeWidth={2.6} />
+                      </span>
+                      {f.t}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-auto pt-7">
+                  <a href="/cadastro" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3.5 text-base font-medium hover:bg-black/[0.02]">
+                    Quero o Pro
+                  </a>
+                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Por loja · cancela quando quiser</p>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* DELIVERYOS AI — destaque */}
+            <Reveal delay={240}>
+              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-[oklch(0.65_0.21_35/.5)] bg-[var(--ink)] p-7 text-white shadow-[0_36px_70px_-30px_oklch(0.65_0.21_35/.6)] md:-mt-3 md:mb-[-0.75rem]">
+                <div className="hero-glow pointer-events-none absolute inset-x-0 top-0 h-40 opacity-70" />
+                <span className="absolute right-6 top-6 inline-flex items-center gap-1 rounded-full bg-[var(--brand)] px-2.5 py-1 text-[11px] font-semibold text-white">
+                  <Sparkles className="size-3" strokeWidth={2.6} />
+                  Novo
+                </span>
+                <h3 className="relative flex items-center gap-2 text-lg font-medium">
+                  <Sparkles className="size-4 text-[var(--brand)]" strokeWidth={2.4} />
+                  DeliveryOS AI
+                </h3>
+                <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
+                <div className="relative mt-5 flex items-baseline gap-1.5">
+                  <span className="text-5xl font-medium tracking-tight">R$ 129</span>
+                  <span className="text-sm text-[oklch(0.62_0_0)]">/loja · mês</span>
+                </div>
+                <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
+                <ul className="relative mt-3 space-y-3 text-[15px] text-[oklch(0.88_0_0)]">
+                  {[
+                    { i: Gauge, t: "Diagnóstico inteligente de cada loja" },
+                    { i: Target, t: "Plano de ação: as 3 prioridades do mês" },
+                    { i: Star, t: "Lê avaliações, cancelamentos, marketing e produtos" },
+                    { i: FileUp, t: "Exporta o diagnóstico em PDF com o plano" },
                   ].map((f) => (
                     <li key={f.t} className="flex items-start gap-2.5">
                       <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[oklch(0.82_0.14_55)]">
@@ -820,9 +1003,10 @@ export function Landing() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-auto pt-7">
-                  <a href="/cadastro" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-white/20 px-5 py-3.5 text-base font-medium text-white hover:bg-white/5">
-                    Quero o Pro
+                <div className="relative mt-auto pt-7">
+                  <a href="/cadastro" className="btn-brand grp flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-base font-medium">
+                    Quero a IA
+                    <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
                   </a>
                   <p className="mt-3 text-center text-xs text-[oklch(0.6_0_0)]">Por loja · cancela quando quiser</p>
                 </div>
@@ -831,8 +1015,8 @@ export function Landing() {
           </div>
 
           <Reveal delay={220}>
-            <p className="mx-auto mt-6 max-w-xl text-center text-xs leading-relaxed text-[oklch(0.5_0.01_48)]">
-              Comece no Essencial e veja seu lucro hoje. Suba pro Pro quando quiser o controle financeiro completo — caixa, bancos e automação.
+            <p className="mx-auto mt-8 max-w-2xl text-center text-xs leading-relaxed text-[oklch(0.5_0.01_48)]">
+              Comece no Essencial e veja seu lucro hoje. Suba pro Pro pra rodar todo o financeiro da operação — ou pro DeliveryOS AI pra ter a inteligência que lê a loja e escreve o plano de ação todo mês.
             </p>
           </Reveal>
         </div>
