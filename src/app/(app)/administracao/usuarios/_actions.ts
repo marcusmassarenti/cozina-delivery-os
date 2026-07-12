@@ -8,6 +8,7 @@ import {
   getAccessibleUnitIds,
   getCurrentHoldingId,
   getRolesConfig,
+  isSuperadmin,
 } from "@/lib/auth/permissions"
 import { getDefaultBrand } from "@/lib/data/units"
 
@@ -170,6 +171,46 @@ export async function listUsers(): Promise<AppUser[]> {
 function validatePassword(p: string): string | null {
   if (p.length < 6) return "Senha precisa de pelo menos 6 caracteres"
   return null
+}
+
+/**
+ * Garante que o usuário-ALVO pertence à MESMA empresa (holding) do admin que
+ * está agindo. Sem isto, requireAdmin só confirma que QUEM CHAMA é admin — como
+ * o client é service_role (ignora o RLS), um admin do cliente A conseguiria
+ * editar / resetar a senha / excluir usuários de OUTRA empresa (inclusive o
+ * superadmin) passando o userId alvo. Superadmin (dono do SaaS) fica isento.
+ * Devolve string de erro se o alvo não for da empresa; null se estiver ok.
+ */
+async function assertTargetInCurrentHolding(
+  supabase: ReturnType<typeof createAdminClient>,
+  targetUserId: string,
+): Promise<string | null> {
+  if (await isSuperadmin()) return null
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return "Empresa não encontrada."
+
+  const { data: brandRows } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("holding_id", holdingId)
+  const brandIds = new Set((brandRows ?? []).map((b) => b.id as string))
+  const { data: unitRows } = brandIds.size
+    ? await supabase.from("units").select("id").in("brand_id", [...brandIds])
+    : { data: [] as { id: string }[] }
+  const unitIds = new Set((unitRows ?? []).map((u) => u.id as string))
+
+  const { data: access } = await supabase
+    .from("user_unit_access")
+    .select("scope_type, scope_id")
+    .eq("user_id", targetUserId)
+
+  const belongs = (access ?? []).some(
+    (a) =>
+      (a.scope_type === "holding" && a.scope_id === holdingId) ||
+      (a.scope_type === "brand" && brandIds.has(a.scope_id as string)) ||
+      (a.scope_type === "unit" && unitIds.has(a.scope_id as string)),
+  )
+  return belongs ? null : "Esse usuário não pertence à sua empresa."
 }
 
 /**
@@ -387,6 +428,10 @@ export async function updateUser(
     // Só admin altera perfil/senha/escopo de outros usuários.
     const { admin: supabase, userId: callerId } = await requireAdmin()
 
+    // ...e só de usuários da PRÓPRIA empresa (anti-sequestro cross-tenant).
+    const targetErr = await assertTargetInCurrentHolding(supabase, userId)
+    if (targetErr) return { ok: false, message: targetErr }
+
     const { error: profileErr } = await supabase
       .from("profiles")
       .update({
@@ -438,6 +483,10 @@ export async function deleteUser(userId: string): Promise<UserActionState> {
         message: "Você não pode deletar a si mesmo.",
       }
     }
+    // Só usuários da própria empresa (anti-sequestro cross-tenant).
+    const targetErr = await assertTargetInCurrentHolding(supabase, userId)
+    if (targetErr) return { ok: false, message: targetErr }
+
     const { error } = await supabase.auth.admin.deleteUser(userId)
     if (error) return { ok: false, message: error.message }
     revalidatePath("/administracao/usuarios")
