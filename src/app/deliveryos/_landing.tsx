@@ -39,7 +39,7 @@ import {
 } from "lucide-react"
 
 import { ExperimenteDemo } from "./_demo"
-import { CountUp, Reveal, useScrolled } from "./_motion"
+import { Reveal, useScrolled } from "./_motion"
 import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
 
 const STYLES = `
@@ -868,57 +868,75 @@ export function Landing() {
         </div>
       </section>
 
-      {/* PROVA SOCIAL */}
+      {/* AUTORIDADE / QUEM FEZ */}
       <section className="mx-auto max-w-6xl px-5 py-24">
         <Reveal>
-          <div className="lift relative overflow-hidden rounded-3xl border border-[oklch(0.65_0.21_35/.2)] bg-gradient-to-br from-[oklch(0.97_0.03_45)] to-white p-8 text-center sm:p-10">
+          <div className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
               <Zap className="size-3.5" strokeWidth={2.4} />
               Testado no fogo
             </span>
-            <h2 className="mx-auto mt-4 max-w-2xl text-balance text-2xl font-medium tracking-tight sm:text-3xl">
+            <h2 className="mt-4 text-balance text-3xl font-medium tracking-tight sm:text-4xl">
               Feito por quem vive de delivery — não por quem só programa
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-[oklch(0.45_0.02_45)]">
-              O Delivery OS nasceu rodando na operação real da rede <span className="font-medium">Churrasco no Pote</span>: 9 lojas, 3 plataformas, fechamento todo dia. O que você usa já foi provado no balcão.
+            <p className="mx-auto mt-4 max-w-xl text-[oklch(0.5_0.01_48)]">
+              O Delivery OS não nasceu numa software house. Nasceu na operação —
+              anos fechando delivery, apanhando das taxas e aprendendo na prática.
+              A gente viveu a dor, virou o jogo, e tem relação direta com quem
+              lidera as plataformas.
             </p>
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-center">
-              {[
-                { v: 9, s: "", l: "lojas em operação" },
-                { v: 3, s: "", l: "plataformas integradas" },
-                { v: 100, s: "%", l: "dados reais, sem mock" },
-              ].map((k) => (
-                <div key={k.l}>
-                  <p className="text-3xl font-medium tracking-tight text-[var(--brand-strong)]">
-                    <CountUp to={k.v} suffix={k.s} />
-                  </p>
-                  <p className="mt-0.5 text-xs text-[oklch(0.5_0.01_48)]">{k.l}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </Reveal>
 
-        <Reveal delay={120}>
-          <figure className="mx-auto mt-10 max-w-2xl rounded-3xl border border-black/[0.06] bg-white p-7 text-center shadow-sm sm:p-9">
-            <blockquote className="text-balance text-lg font-medium leading-relaxed text-[oklch(0.3_0.02_45)] sm:text-xl">
-              &ldquo;Eu fecho 9 lojas em 3 plataformas todo mês. Cansei do achismo
-              e construí o Delivery OS pra enxergar, de verdade, onde ganho e onde
-              perco — é a ferramenta que eu queria ter.&rdquo;
-            </blockquote>
-            <figcaption className="mt-6 flex items-center justify-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-sm font-bold text-[var(--brand-strong)]">
-                MM
+        <div className="mt-12 grid gap-5 sm:grid-cols-3">
+          <Reveal>
+            <div className="lift h-full rounded-2xl border border-black/[0.07] bg-white p-6">
+              <span className="flex size-11 items-center justify-center rounded-xl bg-[oklch(0.95_0.04_30)] text-[var(--brand-strong)]">
+                <Store className="size-5" strokeWidth={2} />
               </span>
-              <span className="text-left">
-                <span className="block text-sm font-semibold">Marcus Massarenti</span>
-                <span className="block text-xs text-[oklch(0.5_0.01_48)]">
-                  Fundador · rede Churrasco no Pote
+              <h3 className="mt-4 text-lg font-medium">
+                Donos de delivery, não software house
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">
+                Anos vivendo a operação: a dor de não saber o lucro, a virada e o
+                aprendizado. É a ferramenta que a gente queria ter — e não achou.
+              </p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={110}>
+            <div className="lift h-full rounded-2xl border border-black/[0.07] bg-white p-6">
+              <div className="flex items-center gap-1.5">
+                {(["ifood", "99food", "keeta"] as PlatId[]).map((id) => (
+                  <PlatLogo key={id} id={id} size={28} className="rounded-lg" />
+                ))}
+              </div>
+              <h3 className="mt-4 text-lg font-medium">Por dentro das plataformas</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">
+                Relação direta com quem lidera iFood, 99 Food e Keeta —
+                entendemos as regras de cada uma por dentro, não de fora.
+              </p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={220}>
+            <div className="lift h-full rounded-2xl border border-black/[0.07] bg-white p-6">
+              <span className="flex size-11 items-center justify-center rounded-xl bg-[oklch(0.95_0.04_30)] text-[var(--brand-strong)]">
+                <Network className="size-5" strokeWidth={2} />
+              </span>
+              <h3 className="mt-4 flex flex-wrap items-center gap-2 text-lg font-medium">
+                Aberto pra integrar
+                <span className="rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-strong)]">
+                  API aberta
                 </span>
-              </span>
-            </figcaption>
-          </figure>
-        </Reveal>
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">
+                As 3 grandes já integradas — e uma API aberta pra novas
+                plataformas e sistemas (ex.: ERP) se conectarem ao Delivery OS.
+              </p>
+            </div>
+          </Reveal>
+        </div>
       </section>
 
       {/* PREÇOS */}
