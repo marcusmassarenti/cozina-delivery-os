@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     return new Response("unauthorized", { status: 401 })
   }
 
-  let body: { event?: string; payment?: AsaasPayment } = {}
+  let body: { id?: string; event?: string; payment?: AsaasPayment } = {}
   try {
     body = (await req.json()) as typeof body
   } catch {
@@ -89,6 +89,12 @@ export async function POST(req: Request) {
 
   const event = String(body.event ?? "")
   const payment = body.payment ?? {}
+  // Chave única do evento (id do envelope do Asaas; senão evento+cobrança).
+  const eventKey = body.id
+    ? `evt:${body.id}`
+    : payment.id
+      ? `${event}:${payment.id}`
+      : ""
   const subscriptionId = payment.subscription ? String(payment.subscription) : null
   const customerId = payment.customer ? String(payment.customer) : null
 
@@ -123,6 +129,22 @@ export async function POST(req: Request) {
         customerId,
       })
       return Response.json({ ok: true })
+    }
+
+    // Idempotência / anti-replay: registra o evento ANTES de aplicar. Se já
+    // existe (reenvio do Asaas ou replay de evento antigo), não reaplica.
+    // O insert com onConflict é atômico (PK), então não há corrida.
+    if (eventKey) {
+      const { data: inserted, error: insErr } = await admin
+        .from("asaas_processed_events")
+        .upsert(
+          { event_key: eventKey, event, holding_id: holdingId },
+          { onConflict: "event_key", ignoreDuplicates: true },
+        )
+        .select("event_key")
+      if (!insErr && (!inserted || inserted.length === 0)) {
+        return Response.json({ ok: true, deduped: true })
+      }
     }
 
     const patch: Record<string, unknown> = {
