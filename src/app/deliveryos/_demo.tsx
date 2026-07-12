@@ -400,6 +400,53 @@ export function ExperimenteDemo({ sample = false }: { sample?: boolean } = {}) {
   )
 }
 
+/** R$ digitado → número (centavos). Igual ao editor de custos do sistema. */
+function parseBRL(s: string): number {
+  return parseInt(s.replace(/\D/g, "") || "0", 10) / 100
+}
+function displayBRL(n: number): string {
+  return n === 0
+    ? ""
+    : n.toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+}
+
+function CostInput({
+  label,
+  value,
+  onChange,
+  pct,
+}: {
+  label: string
+  value: number
+  onChange: (n: number) => void
+  pct: number
+}) {
+  return (
+    <div className="mt-3">
+      <div className="flex items-baseline justify-between gap-2 text-[11px] font-medium text-muted-foreground">
+        <span>{label}</span>
+        <span className="tabular-nums text-muted-foreground/70">
+          {pct.toFixed(0)}%
+        </span>
+      </div>
+      <div className="mt-1 flex items-center gap-1.5 rounded-lg border bg-background px-2.5 py-2 focus-within:border-[var(--brand)]">
+        <span className="text-xs text-muted-foreground">R$</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={displayBRL(value)}
+          onChange={(e) => onChange(parseBRL(e.target.value))}
+          placeholder="0,00"
+          className="w-full bg-transparent text-sm tabular-nums outline-none"
+        />
+      </div>
+    </div>
+  )
+}
+
 function ResultPanel({
   data,
   name,
@@ -409,6 +456,11 @@ function ResultPanel({
   name: string
   onReset: () => void
 }) {
+  // Custos que o cliente lança (como no sistema) — pré-preenchidos com uma
+  // estimativa típica pra já mostrar a margem "fechando"; editáveis na hora.
+  const [cmv, setCmv] = useState(() => Math.round(data.bruto * 0.32))
+  const [operacao, setOperacao] = useState(() => Math.round(data.bruto * 0.12))
+
   // Monta a MESMA estrutura que a tela real do sistema recebe (DreDetalhado).
   const platforms: DrePlat[] = [
     {
@@ -435,20 +487,46 @@ function ResultPanel({
         </span>
       </div>
 
-      {/* A TELA REAL DO SISTEMA — mesmo componente do app (DreDetalhado), em
-          modo escuro (contexto .dark ativa os tokens dark do tema). */}
-      <div className="dark text-foreground">
+      {/* A TELA REAL DO SISTEMA — DreDetalhado + o box de custos ao lado (como
+          no app: você lança CMV/operacional e a margem recalcula na hora). */}
+      <div className="dark text-foreground grid gap-3 lg:grid-cols-[1fr_236px] lg:items-start">
         <DreDetalhado
           platforms={platforms}
           totalBruto={data.bruto}
           totalLiquido={data.liquido}
-          cmv={0}
-          operacao={0}
+          cmv={cmv}
+          operacao={operacao}
           periodo={data.competencia}
           title="DRE da sua loja"
           totalLabel="Resultado da loja"
           showPdf={false}
         />
+
+        {/* Box de custos — lance e a margem fecha (igual ao sistema). */}
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-sm font-semibold">Lance os custos da sua loja</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            Ajuste com os seus números — a <b>margem</b> e o <b>lucro</b>{" "}
+            recalculam na hora, ao lado.
+          </p>
+
+          <CostInput
+            label="CMV (custo dos produtos)"
+            value={cmv}
+            onChange={setCmv}
+            pct={data.bruto > 0 ? (cmv / data.bruto) * 100 : 0}
+          />
+          <CostInput
+            label="Custos operacionais (aluguel, folha…)"
+            value={operacao}
+            onChange={setOperacao}
+            pct={data.bruto > 0 ? (operacao / data.bruto) * 100 : 0}
+          />
+
+          <p className="mt-3 text-[10px] leading-snug text-muted-foreground">
+            No sistema, você lança por categoria e fica salvo mês a mês.
+          </p>
+        </div>
       </div>
 
       <div className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
@@ -457,9 +535,9 @@ function ResultPanel({
       </div>
 
       <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
-        É a <b>mesma tela</b> que você vê dentro do Delivery OS. No sistema, você
-        lança o CMV e os custos e a <b>margem</b> e o <b>lucro real</b> aparecem
-        aqui embaixo — por loja e no consolidado.
+        É a <b>mesma tela</b> do Delivery OS. Ajuste o CMV e os custos no box ao
+        lado e veja a <b>margem</b> e o <b>lucro real</b> fecharem na hora. No
+        sistema completo isso vale pra todas as suas lojas, mês a mês.
       </p>
 
       {/* CTA */}
