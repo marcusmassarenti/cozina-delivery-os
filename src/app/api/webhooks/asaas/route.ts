@@ -2,17 +2,30 @@
  * Webhook do Asaas — recebe os eventos de cobrança da assinatura e sincroniza
  * o status de pagamento da holding (libera / bloqueia o acesso).
  *
- * Segurança: se ASAAS_WEBHOOK_TOKEN estiver definido, exigimos que o Asaas
- * envie o mesmo valor no header `asaas-access-token` (configurado no painel do
- * Asaas). Respondemos sempre 200 pra não entrar em loop de reenvio; erros ficam
- * no log.
+ * Segurança (FAIL-CLOSED): exigimos SEMPRE que o Asaas envie o header
+ * `asaas-access-token` igual ao ASAAS_WEBHOOK_TOKEN (configurado no painel do
+ * Asaas). Se o segredo não estiver setado no ambiente, RECUSAMOS o webhook
+ * (500) em vez de aceitar tudo — caso contrário qualquer um poderia forjar um
+ * "pagamento confirmado" e liberar plano de graça. Comparação timing-safe.
+ * Eventos válidos são respondidos com 200 pra não entrar em loop de reenvio.
  *
  * Eventos que importam:
  *  - PAGO (confirmado/recebido) → paid=true, encerra o trial, limpa suspensão.
  *  - VENCIDO (overdue)          → paid=false, agenda suspensão (vencimento + 7).
  *  - ESTORNADO/removido         → paid=false.
  */
+import { timingSafeEqual } from "node:crypto"
+
 import { createAdminClient } from "@/lib/supabase/admin"
+
+/** Comparação de segredo em tempo constante (evita timing attack). */
+function tokenOk(expected: string, got: string | null): boolean {
+  if (!got) return false
+  const a = Buffer.from(got)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -55,7 +68,15 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const expected = process.env.ASAAS_WEBHOOK_TOKEN
-  if (expected && req.headers.get("asaas-access-token") !== expected) {
+  if (!expected) {
+    // Fail-closed: sem segredo configurado, não processamos nada. O Asaas
+    // reenvia; assim que a env var entrar na Vercel, os eventos são aplicados.
+    console.error(
+      "asaas webhook: ASAAS_WEBHOOK_TOKEN ausente — recusando (fail-closed)",
+    )
+    return new Response("webhook misconfigured", { status: 500 })
+  }
+  if (!tokenOk(expected, req.headers.get("asaas-access-token"))) {
     return new Response("unauthorized", { status: 401 })
   }
 
