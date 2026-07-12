@@ -893,25 +893,73 @@ export function PainBreakdown() {
         </div>
       </div>
 
-      <p className="mt-6 text-center text-2xl font-medium leading-snug sm:text-3xl">
-        As taxas levam <span className="text-[oklch(0.76_0.17_28)]">R$ {taxas}</span>.{" "}
-        Sobra só <span className="text-[oklch(0.82_0.16_150)]">R$ {sobra}</span>.
-      </p>
-      <p className="mt-1.5 text-center text-sm text-[oklch(0.6_0_0)]">
+      {/* Mesma leitura do DRE do sistema: faturamento → taxas → sobra. */}
+      <div className="mx-auto mt-7 max-w-xl">
+        <div className="flex items-baseline justify-between gap-2 py-1.5">
+          <span className="text-sm font-semibold">Faturamento</span>
+          <span className="flex shrink-0 items-baseline gap-2">
+            <span className="text-sm font-bold tabular-nums">R$ 100</span>
+            <span className="w-10 text-right text-[10px] tabular-nums text-white/40">100%</span>
+          </span>
+        </div>
+
+        <div className="flex items-baseline justify-between gap-2 py-1.5">
+          <span className="text-sm text-white/60">(−) Taxas das plataformas</span>
+          <span className="flex shrink-0 items-baseline gap-2">
+            <span className="text-sm font-medium tabular-nums text-[oklch(0.76_0.14_28)]">
+              − R$ {taxas}
+            </span>
+            <span className="w-10 text-right text-[10px] tabular-nums text-white/40">
+              {taxas}%
+            </span>
+          </span>
+        </div>
+
+        <div className="space-y-0.5 border-l border-white/10 pl-3">
+          {segs.map((s) => (
+            <div
+              key={s.l}
+              className="flex items-baseline justify-between gap-2 py-0.5"
+            >
+              <span className="flex min-w-0 items-center gap-2 text-[12px] text-white/55">
+                <span
+                  className="size-2 shrink-0 rounded-[3px]"
+                  style={{ background: s.c }}
+                />
+                <span className="truncate">{s.l}</span>
+              </span>
+              <span className="flex shrink-0 items-baseline gap-2">
+                <span className="text-[12px] tabular-nums text-[oklch(0.74_0.12_28)]">
+                  − R$ {s.v}
+                </span>
+                <span className="w-8 text-right text-[9px] tabular-nums text-white/35">
+                  {s.v}%
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="my-1.5 border-t border-white/10" />
+
+        <div className="-mx-2 flex items-baseline justify-between gap-2 rounded-md bg-[oklch(0.28_0.07_150)] px-2 py-2">
+          <span className="text-sm font-semibold text-[oklch(0.88_0.13_150)]">
+            = Sobra pra você
+          </span>
+          <span className="flex shrink-0 items-baseline gap-2">
+            <span className="text-base font-bold tabular-nums text-[oklch(0.86_0.16_150)]">
+              R$ {sobra}
+            </span>
+            <span className="w-10 text-right text-[10px] tabular-nums text-[oklch(0.78_0.1_150)]">
+              {sobra}%
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <p className="mt-4 text-center text-sm text-white/50">
         E na maioria das lojas, ninguém percebe.
       </p>
-
-      <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-x-10 gap-y-3 text-[13px] sm:grid-cols-2">
-        {segs.map((s) => (
-          <span key={s.l} className="flex items-center justify-between gap-3 text-[oklch(0.72_0_0)]">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: s.c }} />
-              <span className="truncate">{s.l}</span>
-            </span>
-            <span className="shrink-0 tabular-nums text-white">−R$ {s.v}</span>
-          </span>
-        ))}
-      </div>
     </div>
   )
 }
