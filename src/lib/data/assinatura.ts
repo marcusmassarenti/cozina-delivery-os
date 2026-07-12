@@ -103,7 +103,7 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   const { data: h } = await admin
     .from("holdings")
     .select(
-      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
+      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, pending_plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
     )
     .eq("id", holdingId)
     .maybeSingle()
@@ -137,7 +137,13 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   )
 
   const precoCustom = h.monthly_fee != null
-  const selectedPlan = (h.plan_tier as PlanId | null) ?? null
+  // Plano PAGO (plan_tier) tem prioridade; se ainda não pagou, mostra o
+  // escolhido/pendente (pra exibição e cálculo do valor). O que LIBERA as
+  // features é só o plan_tier (ver isProPlan/isAiPlan).
+  const selectedPlan =
+    ((h.plan_tier as PlanId | null) ??
+      (h.pending_plan_tier as PlanId | null)) ??
+    null
 
   let mensalidade: number
   if (precoCustom) {

@@ -97,21 +97,24 @@ export async function POST(req: Request) {
 
     // Acha a holding pela assinatura (ou, no pior caso, pelo cliente).
     let holdingId: string | null = null
+    let pendingPlanTier: string | null = null
     if (subscriptionId) {
       const { data } = await admin
         .from("holdings")
-        .select("id")
+        .select("id, pending_plan_tier")
         .eq("asaas_subscription_id", subscriptionId)
         .maybeSingle()
       holdingId = data?.id ?? null
+      pendingPlanTier = (data?.pending_plan_tier as string | null) ?? null
     }
     if (!holdingId && customerId) {
       const { data } = await admin
         .from("holdings")
-        .select("id")
+        .select("id, pending_plan_tier")
         .eq("asaas_customer_id", customerId)
         .maybeSingle()
       holdingId = data?.id ?? null
+      pendingPlanTier = (data?.pending_plan_tier as string | null) ?? null
     }
     if (!holdingId) {
       console.warn("asaas webhook: holding não encontrada", {
@@ -136,6 +139,12 @@ export async function POST(req: Request) {
       patch.suspend_on = null
       patch.payment_method = "Asaas"
       if (payment.dueDate) patch.due_date = String(payment.dueDate)
+      // Pagamento confirmado → CONCEDE o plano escolhido (pending → plan_tier).
+      // É aqui, e só aqui, que a feature é liberada. Limpa o pendente.
+      if (pendingPlanTier) {
+        patch.plan_tier = pendingPlanTier
+        patch.pending_plan_tier = null
+      }
     } else if (VENCIDO.has(event)) {
       patch.paid = false
       if (payment.dueDate) {

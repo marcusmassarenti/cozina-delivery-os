@@ -140,20 +140,25 @@ function planRank(tier: string | null): number {
 
 /**
  * True quando a conta tem acesso aos módulos Pro (Fluxo de Caixa etc.).
- * Super-admin (dono do SaaS) sempre; cliente do Pro pra cima (pro ou ai).
+ * Super-admin (dono do SaaS) sempre; no teste grátis tudo é liberado; fora do
+ * trial vale o plano EFETIVAMENTE PAGO (plan_tier), do Pro pra cima.
  */
 export async function isProPlan(): Promise<boolean> {
   if (await isSuperadmin()) return true
   const b = await getCurrentHoldingBilling()
-  return planRank(b?.planTier ?? null) >= PLAN_RANK.pro
+  if (!b) return false
+  if (b.status === "trial") return true
+  return planRank(b.planTier) >= PLAN_RANK.pro
 }
 
 /**
  * True quando a conta tem o DeliveryOS AI (diagnóstico + plano de ação por IA).
- * Só o tier "ai" (acima do Pro). Super-admin sempre.
+ * Super-admin sempre; teste grátis libera; fora do trial só o tier "ai" pago.
  */
 export async function isAiPlan(): Promise<boolean> {
   if (await isSuperadmin()) return true
   const b = await getCurrentHoldingBilling()
-  return planRank(b?.planTier ?? null) >= PLAN_RANK.ai
+  if (!b) return false
+  if (b.status === "trial") return true
+  return planRank(b.planTier) >= PLAN_RANK.ai
 }

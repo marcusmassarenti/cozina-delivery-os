@@ -180,7 +180,9 @@ export async function assinar(
         .update({
           asaas_subscription_id: subscriptionId,
           payment_method: "Asaas",
-          ...(plano.precoCustom ? {} : { plan_tier: planId }),
+          // Grava só como PENDENTE. O plan_tier (que libera as features) só é
+          // concedido pelo webhook quando o pagamento confirmar de verdade.
+          ...(plano.precoCustom ? {} : { pending_plan_tier: planId }),
         })
         .eq("id", holdingId)
     }
@@ -222,7 +224,7 @@ export async function simularPagamento(
   const admin = createAdminClient()
   const { data: h } = await admin
     .from("holdings")
-    .select("id, asaas_subscription_id")
+    .select("id, asaas_subscription_id, pending_plan_tier")
     .eq("id", holdingId)
     .maybeSingle()
   if (!h || h.asaas_subscription_id !== subscriptionId)
@@ -230,6 +232,7 @@ export async function simularPagamento(
 
   const hoje = todayISO()
   const plano = await getPlanoAtual()
+  const pendingTier = (h.pending_plan_tier as string | null) ?? null
   await admin
     .from("holdings")
     .update({
@@ -238,6 +241,8 @@ export async function simularPagamento(
       suspend_on: null,
       due_date: addMonths(hoje, 1),
       payment_method: "Asaas (Simulado)",
+      // Espelha o webhook: pagamento confirmado concede o plano pendente.
+      ...(pendingTier ? { plan_tier: pendingTier, pending_plan_tier: null } : {}),
       asaas_last_event: {
         event: "SIMULATED_PAYMENT_CONFIRMED",
         at: new Date().toISOString(),
