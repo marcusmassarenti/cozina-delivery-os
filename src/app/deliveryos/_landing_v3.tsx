@@ -235,9 +235,42 @@ const PORDENTRO_TABS: {
     texto:
       "Tudo consolidado das 3 plataformas — e o que cada uma representa de verdade no seu bolso.",
     bullets: [
-      "KPIs: bruto, líquido, margem, ticket e nota",
+      "KPIs consolidados: bruto, líquido, margem, ticket e nota",
+      "Split de faturamento por plataforma (quem pesa mais)",
       "DRE da loja: bruto → taxas → CMV → margem real",
-      "Você lança o CMV e a margem aparece na hora",
+      "Você lança o CMV e a margem real aparece na hora",
+    ],
+  },
+  {
+    key: "avaliacoes",
+    label: "Avaliações",
+    img: "/landing/avaliacoes.png",
+    url: "app.deliveryos.food/unidade/avaliacoes",
+    callout: "nota das 3 plataformas",
+    tag: "Reputação",
+    titulo: "Saiba o que falam — e o que melhorar",
+    texto:
+      "Nota média, distribuição de estrelas e o que mais elogiam (e reclamam), das 3 plataformas juntas.",
+    bullets: [
+      "Nota e distribuição consolidadas",
+      "O que elogiam e o que reclamam",
+      "Comentários reais dos clientes",
+    ],
+  },
+  {
+    key: "cardapio",
+    label: "Cardápio",
+    img: "/landing/cardapio.png",
+    url: "app.deliveryos.food/unidade/cardapio",
+    callout: "onde o cliente desiste",
+    tag: "Cardápio & produtos",
+    titulo: "O que vende — e onde o cliente desiste",
+    texto:
+      "O funil de conversão (de visita a pedido) e os itens que mais saem, com o que puxa e o que trava a venda.",
+    bullets: [
+      "Funil: visita → sacola → pedido",
+      "Top itens vendidos e complementos",
+      "Onde o cliente abandona o carrinho",
     ],
   },
   {
@@ -250,11 +283,13 @@ const PORDENTRO_TABS: {
     tag: "DeliveryOS AI",
     titulo: "A IA lê a sua loja e diz o que fazer",
     texto:
-      "Todo mês cruza funil, avaliações, cancelamentos e produtos — e aponta as 3 ações que mais mexem no resultado.",
+      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado — não é mais um dashboard, é plano de ação.",
     bullets: [
+      "Funil das 3 plataformas — onde o cliente desiste",
       "Lê o texto das avaliações, não só a nota",
-      "As 3 ações de maior impacto no mês",
-      "Exporta o plano de ação em PDF",
+      "Cancelamentos, CMV e margem fora da meta",
+      "Marketing: quanto gastou e o que de fato voltou",
+      "Produtos que puxam (ou travam) a venda",
     ],
   },
   {
@@ -269,11 +304,23 @@ const PORDENTRO_TABS: {
     texto:
       "Não é só o delivery — o caixa completo da sua operação, sem abrir planilha.",
     bullets: [
-      "Contas a pagar e a receber",
-      "Concilia o banco por OFX",
-      "Resultado do mês, por conta",
+      "Caixa de toda a operação, conta por conta",
+      "Contas a pagar e a receber, sem perder boleto",
+      "Importação OFX: concilia o extrato do banco",
+      "Contas, cartões e faturas num lugar só",
+      "Categorias e subcategorias (pra onde vai cada real)",
+      "Relatórios: receita, despesa e resultado do mês",
     ],
   },
+]
+
+/** Módulos que não viram aba, listados compactos abaixo das abas. */
+const MAIS_MODULOS = [
+  "Dashboard",
+  "Relatório Diário",
+  "Pedidos",
+  "Unidades",
+  "Importação",
 ]
 
 function PorDentroTabs() {
@@ -341,6 +388,21 @@ function PorDentroTabs() {
             ))}
           </ul>
         </div>
+      </div>
+
+      {/* E mais no sistema — módulos que não viraram aba, compactos */}
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-2 border-t border-black/[0.06] pt-6">
+        <span className="text-xs font-medium text-[oklch(0.5_0.01_48)]">
+          E ainda:
+        </span>
+        {MAIS_MODULOS.map((m) => (
+          <span
+            key={m}
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.07] bg-white px-3 py-1.5 text-[13px] font-medium text-[oklch(0.4_0.01_48)]"
+          >
+            {m}
+          </span>
+        ))}
       </div>
     </div>
   )
