@@ -427,7 +427,7 @@ export function LandingV2() {
             >
               Entrar
             </a>
-            <a href="/cadastro" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
+            <a href="/experimente" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
               Testar grátis
             </a>
           </div>
@@ -461,12 +461,12 @@ export function LandingV2() {
             </Reveal>
             <Reveal delay={240}>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-                <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
+                <a href="/experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
                   <Upload className="size-[18px]" strokeWidth={2.2} />
                   Descobrir meu lucro agora
                   <ArrowRight className="arrow-slide size-[18px]" strokeWidth={2.2} />
                 </a>
-                <a href="#experimente" className="btn-ghost inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 text-[15px] font-medium text-white hover:bg-white/5">
+                <a href="/experimente" className="btn-ghost inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 text-[15px] font-medium text-white hover:bg-white/5">
                   Ver como funciona
                 </a>
               </div>
@@ -567,7 +567,7 @@ export function LandingV2() {
                 </div>
               </Reveal>
               <Reveal delay={180}>
-                <a href="#experimente" className="btn-brand grp mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-medium">
+                <a href="/experimente" className="btn-brand grp mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-medium">
                   <Upload className="size-5" strokeWidth={2.2} />
                   Quero testar com a minha planilha
                   <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
@@ -613,7 +613,7 @@ export function LandingV2() {
 
         <Reveal delay={120}>
           <div className="mt-12 flex justify-center">
-            <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-medium">
+            <a href="/experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-medium">
               <Upload className="size-[18px]" strokeWidth={2.2} />
               Quero usar a ferramenta
               <ArrowRight className="arrow-slide size-[18px]" strokeWidth={2.2} />
@@ -728,7 +728,7 @@ export function LandingV2() {
 
           <Reveal delay={120}>
             <div className="mt-14 flex justify-center">
-              <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-medium">
+              <a href="/experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-medium">
                 <Upload className="size-[18px]" strokeWidth={2.2} />
                 Quero usar a ferramenta
                 <ArrowRight className="arrow-slide size-[18px]" strokeWidth={2.2} />
@@ -854,7 +854,7 @@ export function LandingV2() {
 
           <Reveal delay={120}>
             <div className="mt-14 flex flex-wrap items-center justify-center gap-3">
-              <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
+              <a href="/experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
                 <Upload className="size-[18px]" strokeWidth={2.2} />
                 Quero usar a ferramenta
                 <ArrowRight className="arrow-slide size-[18px]" strokeWidth={2.2} />
@@ -1320,7 +1320,7 @@ export function LandingV2() {
             </p>
           </Reveal>
           <Reveal delay={160}>
-            <a href="#experimente" className="btn-brand grp mt-8 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-medium">
+            <a href="/experimente" className="btn-brand grp mt-8 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-medium">
               <Upload className="size-5" strokeWidth={2.2} />
               Descobrir meu lucro agora
               <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
