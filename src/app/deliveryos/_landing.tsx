@@ -452,7 +452,7 @@ export function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5">
           <Reveal>
             <p className="text-xs font-medium uppercase tracking-wider text-[oklch(0.55_0.01_48)]">
-              Lê os relatórios que você já baixa de
+              Sem senha · sem conectar nada · você só sobe o relatório de
             </p>
           </Reveal>
           <Reveal delay={100}>
