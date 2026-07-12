@@ -16,11 +16,11 @@ export function LegalShell({
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-6 py-4">
-          <Link href="/login" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <DeliveryOsWordmark subtitle={false} />
           </Link>
           <Link
-            href="/login"
+            href="/"
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← Voltar
