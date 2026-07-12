@@ -3,6 +3,7 @@
 import { headers } from "next/headers"
 
 import { createClient } from "@/lib/supabase/server"
+import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 
 export type ResetState = { ok: boolean; message?: string; sent?: boolean }
 
@@ -17,6 +18,13 @@ export async function requestReset(
   const email = String(formData.get("email") ?? "").trim().toLowerCase()
   if (!email || !email.includes("@")) {
     return { ok: false, message: "Informe um e-mail válido." }
+  }
+
+  // Anti-abuso: 5 pedidos / 15 min por IP (evita flood de e-mail).
+  const ip = await clientIp()
+  if (!(await rateLimit(`reset:${ip}`, 5, 15 * 60))) {
+    // Resposta genérica (não revela nada) — só não dispara mais e-mail.
+    return { ok: true, sent: true }
   }
 
   const h = await headers()

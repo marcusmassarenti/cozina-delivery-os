@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 
 export type SignInState = {
   ok: boolean
@@ -19,6 +20,17 @@ export async function signIn(
 
   if (!email || !password) {
     return { ok: false, message: "Preencha email e senha." }
+  }
+
+  // Anti brute-force: 10 tentativas / 5 min por IP (defesa própria, além do
+  // limite do Supabase Auth).
+  const ip = await clientIp()
+  const dentro = await rateLimit(`login:${ip}`, 10, 5 * 60)
+  if (!dentro) {
+    return {
+      ok: false,
+      message: "Muitas tentativas. Espere alguns minutos e tente de novo.",
+    }
   }
 
   const supabase = await createClient()
