@@ -387,9 +387,9 @@ export function Landing() {
             <span className="flex size-8 items-center justify-center rounded-lg bg-[var(--brand)] text-white shadow-[0_8px_20px_-8px_oklch(0.65_0.21_35/.8)]">
               <BarChart3 className="size-[18px]" strokeWidth={2.4} />
             </span>
-            <span className="text-[17px] tracking-tight">Delivery OS</span>
+            <span className={`text-[17px] tracking-tight transition-colors ${scrolled ? "text-[var(--ink)]" : "text-white"}`}>Delivery OS</span>
           </a>
-          <div className="hidden items-center gap-6 text-sm text-[oklch(0.45_0.01_48)] md:flex">
+          <div className={`hidden items-center gap-6 text-sm transition-colors md:flex ${scrolled ? "text-[oklch(0.45_0.01_48)]" : "text-white/80"}`}>
             {NAV_LINKS.map((l) => {
               const on = active === l.id
               return (
@@ -416,7 +416,7 @@ export function Landing() {
           <div className="flex items-center gap-3 sm:gap-4">
             <a
               href="/login"
-              className="text-sm font-medium text-[oklch(0.45_0.01_48)] transition-colors hover:text-[var(--brand)]"
+              className={`text-sm font-medium transition-colors ${scrolled ? "text-[oklch(0.45_0.01_48)] hover:text-[var(--brand)]" : "text-white/85 hover:text-white"}`}
             >
               Entrar
             </a>
