@@ -11,6 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.deliveryos.food"),
   title: "Delivery OS",
   description: "O sistema operacional do seu delivery — iFood, 99 Food e Keeta num lugar só.",
 };
