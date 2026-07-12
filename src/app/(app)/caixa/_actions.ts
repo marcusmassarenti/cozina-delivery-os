@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { requireAuth } from "@/lib/auth/guards"
 import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
+import { isProPlan } from "@/lib/data/billing"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type ActionState = { ok: boolean; message?: string; id?: string }
@@ -13,6 +14,12 @@ async function ctx(): Promise<{
   admin: ReturnType<typeof createAdminClient>
 }> {
   await requireAuth()
+  // Fluxo de Caixa é do plano Pro. O gate estava só na UI (escondia o menu);
+  // sem isto, um cliente Essencial chamava a server action direto e usava o
+  // módulo sem pagar. isProPlan() libera superadmin e teste grátis.
+  if (!(await isProPlan())) {
+    throw new Error("O Fluxo de Caixa faz parte do plano Pro. Faça upgrade para usar.")
+  }
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) throw new Error("Sem cliente (holding) associado ao usuário.")
   return { holdingId, admin: createAdminClient() }
