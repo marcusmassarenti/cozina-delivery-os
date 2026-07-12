@@ -434,9 +434,12 @@ export function Landing() {
           </div>
 
           <Reveal delay={420} y={40}>
-            <div className="w-full">
-              <Shot src="/landing/dashboard.png" alt="Painel da rede no Delivery OS" />
-              <p className="mt-3 text-center text-xs text-[oklch(0.62_0.01_60)] lg:text-left">
+            <div className="relative w-full">
+              <div className="glow-blob left-1/2 top-1/2 h-[115%] w-[115%] -translate-x-1/2 -translate-y-1/2 opacity-90" />
+              <div className="relative rounded-[20px] bg-white/10 p-1.5 shadow-[0_50px_100px_-30px_rgba(0,0,0,.8)] ring-1 ring-white/15">
+                <Shot src="/landing/dashboard.png" alt="Painel da rede no Delivery OS" />
+              </div>
+              <p className="relative mt-4 text-center text-xs text-[oklch(0.62_0.01_60)] lg:text-left">
                 O painel da rede — faturamento, taxas e lucro de todas as lojas, consolidados.
               </p>
             </div>
@@ -550,16 +553,23 @@ export function Landing() {
         </div>
       </section>
 
-      {/* RELATÓRIOS DISPONÍVEIS */}
+      {/* O QUE VOCÊ SOBE (INPUT — relatórios que o sistema LÊ) */}
       <section id="relatorios" className="mx-auto max-w-6xl px-5 pb-24 pt-12">
         <Reveal>
-          <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">
-            Todos os relatórios, num lugar só
+          <p className="text-center text-sm font-medium text-[var(--brand)]">
+            O que você sobe
+          </p>
+        </Reveal>
+        <Reveal delay={60}>
+          <h2 className="mt-2 text-center text-3xl font-medium tracking-tight sm:text-4xl">
+            Os relatórios que você já baixa — a gente lê todos
           </h2>
         </Reveal>
-        <Reveal delay={80}>
-          <p className="mx-auto mt-4 max-w-xl text-center text-[oklch(0.5_0.01_48)]">
-            O Delivery OS entende os principais relatórios das 3 plataformas — financeiro, cardápio, pedidos e avaliações.
+        <Reveal delay={120}>
+          <p className="mx-auto mt-4 max-w-2xl text-center text-[oklch(0.5_0.01_48)]">
+            Cada plataforma manda um arquivo diferente. Você sobe o que já baixa
+            hoje no iFood, 99 Food e Keeta — financeiro, cardápio, pedidos e
+            avaliações — e o Delivery OS entende cada um.
           </p>
         </Reveal>
         <div className="mt-12 grid gap-5 sm:grid-cols-3">
@@ -584,23 +594,6 @@ export function Landing() {
             </Reveal>
           ))}
         </div>
-
-        {/* Hub de relatórios — print real, faixa larga */}
-        <Reveal delay={140} y={36}>
-          <div className="mx-auto mt-14 max-w-5xl px-5">
-            <p className="mb-5 text-center text-[oklch(0.5_0.01_48)]">
-              E a rede inteira vira{" "}
-              <b className="font-medium text-foreground">relatório pronto</b> —
-              comparativo entre lojas, ranking, evolução, ROI de campanha e mais,
-              num hub só.
-            </p>
-            <Shot
-              src="/landing/relatorios.png"
-              alt="Hub de relatórios da rede no Delivery OS"
-            />
-          </div>
-        </Reveal>
-
         <Reveal delay={120}>
           <div className="mt-10 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[oklch(0.65_0.21_35/.4)] bg-[var(--brand-soft)] px-4 py-2 text-sm font-medium text-[var(--brand-strong)]">
@@ -609,6 +602,37 @@ export function Landing() {
             </span>
           </div>
         </Reveal>
+      </section>
+
+      {/* O QUE VOCÊ RECEBE (OUTPUT — relatórios que o sistema GERA) */}
+      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-24">
+        <div className="mx-auto max-w-6xl px-5">
+          <Reveal>
+            <p className="text-center text-sm font-medium text-[var(--brand)]">
+              O que você recebe
+            </p>
+          </Reveal>
+          <Reveal delay={60}>
+            <h2 className="mt-2 text-center text-3xl font-medium tracking-tight sm:text-4xl">
+              E a rede inteira vira relatório pronto
+            </h2>
+          </Reveal>
+          <Reveal delay={120}>
+            <p className="mx-auto mt-4 max-w-2xl text-center text-[oklch(0.5_0.01_48)]">
+              Você sobe os arquivos; o sistema devolve a análise pronta.
+              Comparativo entre lojas, ranking, evolução, ROI de campanha e mais —
+              num hub só, sem abrir uma planilha.
+            </p>
+          </Reveal>
+          <Reveal delay={160} y={36}>
+            <div className="mx-auto mt-12 max-w-5xl">
+              <Shot
+                src="/landing/relatorios.png"
+                alt="Hub de relatórios da rede no Delivery OS"
+              />
+            </div>
+          </Reveal>
+        </div>
       </section>
 
       {/* VEJA POR DENTRO (TELAS) — zig-zag alternado */}
