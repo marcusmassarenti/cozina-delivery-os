@@ -12,11 +12,14 @@ import "server-only"
 import { createHash } from "node:crypto"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getHoldingUnitIds } from "@/lib/data/units"
 
 export type ApiClient = {
   id: string
   name: string
   scopes: string[]
+  /** Empresa (holding) dona da chave. Os endpoints escopam os dados a ela. */
+  holdingId: string | null
 }
 
 /** SHA-256 (hex) da chave — mesmo algoritmo do gerador de chaves. */
@@ -50,7 +53,7 @@ export async function verifyApiKey(
   const admin = createAdminClient()
   const { data } = await admin
     .from("api_clients")
-    .select("id, name, scopes, active")
+    .select("id, name, scopes, active, holding_id")
     .eq("key_hash", hashApiKey(key))
     .maybeSingle()
 
@@ -75,8 +78,35 @@ export async function verifyApiKey(
 
   return {
     ok: true,
-    client: { id: data.id as string, name: data.name as string, scopes },
+    client: {
+      id: data.id as string,
+      name: data.name as string,
+      scopes,
+      holdingId: (data.holding_id as string | null) ?? null,
+    },
   }
+}
+
+type ScopeResult =
+  | { ok: true; unitIds: string[] }
+  | { ok: false; status: number; error: string }
+
+/**
+ * Escopo de dados da chave: exige que ela esteja vinculada a uma empresa
+ * (holding) e devolve os IDs das lojas dessa empresa. Todo endpoint da API
+ * DEVE passar esses unitIds como filtro pras funções de rede — assim uma chave
+ * só enxerga os dados da própria empresa (fail-closed: sem holding → 403).
+ */
+export async function apiScopeUnitIds(client: ApiClient): Promise<ScopeResult> {
+  if (!client.holdingId) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Chave de API não vinculada a uma empresa. Gere uma nova chave.",
+    }
+  }
+  const unitIds = await getHoldingUnitIds(client.holdingId)
+  return { ok: true, unitIds }
 }
 
 /** Resposta de erro JSON padronizada da API. */

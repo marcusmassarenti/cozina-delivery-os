@@ -155,6 +155,26 @@ export async function getVisibleUnits(): Promise<Unit[]> {
   return all.filter((u) => set.has(u.id))
 }
 
+/**
+ * IDs das lojas de uma HOLDING (marcas → unidades). Usado pra escopar a API
+ * pública /api/v1 aos dados da empresa dona da chave. Devolve [] se a holding
+ * não tem loja (fail-closed: a API então não retorna nada de ninguém).
+ */
+export async function getHoldingUnitIds(holdingId: string): Promise<string[]> {
+  const supabase = createAdminClient()
+  const { data: brands } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("holding_id", holdingId)
+  const brandIds = (brands ?? []).map((b) => b.id as string)
+  if (brandIds.length === 0) return []
+  const { data: units } = await supabase
+    .from("units")
+    .select("id")
+    .in("brand_id", brandIds)
+  return (units ?? []).map((u) => u.id as string)
+}
+
 export async function getUnitByCode(code: string): Promise<Unit | null> {
   const supabase = createAdminClient()
 

@@ -5,7 +5,7 @@
  *
  * Default: mês corrente se year/month não vierem.
  */
-import { apiError, verifyApiKey } from "@/lib/api/auth"
+import { apiError, apiScopeUnitIds, verifyApiKey } from "@/lib/api/auth"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import { currentPeriod } from "@/lib/period"
 
@@ -26,6 +26,8 @@ function r2(n: number): number {
 export async function GET(req: Request) {
   const auth = await verifyApiKey(req, "read")
   if (!auth.ok) return apiError(auth.status, auth.error)
+  const scope = await apiScopeUnitIds(auth.client)
+  if (!scope.ok) return apiError(scope.status, scope.error)
 
   const url = new URL(req.url)
   const cur = currentPeriod()
@@ -38,7 +40,7 @@ export async function GET(req: Request) {
     return apiError(400, "Parâmetro 'year' inválido.")
   }
 
-  const r = await getNetworkResultadoForMonth(year, month)
+  const r = await getNetworkResultadoForMonth(year, month, scope.unitIds)
 
   return Response.json({
     period: { year, month },

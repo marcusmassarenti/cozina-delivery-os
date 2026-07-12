@@ -6,6 +6,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
 export type ApiClientRow = {
   id: string
@@ -19,9 +20,13 @@ export type ApiClientRow = {
 
 export async function listApiClients(): Promise<ApiClientRow[]> {
   const admin = createAdminClient()
+  // Só as chaves da PRÓPRIA empresa (multi-tenant).
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return []
   const { data, error } = await admin
     .from("api_clients")
     .select("id, name, key_prefix, scopes, active, created_at, last_used_at")
+    .eq("holding_id", holdingId)
     .order("created_at", { ascending: false })
   if (error) {
     console.error("listApiClients error:", error.message)

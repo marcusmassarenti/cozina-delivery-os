@@ -4,7 +4,8 @@ import { createHash, randomBytes } from "node:crypto"
 
 import { revalidatePath } from "next/cache"
 
-import { requireModulePermission, requireSuperadmin } from "@/lib/auth/guards"
+import { requireModulePermission } from "@/lib/auth/guards"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
 export type CreateKeyState = {
   ok: boolean
@@ -29,6 +30,10 @@ export async function createApiKey(
     if (scope !== "read" && scope !== "write") {
       return { ok: false, message: "Escopo inválido." }
     }
+    // A chave é AMARRADA à empresa de quem cria. A API /api/v1 só devolve
+    // dados dessa holding — sem isso, a chave veria a rede toda (cross-tenant).
+    const holdingId = await getCurrentHoldingId()
+    if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
 
     const raw = randomBytes(24).toString("base64url")
     const key = `cz_live_${raw}`
@@ -41,6 +46,7 @@ export async function createApiKey(
       key_hash: keyHash,
       scopes: [scope],
       active: true,
+      holding_id: holdingId,
     })
     if (error) return { ok: false, message: error.message }
 
@@ -61,10 +67,14 @@ export async function revokeApiKey(
   try {
     const { admin } = await requireModulePermission("conexoes", "edit")
     if (!id) return { ok: false, message: "Chave inválida." }
+    // Só revoga chave da própria empresa (não dá pra revogar de outro tenant).
+    const holdingId = await getCurrentHoldingId()
+    if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
     const { error } = await admin
       .from("api_clients")
       .update({ active: false })
       .eq("id", id)
+      .eq("holding_id", holdingId)
     if (error) return { ok: false, message: error.message }
     revalidatePath("/conexoes")
     return { ok: true }
