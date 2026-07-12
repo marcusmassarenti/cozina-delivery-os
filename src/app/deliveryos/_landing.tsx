@@ -869,7 +869,8 @@ export function Landing() {
       </section>
 
       {/* AUTORIDADE / QUEM FEZ */}
-      <section className="mx-auto max-w-6xl px-5 py-24">
+      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-24">
+        <div className="mx-auto max-w-6xl px-5">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
@@ -936,6 +937,7 @@ export function Landing() {
               </p>
             </div>
           </Reveal>
+        </div>
         </div>
       </section>
 
