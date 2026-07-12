@@ -428,7 +428,7 @@ export function Landing() {
       </nav>
 
       {/* HERO */}
-      <header id="topo" className="relative overflow-hidden bg-[var(--ink)] pb-16 pt-28 text-white">
+      <header id="topo" className="relative overflow-hidden bg-[var(--ink)] pb-12 pt-24 sm:pb-16 sm:pt-28 text-white">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-60" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-5 lg:grid-cols-[0.92fr_1.28fr] lg:gap-10">
@@ -440,7 +440,7 @@ export function Landing() {
               </span>
             </Reveal>
             <Reveal delay={80}>
-              <h1 className="mt-6 text-balance text-4xl font-medium leading-[1.08] tracking-tight sm:text-5xl lg:text-[52px]">
+              <h1 className="mt-5 text-balance text-3xl font-medium leading-[1.15] tracking-tight sm:mt-6 sm:text-5xl sm:leading-[1.08] lg:text-[52px]">
                 Descubra quanto você{" "}
                 <span className="text-[oklch(0.78_0.16_50)]">realmente ganha</span>{" "}
                 em cada plataforma
@@ -508,7 +508,7 @@ export function Landing() {
       </section>
 
       {/* DORES */}
-      <section className="mx-auto max-w-6xl px-5 py-16">
+      <section className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
         <Reveal>
           <h2 className="mx-auto max-w-2xl text-balance text-center text-3xl font-medium tracking-tight sm:text-4xl">
             Você sabe quanto sobra de verdade?
@@ -644,7 +644,7 @@ export function Landing() {
       </section>
 
       {/* O QUE VOCÊ RECEBE (OUTPUT — relatórios que o sistema GERA) */}
-      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-16">
+      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-12 sm:py-16">
         <div className="mx-auto max-w-6xl px-5">
           <Reveal>
             <p className="text-center text-sm font-medium text-[var(--brand)]">
@@ -664,7 +664,7 @@ export function Landing() {
             </p>
           </Reveal>
           <Reveal delay={160} y={36}>
-            <div className="mx-auto mt-12 max-w-5xl">
+            <div className="mx-auto mt-12 hidden max-w-5xl sm:block">
               <Shot
                 src="/landing/relatorios.png"
                 alt="Hub de relatórios da rede no Delivery OS"
@@ -675,7 +675,7 @@ export function Landing() {
       </section>
 
       {/* VEJA POR DENTRO (TELAS) — zig-zag alternado */}
-      <section id="sistema" className="relative overflow-hidden bg-white py-16">
+      <section id="sistema" className="relative overflow-hidden bg-white py-12 sm:py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob -left-28 top-44 h-80 w-80" />
         <div className="glow-blob -right-28 bottom-44 h-80 w-80" />
@@ -694,7 +694,7 @@ export function Landing() {
             </p>
           </Reveal>
 
-          <div className="mt-16 space-y-14 lg:space-y-20">
+          <div className="mt-16 space-y-10 sm:space-y-14 lg:space-y-20">
             {FEATURE_ROWS.map(({ img, icon: Icon, tag, titulo, texto, bullets }, i) => {
               const reverse = i % 2 === 1
               return (
@@ -730,7 +730,7 @@ export function Landing() {
       </section>
 
       {/* DELIVERYOS AI — diagnóstico + plano de ação por IA */}
-      <section id="ia" className="relative overflow-hidden bg-[var(--ink)] py-16 text-white">
+      <section id="ia" className="relative overflow-hidden bg-[var(--ink)] py-12 sm:py-16 text-white">
         <div className="hero-glow pointer-events-none absolute inset-0 opacity-70" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-40" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -802,7 +802,7 @@ export function Landing() {
       </section>
 
       {/* PLANO PRO — gestão financeira / multi-loja */}
-      <section className="relative overflow-hidden border-t border-black/[0.05] bg-white py-16">
+      <section className="relative overflow-hidden border-t border-black/[0.05] bg-white py-12 sm:py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-60" />
         <div className="glow-blob -left-28 top-32 h-80 w-80" />
         <div className="glow-blob -right-28 bottom-24 h-80 w-80" />
@@ -854,8 +854,8 @@ export function Landing() {
         </div>
       </section>
 
-      {/* MÓDULOS */}
-      <section className="relative overflow-hidden bg-[var(--cream)] py-16">
+      {/* MÓDULOS (oculto no mobile — secundário, evita dispersar) */}
+      <section className="relative hidden overflow-hidden bg-[var(--cream)] py-16 sm:block">
         <div className="glow-blob -right-24 top-6 h-72 w-72" />
         <div className="glow-blob -left-24 bottom-6 h-72 w-72" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -883,7 +883,7 @@ export function Landing() {
       </section>
 
       {/* SEGURANÇA */}
-      <section id="seguranca" className="bg-[var(--ink)] py-16 text-white">
+      <section id="seguranca" className="bg-[var(--ink)] py-12 sm:py-16 text-white">
         <div className="mx-auto max-w-5xl px-5">
           <Reveal>
             <div className="flex flex-col items-center gap-4 text-center">
@@ -932,7 +932,7 @@ export function Landing() {
       </section>
 
       {/* AUTORIDADE / QUEM FEZ */}
-      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-16">
+      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-12 sm:py-16">
         <div className="mx-auto max-w-6xl px-5">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -1005,7 +1005,7 @@ export function Landing() {
       </section>
 
       {/* PREÇOS */}
-      <section id="precos" className="relative overflow-hidden bg-white py-16">
+      <section id="precos" className="relative overflow-hidden bg-white py-12 sm:py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-10 h-72 w-[44rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -1201,7 +1201,7 @@ export function Landing() {
       </section>
 
       {/* FAQ */}
-      <section className="bg-[var(--cream)] py-16">
+      <section className="bg-[var(--cream)] py-12 sm:py-16">
         <div className="mx-auto max-w-3xl px-5">
           <Reveal>
             <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">Perguntas frequentes</h2>
@@ -1217,7 +1217,7 @@ export function Landing() {
       </section>
 
       {/* CTA FINAL */}
-      <section className="relative overflow-hidden bg-[var(--ink)] py-16 text-center text-white">
+      <section className="relative overflow-hidden bg-[var(--ink)] py-12 sm:py-16 text-center text-white">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-50" />
         <div className="relative mx-auto max-w-2xl px-5">
