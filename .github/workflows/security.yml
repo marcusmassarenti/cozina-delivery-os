@@ -24,8 +24,6 @@ jobs:
       - name: Tipos (tsc --noEmit)
         run: npx tsc --noEmit
 
-      # Informativo por ora: o código tem lint debt pré-existente (56 erros
-      # não relacionados a segurança). Não bloqueia o merge; limpar aos poucos.
       - name: Lint (informativo)
         run: npm run lint || true
 
