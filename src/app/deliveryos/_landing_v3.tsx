@@ -555,12 +555,12 @@ export function LandingV3() {
       </section>
 
       {/* ★ TESTE GRÁTIS — 2ª dobra (demo ao vivo, no navegador) */}
-      <section id="experimente" className="relative overflow-hidden bg-white pb-14 pt-16 sm:pt-20">
+      <section id="experimente" className="relative overflow-hidden bg-white pb-12 pt-10 sm:pt-14">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-8 h-72 w-[40rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
           <div
-            className={`grid items-center gap-10 lg:gap-16 ${
+            className={`grid items-center gap-8 lg:gap-14 ${
               demoResult ? "" : "lg:grid-cols-2"
             }`}
           >

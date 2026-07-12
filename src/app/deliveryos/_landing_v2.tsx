@@ -515,7 +515,7 @@ export function LandingV2() {
       </section>
 
       {/* ===== TESTE GRÁTIS (a joia) — experimente com a SUA planilha, ao vivo ===== */}
-      <section id="experimente" className="relative overflow-hidden bg-white pb-16 pt-16 sm:pt-20">
+      <section id="experimente" className="relative overflow-hidden bg-white pb-12 pt-10 sm:pt-14">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-10 h-72 w-[44rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -528,13 +528,13 @@ export function LandingV2() {
               </span>
             </Reveal>
             <Reveal delay={70}>
-              <h2 className="mt-5 text-balance text-3xl font-semibold tracking-tight sm:text-5xl">
+              <h2 className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
                 Suba a sua planilha e veja seu{" "}
                 <span className="text-[var(--brand)]">lucro real</span> agora
               </h2>
             </Reveal>
             <Reveal delay={140}>
-              <p className="mx-auto mt-4 max-w-xl text-pretty text-[oklch(0.5_0.01_48)] sm:text-lg">
+              <p className="mx-auto mt-3 max-w-xl text-pretty text-[oklch(0.5_0.01_48)]">
                 Baixa o relatório do iFood, 99 Food ou Keeta, arrasta aqui e veja
                 na hora quanto as taxas comem e o que de fato entra na sua conta.
                 Sem instalar nada, sem dar senha.
@@ -543,7 +543,7 @@ export function LandingV2() {
           </div>
 
           <div
-            className={`mt-12 grid items-center gap-10 lg:gap-16 ${
+            className={`mt-8 grid items-center gap-8 lg:gap-14 ${
               demoResult ? "" : "lg:grid-cols-2"
             }`}
           >

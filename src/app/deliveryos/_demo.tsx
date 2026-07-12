@@ -383,7 +383,7 @@ export function ExperimenteDemo({
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
-          className={`flex cursor-pointer flex-col items-center rounded-3xl border-2 border-dashed p-10 text-center transition-colors sm:p-14 ${
+          className={`flex cursor-pointer flex-col items-center rounded-3xl border-2 border-dashed p-6 text-center transition-colors sm:p-8 ${
             dragging
               ? "border-[var(--brand)] bg-[var(--brand-soft)]"
               : "border-black/15 bg-white hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]/40"
@@ -410,18 +410,18 @@ export function ExperimenteDemo({
             </>
           ) : (
             <>
-              <span className="flex size-16 items-center justify-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_14px_30px_-14px_oklch(0.65_0.21_35/.9)]">
-                <Upload className="size-7" strokeWidth={2} />
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_14px_30px_-14px_oklch(0.65_0.21_35/.9)]">
+                <Upload className="size-6" strokeWidth={2} />
               </span>
-              <p className="mt-5 text-lg font-medium">
+              <p className="mt-3.5 text-base font-medium">
                 Arraste seu relatório aqui
               </p>
-              <p className="mt-1.5 max-w-sm text-sm text-[oklch(0.5_0.01_48)]">
+              <p className="mt-1 max-w-sm text-[13px] text-[oklch(0.5_0.01_48)]">
                 iFood (Conciliação), 99 Food (Dados da loja/pedido) ou Keeta
                 (Pedidos), em <span className="font-mono">.xlsx</span> ou{" "}
                 <span className="font-mono">.csv</span>. Ou clique pra escolher.
               </p>
-              <span className="btn-brand mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium">
+              <span className="btn-brand mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium">
                 <FileSpreadsheet className="size-4" strokeWidth={2.2} />
                 Escolher arquivo
               </span>
@@ -431,13 +431,13 @@ export function ExperimenteDemo({
       )}
 
       {/* Selo de privacidade */}
-      <p className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-[oklch(0.5_0.01_48)]">
+      <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs text-[oklch(0.5_0.01_48)]">
         <Lock className="size-3.5 text-[var(--brand)]" strokeWidth={2.2} />
         Tudo acontece no seu navegador. A planilha não é enviada nem salva em lugar nenhum.
       </p>
 
       {sample && state.s === "idle" && (
-        <div className="mt-4 text-center">
+        <div className="mt-2.5 text-center">
           <button
             type="button"
             onClick={() =>
@@ -447,7 +447,7 @@ export function ExperimenteDemo({
                 data: SAMPLE_DATA,
               })
             }
-            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-[oklch(0.4_0.01_48)] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-[13px] font-medium text-[oklch(0.4_0.01_48)] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
           >
             <FileSpreadsheet className="size-4" strokeWidth={2} />
             Não tem o arquivo agora? Ver com uma planilha de exemplo
@@ -457,11 +457,11 @@ export function ExperimenteDemo({
 
       {/* Como baixar o relatório — vídeo + link direto por plataforma */}
       {state.s === "idle" && (
-        <div className="mt-5 border-t border-black/[0.06] pt-4 text-center">
+        <div className="mt-3 border-t border-black/[0.06] pt-3 text-center">
           <p className="text-xs font-medium text-[oklch(0.45_0.01_48)]">
             Não sabe onde baixar? Veja o passo a passo de cada plataforma:
           </p>
-          <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2.5">
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             {COMO_BAIXAR.map((p) => (
               <button
                 key={p.id}
