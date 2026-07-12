@@ -305,8 +305,34 @@ function Shot({ src, alt }: { src: string; alt: string }) {
   )
 }
 
+/** Itens da nav (âncoras) — usados também pelo scrollspy. */
+const NAV_LINKS: { id: string; label: string; ai?: boolean }[] = [
+  { id: "experimente", label: "Como funciona" },
+  { id: "relatorios", label: "Relatórios" },
+  { id: "sistema", label: "O sistema" },
+  { id: "ia", label: "IA", ai: true },
+  { id: "seguranca", label: "Segurança" },
+  { id: "precos", label: "Preços" },
+]
+
 export function Landing() {
   const scrolled = useScrolled(20)
+  const [active, setActive] = useState("")
+
+  // Scrollspy: marca no menu a seção que está em vista.
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) setActive(e.target.id)
+      },
+      { rootMargin: "-15% 0px -80% 0px" },
+    )
+    NAV_LINKS.forEach((l) => {
+      const el = document.getElementById(l.id)
+      if (el) io.observe(el)
+    })
+    return () => io.disconnect()
+  }, [])
 
   // Smooth-scroll "buttery" (Lenis). Respeita prefers-reduced-motion e leva os
   // links âncora (#como, #precos…) com a mesma suavidade.
@@ -363,16 +389,29 @@ export function Landing() {
             </span>
             <span className="text-[17px] tracking-tight">Delivery OS</span>
           </a>
-          <div className="hidden items-center gap-7 text-sm text-[oklch(0.45_0.01_48)] md:flex">
-            <a href="#experimente" className="transition-colors hover:text-[var(--brand)]">Como funciona</a>
-            <a href="#relatorios" className="transition-colors hover:text-[var(--brand)]">Relatórios</a>
-            <a href="#sistema" className="transition-colors hover:text-[var(--brand)]">O sistema</a>
-            <a href="#ia" className="inline-flex items-center gap-1 transition-colors hover:text-[var(--brand)]">
-              <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
-              IA
-            </a>
-            <a href="#seguranca" className="transition-colors hover:text-[var(--brand)]">Segurança</a>
-            <a href="#precos" className="transition-colors hover:text-[var(--brand)]">Preços</a>
+          <div className="hidden items-center gap-6 text-sm text-[oklch(0.45_0.01_48)] md:flex">
+            {NAV_LINKS.map((l) => {
+              const on = active === l.id
+              return (
+                <a
+                  key={l.id}
+                  href={`#${l.id}`}
+                  className={`inline-flex items-center gap-1 transition-colors ${
+                    on
+                      ? "font-semibold text-[var(--brand)]"
+                      : "hover:text-[var(--brand)]"
+                  }`}
+                >
+                  {l.ai && (
+                    <Sparkles
+                      className="size-3.5 text-[var(--brand)]"
+                      strokeWidth={2.4}
+                    />
+                  )}
+                  {l.label}
+                </a>
+              )
+            })}
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
             <a
@@ -389,10 +428,10 @@ export function Landing() {
       </nav>
 
       {/* HERO */}
-      <header id="topo" className="relative overflow-hidden bg-[var(--ink)] pb-24 pt-32 text-white">
+      <header id="topo" className="relative overflow-hidden bg-[var(--ink)] pb-16 pt-28 text-white">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-60" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-5 lg:grid-cols-[1.05fr_1fr] lg:gap-14">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-5 lg:grid-cols-[0.92fr_1.28fr] lg:gap-10">
           <div className="text-center lg:text-left">
             <Reveal>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-[oklch(0.85_0.05_60)]">
@@ -469,7 +508,7 @@ export function Landing() {
       </section>
 
       {/* DORES */}
-      <section className="mx-auto max-w-6xl px-5 py-24">
+      <section className="mx-auto max-w-6xl px-5 py-16">
         <Reveal>
           <h2 className="mx-auto max-w-2xl text-balance text-center text-3xl font-medium tracking-tight sm:text-4xl">
             Você sabe quanto sobra de verdade?
@@ -554,7 +593,7 @@ export function Landing() {
       </section>
 
       {/* O QUE VOCÊ SOBE (INPUT — relatórios que o sistema LÊ) */}
-      <section id="relatorios" className="mx-auto max-w-6xl px-5 pb-24 pt-12">
+      <section id="relatorios" className="mx-auto max-w-6xl px-5 pb-16 pt-10">
         <Reveal>
           <p className="text-center text-sm font-medium text-[var(--brand)]">
             O que você sobe
@@ -605,7 +644,7 @@ export function Landing() {
       </section>
 
       {/* O QUE VOCÊ RECEBE (OUTPUT — relatórios que o sistema GERA) */}
-      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-24">
+      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-16">
         <div className="mx-auto max-w-6xl px-5">
           <Reveal>
             <p className="text-center text-sm font-medium text-[var(--brand)]">
@@ -636,7 +675,7 @@ export function Landing() {
       </section>
 
       {/* VEJA POR DENTRO (TELAS) — zig-zag alternado */}
-      <section id="sistema" className="relative overflow-hidden bg-white py-24">
+      <section id="sistema" className="relative overflow-hidden bg-white py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob -left-28 top-44 h-80 w-80" />
         <div className="glow-blob -right-28 bottom-44 h-80 w-80" />
@@ -655,7 +694,7 @@ export function Landing() {
             </p>
           </Reveal>
 
-          <div className="mt-16 space-y-20 lg:space-y-28">
+          <div className="mt-16 space-y-14 lg:space-y-20">
             {FEATURE_ROWS.map(({ img, icon: Icon, tag, titulo, texto, bullets }, i) => {
               const reverse = i % 2 === 1
               return (
@@ -691,7 +730,7 @@ export function Landing() {
       </section>
 
       {/* DELIVERYOS AI — diagnóstico + plano de ação por IA */}
-      <section id="ia" className="relative overflow-hidden bg-[var(--ink)] py-24 text-white">
+      <section id="ia" className="relative overflow-hidden bg-[var(--ink)] py-16 text-white">
         <div className="hero-glow pointer-events-none absolute inset-0 opacity-70" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-40" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -763,7 +802,7 @@ export function Landing() {
       </section>
 
       {/* PLANO PRO — gestão financeira / multi-loja */}
-      <section className="relative overflow-hidden border-t border-black/[0.05] bg-white py-24">
+      <section className="relative overflow-hidden border-t border-black/[0.05] bg-white py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-60" />
         <div className="glow-blob -left-28 top-32 h-80 w-80" />
         <div className="glow-blob -right-28 bottom-24 h-80 w-80" />
@@ -796,7 +835,7 @@ export function Landing() {
           </Reveal>
 
           {/* Recursos, em grade (sem espremer) */}
-          <div className="mx-auto mt-16 grid max-w-5xl gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto mt-12 grid max-w-5xl gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {[...PRO_LEFT, ...PRO_RIGHT].map((f, n) => (
               <Reveal key={f.t} delay={(n % 3) * 80} y={24}>
                 <ProFeature {...f} />
@@ -816,7 +855,7 @@ export function Landing() {
       </section>
 
       {/* MÓDULOS */}
-      <section className="relative overflow-hidden bg-[var(--cream)] py-24">
+      <section className="relative overflow-hidden bg-[var(--cream)] py-16">
         <div className="glow-blob -right-24 top-6 h-72 w-72" />
         <div className="glow-blob -left-24 bottom-6 h-72 w-72" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -844,7 +883,7 @@ export function Landing() {
       </section>
 
       {/* SEGURANÇA */}
-      <section id="seguranca" className="bg-[var(--ink)] py-24 text-white">
+      <section id="seguranca" className="bg-[var(--ink)] py-16 text-white">
         <div className="mx-auto max-w-5xl px-5">
           <Reveal>
             <div className="flex flex-col items-center gap-4 text-center">
@@ -893,7 +932,7 @@ export function Landing() {
       </section>
 
       {/* AUTORIDADE / QUEM FEZ */}
-      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-24">
+      <section className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-16">
         <div className="mx-auto max-w-6xl px-5">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -966,7 +1005,7 @@ export function Landing() {
       </section>
 
       {/* PREÇOS */}
-      <section id="precos" className="relative overflow-hidden bg-white py-24">
+      <section id="precos" className="relative overflow-hidden bg-white py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-10 h-72 w-[44rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
@@ -1162,7 +1201,7 @@ export function Landing() {
       </section>
 
       {/* FAQ */}
-      <section className="bg-[var(--cream)] py-24">
+      <section className="bg-[var(--cream)] py-16">
         <div className="mx-auto max-w-3xl px-5">
           <Reveal>
             <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">Perguntas frequentes</h2>
@@ -1178,7 +1217,7 @@ export function Landing() {
       </section>
 
       {/* CTA FINAL */}
-      <section className="relative overflow-hidden bg-[var(--ink)] py-24 text-center text-white">
+      <section className="relative overflow-hidden bg-[var(--ink)] py-16 text-center text-white">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-50" />
         <div className="relative mx-auto max-w-2xl px-5">
