@@ -1,20 +1,25 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   ArrowRight,
   Check,
+  ExternalLink,
   FileSpreadsheet,
   Loader2,
   Lock,
+  Play,
   Plus,
   RefreshCw,
   Trash2,
   Upload,
+  X,
 } from "lucide-react"
 
 import type { NinefoodParseResult } from "@/lib/import/ninefood/types"
 import type { KeetaParseResult } from "@/lib/import/keeta/types"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import {
   DreDetalhado,
   type DrePlat,
@@ -225,6 +230,41 @@ const SAMPLE_DATA: ResultData = build(
   "Junho/2026",
 )
 
+/** Base pública dos vídeos tutoriais (Supabase Storage, bucket "tutoriais"). */
+const TUT =
+  "https://srgmmqihgvkmwjkorkva.supabase.co/storage/v1/object/public/tutoriais/"
+
+/** Como baixar o relatório em cada plataforma — vídeo + link direto pro portal. */
+const COMO_BAIXAR: {
+  id: PlatformId
+  label: string
+  relatorio: string
+  video: string
+  portalUrl: string
+}[] = [
+  {
+    id: "ifood",
+    label: "iFood",
+    relatorio: "Financeiro / Conciliação",
+    video: `${TUT}ifood-financeiro.mp4`,
+    portalUrl: "https://portal.ifood.com.br/revenue/billaas/home",
+  },
+  {
+    id: "99food",
+    label: "99 Food",
+    relatorio: "Dados da loja",
+    video: `${TUT}99-loja.mp4`,
+    portalUrl: "https://merchant.99app.com/pt-BR/manager/report",
+  },
+  {
+    id: "keeta",
+    label: "Keeta",
+    relatorio: "Baixar dados",
+    video: `${TUT}keeta-baixar-dados.mp4`,
+    portalUrl: "https://merchant.mykeeta.com/m/web/app/bizdata#/dataDownload",
+  },
+]
+
 /**
  * `sample`: mostra o botão "Ver com uma planilha de exemplo" (variantes v2/v3).
  * `onResultChange`: avisa o pai quando um resultado aparece/some (pra a seção
@@ -239,6 +279,7 @@ export function ExperimenteDemo({
 } = {}) {
   const [state, setState] = useState<DemoState>({ s: "idle" })
   const [dragging, setDragging] = useState(false)
+  const [guia, setGuia] = useState<(typeof COMO_BAIXAR)[number] | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -313,6 +354,7 @@ export function ExperimenteDemo({
   const reset = () => setState({ s: "idle" })
 
   return (
+    <>
     <div className="mx-auto max-w-3xl">
       {/* CARD principal (dropzone / parsing / result / error) */}
       {state.s === "result" ? (
@@ -412,7 +454,82 @@ export function ExperimenteDemo({
           </button>
         </div>
       )}
+
+      {/* Como baixar o relatório — vídeo + link direto por plataforma */}
+      {state.s === "idle" && (
+        <div className="mt-5 border-t border-black/[0.06] pt-4 text-center">
+          <p className="text-xs font-medium text-[oklch(0.45_0.01_48)]">
+            Não sabe onde baixar? Veja o passo a passo de cada plataforma:
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2.5">
+            {COMO_BAIXAR.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setGuia(p)}
+                className="group inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3.5 py-2 text-sm font-medium transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              >
+                <PlatformLogo platform={p.id} size="sm" />
+                {p.label}
+                <Play
+                  className="size-3 fill-[var(--brand)] text-[var(--brand)]"
+                  strokeWidth={0}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+
+    {/* Modal: vídeo de como baixar + link direto pro portal.
+        Portal no <body> — o Lenis aplica transform no wrapper de scroll, o que
+        quebraria `position: fixed` se o modal ficasse dentro da árvore. Estilo
+        autossuficiente (sem var(--brand)/.btn-brand, que vivem no .dos-root). */}
+    {guia &&
+      typeof document !== "undefined" &&
+      createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-4"
+          onClick={() => setGuia(null)}
+        >
+          <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between gap-3 text-white">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <PlatformLogo platform={guia.id} size="sm" />
+                Como baixar no {guia.label} — {guia.relatorio}
+              </p>
+              <button
+                type="button"
+                onClick={() => setGuia(null)}
+                aria-label="Fechar"
+                className="rounded-md p-1 transition-colors hover:bg-white/10"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <video
+              src={guia.video}
+              controls
+              autoPlay
+              className="max-h-[70vh] w-full rounded-lg bg-black"
+            />
+            <div className="mt-3 flex justify-center">
+              <a
+                href={guia.portalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-[oklch(0.65_0.21_35)] px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-colors hover:bg-[oklch(0.57_0.2_33)]"
+              >
+                <ExternalLink className="size-4" strokeWidth={2.2} />
+                Abrir o portal do {guia.label}
+              </a>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
 
