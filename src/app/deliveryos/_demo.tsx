@@ -7,7 +7,9 @@ import {
   FileSpreadsheet,
   Loader2,
   Lock,
+  Plus,
   RefreshCw,
+  Trash2,
   Upload,
 } from "lucide-react"
 
@@ -447,6 +449,58 @@ function CostInput({
   )
 }
 
+function CategoryRow({
+  cat,
+  setCat,
+  exemplo,
+}: {
+  cat: { nome: string; valor: number } | null
+  setCat: (c: { nome: string; valor: number } | null) => void
+  exemplo: string
+}) {
+  if (!cat) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCat({ nome: "", valor: 0 })}
+        className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--brand-strong)] hover:underline"
+      >
+        <Plus className="size-3.5" strokeWidth={2.4} /> adicionar categoria
+      </button>
+    )
+  }
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <input
+        type="text"
+        value={cat.nome}
+        onChange={(e) => setCat({ ...cat, nome: e.target.value })}
+        placeholder={exemplo}
+        className="w-0 flex-1 rounded-lg border bg-background px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
+      />
+      <div className="flex items-center gap-1 rounded-lg border bg-background px-2 py-1.5 focus-within:border-[var(--brand)]">
+        <span className="text-[11px] text-muted-foreground">R$</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={displayBRL(cat.valor)}
+          onChange={(e) => setCat({ ...cat, valor: parseBRL(e.target.value) })}
+          placeholder="0,00"
+          className="w-16 bg-transparent text-xs tabular-nums outline-none"
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => setCat(null)}
+        aria-label="remover categoria"
+        className="text-muted-foreground transition-colors hover:text-rose-500"
+      >
+        <Trash2 className="size-3.5" strokeWidth={2} />
+      </button>
+    </div>
+  )
+}
+
 function ResultPanel({
   data,
   name,
@@ -460,6 +514,13 @@ function ResultPanel({
   // estimativa típica pra já mostrar a margem "fechando"; editáveis na hora.
   const [cmv, setCmv] = useState(() => Math.round(data.bruto * 0.32))
   const [operacao, setOperacao] = useState(() => Math.round(data.bruto * 0.12))
+  // 1 categoria opcional por custo — pra ver o DRE detalhado (expansível).
+  const [cmvCat, setCmvCat] = useState<{ nome: string; valor: number } | null>(
+    null,
+  )
+  const [opCat, setOpCat] = useState<{ nome: string; valor: number } | null>(
+    null,
+  )
 
   // Monta a MESMA estrutura que a tela real do sistema recebe (DreDetalhado).
   const platforms: DrePlat[] = [
@@ -496,6 +557,8 @@ function ResultPanel({
           totalLiquido={data.liquido}
           cmv={cmv}
           operacao={operacao}
+          cmvCats={cmvCat && cmvCat.valor > 0 ? [{ nome: cmvCat.nome || "Categoria", valor: cmvCat.valor }] : []}
+          operacaoCats={opCat && opCat.valor > 0 ? [{ nome: opCat.nome || "Categoria", valor: opCat.valor }] : []}
           periodo={data.competencia}
           title="DRE da sua loja"
           totalLabel="Resultado da loja"
@@ -516,22 +579,45 @@ function ResultPanel({
             onChange={setCmv}
             pct={data.bruto > 0 ? (cmv / data.bruto) * 100 : 0}
           />
+          <CategoryRow
+            cat={cmvCat}
+            setCat={setCmvCat}
+            exemplo="Ex.: Carnes"
+          />
+
           <CostInput
             label="Custos operacionais (aluguel, folha…)"
             value={operacao}
             onChange={setOperacao}
             pct={data.bruto > 0 ? (operacao / data.bruto) * 100 : 0}
           />
+          <CategoryRow cat={opCat} setCat={setOpCat} exemplo="Ex.: Aluguel" />
 
           <p className="mt-3 text-[10px] leading-snug text-muted-foreground">
-            No sistema, você lança por categoria e fica salvo mês a mês.
+            Adicione uma categoria pra ver o DRE <b>detalhado</b> (clica na linha
+            do CMV/custos no DRE ao lado). No sistema, você lança quantas quiser,
+            salvas mês a mês.
           </p>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
-        <span>{data.pedidos.toLocaleString("pt-BR")} pedidos</span>
-        <span>Ticket médio {brl(data.ticket)}</span>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-black/[0.08] bg-white px-4 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Pedidos no mês
+          </p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums leading-none text-[var(--ink)]">
+            {data.pedidos.toLocaleString("pt-BR")}
+          </p>
+        </div>
+        <div className="rounded-xl border border-black/[0.08] bg-white px-4 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Ticket médio
+          </p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums leading-none text-[var(--ink)]">
+            {brl(data.ticket)}
+          </p>
+        </div>
       </div>
 
       <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
