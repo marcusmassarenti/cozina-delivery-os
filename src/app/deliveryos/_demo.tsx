@@ -435,18 +435,21 @@ function ResultPanel({
         </span>
       </div>
 
-      {/* A TELA REAL DO SISTEMA — mesmo componente do app (DreDetalhado). */}
-      <DreDetalhado
-        platforms={platforms}
-        totalBruto={data.bruto}
-        totalLiquido={data.liquido}
-        cmv={0}
-        operacao={0}
-        periodo={data.competencia}
-        title="DRE da sua loja"
-        totalLabel="Resultado da loja"
-        showPdf={false}
-      />
+      {/* A TELA REAL DO SISTEMA — mesmo componente do app (DreDetalhado), em
+          modo escuro (contexto .dark ativa os tokens dark do tema). */}
+      <div className="dark text-foreground">
+        <DreDetalhado
+          platforms={platforms}
+          totalBruto={data.bruto}
+          totalLiquido={data.liquido}
+          cmv={0}
+          operacao={0}
+          periodo={data.competencia}
+          title="DRE da sua loja"
+          totalLabel="Resultado da loja"
+          showPdf={false}
+        />
+      </div>
 
       <div className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
         <span>{data.pedidos.toLocaleString("pt-BR")} pedidos</span>
