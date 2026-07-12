@@ -274,24 +274,24 @@ export async function consumirCotaIA(holdingId: string): Promise<void> {
   const dia = new Date().toISOString().slice(0, 10)
   const limite = iaLimiteDiario()
 
-  const { data } = await admin
-    .from("ia_usage")
-    .select("chamadas")
-    .eq("holding_id", holdingId)
-    .eq("dia", dia)
-    .maybeSingle()
-  const usadas = data?.chamadas ?? 0
-  if (usadas >= limite) {
+  // Incremento ATÔMICO (migration 0087): incrementa só se abaixo do limite e
+  // devolve o novo total; NULL = limite atingido. Sem corrida (uma instrução).
+  const { data, error } = await admin.rpc("ia_consumir_cota", {
+    p_holding: holdingId,
+    p_dia: dia,
+    p_limite: limite,
+  })
+  if (error) {
+    // Fail-open no CONTROLE (não bloqueia uso legítimo por falha de infra);
+    // o gate de plano/auth já protege o endpoint. Loga pra investigar.
+    console.error("consumirCotaIA: erro no incremento atômico:", error.message)
+    return
+  }
+  if (data == null) {
     throw new Error(
       `Limite diário de IA atingido (${limite} gerações). Tente amanhã ou ajuste o limite.`,
     )
   }
-  await admin
-    .from("ia_usage")
-    .upsert(
-      { holding_id: holdingId, dia, chamadas: usadas + 1 },
-      { onConflict: "holding_id,dia" },
-    )
 }
 
 // ─── Geração (chama o Claude) ────────────────────────────────────────
