@@ -1,0 +1,40 @@
+name: Segurança & Qualidade
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Tipos (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Dependências — vulnerabilidades CRÍTICAS (gate)
+        run: npm audit --audit-level=critical
+
+      - name: Dependências — high (informativo, não bloqueia)
+        run: npm audit --audit-level=high || true
+
+      - name: Scan de segredos (gitleaks)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --no-banner --redact --exit-code 1
