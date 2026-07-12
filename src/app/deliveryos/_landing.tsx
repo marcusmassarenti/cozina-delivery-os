@@ -1202,11 +1202,11 @@ export function Landing() {
 
       {/* FAQ */}
       <section className="bg-[var(--cream)] py-12 sm:py-16">
-        <div className="mx-auto max-w-3xl px-5">
+        <div className="mx-auto max-w-5xl px-5">
           <Reveal>
             <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">Perguntas frequentes</h2>
           </Reveal>
-          <div className="mt-10 space-y-3">
+          <div className="mt-10 grid gap-3 sm:grid-cols-2 sm:items-start">
             {FAQ.map((f, i) => (
               <Reveal key={f.q} delay={i * 50}>
                 <FaqItem q={f.q} a={f.a} />
