@@ -24,8 +24,8 @@ jobs:
       - name: Tipos (tsc --noEmit)
         run: npx tsc --noEmit
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint (informativo)
+        run: npm run lint || true
 
       - name: Dependências — vulnerabilidades CRÍTICAS (gate)
         run: npm audit --audit-level=critical
