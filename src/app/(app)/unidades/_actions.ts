@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { requireModulePermission, requireUnitAccess } from "@/lib/auth/guards"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { validateImageUpload } from "@/lib/upload/image"
 
 export type CreateUnitState = {
   ok: boolean
@@ -171,21 +172,17 @@ export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
 /** Sobe o logo de UMA loja (white-label por unidade) → units.logo_url. */
 export async function saveUnitLogo(formData: FormData): Promise<CreateUnitState> {
   const unitId = String(formData.get("unitId") ?? "").trim()
-  const file = formData.get("logo")
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
-  if (!(file instanceof File) || file.size === 0)
-    return { ok: false, message: "Selecione uma imagem." }
-  if (file.size > 2 * 1024 * 1024)
-    return { ok: false, message: "Imagem muito grande (máx. 2 MB)." }
+  const img = await validateImageUpload(formData.get("logo"))
+  if (!img.ok) return { ok: false, message: img.message }
   try {
     await requireModulePermission("unidades", "edit")
     await requireUnitAccess(unitId) // anti cross-tenant: só a própria loja
     const supabase = createAdminClient()
-    const ext = (file.name.split(".").pop() || "png").toLowerCase()
-    const path = `units/${unitId}.${ext}`
+    const path = `units/${unitId}.${img.ext}`
     const { error: upErr } = await supabase.storage
       .from("branding")
-      .upload(path, file, { upsert: true, contentType: file.type })
+      .upload(path, img.bytes, { upsert: true, contentType: img.contentType })
     if (upErr) return { ok: false, message: `Falha no upload: ${upErr.message}` }
     const { data: pub } = supabase.storage.from("branding").getPublicUrl(path)
     const url = `${pub.publicUrl}?v=${Date.now()}` // cache-bust pro CDN

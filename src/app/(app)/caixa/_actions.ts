@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/guards"
 import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
 import { isProPlan } from "@/lib/data/billing"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { validateImageUpload } from "@/lib/upload/image"
 
 export type ActionState = { ok: boolean; message?: string; id?: string }
 
@@ -596,14 +597,12 @@ export async function uploadLogo(
 ): Promise<{ ok: boolean; url?: string; message?: string }> {
   try {
     const { holdingId, admin } = await ctx()
-    const file = formData.get("file")
-    if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Selecione uma imagem." }
-    if (file.size > 2_000_000) return { ok: false, message: "Imagem muito grande (máx. 2 MB)." }
-    const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")
-    const path = `${holdingId}/${crypto.randomUUID()}.${ext}`
+    const img = await validateImageUpload(formData.get("file"))
+    if (!img.ok) return { ok: false, message: img.message }
+    const path = `${holdingId}/${crypto.randomUUID()}.${img.ext}`
     const { error } = await admin.storage
       .from("fin-logos")
-      .upload(path, file, { contentType: file.type || "image/png", upsert: false })
+      .upload(path, img.bytes, { contentType: img.contentType, upsert: false })
     if (error) return { ok: false, message: error.message }
     const { data } = admin.storage.from("fin-logos").getPublicUrl(path)
     return { ok: true, url: data.publicUrl }
