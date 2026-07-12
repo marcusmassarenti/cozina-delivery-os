@@ -8,18 +8,35 @@
  *         Responder 200 É o acknowledgment — a 99 considera entregue e não
  *         reenvia. Gravar antes de processar evita perder evento.
  *
- * Segurança: webhook é endpoint público (a 99 precisa alcançar). Por ora
- * grava tudo e dá ack; a validação de assinatura/secret entra na homologação,
- * quando a 99 informar o esquema. A tabela tem RLS (só service_role escreve).
+ * Segurança: webhook é endpoint público (a 99 precisa alcançar). Proteção
+ * opcional por token compartilhado: se NINEFOOD_WEBHOOK_SECRET estiver setado,
+ * exigimos ?token=<secret> (ou header x-webhook-token) — configure o mesmo
+ * valor na URL do webhook no portal da 99. Sem o secret setado, mantém o
+ * comportamento antigo (aceita e loga aviso), pra não quebrar a homologação.
+ * Também limita o tamanho do payload. A tabela tem RLS (só service_role escreve).
  */
+import { timingSafeEqual } from "node:crypto"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+/** Limite do corpo do webhook (evita poluir o banco com payload gigante). */
+const MAX_BODY_BYTES = 256 * 1024
+
 const str = (v: unknown): string | null => {
   const s = v == null ? "" : String(v).trim()
   return s === "" ? null : s
+}
+
+/** Compara segredo em tempo constante. */
+function secretOk(expected: string, got: string | null): boolean {
+  if (!got) return false
+  const a = Buffer.from(got)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
 }
 
 export async function GET(req: Request) {
@@ -33,13 +50,33 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // Proteção opcional por token (liga setando NINEFOOD_WEBHOOK_SECRET).
+  const secret = process.env.NINEFOOD_WEBHOOK_SECRET
+  if (secret) {
+    const url = new URL(req.url)
+    const got =
+      url.searchParams.get("token") ?? req.headers.get("x-webhook-token")
+    if (!secretOk(secret, got)) {
+      return new Response("unauthorized", { status: 401 })
+    }
+  } else {
+    console.warn(
+      "99food webhook: sem NINEFOOD_WEBHOOK_SECRET — endpoint aberto (defina o secret pra travar)",
+    )
+  }
+
+  // Limite de tamanho do corpo.
+  const raw = await req.text().catch(() => "")
+  if (raw.length > MAX_BODY_BYTES) {
+    return new Response("payload too large", { status: 413 })
+  }
+
   let payload: Record<string, unknown> = {}
   try {
-    payload = (await req.json()) as Record<string, unknown>
+    payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
   } catch {
     // Alguns webhooks mandam form/texto em vez de JSON.
-    const text = await req.text().catch(() => "")
-    payload = text ? { raw: text } : {}
+    payload = raw ? { raw } : {}
   }
 
   try {
