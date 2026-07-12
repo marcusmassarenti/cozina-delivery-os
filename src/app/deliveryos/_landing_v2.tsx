@@ -91,7 +91,7 @@ const PASSOS: { n: number; t: string; d: string }[] = [
   { n: 1, t: "Abre o portal da plataforma", d: "iFood, 99 Food ou Keeta — o mesmo que você já usa todo dia." },
   { n: 2, t: "Clica em Financeiro / Conciliação", d: "O relatório que mostra o que a plataforma te repassou." },
   { n: 3, t: "Baixa o mês", d: "Escolhe o período e salva o arquivo (.xlsx ou .csv)." },
-  { n: 4, t: "Arrasta aqui", d: "Joga a planilha no Delivery OS e o resultado aparece na hora." },
+  { n: 4, t: "Solta no navegador", d: "Joga a planilha no campo de teste grátis (aqui mesmo, sem instalar nem logar) e o resultado aparece na hora." },
 ]
 
 /* Depoimentos — PLACEHOLDER pro Marcus preencher com cliente REAL. */
@@ -542,19 +542,9 @@ export function LandingV2() {
           </div>
 
           <div className="mt-12 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-            {/* Arraste + botão secundário — esquerda */}
+            {/* Arraste (com botão "planilha de exemplo" embutido) — esquerda */}
             <Reveal delay={220} className="order-2 lg:order-1">
-              <ExperimenteDemo />
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-                {/* TODO: ligar planilha-exemplo (não editar _demo.tsx) */}
-                <button
-                  type="button"
-                  className="btn-ghost inline-flex items-center gap-2 rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium hover:bg-black/[0.02]"
-                >
-                  <FileSpreadsheet className="size-4" strokeWidth={2.2} />
-                  Ver com uma planilha de exemplo
-                </button>
-              </div>
+              <ExperimenteDemo sample />
             </Reveal>
 
             {/* Passos + CTA primário forte — direita */}

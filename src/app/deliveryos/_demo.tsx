@@ -200,7 +200,28 @@ function normKeeta(r: KeetaParseResult): ResultData {
   )
 }
 
-export function ExperimenteDemo() {
+/**
+ * Resultado de EXEMPLO (números fictícios de uma loja iFood) — pro botão
+ * "Ver com uma planilha de exemplo" mostrar o painel sem a pessoa ter o arquivo
+ * na mão. Passa pela mesma função `build` do fluxo real. Marcado como exemplo.
+ */
+const SAMPLE_DATA: ResultData = build(
+  "ifood",
+  48250,
+  26538,
+  789,
+  [
+    { l: "Comissão", v: 11100 },
+    { l: "Taxa de entrega", v: 3378 },
+    { l: "Cupom", v: 2895 },
+    { l: "Frete grátis", v: 2895 },
+    { l: "Taxa de transação", v: 1444 },
+  ],
+  "Junho/2026",
+)
+
+/** `sample`: mostra o botão "Ver com uma planilha de exemplo" (variantes v2/v3). */
+export function ExperimenteDemo({ sample = false }: { sample?: boolean } = {}) {
   const [state, setState] = useState<DemoState>({ s: "idle" })
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -353,6 +374,25 @@ export function ExperimenteDemo() {
         <Lock className="size-3.5 text-[var(--brand)]" strokeWidth={2.2} />
         Tudo acontece no seu navegador. A planilha não é enviada nem salva em lugar nenhum.
       </p>
+
+      {sample && state.s === "idle" && (
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() =>
+              setState({
+                s: "result",
+                name: "exemplo — números fictícios",
+                data: SAMPLE_DATA,
+              })
+            }
+            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-[oklch(0.4_0.01_48)] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          >
+            <FileSpreadsheet className="size-4" strokeWidth={2} />
+            Não tem o arquivo agora? Ver com uma planilha de exemplo
+          </button>
+        </div>
+      )}
     </div>
   )
 }

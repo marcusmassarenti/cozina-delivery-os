@@ -91,7 +91,7 @@ const PASSOS: { icon: LucideIcon; t: string; d: string }[] = [
   { icon: Store, t: "Abre o portal", d: "iFood, 99 Food ou Keeta" },
   { icon: Receipt, t: "Vai em Financeiro / Conciliação", d: "o relatório que fecha o mês" },
   { icon: FileSpreadsheet, t: "Baixa o mês", d: "em .xlsx ou .csv" },
-  { icon: Upload, t: "Arrasta aqui", d: "o painel monta na hora" },
+  { icon: Upload, t: "Solta no navegador", d: "no teste grátis, sem instalar nem logar" },
 ]
 
 const RELATORIOS: { id: PlatId; itens: string[] }[] = [
@@ -559,9 +559,9 @@ export function LandingV3() {
         <div className="glow-blob left-1/2 top-8 h-72 w-[40rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-            {/* Demo — esquerda */}
+            {/* Demo (com botão "planilha de exemplo" embutido) — esquerda */}
             <Reveal delay={220} className="order-2 lg:order-1">
-              <ExperimenteDemo />
+              <ExperimenteDemo sample />
             </Reveal>
 
             {/* Texto + reversão de risco — direita */}
@@ -599,16 +599,12 @@ export function LandingV3() {
 
               <Reveal delay={240}>
                 <div className="mt-5 flex flex-wrap items-center gap-3">
-                  {/* TODO ligar exemplo (precisa passar uma planilha demo ao ExperimenteDemo, em _demo.tsx) */}
-                  <button
-                    type="button"
-                    className="btn-ghost inline-flex items-center gap-2 rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium hover:bg-black/[0.02]"
-                  >
-                    <FileSpreadsheet className="size-4" strokeWidth={2.2} />
-                    Ver com uma planilha de exemplo
-                  </button>
-                  <span className="text-xs text-[oklch(0.5_0.01_48)]">
-                    ou arraste a sua ao lado
+                  <span className="text-sm text-[oklch(0.5_0.01_48)]">
+                    Arraste sua planilha ao lado — ou use o botão{" "}
+                    <span className="font-medium text-[oklch(0.35_0.01_48)]">
+                      &ldquo;planilha de exemplo&rdquo;
+                    </span>{" "}
+                    logo abaixo da caixa.
                   </span>
                 </div>
               </Reveal>
