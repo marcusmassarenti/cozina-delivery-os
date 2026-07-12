@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ArrowRight,
   Check,
@@ -225,11 +225,25 @@ const SAMPLE_DATA: ResultData = build(
   "Junho/2026",
 )
 
-/** `sample`: mostra o botão "Ver com uma planilha de exemplo" (variantes v2/v3). */
-export function ExperimenteDemo({ sample = false }: { sample?: boolean } = {}) {
+/**
+ * `sample`: mostra o botão "Ver com uma planilha de exemplo" (variantes v2/v3).
+ * `onResultChange`: avisa o pai quando um resultado aparece/some (pra a seção
+ * dar largura total ao DRE).
+ */
+export function ExperimenteDemo({
+  sample = false,
+  onResultChange,
+}: {
+  sample?: boolean
+  onResultChange?: (hasResult: boolean) => void
+} = {}) {
   const [state, setState] = useState<DemoState>({ s: "idle" })
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    onResultChange?.(state.s === "result")
+  }, [state.s, onResultChange])
 
   const handleFile = useCallback(async (file: File) => {
     setState({ s: "parsing", name: file.name })

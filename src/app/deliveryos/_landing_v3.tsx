@@ -363,6 +363,7 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean }[] = [
 export function LandingV3() {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
+  const [demoResult, setDemoResult] = useState(false)
 
   // Scrollspy: marca no menu a seção que está em vista.
   useEffect(() => {
@@ -558,14 +559,21 @@ export function LandingV3() {
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-8 h-72 w-[40rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
-          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-            {/* Demo (com botão "planilha de exemplo" embutido) — esquerda */}
-            <Reveal delay={220} className="order-2 lg:order-1">
-              <ExperimenteDemo sample />
+          <div
+            className={`grid items-center gap-10 lg:gap-16 ${
+              demoResult ? "" : "lg:grid-cols-2"
+            }`}
+          >
+            {/* Demo / resultado — largura total quando tem resultado */}
+            <Reveal
+              delay={220}
+              className={demoResult ? "" : "order-2 lg:order-1"}
+            >
+              <ExperimenteDemo sample onResultChange={setDemoResult} />
             </Reveal>
 
-            {/* Texto + reversão de risco — direita */}
-            <div className="order-1 lg:order-2">
+            {/* Texto + reversão de risco — some quando o resultado aparece */}
+            <div className={`order-1 lg:order-2 ${demoResult ? "hidden" : ""}`}>
               <Reveal>
                 <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[var(--brand)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-white">
                   <Zap className="size-3.5" strokeWidth={2.6} />

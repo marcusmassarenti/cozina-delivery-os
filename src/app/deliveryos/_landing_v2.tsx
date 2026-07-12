@@ -325,6 +325,7 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean }[] = [
 export function LandingV2() {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
+  const [demoResult, setDemoResult] = useState(false)
 
   // Scrollspy: marca no menu a seção que está em vista.
   useEffect(() => {
@@ -541,14 +542,21 @@ export function LandingV2() {
             </Reveal>
           </div>
 
-          <div className="mt-12 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-            {/* Arraste (com botão "planilha de exemplo" embutido) — esquerda */}
-            <Reveal delay={220} className="order-2 lg:order-1">
-              <ExperimenteDemo sample />
+          <div
+            className={`mt-12 grid items-center gap-10 lg:gap-16 ${
+              demoResult ? "" : "lg:grid-cols-2"
+            }`}
+          >
+            {/* Arraste / resultado — quando tem resultado, ocupa a largura toda */}
+            <Reveal
+              delay={220}
+              className={demoResult ? "" : "order-2 lg:order-1"}
+            >
+              <ExperimenteDemo sample onResultChange={setDemoResult} />
             </Reveal>
 
-            {/* Passos + CTA primário forte — direita */}
-            <div className="order-1 lg:order-2">
+            {/* Passos — some quando o resultado aparece (não servem mais) */}
+            <div className={`order-1 lg:order-2 ${demoResult ? "hidden" : ""}`}>
               <Reveal>
                 <div className="space-y-3">
                   {[
