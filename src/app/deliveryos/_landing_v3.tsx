@@ -67,7 +67,9 @@ html.lenis,html.lenis body{height:auto;}
 @keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .no-scrollbar{scrollbar-width:none;-ms-overflow-style:none;}
 .no-scrollbar::-webkit-scrollbar{display:none;}
-@media (prefers-reduced-motion: reduce){.float,.bar-fill,.marquee-track{animation:none!important}}
+.rx-tab-in{animation:rxtabin .38s cubic-bezier(.22,1,.36,1) both;}
+@keyframes rxtabin{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.float,.bar-fill,.marquee-track,.rx-tab-in{animation:none!important}}
 `
 
 const PLAT_LABEL: Record<PlatId, string> = {
@@ -216,6 +218,7 @@ const PORDENTRO_TABS: {
   key: string
   label: string
   badge?: string
+  sparkle?: boolean
   img: string
   url: string
   callout: string
@@ -274,25 +277,6 @@ const PORDENTRO_TABS: {
     ],
   },
   {
-    key: "ia",
-    label: "IA",
-    badge: "Novo",
-    img: "/landing/diagnostico.png",
-    url: "app.deliveryos.food/unidade/diagnostico",
-    callout: "as 3 ações do mês",
-    tag: "DeliveryOS AI",
-    titulo: "A IA lê a sua loja e diz o que fazer",
-    texto:
-      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado — não é mais um dashboard, é plano de ação.",
-    bullets: [
-      "Funil das 3 plataformas — onde o cliente desiste",
-      "Lê o texto das avaliações, não só a nota",
-      "Cancelamentos, CMV e margem fora da meta",
-      "Marketing: quanto gastou e o que de fato voltou",
-      "Produtos que puxam (ou travam) a venda",
-    ],
-  },
-  {
     key: "caixa",
     label: "Fluxo de Caixa",
     badge: "Pro",
@@ -310,6 +294,25 @@ const PORDENTRO_TABS: {
       "Contas, cartões e faturas num lugar só",
       "Categorias e subcategorias (pra onde vai cada real)",
       "Relatórios: receita, despesa e resultado do mês",
+    ],
+  },
+  {
+    key: "ia",
+    label: "IA",
+    sparkle: true,
+    img: "/landing/diagnostico.png",
+    url: "app.deliveryos.food/unidade/diagnostico",
+    callout: "as 3 ações do mês",
+    tag: "DeliveryOS AI",
+    titulo: "A IA lê a sua loja e diz o que fazer",
+    texto:
+      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado — não é mais um dashboard, é plano de ação.",
+    bullets: [
+      "Funil das 3 plataformas — onde o cliente desiste",
+      "Lê o texto das avaliações, não só a nota",
+      "Cancelamentos, CMV e margem fora da meta",
+      "Marketing: quanto gastou e o que de fato voltou",
+      "Produtos que puxam (ou travam) a venda",
     ],
   },
 ]
@@ -335,12 +338,18 @@ function PorDentroTabs() {
             key={x.key}
             type="button"
             onClick={() => setTab(i)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95 ${
               i === tab
                 ? "bg-[var(--brand)] text-white shadow-[0_12px_28px_-12px_oklch(0.65_0.21_35/.8)]"
                 : "border border-black/10 bg-white text-[oklch(0.4_0.01_48)] hover:border-[var(--brand)]"
             }`}
           >
+            {x.sparkle && (
+              <Sparkles
+                className={`size-3.5 ${i === tab ? "text-white" : "text-[var(--brand)]"}`}
+                strokeWidth={2.4}
+              />
+            )}
             {x.label}
             {x.badge && (
               <span
@@ -357,11 +366,13 @@ function PorDentroTabs() {
         ))}
       </div>
 
-      {/* conteúdo do tab ativo */}
-      <div className="mt-8 grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
+      {/* conteúdo do tab ativo — key no wrapper reanima a cada troca */}
+      <div
+        key={t.key}
+        className="rx-tab-in mt-8 grid items-center gap-8 lg:grid-cols-2 lg:gap-14"
+      >
         <div className="order-2 lg:order-1">
           <ShotBrowser
-            key={t.key}
             src={t.img}
             alt={t.titulo}
             url={t.url}
@@ -1017,40 +1028,39 @@ export function LandingV3() {
             </p>
           </Reveal>
 
-          {/* Bento: 1 print grande (painel da rede, movido do hero) + 3 cards */}
-          <div className="mt-12 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-            <Reveal y={36}>
-              <div className="lift h-full overflow-hidden rounded-3xl border border-black/[0.07] bg-white p-2 shadow-[0_30px_60px_-34px_rgba(40,20,10,.45)]">
-                <Shot
-                  src="/landing/dashboard.png"
-                  alt="Painel da rede no Delivery OS — todas as lojas consolidadas"
-                />
-                <p className="px-4 py-4 text-sm text-[oklch(0.5_0.01_48)]">
-                  O painel da rede — faturamento, taxas e lucro de todas as lojas, consolidados.
-                </p>
-              </div>
-            </Reveal>
-
-            <div className="grid gap-5">
-              {REDE.map((r, i) => (
-                <Reveal key={r.t} delay={i * 90}>
-                  <div className="lift h-full rounded-3xl border border-black/[0.07] bg-white p-6">
-                    <span className="flex size-11 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-strong)]">
-                      <r.icon className="size-5" strokeWidth={2} />
-                    </span>
-                    <p className="mt-3 flex flex-wrap items-center gap-2 font-medium">
-                      {r.t}
-                      {r.tag ? (
-                        <span className="rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-strong)]">
-                          {r.tag}
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">{r.d}</p>
-                  </div>
-                </Reveal>
-              ))}
+          {/* Bento: print grande full-width em cima + 3 cards numa linha embaixo
+              (evita o vazio branco de esticar coluna pra igualar altura) */}
+          <Reveal y={36}>
+            <div className="lift mt-12 overflow-hidden rounded-3xl border border-black/[0.07] bg-white p-2 shadow-[0_30px_60px_-34px_rgba(40,20,10,.45)]">
+              <Shot
+                src="/landing/dashboard.png"
+                alt="Painel da rede no Delivery OS — todas as lojas consolidadas"
+              />
+              <p className="px-4 py-4 text-sm text-[oklch(0.5_0.01_48)]">
+                O painel da rede — faturamento, taxas e lucro de todas as lojas, consolidados.
+              </p>
             </div>
+          </Reveal>
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-3">
+            {REDE.map((r, i) => (
+              <Reveal key={r.t} delay={i * 90}>
+                <div className="lift flex h-full flex-col rounded-3xl border border-black/[0.07] bg-white p-6">
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+                    <r.icon className="size-5" strokeWidth={2} />
+                  </span>
+                  <p className="mt-3 flex flex-wrap items-center gap-2 font-medium">
+                    {r.t}
+                    {r.tag ? (
+                      <span className="rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-strong)]">
+                        {r.tag}
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">{r.d}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
 
           {/* Hub de relatórios da rede + financeiro multi-loja */}
