@@ -953,17 +953,6 @@ export function LandingV3() {
               <div className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white p-1 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setAnual(false)}
-                  className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                    anual
-                      ? "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
-                      : "bg-[var(--brand)] text-white"
-                  }`}
-                >
-                  Mensal
-                </button>
-                <button
-                  type="button"
                   onClick={() => setAnual(true)}
                   className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
                     anual
@@ -979,6 +968,17 @@ export function LandingV3() {
                   >
                     melhor preço
                   </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnual(false)}
+                  className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                    anual
+                      ? "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
+                      : "bg-[var(--brand)] text-white"
+                  }`}
+                >
+                  Mensal
                 </button>
               </div>
               <p className="text-xs text-[oklch(0.5_0.01_48)]">

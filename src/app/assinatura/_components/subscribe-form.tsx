@@ -110,17 +110,6 @@ export function SubscribeForm({
             <div className="inline-flex items-center gap-1 rounded-full border bg-background p-1">
               <button
                 type="button"
-                onClick={() => setCiclo("mensal")}
-                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-                  ciclo === "mensal"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Mensal
-              </button>
-              <button
-                type="button"
                 onClick={() => setCiclo("anual")}
                 className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
                   ciclo === "anual"
@@ -138,6 +127,17 @@ export function SubscribeForm({
                 >
                   melhor preço
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCiclo("mensal")}
+                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                  ciclo === "mensal"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Mensal
               </button>
             </div>
             <p className="text-[11px] text-muted-foreground">
