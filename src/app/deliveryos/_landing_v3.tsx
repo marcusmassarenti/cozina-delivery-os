@@ -1280,33 +1280,35 @@ export function LandingV3() {
         </div>
       </section>
 
-      {/* SEGURANÇA — 1 faixa de selos */}
-      <section id="seguranca" className="border-b border-black/[0.06] bg-white py-10">
-        <div className="mx-auto max-w-6xl px-5">
+      {/* SEGURANÇA — faixa escura (destaque) com selos */}
+      <section id="seguranca" className="relative overflow-hidden border-y border-white/10 bg-[var(--ink2)] py-12 text-white">
+        <div className="dot-grid pointer-events-none absolute inset-0 opacity-60" />
+        <div className="glow-blob left-1/2 top-0 h-40 w-[36rem] -translate-x-1/2" />
+        <div className="relative mx-auto max-w-6xl px-5">
           <div className="flex flex-col items-center justify-between gap-6 lg:flex-row">
             <div className="flex items-center gap-3">
               <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_26px_-14px_oklch(0.65_0.21_35/.9)]">
                 <ShieldCheck className="size-6" strokeWidth={1.9} />
               </span>
-              <p className="max-w-xs text-sm text-[oklch(0.45_0.01_48)]">
+              <p className="max-w-xs text-sm text-white/70">
                 Você não dá senha nem conecta nada. Seus dados ficam só na sua conta — e você apaga quando quiser.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {TRUST.map((b) => (
-                <span key={b.t} className="inline-flex items-center gap-2 rounded-full border border-black/[0.07] bg-[var(--cream)] px-3.5 py-2 text-xs font-medium text-[oklch(0.4_0.01_48)]">
-                  <b.icon className="size-4 shrink-0 text-[var(--brand-strong)]" strokeWidth={2} />
+                <span key={b.t} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-2 text-xs font-medium text-white/85">
+                  <b.icon className="size-4 shrink-0 text-[var(--brand)]" strokeWidth={2} />
                   {b.t}
                 </span>
               ))}
             </div>
           </div>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-[oklch(0.5_0.01_48)] lg:justify-end">
-            <a href="/seguranca" className="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--brand)]">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-white/50 lg:justify-end">
+            <a href="/seguranca" className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
               <ShieldCheck className="size-3.5" strokeWidth={2.2} />
               Como protegemos seus dados
             </a>
-            <a href="/privacidade" className="transition-colors hover:text-[var(--brand)]">Política de Privacidade</a>
+            <a href="/privacidade" className="transition-colors hover:text-white">Política de Privacidade</a>
           </div>
         </div>
       </section>
