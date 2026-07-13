@@ -36,6 +36,7 @@ import {
 import { ExperimenteDemo } from "./_demo"
 import { Reveal, useScrolled } from "./_motion"
 import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
+import { reportsByPlatform } from "@/lib/reports-catalog"
 
 const STYLES = `
 .dos-root{--brand:oklch(0.65 0.21 35);--brand-strong:oklch(0.57 0.2 33);--ink:oklch(0.2 0.01 48);--ink2:oklch(0.27 0.014 48);--cream:oklch(0.99 0.005 75);--brand-soft:oklch(0.96 0.035 55);color:oklch(0.22 0.01 48);background-color:var(--cream);background-image:radial-gradient(oklch(0.65 0.21 35/.045) 1px,transparent 1px);background-size:24px 24px;}
@@ -83,10 +84,12 @@ const DORES = [
   { icon: HelpCircle, titulo: "Decisão no escuro", texto: "Sem o lucro real, não dá pra saber qual plataforma de fato vale a pena." },
 ]
 
+/* Cobertura por plataforma — derivada do catálogo oficial (reports-catalog.ts)
+   pra nunca desatualizar em relação ao que o sistema realmente lê. */
 const RELATORIOS: { id: PlatId; itens: string[] }[] = [
-  { id: "ifood", itens: ["Financeiro / Conciliação", "Cardápio", "Pedidos", "Avaliações", "Qualidade e Super", "Promoções e negociações"] },
-  { id: "99food", itens: ["Dados da loja", "Itens", "Pedidos"] },
-  { id: "keeta", itens: ["Loja diária", "Itens", "Pedidos", "Dados da promoção"] },
+  { id: "ifood", itens: reportsByPlatform("ifood").map((r) => r.name) },
+  { id: "99food", itens: reportsByPlatform("99food").map((r) => r.name) },
+  { id: "keeta", itens: reportsByPlatform("keeta").map((r) => r.name) },
 ]
 
 
@@ -755,9 +758,43 @@ export function LandingV3() {
             </p>
           </Reveal>
 
-          {/* Cobertura por plataforma — cards em destaque */}
-          <div className="mt-12 grid gap-5 sm:grid-cols-3">
-            {RELATORIOS.map((r, i) => (
+          {/* iFood em destaque — a integração mais profunda, itens em 2 colunas.
+              Destacar resolve o desnível de altura (8 x 3 x 4 relatórios). */}
+          <Reveal>
+            <div className="lift relative mt-12 overflow-hidden rounded-2xl border border-[oklch(0.72_0.17_25/.28)] bg-white p-6 shadow-[0_24px_50px_-32px_oklch(0.72_0.17_25/.5)] sm:p-7">
+              <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[oklch(0.72_0.17_25/.08)] blur-2xl" />
+              <div className="relative flex items-center gap-3">
+                <PlatLogo id="ifood" size={42} className="rounded-xl" />
+                <div>
+                  <p className="font-medium leading-tight">iFood</p>
+                  <p className="text-xs text-[oklch(0.55_0.01_48)]">
+                    A integração mais profunda
+                  </p>
+                </div>
+                <span className="ml-auto rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand-strong)]">
+                  {RELATORIOS[0]!.itens.length} relatórios
+                </span>
+              </div>
+              <ul className="relative mt-5 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                {RELATORIOS[0]!.itens.map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
+                  >
+                    <Check
+                      className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                      strokeWidth={2.6}
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Reveal>
+
+          {/* 99 Food + Keeta — contagens próximas (3 e 4), lado a lado */}
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            {RELATORIOS.slice(1).map((r, i) => (
               <Reveal key={r.id} delay={i * 90}>
                 <div className="lift flex h-full flex-col rounded-2xl border border-black/[0.07] bg-white p-6">
                   <div className="flex items-center gap-3">
