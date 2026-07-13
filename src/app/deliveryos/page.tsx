@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { Landing } from "./_landing"
+import { LandingV3 } from "./_landing_v3"
 
 const TITLE = "Delivery OS — veja quanto você realmente ganha no delivery"
 const DESCRIPTION =
@@ -34,5 +34,5 @@ export const metadata: Metadata = {
 }
 
 export default function DeliveryOsLandingPage() {
-  return <Landing />
+  return <LandingV3 />
 }
