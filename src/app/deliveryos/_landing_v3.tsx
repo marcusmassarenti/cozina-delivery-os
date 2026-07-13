@@ -588,7 +588,7 @@ export function LandingV3() {
             >
               Entrar
             </a>
-            <a href="#experimente" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
+            <a href="/cadastro" className="btn-brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium">
               Testar grátis
             </a>
           </div>
