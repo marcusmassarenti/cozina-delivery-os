@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Lenis from "lenis"
 import {
   ArrowRight,
+  ArrowUpRight,
   BarChart3,
   Building2,
   Check,
@@ -1303,12 +1304,22 @@ export function LandingV3() {
               ))}
             </div>
           </div>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-white/50 lg:justify-end">
-            <a href="/seguranca" className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
-              <ShieldCheck className="size-3.5" strokeWidth={2.2} />
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-end">
+            <a
+              href="/seguranca"
+              className="grp inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white/90 transition-colors hover:border-white/35 hover:bg-white/10 hover:text-white"
+            >
+              <ShieldCheck className="size-4 text-[var(--brand)]" strokeWidth={2.2} />
               Como protegemos seus dados
+              <ArrowRight className="arrow-slide size-3.5" strokeWidth={2.4} />
             </a>
-            <a href="/privacidade" className="transition-colors hover:text-white">Política de Privacidade</a>
+            <a
+              href="/privacidade"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-white/75 underline decoration-white/30 underline-offset-4 transition-colors hover:text-white hover:decoration-white/70"
+            >
+              Política de Privacidade
+              <ArrowUpRight className="size-3.5" strokeWidth={2.4} />
+            </a>
           </div>
         </div>
       </section>
