@@ -78,6 +78,15 @@ const PLAT_LABEL: Record<PlatId, string> = {
   keeta: "Keeta",
 }
 
+/* Subtítulo de cada plataforma na seção de cobertura. Deixa claro que a
+   diferença de número é da plataforma (99/Keeta oferecem menos relatórios) —
+   o sistema lê tudo que cada uma disponibiliza. */
+const PLAT_SUB: Record<PlatId, string> = {
+  ifood: "A integração mais profunda",
+  "99food": "Tudo que a 99 disponibiliza",
+  keeta: "Tudo que a Keeta disponibiliza",
+}
+
 const DORES = [
   { icon: FileSpreadsheet, titulo: "Relatórios soltos", texto: "Cada plataforma manda um arquivo diferente. Juntar tudo na mão toma horas todo mês." },
   { icon: EyeOff, titulo: "Taxas escondidas", texto: "Comissão, entrega, promoção, VR… some no meio e você não enxerga o que está pesando." },
@@ -768,7 +777,7 @@ export function LandingV3() {
                 <div>
                   <p className="font-medium leading-tight">iFood</p>
                   <p className="text-xs text-[oklch(0.55_0.01_48)]">
-                    A integração mais profunda
+                    {PLAT_SUB.ifood}
                   </p>
                 </div>
                 <span className="ml-auto rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand-strong)]">
@@ -799,7 +808,12 @@ export function LandingV3() {
                 <div className="lift flex h-full flex-col rounded-2xl border border-black/[0.07] bg-white p-6">
                   <div className="flex items-center gap-3">
                     <PlatLogo id={r.id} size={34} className="rounded-xl" />
-                    <span className="font-medium">{PLAT_LABEL[r.id]}</span>
+                    <div>
+                      <p className="font-medium leading-tight">{PLAT_LABEL[r.id]}</p>
+                      <p className="text-xs text-[oklch(0.55_0.01_48)]">
+                        {PLAT_SUB[r.id]}
+                      </p>
+                    </div>
                     <span className="ml-auto rounded-full bg-[var(--brand-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--brand-strong)]">
                       {r.itens.length} relatórios
                     </span>
@@ -823,8 +837,16 @@ export function LandingV3() {
             ))}
           </div>
 
-          <Reveal delay={120}>
-            <div className="mt-8 flex justify-center">
+          <Reveal delay={100}>
+            <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-[oklch(0.5_0.01_48)]">
+              99 e Keeta têm menos relatórios porque disponibilizam menos — o
+              Delivery OS lê <span className="font-medium text-[oklch(0.35_0.01_48)]">todos</span> que
+              cada plataforma oferece. O iFood simplesmente abre mais dados.
+            </p>
+          </Reveal>
+
+          <Reveal delay={140}>
+            <div className="mt-6 flex justify-center">
               <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[oklch(0.65_0.21_35/.4)] bg-[var(--brand-soft)] px-4 py-2 text-sm font-medium text-[var(--brand-strong)]">
                 <Zap className="size-4" strokeWidth={2.2} />
                 Novos relatórios e plataformas chegando
