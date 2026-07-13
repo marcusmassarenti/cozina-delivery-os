@@ -20,7 +20,6 @@ import {
   Lock,
   Mail,
   Network,
-  Receipt,
   ShieldCheck,
   Sparkles,
   Star,
@@ -82,14 +81,6 @@ const DORES = [
   { icon: FileSpreadsheet, titulo: "Relatórios soltos", texto: "Cada plataforma manda um arquivo diferente. Juntar tudo na mão toma horas todo mês." },
   { icon: EyeOff, titulo: "Taxas escondidas", texto: "Comissão, entrega, promoção, VR… some no meio e você não enxerga o que está pesando." },
   { icon: HelpCircle, titulo: "Decisão no escuro", texto: "Sem o lucro real, não dá pra saber qual plataforma de fato vale a pena." },
-]
-
-/* Ato 1 — os 4 cliques que transformam o portal da plataforma em input. */
-const PASSOS: { icon: LucideIcon; t: string; d: string }[] = [
-  { icon: Store, t: "Abre o portal", d: "iFood, 99 Food ou Keeta" },
-  { icon: Receipt, t: "Vai em Financeiro / Conciliação", d: "o relatório que fecha o mês" },
-  { icon: FileSpreadsheet, t: "Baixa o mês", d: "em .xlsx ou .csv" },
-  { icon: Upload, t: "Solta no navegador", d: "no teste grátis, sem instalar nem logar" },
 ]
 
 const RELATORIOS: { id: PlatId; itens: string[] }[] = [
@@ -742,55 +733,54 @@ export function LandingV3() {
         </Reveal>
       </section>
 
-      {/* 4 CLIQUES — o input (reframe do "O QUE VOCÊ SOBE") */}
+      {/* COBERTURA — o que o sistema lê de cada plataforma (não é tutorial de
+          download: isso já está no teste acima e no guia dentro do sistema) */}
       <section id="relatorios" className="border-y border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-12 sm:py-16">
         <div className="mx-auto max-w-6xl px-5">
           <Reveal>
             <p className="text-center text-sm font-medium text-[var(--brand)]">
-              O que você sobe
+              O que o sistema lê
             </p>
           </Reveal>
           <Reveal delay={60}>
-            <h2 className="mt-2 text-center text-3xl font-medium tracking-tight sm:text-4xl">
-              Com 4 <span className="text-[var(--brand)]">cliques</span> você baixa 1 relatório e joga aqui
+            <h2 className="mt-2 text-balance text-center text-3xl font-medium tracking-tight sm:text-4xl">
+              Cada plataforma fala uma língua. O sistema lê{" "}
+              <span className="text-[var(--brand)]">todas</span>.
             </h2>
           </Reveal>
           <Reveal delay={120}>
             <p className="mx-auto mt-4 max-w-2xl text-center text-[oklch(0.5_0.01_48)]">
-              Nada de conectar conta nem dar senha. É o mesmo relatório que você
-              já baixa hoje no portal de cada plataforma.
+              iFood, 99 Food e Keeta entregam relatórios diferentes. O Delivery OS
+              entende cada um e junta tudo num painel só — e a lista só cresce.
             </p>
           </Reveal>
 
-          <div className="mt-12 grid gap-4 sm:grid-cols-4">
-            {PASSOS.map((p, i) => (
-              <Reveal key={p.t} delay={i * 90}>
-                <div className="relative h-full rounded-2xl border border-black/[0.07] bg-white p-6">
-                  <span className="absolute right-5 top-5 text-4xl font-semibold text-[oklch(0.9_0.03_50)]">
-                    {i + 1}
-                  </span>
-                  <span className="flex size-11 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-strong)]">
-                    <p.icon className="size-5" strokeWidth={2} />
-                  </span>
-                  <p className="mt-4 font-medium leading-snug">{p.t}</p>
-                  <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">{p.d}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          {/* O que a gente lê de cada plataforma (menor) */}
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {/* Cobertura por plataforma — cards em destaque */}
+          <div className="mt-12 grid gap-5 sm:grid-cols-3">
             {RELATORIOS.map((r, i) => (
               <Reveal key={r.id} delay={i * 90}>
-                <div className="h-full rounded-2xl border border-black/[0.06] bg-white/70 p-5">
-                  <div className="flex items-center gap-2.5">
-                    <PlatLogo id={r.id} size={26} className="rounded-lg" />
-                    <span className="text-sm font-medium">{PLAT_LABEL[r.id]}</span>
+                <div className="lift flex h-full flex-col rounded-2xl border border-black/[0.07] bg-white p-6">
+                  <div className="flex items-center gap-3">
+                    <PlatLogo id={r.id} size={34} className="rounded-xl" />
+                    <span className="font-medium">{PLAT_LABEL[r.id]}</span>
+                    <span className="ml-auto rounded-full bg-[var(--brand-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--brand-strong)]">
+                      {r.itens.length} relatórios
+                    </span>
                   </div>
-                  <p className="mt-3 text-[13px] leading-relaxed text-[oklch(0.5_0.01_48)]">
-                    {r.itens.join(" · ")}
-                  </p>
+                  <ul className="mt-4 space-y-2">
+                    {r.itens.map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
+                      >
+                        <Check
+                          className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                          strokeWidth={2.6}
+                        />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </Reveal>
             ))}
