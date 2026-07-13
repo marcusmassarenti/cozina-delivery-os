@@ -150,7 +150,7 @@ export async function asaasCreateSubscription(input: {
   customer: string
   value: number
   nextDueDate: string // YYYY-MM-DD
-  cycle: "MONTHLY"
+  cycle: "MONTHLY" | "YEARLY"
   description?: string
   externalReference?: string
 }): Promise<AsaasSubscription> {

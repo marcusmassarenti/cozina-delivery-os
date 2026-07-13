@@ -38,6 +38,7 @@ import { ExperimenteDemo } from "./_demo"
 import { Reveal, useScrolled } from "./_motion"
 import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
 import { reportsByPlatform } from "@/lib/reports-catalog"
+import { precoStr, valorMensalExibido } from "@/lib/pricing"
 
 const STYLES = `
 .dos-root{--brand:oklch(0.65 0.21 35);--brand-strong:oklch(0.57 0.2 33);--ink:oklch(0.2 0.01 48);--ink2:oklch(0.27 0.014 48);--cream:oklch(0.99 0.005 75);--brand-soft:oklch(0.96 0.035 55);color:oklch(0.22 0.01 48);background-color:var(--cream);background-image:radial-gradient(oklch(0.65 0.21 35/.045) 1px,transparent 1px);background-size:24px 24px;}
@@ -449,13 +450,8 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean }[] = [
 ]
 
 /* Preço dos planos. A BASE é o ANUAL (valor por mês); o mensal custa +30%.
-   O anual é cobrado à vista no cartão (12 meses de uma vez, 1 cobrança/ano). */
-const MENSAL_MULT = 1.3
-
-/** "49" quando inteiro, "63,70" quando tem centavos. */
-function precoStr(v: number) {
-  return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(".", ",")
-}
+   O anual é cobrado à vista no cartão (12 meses de uma vez, 1 cobrança/ano).
+   A regra do +30% vem de @/lib/pricing (fonte única, dividida com o checkout). */
 
 /** Bloco de preço de um card — alterna entre anual (base) e mensal (+30%). */
 function PrecoValor({
@@ -467,7 +463,7 @@ function PrecoValor({
   anual: boolean
   dark?: boolean
 }) {
-  const valor = anual ? mes : Math.round(mes * MENSAL_MULT * 100) / 100
+  const valor = valorMensalExibido(mes, anual ? "anual" : "mensal")
   const muted = dark ? "text-[oklch(0.62_0_0)]" : "text-[oklch(0.5_0.01_48)]"
   const brand = dark ? "text-[oklch(0.82_0.14_55)]" : "text-[var(--brand-strong)]"
   return (

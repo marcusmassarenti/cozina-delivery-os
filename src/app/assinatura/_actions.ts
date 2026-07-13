@@ -13,6 +13,11 @@ import {
 } from "@/lib/data/assinatura"
 import { todayISO } from "@/lib/data/billing"
 import {
+  asaasCycle,
+  valorCobranca,
+  type BillingCycle,
+} from "@/lib/pricing"
+import {
   asaasCancelSubscription,
   asaasCreateCustomer,
   asaasCreateSubscription,
@@ -103,10 +108,24 @@ export async function assinar(
       : planEscolhido === "ai"
         ? "ai"
         : "essencial"
-  let valor = plano.mensalidade
-  if (!plano.precoCustom) {
+  // Ciclo escolhido (self-service). Clientes com preço custom seguem mensal.
+  const ciclo: BillingCycle =
+    !plano.precoCustom && String(formData.get("ciclo") ?? "") === "anual"
+      ? "anual"
+      : String(formData.get("ciclo") ?? "") === "mensal"
+        ? "mensal"
+        : plano.precoCustom
+          ? "mensal"
+          : "anual"
+
+  // Valor cobrado: anual = 12× à vista (1 cobrança); mensal = base +30%.
+  let valor: number
+  if (plano.precoCustom) {
+    valor = plano.mensalidade // negociado, cobrado mensal
+  } else {
     const precos = await getDefaultPlan()
-    valor = precoDoPlano(precos, planId, plano.activeUnits)
+    const base = precoDoPlano(precos, planId, plano.activeUnits)
+    valor = valorCobranca(base, ciclo)
   }
   if (valor <= 0)
     return {
@@ -170,8 +189,8 @@ export async function assinar(
         customer: customerId,
         value: valor,
         nextDueDate,
-        cycle: "MONTHLY",
-        description: `Delivery OS — plano ${planId} (${plano.name})`,
+        cycle: asaasCycle(ciclo),
+        description: `Delivery OS — plano ${planId} (${plano.name}) · ${ciclo}`,
         externalReference: holdingId,
       })
       subscriptionId = sub.id
@@ -180,6 +199,7 @@ export async function assinar(
         .update({
           asaas_subscription_id: subscriptionId,
           payment_method: "Asaas",
+          billing_cycle: ciclo,
           // Grava só como PENDENTE. O plan_tier (que libera as features) só é
           // concedido pelo webhook quando o pagamento confirmar de verdade.
           ...(plano.precoCustom ? {} : { pending_plan_tier: planId }),
@@ -224,7 +244,7 @@ export async function simularPagamento(
   const admin = createAdminClient()
   const { data: h } = await admin
     .from("holdings")
-    .select("id, asaas_subscription_id, pending_plan_tier")
+    .select("id, asaas_subscription_id, pending_plan_tier, billing_cycle")
     .eq("id", holdingId)
     .maybeSingle()
   if (!h || h.asaas_subscription_id !== subscriptionId)
@@ -233,13 +253,15 @@ export async function simularPagamento(
   const hoje = todayISO()
   const plano = await getPlanoAtual()
   const pendingTier = (h.pending_plan_tier as string | null) ?? null
+  // Anual paga o ano; o próximo vencimento é daqui a 12 meses (mensal = 1).
+  const mesesAteRenovar = h.billing_cycle === "anual" ? 12 : 1
   await admin
     .from("holdings")
     .update({
       paid: true,
       trial_ends_at: null,
       suspend_on: null,
-      due_date: addMonths(hoje, 1),
+      due_date: addMonths(hoje, mesesAteRenovar),
       payment_method: "Asaas (Simulado)",
       // Espelha o webhook: pagamento confirmado concede o plano pendente.
       ...(pendingTier ? { plan_tier: pendingTier, pending_plan_tier: null } : {}),

@@ -8,6 +8,11 @@ import { Check, Sparkles, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { fmtBRL } from "@/lib/format"
 import type { PlanId, PlanoOption } from "@/lib/data/assinatura"
+import {
+  valorCobranca,
+  valorMensalExibido,
+  type BillingCycle,
+} from "@/lib/pricing"
 import { assinar, type AssinarState } from "../_actions"
 
 function SubmitBtn({ label }: { label: string }) {
@@ -40,6 +45,8 @@ export function SubscribeForm({
     ok: false,
   })
   const [plan, setPlan] = React.useState<PlanId>(defaultPlan)
+  // Ciclo de cobrança (só self-service). Anual é a base; mensal custa +30%.
+  const [ciclo, setCiclo] = React.useState<BillingCycle>("anual")
 
   // Endereço (pra Nota Fiscal) — CEP autopreenche o resto via ViaCEP.
   const [cep, setCep] = React.useState("")
@@ -81,13 +88,65 @@ export function SubscribeForm({
     "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 
   const selected = planos.find((p) => p.id === plan)
-  const total = precoCustom ? customMensalidade : (selected?.total ?? 0)
+  // baseTotal = preço-base (anual/mês) × lojas. mesExibido varia com o ciclo;
+  // cobrancaAgora é o que vai pro cartão (anual = 12× à vista; mensal = +30%).
+  const baseTotal = precoCustom ? customMensalidade : (selected?.total ?? 0)
+  const mesExibido = precoCustom
+    ? baseTotal
+    : valorMensalExibido(baseTotal, ciclo)
+  const cobrancaAgora = precoCustom
+    ? baseTotal
+    : valorCobranca(baseTotal, ciclo)
 
   return (
     <form action={action} className="mt-6 space-y-4 text-left">
       {!precoCustom && (
         <>
           <input type="hidden" name="plano" value={plan} />
+          <input type="hidden" name="ciclo" value={ciclo} />
+
+          {/* Toggle Mensal / Anual */}
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="inline-flex items-center gap-1 rounded-full border bg-background p-1">
+              <button
+                type="button"
+                onClick={() => setCiclo("mensal")}
+                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                  ciclo === "mensal"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Mensal
+              </button>
+              <button
+                type="button"
+                onClick={() => setCiclo("anual")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                  ciclo === "anual"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Anual
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                    ciclo === "anual"
+                      ? "bg-primary-foreground/20"
+                      : "bg-emerald-500/15 text-emerald-600"
+                  }`}
+                >
+                  melhor preço
+                </span>
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {ciclo === "anual"
+                ? "1 cobrança à vista no cartão, sem os 30% a mais do mensal."
+                : "No anual você paga à vista e evita os 30% a mais."}
+            </p>
+          </div>
+
           <div className="space-y-2">
             {planos.map((p) => {
               const active = p.id === plan
@@ -119,10 +178,10 @@ export function SubscribeForm({
                   <span className="flex items-center gap-2">
                     <span className="text-right">
                       <span className="block text-sm font-semibold tabular-nums">
-                        {fmtBRL(p.total)}
+                        {fmtBRL(valorMensalExibido(p.total, ciclo))}
                       </span>
                       <span className="block text-[10px] text-muted-foreground">
-                        /mês
+                        /mês{ciclo === "anual" ? " · anual" : ""}
                       </span>
                     </span>
                     <span
@@ -286,15 +345,27 @@ export function SubscribeForm({
           </span>
         </div>
         <div className="mt-1.5 flex items-center justify-between border-t pt-1.5">
-          <span className="text-xs text-muted-foreground">Total mensal</span>
+          <span className="text-xs text-muted-foreground">
+            {ciclo === "anual" && !precoCustom ? "Cobrança à vista (ano)" : "Total mensal"}
+          </span>
           <span className="text-base font-bold tabular-nums">
-            {fmtBRL(total)}
-            <span className="text-xs font-normal text-muted-foreground">/mês</span>
+            {fmtBRL(cobrancaAgora)}
+            <span className="text-xs font-normal text-muted-foreground">
+              {ciclo === "anual" && !precoCustom ? "/ano" : "/mês"}
+            </span>
           </span>
         </div>
+        {ciclo === "anual" && !precoCustom && (
+          <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Equivale a</span>
+            <span className="tabular-nums">{fmtBRL(mesExibido)}/mês</span>
+          </div>
+        )}
         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Check className="size-3 text-emerald-600" strokeWidth={3} />
-          Pagamento no cartão de crédito · renova automático · cancele quando quiser
+          {ciclo === "anual" && !precoCustom
+            ? "Cartão de crédito · 1 cobrança à vista · renova a cada 12 meses"
+            : "Cartão de crédito · renova automático · cancele quando quiser"}
         </p>
       </div>
 
@@ -309,8 +380,10 @@ export function SubscribeForm({
           jaTemCliente
             ? "Ir para o pagamento no cartão"
             : precoCustom
-              ? `Assinar por ${fmtBRL(total)}/mês`
-              : `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(total)}/mês`
+              ? `Assinar por ${fmtBRL(cobrancaAgora)}/mês`
+              : ciclo === "anual"
+                ? `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(cobrancaAgora)}/ano à vista`
+                : `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(cobrancaAgora)}/mês`
         }
       />
 
