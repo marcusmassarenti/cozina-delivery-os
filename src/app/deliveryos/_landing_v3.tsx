@@ -1286,25 +1286,34 @@ export function LandingV3() {
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-60" />
         <div className="glow-blob left-1/2 top-0 h-40 w-[36rem] -translate-x-1/2" />
         <div className="relative mx-auto max-w-6xl px-5">
-          <div className="flex flex-col items-center justify-between gap-6 lg:flex-row">
-            <div className="flex items-center gap-3">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_26px_-14px_oklch(0.65_0.21_35/.9)]">
-                <ShieldCheck className="size-6" strokeWidth={1.9} />
-              </span>
-              <p className="max-w-xs text-sm text-white/70">
+          {/* cabeçalho — destaque */}
+          <div className="flex flex-col items-center gap-4 text-center lg:flex-row lg:gap-5 lg:text-left">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_14px_30px_-14px_oklch(0.65_0.21_35/.9)]">
+              <ShieldCheck className="size-6" strokeWidth={1.9} />
+            </span>
+            <div>
+              <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
+                Segurança de dados a gente leva a sério
+              </h2>
+              <p className="mt-1.5 text-sm text-white/60">
                 Você não dá senha nem conecta nada. Seus dados ficam só na sua conta — e você apaga quando quiser.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {TRUST.map((b) => (
-                <span key={b.t} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-2 text-xs font-medium text-white/85">
-                  <b.icon className="size-4 shrink-0 text-[var(--brand)]" strokeWidth={2} />
-                  {b.t}
-                </span>
-              ))}
-            </div>
           </div>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-end">
+
+          {/* 4 pontos — ícone + texto (feature, não pílula: não confunde com link) */}
+          <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+            {TRUST.map((b) => (
+              <div key={b.t} className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[var(--brand)]">
+                  <b.icon className="size-5" strokeWidth={2} />
+                </span>
+                <span className="text-sm font-medium text-white/85">{b.t}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-white/10 pt-6 lg:justify-end">
             <a
               href="/seguranca"
               className="grp inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white/90 transition-colors hover:border-white/35 hover:bg-white/10 hover:text-white"
