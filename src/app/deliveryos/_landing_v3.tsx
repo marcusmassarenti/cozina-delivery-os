@@ -89,24 +89,18 @@ const PLAT_SUB: Record<PlatId, string> = {
 
 /* Acento de marca por plataforma na seção de cobertura — card tingido + selo
    na cor da plataforma (iFood vermelho, 99 amarelo, Keeta amarelo→verde). */
-const PLAT_ACCENT: Record<
-  PlatId,
-  { card: string; blob: string; chip: string }
-> = {
+const PLAT_ACCENT: Record<PlatId, { card: string; chip: string }> = {
   ifood: {
-    card: "border-[#ea1d2c40] bg-[#ea1d2c0a]",
-    blob: "bg-[#ea1d2c24]",
-    chip: "bg-[#ea1d2c14] text-[#b81824]",
+    card: "border-[#ea1d2c47] bg-gradient-to-br from-[#ea1d2c33] via-[#ea1d2c14] to-transparent",
+    chip: "bg-[#ea1d2c1a] text-[#b81824]",
   },
   "99food": {
-    card: "border-[#f0b90045] bg-[#fbcf1a14]",
-    blob: "bg-[#f5c51a2e]",
-    chip: "bg-[#f0b90024] text-[#8a6d00]",
+    card: "border-[#f0b90055] bg-gradient-to-br from-[#f5c51a42] via-[#f5c51a1a] to-transparent",
+    chip: "bg-[#f0b9002e] text-[#8a6d00]",
   },
   keeta: {
-    card: "border-[#19b89440] bg-gradient-to-br from-[#ffcd0014] to-[#19b8940f]",
-    blob: "bg-[#19b89424]",
-    chip: "bg-[#19b89418] text-[#0e7c63]",
+    card: "border-[#19b8944a] bg-gradient-to-br from-[#ffcd0038] via-[#19b89422] to-transparent",
+    chip: "bg-[#19b89422] text-[#0e7c63]",
   },
 }
 
@@ -637,8 +631,8 @@ export function LandingV3() {
           <Reveal delay={100}>
             <div className="flex flex-wrap items-center justify-center gap-3">
               {(["ifood", "99food", "keeta"] as PlatId[]).map((id) => (
-                <span key={id} className="lift inline-flex items-center gap-2.5 rounded-2xl border border-black/[0.07] bg-[var(--cream)] px-4 py-2.5 text-[15px] font-medium">
-                  <PlatLogo id={id} size={28} className="rounded-lg" />
+                <span key={id} className={`lift inline-flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 text-[15px] font-medium ${PLAT_ACCENT[id].card}`}>
+                  <PlatLogo id={id} size={28} className="rounded-lg shadow-[0_6px_14px_-5px_rgba(0,0,0,.4)] ring-2 ring-white" />
                   {PLAT_LABEL[id]}
                 </span>
               ))}
@@ -794,9 +788,8 @@ export function LandingV3() {
               Destacar resolve o desnível de altura (8 x 3 x 4 relatórios). */}
           <Reveal>
             <div className={`lift relative mt-12 overflow-hidden rounded-2xl border bg-white p-6 sm:p-7 ${PLAT_ACCENT.ifood.card}`}>
-              <div className={`pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-2xl ${PLAT_ACCENT.ifood.blob}`} />
               <div className="relative flex items-center gap-3.5">
-                <PlatLogo id="ifood" size={48} className="rounded-2xl shadow-[0_8px_20px_-6px_rgba(0,0,0,.35)] ring-2 ring-white" />
+                <PlatLogo id="ifood" size={48} className="rounded-2xl shadow-[0_10px_24px_-8px_#ea1d2c99] ring-2 ring-white" />
                 <div>
                   <p className="text-lg font-medium leading-tight">iFood</p>
                   <p className="text-xs text-[oklch(0.55_0.01_48)]">
@@ -829,9 +822,8 @@ export function LandingV3() {
             {RELATORIOS.slice(1).map((r, i) => (
               <Reveal key={r.id} delay={i * 90}>
                 <div className={`lift relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white p-6 ${PLAT_ACCENT[r.id].card}`}>
-                  <div className={`pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full blur-2xl ${PLAT_ACCENT[r.id].blob}`} />
                   <div className="relative flex items-center gap-3.5">
-                    <PlatLogo id={r.id} size={44} className="rounded-2xl shadow-[0_8px_20px_-6px_rgba(0,0,0,.35)] ring-2 ring-white" />
+                    <PlatLogo id={r.id} size={44} className="rounded-2xl shadow-[0_8px_20px_-6px_rgba(0,0,0,.4)] ring-2 ring-white" />
                     <div>
                       <p className="font-medium leading-tight">{PLAT_LABEL[r.id]}</p>
                       <p className="text-xs text-[oklch(0.55_0.01_48)]">
@@ -1234,9 +1226,9 @@ export function LandingV3() {
                   <p className="mt-1 text-xs text-[oklch(0.5_0.01_48)]">Não uma software house.</p>
                 </div>
                 <div className="rounded-2xl border border-black/[0.07] bg-[var(--cream)] p-4">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     {(["ifood", "99food", "keeta"] as PlatId[]).map((id) => (
-                      <PlatLogo key={id} id={id} size={22} className="rounded-md" />
+                      <PlatLogo key={id} id={id} size={24} className="rounded-md shadow-[0_4px_10px_-4px_rgba(0,0,0,.4)] ring-2 ring-white" />
                     ))}
                   </div>
                   <p className="mt-2.5 text-sm font-medium">Por dentro das plataformas</p>
