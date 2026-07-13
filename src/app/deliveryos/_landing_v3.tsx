@@ -448,10 +448,48 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean }[] = [
   { id: "redes", label: "Redes" },
 ]
 
+/* Preço dos planos. A BASE é o ANUAL (valor por mês); o mensal custa +30%.
+   O anual é cobrado à vista no cartão (12 meses de uma vez, 1 cobrança/ano). */
+const MENSAL_MULT = 1.3
+
+/** "49" quando inteiro, "63,70" quando tem centavos. */
+function precoStr(v: number) {
+  return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(".", ",")
+}
+
+/** Bloco de preço de um card — alterna entre anual (base) e mensal (+30%). */
+function PrecoValor({
+  mes,
+  anual,
+  dark = false,
+}: {
+  mes: number
+  anual: boolean
+  dark?: boolean
+}) {
+  const valor = anual ? mes : Math.round(mes * MENSAL_MULT * 100) / 100
+  const muted = dark ? "text-[oklch(0.62_0_0)]" : "text-[oklch(0.5_0.01_48)]"
+  const brand = dark ? "text-[oklch(0.82_0.14_55)]" : "text-[var(--brand-strong)]"
+  return (
+    <div className="relative">
+      <div className="mt-5 flex items-baseline gap-1.5">
+        <span className="text-5xl font-medium tracking-tight">R$ {precoStr(valor)}</span>
+        <span className={`text-sm ${muted}`}>/loja · mês</span>
+      </div>
+      <p className={`mt-1.5 text-xs font-medium ${brand}`}>
+        {anual
+          ? `R$ ${precoStr(mes * 12)} à vista no ano · 1 cobrança`
+          : `No anual sai por R$ ${precoStr(mes)}/mês`}
+      </p>
+    </div>
+  )
+}
+
 export function LandingV3() {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
   const [demoResult, setDemoResult] = useState(false)
+  const [anual, setAnual] = useState(true)
 
   // Scrollspy: marca no menu a seção que está em vista.
   useEffect(() => {
@@ -910,20 +948,57 @@ export function LandingV3() {
             </h2>
           </Reveal>
           <Reveal delay={70}>
-            <p className="mt-3 text-center text-[oklch(0.5_0.01_48)]">Por loja, por mês. Sem fidelidade — cancela quando quiser.</p>
+            <p className="mt-3 text-center text-[oklch(0.5_0.01_48)]">Por loja. No mensal, cancela quando quiser; no anual, você paga à vista e evita os 30% a mais.</p>
           </Reveal>
 
-          <div className="mx-auto mt-12 grid items-stretch gap-6 md:grid-cols-3">
+          {/* Toggle Mensal / Anual */}
+          <Reveal delay={100}>
+            <div className="mt-7 flex flex-col items-center gap-2">
+              <div className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setAnual(false)}
+                  className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                    anual
+                      ? "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
+                      : "bg-[var(--brand)] text-white"
+                  }`}
+                >
+                  Mensal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnual(true)}
+                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                    anual
+                      ? "bg-[var(--brand)] text-white"
+                      : "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
+                  }`}
+                >
+                  Anual
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      anual ? "bg-white/20 text-white" : "bg-[var(--brand-soft)] text-[var(--brand-strong)]"
+                    }`}
+                  >
+                    melhor preço
+                  </span>
+                </button>
+              </div>
+              <p className="text-xs text-[oklch(0.5_0.01_48)]">
+                Anual = 1 cobrança à vista no cartão, sem os 30% a mais do mensal.
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="mx-auto mt-10 grid items-stretch gap-6 md:grid-cols-3">
             {/* ESSENCIAL */}
             <Reveal delay={120}>
               <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-7">
                 <span className="absolute right-6 top-6 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">Comece aqui</span>
                 <h3 className="text-lg font-medium">Essencial</h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Pra ver seu lucro no delivery</p>
-                <div className="mt-5 flex items-baseline gap-1.5">
-                  <span className="text-5xl font-medium tracking-tight">R$ 49</span>
-                  <span className="text-sm text-[oklch(0.5_0.01_48)]">/loja · mês</span>
-                </div>
+                <PrecoValor mes={49} anual={anual} />
                 <ul className="mt-6 space-y-3 text-[15px]">
                   {[
                     "Upload iFood, 99 e Keeta",
@@ -960,10 +1035,7 @@ export function LandingV3() {
                   Pro
                 </h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Gestão financeira completa</p>
-                <div className="mt-5 flex items-baseline gap-1.5">
-                  <span className="text-5xl font-medium tracking-tight">R$ 99</span>
-                  <span className="text-sm text-[oklch(0.5_0.01_48)]">/loja · mês</span>
-                </div>
+                <PrecoValor mes={99} anual={anual} />
                 <p className="mt-5 text-[13px] font-medium text-[var(--brand-strong)]">Tudo do Essencial, e mais:</p>
                 <ul className="mt-3 space-y-3 text-[15px]">
                   {[
@@ -1002,10 +1074,7 @@ export function LandingV3() {
                   DeliveryOS AI
                 </h3>
                 <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
-                <div className="relative mt-5 flex items-baseline gap-1.5">
-                  <span className="text-5xl font-medium tracking-tight">R$ 159</span>
-                  <span className="text-sm text-[oklch(0.62_0_0)]">/loja · mês</span>
-                </div>
+                <PrecoValor mes={159} anual={anual} dark />
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
                 <ul className="relative mt-3 space-y-3 text-[15px] text-[oklch(0.88_0_0)]">
                   {[
