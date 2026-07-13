@@ -708,8 +708,8 @@ export function LandingV3() {
         </div>
       </section>
 
-      {/* DORES — com número gigante */}
-      <section className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
+      {/* DORES — número gigante + barra + 3 cards, compacto (cabe numa tela) */}
+      <section className="mx-auto max-w-6xl px-5 py-10 sm:py-12">
         <Reveal>
           <h2 className="mx-auto max-w-2xl text-balance text-center text-3xl font-medium tracking-tight sm:text-4xl">
             Você sabe quanto <span className="text-[var(--brand)]">sobra</span> de verdade?
@@ -717,11 +717,11 @@ export function LandingV3() {
         </Reveal>
 
         <Reveal delay={80}>
-          <div className="mt-10 text-center">
-            <p className="text-6xl font-semibold tracking-tight text-[var(--brand)] sm:text-7xl">
+          <div className="mt-6 text-center">
+            <p className="text-5xl font-semibold tracking-tight text-[var(--brand)] sm:text-6xl">
               R$ 45
             </p>
-            <p className="mx-auto mt-3 max-w-md text-[oklch(0.5_0.01_48)]">
+            <p className="mx-auto mt-2.5 max-w-md text-[15px] text-[oklch(0.5_0.01_48)]">
               de cada R$ 100 podem sumir em taxas, entrega e promoção antes de
               virar lucro. Sem o número real, é tudo no achismo.
             </p>
@@ -729,19 +729,19 @@ export function LandingV3() {
         </Reveal>
 
         <Reveal delay={120} y={36}>
-          <div className="mx-auto mt-12 max-w-3xl">
+          <div className="mx-auto mt-7 max-w-3xl">
             <PainBreakdown />
           </div>
         </Reveal>
 
-        <div className="mt-14 grid gap-5 sm:grid-cols-3">
+        <div className="mt-7 grid gap-4 sm:grid-cols-3">
           {DORES.map((d, i) => (
             <Reveal key={d.titulo} delay={i * 110}>
-              <div className="lift h-full rounded-2xl border border-black/[0.07] bg-white p-6">
-                <span className="flex size-11 items-center justify-center rounded-xl bg-[oklch(0.95_0.04_30)] text-[var(--brand-strong)]">
+              <div className="lift h-full rounded-2xl border border-black/[0.07] bg-white p-5">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-[oklch(0.95_0.04_30)] text-[var(--brand-strong)]">
                   <d.icon className="size-5" strokeWidth={2} />
                 </span>
-                <h3 className="mt-4 text-lg font-medium">{d.titulo}</h3>
+                <h3 className="mt-3 text-lg font-medium">{d.titulo}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-[oklch(0.5_0.01_48)]">{d.texto}</p>
               </div>
             </Reveal>
@@ -749,7 +749,7 @@ export function LandingV3() {
         </div>
 
         <Reveal delay={120}>
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
               <Upload className="size-[18px]" strokeWidth={2.2} />
               Quero ver quanto sobra pra mim
