@@ -87,6 +87,29 @@ const PLAT_SUB: Record<PlatId, string> = {
   keeta: "Tudo que a Keeta disponibiliza",
 }
 
+/* Acento de marca por plataforma na seção de cobertura — card tingido + selo
+   na cor da plataforma (iFood vermelho, 99 amarelo, Keeta amarelo→verde). */
+const PLAT_ACCENT: Record<
+  PlatId,
+  { card: string; blob: string; chip: string }
+> = {
+  ifood: {
+    card: "border-[#ea1d2c40] bg-[#ea1d2c0a]",
+    blob: "bg-[#ea1d2c24]",
+    chip: "bg-[#ea1d2c14] text-[#b81824]",
+  },
+  "99food": {
+    card: "border-[#f0b90045] bg-[#fbcf1a14]",
+    blob: "bg-[#f5c51a2e]",
+    chip: "bg-[#f0b90024] text-[#8a6d00]",
+  },
+  keeta: {
+    card: "border-[#19b89440] bg-gradient-to-br from-[#ffcd0014] to-[#19b8940f]",
+    blob: "bg-[#19b89424]",
+    chip: "bg-[#19b89418] text-[#0e7c63]",
+  },
+}
+
 const DORES = [
   { icon: FileSpreadsheet, titulo: "Relatórios soltos", texto: "Cada plataforma manda um arquivo diferente. Juntar tudo na mão toma horas todo mês." },
   { icon: EyeOff, titulo: "Taxas escondidas", texto: "Comissão, entrega, promoção, VR… some no meio e você não enxerga o que está pesando." },
@@ -770,17 +793,17 @@ export function LandingV3() {
           {/* iFood em destaque — a integração mais profunda, itens em 2 colunas.
               Destacar resolve o desnível de altura (8 x 3 x 4 relatórios). */}
           <Reveal>
-            <div className="lift relative mt-12 overflow-hidden rounded-2xl border border-[oklch(0.72_0.17_25/.28)] bg-white p-6 shadow-[0_24px_50px_-32px_oklch(0.72_0.17_25/.5)] sm:p-7">
-              <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[oklch(0.72_0.17_25/.08)] blur-2xl" />
-              <div className="relative flex items-center gap-3">
-                <PlatLogo id="ifood" size={42} className="rounded-xl" />
+            <div className={`lift relative mt-12 overflow-hidden rounded-2xl border bg-white p-6 sm:p-7 ${PLAT_ACCENT.ifood.card}`}>
+              <div className={`pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-2xl ${PLAT_ACCENT.ifood.blob}`} />
+              <div className="relative flex items-center gap-3.5">
+                <PlatLogo id="ifood" size={48} className="rounded-2xl shadow-[0_8px_20px_-6px_rgba(0,0,0,.35)] ring-2 ring-white" />
                 <div>
-                  <p className="font-medium leading-tight">iFood</p>
+                  <p className="text-lg font-medium leading-tight">iFood</p>
                   <p className="text-xs text-[oklch(0.55_0.01_48)]">
                     {PLAT_SUB.ifood}
                   </p>
                 </div>
-                <span className="ml-auto rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand-strong)]">
+                <span className={`ml-auto rounded-full px-3 py-1 text-xs font-semibold ${PLAT_ACCENT.ifood.chip}`}>
                   {RELATORIOS[0]!.itens.length} relatórios
                 </span>
               </div>
@@ -805,20 +828,21 @@ export function LandingV3() {
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             {RELATORIOS.slice(1).map((r, i) => (
               <Reveal key={r.id} delay={i * 90}>
-                <div className="lift flex h-full flex-col rounded-2xl border border-black/[0.07] bg-white p-6">
-                  <div className="flex items-center gap-3">
-                    <PlatLogo id={r.id} size={34} className="rounded-xl" />
+                <div className={`lift relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white p-6 ${PLAT_ACCENT[r.id].card}`}>
+                  <div className={`pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full blur-2xl ${PLAT_ACCENT[r.id].blob}`} />
+                  <div className="relative flex items-center gap-3.5">
+                    <PlatLogo id={r.id} size={44} className="rounded-2xl shadow-[0_8px_20px_-6px_rgba(0,0,0,.35)] ring-2 ring-white" />
                     <div>
                       <p className="font-medium leading-tight">{PLAT_LABEL[r.id]}</p>
                       <p className="text-xs text-[oklch(0.55_0.01_48)]">
                         {PLAT_SUB[r.id]}
                       </p>
                     </div>
-                    <span className="ml-auto rounded-full bg-[var(--brand-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--brand-strong)]">
+                    <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${PLAT_ACCENT[r.id].chip}`}>
                       {r.itens.length} relatórios
                     </span>
                   </div>
-                  <ul className="mt-4 space-y-2">
+                  <ul className="relative mt-4 space-y-2">
                     {r.itens.map((item) => (
                       <li
                         key={item}
@@ -838,10 +862,10 @@ export function LandingV3() {
           </div>
 
           <Reveal delay={100}>
-            <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-[oklch(0.5_0.01_48)]">
-              99 e Keeta têm menos relatórios porque disponibilizam menos — o
-              Delivery OS lê <span className="font-medium text-[oklch(0.35_0.01_48)]">todos</span> que
-              cada plataforma oferece. O iFood simplesmente abre mais dados.
+            <p className="mx-auto mt-8 max-w-2xl text-balance text-center text-[15px] leading-relaxed text-[oklch(0.4_0.01_48)]">
+              O Delivery OS lê <span className="font-semibold text-[oklch(0.28_0.01_48)]">todos</span> os
+              relatórios que cada plataforma oferece. 99 e Keeta têm menos porque
+              disponibilizam menos — o iFood simplesmente abre mais dados.
             </p>
           </Reveal>
 
