@@ -819,73 +819,53 @@ export function LandingV3() {
             </p>
           </Reveal>
 
-          {/* iFood em destaque — a integração mais profunda, itens em 2 colunas.
-              Destacar resolve o desnível de altura (8 x 3 x 4 relatórios). */}
-          <Reveal>
-            <div className={`lift relative mt-12 overflow-hidden rounded-2xl border bg-white p-6 sm:p-7 ${PLAT_ACCENT.ifood.card}`}>
-              <div className="relative flex items-center gap-3.5">
-                <PlatLogo id="ifood" size={48} className="rounded-2xl shadow-[0_10px_24px_-8px_#ea1d2c99] ring-2 ring-white" />
-                <div>
-                  <p className="text-lg font-medium leading-tight">iFood</p>
-                  <p className="text-xs text-[oklch(0.55_0.01_48)]">
-                    {PLAT_SUB.ifood}
-                  </p>
-                </div>
-                <span className={`ml-auto rounded-full px-3 py-1 text-xs font-semibold ${PLAT_ACCENT.ifood.chip}`}>
-                  {RELATORIOS[0]!.itens.length} relatórios
-                </span>
-              </div>
-              <ul className="relative mt-5 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-                {RELATORIOS[0]!.itens.map((item) => (
-                  <li
-                    key={item}
-                    className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
-                  >
-                    <Check
-                      className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
-                      strokeWidth={2.6}
+          {/* Cobertura — os 3 lado a lado (iFood maior). Logo centralizado e
+              "saltando" pra fora do topo do card. */}
+          <div className="mt-16 grid gap-5 md:grid-cols-[1.5fr_1fr_1fr]">
+            {RELATORIOS.map((r, i) => {
+              const featured = r.id === "ifood"
+              return (
+                <Reveal key={r.id} delay={i * 90}>
+                  <div className={`lift relative h-full rounded-2xl border bg-white px-6 pb-6 pt-14 text-center ${PLAT_ACCENT[r.id].card}`}>
+                    {/* logo flutuante — centralizado e pra fora do topo */}
+                    <PlatLogo
+                      id={r.id}
+                      size={featured ? 60 : 48}
+                      className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-[0_14px_30px_-8px_rgba(0,0,0,.4)] ring-4 ring-white"
                     />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </Reveal>
-
-          {/* 99 Food + Keeta — contagens próximas (3 e 4), lado a lado */}
-          <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            {RELATORIOS.slice(1).map((r, i) => (
-              <Reveal key={r.id} delay={i * 90}>
-                <div className={`lift relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white p-6 ${PLAT_ACCENT[r.id].card}`}>
-                  <div className="relative flex items-center gap-3.5">
-                    <PlatLogo id={r.id} size={44} className="rounded-2xl shadow-[0_8px_20px_-6px_rgba(0,0,0,.4)] ring-2 ring-white" />
-                    <div>
-                      <p className="font-medium leading-tight">{PLAT_LABEL[r.id]}</p>
-                      <p className="text-xs text-[oklch(0.55_0.01_48)]">
-                        {PLAT_SUB[r.id]}
-                      </p>
-                    </div>
-                    <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${PLAT_ACCENT[r.id].chip}`}>
+                    <p className={`font-medium leading-tight ${featured ? "text-lg" : ""}`}>
+                      {PLAT_LABEL[r.id]}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[oklch(0.55_0.01_48)]">
+                      {PLAT_SUB[r.id]}
+                    </p>
+                    <span className={`mt-2.5 inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${PLAT_ACCENT[r.id].chip}`}>
                       {r.itens.length} relatórios
                     </span>
+                    <ul
+                      className={`mt-5 space-y-2.5 text-left ${
+                        featured
+                          ? "sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2.5 sm:space-y-0"
+                          : ""
+                      }`}
+                    >
+                      {r.itens.map((item) => (
+                        <li
+                          key={item}
+                          className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
+                        >
+                          <Check
+                            className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                            strokeWidth={2.6}
+                          />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <ul className="relative mt-4 space-y-2">
-                    {r.itens.map((item) => (
-                      <li
-                        key={item}
-                        className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
-                      >
-                        <Check
-                          className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
-                          strokeWidth={2.6}
-                        />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              )
+            })}
           </div>
 
           <Reveal delay={100}>
