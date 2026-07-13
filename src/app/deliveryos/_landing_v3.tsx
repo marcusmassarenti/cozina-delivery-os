@@ -1484,13 +1484,13 @@ export function LandingV3() {
         </div>
       </footer>
 
-      {/* CTA FIXO — só mobile */}
+      {/* CTA FIXO — só mobile. Leva pro cadastro (teste grátis) pra converter. */}
       <a
-        href="#experimente"
-        className="btn-brand fixed inset-x-3 bottom-3 z-40 flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-semibold sm:hidden"
+        href="/cadastro"
+        className="btn-brand grp fixed inset-x-3 bottom-3 z-40 flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-semibold sm:hidden"
       >
-        <Upload className="size-[18px]" strokeWidth={2.2} />
-        Subir planilha grátis
+        Testar grátis · 7 dias
+        <ArrowRight className="arrow-slide size-[18px]" strokeWidth={2.2} />
       </a>
     </div>
   )
