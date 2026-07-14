@@ -114,10 +114,17 @@ const DORES = [
 
 /* Cobertura por plataforma — derivada do catálogo oficial (reports-catalog.ts)
    pra nunca desatualizar em relação ao que o sistema realmente lê. */
+/* Rótulo SÓ na landing (marketing): deixa dois relatórios parecidos mais
+   distintos pra quem só está conhecendo. Nas telas operacionais (guia, config)
+   o nome real da Keeta é mantido pra o lojista achar o arquivo no portal. */
+const LANDING_NOME: Record<string, string> = {
+  "Pedidos recentes": "Taxas e promoções por pedido",
+}
+const nomeLanding = (n: string) => LANDING_NOME[n] ?? n
 const RELATORIOS: { id: PlatId; itens: string[] }[] = [
-  { id: "ifood", itens: reportsByPlatform("ifood").map((r) => r.name) },
-  { id: "99food", itens: reportsByPlatform("99food").map((r) => r.name) },
-  { id: "keeta", itens: reportsByPlatform("keeta").map((r) => r.name) },
+  { id: "ifood", itens: reportsByPlatform("ifood").map((r) => nomeLanding(r.name)) },
+  { id: "99food", itens: reportsByPlatform("99food").map((r) => nomeLanding(r.name)) },
+  { id: "keeta", itens: reportsByPlatform("keeta").map((r) => nomeLanding(r.name)) },
 ]
 
 

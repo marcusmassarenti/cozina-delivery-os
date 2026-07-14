@@ -240,7 +240,8 @@ const KEETA_ENTRIES: GuideEntry[] = [
     scope: "Todos ou por loja",
     path: ["Keeta", "Relatórios", "Baixar dados"],
     steps: KEETA_FLOW,
-    feeds: "Faturamento líquido, cancelamentos, notas e comentários.",
+    feeds:
+      "O líquido por pedido + as avaliações (nota, comentário e resposta) e cancelamentos. É o financeiro e a reputação.",
     links: KEETA_LINK,
   },
   {
@@ -252,8 +253,9 @@ const KEETA_ENTRIES: GuideEntry[] = [
     scope: "Todos ou por loja",
     path: ["Keeta", "Pedidos"],
     steps:
-      'Fluxo diferente dos mensais — baixe pela tela de Pedidos da Keeta. O passo a passo está no vídeo "Baixar Pedidos" acima.',
-    feeds: "Subsídio Keeta×loja, taxas por pedido e campanha (base do ROI e do repasse real).",
+      'Fluxo diferente dos mensais — baixe pela tela de Pedidos da Keeta (outra tela). O passo a passo está no vídeo "Pedidos recentes" acima.',
+    feeds:
+      "Outro recorte do MESMO pedido: cada taxa aberta + quanto da promoção a Keeta bancou (subsídio Keeta×loja). É a base do ROI e do repasse real.",
     links: KEETA_LINK,
   },
   {
@@ -332,7 +334,8 @@ const PLATFORMS: {
         title: "Baixar os relatórios (Restaurante · Pedido · Item · Promoção)",
         src: `${TUT}keeta-baixar-dados.mp4`,
       },
-      { title: "Pedidos recentes", src: `${TUT}keeta-pedidos.mp4` },
+      { title: "Baixar Pedidos", src: `${TUT}keeta-pedidos.mp4` },
+      { title: "Pedidos recentes", src: `${TUT}keeta-pedidos-recentes.mp4` },
     ],
   },
 ]
