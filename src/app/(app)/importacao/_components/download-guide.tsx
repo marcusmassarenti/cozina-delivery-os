@@ -253,7 +253,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     scope: "Todos ou por loja",
     path: ["Keeta", "Pedidos"],
     steps:
-      'Fluxo diferente dos mensais — baixe pela tela de Pedidos da Keeta (outra tela). O passo a passo está no vídeo "Pedidos recentes" acima.',
+      'Fluxo diferente dos mensais — baixe pela tela de Pedidos da Keeta (outra tela). O passo a passo está no vídeo "Baixar Pedidos" acima.',
     feeds:
       "Outro recorte do MESMO pedido: cada taxa aberta + quanto da promoção a Keeta bancou (subsídio Keeta×loja). É a base do ROI e do repasse real.",
     links: KEETA_LINK,
@@ -334,7 +334,7 @@ const PLATFORMS: {
         title: "Baixar os relatórios (Restaurante · Pedido · Item · Promoção)",
         src: `${TUT}keeta-baixar-dados.mp4`,
       },
-      { title: "Pedidos recentes", src: `${TUT}keeta-pedidos-recentes.mp4` },
+      { title: "Baixar Pedidos", src: `${TUT}keeta-pedidos.mp4` },
     ],
   },
 ]
