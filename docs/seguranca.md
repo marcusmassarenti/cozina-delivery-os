@@ -9,7 +9,7 @@ Resumo da postura de segurança + runbook operacional. Base pra handoff.
 
 | Área | Estado |
 |---|---|
-| **RLS (multi-tenant)** | ✅ Todas as 67 tabelas do `public` com RLS ligada. 52 policies, 100% escopadas por `has_unit_access` / `has_holding_access` / `has_brand_access` / `auth.uid()`. Zero `using(true)`, zero acesso `anon`. |
+| **RLS (multi-tenant)** | ✅ Todas as 66 tabelas do `public` com RLS ligada. 53 policies, 100% escopadas por `has_unit_access` / `has_holding_access` / `has_brand_access` / `auth.uid()`. Zero `using(true)`, zero acesso `anon`. |
 | **Funções SECURITY DEFINER** | ✅ As 13 fixam `search_path=public` (sem hijack). |
 | **service_role / secrets** | ✅ Só server-side (`lib/supabase/admin.ts` com `import "server-only"`). Nenhum em componente `"use client"`. `.env` nunca commitado; `.gitignore` cobre `.env*`. |
 | **`NEXT_PUBLIC_*`** | ✅ Só `SUPABASE_URL` e `ANON_KEY` (públicos por design). |
