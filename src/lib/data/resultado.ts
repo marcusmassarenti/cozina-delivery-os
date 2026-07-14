@@ -19,6 +19,7 @@ import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
+import { getKeetaFaturaTaxasByUnits } from "@/lib/data/keeta-repasses"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 
@@ -288,12 +289,14 @@ export async function getNetworkDrePlatforms(
   const unitIds = active.map((u) => u.id)
   if (unitIds.length === 0) return []
 
-  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit] = await Promise.all([
-    getFinanceiroResumoByUnits(unitIds, year, month),
-    getNinefoodResumoByUnits(unitIds, year, month),
-    getKeetaResumoByUnits(unitIds, year, month),
-    getRealMonthlyForUnits(unitIds, year, month),
-  ])
+  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit, keFat] =
+    await Promise.all([
+      getFinanceiroResumoByUnits(unitIds, year, month),
+      getNinefoodResumoByUnits(unitIds, year, month),
+      getKeetaResumoByUnits(unitIds, year, month),
+      getRealMonthlyForUnits(unitIds, year, month),
+      getKeetaFaturaTaxasByUnits(unitIds, year, month),
+    ])
   const pBruto = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
     m.platforms.find((p) => p.id === id)?.bruto ?? 0
   const pLiq = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
@@ -420,7 +423,29 @@ export async function getNetworkDrePlatforms(
       0,
       a.ni.promo,
     ),
-    make("keeta", "Keeta", a.ke.bruto, a.ke.liq, [], 0, a.ke.promo),
+    make(
+      "keeta",
+      "Keeta",
+      a.ke.bruto,
+      a.ke.liq,
+      // Quebra oficial da Fatura (aba Histórico) somada na rede. Sem Fatura,
+      // ao menos a promoção que a loja bancou; o resto vira Cancelamentos.
+      keFat.hasData
+        ? [
+            { label: "Comissão", value: keFat.comissao },
+            { label: "Taxa de distância", value: keFat.taxaDistancia },
+            { label: "Taxa de pagamento online", value: keFat.taxaPagamentoOnline },
+            { label: "Saque antecipado", value: keFat.taxaSaqueAntecipado },
+            { label: "Taxa de serviço mensal", value: keFat.taxaServicoMensal },
+            { label: "Publicidade / marketing", value: keFat.publicidade },
+            { label: "Ajuste de comissão", value: keFat.ajusteComissao },
+            { label: "Serviço da Ajuda", value: keFat.deducaoAjuda },
+            { label: "Promoções (loja bancou)", value: keFat.promoLoja },
+          ]
+        : [{ label: "Promoções (loja bancou)", value: a.ke.promo }],
+      0,
+      keFat.hasData ? keFat.promoLoja : a.ke.promo,
+    ),
   ].filter((p): p is NetworkDrePlat => p !== null)
 }
 

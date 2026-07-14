@@ -145,3 +145,36 @@ export async function getKeetaFaturaTaxasForMonth(
     hasData: true,
   }
 }
+
+/** Taxas da Fatura SOMADAS sobre várias lojas (pro DRE do grupo / IA). */
+export async function getKeetaFaturaTaxasByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<KeetaFaturaTaxas> {
+  if (unitIds.length === 0) return ZERO_TAXAS
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("keeta_fatura_taxas")
+    .select(
+      "comissao, taxa_distancia, taxa_pagamento_online, taxa_saque_antecipado, taxa_servico_mensal, promo_loja, publicidade, ajuste_comissao, deducao_ajuda",
+    )
+    .in("unit_id", unitIds)
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+  if (!data || data.length === 0) return ZERO_TAXAS
+  const num = (v: unknown) => Number(v) || 0
+  const acc = { ...ZERO_TAXAS, hasData: true }
+  for (const r of data) {
+    acc.comissao += num(r.comissao)
+    acc.taxaDistancia += num(r.taxa_distancia)
+    acc.taxaPagamentoOnline += num(r.taxa_pagamento_online)
+    acc.taxaSaqueAntecipado += num(r.taxa_saque_antecipado)
+    acc.taxaServicoMensal += num(r.taxa_servico_mensal)
+    acc.promoLoja += num(r.promo_loja)
+    acc.publicidade += num(r.publicidade)
+    acc.ajusteComissao += num(r.ajuste_comissao)
+    acc.deducaoAjuda += num(r.deducao_ajuda)
+  }
+  return acc
+}

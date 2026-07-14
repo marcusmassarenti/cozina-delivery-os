@@ -9,6 +9,7 @@ import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
 import { getMonthlyGeneral } from "@/lib/data/lancamentos"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import { getTopProdutos } from "@/lib/data/produtos"
+import { getKeetaFaturaTaxasForMonth } from "@/lib/data/keeta-repasses"
 import { askClaudeJson, diagnosticoModel } from "@/lib/anthropic/client"
 import {
   getCardapioPeriodoForMonth,
@@ -57,6 +58,7 @@ async function montarSnapshot(
     topIf,
     top99,
     topKe,
+    keFat,
   ] = await Promise.all([
     getFunnelForMonth(unitId, year, month),
     getCardapioPeriodoForMonth(unitId, year, month),
@@ -70,6 +72,7 @@ async function montarSnapshot(
     getTopProdutos("ifood", [unitId], year, month, 15),
     getTopProdutos("99food", [unitId], year, month, 15),
     getTopProdutos("keeta", [unitId], year, month, 15),
+    getKeetaFaturaTaxasForMonth(unitId, year, month),
   ])
 
   // CMV (manual) — só entra se foi lançado (senão o plano da IA acharia 0% ótimo).
@@ -110,6 +113,9 @@ async function montarSnapshot(
   const funil = periodo ?? funnel
   const conversao =
     (periodo?.conversaoPct ?? (funnel.diasComDado > 0 ? funnel.conversaoPct : null))
+
+  const keetaBruto =
+    consol.plataformas.find((p) => /keeta/i.test(p.label))?.bruto ?? 0
 
   const round = (n: number) => Math.round(n * 100) / 100
   const snap = {
@@ -165,6 +171,22 @@ async function montarSnapshot(
           investimentoLoja: promocoes.investimentoLojas,
           roas: promocoes.roasLojas,
           nCampanhas: promocoes.nCampanhas,
+        }
+      : null,
+    // Custos da Keeta (da Fatura). Destaque: promoção que a LOJA banca —
+    // costuma pesar e fica escondida. null = loja não subiu a Fatura da Keeta.
+    keeta_custos: keFat.hasData
+      ? {
+          comissao: round(keFat.comissao),
+          taxaEntrega: round(keFat.taxaDistancia),
+          taxaPagamentoOnline: round(keFat.taxaPagamentoOnline),
+          taxaServicoMensal: round(keFat.taxaServicoMensal),
+          publicidade: round(keFat.publicidade),
+          promocaoQueALojaBancou: round(keFat.promoLoja),
+          promocaoLojaPctDaKeeta:
+            keetaBruto > 0
+              ? round((keFat.promoLoja / keetaBruto) * 100)
+              : null,
         }
       : null,
     sentimento: superAval
