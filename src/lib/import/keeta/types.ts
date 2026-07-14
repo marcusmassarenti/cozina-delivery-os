@@ -11,6 +11,7 @@ export type KeetaReportType =
   | "pedido" // "Pedidos" — 1 linha por pedido (financeiro + cancel + avaliação)
   | "pedido_recente" // "Pedidos recentes" — 1 linha por pedido (promoção Keeta×loja + taxas granulares + campanha)
   | "promocao" // "Dados da promoção" — 1 linha por campanha × loja × dia (ROI da promoção)
+  | "fatura" // "Fatura" (bill-…) — 3 abas; aba "Detalhes da fatura" = repasse por loja/dia (ciclo + data de liquidação)
   | "unknown"
 
 // ─── Loja diária ─────────────────────────────────────────────────────
@@ -176,10 +177,31 @@ export type ParsedKeetaPromocoes = {
   }>
 }
 
+// ─── Fatura (repasse por loja/dia) ───────────────────────────────────
+
+export type ParsedKeetaRepasseLinha = {
+  dataTransacao: Date // "Data da transação" (dia dos pedidos)
+  cicloFaturamento: string | null // "Ciclo de faturamento" (semana)
+  dataLiquidacao: Date | null // "Data da liquidação" (quando cai)
+  status: string | null // "Status do repasse"
+  valorRepasse: number | null // "Pagamento total" (repasse do dia)
+  cnpj: string | null // "CNPJ" da loja
+}
+
+export type ParsedKeetaFatura = {
+  reportType: "fatura"
+  porLoja: Array<{
+    storeId: string
+    storeName: string | null
+    repasses: ParsedKeetaRepasseLinha[]
+  }>
+}
+
 export type KeetaParseResult =
   | ParsedKeetaLoja
   | ParsedKeetaItem
   | ParsedKeetaPedidos
   | ParsedKeetaPedidosRecentes
   | ParsedKeetaPromocoes
+  | ParsedKeetaFatura
   | { reportType: "unknown"; error: string }

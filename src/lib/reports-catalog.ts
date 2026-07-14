@@ -28,6 +28,7 @@ export type ReportKey =
   | "keeta_pedido"
   | "keeta_pedido_recente"
   | "keeta_promocao"
+  | "keeta_fatura"
 
 export type ReportDef = {
   key: ReportKey
@@ -173,6 +174,14 @@ export const REPORTS_CATALOG: ReportDef[] = [
     name: "Promoções",
     whatIs: "Campanhas da Keeta com investimento e retorno (ROI).",
     helps: "Quanto rende cada promoção na Keeta pra decidir onde investir.",
+    essential: true,
+  },
+  {
+    key: "keeta_fatura",
+    platform: "keeta",
+    name: "Fatura (repasse)",
+    whatIs: "A fatura consolidada: repasse por loja e por dia, com o ciclo e a data de liquidação.",
+    helps: "Mostra quanto e QUANDO cai o dinheiro de cada loja — o calendário de recebíveis.",
     essential: true,
   },
 ]

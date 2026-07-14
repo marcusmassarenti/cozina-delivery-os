@@ -25,6 +25,7 @@ function toCatalogKey(platform: PlatformId, key: string): ReportKey | null {
     "keeta:pedido_recente": "keeta_pedido_recente",
     "keeta:promocao": "keeta_promocao",
     "keeta:item": "keeta_item",
+    "keeta:fatura": "keeta_fatura",
   }
   return m[`${platform}:${key}`] ?? null
 }

@@ -36,6 +36,7 @@ import type {
   ParsedKeetaPedidos,
   ParsedKeetaPedidosRecentes,
   ParsedKeetaPromocoes,
+  ParsedKeetaFatura,
 } from "@/lib/import/keeta"
 
 export type ImportFileResult = {
@@ -219,6 +220,19 @@ export type ImportSummary =
       campanhas: number
       pedidos: number
       despesa: number
+      novos: number
+      atualizados: number
+    }
+  | {
+      kind: "keeta_fatura"
+      unitCode: string
+      unitName: string
+      storeId: string
+      periodoInicio: string // YYYY-MM-DD
+      periodoFim: string // YYYY-MM-DD
+      dias: number
+      totalRepasse: number
+      aLiquidar: number
       novos: number
       atualizados: number
     }
@@ -476,6 +490,15 @@ async function processFile(
     }
     if (parsed.reportType === "promocao") {
       return await processKeetaPromocoes(
+        parsed,
+        storeMaps.keeta,
+        file.name,
+        userId,
+        admin,
+      )
+    }
+    if (parsed.reportType === "fatura") {
+      return await processKeetaFatura(
         parsed,
         storeMaps.keeta,
         file.name,
@@ -3020,6 +3043,132 @@ async function saveKeetaPromocoes(
     campanhas,
     pedidos: Math.round(pedidos),
     despesa: Math.round(despesa * 100) / 100,
+    novos,
+    atualizados,
+  }
+}
+
+// ─── Keeta: Fatura (repasse por loja/dia — quando o dinheiro cai) ─────
+
+async function processKeetaFatura(
+  parsed: ParsedKeetaFatura,
+  storeMap: StoreMap,
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportFileResult[]> {
+  const results: ImportFileResult[] = []
+  const isMulti = parsed.porLoja.length > 1
+  for (const grupo of parsed.porLoja) {
+    const unit = storeMap.get(grupo.storeId)
+    if (!unit) {
+      results.push(keetaUnmapped(grupo, filename, isMulti, "Keeta — Fatura"))
+      continue
+    }
+    try {
+      const summary = await saveKeetaRepasses(
+        grupo,
+        unit,
+        filename,
+        userId,
+        admin,
+      )
+      results.push(keetaOk(unit, filename, isMulti, summary))
+    } catch (e) {
+      results.push(keetaErr(unit, filename, isMulti, e, "Fatura"))
+    }
+  }
+  return results
+}
+
+async function saveKeetaRepasses(
+  grupo: ParsedKeetaFatura["porLoja"][number],
+  unit: { unitId: string; code: string; name: string },
+  filename: string,
+  userId: string | null,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<ImportSummary> {
+  if (grupo.repasses.length === 0)
+    throw new Error("Nenhum repasse válido nessa loja.")
+
+  const sortedTs = grupo.repasses
+    .map((r) => r.dataTransacao.getTime())
+    .sort((a, b) => a - b)
+  const periodoInicio = new Date(sortedTs[0])
+  const periodoFim = new Date(sortedTs[sortedTs.length - 1])
+
+  const datas = grupo.repasses.map((r) => formatDateOnly(r.dataTransacao))
+  const atualizados = await somaEmLotes(datas, async (slice) => {
+    const { count } = await admin
+      .from("keeta_repasses")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", unit.unitId)
+      .in("data_transacao", slice)
+    return count ?? 0
+  })
+  const novos = grupo.repasses.length - atualizados
+
+  const { data: importLog, error: ilErr } = await admin
+    .from("platform_imports")
+    .insert({
+      unit_id: unit.unitId,
+      platform: "keeta",
+      report_type: "fatura",
+      cadencia: "diario",
+      ref_date: formatDateOnly(periodoFim),
+      source_filename: filename,
+      imported_by: userId,
+      status: "success",
+      rows_imported: grupo.repasses.length,
+    })
+    .select("id")
+    .single()
+  if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
+
+  const rows = grupo.repasses.map((r) => ({
+    unit_id: unit.unitId,
+    data_transacao: formatDateOnly(r.dataTransacao),
+    ref_year: r.dataTransacao.getFullYear(),
+    ref_month: r.dataTransacao.getMonth() + 1,
+    ciclo_faturamento: r.cicloFaturamento,
+    data_liquidacao: r.dataLiquidacao ? formatDateOnly(r.dataLiquidacao) : null,
+    status: r.status,
+    valor_repasse: r.valorRepasse,
+    cnpj: r.cnpj,
+    import_id: importLog.id,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from("keeta_repasses")
+      .upsert(rows.slice(i, i + CHUNK), {
+        onConflict: "unit_id,data_transacao",
+      })
+    if (error)
+      throw new Error(
+        `Falha ao gravar Fatura (chunk ${i / CHUNK + 1}): ${error.message}`,
+      )
+  }
+
+  let total = 0
+  let aLiquidar = 0
+  for (const r of grupo.repasses) {
+    total += r.valorRepasse ?? 0
+    if (r.status && r.status.toLowerCase() !== "liquidado")
+      aLiquidar += r.valorRepasse ?? 0
+  }
+
+  return {
+    kind: "keeta_fatura",
+    unitCode: unit.code,
+    unitName: unit.name,
+    storeId: grupo.storeId,
+    periodoInicio: formatDateOnly(periodoInicio),
+    periodoFim: formatDateOnly(periodoFim),
+    dias: grupo.repasses.length,
+    totalRepasse: Math.round(total * 100) / 100,
+    aLiquidar: Math.round(aLiquidar * 100) / 100,
     novos,
     atualizados,
   }

@@ -55,6 +55,7 @@ const REPORTS: ReportDef[] = [
   { platform: "keeta", key: "pedido_recente", label: "Pedidos recentes", cadencia: "diario", perStore: false, table: "keeta_pedidos_recentes", dateCol: "data" },
   { platform: "keeta", key: "promocao", label: "Dados da promoção", cadencia: "diario", perStore: false, table: "keeta_promocoes", dateCol: "data" },
   { platform: "keeta", key: "item", label: "Dados do item", cadencia: "diario", perStore: false, table: "keeta_daily_item", dateCol: "data" },
+  { platform: "keeta", key: "fatura", label: "Fatura (repasse)", cadencia: "diario", perStore: false, table: "keeta_repasses", dateCol: "data_transacao" },
 ]
 
 export type ReportStatus = {

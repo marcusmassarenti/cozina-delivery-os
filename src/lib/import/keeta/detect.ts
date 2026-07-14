@@ -45,6 +45,10 @@ export function readHeader(sheet: XLSX.WorkSheet): string[] {
 export function detectKeetaReportType(
   workbook: XLSX.WorkBook,
 ): KeetaReportType {
+  // Fatura consolidada (bill-…): tem 3 abas; a 1ª é "Explicação" (glossário),
+  // então NÃO dá pra detectar pela 1ª aba — identifica pela aba de repasse.
+  if (workbook.SheetNames.includes("Detalhes da fatura")) return "fatura"
+
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) return "unknown"
   const sheet = workbook.Sheets[sheetName]
@@ -70,6 +74,9 @@ export function detectKeetaReportType(
  * "ID do restaurante" + "Número do pedido" + "Promoção financiada pela Keeta".
  */
 export function isKeetaWorkbook(workbook: XLSX.WorkBook): boolean {
+  // Fatura consolidada — reconhecida pelas abas próprias.
+  if (workbook.SheetNames.includes("Detalhes da fatura")) return true
+
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) return false
   const sheet = workbook.Sheets[sheetName]

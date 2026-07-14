@@ -282,6 +282,20 @@ const KEETA_ENTRIES: GuideEntry[] = [
     feeds: "Quanto rendeu cada campanha, quanto a Keeta bancou vs. a sua loja, e as vendas em promoção.",
     links: KEETA_LINK,
   },
+  {
+    key: "keeta_fatura",
+    icon: Calendar,
+    title: "Fatura (repasse)",
+    badge: "Mensal",
+    badgeTone: "emerald",
+    scope: "Todos ou por loja",
+    path: ["Keeta", "Faturas"],
+    steps:
+      'Na tela de Faturas da Keeta → escolhe o período → baixa o arquivo da fatura (bill-…). O sistema lê a aba de repasse sozinho.',
+    feeds:
+      "Quanto e QUANDO cai o dinheiro de cada loja — o ciclo semanal e a data de liquidação (o calendário de recebíveis).",
+    links: KEETA_LINK,
+  },
 ]
 
 const toneClass: Record<GuideEntry["badgeTone"], string> = {
@@ -335,6 +349,7 @@ const PLATFORMS: {
         src: `${TUT}keeta-baixar-dados.mp4`,
       },
       { title: "Baixar Pedidos recentes", src: `${TUT}keeta-pedidos.mp4` },
+      { title: "Baixar a Fatura (repasse)", src: `${TUT}keeta-fatura.mp4` },
     ],
   },
 ]
@@ -436,13 +451,14 @@ export function DownloadGuide({ enabled }: { enabled: ReportKey[] }) {
             )}
             {active === "keeta" && (
               <>
-                Baixe os <strong>5 relatórios</strong> pra ter a info completa. Os
+                Baixe os <strong>6 relatórios</strong> pra ter a info completa. Os
                 4 mensais (restaurante, pedido, item e promoção) saem num fluxo
                 só: período mensal → restaurante (ou todos, se for rede) →
                 &ldquo;Selecionar todos os dados&rdquo; → Enviar → aba{" "}
                 <strong>Downloads</strong> → Baixar. O{" "}
-                <strong>Pedidos recentes</strong> baixa à parte, pela tela de
-                Pedidos (veja o vídeo).
+                <strong>Pedidos recentes</strong> e a{" "}
+                <strong>Fatura (repasse)</strong> baixam à parte, em telas
+                próprias (veja os vídeos).
               </>
             )}
           </div>
