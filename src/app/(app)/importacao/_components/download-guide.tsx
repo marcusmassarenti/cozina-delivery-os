@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   ChevronDown,
+  Clock,
   ExternalLink,
   Film,
   Gauge,
@@ -243,6 +244,19 @@ const KEETA_ENTRIES: GuideEntry[] = [
     links: KEETA_LINK,
   },
   {
+    key: "keeta_pedido_recente",
+    icon: Clock,
+    title: "Pedidos recentes",
+    badge: "Mensal",
+    badgeTone: "blue",
+    scope: "Todos ou por loja",
+    path: ["Keeta", "Pedidos"],
+    steps:
+      'Fluxo diferente dos mensais — baixe pela tela de Pedidos da Keeta. O passo a passo está no vídeo "Baixar Pedidos" acima.',
+    feeds: "Subsídio Keeta×loja, taxas por pedido e campanha (base do ROI e do repasse real).",
+    links: KEETA_LINK,
+  },
+  {
     key: "keeta_item",
     icon: UtensilsCrossed,
     title: "Dados do item",
@@ -318,7 +332,7 @@ const PLATFORMS: {
         title: "Baixar os relatórios (Restaurante · Pedido · Item · Promoção)",
         src: `${TUT}keeta-baixar-dados.mp4`,
       },
-      { title: "Baixar Pedidos", src: `${TUT}keeta-pedidos.mp4` },
+      { title: "Pedidos recentes", src: `${TUT}keeta-pedidos.mp4` },
     ],
   },
 ]
@@ -413,17 +427,20 @@ export function DownloadGuide({ enabled }: { enabled: ReportKey[] }) {
               <>
                 A 99 <strong>não deixa selecionar todas as lojas</strong> — baixe
                 os <strong>3 relatórios de cada loja</strong>, uma por uma
-                (período mensal → todos os dados → Enviar → aba "Baixar
-                relatório"). Pode subir o <strong>.zip</strong> direto, o sistema
-                lê.
+                (período mensal → todos os dados → Enviar → aba &ldquo;Baixar
+                relatório&rdquo;). Pode subir o <strong>.zip</strong> direto, o
+                sistema lê.
               </>
             )}
             {active === "keeta" && (
               <>
-                Baixe os <strong>4 relatórios</strong> (restaurante, pedido, item
-                e promoção) pra ter a info completa. É um fluxo só: período mensal
-                → restaurante (ou todos, se for rede) → "Selecionar todos os
-                dados" → Enviar → aba <strong>Downloads</strong> → Baixar.
+                Baixe os <strong>5 relatórios</strong> pra ter a info completa. Os
+                4 mensais (restaurante, pedido, item e promoção) saem num fluxo
+                só: período mensal → restaurante (ou todos, se for rede) →
+                &ldquo;Selecionar todos os dados&rdquo; → Enviar → aba{" "}
+                <strong>Downloads</strong> → Baixar. O{" "}
+                <strong>Pedidos recentes</strong> baixa à parte, pela tela de
+                Pedidos (veja o vídeo).
               </>
             )}
           </div>

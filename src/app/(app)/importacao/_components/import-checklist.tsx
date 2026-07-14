@@ -22,7 +22,7 @@ function toCatalogKey(platform: PlatformId, key: string): ReportKey | null {
     "99food:pedido": "99food_pedido",
     "keeta:restaurante": "keeta_loja",
     "keeta:pedido": "keeta_pedido",
-    "keeta:pedido_recente": "keeta_pedido",
+    "keeta:pedido_recente": "keeta_pedido_recente",
     "keeta:promocao": "keeta_promocao",
     "keeta:item": "keeta_item",
   }

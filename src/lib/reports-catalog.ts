@@ -26,6 +26,7 @@ export type ReportKey =
   | "keeta_loja"
   | "keeta_item"
   | "keeta_pedido"
+  | "keeta_pedido_recente"
   | "keeta_promocao"
 
 export type ReportDef = {
@@ -154,8 +155,16 @@ export const REPORTS_CATALOG: ReportDef[] = [
     key: "keeta_pedido",
     platform: "keeta",
     name: "Pedidos",
-    whatIs: "Pedidos com pagamento e operação (inclui os recentes).",
+    whatIs: "Pedidos com pagamento e operação do período.",
     helps: "Detalhe pedido a pedido pra conciliar o caixa.",
+    essential: true,
+  },
+  {
+    key: "keeta_pedido_recente",
+    platform: "keeta",
+    name: "Pedidos recentes",
+    whatIs: "Detalhe pedido a pedido: taxas granulares, subsídio Keeta×loja e campanha.",
+    helps: "Abre o subsídio Keeta×loja e as taxas por pedido — base do ROI e do repasse real.",
     essential: true,
   },
   {

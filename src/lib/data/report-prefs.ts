@@ -24,15 +24,19 @@ async function readEnabledMap(
   return (data?.enabled_reports as Record<string, boolean> | null) ?? null
 }
 
-/** Aplica o mapa salvo sobre o default (essenciais). Keys ausentes = default. */
+/** Aplica o mapa salvo sobre o default (essenciais). Override parcial: só as
+ *  keys presentes no mapa salvo mandam; keys AUSENTES (ex.: relatório novo
+ *  adicionado ao catálogo depois que a holding salvou) caem no default. Assim
+ *  um relatório essencial novo não nasce desligado pra quem já configurou. */
 function resolvePrefs(
   saved: Record<string, boolean> | null,
 ): Record<ReportKey, boolean> {
   const out = {} as Record<ReportKey, boolean>
   for (const key of ALL_REPORT_KEYS) {
-    out[key] = saved
-      ? Boolean(saved[key])
-      : DEFAULT_ENABLED_REPORTS.includes(key)
+    out[key] =
+      saved && key in saved
+        ? Boolean(saved[key])
+        : DEFAULT_ENABLED_REPORTS.includes(key)
   }
   return out
 }
