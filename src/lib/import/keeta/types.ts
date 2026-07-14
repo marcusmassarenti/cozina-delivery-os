@@ -188,12 +188,28 @@ export type ParsedKeetaRepasseLinha = {
   cnpj: string | null // "CNPJ" da loja
 }
 
+/** Taxas agregadas da aba "Histórico de pedidos" da Fatura (por loja/mês).
+ *  Valores POSITIVOS = custo (a Fatura traz negativo; o parser normaliza). */
+export type ParsedKeetaFaturaTaxas = {
+  comissao: number // "Comissão básica"
+  taxaDistancia: number // "Taxa adicional de distância"
+  taxaPagamentoOnline: number // "Taxa de pagamento online"
+  taxaSaqueAntecipado: number // "Taxa de saque antecipado"
+  taxaServicoMensal: number // "Taxa de serviço mensal"
+  promoLoja: number // promo do item + entrega bancados pela loja
+  publicidade: number // "Custos de publicidade" + "Gasto com marketing inteligente"
+  ajusteComissao: number // "Ajuste de comissão"
+  deducaoAjuda: number // "Dedução pelo serviço da Ajuda"
+  pedidos: number
+}
+
 export type ParsedKeetaFatura = {
   reportType: "fatura"
   porLoja: Array<{
     storeId: string
     storeName: string | null
     repasses: ParsedKeetaRepasseLinha[]
+    taxas: ParsedKeetaFaturaTaxas | null
   }>
 }
 

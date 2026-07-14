@@ -3151,6 +3151,32 @@ async function saveKeetaRepasses(
       )
   }
 
+  // Taxas da aba "Histórico de pedidos" (Fase 2) — agregado por loja/mês.
+  // ref = mês do repasse. Enriquece a DRE; não muda nenhum total.
+  if (grupo.taxas) {
+    const { error: txErr } = await admin.from("keeta_fatura_taxas").upsert(
+      {
+        unit_id: unit.unitId,
+        ref_year: periodoFim.getFullYear(),
+        ref_month: periodoFim.getMonth() + 1,
+        comissao: grupo.taxas.comissao,
+        taxa_distancia: grupo.taxas.taxaDistancia,
+        taxa_pagamento_online: grupo.taxas.taxaPagamentoOnline,
+        taxa_saque_antecipado: grupo.taxas.taxaSaqueAntecipado,
+        taxa_servico_mensal: grupo.taxas.taxaServicoMensal,
+        promo_loja: grupo.taxas.promoLoja,
+        publicidade: grupo.taxas.publicidade,
+        ajuste_comissao: grupo.taxas.ajusteComissao,
+        deducao_ajuda: grupo.taxas.deducaoAjuda,
+        pedidos: grupo.taxas.pedidos,
+        import_id: importLog.id,
+      },
+      { onConflict: "unit_id,ref_year,ref_month" },
+    )
+    if (txErr)
+      throw new Error(`Falha ao gravar taxas da Fatura: ${txErr.message}`)
+  }
+
   let total = 0
   let aLiquidar = 0
   for (const r of grupo.repasses) {

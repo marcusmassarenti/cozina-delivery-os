@@ -87,3 +87,61 @@ export async function getKeetaRepasseResumo(
     ciclos,
   }
 }
+
+/** Taxas da Fatura (aba Histórico) por loja/mês — a quebra oficial pra DRE. */
+export type KeetaFaturaTaxas = {
+  comissao: number
+  taxaDistancia: number
+  taxaPagamentoOnline: number
+  taxaSaqueAntecipado: number
+  taxaServicoMensal: number
+  promoLoja: number
+  publicidade: number
+  ajusteComissao: number
+  deducaoAjuda: number
+  hasData: boolean
+}
+
+const ZERO_TAXAS: KeetaFaturaTaxas = {
+  comissao: 0,
+  taxaDistancia: 0,
+  taxaPagamentoOnline: 0,
+  taxaSaqueAntecipado: 0,
+  taxaServicoMensal: 0,
+  promoLoja: 0,
+  publicidade: 0,
+  ajusteComissao: 0,
+  deducaoAjuda: 0,
+  hasData: false,
+}
+
+export async function getKeetaFaturaTaxasForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<KeetaFaturaTaxas> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("keeta_fatura_taxas")
+    .select(
+      "comissao, taxa_distancia, taxa_pagamento_online, taxa_saque_antecipado, taxa_servico_mensal, promo_loja, publicidade, ajuste_comissao, deducao_ajuda",
+    )
+    .eq("unit_id", unitId)
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .maybeSingle()
+  if (!data) return ZERO_TAXAS
+  const num = (v: unknown) => Number(v) || 0
+  return {
+    comissao: num(data.comissao),
+    taxaDistancia: num(data.taxa_distancia),
+    taxaPagamentoOnline: num(data.taxa_pagamento_online),
+    taxaSaqueAntecipado: num(data.taxa_saque_antecipado),
+    taxaServicoMensal: num(data.taxa_servico_mensal),
+    promoLoja: num(data.promo_loja),
+    publicidade: num(data.publicidade),
+    ajusteComissao: num(data.ajuste_comissao),
+    deducaoAjuda: num(data.deducao_ajuda),
+    hasData: true,
+  }
+}

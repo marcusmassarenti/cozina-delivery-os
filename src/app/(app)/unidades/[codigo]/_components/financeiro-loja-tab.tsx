@@ -12,7 +12,10 @@ import {
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { KeetaRoiCard } from "@/components/keeta/keeta-roi-card"
 import { RecebiveisPlataforma } from "@/components/keeta/recebiveis-plataforma"
-import { getKeetaRepasseResumo } from "@/lib/data/keeta-repasses"
+import {
+  getKeetaRepasseResumo,
+  getKeetaFaturaTaxasForMonth,
+} from "@/lib/data/keeta-repasses"
 import { getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
@@ -90,6 +93,7 @@ export async function FinanceiroLojaTab({
     costBreakdown,
     keetaRepasse,
     keetaPed,
+    keetaFaturaTaxas,
   ] = await Promise.all([
     getPagamentoResumoForMonth(unitId, year, month),
     getDeliveryFeeForMonth(unitId, year, month),
@@ -102,6 +106,7 @@ export async function FinanceiroLojaTab({
     getUnitCostBreakdown(unitId, year, month),
     getKeetaRepasseResumo(year, month, unitId),
     getKeetaPedidoResumoForMonth(unitId, year, month),
+    getKeetaFaturaTaxasForMonth(unitId, year, month),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -180,6 +185,30 @@ export async function FinanceiroLojaTab({
       itens: lista,
     }
   }
+  // Quebra da taxa da Keeta — prioridade: Fatura (oficial) → Pedidos recentes
+  // → resto. NÃO muda o total (bruto − líquido); só detalha a abertura.
+  const keetaItens: { label: string; value: number }[] = keetaFaturaTaxas.hasData
+    ? [
+        { label: "Comissão", value: keetaFaturaTaxas.comissao },
+        { label: "Taxa de distância", value: keetaFaturaTaxas.taxaDistancia },
+        { label: "Taxa de pagamento online", value: keetaFaturaTaxas.taxaPagamentoOnline },
+        { label: "Saque antecipado", value: keetaFaturaTaxas.taxaSaqueAntecipado },
+        { label: "Taxa de serviço mensal", value: keetaFaturaTaxas.taxaServicoMensal },
+        { label: "Publicidade / marketing", value: keetaFaturaTaxas.publicidade },
+        { label: "Ajuste de comissão", value: keetaFaturaTaxas.ajusteComissao },
+        { label: "Serviço da Ajuda", value: keetaFaturaTaxas.deducaoAjuda },
+        { label: "Promoções (loja bancou)", value: keetaFaturaTaxas.promoLoja },
+      ]
+    : keetaPed.hasData
+      ? [
+          { label: "Comissão", value: keetaPed.comissaoBasica },
+          { label: "Taxa de distância", value: keetaPed.taxaDistancia },
+          { label: "Taxa de pagamento online", value: keetaPed.taxaPagamentoOnline },
+          { label: "Saque antecipado", value: keetaPed.taxaSaqueAntecipado },
+          { label: "Promoções (loja bancou)", value: keetaPed.promoLoja },
+        ]
+      : []
+
   const dreTaxas = [
     buildPlat(
       "ifood",
@@ -203,22 +232,7 @@ export async function FinanceiroLojaTab({
       ],
       0,
     ),
-    buildPlat(
-      "keeta",
-      "Keeta",
-      // Taxas da Keeta vêm do relatório "Pedidos recentes" (por pedido). Sem
-      // ele, cai no total (Cancelamentos / outros), como antes.
-      keetaPed.hasData
-        ? [
-            { label: "Comissão", value: keetaPed.comissaoBasica },
-            { label: "Taxa de distância", value: keetaPed.taxaDistancia },
-            { label: "Taxa de pagamento online", value: keetaPed.taxaPagamentoOnline },
-            { label: "Saque antecipado", value: keetaPed.taxaSaqueAntecipado },
-            { label: "Promoções (loja bancou)", value: keetaPed.promoLoja },
-          ]
-        : [],
-      0,
-    ),
+    buildPlat("keeta", "Keeta", keetaItens, 0),
   ].filter((p): p is DrePlat => p !== null)
 
   const descontos = [
