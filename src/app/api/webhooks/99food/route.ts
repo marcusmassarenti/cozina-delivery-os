@@ -50,19 +50,20 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Proteção opcional por token (liga setando NINEFOOD_WEBHOOK_SECRET).
+  // Fail-closed: exige NINEFOOD_WEBHOOK_SECRET. Setar na Vercel E no ?token=
+  // (ou header x-webhook-token) da URL do webhook no portal da 99.
   const secret = process.env.NINEFOOD_WEBHOOK_SECRET
-  if (secret) {
-    const url = new URL(req.url)
-    const got =
-      url.searchParams.get("token") ?? req.headers.get("x-webhook-token")
-    if (!secretOk(secret, got)) {
-      return new Response("unauthorized", { status: 401 })
-    }
-  } else {
-    console.warn(
-      "99food webhook: sem NINEFOOD_WEBHOOK_SECRET — endpoint aberto (defina o secret pra travar)",
+  if (!secret) {
+    console.error(
+      "99food webhook: NINEFOOD_WEBHOOK_SECRET ausente — recusando (fail-closed)",
     )
+    return new Response("webhook not configured", { status: 503 })
+  }
+  const url = new URL(req.url)
+  const got =
+    url.searchParams.get("token") ?? req.headers.get("x-webhook-token")
+  if (!secretOk(secret, got)) {
+    return new Response("unauthorized", { status: 401 })
   }
 
   // Limite de tamanho do corpo.
