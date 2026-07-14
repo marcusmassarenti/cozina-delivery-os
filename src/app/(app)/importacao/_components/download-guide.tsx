@@ -53,7 +53,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     steps:
       'Seleciona a competência (mês) → botão "Exportar" → XLSX. É SEMPRE loja por loja (não existe no portal de redes). Repete por loja.',
     feeds:
-      "Faturamento bruto/líquido, quebra de taxas, cancelamentos — a base FINANCEIRA oficial (bate com a tela Financeiro do iFood).",
+      "Quanto entrou de verdade: bruto, líquido, todas as taxas descontadas e cancelamentos. É a base do seu resultado (bate com a tela Financeiro do iFood).",
     links: [
       {
         label: "Financeiro (loja por loja)",
@@ -72,7 +72,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     steps:
       'Escolhe o período → "Exportar" → XLSX. SEMPRE loja por loja (não existe no portal de redes). Repete por loja.',
     feeds:
-      "Forma de pagamento, Vale-Refeição por bandeira, operação. NÃO é a base de faturamento — pra faturamento use o Financeiro.",
+      "Como o cliente pagou cada pedido e quanto veio de Vale-Refeição, por bandeira. Serve pra conferir o caixa — não é o faturamento (esse vem do Financeiro).",
     links: [
       { label: "Pedidos (loja por loja)", href: "https://portal.ifood.com.br/orders" },
     ],
@@ -87,7 +87,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal iFood", "Relatórios da loja", "Cardápio"],
     steps:
       'SEMPRE individual da loja, uma por vez → período → "Exportar" → XLSX. ⚠️ Pelo portal de REDES vem só o consolidado (funil por loja, mas os produtos só no TOTAL da marca — sem item por loja).',
-    feeds: "Funil de conversão, top itens vendidos e complementos — por loja.",
+    feeds: "O caminho do cliente (de quem abre o cardápio a quem pede) e quais pratos mais saem, com os complementos — por loja.",
     links: [
       {
         label: "Cardápio por loja",
@@ -105,7 +105,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal iFood", "Relatórios", "Avaliações"],
     steps:
       'Loja única → portal do lojista; rede/franquia → portal de redes. Período → "Exportar" → XLSX.',
-    feeds: "Nota média, top elogios/reclamações, comentários.",
+    feeds: "Sua nota, o que os clientes mais elogiam e mais reclamam, e os comentários.",
     links: [
       {
         label: "Loja única",
@@ -124,7 +124,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal iFood", "Relatórios", "Operação", "Qualidade da operação"],
     steps:
       'Em Relatórios → seção "Operação" → "Qualidade da operação" → período → "Exportar". No modo REDE vem 1 arquivo com todas as lojas.',
-    feeds: "Tempo online, chamados, cancelamentos, tempo de preparo, atrasos e nível Super.",
+    feeds: "Os indicadores que o iFood usa pra te ranquear: tempo online, atrasos, cancelamentos, tempo de preparo e nível Super.",
     links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
   },
   {
@@ -137,7 +137,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal iFood", "Relatórios", "Operação", "Promoções e marketing"],
     steps:
       'Relatórios → "Promoções e marketing" → período → "Exportar". No modo rede traz todas as lojas de uma vez.',
-    feeds: "Investimento e retorno (ROI) por campanha, subsídio iFood × loja.",
+    feeds: "Quanto você gastou em cada campanha e o que ela trouxe de volta — e quanto o iFood bancou vs. a sua loja.",
     links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
   },
   {
@@ -150,7 +150,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal iFood", "Relatórios", "Operação", "Super restaurante"],
     steps:
       'Relatórios → "Super restaurante" → "Exportar". Traz o nível atual de cada loja.',
-    feeds: "Nível Super, plano de ação do iFood e tags de sentimento das avaliações.",
+    feeds: "Seu nível no programa Super, o que o iFood recomenda melhorar e o clima geral das avaliações.",
     links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
   },
   {
@@ -163,7 +163,7 @@ const IFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal iFood", "Relatórios", "Operação", "Negociações e chamados"],
     steps:
       'Relatórios → "Negociações e chamados" → período → "Exportar".',
-    feeds: "Cancelamentos evitados, motivos de reclamação, reembolsos e cupons.",
+    feeds: "Quanto você recuperou negociando (em vez de reembolsar), os motivos que mais geram problema, reembolsos e cupons.",
     links: [{ label: "Relatórios iFood", href: "https://portal.ifood.com.br/reports-for-merchant" }],
   },
 ]
@@ -182,7 +182,7 @@ const NINEFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal 99 Food", "Relatórios"],
     steps:
       'Período mensal → escolhe a loja (a 99 não tem "todas") → "Selecionar todos os dados" → Enviar. Na aba "Baixar relatório", baixa. Pode subir o .zip.',
-    feeds: "Faturamento, comissão, avaliação, taxa de aceitação, preparo.",
+    feeds: "O financeiro e a operação da 99: faturamento, comissão, sua nota, taxa de aceitação e tempo de preparo.",
     links: NINE_LINK,
   },
   {
@@ -195,7 +195,7 @@ const NINEFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal 99 Food", "Relatórios"],
     steps:
       'Mesmo fluxo, tipo "Dados do item" → loja + período → todos os dados → Enviar → baixar.',
-    feeds: "Top itens, funil de carrinho, preço médio por loja.",
+    feeds: "Quais itens mais vendem na 99, o preço médio e onde o cliente larga o carrinho.",
     links: NINE_LINK,
   },
   {
@@ -208,7 +208,7 @@ const NINEFOOD_ENTRIES: GuideEntry[] = [
     path: ["Portal 99 Food", "Relatórios"],
     steps:
       'Mesmo fluxo, tipo "Dados do pedido" → loja + período → todos os dados → Enviar → baixar.',
-    feeds: "Notas, top tags, comentários, % clientes novos.",
+    feeds: "As avaliações (nota e comentário), os assuntos que mais aparecem e quantos clientes são novos.",
     links: NINE_LINK,
   },
 ]
@@ -228,7 +228,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     scope: "Todos ou por loja",
     path: ["Keeta", "Relatórios", "Baixar dados"],
     steps: KEETA_FLOW,
-    feeds: "Faturamento, pedidos, cancelados, funil, preparo.",
+    feeds: "O dia a dia da loja na Keeta: faturamento, pedidos, cancelados, o caminho até o pedido e o tempo de preparo.",
     links: KEETA_LINK,
   },
   {
@@ -255,7 +255,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     steps:
       'Fluxo diferente dos mensais — baixe pela tela de Pedidos da Keeta (outra tela). O passo a passo está no vídeo "Baixar Pedidos recentes" acima.',
     feeds:
-      "Outro recorte do MESMO pedido: cada taxa aberta + quanto da promoção a Keeta bancou (subsídio Keeta×loja). É a base do ROI e do repasse real.",
+      "Outro recorte do MESMO pedido: cada taxa aberta + quanto da promoção a Keeta bancou vs. a sua loja. É o que mostra o retorno real das promoções e o repasse certo.",
     links: KEETA_LINK,
   },
   {
@@ -267,7 +267,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     scope: "Todos ou por loja",
     path: ["Keeta", "Relatórios", "Baixar dados"],
     steps: KEETA_FLOW,
-    feeds: "Top produtos, preço médio, alcance por item.",
+    feeds: "Quais itens mais vendem na Keeta, com preço médio e quantas pessoas cada um alcançou.",
     links: KEETA_LINK,
   },
   {
@@ -279,7 +279,7 @@ const KEETA_ENTRIES: GuideEntry[] = [
     scope: "Todos ou por loja",
     path: ["Keeta", "Relatórios", "Baixar dados"],
     steps: KEETA_FLOW,
-    feeds: "ROI das campanhas, subsídio Keeta×loja, vendas em promoção.",
+    feeds: "Quanto rendeu cada campanha, quanto a Keeta bancou vs. a sua loja, e as vendas em promoção.",
     links: KEETA_LINK,
   },
 ]
