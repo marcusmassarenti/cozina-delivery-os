@@ -50,20 +50,22 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Fail-closed: exige NINEFOOD_WEBHOOK_SECRET. Setar na Vercel E no ?token=
-  // (ou header x-webhook-token) da URL do webhook no portal da 99.
+  // Proteção PROGRESSIVA (webhook de ALTO volume, ~33k eventos/mês): enquanto
+  // NINEFOOD_WEBHOOK_SECRET não estiver setado, aceita (pra não derrubar a
+  // conexão viva da 99). Assim que o secret for setado na Vercel E no ?token=
+  // da URL no portal da 99, passa a EXIGIR — sem downtime. Ver docs/segurança.
   const secret = process.env.NINEFOOD_WEBHOOK_SECRET
-  if (!secret) {
-    console.error(
-      "99food webhook: NINEFOOD_WEBHOOK_SECRET ausente — recusando (fail-closed)",
+  if (secret) {
+    const url = new URL(req.url)
+    const got =
+      url.searchParams.get("token") ?? req.headers.get("x-webhook-token")
+    if (!secretOk(secret, got)) {
+      return new Response("unauthorized", { status: 401 })
+    }
+  } else {
+    console.warn(
+      "99food webhook: sem NINEFOOD_WEBHOOK_SECRET — endpoint aberto. Defina o secret (Vercel + ?token= na URL da 99) pra travar.",
     )
-    return new Response("webhook not configured", { status: 503 })
-  }
-  const url = new URL(req.url)
-  const got =
-    url.searchParams.get("token") ?? req.headers.get("x-webhook-token")
-  if (!secretOk(secret, got)) {
-    return new Response("unauthorized", { status: 401 })
   }
 
   // Limite de tamanho do corpo.
