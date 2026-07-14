@@ -37,7 +37,11 @@ yarn-error.log*
 .vercel
 
 # claude code local config (preview mcp, etc — específico de máquina)
-.claude/
+.claude/*
+# ...mas versiona os agentes (ex.: security-recon/exploit) pro handoff.
+# settings.json continua local (permissions/hooks são por máquina).
+!.claude/agents/
+!.claude/agents/*.md
 
 # typescript
 *.tsbuildinfo
