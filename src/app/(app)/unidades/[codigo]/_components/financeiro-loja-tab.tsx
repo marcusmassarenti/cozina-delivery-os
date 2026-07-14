@@ -11,9 +11,12 @@ import {
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { KeetaRoiCard } from "@/components/keeta/keeta-roi-card"
+import { RecebiveisPlataforma } from "@/components/keeta/recebiveis-plataforma"
+import { getKeetaRepasseResumo } from "@/lib/data/keeta-repasses"
 import { getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
+import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
@@ -85,6 +88,8 @@ export async function FinanceiroLojaTab({
     antecipMap,
     keetaPromo,
     costBreakdown,
+    keetaRepasse,
+    keetaPed,
   ] = await Promise.all([
     getPagamentoResumoForMonth(unitId, year, month),
     getDeliveryFeeForMonth(unitId, year, month),
@@ -95,6 +100,8 @@ export async function FinanceiroLojaTab({
     getAntecipacaoFeeByUnits([unitId], year, month),
     getKeetaPromocaoResumo([unitId], year, month),
     getUnitCostBreakdown(unitId, year, month),
+    getKeetaRepasseResumo(year, month, unitId),
+    getKeetaPedidoResumoForMonth(unitId, year, month),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -196,7 +203,22 @@ export async function FinanceiroLojaTab({
       ],
       0,
     ),
-    buildPlat("keeta", "Keeta", [], 0),
+    buildPlat(
+      "keeta",
+      "Keeta",
+      // Taxas da Keeta vêm do relatório "Pedidos recentes" (por pedido). Sem
+      // ele, cai no total (Cancelamentos / outros), como antes.
+      keetaPed.hasData
+        ? [
+            { label: "Comissão", value: keetaPed.comissaoBasica },
+            { label: "Taxa de distância", value: keetaPed.taxaDistancia },
+            { label: "Taxa de pagamento online", value: keetaPed.taxaPagamentoOnline },
+            { label: "Saque antecipado", value: keetaPed.taxaSaqueAntecipado },
+            { label: "Promoções (loja bancou)", value: keetaPed.promoLoja },
+          ]
+        : [],
+      0,
+    ),
   ].filter((p): p is DrePlat => p !== null)
 
   const descontos = [
@@ -253,6 +275,11 @@ export async function FinanceiroLojaTab({
           </p>
         </div>
       </div>
+
+      {/* Recebíveis — quando o dinheiro cai (repasse da Fatura da Keeta) */}
+      {keetaRepasse.ciclos.length > 0 && (
+        <RecebiveisPlataforma keeta={keetaRepasse} />
+      )}
 
       {/* Custo de entrega (logístico) — por plataforma */}
       {deliveryFee.total > 0 && (

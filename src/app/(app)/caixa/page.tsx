@@ -26,12 +26,9 @@ import {
   type TitularTotal,
 } from "@/lib/data/caixa"
 
-import { getKeetaRepasseResumo } from "@/lib/data/keeta-repasses"
-
 import { FinIcon } from "./_components/fin-icon"
 import { BankBadge } from "./_components/bank-badge"
 import { LojasComparativo } from "./_components/lojas-comparativo"
-import { RecebiveisPlataforma } from "./_components/recebiveis-plataforma"
 
 function fmtDate(d: string | null) {
   if (!d) return "—"
@@ -50,11 +47,10 @@ export default async function VisaoGeralPage({
   const sp = await searchParams
   const loja = sp.loja
   const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
-  const [dash, categories, top, keetaRepasse] = await Promise.all([
+  const [dash, categories, top] = await Promise.all([
     getCaixaDashboard(holdingId, year, month, loja),
     getCategoriesFlat(holdingId),
     getTopTitulares(holdingId, year, month, loja),
-    getKeetaRepasseResumo(year, month, loja),
   ])
   // No Consolidado, mostra o comparativo por loja.
   const consolidado = !loja || loja === "todas"
@@ -193,9 +189,6 @@ export default async function VisaoGeralPage({
           catById={catById}
         />
       </div>
-
-      {/* Recebíveis das plataformas (repasse — quando o dinheiro cai) */}
-      <RecebiveisPlataforma keeta={keetaRepasse} />
 
       {/* Maiores gastos / receitas */}
       <div className="grid gap-3 lg:grid-cols-2">

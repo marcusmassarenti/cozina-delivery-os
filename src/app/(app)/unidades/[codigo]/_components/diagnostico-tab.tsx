@@ -1253,10 +1253,10 @@ function Health({
       className={`diag-hover relative rounded-xl border p-3 hover:z-10 ${T.card}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
           <InfoTip texto={explicacao} />
-        </p>
+        </div>
         <Icon className={`size-3.5 shrink-0 ${T.ic}`} />
       </div>
       <p className={`mt-1 text-xl font-bold tabular-nums ${T.val}`}>
