@@ -334,7 +334,6 @@ const PLATFORMS: {
         title: "Baixar os relatórios (Restaurante · Pedido · Item · Promoção)",
         src: `${TUT}keeta-baixar-dados.mp4`,
       },
-      { title: "Baixar Pedidos", src: `${TUT}keeta-pedidos.mp4` },
       { title: "Pedidos recentes", src: `${TUT}keeta-pedidos-recentes.mp4` },
     ],
   },
