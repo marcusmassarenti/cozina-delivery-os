@@ -264,6 +264,25 @@ export async function asaasGetInvoice(id: string): Promise<AsaasInvoice> {
 }
 
 /**
+ * Lê a config de emissão automática de uma assinatura. É a FONTE DA VERDADE
+ * sobre "essa assinatura emite nota sozinha?" — a lista de notas agendadas é
+ * só um reflexo dela, e cancelar uma nota não apaga a config.
+ * Devolve null se a assinatura não tem config (ou se o Asaas devolveu erro).
+ */
+export async function asaasGetSubscriptionInvoiceSettings(
+  subscriptionId: string,
+): Promise<Record<string, unknown> | null> {
+  if (asaasIsMock()) return null
+  try {
+    return await call<Record<string, unknown>>(
+      `/subscriptions/${subscriptionId}/invoiceSettings`,
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
  * Antecipa a emissão de uma nota AGENDADA (status SCHEDULED) — manda o Asaas
  * enviar pra prefeitura agora em vez de esperar o processamento em lote.
  */

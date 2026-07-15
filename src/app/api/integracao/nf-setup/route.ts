@@ -17,6 +17,7 @@
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
+  asaasGetSubscriptionInvoiceSettings,
   asaasIsMock,
   asaasListMunicipalServices,
   type AsaasMunicipalService,
@@ -65,14 +66,32 @@ export async function GET() {
     (s) => semZero((s.description ?? "").split("|")[0]!.trim()) === codigo,
   )
 
+  // Pergunta pro Asaas, assinatura por assinatura, se a emissão automática
+  // está ligada. Isto é a fonte da verdade — a lista de notas agendadas não é.
+  const porAssinatura = await Promise.all(
+    (assinaturas ?? []).map(async (h) => {
+      const cfg = await asaasGetSubscriptionInvoiceSettings(
+        h.asaas_subscription_id as string,
+      )
+      return {
+        empresa: h.name as string,
+        assinatura: h.asaas_subscription_id as string,
+        emiteAutomatico: cfg !== null,
+        config: cfg,
+      }
+    }),
+  )
+
   return Response.json({
+    // A pergunta que importa: cada assinatura emite nota sozinha?
+    emissaoAutomatica: porAssinatura,
+    semEmissaoAutomatica: porAssinatura.filter((a) => !a.emiteAutomatico).length,
     enviaremos,
     // Confere se o código que enviamos existe no catálogo da prefeitura:
     codigoConfere: casa.length > 0,
     codigoNoCatalogo: casa,
     catalogoDaPrefeitura: catalogo,
     erroAoListarCatalogo: erro,
-    assinaturasQueSeriamConfiguradas: assinaturas?.length ?? 0,
     comoAplicar: "Botão 'Aplicar nas assinaturas' em /plataforma",
   })
 }
