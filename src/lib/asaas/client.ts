@@ -217,6 +217,50 @@ export async function asaasListInvoices(
 }
 
 /**
+ * Emite uma nota AVULSA (sem cobrança vinculada), direto pro cliente.
+ *
+ * Serve pra testar se a prefeitura autoriza a nota com os nossos dados
+ * fiscais, sem precisar de pagamento nenhum. A nota é REAL: vai pra
+ * prefeitura e precisa ser cancelada depois se for só teste.
+ */
+export async function asaasCreateInvoice(input: {
+  customer: string
+  serviceDescription: string
+  observations: string
+  value: number
+  deductions: number
+  effectiveDate: string // YYYY-MM-DD
+  municipalServiceCode?: string
+  municipalServiceName: string
+  externalReference?: string
+  taxes: {
+    retainIss: boolean
+    iss: number
+    cofins: number
+    csll: number
+    inss: number
+    ir: number
+    pis: number
+  }
+}): Promise<AsaasInvoice> {
+  if (asaasIsMock()) return { id: mockId("inv"), status: "SCHEDULED" }
+  return call<AsaasInvoice>("/invoices", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+/** Lê uma nota pelo id — pra acompanhar o status até autorizar (ou falhar). */
+export async function asaasGetInvoice(id: string): Promise<AsaasInvoice> {
+  return call<AsaasInvoice>(`/invoices/${id}`)
+}
+
+/** Cancela uma nota já emitida (usado pra limpar a nota de teste). */
+export async function asaasCancelInvoice(id: string): Promise<AsaasInvoice> {
+  return call<AsaasInvoice>(`/invoices/${id}/cancel`, { method: "POST" })
+}
+
+/**
  * Serviço municipal cadastrado no painel do Asaas (Configurações fiscais →
  * Serviços cadastrados). É de onde sai o código que vai na nota.
  */
