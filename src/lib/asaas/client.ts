@@ -216,6 +216,70 @@ export async function asaasListInvoices(
   }
 }
 
+/**
+ * Serviço municipal cadastrado no painel do Asaas (Configurações fiscais →
+ * Serviços cadastrados). É de onde sai o código que vai na nota.
+ */
+export type AsaasMunicipalService = {
+  id?: string | null
+  description?: string | null
+  issTax?: number | null
+}
+
+/** Lista os serviços municipais da conta — usado pra conferir o código certo. */
+export async function asaasListMunicipalServices(): Promise<
+  AsaasMunicipalService[]
+> {
+  if (asaasIsMock()) return []
+  const list = await call<{ data?: AsaasMunicipalService[] }>(
+    "/invoices/municipalServices?limit=50",
+  )
+  return list.data ?? []
+}
+
+/**
+ * Liga a emissão AUTOMÁTICA de nota fiscal numa assinatura.
+ *
+ * Sem isso, ter o módulo de NF configurado na conta só permite emitir na mão,
+ * uma por uma. Esta config é POR ASSINATURA: manda o Asaas emitir sozinho a
+ * cada cobrança, no período definido em `effectiveDatePeriod`.
+ *
+ * `taxes` é obrigatório na API — os valores vêm de FISCAL (asaas/fiscal.ts),
+ * espelhando o serviço padrão cadastrado no painel.
+ */
+export async function asaasSetSubscriptionInvoiceSettings(
+  subscriptionId: string,
+  input: {
+    municipalServiceId?: string
+    municipalServiceCode?: string
+    municipalServiceName?: string
+    observations?: string
+    deductions?: number
+    effectiveDatePeriod?:
+      | "ON_PAYMENT_CONFIRMATION"
+      | "ON_PAYMENT_DUE_DATE"
+      | "BEFORE_PAYMENT_DUE_DATE"
+      | "ON_DUE_DATE_MONTH"
+      | "ON_NEXT_MONTH"
+    receivedOnly?: boolean
+    taxes: {
+      retainIss: boolean
+      iss: number
+      cofins: number
+      csll: number
+      inss: number
+      ir: number
+      pis: number
+    }
+  },
+): Promise<void> {
+  if (asaasIsMock()) return
+  await call(`/subscriptions/${subscriptionId}/invoiceSettings`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
 /** Cancela a assinatura recorrente no Asaas (para de cobrar). */
 export async function asaasCancelSubscription(
   subscriptionId: string,

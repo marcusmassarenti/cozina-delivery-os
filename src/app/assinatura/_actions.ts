@@ -22,7 +22,9 @@ import {
   asaasCreateCustomer,
   asaasCreateSubscription,
   asaasFirstInvoiceUrl,
+  asaasSetSubscriptionInvoiceSettings,
 } from "@/lib/asaas/client"
+import { fiscalInvoiceSettings } from "@/lib/asaas/fiscal"
 
 export type AssinarState = {
   ok: boolean
@@ -194,6 +196,24 @@ export async function assinar(
         externalReference: holdingId,
       })
       subscriptionId = sub.id
+
+      // Liga a emissão automática de NF nessa assinatura. É uma config POR
+      // assinatura — sem ela, o Asaas só emite nota na mão, uma por uma.
+      // Falha "de leve" de propósito: se der erro, o cliente NÃO pode ficar
+      // sem o link de pagamento por causa da nota. A gente reconfigura depois
+      // pelo /api/admin/nf-setup.
+      try {
+        await asaasSetSubscriptionInvoiceSettings(
+          subscriptionId,
+          fiscalInvoiceSettings(),
+        )
+      } catch (e) {
+        console.error(
+          `[nf] falhou ao configurar emissão automática na assinatura ${subscriptionId}:`,
+          e,
+        )
+      }
+
       await admin
         .from("holdings")
         .update({
