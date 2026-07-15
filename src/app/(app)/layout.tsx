@@ -100,7 +100,10 @@ export default async function AppLayout({
           initialOnboarded={userContext.onboarded}
           brandName={userContext.companyName || userContext.brandName}
         />
-        <WhatsNewModal onboarded={userContext.onboarded} />
+        <WhatsNewModal
+          onboarded={userContext.onboarded}
+          lastSeenVersion={userContext.lastSeenVersion}
+        />
       </SidebarProvider>
     </TooltipProvider>
   )

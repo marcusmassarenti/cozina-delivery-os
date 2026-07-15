@@ -31,6 +31,10 @@ export type UserContext = {
   logoUrl: string | null
   /** Já viu o tour de boas-vindas? (controla o onboarding do 1º login) */
   onboarded: boolean
+  /** Última versão do changelog que o usuário viu (modal de novidades).
+   *  Fica no BANCO (não no localStorage) pra não reaparecer em outro
+   *  navegador/device nem quando o browser limpa dados do site. */
+  lastSeenVersion: string | null
 }
 
 const FALLBACK: UserContext = {
@@ -41,6 +45,7 @@ const FALLBACK: UserContext = {
   companyName: "",
   logoUrl: null,
   onboarded: true,
+  lastSeenVersion: null,
 }
 
 // Cacheado por request (React.cache): layout + páginas reusam a mesma resposta.
@@ -128,10 +133,11 @@ async function loadCurrentUserContext(): Promise<UserContext> {
   let onboarded = true
   const { data: ob } = await admin
     .from("profiles")
-    .select("onboarded")
+    .select("onboarded, last_seen_version")
     .eq("user_id", userId)
     .maybeSingle()
   if (ob && ob.onboarded === false) onboarded = false
+  const lastSeenVersion = (ob?.last_seen_version as string | null) ?? null
 
   return {
     userId,
@@ -141,6 +147,7 @@ async function loadCurrentUserContext(): Promise<UserContext> {
     companyName,
     logoUrl,
     onboarded,
+    lastSeenVersion,
   }
 }
 

@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { Bug, Sparkles, Wrench, X, type LucideIcon } from "lucide-react"
 
 import { CHANGELOG, type ChangeKind } from "@/lib/changelog"
+import { markVersionSeen } from "@/components/whats-new-actions"
 
-const KEY = "cozina:lastSeenVersion"
 const KIND_ICON: Record<ChangeKind, LucideIcon> = {
   novo: Sparkles,
   melhoria: Wrench,
@@ -20,32 +20,34 @@ const KIND_CLS: Record<ChangeKind, string> = {
 
 /**
  * Aviso de "Novidades" ao entrar: mostra a última versão lançada quando o
- * usuário ainda não a viu (controle por localStorage). Só aparece pra quem já
- * passou do onboarding — o usuário novo vê o tour de boas-vindas primeiro.
+ * usuário ainda não a viu.
+ *
+ * O "já vi" é do USUÁRIO, no banco (profiles.last_seen_version → chega aqui
+ * como `lastSeenVersion`). Antes era localStorage, que é por navegador: o
+ * aviso voltava em outro device/navegador e sempre que o browser limpava os
+ * dados do site. Como o valor já vem do servidor no render, não precisa de
+ * effect nem de storage local.
+ *
+ * Só aparece pra quem já passou do onboarding — usuário novo vê o tour antes.
  */
-export function WhatsNewModal({ onboarded }: { onboarded: boolean }) {
-  const [open, setOpen] = useState(false)
+export function WhatsNewModal({
+  onboarded,
+  lastSeenVersion,
+}: {
+  onboarded: boolean
+  lastSeenVersion: string | null
+}) {
+  const [dismissed, setDismissed] = useState(false)
   const latest = CHANGELOG[0]
 
-  useEffect(() => {
-    if (!latest || !onboarded) return
-    try {
-      if (localStorage.getItem(KEY) !== latest.version) setOpen(true)
-    } catch {
-      /* localStorage indisponível — não mostra */
-    }
-  }, [latest, onboarded])
+  if (!latest || !onboarded) return null
+  if (dismissed || lastSeenVersion === latest.version) return null
 
   function dismiss() {
-    try {
-      if (latest) localStorage.setItem(KEY, latest.version)
-    } catch {
-      /* ignore */
-    }
-    setOpen(false)
+    setDismissed(true) // some na hora
+    void markVersionSeen(latest!.version) // e persiste no usuário
   }
 
-  if (!open || !latest) return null
   const items = latest.areas.flatMap((a) => a.items).slice(0, 5)
 
   return (
