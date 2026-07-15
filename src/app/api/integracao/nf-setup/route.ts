@@ -18,6 +18,7 @@ import {
   asaasIsMock,
   asaasListMunicipalServices,
   asaasSetSubscriptionInvoiceSettings,
+  type AsaasMunicipalService,
 } from "@/lib/asaas/client"
 import { fiscalInvoiceSettings } from "@/lib/asaas/fiscal"
 
@@ -50,11 +51,20 @@ export async function GET() {
     .select("id, name, asaas_subscription_id")
     .not("asaas_subscription_id", "is", null)
 
+  // Atenção: isto é o CATÁLOGO da prefeitura (todos os códigos de serviço que
+  // o município aceita), não os serviços que cadastramos no painel. Serve pra
+  // conferir se o código que enviamos existe e qual ISS a prefeitura associa.
+  const catalogo = (servicosNoAsaas ?? []) as AsaasMunicipalService[]
+  const codigo = enviaremos.municipalServiceCode
+  const casa = catalogo.filter((s) => (s.description ?? "").startsWith(codigo))
+
   return Response.json({
-    // Confira se municipalServiceCode bate com algum código daqui:
-    servicosCadastradosNoAsaas: servicosNoAsaas,
-    erroAoListarServicos: erro,
     enviaremos,
+    // Confere se o código que enviamos existe no catálogo da prefeitura:
+    codigoConfere: casa.length > 0,
+    codigoNoCatalogo: casa,
+    catalogoDaPrefeitura: catalogo,
+    erroAoListarCatalogo: erro,
     assinaturasQueSeriamConfiguradas: assinaturas?.length ?? 0,
     comoAplicar: "POST nesta mesma URL",
   })
