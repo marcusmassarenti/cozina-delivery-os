@@ -23,9 +23,12 @@ import "server-only"
  */
 export const FISCAL_SERVICE_CODE = process.env.ASAAS_NF_SERVICE_CODE ?? "2660"
 
-/** Descrição que sai na nota. Igual à cadastrada no painel. */
+/**
+ * Descrição que sai na nota. Igual à cadastrada no painel — sem dizer o ciclo
+ * de propósito, pra servir tanto pro plano mensal quanto pro anual.
+ */
 export const FISCAL_SERVICE_NAME =
-  process.env.ASAAS_NF_SERVICE_NAME ?? "Delivery OS Assinatura Mensal"
+  process.env.ASAAS_NF_SERVICE_NAME ?? "DeliveryOS Assinatura"
 
 /**
  * Impostos. A conta é Simples Nacional com regime especial "Isenta", então os
