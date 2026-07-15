@@ -181,6 +181,41 @@ export async function asaasFirstInvoiceUrl(
   return null
 }
 
+/** Nota fiscal (NFS-e) emitida pelo Asaas. `pdfUrl`/`xmlUrl` só vêm quando a
+ *  nota já foi autorizada pela prefeitura (status AUTHORIZED). */
+export type AsaasInvoice = {
+  id: string
+  /** SCHEDULED | SYNCHRONIZED | AUTHORIZED | CANCELED | ERROR | ... */
+  status?: string | null
+  number?: string | null
+  value?: number | null
+  effectiveDate?: string | null // YYYY-MM-DD
+  pdfUrl?: string | null
+  xmlUrl?: string | null
+  serviceDescription?: string | null
+}
+
+/**
+ * Notas fiscais do cliente no Asaas (mais recentes primeiro).
+ * Falha "de leve": se o módulo de NF não estiver configurado ou a API der erro,
+ * devolve lista vazia — a tela só não mostra notas, nunca quebra.
+ */
+export async function asaasListInvoices(
+  customerId: string,
+): Promise<AsaasInvoice[]> {
+  if (asaasIsMock()) return []
+  try {
+    const list = await call<{ data?: AsaasInvoice[] }>(
+      `/invoices?customer=${encodeURIComponent(customerId)}&limit=24`,
+    )
+    return (list.data ?? []).sort((a, b) =>
+      (b.effectiveDate ?? "").localeCompare(a.effectiveDate ?? ""),
+    )
+  } catch {
+    return []
+  }
+}
+
 /** Cancela a assinatura recorrente no Asaas (para de cobrar). */
 export async function asaasCancelSubscription(
   subscriptionId: string,

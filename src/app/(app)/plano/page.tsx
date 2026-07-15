@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import {
   Clock,
   CreditCard,
+  Download,
   Mail,
   MessageCircle,
   Store,
@@ -10,6 +11,7 @@ import {
 
 import { createClient } from "@/lib/supabase/server"
 import { getPlanoAtual } from "@/lib/data/assinatura"
+import { asaasListInvoices } from "@/lib/asaas/client"
 import { fmtBRL } from "@/lib/format"
 import { CancelButton } from "@/app/assinatura/_components/cancel-button"
 
@@ -17,6 +19,17 @@ export const dynamic = "force-dynamic"
 
 const WHATSAPP = "https://wa.me/5511995125139"
 const EMAIL = "mailto:suporte@deliveryos.food"
+
+/** Status da NF no Asaas → texto pro lojista. Só AUTHORIZED tem PDF/XML. */
+const NF_STATUS: Record<string, string> = {
+  SCHEDULED: "agendada",
+  SYNCHRONIZED: "processando",
+  AUTHORIZED: "autorizada",
+  PROCESSING_CANCELLATION: "cancelando",
+  CANCELED: "cancelada",
+  CANCELLATION_DENIED: "cancelamento negado",
+  ERROR: "erro na emissão",
+}
 
 function fmtDataBR(iso: string | null): string {
   if (!iso) return "—"
@@ -34,6 +47,12 @@ export default async function PlanoPage() {
 
   const plano = await getPlanoAtual()
   if (!plano || plano.status !== "paid") redirect("/assinatura")
+
+  // Notas fiscais emitidas pelo Asaas. Falha "de leve" (lista vazia) se o
+  // módulo de NF não estiver configurado — a tela nunca quebra por isso.
+  const notas = plano.customerId
+    ? await asaasListInvoices(plano.customerId)
+    : []
 
   const valorBRL = fmtBRL(plano.mensalidade)
 
@@ -146,6 +165,85 @@ export default async function PlanoPage() {
                       </td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums">
                         {fmtBRL(p.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Notas fiscais (emitidas pelo Asaas) */}
+      <div>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Notas fiscais
+        </h2>
+        <div className="mt-2 overflow-hidden rounded-xl border bg-card">
+          {notas.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+              Nenhuma nota fiscal por aqui ainda. Elas aparecem sozinhas assim
+              que forem emitidas, logo após a confirmação do pagamento.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Data</th>
+                    <th className="px-4 py-2.5 font-semibold">Número</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">
+                      Valor
+                    </th>
+                    <th className="px-4 py-2.5 text-right font-semibold">
+                      Baixar
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notas.map((n) => (
+                    <tr
+                      key={n.id}
+                      className="border-b last:border-0 hover:bg-muted/30"
+                    >
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {fmtDataBR(n.effectiveDate ?? null)}
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">
+                        {n.number ?? "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums">
+                        {n.value != null ? fmtBRL(n.value) : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {n.pdfUrl ? (
+                          <span className="flex items-center justify-end gap-2">
+                            <a
+                              href={n.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                            >
+                              <Download className="size-3" />
+                              PDF
+                            </a>
+                            {n.xmlUrl && (
+                              <a
+                                href={n.xmlUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+                              >
+                                XML
+                              </a>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {NF_STATUS[n.status ?? ""] ?? "processando"}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
