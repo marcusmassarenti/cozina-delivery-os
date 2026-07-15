@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { Download, FileText, RefreshCw } from "lucide-react"
+import { Download, FileText, RefreshCw, Send } from "lucide-react"
 
 import {
   cancelarNfTeste,
   configurarNfAutomatica,
+  emitirAgoraNfTeste,
   emitirNfTeste,
   statusNfTeste,
   type NfTesteState,
@@ -13,7 +14,7 @@ import {
 
 /** Status da NF no Asaas → texto pro humano. */
 const STATUS: Record<string, string> = {
-  SCHEDULED: "agendada — aguardando a prefeitura",
+  SCHEDULED: "agendada — o Asaas ainda não enviou pra prefeitura",
   SYNCHRONIZED: "processando na prefeitura",
   AUTHORIZED: "AUTORIZADA pela prefeitura ✓",
   PROCESSING_CANCELLATION: "cancelamento em andamento",
@@ -59,6 +60,14 @@ export function NfSetupButton() {
     if (!teste?.invoiceId) return
     setPending("status")
     const novo = await statusNfTeste(teste.invoiceId)
+    setTeste((old) => ({ ...old, ...novo, tomador: old?.tomador }))
+    setPending(null)
+  }
+
+  async function emitirAgora() {
+    if (!teste?.invoiceId) return
+    setPending("agora")
+    const novo = await emitirAgoraNfTeste(teste.invoiceId)
     setTeste((old) => ({ ...old, ...novo, tomador: old?.tomador }))
     setPending(null)
   }
@@ -139,6 +148,19 @@ export function NfSetupButton() {
 
             {teste.invoiceId && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                {teste.status === "SCHEDULED" && (
+                  <button
+                    type="button"
+                    onClick={emitirAgora}
+                    disabled={pending !== null}
+                    className="inline-flex items-center gap-1 rounded-md border border-current/30 px-2 py-1 font-medium transition-opacity hover:opacity-70 disabled:opacity-50"
+                  >
+                    <Send className="size-3" />
+                    {pending === "agora"
+                      ? "Enviando..."
+                      : "Enviar pra prefeitura agora"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={atualizar}

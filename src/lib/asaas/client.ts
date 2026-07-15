@@ -255,6 +255,14 @@ export async function asaasGetInvoice(id: string): Promise<AsaasInvoice> {
   return call<AsaasInvoice>(`/invoices/${id}`)
 }
 
+/**
+ * Antecipa a emissão de uma nota AGENDADA (status SCHEDULED) — manda o Asaas
+ * enviar pra prefeitura agora em vez de esperar o processamento em lote.
+ */
+export async function asaasAuthorizeInvoice(id: string): Promise<AsaasInvoice> {
+  return call<AsaasInvoice>(`/invoices/${id}/authorize`, { method: "POST" })
+}
+
 /** Cancela uma nota já emitida (usado pra limpar a nota de teste). */
 export async function asaasCancelInvoice(id: string): Promise<AsaasInvoice> {
   return call<AsaasInvoice>(`/invoices/${id}/cancel`, { method: "POST" })

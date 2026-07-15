@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { guard, requireSuperadmin } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import {
+  asaasAuthorizeInvoice,
   asaasCancelInvoice,
   asaasCreateInvoice,
   asaasGetCustomer,
@@ -568,7 +569,7 @@ export async function emitirNfTeste(): Promise<NfTesteState> {
       pdfUrl: nota.pdfUrl ?? undefined,
       tomador: `${holding?.name as string} · ${cliente.cpfCnpj}`,
       message:
-        "Nota de R$ 1 enviada. A prefeitura leva alguns minutos pra autorizar — clique em Atualizar pra ver o resultado.",
+        "Nota de R$ 1 criada e agendada. O Asaas só envia pra prefeitura no processamento em lote — use \"Enviar pra prefeitura agora\" pra não esperar.",
     }
   } catch (err) {
     return {
@@ -614,6 +615,31 @@ export async function cancelarNfTeste(
     return {
       ok: false,
       message: err instanceof Error ? err.message : "Erro ao cancelar a nota.",
+    }
+  }
+}
+
+/**
+ * Antecipa a emissão da nota de teste: manda o Asaas enviar pra prefeitura
+ * agora, em vez de esperar o processamento em lote do agendamento.
+ */
+export async function emitirAgoraNfTeste(
+  invoiceId: string,
+): Promise<NfTesteState> {
+  try {
+    await requireSuperadmin()
+    const n = await asaasAuthorizeInvoice(invoiceId)
+    return {
+      ok: true,
+      invoiceId: n.id,
+      status: n.status ?? "SYNCHRONIZED",
+      pdfUrl: n.pdfUrl ?? undefined,
+      message: "Enviada pra prefeitura agora. Atualize o status em instantes.",
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro ao antecipar a nota.",
     }
   }
 }
