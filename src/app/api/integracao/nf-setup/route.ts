@@ -55,8 +55,14 @@ export async function GET() {
   // o município aceita), não os serviços que cadastramos no painel. Serve pra
   // conferir se o código que enviamos existe e qual ISS a prefeitura associa.
   const catalogo = (servicosNoAsaas ?? []) as AsaasMunicipalService[]
-  const codigo = enviaremos.municipalServiceCode
-  const casa = catalogo.filter((s) => (s.description ?? "").startsWith(codigo))
+
+  // Compara sem zero à esquerda: o painel exibe "02660", o catálogo devolve
+  // "2660". São o mesmo serviço — comparar cru daria falso negativo.
+  const semZero = (s: string) => s.replace(/^0+/, "")
+  const codigo = semZero(enviaremos.municipalServiceCode)
+  const casa = catalogo.filter(
+    (s) => semZero((s.description ?? "").split("|")[0]!.trim()) === codigo,
+  )
 
   return Response.json({
     enviaremos,

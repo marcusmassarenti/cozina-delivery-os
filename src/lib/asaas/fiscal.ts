@@ -13,12 +13,15 @@ import "server-only"
  */
 
 /**
- * Código do serviço municipal. No painel aparece como
- * "01899 | 17.03 - Planejamento, coordenação, programação ou organização
- * técnica, financeira ou administrativa" — o código é a primeira parte.
+ * Código do serviço municipal: 1.01 - Análise e desenvolvimento de sistemas.
+ *
+ * ⚠️ Sem o zero à esquerda de propósito. O painel do Asaas MOSTRA "02660",
+ * mas o catálogo da prefeitura (GET /invoices/municipalServices) devolve
+ * "2660 | 1.01 - Análise e desenvolvimento de sistemas" — é esse o valor que
+ * a API reconhece. Mandar "02660" arrisca a nota não ser emitida.
+ * Confira em /api/integracao/nf-setup → codigoConfere.
  */
-export const FISCAL_SERVICE_CODE =
-  process.env.ASAAS_NF_SERVICE_CODE ?? "01899"
+export const FISCAL_SERVICE_CODE = process.env.ASAAS_NF_SERVICE_CODE ?? "2660"
 
 /** Descrição que sai na nota. Igual à cadastrada no painel. */
 export const FISCAL_SERVICE_NAME =
@@ -26,15 +29,16 @@ export const FISCAL_SERVICE_NAME =
 
 /**
  * Impostos. A conta é Simples Nacional com regime especial "Isenta", então os
- * federais vão zerados (recolhidos no DAS) e só o ISS é informado — 5%, que é
- * o que está no serviço cadastrado.
+ * federais vão zerados (recolhidos no DAS) e só o ISS é informado — 2,9%, que
+ * é a alíquota do 1.01 no catálogo da prefeitura e o que está no serviço
+ * padrão cadastrado no painel.
  *
  * `retainIss: false` = a nota NÃO tem ISS retido na fonte; quem recolhe somos
  * nós (via DAS), não o cliente.
  */
 export const FISCAL_TAXES = {
   retainIss: false,
-  iss: Number(process.env.ASAAS_NF_ISS ?? 5),
+  iss: Number(process.env.ASAAS_NF_ISS ?? 2.9),
   cofins: 0,
   csll: 0,
   inss: 0,
