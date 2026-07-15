@@ -196,7 +196,13 @@ export type AsaasInvoice = {
 }
 
 /**
- * Notas fiscais do cliente no Asaas (mais recentes primeiro).
+ * Notas fiscais do cliente no Asaas, pro PORTAL do lojista (mais recentes
+ * primeiro).
+ *
+ * Esconde as canceladas: pro cliente elas são ruído — não valem como
+ * documento e não tem o que fazer com elas. (Pra ver TODAS, incluindo as
+ * canceladas, é o painel do Asaas.)
+ *
  * Falha "de leve": se o módulo de NF não estiver configurado ou a API der erro,
  * devolve lista vazia — a tela só não mostra notas, nunca quebra.
  */
@@ -208,9 +214,11 @@ export async function asaasListInvoices(
     const list = await call<{ data?: AsaasInvoice[] }>(
       `/invoices?customer=${encodeURIComponent(customerId)}&limit=24`,
     )
-    return (list.data ?? []).sort((a, b) =>
-      (b.effectiveDate ?? "").localeCompare(a.effectiveDate ?? ""),
-    )
+    return (list.data ?? [])
+      .filter((n) => n.status !== "CANCELED" && n.status !== "ERROR")
+      .sort((a, b) =>
+        (b.effectiveDate ?? "").localeCompare(a.effectiveDate ?? ""),
+      )
   } catch {
     return []
   }
