@@ -8,6 +8,7 @@ import { daysUntil } from "@/lib/data/billing"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
 
+import { NfSetupButton } from "./_components/nf-setup-button"
 import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
 import { PlanSettingsDialog } from "./_components/plan-settings-dialog"
 import { EditBillingDialog } from "./_components/edit-billing-dialog"
@@ -276,6 +277,8 @@ export default async function PlataformaPage() {
           </table>
         </div>
       </div>
+
+      <NfSetupButton />
 
       <p className="text-xs text-muted-foreground">
         Quando um cliente está <strong>sem pagar</strong> e passa da{" "}
