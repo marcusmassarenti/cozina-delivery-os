@@ -6,8 +6,8 @@
  *    lojas DAQUELA plataforma têm o mês. Mostra quais faltam (só lojas iFood —
  *    loja fora da plataforma não conta).
  *  - DIÁRIO / SEMANAL (99, Keeta, avaliações, cardápio): frescor — até que dia
- *    tem dado no mês. "Em dia" = dado até ontem (D-1, diário) / últimos 7 dias
- *    (semanal). Senão, "atrasado N dias".
+ *    tem dado no mês. "Em dia" = dado dos últimos 5 dias (diário, tolerância de
+ *    4) / últimos 7 dias (semanal). Senão, "atrasado N dias".
  *
  * Performance: os mensais por loja vêm do log platform_imports (pequeno, com
  * ref_year/ref_month e unambíguo pra iFood). Os de rede vêm de um
@@ -27,6 +27,9 @@ import type { PlatformId } from "@/components/platform-logo"
 
 export type Cadencia = "diario" | "semanal" | "mensal"
 export type ChecklistStatus = "ok" | "parcial" | "atrasado" | "falta"
+
+/** Dias de atraso que um relatório diário tolera antes de virar "atrasado". */
+const DIARIO_TOLERANCIA_DIAS = 4
 
 type ReportDef = {
   platform: PlatformId
@@ -210,7 +213,10 @@ export async function getImportChecklistForMonth(
           0,
           Math.round((target.getTime() - parseYmd(lastDate).getTime()) / 86_400_000),
         )
-        const tol = rep.cadencia === "semanal" ? 7 : 0
+        // Tolerância antes de marcar "atrasado". Diário tolera 4 dias (só
+        // acusa a partir de 5) — 1 dia de atraso é rotina e enchia a tela de
+        // laranja à toa. Semanal tolera a própria janela de 7 dias.
+        const tol = rep.cadencia === "semanal" ? 7 : DIARIO_TOLERANCIA_DIAS
         status = lagDays <= tol ? "ok" : "atrasado"
       }
       return {

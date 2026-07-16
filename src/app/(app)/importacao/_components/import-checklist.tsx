@@ -124,7 +124,8 @@ export async function ImportChecklist() {
         <p className="text-[11px] text-muted-foreground">
           <strong className="text-foreground">Mensais</strong> (iFood Conciliação
           e Pedidos) precisam de 1 arquivo por loja. <strong className="text-foreground">Diários/semanais</strong>{" "}
-          são 1 arquivo da rede — &quot;em dia&quot; = dado até ontem.
+          são 1 arquivo da rede — só acusa &quot;atrasado&quot; depois de 5 dias sem
+          dado novo.
         </p>
       </div>
     </div>
