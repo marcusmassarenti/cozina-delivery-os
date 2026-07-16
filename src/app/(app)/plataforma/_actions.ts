@@ -5,20 +5,10 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { guard, requireSuperadmin } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import {
-  asaasAuthorizeInvoice,
-  asaasCancelInvoice,
-  asaasCreateInvoice,
-  asaasGetCustomer,
-  asaasGetInvoice,
   asaasIsMock,
   asaasSetSubscriptionInvoiceSettings,
 } from "@/lib/asaas/client"
-import {
-  FISCAL_SERVICE_CODE,
-  FISCAL_SERVICE_NAME,
-  FISCAL_TAXES,
-  fiscalInvoiceSettings,
-} from "@/lib/asaas/fiscal"
+import { fiscalInvoiceSettings } from "@/lib/asaas/fiscal"
 
 export type CriarClienteState = {
   ok: boolean
@@ -494,152 +484,6 @@ export async function configurarNfAutomatica(): Promise<NfSetupState> {
     return {
       ok: false,
       message: err instanceof Error ? err.message : "Erro ao configurar a NF.",
-    }
-  }
-}
-
-export type NfTesteState = {
-  ok: boolean
-  message?: string
-  /** id da nota, pra poder cancelar depois */
-  invoiceId?: string
-  status?: string
-  pdfUrl?: string
-  /** pra quem a nota saiu — o super-admin confere antes de emitir */
-  tomador?: string
-}
-
-/**
- * Emite uma nota AVULSA de R$ 1 pra testar se a prefeitura autoriza com os
- * nossos dados fiscais — sem cobrança, sem cartão, sem taxa.
- *
- * ⚠️ A nota é REAL: vai pra prefeitura e entra na contabilidade. Use o botão
- * de cancelar assim que confirmar o resultado.
- *
- * Testa o risco mais provável (certificado / inscrição municipal / código de
- * serviço). NÃO testa o gatilho automático — esse só um pagamento real prova.
- */
-export async function emitirNfTeste(): Promise<NfTesteState> {
-  try {
-    const { admin } = await requireSuperadmin()
-    if (asaasIsMock()) {
-      return { ok: false, message: "ASAAS_API_KEY não configurada." }
-    }
-
-    const { data: holding } = await admin
-      .from("holdings")
-      .select("name, asaas_customer_id")
-      .not("asaas_customer_id", "is", null)
-      .limit(1)
-      .maybeSingle()
-
-    const customerId = holding?.asaas_customer_id as string | undefined
-    if (!customerId) {
-      return { ok: false, message: "Nenhum cliente cadastrado no Asaas." }
-    }
-
-    // Confere o cadastro ANTES de emitir: sem CNPJ/endereço a prefeitura
-    // recusa, e a gente culparia a configuração fiscal por engano.
-    const cliente = await asaasGetCustomer(customerId)
-    if (!cliente?.cpfCnpj) {
-      return {
-        ok: false,
-        message: `O cliente "${holding?.name as string}" está sem CPF/CNPJ no Asaas — a prefeitura recusaria a nota por isso, não pela nossa configuração. Complete o cadastro antes de testar.`,
-      }
-    }
-
-    const hoje = new Date().toISOString().slice(0, 10)
-    const nota = await asaasCreateInvoice({
-      customer: customerId,
-      value: 1,
-      deductions: 0,
-      effectiveDate: hoje,
-      serviceDescription: FISCAL_SERVICE_NAME,
-      observations: "Nota de teste — emitida pra validar a integração fiscal.",
-      municipalServiceCode: FISCAL_SERVICE_CODE,
-      municipalServiceName: FISCAL_SERVICE_NAME,
-      externalReference: "teste-nf",
-      taxes: { ...FISCAL_TAXES },
-    })
-
-    return {
-      ok: true,
-      invoiceId: nota.id,
-      status: nota.status ?? "SCHEDULED",
-      pdfUrl: nota.pdfUrl ?? undefined,
-      tomador: `${holding?.name as string} · ${cliente.cpfCnpj}`,
-      message:
-        "Nota de R$ 1 criada e agendada. O Asaas só envia pra prefeitura no processamento em lote — use \"Enviar pra prefeitura agora\" pra não esperar.",
-    }
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Erro ao emitir a nota.",
-    }
-  }
-}
-
-/** Relê a nota de teste pra ver se a prefeitura já autorizou (ou recusou). */
-export async function statusNfTeste(invoiceId: string): Promise<NfTesteState> {
-  try {
-    await requireSuperadmin()
-    const n = await asaasGetInvoice(invoiceId)
-    return {
-      ok: true,
-      invoiceId: n.id,
-      status: n.status ?? "—",
-      pdfUrl: n.pdfUrl ?? undefined,
-    }
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Erro ao ler a nota.",
-    }
-  }
-}
-
-/** Cancela a nota de teste — some da contabilidade e do portal do cliente. */
-export async function cancelarNfTeste(
-  invoiceId: string,
-): Promise<NfTesteState> {
-  try {
-    await requireSuperadmin()
-    const n = await asaasCancelInvoice(invoiceId)
-    return {
-      ok: true,
-      invoiceId: n.id,
-      status: n.status ?? "CANCELED",
-      message: "Nota de teste cancelada.",
-    }
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Erro ao cancelar a nota.",
-    }
-  }
-}
-
-/**
- * Antecipa a emissão da nota de teste: manda o Asaas enviar pra prefeitura
- * agora, em vez de esperar o processamento em lote do agendamento.
- */
-export async function emitirAgoraNfTeste(
-  invoiceId: string,
-): Promise<NfTesteState> {
-  try {
-    await requireSuperadmin()
-    const n = await asaasAuthorizeInvoice(invoiceId)
-    return {
-      ok: true,
-      invoiceId: n.id,
-      status: n.status ?? "SYNCHRONIZED",
-      pdfUrl: n.pdfUrl ?? undefined,
-      message: "Enviada pra prefeitura agora. Atualize o status em instantes.",
-    }
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Erro ao antecipar a nota.",
     }
   }
 }

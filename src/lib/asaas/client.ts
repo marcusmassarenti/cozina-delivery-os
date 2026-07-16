@@ -225,45 +225,6 @@ export async function asaasListInvoices(
 }
 
 /**
- * Emite uma nota AVULSA (sem cobrança vinculada), direto pro cliente.
- *
- * Serve pra testar se a prefeitura autoriza a nota com os nossos dados
- * fiscais, sem precisar de pagamento nenhum. A nota é REAL: vai pra
- * prefeitura e precisa ser cancelada depois se for só teste.
- */
-export async function asaasCreateInvoice(input: {
-  customer: string
-  serviceDescription: string
-  observations: string
-  value: number
-  deductions: number
-  effectiveDate: string // YYYY-MM-DD
-  municipalServiceCode?: string
-  municipalServiceName: string
-  externalReference?: string
-  taxes: {
-    retainIss: boolean
-    iss: number
-    cofins: number
-    csll: number
-    inss: number
-    ir: number
-    pis: number
-  }
-}): Promise<AsaasInvoice> {
-  if (asaasIsMock()) return { id: mockId("inv"), status: "SCHEDULED" }
-  return call<AsaasInvoice>("/invoices", {
-    method: "POST",
-    body: JSON.stringify(input),
-  })
-}
-
-/** Lê uma nota pelo id — pra acompanhar o status até autorizar (ou falhar). */
-export async function asaasGetInvoice(id: string): Promise<AsaasInvoice> {
-  return call<AsaasInvoice>(`/invoices/${id}`)
-}
-
-/**
  * Lê a config de emissão automática de uma assinatura. É a FONTE DA VERDADE
  * sobre "essa assinatura emite nota sozinha?" — a lista de notas agendadas é
  * só um reflexo dela, e cancelar uma nota não apaga a config.
@@ -280,19 +241,6 @@ export async function asaasGetSubscriptionInvoiceSettings(
   } catch {
     return null
   }
-}
-
-/**
- * Antecipa a emissão de uma nota AGENDADA (status SCHEDULED) — manda o Asaas
- * enviar pra prefeitura agora em vez de esperar o processamento em lote.
- */
-export async function asaasAuthorizeInvoice(id: string): Promise<AsaasInvoice> {
-  return call<AsaasInvoice>(`/invoices/${id}/authorize`, { method: "POST" })
-}
-
-/** Cancela uma nota já emitida (usado pra limpar a nota de teste). */
-export async function asaasCancelInvoice(id: string): Promise<AsaasInvoice> {
-  return call<AsaasInvoice>(`/invoices/${id}/cancel`, { method: "POST" })
 }
 
 /**
