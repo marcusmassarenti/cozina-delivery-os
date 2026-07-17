@@ -172,7 +172,7 @@ const FAQ = [
   { q: "Meus dados ficam seguros?", a: "Sim. Ficam só na sua conta, isolados e criptografados, e você apaga quando quiser. Nunca compartilhamos com ninguém." },
   { q: "Preciso instalar alguma coisa?", a: "Não. É tudo no navegador — abre, sobe a planilha e vê o painel na hora." },
   { q: "O que vem no plano Pro?", a: "Tudo do Essencial mais o financeiro completo: fluxo de caixa com contas a pagar e a receber, contas bancárias, cartões e categorias, importação OFX dos bancos pra conciliar o extrato e todos os módulos do sistema. É pra quem quer rodar todo o financeiro da operação num lugar só." },
-  { q: "O que é o DeliveryOS AI?", a: "É a camada de inteligência do sistema. Ao abrir o diagnóstico de uma loja, a IA cruza funil, avaliações (com o texto das reclamações), cancelamentos, CMV, marketing e produtos, e escreve um plano de ação com as 3 prioridades do mês — o problema, o que está em jogo e como resolver. Você exporta tudo em PDF. E tem o Nino, seu consultor de IA: você pergunta em português (\"como está meu faturamento?\", \"qual loja vende mais?\", \"meu cancelamento subiu?\") e ele responde na hora com os seus números reais. Tudo no plano DeliveryOS AI, que inclui o Pro." },
+  { q: "O que é o DeliveryOS AI?", a: "É a camada de inteligência do sistema. Ao abrir o diagnóstico de uma loja, a IA cruza funil, avaliações (com o texto das reclamações), cancelamentos, CMV, marketing e produtos, e escreve um plano de ação com as 3 prioridades do mês — o problema, o que está em jogo e como resolver. Você exporta tudo em PDF. E tem o Nino, seu consultor de IA: você pergunta como mandaria pro seu sócio (\"como está meu faturamento?\", \"qual loja vende mais?\", \"meu cancelamento subiu?\") e ele responde na hora com os seus números reais. Tudo no plano DeliveryOS AI, que inclui o Pro." },
   { q: "Posso cancelar quando quiser?", a: "Pode, sem multa nem fidelidade. Cancela e pronto." },
 ]
 
@@ -273,9 +273,9 @@ const PORDENTRO_TABS: {
     tag: "DeliveryOS AI",
     titulo: "A IA lê a sua loja e diz o que fazer",
     texto:
-      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação — em português, com os seus números reais.",
+      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação, com os seus números reais.",
     bullets: [
-      "Nino AI: pergunte em português e ele responde na hora",
+      "Nino AI: pergunte e ele responde na hora",
       "Funil das 3 plataformas — onde o cliente desiste",
       "Lê o texto das avaliações, não só a nota",
       "Cancelamentos, CMV e margem fora da meta",
@@ -571,12 +571,13 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
             {tab.tag}
           </span>
           <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
-            Converse com o Nino, seu consultor de IA
+            Um consultor que conhece a sua operação de cor
           </h3>
           <p className="mt-2 text-[oklch(0.45_0.01_48)]">
-            Pergunte em português, como se mandasse mensagem pro seu sócio. O
-            Nino responde na hora com os números reais das suas lojas — sem
-            planilha, sem relatório, sem esperar o contador.
+            Manda a pergunta como mandaria pro seu sócio — e o Nino responde na
+            hora, com os números reais das suas lojas. É como ter um analista só
+            seu, 24 horas por dia: sem planilha, sem relatório, sem esperar o
+            contador.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {NINO_PODERES.map((p) => (
