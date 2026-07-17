@@ -558,7 +558,7 @@ function NinoChatMock() {
  */
 function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
   return (
-    <div className="rx-tab-in">
+    <div id="nino" className="rx-tab-in scroll-mt-24">
       <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
         {/* Mockup da conversa */}
         <div className="order-2 lg:order-1">
@@ -646,10 +646,13 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
   )
 }
 
-/** Itens da nav (âncoras) — usados também pelo scrollspy. */
-const NAV_LINKS: { id: string; label: string; ai?: boolean }[] = [
+/** Itens da nav (âncoras) — usados também pelo scrollspy.
+ *  `spy: false` → o link rola mas não é observado (evita brigar com a seção
+ *  que o contém pelo destaque; caso do Nino, que vive dentro de "O sistema"). */
+const NAV_LINKS: { id: string; label: string; ai?: boolean; spy?: boolean }[] = [
   { id: "experimente", label: "Como funciona" },
   { id: "sistema", label: "O sistema" },
+  { id: "nino", label: "Nino AI", ai: true, spy: false },
   { id: "precos", label: "Preços" },
   { id: "redes", label: "Redes" },
 ]
@@ -706,6 +709,7 @@ export function LandingV3({
       { rootMargin: "-15% 0px -80% 0px" },
     )
     NAV_LINKS.forEach((l) => {
+      if (l.spy === false) return
       const el = document.getElementById(l.id)
       if (el) io.observe(el)
     })
@@ -831,6 +835,22 @@ export function LandingV3({
                 lê todas e mostra o lucro real de cada loja e cada plataforma. Na
                 hora, sem cadastro, sem senha.
               </p>
+            </Reveal>
+            <Reveal delay={210}>
+              <a
+                href="#nino"
+                className="group mt-5 inline-flex items-center gap-2 rounded-full border border-[oklch(0.65_0.21_35/.35)] bg-[oklch(0.65_0.21_35/.12)] px-3.5 py-1.5 text-xs font-medium text-[oklch(0.86_0.06_60)] transition-colors hover:bg-[oklch(0.65_0.21_35/.2)]"
+              >
+                <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
+                <span>
+                  Novo — <span className="font-semibold text-white">Nino AI</span>,
+                  seu consultor: pergunte e ele responde com os seus números
+                </span>
+                <ArrowRight
+                  className="size-3.5 transition-transform group-hover:translate-x-0.5"
+                  strokeWidth={2.4}
+                />
+              </a>
             </Reveal>
             <Reveal delay={240}>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
