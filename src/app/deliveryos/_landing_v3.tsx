@@ -18,9 +18,13 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  Lightbulb,
   Lock,
   Mail,
+  MessageSquareText,
   Network,
+  CalendarClock,
+  Scale,
   ShieldCheck,
   Sparkles,
   Star,
@@ -335,9 +339,9 @@ const PORDENTRO_TABS: {
     tag: "DeliveryOS AI",
     titulo: "A IA lê a sua loja e diz o que fazer",
     texto:
-      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação — com os seus números reais.",
+      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação — em português, com os seus números reais.",
     bullets: [
-      "Nino AI: pergunte e ele responde com os seus números",
+      "Nino AI: pergunte em português e ele responde na hora",
       "Funil das 3 plataformas — onde o cliente desiste",
       "Lê o texto das avaliações, não só a nota",
       "Cancelamentos, CMV e margem fora da meta",
@@ -446,6 +450,161 @@ function PorDentroTabs() {
         ))}
       </div>
     </div>
+  )
+}
+
+/* ── Nino AI — seção dedicada (spotlight do consultor de IA) ── */
+
+/** Bolhas de exemplo da conversa (números fictícios, só pra mostrar o tom). */
+const NINO_CHAT: { de: "voce" | "nino"; txt: string }[] = [
+  { de: "voce", txt: "qual loja vendeu mais esse mês?" },
+  {
+    de: "nino",
+    txt: "A Jardins lidera com R$ 214 mil (34% da rede). A Moema vem logo atrás com R$ 198 mil — e cresceu 12% contra o mês passado, o melhor ritmo entre as suas lojas.",
+  },
+  { de: "voce", txt: "meu cancelamento tá alto?" },
+  {
+    de: "nino",
+    txt: "Na rede está em 3,8% — dentro da meta. Mas a Vila Mariana está em 6,1% no iFood, quase o dobro. Vale olhar: a maioria é por item em falta.",
+  },
+]
+
+/** O que dá pra perguntar — agrupado por tema, com exemplos reais de pergunta. */
+const NINO_PODERES: { i: LucideIcon; t: string; ex: string }[] = [
+  {
+    i: TrendingUp,
+    t: "Faturamento e vendas",
+    ex: "“como está meu faturamento?”, “bati a meta?”",
+  },
+  {
+    i: Scale,
+    t: "Comparar lojas",
+    ex: "“qual loja vende mais?”, “compare a Moema com a Jardins”",
+  },
+  {
+    i: Coins,
+    t: "Taxas, CMV e margem",
+    ex: "“quanto pago de taxa no iFood?”, “meu CMV está alto?”",
+  },
+  {
+    i: CalendarClock,
+    t: "Histórico do ano",
+    ex: "“como foi meu ano até agora?”, “qual foi o melhor mês?”",
+  },
+  {
+    i: Star,
+    t: "Avaliações e cancelamento",
+    ex: "“minha nota caiu?”, “por que cancelam?”",
+  },
+  {
+    i: Lightbulb,
+    t: "Onde focar",
+    ex: "“o que devo priorizar essa semana?”",
+  },
+]
+
+function NinoSpotlight() {
+  return (
+    <section
+      id="nino"
+      className="relative overflow-hidden bg-[var(--ink)] py-14 text-white sm:py-20"
+    >
+      <div className="hero-glow pointer-events-none absolute inset-x-0 top-0 h-56 opacity-60" />
+      <div className="dot-grid pointer-events-none absolute inset-0 opacity-40" />
+      <div className="relative mx-auto max-w-6xl px-5">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <span className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-[oklch(0.82_0.14_55)]">
+            <Sparkles className="size-3.5" strokeWidth={2.6} />
+            DeliveryOS AI
+          </span>
+          <h2 className="mt-4 text-3xl font-medium tracking-tight sm:text-4xl">
+            Converse com o Nino, seu consultor de IA
+          </h2>
+          <p className="mx-auto mt-3 text-[oklch(0.75_0.012_60)]">
+            Pergunte em português, como se mandasse mensagem pro seu sócio. O
+            Nino responde na hora usando os números reais das suas lojas — sem
+            planilha, sem relatório, sem esperar o contador.
+          </p>
+        </Reveal>
+
+        <div className="mt-10 grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
+          {/* Mockup da conversa */}
+          <Reveal className="order-2 lg:order-1">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 shadow-[0_36px_70px_-30px_oklch(0.65_0.21_35/.5)] backdrop-blur sm:p-5">
+              <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
+                <span className="flex size-8 items-center justify-center rounded-full bg-[var(--brand)] text-white">
+                  <Sparkles className="size-4" strokeWidth={2.6} />
+                </span>
+                <div className="leading-tight">
+                  <p className="text-sm font-semibold">Nino</p>
+                  <p className="text-[11px] text-[oklch(0.68_0.012_60)]">
+                    Consultor de IA · online
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2.5">
+                {NINO_CHAT.map((m, i) =>
+                  m.de === "voce" ? (
+                    <div key={i} className="flex justify-end">
+                      <p className="max-w-[80%] rounded-2xl rounded-br-sm bg-[var(--brand)] px-3.5 py-2 text-sm text-white">
+                        {m.txt}
+                      </p>
+                    </div>
+                  ) : (
+                    <div key={i} className="flex justify-start">
+                      <p className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white/[0.07] px-3.5 py-2 text-sm text-[oklch(0.9_0_0)]">
+                        {m.txt}
+                      </p>
+                    </div>
+                  ),
+                )}
+              </div>
+              <p className="mt-4 border-t border-white/10 pt-3 text-center text-[11px] text-[oklch(0.6_0_0)]">
+                Exemplo ilustrativo · o Nino só responde com os dados da sua
+                conta
+              </p>
+            </div>
+          </Reveal>
+
+          {/* Poderes do Nino */}
+          <Reveal delay={120} className="order-1 lg:order-2">
+            <h3 className="flex items-center gap-2 text-lg font-medium">
+              <MessageSquareText
+                className="size-5 text-[var(--brand)]"
+                strokeWidth={2.2}
+              />
+              Pergunte o que quiser sobre a operação
+            </h3>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {NINO_PODERES.map((p) => (
+                <div
+                  key={p.t}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[oklch(0.82_0.14_55)]">
+                      <p.i className="size-3.5" strokeWidth={2.4} />
+                    </span>
+                    <p className="text-sm font-semibold">{p.t}</p>
+                  </div>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[oklch(0.72_0.012_60)]">
+                    {p.ex}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-5 flex items-start gap-2 text-[13px] text-[oklch(0.72_0.012_60)]">
+              <Check
+                className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                strokeWidth={2.6}
+              />
+              Franqueado pergunta sobre a própria loja; a holding vê a rede
+              inteira — cada um só enxerga o que é seu.
+            </p>
+          </Reveal>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -926,6 +1085,9 @@ export function LandingV3({
         </div>
       </section>
 
+      {/* NINO — consultor de IA (spotlight) */}
+      <NinoSpotlight />
+
       {/* PREÇOS */}
       <section id="precos" className="relative overflow-hidden bg-white py-12 sm:py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
@@ -1067,7 +1229,7 @@ export function LandingV3({
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
                 <ul className="relative mt-3 space-y-3 text-[15px] text-[oklch(0.88_0_0)]">
                   {[
-                    { i: Sparkles, t: "Nino AI: pergunte e ele responde com os seus números" },
+                    { i: Sparkles, t: "Nino AI: consultor que responde na hora — compara lojas, taxas, CMV e o ano inteiro" },
                     { i: Gauge, t: "Diagnóstico inteligente de cada loja" },
                     { i: Target, t: "Plano de ação: as 3 prioridades do mês" },
                     { i: Star, t: "Lê avaliações, cancelamentos, marketing e produtos" },
