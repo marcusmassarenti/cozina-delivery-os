@@ -945,8 +945,9 @@ export function LandingV3({
       <header id="topo" className="relative overflow-hidden bg-[var(--ink)] pb-12 pt-24 sm:pb-16 sm:pt-28 text-white">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         <div className="dot-grid pointer-events-none absolute inset-0 opacity-60" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-5 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
-          <div className="text-center lg:text-left">
+        <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-start gap-x-8 px-5 lg:grid-cols-[1fr_1.2fr] lg:gap-x-10">
+          {/* Intro — texto (no mobile fica ANTES da tela) */}
+          <div className="text-center lg:col-start-1 lg:row-start-1 lg:self-center lg:text-left">
             <Reveal>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-[oklch(0.85_0.05_60)]">
                 <span className="size-1.5 rounded-full bg-[var(--brand)]" />
@@ -982,8 +983,29 @@ export function LandingV3({
                 />
               </a>
             </Reveal>
+          </div>
+
+          {/* Tela (print) — no mobile ENTRE o texto e os botões; no desktop, coluna da direita */}
+          <Reveal
+            delay={420}
+            y={40}
+            className="mt-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:self-center"
+          >
+            <div className="relative w-full">
+              <div className="glow-blob left-1/2 top-1/2 h-[115%] w-[115%] -translate-x-1/2 -translate-y-1/2 opacity-90" />
+              <div className="relative rounded-[20px] bg-white/10 p-1.5 shadow-[0_50px_100px_-30px_rgba(0,0,0,.8)] ring-1 ring-white/15">
+                <Shot src="/landing/dre.png" alt="Resultado da sua loja no Delivery OS" />
+              </div>
+              <p className="relative mt-4 text-center text-xs text-[oklch(0.62_0.01_60)] lg:text-left">
+                A sua loja — faturamento, taxas e o que sobra em cada plataforma.
+              </p>
+            </div>
+          </Reveal>
+
+          {/* Botões + garantia (no mobile, DEPOIS da tela) */}
+          <div className="mt-8 text-center lg:col-start-1 lg:row-start-2 lg:mt-9 lg:text-left">
             <Reveal delay={240}>
-              <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+              <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
                   <Upload className="size-[18px]" strokeWidth={2.2} />
                   Descobrir meu lucro agora
@@ -1000,18 +1022,6 @@ export function LandingV3({
               </p>
             </Reveal>
           </div>
-
-          <Reveal delay={420} y={40}>
-            <div className="relative w-full">
-              <div className="glow-blob left-1/2 top-1/2 h-[115%] w-[115%] -translate-x-1/2 -translate-y-1/2 opacity-90" />
-              <div className="relative rounded-[20px] bg-white/10 p-1.5 shadow-[0_50px_100px_-30px_rgba(0,0,0,.8)] ring-1 ring-white/15">
-                <Shot src="/landing/dre.png" alt="Resultado da sua loja no Delivery OS" />
-              </div>
-              <p className="relative mt-4 text-center text-xs text-[oklch(0.62_0.01_60)] lg:text-left">
-                A sua loja — faturamento, taxas e o que sobra em cada plataforma.
-              </p>
-            </div>
-          </Reveal>
         </div>
       </header>
 
