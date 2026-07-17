@@ -88,7 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { label: "DRE Grupo", href: "/financeiro", icon: Wallet, module: "financeiro" },
       // Sem module: aparece pra todos; a página gateia no plano AI (upsell).
-      { label: "Consultor IA", href: "/consultor-ia", icon: MessageSquareText },
+      { label: "Nino AI", href: "/consultor-ia", icon: MessageSquareText },
     ],
   },
   {

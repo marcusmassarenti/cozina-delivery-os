@@ -168,7 +168,7 @@ const FAQ = [
   { q: "Meus dados ficam seguros?", a: "Sim. Ficam só na sua conta, isolados e criptografados, e você apaga quando quiser. Nunca compartilhamos com ninguém." },
   { q: "Preciso instalar alguma coisa?", a: "Não. É tudo no navegador — abre, sobe a planilha e vê o painel na hora." },
   { q: "O que vem no plano Pro?", a: "Tudo do Essencial mais o financeiro completo: fluxo de caixa com contas a pagar e a receber, contas bancárias, cartões e categorias, importação OFX dos bancos pra conciliar o extrato e todos os módulos do sistema. É pra quem quer rodar todo o financeiro da operação num lugar só." },
-  { q: "O que é o DeliveryOS AI?", a: "É a camada de inteligência do sistema. Ao abrir o diagnóstico de uma loja, a IA cruza funil, avaliações (com o texto das reclamações), cancelamentos, CMV, marketing e produtos, e escreve um plano de ação com as 3 prioridades do mês — o problema, o que está em jogo e como resolver. Você exporta tudo em PDF. Está no plano DeliveryOS AI, que inclui tudo do Pro." },
+  { q: "O que é o DeliveryOS AI?", a: "É a camada de inteligência do sistema. Ao abrir o diagnóstico de uma loja, a IA cruza funil, avaliações (com o texto das reclamações), cancelamentos, CMV, marketing e produtos, e escreve um plano de ação com as 3 prioridades do mês — o problema, o que está em jogo e como resolver. Você exporta tudo em PDF. E tem o Nino, seu consultor de IA: você pergunta em português (\"como está meu faturamento?\", \"qual loja vende mais?\", \"meu cancelamento subiu?\") e ele responde na hora com os seus números reais. Tudo no plano DeliveryOS AI, que inclui o Pro." },
   { q: "Posso cancelar quando quiser?", a: "Pode, sem multa nem fidelidade. Cancela e pronto." },
 ]
 
@@ -335,8 +335,9 @@ const PORDENTRO_TABS: {
     tag: "DeliveryOS AI",
     titulo: "A IA lê a sua loja e diz o que fazer",
     texto:
-      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado — não é mais um dashboard, é plano de ação.",
+      "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação — com os seus números reais.",
     bullets: [
+      "Nino AI: pergunte e ele responde com os seus números",
       "Funil das 3 plataformas — onde o cliente desiste",
       "Lê o texto das avaliações, não só a nota",
       "Cancelamentos, CMV e margem fora da meta",
@@ -1066,6 +1067,7 @@ export function LandingV3({
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
                 <ul className="relative mt-3 space-y-3 text-[15px] text-[oklch(0.88_0_0)]">
                   {[
+                    { i: Sparkles, t: "Nino AI: pergunte e ele responde com os seus números" },
                     { i: Gauge, t: "Diagnóstico inteligente de cada loja" },
                     { i: Target, t: "Plano de ação: as 3 prioridades do mês" },
                     { i: Star, t: "Lê avaliações, cancelamentos, marketing e produtos" },

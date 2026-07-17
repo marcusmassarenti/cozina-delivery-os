@@ -131,7 +131,7 @@ export function PlanSettingsDialog({
 
           <div className="border-t pt-3">
             <label htmlFor="pacotePreco" className="text-xs font-medium">
-              Pacote de perguntas do Consultor IA (R$)
+              Pacote de perguntas do Nino AI (R$)
             </label>
             <input
               id="pacotePreco"

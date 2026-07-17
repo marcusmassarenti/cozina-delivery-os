@@ -12,9 +12,9 @@ import { ConsultorChat } from "./_components/consultor-chat"
 export const dynamic = "force-dynamic"
 
 /**
- * Consultor IA — chat que responde sobre a operação com os números reais da
- * conta. Gated no plano DeliveryOS AI; sem plano, vira upsell. As conversas
- * ficam salvas por usuário (histórico na lateral, como o Claude).
+ * Nino AI — chat que responde sobre a operação com os números reais da conta.
+ * Gated no plano DeliveryOS AI; sem plano, vira upsell. As conversas ficam
+ * salvas por usuário (histórico na lateral, como o Claude).
  */
 export default async function ConsultorIaPage() {
   const estado = await getConsultorEstado()
@@ -31,19 +31,22 @@ export default async function ConsultorIaPage() {
       {/* Título (compacto) */}
       <h1 className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
         <Sparkles className="size-5 text-primary" />
-        Consultor IA
+        Nino AI
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+          IA
+        </span>
       </h1>
 
       {!estado.isAi ? (
         <Upsell />
       ) : !estado.configurado ? (
         <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-          O Consultor IA ainda está sendo ativado nesta conta. Fale com o
-          suporte se isso persistir.
+          O Nino AI ainda está sendo ativado nesta conta. Fale com o suporte se
+          isso persistir.
         </div>
       ) : estado.lojas === 0 ? (
         <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-          Cadastre ao menos uma loja pra usar o Consultor.
+          Cadastre ao menos uma loja pra falar com o Nino.
         </div>
       ) : (
         <ConsultorChat
@@ -65,7 +68,7 @@ function Upsell() {
         <Lock className="size-6 text-primary" />
       </div>
       <p className="mt-4 text-base font-semibold">
-        O Consultor IA faz parte do plano DeliveryOS AI
+        O Nino AI faz parte do plano DeliveryOS AI
       </p>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
         Um consultor que responde na hora sobre o seu faturamento, CMV,
