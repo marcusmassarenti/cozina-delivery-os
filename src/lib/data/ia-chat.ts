@@ -16,6 +16,8 @@ import { requireAuth } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
+import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
+import type { PlatformId } from "@/components/platform-logo"
 import { isAiPlan } from "@/lib/data/billing"
 import { askClaudeChat, isAnthropicConfigured, type ChatTurn } from "@/lib/anthropic/client"
 
@@ -232,14 +234,28 @@ async function consumirCota(
   return (data as "gratis" | "credito" | null) ?? null
 }
 
-/** Monta o contexto compacto (rede + por loja) que vai no system prompt. */
+/** Monta o contexto compacto (rede + por loja + histórico do ano). */
 function montarContexto(
-  units: { name: string; code: string }[],
-  monthly: Map<string, ReturnType<typeof numerosDaLoja>>,
+  units: { id: string; name: string; code: string }[],
+  numerosMap: Map<string, ReturnType<typeof numerosDaLoja>>,
+  histMap: Map<string, MesLoja[]>,
   periodo: string,
 ): string {
-  const lojas = [...monthly.values()]
-  const rede = lojas.reduce(
+  // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
+  const por_loja = units
+    .map((u) => {
+      const atual = numerosMap.get(u.id)
+      const historico = histMap.get(u.id) ?? []
+      if (!atual && historico.length === 0) return null
+      return {
+        ...(atual ?? { loja: u.name }),
+        historico_mensal: historico,
+      }
+    })
+    .filter(Boolean)
+
+  const atuais = [...numerosMap.values()]
+  const rede = atuais.reduce(
     (acc, l) => ({
       bruto: acc.bruto + l.faturamento_bruto,
       liquido: acc.liquido + l.recebido_liquido,
@@ -248,16 +264,32 @@ function montarContexto(
     }),
     { bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 },
   )
+
+  // Histórico da REDE por mês (soma das lojas) — pra "resumo do ano da rede".
+  const redeMes = new Map<string, { bruto: number; pedidos: number }>()
+  for (const serie of histMap.values()) {
+    for (const m of serie) {
+      const cur = redeMes.get(m.mes) ?? { bruto: 0, pedidos: 0 }
+      cur.bruto += m.bruto
+      cur.pedidos += m.pedidos
+      redeMes.set(m.mes, cur)
+    }
+  }
+  const historico_rede_mensal = [...redeMes.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([mes, v]) => ({ mes, faturamento_bruto: round(v.bruto), pedidos: v.pedidos }))
+
   return JSON.stringify({
-    periodo,
-    rede: {
+    mes_corrente: periodo,
+    rede_mes_corrente: {
       lojas: units.length,
       faturamento_bruto: round(rede.bruto),
       recebido_liquido: round(rede.liquido),
       pedidos: rede.pedidos,
       cancelados: rede.cancelados,
     },
-    por_loja: lojas,
+    historico_rede_mensal,
+    por_loja,
   })
 }
 
@@ -297,12 +329,60 @@ function round(n: number): number {
   return Math.round(n * 100) / 100
 }
 
+const TODAS_PLATAFORMAS: PlatformId[] = ["ifood", "99food", "keeta"]
+
+type MesLoja = {
+  mes: string
+  bruto: number
+  liquido: number
+  pedidos: number
+  cancelados: number
+}
+
+/**
+ * Histórico mensal do ANO corrente, por loja (jan → mês atual). Busca os meses
+ * em paralelo (cada um é 1 agregação da rede), então a latência fica perto de
+ * buscar um mês só. Só entram meses que têm dado. Assim a IA consegue
+ * responder "resumo do ano", "compare com o mês passado", "evolução".
+ */
+async function historicoMensalDoAno(
+  unitIds: string[],
+  year: number,
+  ateMes: number,
+): Promise<Map<string, MesLoja[]>> {
+  const meses = Array.from({ length: ateMes }, (_, i) => i + 1)
+  const mapsPorMes = await Promise.all(
+    meses.map((m) => getUnitMetricsForMonth(unitIds, TODAS_PLATAFORMAS, year, m)),
+  )
+  const hist = new Map<string, MesLoja[]>()
+  for (const id of unitIds) hist.set(id, [])
+  meses.forEach((m, i) => {
+    const map = mapsPorMes[i]
+    for (const id of unitIds) {
+      const mt = map.get(id)
+      if (!mt || !mt.hasData) continue
+      hist.get(id)!.push({
+        mes: `${String(m).padStart(2, "0")}/${year}`,
+        bruto: round(mt.bruto),
+        liquido: round(mt.liquido),
+        pedidos: mt.pedidos,
+        cancelados: mt.cancelados,
+      })
+    }
+  })
+  return hist
+}
+
 const SYSTEM_BASE = `Você é o Consultor IA do Delivery OS: um consultor de delivery experiente e direto que fala português do Brasil pro DONO da operação — sem jargão, sem enrolação.
 
-Você recebe os NÚMEROS REAIS da conta (a rede inteira e cada loja) do mês corrente, e responde as perguntas do dono sobre a operação: faturamento, CMV, ticket, cancelamento, taxas por plataforma, comparação entre lojas, resumo da rede.
+Você recebe os NÚMEROS REAIS da conta e responde as perguntas do dono sobre a operação: faturamento, CMV, ticket, cancelamento, taxas por plataforma, comparação entre lojas, resumo da rede, evolução ao longo do ano.
+
+O contexto tem:
+- "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
+- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use isso pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "como está a evolução".
 
 REGRAS:
-- Use SOMENTE os números fornecidos no JSON de contexto. NUNCA invente um dado que não está lá. Se te perguntarem algo que os números não respondem (ex.: custo de um prato específico, dado de um mês que não é o corrente), diga com franqueza que esse dado não está disponível aqui — não chute.
+- Use SOMENTE os números fornecidos no JSON de contexto. NUNCA invente um dado que não está lá. O histórico cobre só os meses do ano corrente que já têm dado — se te perguntarem sobre ANOS ANTERIORES, meses sem dado, ou algo que o contexto não tem (ex.: custo de um prato específico), diga com franqueza que esse dado não está disponível aqui — não chute.
 - Seja CONCISO e direto: responda a pergunta, cite o número real que sustenta a resposta, e pare. Nada de relatório gigante quando cabe uma frase.
 - Escreva em TEXTO SIMPLES, sem markdown: nada de asteriscos pra negrito (**), nada de # títulos, nada de tabelas. Se precisar listar, use hífen (-) no começo da linha. O texto vai aparecer cru pro usuário, então formatação markdown fica feia.
 - "cmv" só existe quando a loja lançou os custos. Se vier null, NÃO comente CMV nem margem dessa loja (não foi lançado — não assuma que está bom nem ruim).
@@ -367,21 +447,22 @@ export async function perguntarConsultor(
 
   try {
     const { year, month } = anoMesCorrente()
-    const monthlyMap = await getRealMonthlyForUnits(
-      units.map((u) => u.id),
-      year,
-      month,
-    )
+    const unitIds = units.map((u) => u.id)
+    // Mês corrente em detalhe + histórico mensal do ano (em paralelo).
+    const [monthlyMap, histMap] = await Promise.all([
+      getRealMonthlyForUnits(unitIds, year, month),
+      historicoMensalDoAno(unitIds, year, month),
+    ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
       const m = monthlyMap.get(u.id)
       if (m) numeros.set(u.id, numerosDaLoja(m, u.name))
     }
     const periodo = `${String(month).padStart(2, "0")}/${year}`
-    const contexto = montarContexto(units, numeros, periodo)
+    const contexto = montarContexto(units, numeros, histMap, periodo)
 
     const resposta = await askClaudeChat({
-      system: `${SYSTEM_BASE}\n\nCONTEXTO (números reais, mês ${periodo}):\n${contexto}`,
+      system: `${SYSTEM_BASE}\n\nCONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,
       // Mantém a conversa curta (últimos 8 turnos) — barato e suficiente.
       messages: messages.slice(-8),
       maxTokens: 900,
