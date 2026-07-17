@@ -173,15 +173,16 @@ export function ConsultorChat({
 
   const favoritas = conversas.filter((c) => c.favorita)
   const recentes = conversas.filter((c) => !c.favorita)
+  const conversaAtiva = conversas.find((c) => c.id === ativaId) ?? null
 
   return (
-    <div className="flex flex-col gap-4 md:flex-row">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
       {/* Lateral: conversas */}
-      <aside className="md:w-60 md:shrink-0">
+      <aside className="flex min-h-0 flex-col md:w-60 md:shrink-0">
         <button
           type="button"
           onClick={novaConversa}
-          className="mb-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          className="mb-2 flex w-full shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
         >
           <Plus className="size-4" />
           Nova conversa
@@ -192,7 +193,7 @@ export function ConsultorChat({
             Suas conversas aparecem aqui.
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex max-h-40 flex-col gap-3 overflow-y-auto md:max-h-none md:flex-1">
             {favoritas.length > 0 && (
               <ListaSecao
                 titulo="Favoritas"
@@ -222,20 +223,31 @@ export function ConsultorChat({
       </aside>
 
       {/* Chat */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <p className="text-xs text-muted-foreground">
-          {restantes > 0 ? (
-            <>
-              <span className="font-semibold text-foreground tabular-nums">
-                {restantes}
-              </span>{" "}
-              pergunta{restantes === 1 ? "" : "s"} restante
-              {restantes === 1 ? "" : "s"} este mês
-            </>
-          ) : (
-            "Últimas perguntas do mês"
-          )}
-        </p>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+        {/* Cabeçalho: qual conversa (como o breadcrumb do Claude) + cota */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b pb-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-medium">
+              {conversaAtiva ? conversaAtiva.titulo : "Nova conversa"}
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <Store className="size-2.5" />
+              {lojaNome(conversaAtiva?.unitId ?? null)}
+            </span>
+          </div>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {restantes > 0 ? (
+              <>
+                <span className="font-semibold text-foreground tabular-nums">
+                  {restantes}
+                </span>{" "}
+                restante{restantes === 1 ? "" : "s"}
+              </>
+            ) : (
+              "Últimas do mês"
+            )}
+          </span>
+        </div>
 
         {bloqueado ? (
           <div className="rounded-xl border bg-card p-6 text-center">
@@ -257,7 +269,7 @@ export function ConsultorChat({
           </div>
         ) : (
           <>
-            <div className="min-h-[280px] rounded-xl border bg-card p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card p-4">
               {carregando ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   Carregando conversa…
@@ -315,7 +327,7 @@ export function ConsultorChat({
             </div>
 
             {erro && (
-              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+              <div className="shrink-0 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
                 {erro}
               </div>
             )}
@@ -325,7 +337,7 @@ export function ConsultorChat({
                 e.preventDefault()
                 void enviar(input)
               }}
-              className="flex items-end gap-2"
+              className="flex shrink-0 items-end gap-2"
             >
               <textarea
                 value={input}

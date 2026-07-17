@@ -23,18 +23,12 @@ export default async function ConsultorIaPage() {
   const lojas = units.map((u) => ({ id: u.id, code: u.code, name: u.name }))
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-muted/30 p-6">
-      {/* Título */}
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <Sparkles className="size-6 text-primary" />
-          Consultor IA
-        </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Pergunte sobre a sua operação e receba a resposta com os seus números
-          reais.
-        </p>
-      </div>
+    <div className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-5xl min-h-0 flex-col gap-3 bg-muted/30 p-4 md:p-6">
+      {/* Título (compacto) */}
+      <h1 className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
+        <Sparkles className="size-5 text-primary" />
+        Consultor IA
+      </h1>
 
       {!estado.isAi ? (
         <Upsell />
