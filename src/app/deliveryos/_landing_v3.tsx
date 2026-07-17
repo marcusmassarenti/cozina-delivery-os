@@ -488,7 +488,12 @@ function PrecoValor({
   )
 }
 
-export function LandingV3() {
+export function LandingV3({
+  precos,
+}: {
+  /** Preços por loja vindos do /plataforma (platform_settings). */
+  precos: { essencial: number; pro: number; ai: number }
+}) {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
   const [demoResult, setDemoResult] = useState(false)
@@ -981,7 +986,7 @@ export function LandingV3() {
                 <span className="absolute right-6 top-6 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">Comece aqui</span>
                 <h3 className="text-lg font-medium">Essencial</h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Pra ver seu lucro no delivery</p>
-                <PrecoValor mes={49} anual={anual} />
+                <PrecoValor mes={precos.essencial} anual={anual} />
                 <ul className="mt-6 space-y-3 text-[15px]">
                   {[
                     "Upload iFood, 99 e Keeta",
@@ -1018,7 +1023,7 @@ export function LandingV3() {
                   Pro
                 </h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Gestão financeira completa</p>
-                <PrecoValor mes={99} anual={anual} />
+                <PrecoValor mes={precos.pro} anual={anual} />
                 <p className="mt-5 text-[13px] font-medium text-[var(--brand-strong)]">Tudo do Essencial, e mais:</p>
                 <ul className="mt-3 space-y-3 text-[15px]">
                   {[
@@ -1057,7 +1062,7 @@ export function LandingV3() {
                   DeliveryOS AI
                 </h3>
                 <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
-                <PrecoValor mes={159} anual={anual} dark />
+                <PrecoValor mes={precos.ai} anual={anual} dark />
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
                 <ul className="relative mt-3 space-y-3 text-[15px] text-[oklch(0.88_0_0)]">
                   {[

@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { getDefaultPlan } from "@/lib/data/assinatura"
 import { LandingV3 } from "../deliveryos/_landing_v3"
 
 export const metadata: Metadata = {
@@ -7,6 +8,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false }, // variante de teste, fora do Google
 }
 
-export default function V3Page() {
-  return <LandingV3 />
+export default async function V3Page() {
+  const precos = await getDefaultPlan()
+  return <LandingV3 precos={precos} />
 }

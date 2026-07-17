@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { getDefaultPlan } from "@/lib/data/assinatura"
 import { LandingV3 } from "./_landing_v3"
 
 const TITLE = "Delivery OS — veja quanto você realmente ganha no delivery"
@@ -33,6 +34,9 @@ export const metadata: Metadata = {
   },
 }
 
-export default function DeliveryOsLandingPage() {
-  return <LandingV3 />
+export default async function DeliveryOsLandingPage() {
+  // Preços vêm do /plataforma (platform_settings) — landing e checkout sempre
+  // iguais. Muda num lugar só.
+  const precos = await getDefaultPlan()
+  return <LandingV3 precos={precos} />
 }
