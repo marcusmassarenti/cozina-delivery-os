@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Lenis from "lenis"
 import {
   ArrowRight,
@@ -9,6 +9,8 @@ import {
   Building2,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Coins,
   EyeOff,
   FileSpreadsheet,
@@ -557,91 +559,183 @@ function NinoChatMock() {
  * (não usa o layout padrão de print + bullets das outras abas).
  */
 function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [slide, setSlide] = useState(0)
+  const SLIDES = 2
+
+  const irPara = (i: number) => {
+    const el = scrollRef.current
+    if (!el) return
+    const alvo = Math.max(0, Math.min(SLIDES - 1, i))
+    el.scrollTo({ left: alvo * el.clientWidth, behavior: "smooth" })
+    setSlide(alvo)
+  }
+
   return (
     <div id="nino" className="rx-tab-in scroll-mt-24">
-      <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
-        {/* Mockup da conversa */}
-        <div className="order-2 lg:order-1">
-          <NinoChatMock />
-        </div>
-
-        {/* Poderes do Nino */}
-        <div className="order-1 lg:order-2">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
-            {tab.tag}
-          </span>
-          <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
-            Seu consultor de delivery, 24 horas por dia
-          </h3>
-          <p className="mt-2 text-[oklch(0.45_0.01_48)]">
-            Manda a pergunta como mandaria pro seu sócio — e o Nino responde na
-            hora, com os números reais das suas lojas. Um especialista em
-            delivery à sua disposição a qualquer hora: sem planilha, sem
-            relatório, sem esperar o contador.
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {NINO_PODERES.map((p) => (
-              <div
-                key={p.t}
-                className="rounded-2xl border border-black/[0.07] bg-white p-4"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]">
-                    <p.i className="size-3.5" strokeWidth={2.4} />
-                  </span>
-                  <p className="text-sm font-semibold">{p.t}</p>
+      <div className="relative">
+        {/* Trilho horizontal (2 telas lado a lado, com snap) */}
+        <div
+          ref={scrollRef}
+          onScroll={(e) =>
+            setSlide(
+              Math.round(
+                e.currentTarget.scrollLeft /
+                  Math.max(1, e.currentTarget.clientWidth),
+              ),
+            )
+          }
+          className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {/* ── Tela 1 — o Nino (chat + o que perguntar) ── */}
+          <div className="w-full shrink-0 snap-start px-0.5">
+            <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
+              <div className="order-2 lg:order-1">
+                <NinoChatMock />
+              </div>
+              <div className="order-1 lg:order-2">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
+                  {tab.tag}
+                </span>
+                <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
+                  Seu consultor de delivery, 24 horas por dia
+                </h3>
+                <p className="mt-2 text-[oklch(0.45_0.01_48)]">
+                  Manda a pergunta como mandaria pro seu sócio — e o Nino
+                  responde na hora, com os números reais das suas lojas. Um
+                  especialista em delivery à sua disposição a qualquer hora: sem
+                  planilha, sem relatório, sem esperar o contador.
+                </p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {NINO_PODERES.map((p) => (
+                    <div
+                      key={p.t}
+                      className="rounded-2xl border border-black/[0.07] bg-white p-4"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+                          <p.i className="size-3.5" strokeWidth={2.4} />
+                        </span>
+                        <p className="text-sm font-semibold">{p.t}</p>
+                      </div>
+                      <p className="mt-2 text-[13px] leading-relaxed text-[oklch(0.5_0.01_48)]">
+                        {p.ex}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-2 text-[13px] leading-relaxed text-[oklch(0.5_0.01_48)]">
-                  {p.ex}
+                <p className="mt-5 flex items-start gap-2 text-[13px] text-[oklch(0.5_0.01_48)]">
+                  <Check
+                    className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                    strokeWidth={2.6}
+                  />
+                  Franqueado pergunta sobre a própria loja; a holding vê a rede
+                  inteira — cada um só enxerga o que é seu.
                 </p>
               </div>
-            ))}
+            </div>
           </div>
-          <p className="mt-5 flex items-start gap-2 text-[13px] text-[oklch(0.5_0.01_48)]">
-            <Check
-              className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
-              strokeWidth={2.6}
-            />
-            Franqueado pergunta sobre a própria loja; a holding vê a rede
-            inteira — cada um só enxerga o que é seu.
-          </p>
+
+          {/* ── Tela 2 — o diagnóstico com o plano de ação (o print) ── */}
+          <div className="w-full shrink-0 snap-start px-0.5">
+            <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
+              <div className="order-1">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
+                  Todo mês, automático
+                </span>
+                <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
+                  {tab.titulo}
+                </h3>
+                <p className="mt-2 text-[oklch(0.45_0.01_48)]">
+                  Além do chat, a IA cruza tudo sozinha e escreve o diagnóstico
+                  da loja com as 3 ações que mais mexem no resultado — o
+                  problema, o que está em jogo e como resolver. Você exporta em
+                  PDF.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  {tab.bullets.slice(1).map((b) => (
+                    <li key={b} className="flex items-start gap-2 text-sm">
+                      <Check
+                        className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                        strokeWidth={2.6}
+                      />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="order-2">
+                <ShotBrowser
+                  src={tab.img}
+                  alt={tab.titulo}
+                  url={tab.url}
+                  callout={tab.callout}
+                />
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Seta flutuante — rola pra próxima tela (some na última) */}
+        {slide < SLIDES - 1 && (
+          <button
+            type="button"
+            onClick={() => irPara(slide + 1)}
+            aria-label="Ver o diagnóstico"
+            className="absolute -right-1 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/95 p-3 shadow-[0_12px_28px_-10px_rgba(0,0,0,.3)] backdrop-blur transition-transform hover:scale-105 lg:flex"
+          >
+            <ChevronRight className="size-5 text-[var(--brand)]" strokeWidth={2.4} />
+          </button>
+        )}
+        {slide > 0 && (
+          <button
+            type="button"
+            onClick={() => irPara(slide - 1)}
+            aria-label="Voltar pro Nino"
+            className="absolute -left-1 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/95 p-3 shadow-[0_12px_28px_-10px_rgba(0,0,0,.3)] backdrop-blur transition-transform hover:scale-105 lg:flex"
+          >
+            <ChevronLeft className="size-5 text-[var(--brand)]" strokeWidth={2.4} />
+          </button>
+        )}
       </div>
 
-      {/* E ainda: o diagnóstico com o plano de ação (o print) */}
-      <div className="mt-10 grid items-center gap-8 border-t border-black/[0.06] pt-10 lg:grid-cols-2 lg:gap-14">
-        <div className="order-1">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
-            Todo mês, automático
-          </span>
-          <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
-            {tab.titulo}
-          </h3>
-          <p className="mt-2 text-[oklch(0.45_0.01_48)]">
-            Além do chat, a IA cruza tudo sozinha e escreve o diagnóstico da
-            loja com as 3 ações que mais mexem no resultado — o problema, o que
-            está em jogo e como resolver. Você exporta em PDF.
-          </p>
-          <ul className="mt-4 space-y-2">
-            {tab.bullets.slice(1).map((b) => (
-              <li key={b} className="flex items-start gap-2 text-sm">
-                <Check
-                  className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
-                  strokeWidth={2.6}
-                />
-                {b}
-              </li>
-            ))}
-          </ul>
+      {/* Controles do carrossel: setas + bolinhas (com rótulo da tela) */}
+      <div className="mt-6 flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={() => irPara(slide - 1)}
+          disabled={slide === 0}
+          aria-label="Anterior"
+          className="flex size-9 items-center justify-center rounded-full border border-black/10 text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)] disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronLeft className="size-4" strokeWidth={2.4} />
+        </button>
+        <div className="flex items-center gap-2">
+          {["Nino AI", "Diagnóstico"].map((rotulo, i) => (
+            <button
+              key={rotulo}
+              type="button"
+              onClick={() => irPara(i)}
+              aria-label={rotulo}
+              className={`rounded-full text-xs font-medium transition-all ${
+                slide === i
+                  ? "bg-[var(--brand-soft)] px-3 py-1.5 text-[var(--brand-strong)]"
+                  : "px-3 py-1.5 text-[oklch(0.5_0.01_48)] hover:text-[var(--brand)]"
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
         </div>
-        <div className="order-2">
-          <ShotBrowser
-            src={tab.img}
-            alt={tab.titulo}
-            url={tab.url}
-            callout={tab.callout}
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => irPara(slide + 1)}
+          disabled={slide === SLIDES - 1}
+          aria-label="Próximo"
+          className="flex size-9 items-center justify-center rounded-full border border-black/10 text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)] disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronRight className="size-4" strokeWidth={2.4} />
+        </button>
       </div>
     </div>
   )
