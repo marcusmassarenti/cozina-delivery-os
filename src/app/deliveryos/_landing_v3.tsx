@@ -560,8 +560,28 @@ function NinoChatMock() {
  */
 function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const slide0Ref = useRef<HTMLDivElement>(null)
+  const slide1Ref = useRef<HTMLDivElement>(null)
   const [slide, setSlide] = useState(0)
+  const [alturas, setAlturas] = useState<[number, number]>([0, 0])
   const SLIDES = 2
+
+  // A altura do trilho acompanha a tela ativa — senão a tela mais curta
+  // (o diagnóstico) deixa um "buraco branco" embaixo. Re-mede no resize e
+  // quando o print termina de carregar (ResizeObserver).
+  useEffect(() => {
+    const medir = () => {
+      const a0 = slide0Ref.current?.offsetHeight ?? 0
+      const a1 = slide1Ref.current?.offsetHeight ?? 0
+      setAlturas((prev) => (prev[0] === a0 && prev[1] === a1 ? prev : [a0, a1]))
+    }
+    medir()
+    const ro = new ResizeObserver(medir)
+    if (slide0Ref.current) ro.observe(slide0Ref.current)
+    if (slide1Ref.current) ro.observe(slide1Ref.current)
+    return () => ro.disconnect()
+  }, [])
 
   const irPara = (i: number) => {
     const el = scrollRef.current
@@ -569,14 +589,23 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
     const alvo = Math.max(0, Math.min(SLIDES - 1, i))
     el.scrollTo({ left: alvo * el.clientWidth, behavior: "smooth" })
     setSlide(alvo)
+    // Traz o painel de volta pro topo da vista (senão, na troca, a tela some
+    // pra cima e sobra tela branca). Usa o Lenis pra não brigar com o scroll.
+    const topo = rootRef.current
+    if (topo) {
+      if (lenisRef.current) lenisRef.current.scrollTo(topo, { offset: -72 })
+      else topo.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
   }
 
   return (
-    <div id="nino" className="rx-tab-in scroll-mt-24">
+    <div id="nino" ref={rootRef} className="rx-tab-in scroll-mt-24">
       <div className="relative">
-        {/* Trilho horizontal (2 telas lado a lado, com snap) */}
+        {/* Trilho horizontal (2 telas lado a lado, com snap). A altura segue a
+            tela ativa pra não sobrar espaço branco. */}
         <div
           ref={scrollRef}
+          style={alturas[slide] ? { height: alturas[slide] } : undefined}
           onScroll={(e) =>
             setSlide(
               Math.round(
@@ -585,10 +614,10 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
               ),
             )
           }
-          className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex snap-x snap-mandatory items-start overflow-x-auto overflow-y-hidden transition-[height] duration-300 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {/* ── Tela 1 — o Nino (chat + o que perguntar) ── */}
-          <div className="w-full shrink-0 snap-start px-0.5">
+          <div ref={slide0Ref} className="w-full shrink-0 snap-start px-0.5">
             <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
               <div className="order-2 lg:order-1">
                 <NinoChatMock />
@@ -637,7 +666,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
           </div>
 
           {/* ── Tela 2 — o diagnóstico com o plano de ação (o print) ── */}
-          <div className="w-full shrink-0 snap-start px-0.5">
+          <div ref={slide1Ref} className="w-full shrink-0 snap-start px-0.5">
             <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
               <div className="order-1">
                 <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
@@ -784,6 +813,10 @@ function PrecoValor({
   )
 }
 
+/** Instância do Lenis compartilhada, pra rolagens programáticas (ex.: carrossel
+ *  do Nino) usarem o mesmo scroll suave em vez de brigar com ele. */
+const lenisRef: { current: Lenis | null } = { current: null }
+
 export function LandingV3({
   precos,
 }: {
@@ -820,6 +853,7 @@ export function LandingV3({
       wheelMultiplier: 1,
       touchMultiplier: 1.6,
     })
+    lenisRef.current = lenis
     let raf = 0
     const loop = (time: number) => {
       lenis.raf(time)
@@ -842,6 +876,7 @@ export function LandingV3({
       cancelAnimationFrame(raf)
       document.removeEventListener("click", onClick)
       lenis.destroy()
+      lenisRef.current = null
     }
   }, [])
 
