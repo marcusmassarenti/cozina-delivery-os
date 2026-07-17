@@ -326,7 +326,7 @@ export function DreDetalhado({
         <>
           {recebidoDireto > 0 && (
             <Row
-              label="(+) Recebido direto pela loja (PIX/dinheiro/VR/maquininha)"
+              label="(+) Recebido direto pela loja (PIX / dinheiro / VR / maquininha)"
               value={`+ ${fmtBRL(recebidoDireto)}`}
               tone="pos"
               pct={pctOf(recebidoDireto)}
@@ -633,8 +633,10 @@ function Row({
           : ""
       }`}
     >
+      {/* min-w-0: sem isso o label não encolhe abaixo do próprio texto e
+          empurra o card pra fora da tela no mobile. */}
       <span
-        className={`text-xs ${
+        className={`min-w-0 text-xs ${
           bold ? "font-semibold" : muted ? "text-muted-foreground" : ""
         }`}
       >

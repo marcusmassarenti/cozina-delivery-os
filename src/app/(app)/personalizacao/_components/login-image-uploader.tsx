@@ -89,7 +89,8 @@ export function LoginImageUploader({
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: os dois botões lado a lado vazavam da tela no mobile. */}
+        <div className="flex flex-wrap items-center gap-2">
           <SubmitButton />
           {currentImage && (
             <Button

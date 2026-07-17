@@ -288,8 +288,11 @@ export function IfoodCoverageView({
           </div>
 
           {/* Legenda */}
+          {/* O flex-wrap precisa estar TAMBÉM nas linhas de dentro: o pai
+              quebrar não adianta, porque cada linha interna é um item só —
+              os 7 tipos em nowrap vazavam 405px no mobile. */}
           <div className="flex flex-wrap items-center gap-4 rounded-md border bg-card p-3 text-[11px]">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="font-semibold uppercase tracking-wider text-muted-foreground">
                 Tipo
               </span>
@@ -297,7 +300,7 @@ export function IfoodCoverageView({
                 <LegendItem key={c.key} label={c.label} name={c.name} />
               ))}
             </div>
-            <div className="flex items-center gap-3 border-l pl-4">
+            <div className="flex flex-wrap items-center gap-3 sm:border-l sm:pl-4">
               <span className="font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </span>

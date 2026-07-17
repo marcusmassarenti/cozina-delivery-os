@@ -264,7 +264,9 @@ export function PizzaPlataforma({
       title="Participação por plataforma"
       subtitle="Quanto cada uma representa do total"
     >
-      <div className="flex items-center gap-5">
+      {/* No mobile empilha: o donut (160px) + legenda lado a lado não cabem
+          em 375px e empurravam a página. */}
+      <div className="flex flex-col items-center gap-5 sm:flex-row">
         <svg viewBox="0 0 180 180" className="size-40 shrink-0">
           {arcs.map(({ p, d }) => (
             <path key={p} d={d} fill={PLATFORM_COLOR[p]}>

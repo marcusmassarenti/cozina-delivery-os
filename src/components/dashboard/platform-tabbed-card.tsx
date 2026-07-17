@@ -51,7 +51,10 @@ export function PlatformTabbedCard({
   if (slots.length === 0) return null
 
   return (
-    <div className="rounded-xl border bg-card p-5">
+    // min-w-0: como item de grid/flex, o card nasce com min-width:auto e não
+    // encolhe abaixo do próprio conteúdo — os títulos truncate/line-clamp
+    // esticavam a coluna inteira e empurravam o dashboard pra fora da tela.
+    <div className="min-w-0 rounded-xl border bg-card p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {icon}

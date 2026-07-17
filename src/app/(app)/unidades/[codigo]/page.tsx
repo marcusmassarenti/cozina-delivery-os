@@ -532,13 +532,18 @@ function DetailTabs({
 
   return (
     <Tabs defaultValue="financeiro">
-      <TabsList>
-        <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
-        <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
-        <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
-        <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
-        {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
-      </TabsList>
+      {/* No mobile as 5 abas não cabem em 375px: sem o scroll aqui, elas
+          empurravam a página inteira e a última ("Fechamento") ficava
+          cortada e inalcançável. */}
+      <div className="-mx-1 overflow-x-auto px-1">
+        <TabsList>
+          <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+          <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
+          <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
+          <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
+          {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
+        </TabsList>
+      </div>
 
       {/* Financeiro = DRE completo da loja (Receita + Financeiro + Custos) */}
       <TabsContent value="financeiro" className="mt-4">

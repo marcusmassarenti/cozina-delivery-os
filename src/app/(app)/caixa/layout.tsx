@@ -64,7 +64,10 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
           <Coins className="size-6 text-muted-foreground" />
           Financeiro
         </h1>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: no mobile o seletor de loja + o botão não cabem lado a
+            lado e cortavam o "Novo lançamento" — como isto é o layout, o corte
+            acontecia nas 6 telas do Financeiro. */}
+        <div className="flex flex-wrap items-center gap-2">
           {units.length > 0 && <LojaSelector units={units} />}
           <LancamentoDialog
             accounts={accounts}

@@ -195,7 +195,11 @@ export default async function RankingPage({
         </div>
       ) : (
         <>
+          {/* overflow-hidden arredonda os cantos; o overflow-x-auto de dentro
+              é o que deixa rolar até as últimas colunas no mobile — sem ele,
+              Ticket médio/Pedidos/Margem ficavam cortadas e inalcançáveis. */}
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
@@ -238,6 +242,7 @@ export default async function RankingPage({
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
 
           {/* Gráficos */}
