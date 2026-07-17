@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Sparkles, Lock } from "lucide-react"
 
 import { getConsultorEstado, listarConversas } from "@/lib/data/ia-chat"
+import { getVisibleUnits } from "@/lib/data/units"
 import { ConsultorChat } from "./_components/consultor-chat"
 
 export const dynamic = "force-dynamic"
@@ -14,9 +15,12 @@ export const dynamic = "force-dynamic"
 export default async function ConsultorIaPage() {
   const estado = await getConsultorEstado()
   const restantes = Math.max(0, estado.limiteMes - estado.usadasMes) + estado.creditos
-  // Só busca o histórico quando a tela vai mesmo mostrar o chat.
+  // Só busca o histórico/lojas quando a tela vai mesmo mostrar o chat.
   const podeUsar = estado.isAi && estado.configurado && estado.lojas > 0
-  const conversas = podeUsar ? await listarConversas() : []
+  const [conversas, units] = podeUsar
+    ? await Promise.all([listarConversas(), getVisibleUnits()])
+    : [[], []]
+  const lojas = units.map((u) => ({ id: u.id, code: u.code, name: u.name }))
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -47,6 +51,7 @@ export default async function ConsultorIaPage() {
         <ConsultorChat
           conversasIniciais={conversas}
           restantesIniciais={restantes}
+          lojas={lojas}
         />
       )}
     </div>

@@ -4,6 +4,10 @@ import {
   perguntarConsultor,
   listarConversas,
   getConversaMensagens,
+  renomearConversa,
+  favoritarConversa,
+  vincularConversa,
+  excluirConversa,
   type ConversaResumo,
 } from "@/lib/data/ia-chat"
 import type { ChatTurn } from "@/lib/anthropic/client"
@@ -46,4 +50,20 @@ export async function carregarConversas(): Promise<ConversaResumo[]> {
 /** Carrega as mensagens de uma conversa (ao clicar na lateral). */
 export async function abrirConversa(conversaId: string): Promise<ChatTurn[]> {
   return getConversaMensagens(conversaId)
+}
+
+export async function renomear(id: string, titulo: string): Promise<void> {
+  await renomearConversa(id, titulo)
+}
+
+export async function favoritar(id: string, favorita: boolean): Promise<void> {
+  await favoritarConversa(id, favorita)
+}
+
+export async function vincular(id: string, unitId: string | null): Promise<void> {
+  await vincularConversa(id, unitId)
+}
+
+export async function excluir(id: string): Promise<void> {
+  await excluirConversa(id)
 }

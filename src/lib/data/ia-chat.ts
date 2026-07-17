@@ -105,23 +105,80 @@ export type ConversaResumo = {
   id: string
   titulo: string
   atualizadaEm: string
+  favorita: boolean
+  /** Loja a que a conversa se refere; null = a rede/grupo. */
+  unitId: string | null
 }
 
-/** Lista as conversas do usuário logado (mais recentes primeiro). */
+/** Lista as conversas do usuário (favoritas primeiro, depois mais recentes). */
 export async function listarConversas(): Promise<ConversaResumo[]> {
   const { userId } = await requireAuth()
   const admin = createAdminClient()
   const { data } = await admin
     .from("ia_chat_conversas")
-    .select("id, titulo, updated_at")
+    .select("id, titulo, updated_at, favorita, unit_id")
     .eq("user_id", userId)
+    .order("favorita", { ascending: false })
     .order("updated_at", { ascending: false })
-    .limit(50)
+    .limit(80)
   return (data ?? []).map((c) => ({
     id: c.id as string,
     titulo: (c.titulo as string) || "Nova conversa",
     atualizadaEm: c.updated_at as string,
+    favorita: Boolean(c.favorita),
+    unitId: (c.unit_id as string | null) ?? null,
   }))
+}
+
+/** Renomeia uma conversa (só se for do usuário). */
+export async function renomearConversa(
+  conversaId: string,
+  titulo: string,
+): Promise<void> {
+  const { userId } = await requireAuth()
+  const limpo = titulo.replace(/\s+/g, " ").trim().slice(0, 80)
+  if (!limpo) return
+  await createAdminClient()
+    .from("ia_chat_conversas")
+    .update({ titulo: limpo })
+    .eq("id", conversaId)
+    .eq("user_id", userId)
+}
+
+/** Marca/desmarca como favorita. */
+export async function favoritarConversa(
+  conversaId: string,
+  favorita: boolean,
+): Promise<void> {
+  const { userId } = await requireAuth()
+  await createAdminClient()
+    .from("ia_chat_conversas")
+    .update({ favorita })
+    .eq("id", conversaId)
+    .eq("user_id", userId)
+}
+
+/** Vincula a conversa a uma loja (unitId) ou ao grupo (null). */
+export async function vincularConversa(
+  conversaId: string,
+  unitId: string | null,
+): Promise<void> {
+  const { userId } = await requireAuth()
+  await createAdminClient()
+    .from("ia_chat_conversas")
+    .update({ unit_id: unitId })
+    .eq("id", conversaId)
+    .eq("user_id", userId)
+}
+
+/** Exclui uma conversa (e suas mensagens, por cascade). */
+export async function excluirConversa(conversaId: string): Promise<void> {
+  const { userId } = await requireAuth()
+  await createAdminClient()
+    .from("ia_chat_conversas")
+    .delete()
+    .eq("id", conversaId)
+    .eq("user_id", userId)
 }
 
 /** Carrega as mensagens de uma conversa — só se for do usuário logado. */

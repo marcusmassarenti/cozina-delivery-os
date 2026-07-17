@@ -1,16 +1,51 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Send, Sparkles } from "lucide-react"
+import {
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Send,
+  Sparkles,
+  Star,
+  Store,
+  Trash2,
+} from "lucide-react"
 
-import { perguntar, abrirConversa } from "../_actions"
+import {
+  perguntar,
+  abrirConversa,
+  renomear,
+  favoritar,
+  vincular,
+  excluir,
+} from "../_actions"
 import type { ChatTurn } from "@/lib/anthropic/client"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 export type ConversaResumo = {
   id: string
   titulo: string
   atualizadaEm: string
+  favorita: boolean
+  unitId: string | null
 }
+
+type Loja = { id: string; code: string; name: string }
 
 const SUGESTOES = [
   "Como está meu faturamento este mês?",
@@ -19,17 +54,14 @@ const SUGESTOES = [
   "Compare o ticket médio das minhas lojas",
 ]
 
-/**
- * Consultor IA: lista de conversas (lateral, como o Claude) + o chat. As
- * conversas ficam salvas por usuário; a lista atualiza ao vivo quando uma
- * conversa nova é criada. O contador de cota vive aqui pra cair sem recarregar.
- */
 export function ConsultorChat({
   conversasIniciais,
   restantesIniciais,
+  lojas,
 }: {
   conversasIniciais: ConversaResumo[]
   restantesIniciais: number
+  lojas: Loja[]
 }) {
   const [conversas, setConversas] = React.useState(conversasIniciais)
   const [ativaId, setAtivaId] = React.useState<string | null>(null)
@@ -40,11 +72,26 @@ export function ConsultorChat({
   const [erro, setErro] = React.useState<string | null>(null)
   const [restantes, setRestantes] = React.useState(restantesIniciais)
   const [bloqueado, setBloqueado] = React.useState(restantesIniciais <= 0)
+  // Diálogos compartilhados (renomear / vincular).
+  const [renomeando, setRenomeando] = React.useState<ConversaResumo | null>(null)
+  const [vinculando, setVinculando] = React.useState<ConversaResumo | null>(null)
   const fimRef = React.useRef<HTMLDivElement>(null)
+
+  const lojaNome = React.useCallback(
+    (unitId: string | null) =>
+      unitId ? (lojas.find((l) => l.id === unitId)?.name ?? "Loja") : "Grupo",
+    [lojas],
+  )
 
   React.useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, pending])
+
+  function patchConversa(id: string, patch: Partial<ConversaResumo>) {
+    setConversas((atual) =>
+      ordenar(atual.map((c) => (c.id === id ? { ...c, ...patch } : c))),
+    )
+  }
 
   function novaConversa() {
     setAtivaId(null)
@@ -75,17 +122,19 @@ export function ConsultorChat({
     if (r.ok) {
       setMessages([...novo, { role: "assistant", content: r.resposta }])
       setRestantes((n) => Math.max(0, n - 1))
-      // Conversa nova → entra no topo da lista. Existente → sobe pro topo.
       setConversas((atual) => {
+        const anterior = atual.find((c) => c.id === r.conversaId)
         const semEla = atual.filter((c) => c.id !== r.conversaId)
-        return [
+        return ordenar([
           {
             id: r.conversaId,
             titulo: r.titulo,
             atualizadaEm: new Date().toISOString(),
+            favorita: anterior?.favorita ?? false,
+            unitId: anterior?.unitId ?? null,
           },
           ...semEla,
-        ]
+        ])
       })
       setAtivaId(r.conversaId)
     } else {
@@ -96,10 +145,39 @@ export function ConsultorChat({
     }
   }
 
+  async function toggleFavorita(c: ConversaResumo) {
+    patchConversa(c.id, { favorita: !c.favorita })
+    await favoritar(c.id, !c.favorita)
+  }
+
+  async function salvarRenome(id: string, titulo: string) {
+    const limpo = titulo.trim()
+    setRenomeando(null)
+    if (!limpo) return
+    patchConversa(id, { titulo: limpo })
+    await renomear(id, limpo)
+  }
+
+  async function salvarVinculo(id: string, unitId: string | null) {
+    setVinculando(null)
+    patchConversa(id, { unitId })
+    await vincular(id, unitId)
+  }
+
+  async function removerConversa(c: ConversaResumo) {
+    if (!confirm(`Excluir a conversa "${c.titulo}"? Não dá pra desfazer.`)) return
+    setConversas((atual) => atual.filter((x) => x.id !== c.id))
+    if (ativaId === c.id) novaConversa()
+    await excluir(c.id)
+  }
+
+  const favoritas = conversas.filter((c) => c.favorita)
+  const recentes = conversas.filter((c) => !c.favorita)
+
   return (
     <div className="flex flex-col gap-4 md:flex-row">
       {/* Lateral: conversas */}
-      <aside className="md:w-56 md:shrink-0">
+      <aside className="md:w-60 md:shrink-0">
         <button
           type="button"
           onClick={novaConversa}
@@ -108,29 +186,39 @@ export function ConsultorChat({
           <Plus className="size-4" />
           Nova conversa
         </button>
-        <div className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0">
-          {conversas.length === 0 ? (
-            <p className="px-1 py-2 text-xs text-muted-foreground">
-              Suas conversas aparecem aqui.
-            </p>
-          ) : (
-            conversas.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => abrir(c.id)}
-                title={c.titulo}
-                className={`shrink-0 truncate rounded-md px-2.5 py-2 text-left text-xs transition-colors md:w-full ${
-                  c.id === ativaId
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60"
-                }`}
-              >
-                {c.titulo}
-              </button>
-            ))
-          )}
-        </div>
+
+        {conversas.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-muted-foreground">
+            Suas conversas aparecem aqui.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {favoritas.length > 0 && (
+              <ListaSecao
+                titulo="Favoritas"
+                conversas={favoritas}
+                ativaId={ativaId}
+                lojaNome={lojaNome}
+                onAbrir={abrir}
+                onFavoritar={toggleFavorita}
+                onRenomear={setRenomeando}
+                onVincular={setVinculando}
+                onExcluir={removerConversa}
+              />
+            )}
+            <ListaSecao
+              titulo={favoritas.length > 0 ? "Recentes" : undefined}
+              conversas={recentes}
+              ativaId={ativaId}
+              lojaNome={lojaNome}
+              onAbrir={abrir}
+              onFavoritar={toggleFavorita}
+              onRenomear={setRenomeando}
+              onVincular={setVinculando}
+              onExcluir={removerConversa}
+            />
+          </div>
+        )}
       </aside>
 
       {/* Chat */}
@@ -169,7 +257,6 @@ export function ConsultorChat({
           </div>
         ) : (
           <>
-            {/* Conversa */}
             <div className="min-h-[280px] rounded-xl border bg-card p-4">
               {carregando ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
@@ -182,7 +269,7 @@ export function ConsultorChat({
                     Pergunte sobre a sua operação
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Eu respondo com os números reais das suas lojas neste mês.
+                    Eu respondo com os números reais das suas lojas.
                   </p>
                   <div className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-2">
                     {SUGESTOES.map((s) => (
@@ -233,7 +320,6 @@ export function ConsultorChat({
               </div>
             )}
 
-            {/* Caixa de pergunta */}
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -266,6 +352,258 @@ export function ConsultorChat({
           </>
         )}
       </div>
+
+      {/* Diálogo: renomear */}
+      <RenomearDialog
+        conversa={renomeando}
+        onClose={() => setRenomeando(null)}
+        onSalvar={salvarRenome}
+      />
+      {/* Diálogo: vincular a loja/grupo */}
+      <VincularDialog
+        conversa={vinculando}
+        lojas={lojas}
+        onClose={() => setVinculando(null)}
+        onSalvar={salvarVinculo}
+      />
     </div>
+  )
+}
+
+/** Ordena: favoritas primeiro, depois mais recentes. */
+function ordenar(cs: ConversaResumo[]): ConversaResumo[] {
+  return [...cs].sort((a, b) => {
+    if (a.favorita !== b.favorita) return a.favorita ? -1 : 1
+    return b.atualizadaEm.localeCompare(a.atualizadaEm)
+  })
+}
+
+function ListaSecao({
+  titulo,
+  conversas,
+  ativaId,
+  lojaNome,
+  onAbrir,
+  onFavoritar,
+  onRenomear,
+  onVincular,
+  onExcluir,
+}: {
+  titulo?: string
+  conversas: ConversaResumo[]
+  ativaId: string | null
+  lojaNome: (unitId: string | null) => string
+  onAbrir: (id: string) => void
+  onFavoritar: (c: ConversaResumo) => void
+  onRenomear: (c: ConversaResumo) => void
+  onVincular: (c: ConversaResumo) => void
+  onExcluir: (c: ConversaResumo) => void
+}) {
+  if (conversas.length === 0) return null
+  return (
+    <div>
+      {titulo && (
+        <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {titulo}
+        </p>
+      )}
+      <div className="flex flex-col gap-0.5">
+        {conversas.map((c) => (
+          <div
+            key={c.id}
+            className={`group flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors ${
+              c.id === ativaId ? "bg-muted" : "hover:bg-muted/60"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => onFavoritar(c)}
+              title={c.favorita ? "Desfavoritar" : "Favoritar"}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-amber-500"
+            >
+              <Star
+                className={`size-3.5 ${c.favorita ? "fill-amber-400 text-amber-400" : ""}`}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => onAbrir(c.id)}
+              className="min-w-0 flex-1 text-left"
+            >
+              <span
+                className={`block truncate text-xs ${
+                  c.id === ativaId ? "font-medium text-foreground" : "text-foreground/80"
+                }`}
+                title={c.titulo}
+              >
+                {c.titulo}
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Store className="size-2.5" />
+                {lojaNome(c.unitId)}
+              </span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    title="Opções"
+                    className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background group-hover:opacity-100 data-[popup-open]:opacity-100"
+                  >
+                    <MoreHorizontal className="size-3.5" />
+                  </button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={() => onRenomear(c)}>
+                  <Pencil className="size-3.5" />
+                  Renomear
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onVincular(c)}>
+                  <Store className="size-3.5" />
+                  Vincular a…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onExcluir(c)}
+                  className="text-rose-600 dark:text-rose-400"
+                >
+                  <Trash2 className="size-3.5" />
+                  Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RenomearDialog({
+  conversa,
+  onClose,
+  onSalvar,
+}: {
+  conversa: ConversaResumo | null
+  onClose: () => void
+  onSalvar: (id: string, titulo: string) => void
+}) {
+  return (
+    <Dialog open={!!conversa} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Renomear conversa</DialogTitle>
+        </DialogHeader>
+        {/* key remonta o form por conversa → o defaultValue reinicia sozinho,
+            sem precisar de effect + setState. */}
+        {conversa && (
+          <RenomearForm
+            key={conversa.id}
+            tituloInicial={conversa.titulo}
+            onCancelar={onClose}
+            onSalvar={(t) => onSalvar(conversa.id, t)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function RenomearForm({
+  tituloInicial,
+  onCancelar,
+  onSalvar,
+}: {
+  tituloInicial: string
+  onCancelar: () => void
+  onSalvar: (titulo: string) => void
+}) {
+  const ref = React.useRef<HTMLInputElement>(null)
+  return (
+    <>
+      <input
+        ref={ref}
+        defaultValue={tituloInicial}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSalvar(ref.current?.value ?? "")
+        }}
+        maxLength={80}
+        autoFocus
+        className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+      />
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancelar}>
+          Cancelar
+        </Button>
+        <Button type="button" onClick={() => onSalvar(ref.current?.value ?? "")}>
+          Salvar
+        </Button>
+      </DialogFooter>
+    </>
+  )
+}
+
+function VincularDialog({
+  conversa,
+  lojas,
+  onClose,
+  onSalvar,
+}: {
+  conversa: ConversaResumo | null
+  lojas: Loja[]
+  onClose: () => void
+  onSalvar: (id: string, unitId: string | null) => void
+}) {
+  return (
+    <Dialog open={!!conversa} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Vincular conversa</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Marque se esta conversa é sobre uma loja específica ou sobre o grupo.
+        </p>
+        <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+          <OpcaoVinculo
+            ativo={conversa?.unitId == null}
+            label="Grupo (toda a rede)"
+            onClick={() => conversa && onSalvar(conversa.id, null)}
+          />
+          {lojas.map((l) => (
+            <OpcaoVinculo
+              key={l.id}
+              ativo={conversa?.unitId === l.id}
+              label={`${l.name} · #${l.code}`}
+              onClick={() => conversa && onSalvar(conversa.id, l.id)}
+            />
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function OpcaoVinculo({
+  ativo,
+  label,
+  onClick,
+}: {
+  ativo: boolean
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+        ativo ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
+      }`}
+    >
+      <Store className="size-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
   )
 }
