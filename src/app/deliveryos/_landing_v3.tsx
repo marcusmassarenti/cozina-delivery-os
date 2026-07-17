@@ -711,7 +711,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
             type="button"
             onClick={() => irPara(slide + 1)}
             aria-label="Ver o diagnóstico"
-            className="absolute -right-1 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/95 p-3 shadow-[0_12px_28px_-10px_rgba(0,0,0,.3)] backdrop-blur transition-transform hover:scale-105 lg:flex"
+            className="absolute right-3 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/95 p-3 shadow-[0_12px_28px_-10px_rgba(0,0,0,.3)] backdrop-blur transition-transform hover:scale-105 lg:flex"
           >
             <ChevronRight className="size-5 text-[var(--brand)]" strokeWidth={2.4} />
           </button>
@@ -721,7 +721,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
             type="button"
             onClick={() => irPara(slide - 1)}
             aria-label="Voltar pro Nino"
-            className="absolute -left-1 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/95 p-3 shadow-[0_12px_28px_-10px_rgba(0,0,0,.3)] backdrop-blur transition-transform hover:scale-105 lg:flex"
+            className="absolute left-3 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/95 p-3 shadow-[0_12px_28px_-10px_rgba(0,0,0,.3)] backdrop-blur transition-transform hover:scale-105 lg:flex"
           >
             <ChevronLeft className="size-5 text-[var(--brand)]" strokeWidth={2.4} />
           </button>
