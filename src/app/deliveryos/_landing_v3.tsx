@@ -264,13 +264,13 @@ const PORDENTRO_TABS: {
 }[] = [
   {
     key: "ia",
-    label: "IA",
+    label: "Nino AI",
     sparkle: true,
     nino: true,
     img: "/landing/diagnostico.png",
     url: "app.deliveryos.food/unidade/diagnostico",
     callout: "as 3 ações do mês",
-    tag: "DeliveryOS AI",
+    tag: "Nino AI",
     titulo: "A IA lê a sua loja e diz o que fazer",
     texto:
       "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação, com os seus números reais.",
@@ -571,13 +571,13 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
             {tab.tag}
           </span>
           <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
-            Um consultor que conhece a sua operação de cor
+            Seu consultor de delivery, 24 horas por dia
           </h3>
           <p className="mt-2 text-[oklch(0.45_0.01_48)]">
             Manda a pergunta como mandaria pro seu sócio — e o Nino responde na
-            hora, com os números reais das suas lojas. É como ter um analista só
-            seu, 24 horas por dia: sem planilha, sem relatório, sem esperar o
-            contador.
+            hora, com os números reais das suas lojas. Um especialista em
+            delivery à sua disposição a qualquer hora: sem planilha, sem
+            relatório, sem esperar o contador.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {NINO_PODERES.map((p) => (
@@ -844,8 +844,8 @@ export function LandingV3({
               >
                 <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
                 <span>
-                  Novo — <span className="font-semibold text-white">Nino AI</span>,
-                  seu consultor: pergunte e ele responde com os seus números
+                  Novo — <span className="font-semibold text-white">Nino AI</span>:
+                  seu consultor de delivery, disponível 24 horas por dia
                 </span>
                 <ArrowRight
                   className="size-3.5 transition-transform group-hover:translate-x-0.5"
