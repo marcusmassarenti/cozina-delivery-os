@@ -1,7 +1,11 @@
 import Link from "next/link"
 import { Sparkles, Lock } from "lucide-react"
 
-import { getConsultorEstado, listarConversas } from "@/lib/data/ia-chat"
+import {
+  getConsultorEstado,
+  listarConversas,
+  getPacoteConfig,
+} from "@/lib/data/ia-chat"
 import { getVisibleUnits } from "@/lib/data/units"
 import { ConsultorChat } from "./_components/consultor-chat"
 
@@ -17,9 +21,9 @@ export default async function ConsultorIaPage() {
   const restantes = Math.max(0, estado.limiteMes - estado.usadasMes) + estado.creditos
   // Só busca o histórico/lojas quando a tela vai mesmo mostrar o chat.
   const podeUsar = estado.isAi && estado.configurado && estado.lojas > 0
-  const [conversas, units] = podeUsar
-    ? await Promise.all([listarConversas(), getVisibleUnits()])
-    : [[], []]
+  const [conversas, units, pacote] = podeUsar
+    ? await Promise.all([listarConversas(), getVisibleUnits(), getPacoteConfig()])
+    : [[], [], { preco: 0, tamanho: 100 }]
   const lojas = units.map((u) => ({ id: u.id, code: u.code, name: u.name }))
 
   return (
@@ -46,6 +50,7 @@ export default async function ConsultorIaPage() {
           conversasIniciais={conversas}
           restantesIniciais={restantes}
           lojas={lojas}
+          pacote={pacote}
         />
       )}
     </div>

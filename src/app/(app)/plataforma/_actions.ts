@@ -205,6 +205,7 @@ export async function setPlatformPlan(
     const essencial = money("essencial")
     const pro = money("pro")
     const ai = money("ai")
+    const pacotePreco = money("pacotePreco") // pacote de perguntas do Consultor IA
     if (essencial == null) return { ok: false, message: "Informe o valor do Essencial (por loja)." }
     if (pro == null) return { ok: false, message: "Informe o valor do Pro (por loja)." }
     if (ai == null) return { ok: false, message: "Informe o valor do DeliveryOS AI (por loja)." }
@@ -215,6 +216,8 @@ export async function setPlatformPlan(
         essencial_per_unit: essencial,
         pro_per_unit: pro,
         ai_per_unit: ai,
+        // Só sobrescreve o preço do pacote se veio no form.
+        ...(pacotePreco != null ? { ia_pack_price: pacotePreco } : {}),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },

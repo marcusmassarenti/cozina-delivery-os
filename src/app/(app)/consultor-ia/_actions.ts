@@ -8,6 +8,7 @@ import {
   favoritarConversa,
   vincularConversa,
   excluirConversa,
+  comprarPacoteConsultor,
   type ConversaResumo,
 } from "@/lib/data/ia-chat"
 import type { ChatTurn } from "@/lib/anthropic/client"
@@ -66,4 +67,15 @@ export async function vincular(id: string, unitId: string | null): Promise<void>
 
 export async function excluir(id: string): Promise<void> {
   await excluirConversa(id)
+}
+
+export type ComprarResult =
+  | { ok: true; checkoutUrl: string }
+  | { ok: false; mensagem: string }
+
+/** Inicia a compra do pacote de +N perguntas (devolve o link do checkout). */
+export async function comprar(): Promise<ComprarResult> {
+  const r = await comprarPacoteConsultor()
+  if (r.ok) return { ok: true, checkoutUrl: r.checkoutUrl }
+  return { ok: false, mensagem: r.mensagem }
 }

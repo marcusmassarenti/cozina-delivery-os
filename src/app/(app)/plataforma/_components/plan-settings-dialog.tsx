@@ -35,10 +35,13 @@ export function PlanSettingsDialog({
   essencial,
   pro,
   ai,
+  pacotePreco,
 }: {
   essencial: number
   pro: number
   ai: number
+  /** Preço do pacote de perguntas extras do Consultor IA (Fase 2). */
+  pacotePreco: number
 }) {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
@@ -124,6 +127,23 @@ export function PlanSettingsDialog({
                 className={inputCls}
               />
             </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <label htmlFor="pacotePreco" className="text-xs font-medium">
+              Pacote de perguntas do Consultor IA (R$)
+            </label>
+            <input
+              id="pacotePreco"
+              name="pacotePreco"
+              inputMode="decimal"
+              defaultValue={String(pacotePreco).replace(".", ",")}
+              className={inputCls}
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Preço de cada pacote de perguntas extras que o cliente compra
+              quando a cota do mês acaba.
+            </p>
           </div>
 
           {state.message && (

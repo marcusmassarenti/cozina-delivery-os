@@ -4,6 +4,7 @@ import { AlertTriangle, Building2, CheckCircle2, Clock, Wallet } from "lucide-re
 import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
 import { getDefaultPlan } from "@/lib/data/assinatura"
+import { getPacoteConfig } from "@/lib/data/ia-chat"
 import { daysUntil } from "@/lib/data/billing"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
@@ -87,6 +88,7 @@ export default async function PlataformaPage() {
   const { clients, totals } = await getClientsOverview()
   const myHoldingId = await getCurrentHoldingId()
   const defaultPlan = await getDefaultPlan()
+  const pacote = await getPacoteConfig()
 
   const emAtraso = clients.filter(
     (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
@@ -128,6 +130,7 @@ export default async function PlataformaPage() {
             essencial={defaultPlan.essencial}
             pro={defaultPlan.pro}
             ai={defaultPlan.ai}
+            pacotePreco={pacote.preco}
           />
           <NovoClienteDialog />
         </div>

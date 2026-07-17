@@ -19,6 +19,7 @@ import {
   favoritar,
   vincular,
   excluir,
+  comprar,
 } from "../_actions"
 import type { ChatTurn } from "@/lib/anthropic/client"
 import {
@@ -58,10 +59,12 @@ export function ConsultorChat({
   conversasIniciais,
   restantesIniciais,
   lojas,
+  pacote,
 }: {
   conversasIniciais: ConversaResumo[]
   restantesIniciais: number
   lojas: Loja[]
+  pacote: { preco: number; tamanho: number }
 }) {
   const [conversas, setConversas] = React.useState(conversasIniciais)
   const [ativaId, setAtivaId] = React.useState<string | null>(null)
@@ -75,7 +78,34 @@ export function ConsultorChat({
   // Diálogos compartilhados (renomear / vincular).
   const [renomeando, setRenomeando] = React.useState<ConversaResumo | null>(null)
   const [vinculando, setVinculando] = React.useState<ConversaResumo | null>(null)
+  // Compra do pacote (Fase 2).
+  const [comprando, setComprando] = React.useState(false)
+  const [avisoCompra, setAvisoCompra] = React.useState<string | null>(null)
   const fimRef = React.useRef<HTMLDivElement>(null)
+
+  const precoStr = pacote.preco.toFixed(2).replace(".", ",")
+
+  async function comprarPacote() {
+    if (comprando) return
+    if (
+      !confirm(
+        `Comprar ${pacote.tamanho} perguntas por R$ ${precoStr}? Você finaliza o pagamento numa página segura do Asaas, no seu cartão.`,
+      )
+    )
+      return
+    setComprando(true)
+    setAvisoCompra(null)
+    const r = await comprar()
+    setComprando(false)
+    if (r.ok) {
+      window.open(r.checkoutUrl, "_blank", "noopener")
+      setAvisoCompra(
+        "Abrimos o checkout numa nova aba. Depois de pagar, recarregue esta página — as perguntas entram em segundos.",
+      )
+    } else {
+      setErro(r.mensagem)
+    }
+  }
 
   const lojaNome = React.useCallback(
     (unitId: string | null) =>
@@ -235,19 +265,37 @@ export function ConsultorChat({
               {lojaNome(conversaAtiva?.unitId ?? null)}
             </span>
           </div>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {restantes > 0 ? (
-              <>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {restantes}
-                </span>{" "}
-                restante{restantes === 1 ? "" : "s"}
-              </>
-            ) : (
-              "Últimas do mês"
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {restantes > 0 ? (
+                <>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {restantes}
+                  </span>{" "}
+                  restante{restantes === 1 ? "" : "s"}
+                </>
+              ) : (
+                "Últimas do mês"
+              )}
+            </span>
+            {/* Comprar antes de acabar: só aparece quando a cota está baixa. */}
+            {restantes <= 10 && !bloqueado && (
+              <button
+                type="button"
+                onClick={comprarPacote}
+                disabled={comprando}
+                className="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-muted disabled:opacity-60"
+              >
+                {comprando ? "…" : `+${pacote.tamanho} · R$ ${precoStr}`}
+              </button>
             )}
-          </span>
+          </div>
         </div>
+        {avisoCompra && (
+          <p className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+            {avisoCompra}
+          </p>
+        )}
 
         {bloqueado ? (
           <div className="rounded-xl border bg-card p-6 text-center">
@@ -256,16 +304,30 @@ export function ConsultorChat({
               Suas perguntas do mês acabaram
             </p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-              Elas voltam na virada do mês. Em breve você vai poder comprar um
-              pacote de perguntas extras direto por aqui.
+              Elas voltam na virada do mês. Ou compre um pacote de{" "}
+              {pacote.tamanho} perguntas extras agora — os créditos não expiram.
             </p>
             <button
               type="button"
-              disabled
-              className="mt-4 inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium opacity-60"
+              onClick={comprarPacote}
+              disabled={comprando}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
             >
-              Comprar +100 perguntas · em breve
+              <Sparkles className="size-4" />
+              {comprando
+                ? "Abrindo checkout…"
+                : `Comprar +${pacote.tamanho} · R$ ${precoStr}`}
             </button>
+            {avisoCompra && (
+              <p className="mx-auto mt-3 max-w-sm text-xs text-emerald-700 dark:text-emerald-400">
+                {avisoCompra}
+              </p>
+            )}
+            {erro && (
+              <p className="mx-auto mt-3 max-w-sm text-xs text-rose-600 dark:text-rose-400">
+                {erro}
+              </p>
+            )}
           </div>
         ) : (
           <>

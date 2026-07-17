@@ -19,6 +19,7 @@ import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
 import type { PlatformId } from "@/components/platform-logo"
 import { isAiPlan } from "@/lib/data/billing"
+import { asaasCreatePayment } from "@/lib/asaas/client"
 import { askClaudeChat, isAnthropicConfigured, type ChatTurn } from "@/lib/anthropic/client"
 
 /** Perguntas grátis por loja, por mês. Sobrescreve com IA_CHAT_LIMITE_LOJA. */
@@ -41,6 +42,80 @@ function mesCorrente(): string {
 function anoMesCorrente(): { year: number; month: number } {
   const [y, m] = mesCorrente().split("-").map(Number)
   return { year: y, month: m }
+}
+
+/** Preço e tamanho do pacote de perguntas extras (editável em /plataforma). */
+export async function getPacoteConfig(): Promise<{ preco: number; tamanho: number }> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("platform_settings")
+    .select("ia_pack_price, ia_pack_size")
+    .maybeSingle()
+  return {
+    preco: data?.ia_pack_price != null ? Number(data.ia_pack_price) : 19.9,
+    tamanho: data?.ia_pack_size != null ? Number(data.ia_pack_size) : 100,
+  }
+}
+
+/** Hoje em YYYY-MM-DD no fuso de Brasília. */
+function hojeISO(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+/**
+ * Inicia a compra do pacote de +N perguntas: cria a cobrança avulsa no Asaas e
+ * devolve o link do checkout hospedado. O crédito só entra quando o webhook
+ * confirmar o pagamento (ia_chat_creditar). Gated no plano AI.
+ */
+export async function comprarPacoteConsultor(): Promise<
+  | { ok: true; checkoutUrl: string; preco: number; tamanho: number }
+  | { ok: false; mensagem: string }
+> {
+  const [ai, holdingId] = await Promise.all([isAiPlan(), getCurrentHoldingId()])
+  if (!ai)
+    return { ok: false, mensagem: "O Consultor IA faz parte do plano DeliveryOS AI." }
+  if (!holdingId) return { ok: false, mensagem: "Conta não identificada." }
+
+  const admin = createAdminClient()
+  const { data: holding } = await admin
+    .from("holdings")
+    .select("asaas_customer_id")
+    .eq("id", holdingId)
+    .maybeSingle()
+  const customerId = holding?.asaas_customer_id as string | undefined
+  if (!customerId) {
+    return {
+      ok: false,
+      mensagem:
+        "Não achamos uma forma de pagamento na sua conta. Assine ou atualize o cartão antes de comprar o pacote.",
+    }
+  }
+
+  const { preco, tamanho } = await getPacoteConfig()
+  try {
+    const pag = await asaasCreatePayment({
+      customer: customerId,
+      value: preco,
+      dueDate: hojeISO(),
+      description: `Delivery OS — pacote de ${tamanho} perguntas do Consultor IA`,
+      externalReference: `ia-pack:${holdingId}`,
+    })
+    if (!pag.invoiceUrl) {
+      return {
+        ok: false,
+        mensagem: "Cobrança criada, mas o link de pagamento não veio. Tente de novo.",
+      }
+    }
+    return { ok: true, checkoutUrl: pag.invoiceUrl, preco, tamanho }
+  } catch (e) {
+    console.error("comprarPacoteConsultor: erro no Asaas:", e)
+    return { ok: false, mensagem: "Não consegui iniciar a compra agora. Tente de novo." }
+  }
 }
 
 export type ConsultorEstado = {

@@ -60,6 +60,8 @@ type AsaasPayment = {
   confirmedDate?: string
   billingType?: string
   status?: string
+  /** "ia-pack:<holdingId>" marca a compra de pacote do Consultor IA. */
+  externalReference?: string
 }
 
 export async function GET() {
@@ -145,6 +147,46 @@ export async function POST(req: Request) {
       if (!insErr && (!inserted || inserted.length === 0)) {
         return Response.json({ ok: true, deduped: true })
       }
+    }
+
+    // ── Compra de PACOTE do Consultor IA (cobrança avulsa, não assinatura) ──
+    // Marcada por externalReference "ia-pack:<holdingId>". Não mexe em
+    // paid/plan_tier — só credita as perguntas quando confirma.
+    const extRef = String(payment.externalReference ?? "")
+    if (extRef.startsWith("ia-pack:")) {
+      if (CONFIRMADO.has(event)) {
+        const { data: cfg } = await admin
+          .from("platform_settings")
+          .select("ia_pack_size")
+          .maybeSingle()
+        const qtd = cfg?.ia_pack_size != null ? Number(cfg.ia_pack_size) : 100
+        await admin.rpc("ia_chat_creditar", { p_holding: holdingId, p_qtd: qtd })
+        // Registra no histórico com nota distinta (não é mensalidade).
+        if (payment.id) {
+          const note = `Asaas ${payment.id} · pacote IA`
+          const { data: exists } = await admin
+            .from("holding_payments")
+            .select("id")
+            .eq("holding_id", holdingId)
+            .eq("note", note)
+            .maybeSingle()
+          if (!exists) {
+            await admin.from("holding_payments").insert({
+              holding_id: holdingId,
+              paid_on: String(
+                payment.paymentDate ??
+                  payment.confirmedDate ??
+                  new Date().toISOString().slice(0, 10),
+              ),
+              amount: Number(payment.value ?? 0),
+              method: `Asaas${payment.billingType ? ` (${payment.billingType})` : ""} · pacote IA`,
+              note,
+            })
+          }
+        }
+      }
+      // Pacote não altera assinatura/plano — encerra aqui.
+      return Response.json({ ok: true, pacote: true })
     }
 
     const patch: Record<string, unknown> = {

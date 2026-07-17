@@ -181,6 +181,32 @@ export async function asaasFirstInvoiceUrl(
   return null
 }
 
+/**
+ * Cria uma cobrança AVULSA (fora da assinatura) e devolve o link do checkout
+ * hospedado do Asaas. Usado pra vender o pacote de perguntas extras do
+ * Consultor IA — o cliente paga na página do Asaas (o cartão nunca passa pelo
+ * nosso servidor), e o webhook credita quando confirma.
+ *
+ * `externalReference` marca a cobrança (ex.: "ia-pack:<holdingId>") pra o
+ * webhook saber que é pacote, e NÃO tratar como pagamento de assinatura.
+ */
+export async function asaasCreatePayment(input: {
+  customer: string
+  value: number
+  dueDate: string // YYYY-MM-DD
+  description: string
+  externalReference: string
+}): Promise<{ id: string; invoiceUrl: string | null }> {
+  if (asaasIsMock()) {
+    return { id: mockId("pay"), invoiceUrl: `/assinatura/simulado?pack=1` }
+  }
+  const p = await call<{ id: string; invoiceUrl?: string }>("/payments", {
+    method: "POST",
+    body: JSON.stringify({ billingType: BILLING_TYPE, ...input }),
+  })
+  return { id: p.id, invoiceUrl: p.invoiceUrl ?? null }
+}
+
 /** Nota fiscal (NFS-e) emitida pelo Asaas. `pdfUrl`/`xmlUrl` só vêm quando a
  *  nota já foi autorizada pela prefeitura (status AUTHORIZED). */
 export type AsaasInvoice = {
