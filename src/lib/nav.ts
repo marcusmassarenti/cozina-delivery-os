@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ListOrdered,
   type LucideIcon,
+  MessageSquareText,
   Receipt,
   Sparkles,
   Star,
@@ -86,6 +87,8 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "relatorios",
       },
       { label: "DRE Grupo", href: "/financeiro", icon: Wallet, module: "financeiro" },
+      // Sem module: aparece pra todos; a página gateia no plano AI (upsell).
+      { label: "Consultor IA", href: "/consultor-ia", icon: MessageSquareText },
     ],
   },
   {
