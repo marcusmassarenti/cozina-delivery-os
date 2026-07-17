@@ -12,6 +12,7 @@ import "server-only"
  */
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAuth } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -95,6 +96,117 @@ export async function getConsultorEstado(): Promise<ConsultorEstado> {
     creditos,
   }
 }
+
+// ─── Histórico de conversas (como a lateral do Claude) ──────────────
+
+export type ConversaResumo = {
+  id: string
+  titulo: string
+  atualizadaEm: string
+}
+
+/** Lista as conversas do usuário logado (mais recentes primeiro). */
+export async function listarConversas(): Promise<ConversaResumo[]> {
+  const { userId } = await requireAuth()
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ia_chat_conversas")
+    .select("id, titulo, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(50)
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    titulo: (c.titulo as string) || "Nova conversa",
+    atualizadaEm: c.updated_at as string,
+  }))
+}
+
+/** Carrega as mensagens de uma conversa — só se for do usuário logado. */
+export async function getConversaMensagens(
+  conversaId: string,
+): Promise<ChatTurn[]> {
+  const { userId } = await requireAuth()
+  const admin = createAdminClient()
+  // Confere dono antes de ler as mensagens (escopo no app, sem RLS policy).
+  const { data: dono } = await admin
+    .from("ia_chat_conversas")
+    .select("id")
+    .eq("id", conversaId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (!dono) return []
+
+  const { data } = await admin
+    .from("ia_chat_mensagens")
+    .select("papel, conteudo")
+    .eq("conversa_id", conversaId)
+    .order("created_at", { ascending: true })
+  return (data ?? []).map((m) => ({
+    role: m.papel as "user" | "assistant",
+    content: m.conteudo as string,
+  }))
+}
+
+/** Título curto a partir da 1ª pergunta (sem chamada extra à IA). */
+function tituloDaPergunta(pergunta: string): string {
+  const limpo = pergunta.replace(/\s+/g, " ").trim()
+  return limpo.length > 48 ? `${limpo.slice(0, 48)}…` : limpo || "Nova conversa"
+}
+
+/**
+ * Persiste o novo turno (pergunta + resposta). Cria a conversa se ainda não
+ * existir. Devolve o id (novo ou o mesmo) e o título — pra tela atualizar a
+ * lista sem recarregar.
+ */
+async function persistirTurno(
+  holdingId: string,
+  userId: string,
+  conversaId: string | null,
+  pergunta: string,
+  resposta: string,
+): Promise<{ conversaId: string; titulo: string }> {
+  const admin = createAdminClient()
+  let id = conversaId
+  let titulo = ""
+
+  if (!id) {
+    titulo = tituloDaPergunta(pergunta)
+    const { data } = await admin
+      .from("ia_chat_conversas")
+      .insert({ holding_id: holdingId, user_id: userId, titulo })
+      .select("id, titulo")
+      .single()
+    id = data?.id as string
+    titulo = (data?.titulo as string) ?? titulo
+  } else {
+    // Confere dono antes de escrever (não deixa gravar em conversa alheia).
+    const { data } = await admin
+      .from("ia_chat_conversas")
+      .select("titulo")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .maybeSingle()
+    if (!data) {
+      // Conversa não é do usuário → cria uma nova em vez de gravar por cima.
+      return persistirTurno(holdingId, userId, null, pergunta, resposta)
+    }
+    titulo = data.titulo as string
+  }
+
+  await admin.from("ia_chat_mensagens").insert([
+    { conversa_id: id, papel: "user", conteudo: pergunta },
+    { conversa_id: id, papel: "assistant", conteudo: resposta },
+  ])
+  await admin
+    .from("ia_chat_conversas")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", id)
+
+  return { conversaId: id, titulo }
+}
+
+// ─── Cota ────────────────────────────────────────────────────────────
 
 /**
  * Consome 1 pergunta (atômico). Devolve 'gratis' | 'credito' | null (bloqueado
@@ -203,9 +315,16 @@ REGRAS:
  * Devolve a resposta + de onde saiu a cota (pra tela avisar quando virar pago).
  */
 export async function perguntarConsultor(
+  conversaId: string | null,
   messages: ChatTurn[],
 ): Promise<
-  | { ok: true; resposta: string; fonte: "gratis" | "credito" }
+  | {
+      ok: true
+      resposta: string
+      fonte: "gratis" | "credito"
+      conversaId: string
+      titulo: string
+    }
   | { ok: false; motivo: "sem_plano" | "sem_key" | "cota" | "vazio" | "erro"; mensagem: string }
 > {
   if (messages.length === 0 || !messages[messages.length - 1]?.content.trim()) {
@@ -219,10 +338,11 @@ export async function perguntarConsultor(
     }
   }
 
-  const [ai, holdingId, units] = await Promise.all([
+  const [ai, holdingId, units, auth] = await Promise.all([
     isAiPlan(),
     getCurrentHoldingId(),
     getVisibleUnits(),
+    requireAuth(),
   ])
   if (!ai) {
     return {
@@ -266,7 +386,22 @@ export async function perguntarConsultor(
       messages: messages.slice(-8),
       maxTokens: 900,
     })
-    return { ok: true, resposta, fonte }
+    // Persiste o turno (cria a conversa se for a 1ª pergunta).
+    const pergunta = messages[messages.length - 1]!.content
+    const persistida = await persistirTurno(
+      holdingId,
+      auth.userId,
+      conversaId,
+      pergunta,
+      resposta,
+    )
+    return {
+      ok: true,
+      resposta,
+      fonte,
+      conversaId: persistida.conversaId,
+      titulo: persistida.titulo,
+    }
   } catch (e) {
     // A pergunta falhou DEPOIS de consumir a cota. Se gastou um CRÉDITO pago,
     // devolve (não cobramos por falha nossa). Se gastou da bolsa grátis, deixa

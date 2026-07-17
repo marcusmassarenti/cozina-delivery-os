@@ -1,21 +1,25 @@
 import Link from "next/link"
 import { Sparkles, Lock } from "lucide-react"
 
-import { getConsultorEstado } from "@/lib/data/ia-chat"
+import { getConsultorEstado, listarConversas } from "@/lib/data/ia-chat"
 import { ConsultorChat } from "./_components/consultor-chat"
 
 export const dynamic = "force-dynamic"
 
 /**
  * Consultor IA — chat que responde sobre a operação com os números reais da
- * conta. Gated no plano DeliveryOS AI; sem plano, vira upsell.
+ * conta. Gated no plano DeliveryOS AI; sem plano, vira upsell. As conversas
+ * ficam salvas por usuário (histórico na lateral, como o Claude).
  */
 export default async function ConsultorIaPage() {
   const estado = await getConsultorEstado()
   const restantes = Math.max(0, estado.limiteMes - estado.usadasMes) + estado.creditos
+  // Só busca o histórico quando a tela vai mesmo mostrar o chat.
+  const podeUsar = estado.isAi && estado.configurado && estado.lojas > 0
+  const conversas = podeUsar ? await listarConversas() : []
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-muted/30 p-6">
       {/* Título */}
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -40,7 +44,10 @@ export default async function ConsultorIaPage() {
           Cadastre ao menos uma loja pra usar o Consultor.
         </div>
       ) : (
-        <ConsultorChat restantesIniciais={restantes} />
+        <ConsultorChat
+          conversasIniciais={conversas}
+          restantesIniciais={restantes}
+        />
       )}
     </div>
   )
