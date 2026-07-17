@@ -967,22 +967,6 @@ export function LandingV3({
                 hora, sem cadastro, sem senha.
               </p>
             </Reveal>
-            <Reveal delay={210}>
-              <a
-                href="#nino"
-                className="group mt-5 inline-flex items-center gap-2 rounded-full border border-[oklch(0.65_0.21_35/.35)] bg-[oklch(0.65_0.21_35/.12)] px-3.5 py-1.5 text-xs font-medium text-[oklch(0.86_0.06_60)] transition-colors hover:bg-[oklch(0.65_0.21_35/.2)]"
-              >
-                <Sparkles className="size-3.5 text-[var(--brand)]" strokeWidth={2.4} />
-                <span>
-                  Novo — <span className="font-semibold text-white">Nino AI</span>:
-                  seu consultor de delivery, disponível 24 horas por dia
-                </span>
-                <ArrowRight
-                  className="size-3.5 transition-transform group-hover:translate-x-0.5"
-                  strokeWidth={2.4}
-                />
-              </a>
-            </Reveal>
           </div>
 
           {/* Tela (print) — no mobile ENTRE o texto e os botões; no desktop, coluna da direita */}
