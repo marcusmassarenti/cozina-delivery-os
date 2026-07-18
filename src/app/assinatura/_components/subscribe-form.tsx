@@ -172,7 +172,7 @@ export function SubscribeForm({
                       {p.label}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                      {p.desc} · {fmtBRL(p.perUnit)}/loja
+                      {p.desc} · {fmtBRL(p.first)} + {fmtBRL(p.add)}/loja extra
                     </span>
                   </span>
                   <span className="flex items-center gap-2">

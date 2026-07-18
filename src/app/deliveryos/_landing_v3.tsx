@@ -23,7 +23,6 @@ import {
   Lightbulb,
   Lock,
   Mail,
-  MessageSquareText,
   Network,
   CalendarClock,
   Scale,
@@ -799,29 +798,38 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean; spy?: boolean }[] = 
    O anual é cobrado à vista no cartão (12 meses de uma vez, 1 cobrança/ano).
    A regra do +30% vem de @/lib/pricing (fonte única, dividida com o checkout). */
 
-/** Bloco de preço de um card — alterna entre anual (base) e mensal (+30%). */
+/** Preço de um plano: primeira loja + cada loja adicional. */
+type PrecoPlanoLanding = { first: number; add: number }
+
+/** Bloco de preço de um card — mostra a 1ª loja (grande) + o adicional por
+ *  loja. Alterna entre anual (base) e mensal (+30%). */
 function PrecoValor({
-  mes,
+  preco,
   anual,
   dark = false,
 }: {
-  mes: number
+  preco: PrecoPlanoLanding
   anual: boolean
   dark?: boolean
 }) {
-  const valor = valorMensalExibido(mes, anual ? "anual" : "mensal")
+  const cycle = anual ? "anual" : "mensal"
+  const first = valorMensalExibido(preco.first, cycle)
+  const add = valorMensalExibido(preco.add, cycle)
   const muted = dark ? "text-[oklch(0.62_0_0)]" : "text-[oklch(0.5_0.01_48)]"
   const brand = dark ? "text-[oklch(0.82_0.14_55)]" : "text-[var(--brand-strong)]"
   return (
     <div className="relative">
       <div className="mt-4 flex items-baseline gap-1.5">
-        <span className="text-5xl font-medium tracking-tight">R$ {precoStr(valor)}</span>
-        <span className={`text-sm ${muted}`}>/loja · mês</span>
+        <span className="text-5xl font-medium tracking-tight">R$ {precoStr(first)}</span>
+        <span className={`text-sm ${muted}`}>/mês · 1ª loja</span>
       </div>
-      <p className={`mt-1 text-xs font-medium ${brand}`}>
+      <p className={`mt-1.5 text-sm font-medium ${brand}`}>
+        + R$ {precoStr(add)} por loja adicional
+      </p>
+      <p className={`mt-1 text-xs ${muted}`}>
         {anual
-          ? `R$ ${precoStr(mes * 12)} à vista no ano · 1 cobrança`
-          : `No anual sai por R$ ${precoStr(mes)}/mês`}
+          ? `No anual: 1ª loja R$ ${precoStr(preco.first * 12)} à vista · adicionais R$ ${precoStr(preco.add * 12)}`
+          : "Cobrado todo mês · cancela quando quiser"}
       </p>
     </div>
   )
@@ -834,8 +842,12 @@ const lenisRef: { current: Lenis | null } = { current: null }
 export function LandingV3({
   precos,
 }: {
-  /** Preços por loja vindos do /plataforma (platform_settings). */
-  precos: { essencial: number; pro: number; ai: number }
+  /** Preços vindos do /plataforma: 1ª loja + adicional por plano. */
+  precos: {
+    essencial: PrecoPlanoLanding
+    pro: PrecoPlanoLanding
+    ai: PrecoPlanoLanding
+  }
 }) {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
@@ -1342,7 +1354,7 @@ export function LandingV3({
                 <span className="absolute right-6 top-6 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">Comece aqui</span>
                 <h3 className="text-lg font-medium">Essencial</h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Pra ver seu lucro no delivery</p>
-                <PrecoValor mes={precos.essencial} anual={anual} />
+                <PrecoValor preco={precos.essencial} anual={anual} />
                 <ul className="mt-4 space-y-2 text-[15px]">
                   {[
                     "Upload iFood, 99 e Keeta",
@@ -1379,7 +1391,7 @@ export function LandingV3({
                   Pro
                 </h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Gestão financeira completa</p>
-                <PrecoValor mes={precos.pro} anual={anual} />
+                <PrecoValor preco={precos.pro} anual={anual} />
                 <p className="mt-5 text-[13px] font-medium text-[var(--brand-strong)]">Tudo do Essencial, e mais:</p>
                 <ul className="mt-3 space-y-2 text-[15px]">
                   {[
@@ -1418,7 +1430,7 @@ export function LandingV3({
                   DeliveryOS AI
                 </h3>
                 <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
-                <PrecoValor mes={precos.ai} anual={anual} dark />
+                <PrecoValor preco={precos.ai} anual={anual} dark />
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
                 <ul className="relative mt-3 space-y-2 text-[15px] text-[oklch(0.88_0_0)]">
                   {[

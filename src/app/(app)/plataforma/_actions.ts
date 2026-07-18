@@ -202,20 +202,31 @@ export async function setPlatformPlan(
       const n = raw ? Number(raw) : null
       return n != null && !Number.isNaN(n) && n >= 0 ? n : null
     }
-    const essencial = money("essencial")
-    const pro = money("pro")
-    const ai = money("ai")
+    // Modelo "primeira loja + adicional": *_first e *_add por plano.
+    const eF = money("essencial_first")
+    const eA = money("essencial_add")
+    const pF = money("pro_first")
+    const pA = money("pro_add")
+    const aF = money("ai_first")
+    const aA = money("ai_add")
     const pacotePreco = money("pacotePreco") // pacote de perguntas do Consultor IA
-    if (essencial == null) return { ok: false, message: "Informe o valor do Essencial (por loja)." }
-    if (pro == null) return { ok: false, message: "Informe o valor do Pro (por loja)." }
-    if (ai == null) return { ok: false, message: "Informe o valor do DeliveryOS AI (por loja)." }
+    if (eF == null || eA == null)
+      return { ok: false, message: "Informe os valores do Essencial (1ª loja e adicional)." }
+    if (pF == null || pA == null)
+      return { ok: false, message: "Informe os valores do Pro (1ª loja e adicional)." }
+    if (aF == null || aA == null)
+      return { ok: false, message: "Informe os valores do DeliveryOS AI (1ª loja e adicional)." }
 
     const { error } = await admin.from("platform_settings").upsert(
       {
         id: 1,
-        essencial_per_unit: essencial,
-        pro_per_unit: pro,
-        ai_per_unit: ai,
+        // *_per_unit = primeira loja; *_add = cada loja adicional.
+        essencial_per_unit: eF,
+        essencial_add: eA,
+        pro_per_unit: pF,
+        pro_add: pA,
+        ai_per_unit: aF,
+        ai_add: aA,
         // Só sobrescreve o preço do pacote se veio no form.
         ...(pacotePreco != null ? { ia_pack_price: pacotePreco } : {}),
         updated_at: new Date().toISOString(),

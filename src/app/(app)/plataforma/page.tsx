@@ -126,12 +126,7 @@ export default async function PlataformaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <PlanSettingsDialog
-            essencial={defaultPlan.essencial}
-            pro={defaultPlan.pro}
-            ai={defaultPlan.ai}
-            pacotePreco={pacote.preco}
-          />
+          <PlanSettingsDialog precos={defaultPlan} pacotePreco={pacote.preco} />
           <NovoClienteDialog />
         </div>
       </div>

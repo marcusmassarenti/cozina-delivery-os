@@ -118,8 +118,12 @@ function UpgradeScreen({ info }: { info: UpgradeAiInfo }) {
         <div className="mt-6 space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Novo plano</span>
-            <span className="font-medium">
-              DeliveryOS AI · {fmtBRL(info.aiPerUnit)}/loja
+            <span className="font-medium">DeliveryOS AI</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Preço por loja</span>
+            <span className="font-medium tabular-nums">
+              {fmtBRL(info.aiFirst)} + {fmtBRL(info.aiAdd)}/loja extra
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -283,9 +287,10 @@ function Checkout({
                     {p.label}
                   </span>
                   <span className="text-sm font-semibold text-white/75">
-                    {fmtBRL(p.perUnit)}
+                    {fmtBRL(p.first)}
                     <span className="text-xs font-normal text-white/40">
-                      /loja
+                      {" "}
+                      + {fmtBRL(p.add)}/loja
                     </span>
                   </span>
                 </div>

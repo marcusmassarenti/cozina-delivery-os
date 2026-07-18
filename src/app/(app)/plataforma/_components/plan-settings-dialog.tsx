@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { setPlatformPlan, type BillingActionState } from "../_actions"
+import type { PrecosPlano } from "@/lib/data/assinatura"
 
 function SubmitBtn() {
   const { pending } = useFormStatus()
@@ -28,18 +29,15 @@ function SubmitBtn() {
 }
 
 /**
- * Edita o preço POR LOJA dos planos Essencial e Pro do self-service (o que vale
- * pra quem se cadastra sozinho e ainda não tem preço custom). Só super-admin.
+ * Edita o preço dos planos do self-service — modelo "primeira loja + adicional"
+ * por plano. A mensalidade = primeira + adicional × (nº de lojas − 1). Clientes
+ * com preço combinado não são afetados. Só super-admin.
  */
 export function PlanSettingsDialog({
-  essencial,
-  pro,
-  ai,
+  precos,
   pacotePreco,
 }: {
-  essencial: number
-  pro: number
-  ai: number
+  precos: PrecosPlano
   /** Preço do pacote de perguntas extras do Consultor IA (Fase 2). */
   pacotePreco: number
 }) {
@@ -77,57 +75,58 @@ export function PlanSettingsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Tag className="size-5 text-muted-foreground" />
-            Preço dos planos (por loja)
+            Preço dos planos
           </DialogTitle>
           <DialogDescription>
-            Valor por loja/mês de cada plano do self-service. A mensalidade do
-            cliente = preço × nº de lojas ativas. Clientes com preço combinado
-            não são afetados.
+            Modelo &ldquo;primeira loja + adicionais&rdquo;. A mensalidade ={" "}
+            primeira loja + adicional × (nº de lojas − 1). Clientes com preço
+            combinado não são afetados.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label htmlFor="essencial" className="text-xs font-medium">
-                Essencial (R$/loja)
-              </label>
-              <input
-                id="essencial"
-                name="essencial"
-                inputMode="decimal"
-                defaultValue={String(essencial).replace(".", ",")}
-                required
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label htmlFor="pro" className="text-xs font-medium">
-                Pro (R$/loja)
-              </label>
-              <input
-                id="pro"
-                name="pro"
-                inputMode="decimal"
-                defaultValue={String(pro).replace(".", ",")}
-                required
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label htmlFor="ai" className="text-xs font-medium">
-                DeliveryOS AI (R$/loja)
-              </label>
-              <input
-                id="ai"
-                name="ai"
-                inputMode="decimal"
-                defaultValue={String(ai).replace(".", ",")}
-                required
-                className={inputCls}
-              />
-            </div>
+          {/* Cabeçalho da grade */}
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Plano
+            </span>
+            <span className="w-24 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              1ª loja
+            </span>
+            <span className="w-24 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Adicional
+            </span>
           </div>
+          {(
+            [
+              { id: "essencial", label: "Essencial" },
+              { id: "pro", label: "Pro" },
+              { id: "ai", label: "DeliveryOS AI" },
+            ] as const
+          ).map((p) => (
+            <div
+              key={p.id}
+              className="grid grid-cols-[1fr_auto_auto] items-center gap-3"
+            >
+              <span className="text-sm font-medium">{p.label}</span>
+              <input
+                name={`${p.id}_first`}
+                inputMode="decimal"
+                aria-label={`${p.label} — primeira loja`}
+                defaultValue={String(precos[p.id].first).replace(".", ",")}
+                required
+                className={`${inputCls} mt-0 w-24 text-center`}
+              />
+              <input
+                name={`${p.id}_add`}
+                inputMode="decimal"
+                aria-label={`${p.label} — loja adicional`}
+                defaultValue={String(precos[p.id].add).replace(".", ",")}
+                required
+                className={`${inputCls} mt-0 w-24 text-center`}
+              />
+            </div>
+          ))}
 
           <div className="border-t pt-3">
             <label htmlFor="pacotePreco" className="text-xs font-medium">

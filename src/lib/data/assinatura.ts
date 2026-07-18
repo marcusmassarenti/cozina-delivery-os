@@ -26,50 +26,68 @@ export const PLANOS_META: Record<PlanId, { label: string; desc: string }> = {
   ai: { label: "DeliveryOS AI", desc: "IA que lê a loja e monta o plano de ação" },
 }
 
-/** Preços por loja/mês — fallback caso a tabela ainda não exista. */
-export const PRECO_PADRAO: Record<PlanId, number> = {
-  essencial: 49,
-  pro: 99,
-  ai: 159,
+/** Preço de um plano: PRIMEIRA loja + cada loja ADICIONAL (base anual/mês). */
+export type PrecoPlano = { first: number; add: number }
+export type PrecosPlano = Record<PlanId, PrecoPlano>
+
+/** Preços por plano — fallback caso a tabela ainda não tenha as colunas. */
+export const PRECO_PADRAO: PrecosPlano = {
+  essencial: { first: 49, add: 19 },
+  pro: { first: 99, add: 39 },
+  ai: { first: 149, add: 49 },
 }
 
-export type PrecosPlano = Record<PlanId, number>
-
-/** Preços por loja dos planos (editáveis pelo dono em /plataforma). */
+/** Preços dos planos (editáveis pelo dono em /plataforma). Modelo "primeira
+ *  loja + adicionais": *_per_unit = primeira loja, *_add = cada loja extra. */
 export async function getDefaultPlan(): Promise<PrecosPlano> {
   try {
     const admin = createAdminClient()
     const { data } = await admin
       .from("platform_settings")
-      .select("essencial_per_unit, pro_per_unit, ai_per_unit")
+      .select(
+        "essencial_per_unit, essencial_add, pro_per_unit, pro_add, ai_per_unit, ai_add",
+      )
       .eq("id", 1)
       .maybeSingle()
     if (!data) return PRECO_PADRAO
+    const num = (v: unknown, fb: number) => (v != null ? Number(v) : fb)
     return {
-      essencial: Number(data.essencial_per_unit),
-      pro: Number(data.pro_per_unit),
-      // Coluna ai_per_unit é nova — fallback pro padrão se ainda não existir.
-      ai: data.ai_per_unit != null ? Number(data.ai_per_unit) : PRECO_PADRAO.ai,
+      essencial: {
+        first: num(data.essencial_per_unit, PRECO_PADRAO.essencial.first),
+        add: num(data.essencial_add, PRECO_PADRAO.essencial.add),
+      },
+      pro: {
+        first: num(data.pro_per_unit, PRECO_PADRAO.pro.first),
+        add: num(data.pro_add, PRECO_PADRAO.pro.add),
+      },
+      ai: {
+        first: num(data.ai_per_unit, PRECO_PADRAO.ai.first),
+        add: num(data.ai_add, PRECO_PADRAO.ai.add),
+      },
     }
   } catch {
     return PRECO_PADRAO
   }
 }
 
-/** Mensalidade de um plano = preço-por-loja × lojas (mínimo 1 loja). */
+/** Mensalidade (base) de um plano = primeira loja + adicional × (lojas − 1). */
 export function precoDoPlano(
   precos: PrecosPlano,
   plan: PlanId,
   activeUnits: number,
 ): number {
-  return precos[plan] * Math.max(1, activeUnits)
+  const p = precos[plan]
+  const units = Math.max(1, activeUnits)
+  return p.first + p.add * (units - 1)
 }
 
 export type PlanoOption = {
   id: PlanId
   label: string
   desc: string
-  perUnit: number
+  /** Preço da primeira loja e de cada adicional (base anual/mês). */
+  first: number
+  add: number
   total: number
 }
 
@@ -133,7 +151,8 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
       id,
       label: PLANOS_META[id].label,
       desc: PLANOS_META[id].desc,
-      perUnit: precos[id],
+      first: precos[id].first,
+      add: precos[id].add,
       total: precoDoPlano(precos, id, activeUnits),
     }),
   )
@@ -255,7 +274,9 @@ export type UpgradeAiInfo = {
   motivo: null | "sem-assinatura" | "ja-ai" | "custom"
   planoAtualLabel: string
   units: number
-  aiPerUnit: number
+  /** Preço da primeira loja e de cada adicional no plano AI. */
+  aiFirst: number
+  aiAdd: number
   /** Novo valor recorrente (por ciclo) já com o plano AI. */
   aiValorCiclo: number
   cycle: BillingCycle
@@ -307,7 +328,8 @@ export async function getUpgradeAiInfo(): Promise<UpgradeAiInfo | null> {
     motivo,
     planoAtualLabel: PLANOS_META[tierAtual].label,
     units,
-    aiPerUnit: precos.ai,
+    aiFirst: precos.ai.first,
+    aiAdd: precos.ai.add,
     aiValorCiclo,
     cycle,
     proracaoAgora,
