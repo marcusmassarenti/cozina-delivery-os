@@ -516,3 +516,19 @@
 #diag-print-overlay .lucide-chevron-down {
   display: none;
 }
+
+/* ─── Nino AI: estrelinha "pensando" (gira de um lado pro outro) ──────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes ninoWobble {
+    0%,
+    100% {
+      transform: rotate(-16deg);
+    }
+    50% {
+      transform: rotate(16deg);
+    }
+  }
+  .nino-wobble {
+    animation: ninoWobble 1.3s ease-in-out infinite;
+  }
+}

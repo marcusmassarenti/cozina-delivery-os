@@ -82,9 +82,96 @@ export async function askClaudeChat(opts: {
   messages: ChatTurn[]
   maxTokens?: number
   model?: string
+  /**
+   * Liga a busca na web (server-side). Deixa o Nino pesquisar dados EXTERNOS
+   * (mercado, concorrência, tendências do setor) que não estão nos números da
+   * conta. O modelo só pesquisa quando a pergunta pede — perguntas sobre os
+   * próprios números não disparam busca. Haiku usa a versão básica
+   * `web_search_20250305` (a `_20260209` é só de Opus/Sonnet).
+   */
+  webSearch?: boolean
 }): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new AnthropicError("ANTHROPIC_API_KEY não configurada.")
+
+  // Histórico no formato da API. Se a busca web pausar (stop_reason
+  // "pause_turn", quando bate o limite de iterações do loop server-side), a
+  // gente empilha o que o assistente já produziu e reenvia pra continuar.
+  const apiMessages: { role: string; content: unknown }[] = opts.messages.map(
+    (m) => ({ role: m.role, content: m.content }),
+  )
+  const tools = opts.webSearch
+    ? [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }]
+    : undefined
+
+  const textos: string[] = []
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: opts.model || diagnosticoModel(),
+        max_tokens: opts.maxTokens ?? (opts.webSearch ? 1500 : 1200),
+        system: opts.system,
+        messages: apiMessages,
+        ...(tools ? { tools } : {}),
+      }),
+    })
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "")
+      throw new AnthropicError(
+        `Claude respondeu ${res.status}: ${body.slice(0, 300)}`,
+      )
+    }
+
+    const json = (await res.json()) as {
+      content?: { type: string; text?: string }[]
+      stop_reason?: string
+    }
+    const blocks = json.content ?? []
+    // Com busca web a resposta vem em VÁRIOS blocos de texto (antes e depois da
+    // pesquisa) — junta todos, não só o primeiro.
+    for (const b of blocks) {
+      if (b.type === "text" && b.text) textos.push(b.text)
+    }
+    if (json.stop_reason !== "pause_turn") break
+    apiMessages.push({ role: "assistant", content: blocks })
+  }
+
+  const text = textos.join("").trim()
+  if (!text) throw new AnthropicError("Resposta do Claude sem texto.")
+  return text
+}
+
+export type ChatStreamEvent =
+  | { type: "searching" }
+  | { type: "text"; text: string }
+
+/**
+ * Igual ao askClaudeChat, mas em STREAMING: devolve um gerador que emite
+ * `{type:"searching"}` no exato momento em que o modelo dispara a busca na web
+ * e `{type:"text", text}` a cada pedaço de resposta (palavra a palavra). No fim
+ * `return` devolve o texto completo. Assim a tela consegue mostrar "Pesquisando
+ * na web…" quando ele de fato pesquisa — não por adivinhação.
+ */
+export async function* streamClaudeChat(opts: {
+  system: string
+  messages: ChatTurn[]
+  maxTokens?: number
+  model?: string
+  webSearch?: boolean
+}): AsyncGenerator<ChatStreamEvent, string, void> {
+  const key = process.env.ANTHROPIC_API_KEY
+  if (!key) throw new AnthropicError("ANTHROPIC_API_KEY não configurada.")
+
+  const tools = opts.webSearch
+    ? [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }]
+    : undefined
 
   const res = await fetch(API_URL, {
     method: "POST",
@@ -95,25 +182,75 @@ export async function askClaudeChat(opts: {
     },
     body: JSON.stringify({
       model: opts.model || diagnosticoModel(),
-      max_tokens: opts.maxTokens ?? 1200,
+      max_tokens: opts.maxTokens ?? (opts.webSearch ? 1500 : 1200),
       system: opts.system,
       messages: opts.messages,
+      stream: true,
+      ...(tools ? { tools } : {}),
     }),
   })
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "")
+  if (!res.ok || !res.body) {
+    const body = res.body ? await res.text().catch(() => "") : ""
     throw new AnthropicError(
       `Claude respondeu ${res.status}: ${body.slice(0, 300)}`,
     )
   }
 
-  const json = (await res.json()) as {
-    content?: { type: string; text?: string }[]
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let full = ""
+  let avisouBusca = false
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let nl: number
+    // SSE: linhas "data: {...}\n". Cada evento vem numa linha data:.
+    while ((nl = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, nl).trim()
+      buffer = buffer.slice(nl + 1)
+      if (!line.startsWith("data:")) continue
+      const payload = line.slice(5).trim()
+      if (!payload || payload === "[DONE]") continue
+      let evt: {
+        type?: string
+        content_block?: { type?: string }
+        delta?: { type?: string; text?: string }
+      }
+      try {
+        evt = JSON.parse(payload)
+      } catch {
+        continue
+      }
+      if (evt.type === "content_block_start") {
+        const t = evt.content_block?.type
+        // A busca web abre como server_tool_use / web_search_tool_result.
+        if (
+          (t === "server_tool_use" || t === "web_search_tool_result") &&
+          !avisouBusca
+        ) {
+          avisouBusca = true
+          yield { type: "searching" }
+        }
+      } else if (
+        evt.type === "content_block_delta" &&
+        evt.delta?.type === "text_delta"
+      ) {
+        const txt = evt.delta.text ?? ""
+        if (txt) {
+          full += txt
+          yield { type: "text", text: txt }
+        }
+      }
+    }
   }
-  const text = json.content?.find((c) => c.type === "text")?.text
-  if (!text) throw new AnthropicError("Resposta do Claude sem texto.")
-  return text
+
+  const finalText = full.trim()
+  if (!finalText) throw new AnthropicError("Resposta do Claude sem texto.")
+  return finalText
 }
 
 /** Chama o Claude pedindo JSON e faz o parse (tolera cercas ```json). */

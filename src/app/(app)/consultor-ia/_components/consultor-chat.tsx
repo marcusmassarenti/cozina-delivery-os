@@ -13,7 +13,6 @@ import {
 } from "lucide-react"
 
 import {
-  perguntar,
   abrirConversa,
   renomear,
   favoritar,
@@ -73,6 +72,11 @@ export function ConsultorChat({
   const [messages, setMessages] = React.useState<ChatTurn[]>([])
   const [input, setInput] = React.useState("")
   const [pending, setPending] = React.useState(false)
+  // Streaming: `buscando` = o Nino disparou a busca na web (mostra "Pesquisando
+  // na web…" pela realidade). `streamingText` = a resposta chegando palavra a
+  // palavra (null quando não está respondendo).
+  const [buscando, setBuscando] = React.useState(false)
+  const [streamingText, setStreamingText] = React.useState<string | null>(null)
   const [carregando, setCarregando] = React.useState(false)
   const [erro, setErro] = React.useState<string | null>(null)
   const [restantes, setRestantes] = React.useState(restantesIniciais)
@@ -136,7 +140,7 @@ export function ConsultorChat({
 
   React.useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, pending])
+  }, [messages, pending, streamingText])
 
   function patchConversa(id: string, patch: Partial<ConversaResumo>) {
     setConversas((atual) =>
@@ -168,18 +172,78 @@ export function ConsultorChat({
     const novo: ChatTurn[] = [...messages, { role: "user", content: pergunta }]
     setMessages(novo)
     setPending(true)
-    const r = await perguntar(ativaId, novo)
+    setBuscando(false)
+    setStreamingText("")
+
+    let acc = ""
+    type DoneEvt = { conversaId: string; titulo: string }
+    let feito: DoneEvt | null = null
+    let erroEvt: { motivo?: string; mensagem: string } | null = null
+
+    try {
+      const res = await fetch("/consultor-ia/stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversaId: ativaId, messages: novo }),
+      })
+      if (!res.ok || !res.body) throw new Error("stream")
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        let nl: number
+        // NDJSON: um evento por linha.
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const linha = buf.slice(0, nl).trim()
+          buf = buf.slice(nl + 1)
+          if (!linha) continue
+          let evt: {
+            type: string
+            text?: string
+            conversaId?: string
+            titulo?: string
+            motivo?: string
+            mensagem?: string
+          }
+          try {
+            evt = JSON.parse(linha)
+          } catch {
+            continue
+          }
+          if (evt.type === "searching") {
+            setBuscando(true)
+          } else if (evt.type === "text") {
+            acc += evt.text ?? ""
+            setStreamingText(acc)
+          } else if (evt.type === "done") {
+            feito = { conversaId: evt.conversaId!, titulo: evt.titulo! }
+          } else if (evt.type === "error") {
+            erroEvt = { motivo: evt.motivo, mensagem: evt.mensagem ?? "Erro." }
+          }
+        }
+      }
+    } catch {
+      erroEvt = { mensagem: "Falha de conexão. Tente de novo." }
+    }
+
     setPending(false)
-    if (r.ok) {
-      setMessages([...novo, { role: "assistant", content: r.resposta }])
+    setBuscando(false)
+    setStreamingText(null)
+
+    if (feito) {
+      setMessages([...novo, { role: "assistant", content: acc }])
       setRestantes((n) => Math.max(0, n - 1))
+      const dados = feito as DoneEvt
       setConversas((atual) => {
-        const anterior = atual.find((c) => c.id === r.conversaId)
-        const semEla = atual.filter((c) => c.id !== r.conversaId)
+        const anterior = atual.find((c) => c.id === dados.conversaId)
+        const semEla = atual.filter((c) => c.id !== dados.conversaId)
         return ordenar([
           {
-            id: r.conversaId,
-            titulo: r.titulo,
+            id: dados.conversaId,
+            titulo: dados.titulo,
             atualizadaEm: new Date().toISOString(),
             favorita: anterior?.favorita ?? false,
             unitId: anterior?.unitId ?? null,
@@ -187,12 +251,12 @@ export function ConsultorChat({
           ...semEla,
         ])
       })
-      setAtivaId(r.conversaId)
+      setAtivaId(dados.conversaId)
     } else {
       setMessages(messages)
       setInput(pergunta)
-      if (r.bloqueado) setBloqueado(true)
-      else setErro(r.mensagem)
+      if (erroEvt?.motivo === "cota") setBloqueado(true)
+      else setErro(erroEvt?.mensagem ?? "Não consegui responder agora.")
     }
   }
 
@@ -389,17 +453,38 @@ export function ConsultorChat({
                         className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
+                          className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
                             m.role === "user"
-                              ? "bg-primary text-primary-foreground"
+                              ? "whitespace-pre-wrap bg-primary text-primary-foreground"
                               : "bg-muted"
                           }`}
                         >
-                          {m.content}
+                          {m.role === "user" ? (
+                            m.content
+                          ) : (
+                            <RichResposta texto={m.content} />
+                          )}
                         </div>
                       </div>
                     ))}
-                    {pending && <PensandoBolha />}
+                    {/* Enquanto ainda não chegou texto, mostra o "pensando"
+                        (que vira "Pesquisando na web…" quando ele de fato
+                        busca). Assim que o texto começa, ele aparece palavra a
+                        palavra numa bolha, igual o Claude. */}
+                    {pending && !streamingText && (
+                      <PensandoBolha
+                        key={buscando ? "web" : "pensando"}
+                        pergunta={messages[messages.length - 1]?.content ?? ""}
+                        buscando={buscando}
+                      />
+                    )}
+                    {pending && streamingText && (
+                      <div className="flex justify-start">
+                        <div className="max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm">
+                          <RichResposta texto={streamingText} />
+                        </div>
+                      </div>
+                    )}
                     {/* Depois que ele responde, um atalho pra puxar mais. */}
                     {!pending &&
                       !carregando &&
@@ -478,39 +563,213 @@ export function ConsultorChat({
   )
 }
 
-/** Estados que o Nino "passa" enquanto pensa (só efeito, dá sensação de vivo). */
-const FASES_PENSANDO = [
+/** Estados que o Nino "passa" enquanto pensa (só efeito, dá sensação de vivo).
+ *  Dois roteiros: perguntas sobre a conta ("interno") e perguntas de mercado
+ *  ("mercado"), onde ele mostra que está PESQUISANDO fora — igual o Claude. */
+const FASES_INTERNO = [
   "Pensando…",
   "Lendo os seus números…",
   "Cruzando as lojas…",
   "Montando a resposta…",
   "Quase lá…",
 ]
+const FASES_MERCADO = [
+  "Entendendo a pergunta…",
+  "Pesquisando na web…",
+  "Lendo o que encontrei…",
+  "Cruzando com os seus números…",
+  "Montando a resposta…",
+]
+/** Roteiro quando a busca web JÁ disparou de verdade (sinal do servidor). */
+const FASES_BUSCANDO = [
+  "Pesquisando na web…",
+  "Lendo as fontes…",
+  "Cruzando com os seus números…",
+  "Montando a resposta…",
+]
 
-/** Bolha "viva" enquanto o Nino responde — sparkle pulsando + pontinhos que
- *  saltam + o estado atual (pra não parecer travado, igual o Claude). */
-function PensandoBolha() {
+/** Sinais de que a pergunta é sobre o MERCADO/setor (dado externo), não sobre
+ *  os números da própria conta — aí o roteiro vira "pesquisando na web". É um
+ *  palpite pelo texto da pergunta (o Nino só decide buscar na hora); por isso o
+ *  roteiro de mercado fala "pesquisando", nunca "cruzando as lojas". */
+const RE_MERCADO =
+  /\b(mercad\w*|setor\w*|segmento|categoria|concorr\w+|competidor\w*|tend[êe]nci\w*|benchmark\w*|refer[êe]nci\w*|m[ée]dia\s+do\s+setor|panorama|cen[áa]rio|novidad\w*|not[íi]ci\w*|sazonal\w*|demanda|inflaç\w*|fornecedor\w*|pre[çc]o\s+de\s+mercado|pesquis\w+|busca\w*\s+na\s+web|l[áa]\s+fora|fora\s+(das?|da)\s+(minha|nossa|loja)|outras?\s+lojas|no\s+brasil|no\s+mercado|como\s+est[áa]\s+o\s+setor)\b/i
+
+/** "Pensando" discreto: só a estrelinha girando de um lado pro outro + o estado
+ *  atual, sem bolha nem pontinhos. O roteiro se adapta: se a busca web já
+ *  disparou (sinal real do servidor), fala "Pesquisando na web…"; senão é um
+ *  palpite pelo texto que a realidade sobrescreve (a key `buscando` remonta). */
+function PensandoBolha({
+  pergunta,
+  buscando,
+}: {
+  pergunta: string
+  buscando: boolean
+}) {
+  const fases = buscando
+    ? FASES_BUSCANDO
+    : RE_MERCADO.test(pergunta)
+      ? FASES_MERCADO
+      : FASES_INTERNO
   const [i, setI] = React.useState(0)
   React.useEffect(() => {
     const id = setInterval(
-      () => setI((x) => Math.min(x + 1, FASES_PENSANDO.length - 1)),
+      () => setI((x) => Math.min(x + 1, fases.length - 1)),
       1800,
     )
     return () => clearInterval(id)
-  }, [])
+  }, [fases.length])
   return (
-    <div className="flex justify-start">
-      <div className="inline-flex items-center gap-2 rounded-2xl bg-muted px-3.5 py-2 text-sm text-muted-foreground">
-        <Sparkles className="size-3.5 animate-pulse text-primary" />
-        <span className="flex gap-1">
-          <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:-0.3s]" />
-          <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:-0.15s]" />
-          <span className="size-1.5 animate-bounce rounded-full bg-primary/70" />
-        </span>
-        <span>{FASES_PENSANDO[i]}</span>
-      </div>
+    <div className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground/80">
+      <Sparkles className="nino-wobble size-3.5 text-primary/80" />
+      <span>{fases[i]}</span>
     </div>
   )
+}
+
+/** Renderiza a resposta do Nino com markdown leve — **negrito**, títulos
+ *  (## ou linha em negrito), divisória (---), listas com hífen e TABELAS (| .. |)
+ *  — no estilo do Claude. Rede de segurança: mesmo se o modelo mandar uma
+ *  tabela ou um ##, sai bonito (não cru). Tolera markdown incompleto (streaming). */
+function RichResposta({ texto }: { texto: string }) {
+  const blocos: React.ReactNode[] = []
+  let bullets: string[] = []
+  let tabela: string[] = []
+
+  const fecharBullets = () => {
+    if (bullets.length === 0) return
+    const itens = [...bullets]
+    bullets = []
+    blocos.push(
+      <ul
+        key={`ul-${blocos.length}`}
+        className="flex list-disc flex-col gap-1 pl-5 marker:text-muted-foreground/70"
+      >
+        {itens.map((b, i) => (
+          <li key={i}>{inlineNegrito(b)}</li>
+        ))}
+      </ul>,
+    )
+  }
+
+  const fecharTabela = () => {
+    if (tabela.length === 0) return
+    const linhas = tabela
+    tabela = []
+    const parseRow = (r: string) =>
+      r.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim())
+    const ehSeparador = (cells: string[]) =>
+      cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c))
+    const rows = linhas.map(parseRow).filter((cells) => !ehSeparador(cells))
+    if (rows.length === 0) return
+    const [header, ...body] = rows
+    blocos.push(
+      <div key={`tbl-${blocos.length}`} className="overflow-x-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-border/70">
+              {header.map((c, i) => (
+                <th
+                  key={i}
+                  className="px-2 py-1 text-left font-semibold text-foreground"
+                >
+                  {inlineNegrito(c)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((row, ri) => (
+              <tr key={ri} className="border-b border-border/40 last:border-0">
+                {row.map((c, ci) => (
+                  <td key={ci} className="px-2 py-1 align-top tabular-nums">
+                    {inlineNegrito(c)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>,
+    )
+  }
+
+  const tituloSecao = (conteudo: React.ReactNode) =>
+    blocos.push(
+      <p
+        key={`h-${blocos.length}`}
+        className="font-semibold tracking-tight text-foreground"
+      >
+        {conteudo}
+      </p>,
+    )
+
+  for (const linha of texto.split("\n")) {
+    const t = linha.trim()
+    if (!t) {
+      fecharBullets()
+      fecharTabela()
+      continue
+    }
+    // Linha de tabela: | ... | (acumula; renderiza quando a tabela acabar).
+    if (/^\|.*\|$/.test(t)) {
+      fecharBullets()
+      tabela.push(t)
+      continue
+    }
+    // Qualquer outra linha encerra a tabela em aberto.
+    fecharTabela()
+    // Divisória (---, ***, ___).
+    if (/^([-*_])\1{2,}$/.test(t)) {
+      fecharBullets()
+      blocos.push(
+        <hr key={`hr-${blocos.length}`} className="my-0.5 border-border/70" />,
+      )
+      continue
+    }
+    // Título markdown (#, ##, ###…) → vira título de seção (sem os #).
+    const heading = t.match(/^#{1,6}\s+(.+?)\s*$/)
+    if (heading) {
+      fecharBullets()
+      tituloSecao(inlineNegrito(heading[1].replace(/:$/, "")))
+      continue
+    }
+    // Item de lista.
+    if (/^[-•]\s+/.test(t)) {
+      bullets.push(t.replace(/^[-•]\s+/, ""))
+      continue
+    }
+    fecharBullets()
+    // Linha inteira em negrito → título de seção.
+    const titulo = t.match(/^\*\*(.+?)\*\*:?$/)
+    if (titulo) {
+      tituloSecao(titulo[1])
+      continue
+    }
+    blocos.push(
+      <p key={`p-${blocos.length}`} className="whitespace-pre-wrap">
+        {inlineNegrito(t)}
+      </p>,
+    )
+  }
+  fecharBullets()
+  fecharTabela()
+
+  return <div className="flex flex-col gap-2">{blocos}</div>
+}
+
+/** Parser inline mínimo: transforma **trecho** em negrito. */
+function inlineNegrito(s: string): React.ReactNode[] {
+  return s.split(/(\*\*[^*]+\*\*)/g).map((parte, i) => {
+    const m = parte.match(/^\*\*([^*]+)\*\*$/)
+    return m ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {m[1]}
+      </strong>
+    ) : (
+      <React.Fragment key={i}>{parte}</React.Fragment>
+    )
+  })
 }
 
 /** Ordena: favoritas primeiro, depois mais recentes. */

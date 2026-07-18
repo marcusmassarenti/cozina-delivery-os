@@ -37,6 +37,45 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.3.0",
+    date: "2026-07-18",
+    tag: "Grande novidade",
+    title: "Nino AI: pesquisa de mercado + resposta ao vivo",
+    summary:
+      "O Nino agora pesquisa fora do sistema pra responder sobre o mercado do delivery, responde palavra por palavra e mostra as respostas bem mais bonitas.",
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "novo",
+            title: "Análise de mercado (pesquisa na web)",
+            antes:
+              "O Nino só conhecia os números da sua conta — perguntas sobre o mercado ou o setor ele não sabia responder.",
+            depois:
+              "Pergunte sobre tendências do delivery, o mercado de carnes, concorrência, sazonalidade — ele pesquisa dados atuais na web e ainda cruza com os seus números, separando o que é visão de mercado do que é seu.",
+          },
+          {
+            kind: "melhoria",
+            title: "Resposta ao vivo, palavra por palavra",
+            antes:
+              "Você esperava a resposta inteira ficar pronta pra ela aparecer de uma vez.",
+            depois:
+              "A resposta vai aparecendo enquanto o Nino escreve, e quando ele está pesquisando na web ele avisa na hora — igual conversar com o Claude.",
+          },
+          {
+            kind: "melhoria",
+            title: "Respostas mais fáceis de ler",
+            antes:
+              "Textos longos vinham corridos, sem destaque.",
+            depois:
+              "Títulos de seção em negrito, divisórias entre blocos e listas — as análises ficam organizadas e fáceis de bater o olho.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.2.0",
     date: "2026-06-09",
     tag: "Grande novidade",
