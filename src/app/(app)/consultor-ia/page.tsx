@@ -7,6 +7,7 @@ import {
   getPacoteConfig,
 } from "@/lib/data/ia-chat"
 import { getVisibleUnits } from "@/lib/data/units"
+import { getCurrentUserContext } from "@/lib/auth/context"
 import { ConsultorChat } from "./_components/consultor-chat"
 
 export const dynamic = "force-dynamic"
@@ -17,8 +18,12 @@ export const dynamic = "force-dynamic"
  * salvas por usuário (histórico na lateral, como o Claude).
  */
 export default async function ConsultorIaPage() {
-  const estado = await getConsultorEstado()
+  const [estado, user] = await Promise.all([
+    getConsultorEstado(),
+    getCurrentUserContext(),
+  ])
   const restantes = Math.max(0, estado.limiteMes - estado.usadasMes) + estado.creditos
+  const primeiroNome = user.fullName.split(" ")[0] ?? user.fullName
   // Só busca o histórico/lojas quando a tela vai mesmo mostrar o chat.
   const podeUsar = estado.isAi && estado.configurado && estado.lojas > 0
   const [conversas, units, pacote] = podeUsar
@@ -54,6 +59,7 @@ export default async function ConsultorIaPage() {
           restantesIniciais={restantes}
           lojas={lojas}
           pacote={pacote}
+          nome={primeiroNome}
         />
       )}
     </div>

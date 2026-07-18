@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   ListOrdered,
   type LucideIcon,
-  MessageSquareText,
   Receipt,
   Sparkles,
   Star,
@@ -28,6 +27,8 @@ export type NavItem = {
   badge?: string | number
   /** Marca como "em breve": item visível mas desabilitado (não navega). */
   comingSoon?: boolean
+  /** Destaque permanente no menu (cor de marca sempre) — caso do Nino AI. */
+  highlight?: boolean
   /** Módulo de permissão (RBAC). Sem módulo = sempre visível. */
   module?: string
   /** Só aparece pro super-admin da plataforma (dono do SaaS). */
@@ -53,6 +54,14 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/",
         icon: LayoutDashboard,
         module: "dashboard",
+      },
+      // Sem module: aparece pra TODOS os planos. Quem não tem o plano AI cai no
+      // upsell da página (vira vitrine que puxa upgrade). Destaque permanente.
+      {
+        label: "Nino AI",
+        href: "/consultor-ia",
+        icon: Sparkles,
+        highlight: true,
       },
     ],
   },
@@ -87,8 +96,6 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "relatorios",
       },
       { label: "DRE Grupo", href: "/financeiro", icon: Wallet, module: "financeiro" },
-      // Sem module: aparece pra todos; a página gateia no plano AI (upsell).
-      { label: "Nino AI", href: "/consultor-ia", icon: MessageSquareText },
     ],
   },
   {
@@ -197,6 +204,7 @@ export type FlatNavItem = {
   module?: string
   proOnly?: boolean
   exact?: boolean
+  highlight?: boolean
 }
 
 /** Lista achatada dos itens navegáveis (pra busca e favoritos). */
@@ -211,5 +219,6 @@ export const NAV_ITEMS: FlatNavItem[] = NAV_GROUPS.flatMap((g) =>
       module: i.module,
       proOnly: i.proOnly,
       exact: i.exact,
+      highlight: i.highlight,
     })),
 )

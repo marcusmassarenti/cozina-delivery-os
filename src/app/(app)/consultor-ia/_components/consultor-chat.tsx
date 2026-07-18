@@ -60,11 +60,13 @@ export function ConsultorChat({
   restantesIniciais,
   lojas,
   pacote,
+  nome,
 }: {
   conversasIniciais: ConversaResumo[]
   restantesIniciais: number
   lojas: Loja[]
   pacote: { preco: number; tamanho: number }
+  nome: string
 }) {
   const [conversas, setConversas] = React.useState(conversasIniciais)
   const [ativaId, setAtivaId] = React.useState<string | null>(null)
@@ -82,6 +84,12 @@ export function ConsultorChat({
   const [comprando, setComprando] = React.useState(false)
   const [avisoCompra, setAvisoCompra] = React.useState<string | null>(null)
   const fimRef = React.useRef<HTMLDivElement>(null)
+  // Saudação por horário — calculada no cliente (evita mismatch de hidratação).
+  const [saudacao, setSaudacao] = React.useState("Olá")
+  React.useEffect(() => {
+    const h = new Date().getHours()
+    setSaudacao(h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite")
+  }, [])
 
   const precoStr = pacote.preco.toFixed(2).replace(".", ",")
 
@@ -339,12 +347,13 @@ export function ConsultorChat({
                   </p>
                 ) : messages.length === 0 ? (
                   <div className="my-auto text-center">
-                    <Sparkles className="mx-auto size-8 text-primary" />
-                    <p className="mt-3 text-base font-medium">
-                      Pergunte sobre a sua operação
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Eu respondo com os números reais das suas lojas.
+                    <Sparkles className="mx-auto size-9 text-primary" />
+                    <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                      {saudacao}, {nome} 👋
+                    </h2>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      Pergunte sobre a sua operação — eu respondo com os números
+                      reais das suas lojas.
                     </p>
                     <div className="mx-auto mt-5 flex max-w-lg flex-wrap justify-center gap-2">
                       {SUGESTOES.map((s) => (

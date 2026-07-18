@@ -88,9 +88,21 @@ function MenuItems({
               render={<Link href={item.href} />}
               isActive={active}
               tooltip={item.label}
+              className={
+                item.highlight
+                  ? `font-medium text-primary [&>svg]:text-primary hover:text-primary ${
+                      active ? "" : "bg-primary/10 hover:bg-primary/15"
+                    }`
+                  : undefined
+              }
             >
               <item.icon />
               <span>{item.label}</span>
+              {item.highlight && (
+                <span className="ml-auto mr-4 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary group-data-[collapsible=icon]:hidden">
+                  IA
+                </span>
+              )}
             </SidebarMenuButton>
             {/* Estrela de favorito (só na sidebar expandida) */}
             <button
@@ -215,6 +227,7 @@ export function AppSidebar({
                   href: i.href,
                   icon: i.icon,
                   exact: i.exact,
+                  highlight: i.highlight,
                 }))}
                 pathname={pathname}
                 isFav={isFav}
