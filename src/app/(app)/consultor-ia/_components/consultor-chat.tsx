@@ -255,7 +255,7 @@ export function ConsultorChat({
       {/* Chat */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         {/* Cabeçalho: qual conversa (como o breadcrumb do Claude) + cota */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b pb-2">
+        <div className="mx-auto flex w-full max-w-5xl shrink-0 items-center justify-between gap-2 border-b pb-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium">
               {conversaAtiva ? conversaAtiva.titulo : "Nova conversa"}
@@ -292,13 +292,13 @@ export function ConsultorChat({
           </div>
         </div>
         {avisoCompra && (
-          <p className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+          <p className="mx-auto w-full max-w-5xl shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
             {avisoCompra}
           </p>
         )}
 
         {bloqueado ? (
-          <div className="rounded-xl border bg-card p-6 text-center">
+          <div className="mx-auto mt-6 w-full max-w-md rounded-xl border bg-card p-6 text-center">
             <Sparkles className="mx-auto size-8 text-muted-foreground" />
             <p className="mt-3 text-sm font-semibold">
               Suas perguntas do mês acabaram
@@ -331,65 +331,67 @@ export function ConsultorChat({
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card p-4">
-              {carregando ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Carregando conversa…
-                </p>
-              ) : messages.length === 0 ? (
-                <div className="py-6 text-center">
-                  <Sparkles className="mx-auto size-7 text-primary" />
-                  <p className="mt-2 text-sm font-medium">
-                    Pergunte sobre a sua operação
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-1">
+                {carregando ? (
+                  <p className="m-auto text-center text-sm text-muted-foreground">
+                    Carregando conversa…
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Eu respondo com os números reais das suas lojas.
-                  </p>
-                  <div className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-2">
-                    {SUGESTOES.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => enviar(s)}
-                        className="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-                      >
-                        {s}
-                      </button>
-                    ))}
+                ) : messages.length === 0 ? (
+                  <div className="my-auto text-center">
+                    <Sparkles className="mx-auto size-8 text-primary" />
+                    <p className="mt-3 text-base font-medium">
+                      Pergunte sobre a sua operação
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Eu respondo com os números reais das suas lojas.
+                    </p>
+                    <div className="mx-auto mt-5 flex max-w-lg flex-wrap justify-center gap-2">
+                      {SUGESTOES.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => enviar(s)}
+                          className="rounded-full border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {messages.map((m, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
+                ) : (
+                  <div className="flex flex-col gap-3 py-4">
+                    {messages.map((m, i) => (
                       <div
-                        className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
-                          m.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
+                        key={i}
+                        className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
                       >
-                        {m.content}
+                        <div
+                          className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
+                            m.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          }`}
+                        >
+                          {m.content}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {pending && (
-                    <div className="flex justify-start">
-                      <div className="rounded-2xl bg-muted px-3.5 py-2 text-sm text-muted-foreground">
-                        Pensando…
+                    ))}
+                    {pending && (
+                      <div className="flex justify-start">
+                        <div className="rounded-2xl bg-muted px-3.5 py-2 text-sm text-muted-foreground">
+                          Pensando…
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <div ref={fimRef} />
-                </div>
-              )}
+                    )}
+                    <div ref={fimRef} />
+                  </div>
+                )}
+              </div>
             </div>
 
             {erro && (
-              <div className="shrink-0 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+              <div className="mx-auto w-full max-w-5xl shrink-0 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
                 {erro}
               </div>
             )}
@@ -399,7 +401,7 @@ export function ConsultorChat({
                 e.preventDefault()
                 void enviar(input)
               }}
-              className="flex shrink-0 items-end gap-2"
+              className="mx-auto flex w-full max-w-5xl shrink-0 items-end gap-2"
             >
               <textarea
                 value={input}

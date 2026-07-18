@@ -27,7 +27,7 @@ export default async function ConsultorIaPage() {
   const lojas = units.map((u) => ({ id: u.id, code: u.code, name: u.name }))
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-5xl min-h-0 flex-col gap-3 bg-muted/30 p-4 md:p-6">
+    <div className="flex h-[calc(100dvh-3.5rem)] w-full min-h-0 flex-col gap-3 bg-muted/30 p-4 md:p-6">
       {/* Título (compacto) */}
       <h1 className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
         <Sparkles className="size-5 text-primary" />
