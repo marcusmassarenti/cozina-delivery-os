@@ -368,8 +368,23 @@ const MAIS_MODULOS = [
 function PorDentroTabs() {
   const [tab, setTab] = useState(0)
   const t = PORDENTRO_TABS[tab]!
+
+  // O link "Nino AI" do topo (#nino) rola pra cá; garante que a aba do Nino
+  // fique ativa mesmo se o visitante tiver trocado de aba antes.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest?.('a[href="#nino"]')
+      if (a) {
+        const idx = PORDENTRO_TABS.findIndex((x) => x.nino)
+        if (idx >= 0) setTab(idx)
+      }
+    }
+    document.addEventListener("click", onClick)
+    return () => document.removeEventListener("click", onClick)
+  }, [])
+
   return (
-    <div>
+    <div id="nino" className="scroll-mt-8">
       {/* pílulas — 1 aba por vez (compacto no mobile) */}
       <div className="flex flex-wrap items-center justify-center gap-2">
         {PORDENTRO_TABS.map((x, i) => (
@@ -407,7 +422,7 @@ function PorDentroTabs() {
 
       {/* conteúdo do tab ativo — key no wrapper reanima a cada troca */}
       {t.nino ? (
-        <div key={t.key} className="mt-8">
+        <div key={t.key} className="mt-6">
           <NinoTabPanel tab={t} />
         </div>
       ) : (
@@ -529,7 +544,7 @@ function NinoChatMock() {
           </p>
         </div>
       </div>
-      <div className="mt-4 space-y-2.5">
+      <div className="mt-3 space-y-2">
         {NINO_CHAT.map((m, i) =>
           m.de === "voce" ? (
             <div key={i} className="flex justify-end">
@@ -599,7 +614,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
   }
 
   return (
-    <div id="nino" ref={rootRef} className="rx-tab-in scroll-mt-24">
+    <div ref={rootRef} className="rx-tab-in">
       <div className="relative">
         {/* Trilho horizontal (2 telas lado a lado, com snap). A altura segue a
             tela ativa pra não sobrar espaço branco. */}
@@ -629,17 +644,16 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
                 <h3 className="mt-3 text-2xl font-medium tracking-tight sm:text-3xl">
                   Seu consultor de delivery, 24 horas por dia
                 </h3>
-                <p className="mt-2 text-[oklch(0.45_0.01_48)]">
-                  Manda a pergunta como mandaria pro seu sócio — e o Nino
-                  responde na hora, com os números reais das suas lojas. Um
-                  especialista em delivery à sua disposição a qualquer hora: sem
-                  planilha, sem relatório, sem esperar o contador.
+                <p className="mt-2 text-sm text-[oklch(0.45_0.01_48)]">
+                  Manda a pergunta como mandaria pro seu sócio e ele responde na
+                  hora, com os números reais das suas lojas — a qualquer hora,
+                  sem planilha nem relatório.
                 </p>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                   {NINO_PODERES.map((p) => (
                     <div
                       key={p.t}
-                      className="rounded-2xl border border-black/[0.07] bg-white p-4"
+                      className="rounded-2xl border border-black/[0.07] bg-white p-3.5"
                     >
                       <div className="flex items-center gap-2">
                         <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]">
@@ -653,7 +667,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
                     </div>
                   ))}
                 </div>
-                <p className="mt-5 flex items-start gap-2 text-[13px] text-[oklch(0.5_0.01_48)]">
+                <p className="mt-4 flex items-start gap-2 text-[13px] text-[oklch(0.5_0.01_48)]">
                   <Check
                     className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
                     strokeWidth={2.6}
@@ -729,7 +743,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
       </div>
 
       {/* Controles do carrossel: setas + bolinhas (com rótulo da tela) */}
-      <div className="mt-6 flex items-center justify-center gap-4">
+      <div className="mt-5 flex items-center justify-center gap-4">
         <button
           type="button"
           onClick={() => irPara(slide - 1)}
