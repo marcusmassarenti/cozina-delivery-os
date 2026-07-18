@@ -198,13 +198,33 @@ export async function asaasCreatePayment(input: {
   externalReference: string
 }): Promise<{ id: string; invoiceUrl: string | null }> {
   if (asaasIsMock()) {
-    return { id: mockId("pay"), invoiceUrl: `/assinatura/simulado?pack=1` }
+    // Simulado: leva a referência pro checkout de teste saber o que aprovar
+    // (pacote IA ou upgrade de plano).
+    const ref = encodeURIComponent(input.externalReference)
+    return { id: mockId("pay"), invoiceUrl: `/assinatura/simulado?ref=${ref}` }
   }
   const p = await call<{ id: string; invoiceUrl?: string }>("/payments", {
     method: "POST",
     body: JSON.stringify({ billingType: BILLING_TYPE, ...input }),
   })
   return { id: p.id, invoiceUrl: p.invoiceUrl ?? null }
+}
+
+/**
+ * Atualiza o VALOR de uma assinatura recorrente (ex.: upgrade de plano). No
+ * Asaas isso é um POST em /subscriptions/{id}. `updatePendingPayments` reflete
+ * o novo valor nas cobranças futuras já geradas. Só muda as PRÓXIMAS cobranças
+ * — a diferença do ciclo atual (proração) é cobrada à parte.
+ */
+export async function asaasUpdateSubscription(
+  subscriptionId: string,
+  input: { value: number; description?: string; updatePendingPayments?: boolean },
+): Promise<void> {
+  if (asaasIsMock()) return
+  await call(`/subscriptions/${subscriptionId}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
 }
 
 /** Nota fiscal (NFS-e) emitida pelo Asaas. `pdfUrl`/`xmlUrl` só vêm quando a

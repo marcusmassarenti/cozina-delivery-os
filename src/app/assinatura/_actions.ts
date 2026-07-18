@@ -8,7 +8,9 @@ import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import {
   getDefaultPlan,
   getPlanoAtual,
+  getUpgradeAiInfo,
   precoDoPlano,
+  valorAssinaturaDoPlano,
   type PlanId,
 } from "@/lib/data/assinatura"
 import { todayISO } from "@/lib/data/billing"
@@ -20,9 +22,12 @@ import {
 import {
   asaasCancelSubscription,
   asaasCreateCustomer,
+  asaasCreatePayment,
   asaasCreateSubscription,
   asaasFirstInvoiceUrl,
+  asaasIsMock,
   asaasSetSubscriptionInvoiceSettings,
+  asaasUpdateSubscription,
 } from "@/lib/asaas/client"
 import { fiscalInvoiceSettings } from "@/lib/asaas/fiscal"
 
@@ -242,6 +247,146 @@ export async function assinar(
       message: e instanceof Error ? e.message : "Erro ao criar a assinatura.",
     }
   }
+}
+
+export type UpgradeState = {
+  ok: boolean
+  message?: string
+  checkoutUrl?: string | null
+  /** Upgrade liberado na hora (proração ínfima, sem cobrança). */
+  imediato?: boolean
+}
+
+/**
+ * Inicia o upgrade pro plano DeliveryOS AI (cliente que JÁ tem assinatura ativa
+ * num plano menor). Cobra a diferença proporcional AGORA no checkout do Asaas
+ * (cartão já lembrado) e sobe o valor da assinatura pros próximos ciclos. O AI
+ * é liberado quando a proração confirmar (webhook, branch "upgrade:").
+ */
+export async function iniciarUpgradeAi(): Promise<UpgradeState> {
+  const supabase = await createClient()
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user) return { ok: false, message: "Sessão expirada." }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
+
+  const info = await getUpgradeAiInfo()
+  if (!info) return { ok: false, message: "Não foi possível carregar seu plano." }
+  if (!info.podeUpgrade) {
+    const msg =
+      info.motivo === "custom"
+        ? "Seu plano é personalizado — fale com o suporte pra ativar o Nino AI."
+        : info.motivo === "ja-ai"
+          ? "Você já está no plano DeliveryOS AI."
+          : "Você ainda não tem uma assinatura ativa. Assine primeiro."
+    return { ok: false, message: msg }
+  }
+
+  const admin = createAdminClient()
+  const { data: h } = await admin
+    .from("holdings")
+    .select("asaas_customer_id, asaas_subscription_id")
+    .eq("id", holdingId)
+    .maybeSingle()
+  const customerId = (h?.asaas_customer_id as string | null) ?? null
+  const subscriptionId = (h?.asaas_subscription_id as string | null) ?? null
+  if (!customerId || !subscriptionId)
+    return { ok: false, message: "Assinatura não encontrada. Fale com o suporte." }
+
+  // Asaas não cobra abaixo de ~R$5. Se a proração for ínfima, sobe o valor da
+  // assinatura e libera o AI de cortesia, sem cobrança agora.
+  const MIN_ASAAS = 5
+
+  try {
+    if (info.proracaoAgora < MIN_ASAAS) {
+      await asaasUpdateSubscription(subscriptionId, {
+        value: info.aiValorCiclo,
+        description: "Delivery OS — plano ai",
+      })
+      await admin
+        .from("holdings")
+        .update({ plan_tier: "ai", pending_plan_tier: null })
+        .eq("id", holdingId)
+      revalidatePath("/consultor-ia")
+      revalidatePath("/", "layout")
+      return { ok: true, imediato: true }
+    }
+
+    // Marca o AI como pendente — o webhook concede quando a proração confirmar.
+    await admin
+      .from("holdings")
+      .update({ pending_plan_tier: "ai" })
+      .eq("id", holdingId)
+
+    const pay = await asaasCreatePayment({
+      customer: customerId,
+      value: info.proracaoAgora,
+      dueDate: todayISO(),
+      description:
+        "Delivery OS — upgrade pro DeliveryOS AI (diferença proporcional até a renovação)",
+      externalReference: `upgrade:${holdingId}:ai`,
+    })
+    if (!pay.invoiceUrl)
+      return {
+        ok: false,
+        message:
+          "Cobrança criada, mas o link de pagamento ainda está sendo gerado. Tente de novo em instantes.",
+      }
+    return { ok: true, checkoutUrl: pay.invoiceUrl }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro ao iniciar o upgrade.",
+    }
+  }
+}
+
+/**
+ * MODO SIMULADO do UPGRADE: espelha o branch "upgrade:" do webhook — concede o
+ * plano AI e sobe o valor da assinatura. Só age em modo de teste (sem Asaas).
+ */
+export async function simularUpgrade(): Promise<{
+  ok: boolean
+  message?: string
+}> {
+  if (!asaasIsMock()) return { ok: false, message: "Só vale no modo de teste." }
+  const supabase = await createClient()
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user) return { ok: false, message: "Sessão expirada." }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
+
+  const info = await getUpgradeAiInfo()
+  const admin = createAdminClient()
+  const { data: hh } = await admin
+    .from("holdings")
+    .select("asaas_subscription_id")
+    .eq("id", holdingId)
+    .maybeSingle()
+  const subId = (hh?.asaas_subscription_id as string | null) ?? null
+
+  await admin
+    .from("holdings")
+    .update({ plan_tier: "ai", pending_plan_tier: null })
+    .eq("id", holdingId)
+  if (subId) {
+    try {
+      const novoValor = await valorAssinaturaDoPlano(holdingId, "ai")
+      await asaasUpdateSubscription(subId, { value: novoValor }) // no-op no mock
+    } catch {
+      /* mock */
+    }
+  }
+  await admin.from("holding_payments").insert({
+    holding_id: holdingId,
+    paid_on: todayISO(),
+    amount: info?.proracaoAgora ?? 0,
+    method: "Asaas (Simulado) · upgrade AI",
+    note: `Simulado upgrade ${holdingId}`,
+  })
+  revalidatePath("/consultor-ia")
+  revalidatePath("/", "layout")
+  return { ok: true }
 }
 
 /**

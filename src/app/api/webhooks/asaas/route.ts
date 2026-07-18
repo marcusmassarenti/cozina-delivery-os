@@ -17,6 +17,8 @@
 import { timingSafeEqual } from "node:crypto"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { valorAssinaturaDoPlano } from "@/lib/data/assinatura"
+import { asaasUpdateSubscription } from "@/lib/asaas/client"
 
 /** Comparação de segredo em tempo constante (evita timing attack). */
 function tokenOk(expected: string, got: string | null): boolean {
@@ -187,6 +189,65 @@ export async function POST(req: Request) {
       }
       // Pacote não altera assinatura/plano — encerra aqui.
       return Response.json({ ok: true, pacote: true })
+    }
+
+    // ── UPGRADE de plano (cobrança avulsa da proração) ──
+    // externalReference "upgrade:<holdingId>:<plano>". Quando confirma: concede
+    // o novo plano e sobe o valor da assinatura pros próximos ciclos. NÃO mexe
+    // em paid/due_date/suspend da holding (a assinatura base segue igual), por
+    // isso trata à parte — um estorno da proração não pode derrubar a conta.
+    if (extRef.startsWith("upgrade:")) {
+      if (CONFIRMADO.has(event)) {
+        const alvo = extRef.split(":")[2] === "ai" ? "ai" : null
+        if (alvo) {
+          await admin
+            .from("holdings")
+            .update({ plan_tier: alvo, pending_plan_tier: null })
+            .eq("id", holdingId)
+          // Sobe o valor recorrente da assinatura pros próximos ciclos.
+          try {
+            const { data: hh } = await admin
+              .from("holdings")
+              .select("asaas_subscription_id")
+              .eq("id", holdingId)
+              .maybeSingle()
+            const subId = (hh?.asaas_subscription_id as string | null) ?? null
+            if (subId) {
+              const novoValor = await valorAssinaturaDoPlano(holdingId, alvo)
+              await asaasUpdateSubscription(subId, {
+                value: novoValor,
+                description: "Delivery OS — plano ai",
+              })
+            }
+          } catch (e) {
+            console.error("[upgrade] falhou ao subir o valor da assinatura:", e)
+          }
+          // Histórico (nota distinta, dedupe pelo id da cobrança).
+          if (payment.id) {
+            const note = `Asaas ${payment.id} · upgrade AI`
+            const { data: exists } = await admin
+              .from("holding_payments")
+              .select("id")
+              .eq("holding_id", holdingId)
+              .eq("note", note)
+              .maybeSingle()
+            if (!exists) {
+              await admin.from("holding_payments").insert({
+                holding_id: holdingId,
+                paid_on: String(
+                  payment.paymentDate ??
+                    payment.confirmedDate ??
+                    new Date().toISOString().slice(0, 10),
+                ),
+                amount: Number(payment.value ?? 0),
+                method: `Asaas${payment.billingType ? ` (${payment.billingType})` : ""} · upgrade AI`,
+                note,
+              })
+            }
+          }
+        }
+      }
+      return Response.json({ ok: true, upgrade: true })
     }
 
     const patch: Record<string, unknown> = {

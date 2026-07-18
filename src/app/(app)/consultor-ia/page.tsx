@@ -81,11 +81,11 @@ function Upsell() {
         cancelamento e taxas — usando os números reais das suas lojas.
       </p>
       <Link
-        href="/assinatura"
+        href="/assinatura?plano=ai"
         className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
       >
         <Sparkles className="size-4" />
-        Conhecer o plano
+        Liberar o Nino AI
       </Link>
     </div>
   )

@@ -4,9 +4,15 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { simularPagamento } from "../../_actions"
+import { simularPagamento, simularUpgrade } from "../../_actions"
 
-export function SimuladoActions({ sub }: { sub: string }) {
+export function SimuladoActions({
+  sub,
+  upgrade = false,
+}: {
+  sub: string | null
+  upgrade?: boolean
+}) {
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const router = useRouter()
@@ -14,9 +20,11 @@ export function SimuladoActions({ sub }: { sub: string }) {
   async function aprovar() {
     setPending(true)
     setError(null)
-    const res = await simularPagamento(sub)
+    const res = upgrade
+      ? await simularUpgrade()
+      : await simularPagamento(sub ?? "")
     if (res.ok) {
-      router.push("/?assinou=1")
+      router.push(upgrade ? "/consultor-ia" : "/?assinou=1")
       router.refresh()
     } else {
       setPending(false)

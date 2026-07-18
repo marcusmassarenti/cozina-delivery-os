@@ -4,9 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import {
   computeBillingStatus,
+  daysUntil,
   effectiveTrialEnd,
   type BillingStatus,
 } from "@/lib/data/billing"
+import { valorCobranca, type BillingCycle } from "@/lib/pricing"
 
 /**
  * Preço da assinatura self-service — POR LOJA, em três planos (bate com a
@@ -205,5 +207,110 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     customerId: (h.asaas_customer_id as string | null) ?? null,
     subscriptionId: (h.asaas_subscription_id as string | null) ?? null,
     payments,
+  }
+}
+
+/* ─────────────────────────── UPGRADE DE PLANO ──────────────────────────── */
+
+/** Conta as lojas ativas de uma holding (base do preço por loja). */
+async function contarLojasAtivas(holdingId: string): Promise<number> {
+  const admin = createAdminClient()
+  const { data: brands } = await admin
+    .from("brands")
+    .select("id")
+    .eq("holding_id", holdingId)
+  const brandIds = (brands ?? []).map((b) => b.id)
+  if (!brandIds.length) return 0
+  const { count } = await admin
+    .from("units")
+    .select("id", { count: "exact", head: true })
+    .in("brand_id", brandIds)
+    .eq("active", true)
+  return count ?? 0
+}
+
+/** Valor recorrente (por ciclo) de um plano pra uma holding — respeita o
+ *  ciclo (mensal +30% / anual ×12) e o nº de lojas. Usado pela ação de upgrade
+ *  e pelo webhook (pra atualizar o valor da assinatura no Asaas). */
+export async function valorAssinaturaDoPlano(
+  holdingId: string,
+  plan: PlanId,
+): Promise<number> {
+  const admin = createAdminClient()
+  const { data: h } = await admin
+    .from("holdings")
+    .select("billing_cycle")
+    .eq("id", holdingId)
+    .maybeSingle()
+  const cycle: BillingCycle =
+    (h?.billing_cycle as BillingCycle | null) ?? "anual"
+  const units = await contarLojasAtivas(holdingId)
+  const precos = await getDefaultPlan()
+  return valorCobranca(precoDoPlano(precos, plan, units), cycle)
+}
+
+export type UpgradeAiInfo = {
+  /** Pode fazer o upgrade self-service? */
+  podeUpgrade: boolean
+  motivo: null | "sem-assinatura" | "ja-ai" | "custom"
+  planoAtualLabel: string
+  units: number
+  aiPerUnit: number
+  /** Novo valor recorrente (por ciclo) já com o plano AI. */
+  aiValorCiclo: number
+  cycle: BillingCycle
+  /** Diferença proporcional a cobrar AGORA (dias restantes até renovar). */
+  proracaoAgora: number
+  dueDate: string | null
+}
+
+/** Monta os números do upgrade pro plano AI (exibição + base da cobrança). */
+export async function getUpgradeAiInfo(): Promise<UpgradeAiInfo | null> {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return null
+  const admin = createAdminClient()
+  const { data: h } = await admin
+    .from("holdings")
+    .select("monthly_fee, plan_tier, billing_cycle, due_date, asaas_subscription_id")
+    .eq("id", holdingId)
+    .maybeSingle()
+  if (!h) return null
+
+  const cycle: BillingCycle =
+    (h.billing_cycle as BillingCycle | null) ?? "anual"
+  const tierAtual = (h.plan_tier as PlanId | null) ?? "essencial"
+  const dueDate = (h.due_date as string | null) ?? null
+  const units = await contarLojasAtivas(holdingId)
+  const precos = await getDefaultPlan()
+
+  const aiValorCiclo = valorCobranca(precoDoPlano(precos, "ai", units), cycle)
+  const atualValorCiclo = valorCobranca(
+    precoDoPlano(precos, tierAtual, units),
+    cycle,
+  )
+
+  // Proração: diferença por ciclo × (dias restantes / dias do ciclo).
+  const cycleDays = cycle === "anual" ? 365 : 30
+  const restantes = dueDate
+    ? Math.max(0, Math.min(cycleDays, daysUntil(dueDate)))
+    : cycleDays
+  const diff = Math.max(0, aiValorCiclo - atualValorCiclo)
+  const proracaoAgora = Math.round(diff * (restantes / cycleDays) * 100) / 100
+
+  let motivo: UpgradeAiInfo["motivo"] = null
+  if (h.monthly_fee != null) motivo = "custom"
+  else if (!h.asaas_subscription_id) motivo = "sem-assinatura"
+  else if (tierAtual === "ai") motivo = "ja-ai"
+
+  return {
+    podeUpgrade: motivo === null,
+    motivo,
+    planoAtualLabel: PLANOS_META[tierAtual].label,
+    units,
+    aiPerUnit: precos.ai,
+    aiValorCiclo,
+    cycle,
+    proracaoAgora,
+    dueDate,
   }
 }

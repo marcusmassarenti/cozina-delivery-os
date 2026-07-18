@@ -84,12 +84,17 @@ export function ConsultorChat({
   const [comprando, setComprando] = React.useState(false)
   const [avisoCompra, setAvisoCompra] = React.useState<string | null>(null)
   const fimRef = React.useRef<HTMLDivElement>(null)
-  // Saudação por horário — calculada no cliente (evita mismatch de hidratação).
-  const [saudacao, setSaudacao] = React.useState("Olá")
-  React.useEffect(() => {
-    const h = new Date().getHours()
-    setSaudacao(h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite")
-  }, [])
+  // Saudação por horário — lida do cliente via useSyncExternalStore (no server
+  // fica "Olá"; no cliente vira Bom dia/Boa tarde/Boa noite). Sem setState em
+  // effect e sem mismatch de hidratação.
+  const saudacao = React.useSyncExternalStore(
+    () => () => {},
+    () => {
+      const h = new Date().getHours()
+      return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite"
+    },
+    () => "Olá",
+  )
 
   const precoStr = pacote.preco.toFixed(2).replace(".", ",")
 

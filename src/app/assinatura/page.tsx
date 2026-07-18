@@ -11,20 +11,25 @@ import {
 } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/server"
-import { getPlanoAtual, type PlanId, type PlanoAtual } from "@/lib/data/assinatura"
+import {
+  getPlanoAtual,
+  getUpgradeAiInfo,
+  type PlanId,
+  type PlanoAtual,
+  type UpgradeAiInfo,
+} from "@/lib/data/assinatura"
 import { daysUntil } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
 import { SubscribeForm } from "./_components/subscribe-form"
 import { CancelButton } from "./_components/cancel-button"
 import { PayPendingButton } from "./_components/pay-pending-button"
+import { UpgradeButton } from "./_components/upgrade-button"
 
 const BRAND = "oklch(0.65 0.21 35)"
 const BRAND_STRONG = "oklch(0.57 0.2 33)"
 const BRAND_SOFT = "oklch(0.96 0.035 55)"
 const INK = "oklch(0.2 0.01 48)"
-const BRAND_BTN =
-  "inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_oklch(0.65_0.21_35/.65)] transition-all hover:-translate-y-0.5"
 
 const EMAIL = "mailto:suporte@deliveryos.food"
 
@@ -66,15 +71,99 @@ export default async function AssinaturaPage({
   if (!auth.user) redirect("/login")
 
   const plano = await getPlanoAtual()
+  const { plano: planoQuery } = await searchParams
 
-  // Assinatura ATIVA → painel de gestão DENTRO do app (aba da Minha conta).
+  // Assinatura ATIVA:
   if (plano?.status === "paid") {
+    // Pediu upgrade pro AI e dá pra fazer (tem assinatura, plano menor) →
+    // tela de upgrade com a proração. Senão, vai pra gestão (Minha conta).
+    if (planoQuery === "ai") {
+      const up = await getUpgradeAiInfo()
+      if (up?.podeUpgrade) return <UpgradeScreen info={up} />
+    }
     redirect("/minha-conta/assinatura")
   }
 
   // Senão → checkout (assinar ou finalizar pagamento).
-  const { plano: planoQuery } = await searchParams
   return <Checkout plano={plano} planoQuery={planoQuery} />
+}
+
+/* ──────────────────────────── UPGRADE PRO AI ───────────────────────────── */
+
+function UpgradeScreen({ info }: { info: UpgradeAiInfo }) {
+  const temProracao = info.proracaoAgora > 0
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/20 p-6">
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/4 h-72 w-96 -translate-x-1/2 rounded-full blur-3xl"
+        style={{ background: "oklch(0.65 0.21 35 / 0.12)" }}
+      />
+      <div className="relative w-full max-w-md rounded-2xl border bg-card p-6 shadow-xl sm:p-8">
+        <div className="text-center">
+          <div
+            className="mx-auto flex size-14 items-center justify-center rounded-2xl"
+            style={{ background: BRAND_SOFT, color: BRAND_STRONG }}
+          >
+            <Sparkles className="size-7" />
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold">Ative o Nino AI</h1>
+          <p className="mx-auto mt-1.5 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
+            Upgrade do <b className="text-foreground">{info.planoAtualLabel}</b>{" "}
+            pro <b className="text-foreground">DeliveryOS AI</b> — o consultor que
+            responde na hora com os seus números.
+          </p>
+        </div>
+
+        {/* Resumo do que muda */}
+        <div className="mt-6 space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Novo plano</span>
+            <span className="font-medium">
+              DeliveryOS AI · {fmtBRL(info.aiPerUnit)}/loja
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">
+              Mensalidade{info.cycle === "anual" ? " (no anual)" : ""}
+            </span>
+            <span className="font-medium tabular-nums">
+              {fmtBRL(info.aiValorCiclo)}
+              <span className="text-xs font-normal text-muted-foreground">
+                {info.cycle === "anual" ? "/ano" : "/mês"}
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-t pt-3">
+            <span className="font-medium">
+              {temProracao ? "A pagar agora (proporcional)" : "A pagar agora"}
+            </span>
+            <span className="text-lg font-semibold tabular-nums text-[var(--brand-strong)]">
+              {temProracao ? fmtBRL(info.proracaoAgora) : "R$ 0,00"}
+            </span>
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {temProracao
+              ? "Só a diferença proporcional até a sua renovação. A partir do próximo ciclo, a assinatura já sai no valor do AI."
+              : "Sem cobrança agora — o AI é liberado na hora e o novo valor entra na próxima renovação."}
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <UpgradeButton />
+        </div>
+
+        <div className="mt-5 text-center">
+          <Link
+            href="/consultor-ia"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="size-3.5" />
+            Voltar
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /* ─────────────────────── CHECKOUT (assinar / pendente) ─────────────────── */

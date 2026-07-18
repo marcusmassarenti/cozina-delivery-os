@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic"
 export default async function SimuladoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sub?: string }>
+  searchParams: Promise<{ sub?: string; ref?: string }>
 }) {
   const supabase = await createClient()
   const { data: auth } = await supabase.auth.getUser()
@@ -22,8 +22,9 @@ export default async function SimuladoPage({
   // Fora do modo simulado, não existe checkout de teste.
   if (!asaasIsMock()) redirect("/assinatura")
 
-  const { sub } = await searchParams
-  if (!sub) redirect("/assinatura")
+  const { sub, ref } = await searchParams
+  const isUpgrade = (ref ?? "").startsWith("upgrade:")
+  if (!sub && !isUpgrade) redirect("/assinatura")
 
   const plano = await getPlanoAtual()
 
@@ -33,7 +34,9 @@ export default async function SimuladoPage({
         <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
           <FlaskConical className="size-7" />
         </div>
-        <h1 className="mt-4 text-xl font-semibold">Pagamento simulado</h1>
+        <h1 className="mt-4 text-xl font-semibold">
+          {isUpgrade ? "Upgrade simulado" : "Pagamento simulado"}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           O Asaas ainda não está configurado, então este é um checkout de{" "}
           <strong>teste</strong> — nada é cobrado de verdade. Aprovar aqui
@@ -42,17 +45,19 @@ export default async function SimuladoPage({
 
         <div className="mt-6 rounded-xl border bg-muted/30 p-4 text-left">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm font-medium">Delivery OS · mensal</span>
+            <span className="text-sm font-medium">
+              {isUpgrade ? "Upgrade DeliveryOS AI" : "Delivery OS · mensal"}
+            </span>
             <span className="text-lg font-semibold tabular-nums">
               {plano ? fmtBRL(plano.mensalidade) : "—"}
             </span>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Assinatura de teste {sub}
+            {isUpgrade ? "Proração de teste" : `Assinatura de teste ${sub}`}
           </p>
         </div>
 
-        <SimuladoActions sub={sub} />
+        <SimuladoActions sub={sub ?? null} upgrade={isUpgrade} />
       </div>
     </div>
   )
