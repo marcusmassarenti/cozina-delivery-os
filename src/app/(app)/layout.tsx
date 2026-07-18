@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { NavigationProgress } from "@/components/shared/navigation-progress"
 import { TopBar } from "@/components/top-bar"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
+import { WelcomeSubscribedModal } from "@/components/welcome-subscribed-modal"
 import { WhatsNewModal } from "@/components/whats-new-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -66,6 +67,9 @@ export default async function AppLayout({
           <TopBar
             userName={userContext.fullName}
             userInitials={userContext.initials}
+            planTier={billing?.planTier ?? null}
+            billingStatus={billing?.status}
+            isSuperadmin={superadmin}
           />
           {overdue && (
             <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-6 py-2.5 text-xs font-medium text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
@@ -104,6 +108,7 @@ export default async function AppLayout({
           onboarded={userContext.onboarded}
           lastSeenVersion={userContext.lastSeenVersion}
         />
+        <WelcomeSubscribedModal userName={userContext.fullName} />
       </SidebarProvider>
     </TooltipProvider>
   )

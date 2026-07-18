@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { headers } from "next/headers"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -38,6 +39,20 @@ export type AssinarState = {
 }
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "")
+
+/** URL base do app (montada dos headers) — pro Asaas redirecionar de volta. */
+async function appBaseUrl(): Promise<string | null> {
+  try {
+    const h = await headers()
+    const host = h.get("host")
+    if (!host) return null
+    const proto =
+      h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https")
+    return `${proto}://${host}`
+  } catch {
+    return null
+  }
+}
 
 /**
  * Link de pagamento da assinatura JÁ CRIADA (pendente). Não recria nada —
@@ -192,6 +207,7 @@ export async function assinar(
       const hoje = todayISO()
       const nextDueDate =
         plano.trialEndsAt && plano.trialEndsAt > hoje ? plano.trialEndsAt : hoje
+      const base = await appBaseUrl()
       const sub = await asaasCreateSubscription({
         customer: customerId,
         value: valor,
@@ -199,6 +215,10 @@ export async function assinar(
         cycle: asaasCycle(ciclo),
         description: `Delivery OS — plano ${planId} (${plano.name}) · ${ciclo}`,
         externalReference: holdingId,
+        // Depois de pagar, volta pro app com a tela de boas-vindas.
+        ...(base
+          ? { callback: { successUrl: `${base}/?assinou=1`, autoRedirect: true } }
+          : {}),
       })
       subscriptionId = sub.id
 
@@ -318,6 +338,7 @@ export async function iniciarUpgradeAi(): Promise<UpgradeState> {
       .update({ pending_plan_tier: "ai" })
       .eq("id", holdingId)
 
+    const base = await appBaseUrl()
     const pay = await asaasCreatePayment({
       customer: customerId,
       value: info.proracaoAgora,
@@ -325,6 +346,10 @@ export async function iniciarUpgradeAi(): Promise<UpgradeState> {
       description:
         "Delivery OS — upgrade pro DeliveryOS AI (diferença proporcional até a renovação)",
       externalReference: `upgrade:${holdingId}:ai`,
+      // Depois de pagar, cai direto no Nino (o que ele veio buscar).
+      ...(base
+        ? { callback: { successUrl: `${base}/consultor-ia`, autoRedirect: true } }
+        : {}),
     })
     if (!pay.invoiceUrl)
       return {

@@ -153,6 +153,8 @@ export async function asaasCreateSubscription(input: {
   cycle: "MONTHLY" | "YEARLY"
   description?: string
   externalReference?: string
+  /** Depois de pagar, o Asaas leva o cliente de volta pra cá. */
+  callback?: { successUrl: string; autoRedirect?: boolean }
 }): Promise<AsaasSubscription> {
   if (asaasIsMock()) return { id: mockId("sub") }
   return call<AsaasSubscription>("/subscriptions", {
@@ -196,6 +198,8 @@ export async function asaasCreatePayment(input: {
   dueDate: string // YYYY-MM-DD
   description: string
   externalReference: string
+  /** Depois de pagar, o Asaas leva o cliente de volta pra cá. */
+  callback?: { successUrl: string; autoRedirect?: boolean }
 }): Promise<{ id: string; invoiceUrl: string | null }> {
   if (asaasIsMock()) {
     // Simulado: leva a referência pro checkout de teste saber o que aprovar
