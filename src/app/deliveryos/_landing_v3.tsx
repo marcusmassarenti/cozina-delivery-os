@@ -814,11 +814,11 @@ function PrecoValor({
   const brand = dark ? "text-[oklch(0.82_0.14_55)]" : "text-[var(--brand-strong)]"
   return (
     <div className="relative">
-      <div className="mt-5 flex items-baseline gap-1.5">
+      <div className="mt-4 flex items-baseline gap-1.5">
         <span className="text-5xl font-medium tracking-tight">R$ {precoStr(valor)}</span>
         <span className={`text-sm ${muted}`}>/loja · mês</span>
       </div>
-      <p className={`mt-1.5 text-xs font-medium ${brand}`}>
+      <p className={`mt-1 text-xs font-medium ${brand}`}>
         {anual
           ? `R$ ${precoStr(mes * 12)} à vista no ano · 1 cobrança`
           : `No anual sai por R$ ${precoStr(mes)}/mês`}
@@ -1282,22 +1282,22 @@ export function LandingV3({
       </section>
 
       {/* PREÇOS */}
-      <section id="precos" className="relative overflow-hidden bg-white py-12 sm:py-16">
+      <section className="relative overflow-hidden bg-white py-12 sm:py-16">
         <div className="dot-light pointer-events-none absolute inset-0 opacity-70" />
         <div className="glow-blob left-1/2 top-10 h-72 w-[44rem] -translate-x-1/2" />
-        <div className="relative mx-auto max-w-6xl px-5">
+        <div id="precos" className="relative mx-auto max-w-6xl scroll-mt-2 px-5">
           <Reveal>
-            <h2 className="text-center text-4xl font-medium tracking-tight sm:text-5xl">
+            <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">
               Escolha o seu <span className="text-[var(--brand)]">plano</span>
             </h2>
           </Reveal>
           <Reveal delay={70}>
-            <p className="mt-3 text-center text-[oklch(0.5_0.01_48)]">Por loja. No mensal, cancela quando quiser; no anual, você paga à vista e evita os 30% a mais.</p>
+            <p className="mt-2 text-center text-sm text-[oklch(0.5_0.01_48)]">Por loja. No mensal, cancela quando quiser; no anual, você paga à vista e evita os 30% a mais.</p>
           </Reveal>
 
           {/* Toggle Mensal / Anual */}
           <Reveal delay={100}>
-            <div className="mt-7 flex flex-col items-center gap-2">
+            <div className="mt-4 flex flex-col items-center gap-2">
               <div className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white p-1 shadow-sm">
                 <button
                   type="button"
@@ -1335,15 +1335,15 @@ export function LandingV3({
             </div>
           </Reveal>
 
-          <div className="mx-auto mt-10 grid items-stretch gap-6 md:grid-cols-3">
+          <div className="mx-auto mt-4 grid items-stretch gap-6 md:grid-cols-3">
             {/* ESSENCIAL */}
             <Reveal delay={120}>
-              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-7">
+              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-6">
                 <span className="absolute right-6 top-6 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">Comece aqui</span>
                 <h3 className="text-lg font-medium">Essencial</h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Pra ver seu lucro no delivery</p>
                 <PrecoValor mes={precos.essencial} anual={anual} />
-                <ul className="mt-6 space-y-3 text-[15px]">
+                <ul className="mt-4 space-y-2 text-[15px]">
                   {[
                     "Upload iFood, 99 e Keeta",
                     "Painel de lucro real por loja",
@@ -1360,19 +1360,19 @@ export function LandingV3({
                     </li>
                   ))}
                 </ul>
-                <div className="mt-auto pt-7">
-                  <a href="/cadastro" className="btn-ghost grp flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3.5 text-base font-medium hover:bg-black/[0.02]">
+                <div className="mt-auto pt-5">
+                  <a href="/cadastro" className="btn-ghost grp flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3 text-base font-medium hover:bg-black/[0.02]">
                     Começar 7 dias grátis
                     <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
                   </a>
-                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Sem cartão pra testar</p>
+                  <p className="mt-2 text-center text-xs text-[oklch(0.5_0.01_48)]">Sem cartão pra testar</p>
                 </div>
               </div>
             </Reveal>
 
             {/* PRO */}
             <Reveal delay={180}>
-              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-7">
+              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.09] bg-white p-6">
                 <span className="absolute right-6 top-6 rounded-full bg-[oklch(0.94_0.005_48)] px-3 py-1 text-xs font-medium text-[oklch(0.45_0.01_48)]">Completo</span>
                 <h3 className="flex items-center gap-2 text-lg font-medium">
                   <Zap className="size-4 text-[var(--brand)]" strokeWidth={2.4} />
@@ -1381,7 +1381,7 @@ export function LandingV3({
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Gestão financeira completa</p>
                 <PrecoValor mes={precos.pro} anual={anual} />
                 <p className="mt-5 text-[13px] font-medium text-[var(--brand-strong)]">Tudo do Essencial, e mais:</p>
-                <ul className="mt-3 space-y-3 text-[15px]">
+                <ul className="mt-3 space-y-2 text-[15px]">
                   {[
                     { i: Coins, t: "Fluxo de caixa: contas a pagar e a receber" },
                     { i: Wallet, t: "Contas bancárias, cartões e categorias" },
@@ -1396,18 +1396,18 @@ export function LandingV3({
                     </li>
                   ))}
                 </ul>
-                <div className="mt-auto pt-7">
-                  <a href="/cadastro" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3.5 text-base font-medium hover:bg-black/[0.02]">
+                <div className="mt-auto pt-5">
+                  <a href="/cadastro" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3 text-base font-medium hover:bg-black/[0.02]">
                     Quero o Pro
                   </a>
-                  <p className="mt-3 text-center text-xs text-[oklch(0.5_0.01_48)]">Por loja · cancela quando quiser</p>
+                  <p className="mt-2 text-center text-xs text-[oklch(0.5_0.01_48)]">Por loja · cancela quando quiser</p>
                 </div>
               </div>
             </Reveal>
 
             {/* DELIVERYOS AI — destaque */}
             <Reveal delay={240}>
-              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-[oklch(0.65_0.21_35/.5)] bg-[var(--ink)] p-7 text-white shadow-[0_36px_70px_-30px_oklch(0.65_0.21_35/.6)] md:-mt-3 md:mb-[-0.75rem]">
+              <div className="lift relative flex h-full flex-col overflow-hidden rounded-3xl border border-[oklch(0.65_0.21_35/.5)] bg-[var(--ink)] p-6 text-white shadow-[0_36px_70px_-30px_oklch(0.65_0.21_35/.6)] md:-mt-1 md:mb-[-0.25rem]">
                 <div className="hero-glow pointer-events-none absolute inset-x-0 top-0 h-40 opacity-70" />
                 <span className="absolute right-6 top-6 inline-flex items-center gap-1 rounded-full bg-[var(--brand)] px-2.5 py-1 text-[11px] font-semibold text-white">
                   <Sparkles className="size-3" strokeWidth={2.6} />
@@ -1420,7 +1420,7 @@ export function LandingV3({
                 <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
                 <PrecoValor mes={precos.ai} anual={anual} dark />
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
-                <ul className="relative mt-3 space-y-3 text-[15px] text-[oklch(0.88_0_0)]">
+                <ul className="relative mt-3 space-y-2 text-[15px] text-[oklch(0.88_0_0)]">
                   {[
                     { i: Sparkles, t: "Nino AI: consultor que responde na hora — compara lojas, taxas, CMV e o ano inteiro" },
                     { i: Gauge, t: "Diagnóstico inteligente de cada loja" },
@@ -1436,12 +1436,12 @@ export function LandingV3({
                     </li>
                   ))}
                 </ul>
-                <div className="relative mt-auto pt-7">
-                  <a href="/cadastro" className="btn-brand grp flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-base font-medium">
+                <div className="relative mt-auto pt-5">
+                  <a href="/cadastro" className="btn-brand grp flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-base font-medium">
                     Quero a IA
                     <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
                   </a>
-                  <p className="mt-3 text-center text-xs text-[oklch(0.6_0_0)]">Por loja · cancela quando quiser</p>
+                  <p className="mt-2 text-center text-xs text-[oklch(0.6_0_0)]">Por loja · cancela quando quiser</p>
                 </div>
               </div>
             </Reveal>
