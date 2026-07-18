@@ -84,6 +84,14 @@ export function ConsultorChat({
   const [comprando, setComprando] = React.useState(false)
   const [avisoCompra, setAvisoCompra] = React.useState<string | null>(null)
   const fimRef = React.useRef<HTMLDivElement>(null)
+  const taRef = React.useRef<HTMLTextAreaElement>(null)
+  // Depois que o Nino termina de responder, devolve o foco pro campo — pronto
+  // pra continuar a conversa / responder o que ele perguntou.
+  const antesPending = React.useRef(false)
+  React.useEffect(() => {
+    if (antesPending.current && !pending) taRef.current?.focus()
+    antesPending.current = pending
+  }, [pending])
   // Saudação por horário — lida do cliente via useSyncExternalStore (no server
   // fica "Olá"; no cliente vira Bom dia/Boa tarde/Boa noite). Sem setState em
   // effect e sem mismatch de hidratação.
@@ -270,7 +278,7 @@ export function ConsultorChat({
         {/* Cabeçalho: qual conversa (como o breadcrumb do Claude) + cota */}
         <div className="mx-auto flex w-full max-w-5xl shrink-0 items-center justify-between gap-2 border-b pb-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">
+            <span className="truncate text-sm font-semibold tracking-tight">
               {conversaAtiva ? conversaAtiva.titulo : "Nova conversa"}
             </span>
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -391,13 +399,22 @@ export function ConsultorChat({
                         </div>
                       </div>
                     ))}
-                    {pending && (
-                      <div className="flex justify-start">
-                        <div className="rounded-2xl bg-muted px-3.5 py-2 text-sm text-muted-foreground">
-                          Pensando…
+                    {pending && <PensandoBolha />}
+                    {/* Depois que ele responde, um atalho pra puxar mais. */}
+                    {!pending &&
+                      !carregando &&
+                      messages[messages.length - 1]?.role === "assistant" && (
+                        <div className="flex justify-start">
+                          <button
+                            type="button"
+                            onClick={() => enviar("Pode continuar e detalhar mais.")}
+                            className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <Plus className="size-3" />
+                            Continuar
+                          </button>
                         </div>
-                      </div>
-                    )}
+                      )}
                     <div ref={fimRef} />
                   </div>
                 )}
@@ -418,6 +435,7 @@ export function ConsultorChat({
               className="mx-auto flex w-full max-w-5xl shrink-0 items-end gap-2"
             >
               <textarea
+                ref={taRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -456,6 +474,41 @@ export function ConsultorChat({
         onClose={() => setVinculando(null)}
         onSalvar={salvarVinculo}
       />
+    </div>
+  )
+}
+
+/** Estados que o Nino "passa" enquanto pensa (só efeito, dá sensação de vivo). */
+const FASES_PENSANDO = [
+  "Pensando…",
+  "Lendo os seus números…",
+  "Cruzando as lojas…",
+  "Montando a resposta…",
+  "Quase lá…",
+]
+
+/** Bolha "viva" enquanto o Nino responde — sparkle pulsando + pontinhos que
+ *  saltam + o estado atual (pra não parecer travado, igual o Claude). */
+function PensandoBolha() {
+  const [i, setI] = React.useState(0)
+  React.useEffect(() => {
+    const id = setInterval(
+      () => setI((x) => Math.min(x + 1, FASES_PENSANDO.length - 1)),
+      1800,
+    )
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <div className="flex justify-start">
+      <div className="inline-flex items-center gap-2 rounded-2xl bg-muted px-3.5 py-2 text-sm text-muted-foreground">
+        <Sparkles className="size-3.5 animate-pulse text-primary" />
+        <span className="flex gap-1">
+          <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:-0.3s]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:-0.15s]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-primary/70" />
+        </span>
+        <span>{FASES_PENSANDO[i]}</span>
+      </div>
     </div>
   )
 }
