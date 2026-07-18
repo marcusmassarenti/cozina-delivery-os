@@ -82,12 +82,13 @@ function PlanBadge({
   billingStatus?: string
   isSuperadmin: boolean
 }) {
-  if (isSuperadmin) return null
-
   const upgradeChip =
     "inline-flex items-center gap-0.5 rounded-full border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
 
-  if (billingStatus === "trial") {
+  // Super-admin (dono) roda no topo de tudo → selo DeliveryOS AI.
+  const tierEfetivo = isSuperadmin ? "ai" : planTier
+
+  if (!isSuperadmin && billingStatus === "trial") {
     return (
       <div className="hidden items-center gap-1.5 md:flex">
         <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
@@ -106,10 +107,10 @@ function PlanBadge({
     pro: "Pro",
     ai: "DeliveryOS AI",
   }
-  const label = planTier ? LABEL[planTier] : null
+  const label = tierEfetivo ? LABEL[tierEfetivo] : null
   if (!label) return null // plano custom/sem self-service → sem selo
 
-  const isAi = planTier === "ai"
+  const isAi = tierEfetivo === "ai"
   return (
     <div className="hidden items-center gap-1.5 md:flex">
       <span
