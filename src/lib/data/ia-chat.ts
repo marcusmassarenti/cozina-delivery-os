@@ -17,6 +17,9 @@ import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
+import { getCancelamentosPorMotivo } from "@/lib/data/ifood-imported"
+import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
+import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import type { PlatformId } from "@/components/platform-logo"
 import { isAiPlan } from "@/lib/data/billing"
 import { asaasCreatePayment } from "@/lib/asaas/client"
@@ -372,6 +375,116 @@ async function consumirCota(
 }
 
 /** Monta o contexto compacto (rede + por loja + histórico do ano + recortes). */
+type MotivoCancel = { motivo: string; pedidos: number; perda: number }
+
+/**
+ * Cancelamentos por motivo (iFood) por loja, top N, buscados em paralelo.
+ * iFood-only porque a perda em R$ vem do Conciliação do iFood. Devolve só as
+ * lojas que têm algum cancelamento no mês.
+ */
+async function cancelamentosPorLoja(
+  units: { id: string; name: string }[],
+  year: number,
+  month: number,
+  topN = 3,
+): Promise<Map<string, MotivoCancel[]>> {
+  const pares = await Promise.all(
+    units.map(
+      async (u) =>
+        [u.id, await getCancelamentosPorMotivo(u.id, year, month)] as const,
+    ),
+  )
+  const map = new Map<string, MotivoCancel[]>()
+  for (const [id, lista] of pares) {
+    const top = lista.slice(0, topN).map((c) => ({
+      motivo: c.motivo,
+      pedidos: c.pedidos,
+      perda: c.perdaFinanceira,
+    }))
+    if (top.length > 0) map.set(id, top)
+  }
+  return map
+}
+
+type ReputacaoLoja = {
+  nota_geral: number | null
+  nota_ifood: number | null
+  nota_99food: number | null
+  nota_keeta: number | null
+  total_avaliacoes: number
+  avaliacoes_1_2_estrelas: number
+}
+type Reclamacao = {
+  loja: string
+  plataforma: string
+  nota: number
+  comentario: string
+}
+type Reputacao = {
+  porLoja: Map<string, ReputacaoLoja>
+  rede: {
+    nota_media: number | null
+    total_avaliacoes: number
+    avaliacoes_1_2_estrelas: number
+  }
+  reclamacoes_recentes: Reclamacao[]
+}
+
+/**
+ * Reputação da rede: nota por canal (iFood/99/Keeta) e distribuição por loja +
+ * as reclamações reais (comentários 1-2★). Só 2 consultas (cada uma junta as 3
+ * plataformas), pra não sobrecarregar o banco.
+ */
+async function montarReputacao(
+  units: { id: string; name: string }[],
+  year: number,
+  month: number,
+): Promise<Reputacao> {
+  const unitIds = units.map((u) => u.id)
+  const nomePorId = new Map(units.map((u) => [u.id, u.name]))
+  const [rows, negativos] = await Promise.all([
+    getAvaliacoesByUnitForMonth(year, month, unitIds),
+    getComentariosNegativos(year, month, unitIds, 2),
+  ])
+
+  const porLoja = new Map<string, ReputacaoLoja>()
+  let redeSoma = 0
+  let redeTotal = 0
+  let redeNeg = 0
+  for (const r of rows) {
+    const negativas = r.dist[1] + r.dist[2]
+    porLoja.set(r.unitId, {
+      nota_geral: r.notaMedia || null,
+      nota_ifood: r.notaMediaIfood,
+      nota_99food: r.notaMedia99,
+      nota_keeta: r.notaMediaKeeta,
+      total_avaliacoes: r.total,
+      avaliacoes_1_2_estrelas: negativas,
+    })
+    redeSoma += r.notaMedia * r.total
+    redeTotal += r.total
+    redeNeg += negativas
+  }
+
+  const reclamacoes_recentes = negativos.slice(0, 8).map((c) => ({
+    loja: nomePorId.get(c.unitId) ?? "(loja)",
+    plataforma: c.plataforma,
+    nota: c.nota,
+    comentario:
+      c.comentario.length > 160 ? `${c.comentario.slice(0, 160)}…` : c.comentario,
+  }))
+
+  return {
+    porLoja,
+    rede: {
+      nota_media: redeTotal > 0 ? round(redeSoma / redeTotal) : null,
+      total_avaliacoes: redeTotal,
+      avaliacoes_1_2_estrelas: redeNeg,
+    },
+    reclamacoes_recentes,
+  }
+}
+
 function montarContexto(
   units: { id: string; name: string; code: string }[],
   numerosMap: Map<string, ReturnType<typeof numerosDaLoja>>,
@@ -385,6 +498,8 @@ function montarContexto(
     dias_restantes: number
   },
   recortes: Awaited<ReturnType<typeof recortesDePeriodo>>,
+  cancelMap: Map<string, MotivoCancel[]>,
+  reputacao: Reputacao,
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -395,9 +510,28 @@ function montarContexto(
       return {
         ...(atual ?? { loja: u.name }),
         historico_mensal: historico,
+        // Motivos de cancelamento (iFood) da loja no mês, com perda em R$.
+        cancelamentos: cancelMap.get(u.id) ?? null,
+        // Nota por canal + quantas avaliações 1-2★ a loja teve no mês.
+        reputacao: reputacao.porLoja.get(u.id) ?? null,
       }
     })
     .filter(Boolean)
+
+  // Cancelamentos da REDE: junta os motivos de todas as lojas (top 6).
+  const redeCancel = new Map<string, { pedidos: number; perda: number }>()
+  for (const lista of cancelMap.values()) {
+    for (const c of lista) {
+      const cur = redeCancel.get(c.motivo) ?? { pedidos: 0, perda: 0 }
+      cur.pedidos += c.pedidos
+      cur.perda += c.perda
+      redeCancel.set(c.motivo, cur)
+    }
+  }
+  const cancelamentos_rede = [...redeCancel.entries()]
+    .map(([motivo, v]) => ({ motivo, pedidos: v.pedidos, perda: round(v.perda) }))
+    .sort((a, b) => b.pedidos - a.pedidos)
+    .slice(0, 6)
 
   const atuais = [...numerosMap.values()]
   const rede = atuais.reduce(
@@ -436,6 +570,12 @@ function montarContexto(
     },
     // Recortes de quinzena (rede + por loja) do mês corrente e do mês passado.
     periodos: recortes,
+    // Cancelamentos da rede por motivo (iFood), com perda em R$.
+    cancelamentos_rede,
+    // Reputação da rede (nota média, total de avaliações, quantas 1-2★).
+    reputacao_rede: reputacao.rede,
+    // Reclamações reais mais recentes/graves (comentários 1-2★ das 3 plataformas).
+    reclamacoes_recentes: reputacao.reclamacoes_recentes,
     historico_rede_mensal,
     por_loja,
   })
@@ -470,7 +610,24 @@ function numerosDaLoja(
       liquido: round(p.liquido),
       taxa_da_plataforma: round(p.bruto - p.liquido - (p.promocoesLoja || 0)),
     })),
+    // Quebra do que o iFood desconta (só iFood — as outras plataformas ainda
+    // não trazem esse detalhamento). Ajuda a responder "pra onde vai minha taxa".
+    quebra_taxas_ifood: quebraTaxasIfood(m),
   }
+}
+
+/** Detalhe do que o iFood desconta no mês (comissão, entrega, serviços,
+ *  promoção custeada, outros). Null quando não há nada lançado. */
+function quebraTaxasIfood(m: import("@/lib/mock-monthly").UnitMonthly) {
+  const q = {
+    comissao: round(m.taxaComissaoIfood),
+    entrega: round(m.taxaEntregaIfood),
+    servicos_logisticos: round(m.servicosLogisticos),
+    promocoes: round(m.promocoes),
+    outros_descontos: round(m.outrosDescontosIfood),
+  }
+  const soma = q.comissao + q.entrega + q.servicos_logisticos + q.promocoes + q.outros_descontos
+  return soma > 0 ? q : null
 }
 
 function round(n: number): number {
@@ -615,6 +772,10 @@ O contexto tem:
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
 - "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena". (Recorte por dia isolado, semana específica ou fim de semana ainda não estão no contexto — se pedirem isso, ofereça a quinzena ou o mês, não invente.)
 - "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução".
+- Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos, em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
+- "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
+- "reputacao_rede" e, em cada loja, "reputacao": nota média por CANAL (nota_ifood, nota_99food, nota_keeta — null se a loja não tem avaliação naquele canal), a nota_geral (combinada), total_avaliacoes e avaliacoes_1_2_estrelas (quantas avaliações ruins de 1 ou 2 estrelas). Use pra "como está minha nota", "qual loja tem a pior/melhor nota", "nota por plataforma", "quantas avaliações ruins", "reputação da rede".
+- "reclamacoes_recentes": os comentários NEGATIVOS reais (nota 1-2★) mais recentes/graves, com a loja, a plataforma, a nota e o texto do cliente. Use pra "o que os clientes reclamam", "quais as queixas", "o que tá gerando nota baixa". São falas reais — cite o teor (resuma), não invente. Se estiver vazio, diga que não há comentário negativo com texto no período.
 
 VOCÊ SABE DERIVAR (não precisa estar pronto no JSON):
 - Ticket médio = faturamento_bruto ÷ pedidos (dá pra calcular por mês do histórico, por quinzena, por loja).
@@ -697,11 +858,14 @@ export async function perguntarConsultor(
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
     // Mês corrente + histórico do ano + recortes de quinzena (tudo em paralelo).
-    const [monthlyMap, histMap, recortes] = await Promise.all([
-      getRealMonthlyForUnits(unitIds, year, month),
-      historicoMensalDoAno(unitIds, year, month),
-      recortesDePeriodo(units, year, month),
-    ])
+    const [monthlyMap, histMap, recortes, cancelMap, reputacao] =
+      await Promise.all([
+        getRealMonthlyForUnits(unitIds, year, month),
+        historicoMensalDoAno(unitIds, year, month),
+        recortesDePeriodo(units, year, month),
+        cancelamentosPorLoja(units, year, month),
+        montarReputacao(units, year, month),
+      ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
       const m = monthlyMap.get(u.id)
@@ -718,7 +882,7 @@ export async function perguntarConsultor(
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao)
 
     const resposta = await askClaudeChat({
       system: `${SYSTEM_BASE}\n\nCONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,
@@ -838,11 +1002,14 @@ export async function* perguntarConsultorStream(
   try {
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
-    const [monthlyMap, histMap, recortes] = await Promise.all([
-      getRealMonthlyForUnits(unitIds, year, month),
-      historicoMensalDoAno(unitIds, year, month),
-      recortesDePeriodo(units, year, month),
-    ])
+    const [monthlyMap, histMap, recortes, cancelMap, reputacao] =
+      await Promise.all([
+        getRealMonthlyForUnits(unitIds, year, month),
+        historicoMensalDoAno(unitIds, year, month),
+        recortesDePeriodo(units, year, month),
+        cancelamentosPorLoja(units, year, month),
+        montarReputacao(units, year, month),
+      ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
       const m = monthlyMap.get(u.id)
@@ -859,7 +1026,7 @@ export async function* perguntarConsultorStream(
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao)
 
     const stream = streamClaudeChat({
       system: `${SYSTEM_BASE}\n\nCONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,

@@ -37,6 +37,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.0",
+    date: "2026-07-18",
+    tag: "Melhorias",
+    title: "Nino AI mais inteligente: taxas, cancelamentos e reputação",
+    summary:
+      "O Nino agora enxerga dados que já estavam no sistema mas ele não usava — pra onde vai sua taxa, por que cancelam (e quanto você perde) e o que os clientes reclamam.",
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "novo",
+            title: "Pra onde vai a taxa do iFood",
+            desc: "Pergunte 'pra onde vai minha taxa' e o Nino abre o desconto do iFood do mês: comissão, entrega, serviços e promoções que você custeou.",
+          },
+          {
+            kind: "novo",
+            title: "Por que cancelam e quanto você perde",
+            desc: "Os motivos de cancelamento com a perda em R$ de cada um — dá pra ver o gargalo (atraso, item errado, cliente não localizado) e agir onde dói no bolso.",
+          },
+          {
+            kind: "novo",
+            title: "Reputação e o que os clientes reclamam",
+            desc: "Nota por plataforma (iFood/99/Keeta), qual loja está com a pior nota, e os comentários negativos reais agrupados por tema — pra atacar a causa.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.3.0",
     date: "2026-07-18",
     tag: "Grande novidade",
