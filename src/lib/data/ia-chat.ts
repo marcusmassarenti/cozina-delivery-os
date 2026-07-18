@@ -366,12 +366,20 @@ async function consumirCota(
   return (data as "gratis" | "credito" | null) ?? null
 }
 
-/** Monta o contexto compacto (rede + por loja + histórico do ano). */
+/** Monta o contexto compacto (rede + por loja + histórico do ano + recortes). */
 function montarContexto(
   units: { id: string; name: string; code: string }[],
   numerosMap: Map<string, ReturnType<typeof numerosDaLoja>>,
   histMap: Map<string, MesLoja[]>,
   periodo: string,
+  temporal: {
+    hoje: string
+    dia_do_mes: number
+    dias_decorridos: number
+    dias_no_mes: number
+    dias_restantes: number
+  },
+  recortes: Awaited<ReturnType<typeof recortesDePeriodo>>,
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -413,6 +421,7 @@ function montarContexto(
 
   return JSON.stringify({
     mes_corrente: periodo,
+    contexto_temporal: temporal,
     rede_mes_corrente: {
       lojas: units.length,
       faturamento_bruto: round(rede.bruto),
@@ -420,6 +429,8 @@ function montarContexto(
       pedidos: rede.pedidos,
       cancelados: rede.cancelados,
     },
+    // Recortes de quinzena (rede + por loja) do mês corrente e do mês passado.
+    periodos: recortes,
     historico_rede_mensal,
     por_loja,
   })
@@ -505,16 +516,109 @@ async function historicoMensalDoAno(
   return hist
 }
 
+/* ── Recortes de PERÍODO dentro de um mês (quinzenas) ────────────────────
+   getRealMonthlyForUnits aceita um dateRange, então dá pra pegar o total de
+   qualquer janela do mês reusando a MESMA fonte do número mensal. Isso destrava
+   "01-15 vs 16-31", "1ª quinzena deste mês vs do mês passado", etc. */
+
+function pad2b(n: number): string {
+  return String(n).padStart(2, "0")
+}
+function ymd(year: number, month: number, day: number): string {
+  return `${year}-${pad2b(month)}-${pad2b(day)}`
+}
+function diasNoMes(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+function mesAnterior(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+}
+
+type ResumoPeriodo = {
+  rede: { bruto: number; liquido: number; pedidos: number; cancelados: number }
+  por_loja: { loja: string; bruto: number; pedidos: number; cancelados: number }[]
+}
+
+/** Soma da rede + por loja de UMA janela de dias (start..end) de um mês. */
+async function resumoDePeriodo(
+  units: { id: string; name: string }[],
+  year: number,
+  month: number,
+  start: string,
+  end: string,
+): Promise<ResumoPeriodo> {
+  const map = await getRealMonthlyForUnits(
+    units.map((u) => u.id),
+    year,
+    month,
+    { start, end },
+  )
+  const rede = { bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 }
+  const por_loja: ResumoPeriodo["por_loja"] = []
+  for (const u of units) {
+    const m = map.get(u.id)
+    if (!m) continue
+    rede.bruto += m.faturamentoBruto
+    rede.liquido += m.totalLiquido
+    rede.pedidos += m.pedidos
+    rede.cancelados += m.pedidosCancelados
+    por_loja.push({
+      loja: u.name,
+      bruto: round(m.faturamentoBruto),
+      pedidos: m.pedidos,
+      cancelados: m.pedidosCancelados,
+    })
+  }
+  return {
+    rede: {
+      bruto: round(rede.bruto),
+      liquido: round(rede.liquido),
+      pedidos: rede.pedidos,
+      cancelados: rede.cancelados,
+    },
+    por_loja,
+  }
+}
+
+/** Quinzenas do mês corrente e do mês passado (pra comparar período x período). */
+async function recortesDePeriodo(
+  units: { id: string; name: string }[],
+  year: number,
+  month: number,
+) {
+  const ant = mesAnterior(year, month)
+  const fim = diasNoMes(year, month)
+  const fimAnt = diasNoMes(ant.year, ant.month)
+  const [q1, q2, q1Ant, q2Ant] = await Promise.all([
+    resumoDePeriodo(units, year, month, ymd(year, month, 1), ymd(year, month, Math.min(15, fim))),
+    resumoDePeriodo(units, year, month, ymd(year, month, 16), ymd(year, month, fim)),
+    resumoDePeriodo(units, ant.year, ant.month, ymd(ant.year, ant.month, 1), ymd(ant.year, ant.month, Math.min(15, fimAnt))),
+    resumoDePeriodo(units, ant.year, ant.month, ymd(ant.year, ant.month, 16), ymd(ant.year, ant.month, fimAnt)),
+  ])
+  return {
+    mes_corrente: { dia_01_a_15: q1, dia_16_ao_fim: q2 },
+    mes_passado: { dia_01_a_15: q1Ant, dia_16_ao_fim: q2Ant },
+  }
+}
+
 const SYSTEM_BASE = `Você é o Nino, a IA consultora do Delivery OS: um consultor de delivery experiente e direto que fala português do Brasil pro DONO da operação — sem jargão, sem enrolação. Se te perguntarem quem você é, diga que é o Nino, o consultor de IA da operação. Não precisa ficar se apresentando a cada resposta.
 
 Você recebe os NÚMEROS REAIS da conta e responde as perguntas do dono sobre a operação: faturamento, CMV, ticket, cancelamento, taxas por plataforma, comparação entre lojas, resumo da rede, evolução ao longo do ano.
 
 O contexto tem:
+- "contexto_temporal": a data de hoje, o dia do mês, dias decorridos, dias no mês e dias restantes. Use pra PROJETAR o fechamento do mês (regra de três: faturamento_do_mes ÷ dias_decorridos × dias_no_mes) e dizer "no ritmo atual você fecha em ~R$ X" ou "faltam N dias". Deixe claro que é projeção, não certeza.
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
-- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use isso pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "como está a evolução".
+- "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena". (Recorte por dia isolado, semana específica ou fim de semana ainda não estão no contexto — se pedirem isso, ofereça a quinzena ou o mês, não invente.)
+- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução".
+
+VOCÊ SABE DERIVAR (não precisa estar pronto no JSON):
+- Ticket médio = faturamento_bruto ÷ pedidos (dá pra calcular por mês do histórico, por quinzena, por loja).
+- Rankings e comparações (loja que mais fatura, maior ticket, melhor nota, mais cancela, quem cresceu vs mês passado, comparar loja A × B) a partir do array "por_loja" — você tem todos os números.
+- Variação % entre dois números que estão no contexto.
+Faça essas contas quando ajudar a responder.
 
 REGRAS:
-- Use SOMENTE os números fornecidos no JSON de contexto. NUNCA invente um dado que não está lá. O histórico cobre só os meses do ano corrente que já têm dado — se te perguntarem sobre ANOS ANTERIORES, meses sem dado, ou algo que o contexto não tem (ex.: custo de um prato específico), diga com franqueza que esse dado não está disponível aqui — não chute.
+- Use SOMENTE os números fornecidos no JSON de contexto (inclusive derivando as contas acima). NUNCA invente um número que não dá pra calcular a partir do contexto. Se te perguntarem algo que o contexto realmente não tem (anos anteriores, custo de um prato, motivo de cancelamento, dado de um dia isolado), NÃO diga um seco "não sei": explique em 1 linha o que você TEM sobre o tema e ofereça o recorte mais próximo (ex.: "não tenho por dia, mas na 1ª quinzena você fez R$ X"). O dono nunca deve sentir que a IA travou.
 - Seja CONCISO e direto: responda a pergunta, cite o número real que sustenta a resposta, e pare. Nada de relatório gigante quando cabe uma frase.
 - Escreva em TEXTO SIMPLES, sem markdown: nada de asteriscos pra negrito (**), nada de # títulos, nada de tabelas. Se precisar listar, use hífen (-) no começo da linha. O texto vai aparecer cru pro usuário, então formatação markdown fica feia.
 - "cmv" só existe quando a loja lançou os custos. Se vier null, NÃO comente CMV nem margem dessa loja (não foi lançado — não assuma que está bom nem ruim).
@@ -580,10 +684,11 @@ export async function perguntarConsultor(
   try {
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
-    // Mês corrente em detalhe + histórico mensal do ano (em paralelo).
-    const [monthlyMap, histMap] = await Promise.all([
+    // Mês corrente + histórico do ano + recortes de quinzena (tudo em paralelo).
+    const [monthlyMap, histMap, recortes] = await Promise.all([
       getRealMonthlyForUnits(unitIds, year, month),
       historicoMensalDoAno(unitIds, year, month),
+      recortesDePeriodo(units, year, month),
     ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
@@ -591,7 +696,17 @@ export async function perguntarConsultor(
       if (m) numeros.set(u.id, numerosDaLoja(m, u.name))
     }
     const periodo = `${String(month).padStart(2, "0")}/${year}`
-    const contexto = montarContexto(units, numeros, histMap, periodo)
+    const hoje = hojeISO()
+    const diaDoMes = Number(hoje.slice(8, 10))
+    const dias_no_mes = diasNoMes(year, month)
+    const temporal = {
+      hoje,
+      dia_do_mes: diaDoMes,
+      dias_decorridos: diaDoMes,
+      dias_no_mes,
+      dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
+    }
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes)
 
     const resposta = await askClaudeChat({
       system: `${SYSTEM_BASE}\n\nCONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,
