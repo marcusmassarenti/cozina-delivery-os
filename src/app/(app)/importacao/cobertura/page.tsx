@@ -6,6 +6,7 @@ import { getCoverageMatrix } from "@/lib/data/ifood-imported"
 import { getNinefoodCoverageMatrix } from "@/lib/data/ninefood-imported"
 import { getKeetaCoverageMatrix } from "@/lib/data/keeta-imported"
 import { getEnabledReports } from "@/lib/data/report-prefs"
+import { getTenantPlatforms } from "@/lib/data/units"
 import { currentPeriod } from "@/lib/period"
 
 import { IfoodCoverageView } from "./_components/ifood-coverage-view"
@@ -16,12 +17,13 @@ export default async function CoberturaPage() {
   const startYear = 2026
   const startMonth = 1
 
-  const [ifoodMatrix, ninefoodMatrix, keetaMatrix, enabledSet] =
+  const [ifoodMatrix, ninefoodMatrix, keetaMatrix, enabledSet, tenantPlats] =
     await Promise.all([
       getCoverageMatrix(startYear, startMonth, endYear, endMonth),
       getNinefoodCoverageMatrix(startYear, startMonth, endYear, endMonth),
       getKeetaCoverageMatrix(startYear, startMonth, endYear, endMonth),
       getEnabledReports(),
+      getTenantPlatforms(),
     ])
   const enabled = [...enabledSet]
   const enabledFor = (prefix: string) =>
@@ -99,27 +101,27 @@ export default async function CoberturaPage() {
       <PlatformSwitcher
         slots={[
           {
-            platform: "ifood",
+            platform: "ifood" as const,
             empty: ifoodEnabled.length === 0 || !ifoodHasAnyData,
             content: (
               <IfoodCoverageView matrix={ifoodMatrix} enabled={ifoodEnabled} />
             ),
           },
           {
-            platform: "99food",
+            platform: "99food" as const,
             empty: nineEnabled.length === 0 || !ninefoodHasAnyData,
             content: (
               <NinefoodCoverageView matrix={ninefoodMatrix} show={nineShow} />
             ),
           },
           {
-            platform: "keeta",
+            platform: "keeta" as const,
             empty: keetaEnabled.length === 0 || !keetaHasAnyData,
             content: (
               <NinefoodCoverageView matrix={keetaMatrix} show={keetaShow} />
             ),
           },
-        ]}
+        ].filter((s) => tenantPlats.includes(s.platform))}
       />
     </div>
   )

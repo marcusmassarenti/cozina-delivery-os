@@ -37,14 +37,22 @@ export default async function ComparativoProdutosPage({
   const sp = await searchParams
   await assertCanView("relatorios")
   const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
-  const plataforma: PlatformId = PLATS.some((p) => p.id === sp.plat)
+
+  const visibleUnitsRaw = (await getVisibleUnits()).filter((u) => u.active)
+  // Só as plataformas realmente habilitadas em alguma unidade do tenant.
+  const tenantPlats = PLATS.filter((p) =>
+    visibleUnitsRaw.some((u) => u.platforms.includes(p.id)),
+  )
+  const plataforma: PlatformId = tenantPlats.some((p) => p.id === sp.plat)
     ? (sp.plat as PlatformId)
-    : "ifood"
+    : (tenantPlats[0]?.id ?? "ifood")
   const metrica: "qtd" | "valor" = sp.metrica === "valor" ? "valor" : "qtd"
 
-  const allUnits = (await getVisibleUnits())
-    .filter((u) => u.active)
-    .map((u) => ({ id: u.id, code: u.code, name: u.name }))
+  const allUnits = visibleUnitsRaw.map((u) => ({
+    id: u.id,
+    code: u.code,
+    name: u.name,
+  }))
   const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
   const scoped =
     lojaCodes.length > 0
@@ -123,7 +131,7 @@ export default async function ComparativoProdutosPage({
       {/* Switchers plataforma + métrica */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-1 rounded-lg border bg-card p-1">
-          {PLATS.map((p) => (
+          {tenantPlats.map((p) => (
             <a
               key={p.id}
               href={buildHref(sp, "plat", p.id)}

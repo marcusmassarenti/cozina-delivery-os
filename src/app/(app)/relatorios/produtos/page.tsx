@@ -185,6 +185,7 @@ export default async function ProdutosPage({
         <ProdutosFilters
           units={allUnits.map((u) => ({ code: u.code, name: u.name }))}
           periods={periodOptions}
+          platforms={tenantPlats}
           initial={filtersInitial}
         />
       </div>

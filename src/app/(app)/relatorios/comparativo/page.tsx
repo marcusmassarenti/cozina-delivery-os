@@ -165,6 +165,7 @@ export default async function ComparativoPage({
         <ComparativoFilters
           units={allUnits.map((u) => ({ code: u.code, name: u.name }))}
           periods={periodOptions}
+          platforms={tenantPlats}
           initial={filtersInitial}
         />
       </div>

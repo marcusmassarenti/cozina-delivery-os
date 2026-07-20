@@ -155,6 +155,7 @@ export default async function EvolucaoPage({
         <EvolucaoFilters
           units={allUnits.map((u) => ({ code: u.code, name: u.name }))}
           periods={periodOptions}
+          platforms={tenantPlats}
           initial={{ plataformas, lojas: lojaCodes, de, ate, metrica }}
         />
       </div>

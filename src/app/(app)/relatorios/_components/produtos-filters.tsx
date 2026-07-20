@@ -22,10 +22,13 @@ const INDICADORES = [
 export function ProdutosFilters({
   units,
   periods,
+  platforms,
   initial,
 }: {
   units: UnitOption[]
   periods: PeriodOption[]
+  /** Plataformas habilitadas no tenant — só essas viram opção. */
+  platforms: PlatformId[]
   initial: {
     plataforma: PlatformId
     lojas: string[]
@@ -34,6 +37,7 @@ export function ProdutosFilters({
     metrica: string
   }
 }) {
+  const PLATS_ATIVAS = PLATAFORMAS.filter((p) => platforms.includes(p.id))
   const navigate = useNavigate()
   const pathname = usePathname()
 
@@ -84,7 +88,7 @@ export function ProdutosFilters({
             Plataforma
           </span>
           <div className="flex items-center gap-1">
-            {PLATAFORMAS.map((p) => {
+            {PLATS_ATIVAS.map((p) => {
               const on = plataforma === p.id
               return (
                 <button

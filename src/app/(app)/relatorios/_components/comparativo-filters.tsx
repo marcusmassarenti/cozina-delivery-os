@@ -23,10 +23,13 @@ export type UnitOption = { code: string; name: string }
 export function ComparativoFilters({
   units,
   periods,
+  platforms,
   initial,
 }: {
   units: UnitOption[]
   periods: PeriodOption[]
+  /** Plataformas habilitadas no tenant — só essas viram chip. */
+  platforms: PlatformId[]
   initial: {
     plataformas: PlatformId[]
     lojas: string[]
@@ -35,6 +38,7 @@ export function ComparativoFilters({
     metrica: ComparativoMetric
   }
 }) {
+  const PLATS_ATIVAS = PLATAFORMAS.filter((p) => platforms.includes(p.id))
   const navigate = useNavigate()
   const pathname = usePathname()
 
@@ -73,7 +77,7 @@ export function ComparativoFilters({
 
   function aplicar() {
     const params = new URLSearchParams()
-    if (plataformas.size > 0 && plataformas.size < 3) {
+    if (plataformas.size > 0 && plataformas.size < PLATS_ATIVAS.length) {
       params.set("plat", Array.from(plataformas).join(","))
     }
     if (lojas.size > 0) params.set("lojas", Array.from(lojas).join(","))
@@ -99,7 +103,7 @@ export function ComparativoFilters({
             Plataformas
           </span>
           <div className="flex items-center gap-1">
-            {PLATAFORMAS.map((p) => {
+            {PLATS_ATIVAS.map((p) => {
               const on = plataformas.has(p.id)
               return (
                 <button
