@@ -2,6 +2,8 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSuperadmin } from "@/lib/auth/permissions"
+import { asaasListInvoices, type AsaasInvoice } from "@/lib/asaas/client"
+import type { PlatformId } from "@/components/platform-logo"
 import {
   computeBillingStatus,
   effectiveTrialEnd,
@@ -313,4 +315,268 @@ export async function getClientsOverview(): Promise<{
   }
 
   return { clients, totals }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Detalhe de UM cliente (holding) — visão de dono, tudo num lugar.
+// ─────────────────────────────────────────────────────────────────────────
+
+export type ClientUser = {
+  userId: string
+  name: string | null
+  email: string | null
+  whatsapp: string | null
+  perfil: string | null
+  scope: "holding" | "brand" | "unit"
+  isAdmin: boolean
+  lastLogin: string | null
+}
+export type ClientUnitFull = HoldingUnit & {
+  cnpj: string | null
+  brandName: string | null
+  platforms: PlatformId[]
+}
+export type ClientFiscal = {
+  accountType: "PF" | "PJ" | null
+  razaoSocial: string
+  cpfCnpj: string
+  cep: string
+  logradouro: string
+  numero: string
+  complemento: string
+  bairro: string
+  cidade: string
+  uf: string
+  telefone: string
+  email: string
+}
+export type ClientInvoice = {
+  id: string
+  number: string | null
+  status: string | null
+  value: number | null
+  effectiveDate: string | null
+  pdfUrl: string | null
+  xmlUrl: string | null
+  serviceDescription: string | null
+}
+export type ClientDetail = ClientOverview & {
+  fiscal: ClientFiscal
+  fiscalPreenchido: boolean
+  /** Contato principal: o admin da conta (quem cadastrou). */
+  contactName: string | null
+  contactEmail: string | null
+  contactWhatsapp: string | null
+  usersList: ClientUser[]
+  unitsFull: ClientUnitFull[]
+  asaasCustomerId: string | null
+  asaasSubscriptionId: string | null
+  invoices: ClientInvoice[]
+}
+
+const PLAT_ORDER: PlatformId[] = ["ifood", "99food", "keeta"]
+
+export async function getClientDetail(
+  holdingId: string,
+): Promise<ClientDetail | null> {
+  if (!(await isSuperadmin())) return null
+
+  const { clients } = await getClientsOverview()
+  const base = clients.find((c) => c.id === holdingId)
+  if (!base) return null
+
+  const admin = createAdminClient()
+
+  // 1) Dados fiscais / NF + ids do Asaas
+  const { data: h } = await admin
+    .from("holdings")
+    .select(
+      "razao_social, doc_cpf_cnpj, account_type, nf_cep, nf_logradouro, nf_numero, nf_complemento, nf_bairro, nf_cidade, nf_uf, nf_telefone, nf_email, asaas_customer_id, asaas_subscription_id",
+    )
+    .eq("id", holdingId)
+    .maybeSingle()
+  const fiscal: ClientFiscal = {
+    accountType: (h?.account_type as "PF" | "PJ" | null) ?? null,
+    razaoSocial: (h?.razao_social as string) ?? "",
+    cpfCnpj: (h?.doc_cpf_cnpj as string) ?? "",
+    cep: (h?.nf_cep as string) ?? "",
+    logradouro: (h?.nf_logradouro as string) ?? "",
+    numero: (h?.nf_numero as string) ?? "",
+    complemento: (h?.nf_complemento as string) ?? "",
+    bairro: (h?.nf_bairro as string) ?? "",
+    cidade: (h?.nf_cidade as string) ?? "",
+    uf: (h?.nf_uf as string) ?? "",
+    telefone: (h?.nf_telefone as string) ?? "",
+    email: (h?.nf_email as string) ?? "",
+  }
+  const fiscalPreenchido = Boolean(fiscal.cpfCnpj || fiscal.cep)
+  const asaasCustomerId = (h?.asaas_customer_id as string) ?? null
+  const asaasSubscriptionId = (h?.asaas_subscription_id as string) ?? null
+
+  // 2) Marcas e lojas do cliente (com cnpj + plataformas ativas)
+  const { data: brandRows } = await admin
+    .from("brands")
+    .select("id, name")
+    .eq("holding_id", holdingId)
+  const brandIds = (brandRows ?? []).map((b) => b.id)
+  const brandName = new Map<string, string>()
+  for (const b of brandRows ?? []) brandName.set(b.id, b.name as string)
+
+  const { data: unitRows } = brandIds.length
+    ? await admin
+        .from("units")
+        .select("id, brand_id, code, name, cnpj, city, state, active")
+        .in("brand_id", brandIds)
+    : { data: [] as never[] }
+  const unitIds = (unitRows ?? []).map((u) => u.id)
+
+  const { data: platRows } = unitIds.length
+    ? await admin
+        .from("unit_platforms")
+        .select("unit_id, platform, active")
+        .in("unit_id", unitIds)
+        .eq("active", true)
+    : { data: [] as never[] }
+  const platsByUnit = new Map<string, Set<string>>()
+  for (const p of platRows ?? []) {
+    const set = platsByUnit.get(p.unit_id) ?? new Set<string>()
+    set.add(p.platform as string)
+    platsByUnit.set(p.unit_id, set)
+  }
+  const unitsFull: ClientUnitFull[] = (unitRows ?? [])
+    .map((u) => ({
+      id: u.id as string,
+      name: u.name as string,
+      code: (u.code as string) ?? null,
+      cnpj: (u.cnpj as string) ?? null,
+      city: (u.city as string) ?? null,
+      state: (u.state as string) ?? null,
+      active: !!u.active,
+      brandName: brandName.get(u.brand_id as string) ?? null,
+      platforms: PLAT_ORDER.filter((p) =>
+        platsByUnit.get(u.id as string)?.has(p),
+      ),
+    }))
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
+
+  // 3) Usuários da conta (qualquer escopo que aponte pra ela)
+  const { data: accessRows } = await admin
+    .from("user_unit_access")
+    .select("user_id, scope_type, scope_id, role")
+  const unitToHolding = new Map<string, string>()
+  for (const u of unitRows ?? []) unitToHolding.set(u.id as string, holdingId)
+  const brandSet = new Set(brandIds)
+  const userScope = new Map<
+    string,
+    { scope: "holding" | "brand" | "unit"; isAdmin: boolean }
+  >()
+  for (const a of accessRows ?? []) {
+    if (!a.scope_id) continue
+    const belongs =
+      (a.scope_type === "holding" && a.scope_id === holdingId) ||
+      (a.scope_type === "brand" && brandSet.has(a.scope_id)) ||
+      (a.scope_type === "unit" && unitToHolding.has(a.scope_id))
+    if (!belongs) continue
+    const prev = userScope.get(a.user_id)
+    const isAdmin = a.role === "admin" || prev?.isAdmin || false
+    // holding > brand > unit — guarda o mais amplo
+    const rank = { holding: 3, brand: 2, unit: 1 } as const
+    const scope =
+      !prev || rank[a.scope_type as "holding" | "brand" | "unit"] > rank[prev.scope]
+        ? (a.scope_type as "holding" | "brand" | "unit")
+        : prev.scope
+    userScope.set(a.user_id, { scope, isAdmin })
+  }
+
+  // profiles (nome/perfil) + auth (email/whatsapp/último acesso)
+  const userIds = [...userScope.keys()]
+  const profileById = new Map<
+    string,
+    { full_name: string | null; perfil: string | null }
+  >()
+  if (userIds.length) {
+    const { data: profs } = await admin
+      .from("profiles")
+      .select("user_id, full_name, perfil")
+      .in("user_id", userIds)
+    for (const p of profs ?? [])
+      profileById.set(p.user_id, {
+        full_name: (p.full_name as string) ?? null,
+        perfil: (p.perfil as string) ?? null,
+      })
+  }
+  const authById = new Map<
+    string,
+    { email: string | null; whatsapp: string | null; lastLogin: string | null }
+  >()
+  try {
+    const { data: authList } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    for (const u of authList?.users ?? []) {
+      const meta = (u.user_metadata ?? {}) as { whatsapp?: string | null }
+      authById.set(u.id, {
+        email: u.email ?? null,
+        whatsapp: meta.whatsapp ?? null,
+        lastLogin: u.last_sign_in_at ?? null,
+      })
+    }
+  } catch {
+    // sem auth admin → só nome/perfil
+  }
+  const usersList: ClientUser[] = userIds
+    .map((uid) => {
+      const scope = userScope.get(uid)!
+      const prof = profileById.get(uid)
+      const auth = authById.get(uid)
+      return {
+        userId: uid,
+        name: prof?.full_name ?? null,
+        email: auth?.email ?? null,
+        whatsapp: auth?.whatsapp ?? null,
+        perfil: prof?.perfil ?? null,
+        scope: scope.scope,
+        isAdmin: scope.isAdmin,
+        lastLogin: auth?.lastLogin ?? null,
+      }
+    })
+    .sort(
+      (a, b) =>
+        Number(b.isAdmin) - Number(a.isAdmin) ||
+        (b.lastLogin ?? "").localeCompare(a.lastLogin ?? ""),
+    )
+
+  // Contato principal = admin da conta (fallback: 1º usuário)
+  const contact = usersList.find((u) => u.isAdmin) ?? usersList[0] ?? null
+
+  // 4) Notas fiscais emitidas (Asaas)
+  let invoices: ClientInvoice[] = []
+  if (asaasCustomerId) {
+    const raw: AsaasInvoice[] = await asaasListInvoices(asaasCustomerId)
+    invoices = raw.map((n) => ({
+      id: n.id,
+      number: n.number ?? null,
+      status: n.status ?? null,
+      value: n.value != null ? Number(n.value) : null,
+      effectiveDate: n.effectiveDate ?? null,
+      pdfUrl: n.pdfUrl ?? null,
+      xmlUrl: n.xmlUrl ?? null,
+      serviceDescription: n.serviceDescription ?? null,
+    }))
+  }
+
+  return {
+    ...base,
+    fiscal,
+    fiscalPreenchido,
+    contactName: contact?.name ?? null,
+    contactEmail: contact?.email ?? null,
+    contactWhatsapp: contact?.whatsapp ?? null,
+    usersList,
+    unitsFull,
+    asaasCustomerId,
+    asaasSubscriptionId,
+    invoices,
+  }
 }

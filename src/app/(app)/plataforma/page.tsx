@@ -1,5 +1,6 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
-import { AlertTriangle, Building2, CheckCircle2, Clock, Wallet } from "lucide-react"
+import { AlertTriangle, Building2, CheckCircle2, Clock, Eye, Wallet } from "lucide-react"
 
 import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
@@ -170,7 +171,12 @@ export default async function PlataformaPage() {
                 return (
                   <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{c.name}</div>
+                      <Link
+                        href={`/plataforma/${c.id}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {c.name}
+                      </Link>
                       <div className="text-[11px] text-muted-foreground">
                         {c.establishmentType ?? "Tipo não definido"} ·{" "}
                         {c.users} usuário{c.users !== 1 ? "s" : ""}
@@ -230,6 +236,13 @@ export default async function PlataformaPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
+                        <Link
+                          href={`/plataforma/${c.id}`}
+                          className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                        >
+                          <Eye className="size-3.5" />
+                          Ver
+                        </Link>
                         <PaymentsDialog
                           client={{
                             id: c.id,
