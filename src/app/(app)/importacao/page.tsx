@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, LayoutGrid, Upload } from "lucide-react"
+import { ChevronLeft, ChevronRight, LayoutGrid, Store, Upload } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
@@ -151,15 +151,18 @@ export default async function ImportacaoPage({
 
       <SectionDivider number={1} label="Subir relatório" />
       <div className="rounded-xl border bg-card p-5">
-        {activeUnits.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Nenhuma unidade cadastrada. Vai em{" "}
-            <span className="font-medium">/unidades</span> e cadastra a
-            primeira loja.
+        {activeUnits.length === 0 && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+            <Store className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              Você ainda não tem lojas cadastradas — tudo bem. Sobe um relatório
+              aqui e, ao detectar a loja, o sistema te oferece{" "}
+              <strong>criar a unidade e importar</strong> de uma vez. (Ou
+              cadastre manual em <span className="font-medium">/unidades</span>.)
+            </span>
           </div>
-        ) : (
-          <ImportForm availableUnits={availableUnitsLite} />
         )}
+        <ImportForm availableUnits={availableUnitsLite} />
       </div>
 
       <SectionDivider number={2} label="Histórico de importações" />
