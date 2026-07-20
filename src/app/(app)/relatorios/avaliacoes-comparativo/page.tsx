@@ -1,4 +1,5 @@
-import { AlertTriangle, Star } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, AlertTriangle, Star } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -69,6 +70,14 @@ export default async function AvaliacoesComparativoPage({
         <div className="flex items-center gap-3">
           <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
           <div>
+          <Link
+            href="/relatorios"
+            className="mb-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            data-print="hide"
+          >
+            <ArrowLeft className="size-3.5" />
+            Hub de Relatórios
+          </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Star className="size-6 text-primary" />
             Comparativo de nota

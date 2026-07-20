@@ -1,4 +1,5 @@
-import { AlertTriangle, LineChart } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, AlertTriangle, LineChart } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -95,6 +96,14 @@ export default async function AvaliacoesEvolucaoPage({
         <div className="flex items-center gap-3">
           <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
           <div>
+          <Link
+            href="/relatorios"
+            className="mb-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            data-print="hide"
+          >
+            <ArrowLeft className="size-3.5" />
+            Hub de Relatórios
+          </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <LineChart className="size-6 text-primary" />
             Evolução da nota

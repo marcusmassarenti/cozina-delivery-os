@@ -1,4 +1,5 @@
-import { AlertTriangle, Layers } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, AlertTriangle, Layers } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -90,6 +91,14 @@ export default async function PlataformasPage({
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
+          <Link
+            href="/relatorios"
+            className="mb-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            data-print="hide"
+          >
+            <ArrowLeft className="size-3.5" />
+            Hub de Relatórios
+          </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Layers className="size-6 text-primary" />
             Faturamento por plataforma

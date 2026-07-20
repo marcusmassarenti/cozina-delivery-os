@@ -1,6 +1,7 @@
 import Link from "next/link"
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   Bike,
   CalendarRange,
@@ -241,6 +242,14 @@ export default async function RelatoriosPage({
       {/* Cabeçalho */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
+          <Link
+            href="/relatorios"
+            className="mb-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            data-print="hide"
+          >
+            <ArrowLeft className="size-3.5" />
+            Hub de Relatórios
+          </Link>
           <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Relatório consolidado da rede · {periodLabel} ·{" "}
