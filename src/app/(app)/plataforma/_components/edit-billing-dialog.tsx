@@ -49,7 +49,13 @@ const parseMoney = (v: string): number => {
   return isFinite(n) ? n : 0
 }
 
-export function EditBillingDialog({ client }: { client: BillingClient }) {
+export function EditBillingDialog({
+  client,
+  compact = false,
+}: {
+  client: BillingClient
+  compact?: boolean
+}) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(setClientBilling, initial)
   const [paid, setPaid] = React.useState(client.paid)
@@ -82,10 +88,12 @@ export function EditBillingDialog({ client }: { client: BillingClient }) {
         render={
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Editar cobrança"
+            aria-label="Editar cobrança"
+            className={`inline-flex items-center gap-1.5 rounded-md border ${compact ? "px-2 py-1.5" : "px-2.5 py-1.5"} text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground`}
           >
             <Pencil className="size-3.5" />
-            Editar
+            {!compact && "Editar"}
           </button>
         }
       />

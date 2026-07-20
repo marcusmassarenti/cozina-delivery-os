@@ -24,10 +24,12 @@ export function DeleteClientButton({
   id,
   name,
   canDelete,
+  compact = false,
 }: {
   id: string
   name: string
   canDelete: boolean
+  compact?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
   const [pending, setPending] = React.useState(false)
@@ -56,10 +58,11 @@ export function DeleteClientButton({
           <button
             type="button"
             title="Excluir cliente"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-rose-200 px-2.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+            aria-label="Excluir cliente"
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-rose-200 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/30 ${compact ? "px-2" : "px-2.5"}`}
           >
             <Trash2 className="size-3.5" />
-            Excluir
+            {!compact && "Excluir"}
           </button>
         }
       />

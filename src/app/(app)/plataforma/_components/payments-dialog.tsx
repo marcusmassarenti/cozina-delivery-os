@@ -31,6 +31,7 @@ function fmtDate(d: string): string {
 
 export function PaymentsDialog({
   client,
+  compact = false,
 }: {
   client: {
     id: string
@@ -39,6 +40,8 @@ export function PaymentsDialog({
     suggested: number
     method: string | null
   }
+  /** true = botão só ícone (economiza largura na tabela). */
+  compact?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
   const [showForm, setShowForm] = React.useState(false)
@@ -66,10 +69,12 @@ export function PaymentsDialog({
         render={
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Pagamentos"
+            aria-label="Pagamentos"
+            className={`inline-flex items-center gap-1.5 rounded-md border ${compact ? "px-2 py-1.5" : "px-2.5 py-1.5"} text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground`}
           >
             <Receipt className="size-3.5" />
-            Pagamentos
+            {!compact && "Pagamentos"}
           </button>
         }
       />

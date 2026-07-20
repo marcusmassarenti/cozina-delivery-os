@@ -24,6 +24,10 @@ export default async function AppLayout({
     redirect("/login")
   }
 
+  // "Último acesso" real: marca atividade (throttle de 5 min no RPC). Não
+  // bloqueia a renderização — se falhar, segue a vida.
+  void supabase.rpc("touch_last_seen")
+
   const userContext = await getCurrentUserContext()
 
   // Módulos que o perfil do usuário pode "Ver" — alimenta o filtro do menu.

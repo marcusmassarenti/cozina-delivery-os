@@ -148,18 +148,30 @@ export async function getClientsOverview(): Promise<{
   const units = unitsRes.data ?? []
   const accesses = accessRes.data ?? []
 
-  // Último acesso por usuário (auth). Lista tudo (poucos usuários na plataforma).
+  // Último acesso por usuário. Combina last_sign_in_at (auth — só muda ao
+  // digitar a senha) com profiles.last_seen_at (atividade real, throttled) e
+  // pega o mais recente. Sem o last_seen_at, quem fica logado aparecia sumido.
   const lastLoginByUser = new Map<string, string | null>()
+  const keepMax = (uid: string, ts: string | null) => {
+    if (!ts) return
+    const prev = lastLoginByUser.get(uid)
+    if (!prev || ts > prev) lastLoginByUser.set(uid, ts)
+  }
   try {
     const { data: authList } = await admin.auth.admin.listUsers({
       page: 1,
       perPage: 1000,
     })
-    for (const u of authList?.users ?? [])
-      lastLoginByUser.set(u.id, u.last_sign_in_at ?? null)
+    for (const u of authList?.users ?? []) keepMax(u.id, u.last_sign_in_at ?? null)
   } catch {
-    // sem auth admin → deixa vazio (coluna mostra "—")
+    // sem auth admin → cai só no last_seen_at
   }
+  const { data: seenRows } = await admin
+    .from("profiles")
+    .select("user_id, last_seen_at")
+    .not("last_seen_at", "is", null)
+  for (const r of seenRows ?? [])
+    keepMax(r.user_id as string, (r.last_seen_at as string) ?? null)
 
   // pagamentos por holding (tabela pode não existir ainda → vazio)
   const paymentsByHolding = new Map<string, HoldingPayment[]>()
@@ -539,17 +551,18 @@ export async function getClientDetail(
   const userIds = [...userScope.keys()]
   const profileById = new Map<
     string,
-    { full_name: string | null; perfil: string | null }
+    { full_name: string | null; perfil: string | null; lastSeen: string | null }
   >()
   if (userIds.length) {
     const { data: profs } = await admin
       .from("profiles")
-      .select("user_id, full_name, perfil")
+      .select("user_id, full_name, perfil, last_seen_at")
       .in("user_id", userIds)
     for (const p of profs ?? [])
       profileById.set(p.user_id, {
         full_name: (p.full_name as string) ?? null,
         perfil: (p.perfil as string) ?? null,
+        lastSeen: (p.last_seen_at as string) ?? null,
       })
   }
   const authById = new Map<
@@ -577,6 +590,11 @@ export async function getClientDetail(
       const scope = userScope.get(uid)!
       const prof = profileById.get(uid)
       const auth = authById.get(uid)
+      // Último acesso = mais recente entre login (auth) e atividade (last_seen).
+      const signIn = auth?.lastLogin ?? null
+      const seen = prof?.lastSeen ?? null
+      const lastLogin =
+        signIn && seen ? (signIn > seen ? signIn : seen) : (signIn ?? seen)
       return {
         userId: uid,
         name: prof?.full_name ?? null,
@@ -585,7 +603,7 @@ export async function getClientDetail(
         perfil: prof?.perfil ?? null,
         scope: scope.scope,
         isAdmin: scope.isAdmin,
-        lastLogin: auth?.lastLogin ?? null,
+        lastLogin,
       }
     })
     .sort(
