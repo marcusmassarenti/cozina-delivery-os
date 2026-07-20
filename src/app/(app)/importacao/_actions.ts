@@ -3558,9 +3558,8 @@ export async function createUnitAndImport(
   _prev: CreateUnitAndImportState,
   formData: FormData,
 ): Promise<CreateUnitAndImportState> {
-  let userId: string
   try {
-    ;({ userId } = await requireModulePermission("importacao", "edit"))
+    await requireModulePermission("importacao", "edit")
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
@@ -3688,51 +3687,30 @@ export async function createUnitAndImport(
     return { ok: false, message: `Falha ao vincular plataformas: ${upErr.message}` }
   }
 
-  // Agora importa o arquivo. Carrega storeMaps COMPLETOS (todas as
-  // unidades cadastradas + a recém-criada) — assim arquivos multi-loja
-  // gravam tudo que conseguem mapear.
-  const storeMaps = await loadAllStoreMaps(admin)
-  const out = await processFile(file, storeMaps, admin, userId)
-
-  // Pra processFile que retorna array (multi-loja), queremos o result
-  // da loja RECÉM-CRIADA — não outras lojas que continuam unmapped
-  // e poluiriam a resposta.
-  const arr = Array.isArray(out) ? out : [out]
-  const result =
-    arr.find((r) => {
-      if (r.summary && "storeId" in r.summary) {
-        return r.summary.storeId === storeId
-      }
-      if (r.unmapped) return r.unmapped.storeId === storeId
-      return false
-    }) ??
-    arr[0] ?? {
-      filename: file.name,
-      ok: false,
-      message: "Nenhum resultado retornado.",
-    }
-
-  revalidateTag("reports", "max")
+  // NÃO importa o arquivo aqui. Um relatório de Pedidos pode ter milhares de
+  // linhas; importar DENTRO da ação do modal estoura o tempo da função, que
+  // morre sem responder → o modal fica em loop infinito (sem nem mostrar erro).
+  // A unidade + vínculo já resolveram a "loja desconhecida" (o objetivo do
+  // modal). Devolvemos ok=true pra FECHAR o modal na hora; o arquivo é
+  // importado logo em seguida pelo rescan do cliente (recheckAndImport), numa
+  // requisição separada que pode demorar sem travar a tela.
   revalidateTag("units", "max")
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   revalidatePath("/")
 
-  // A UNIDADE já foi criada + vinculada acima — o objetivo do modal terminou.
-  // Se a loja AINDA volta unmapped, algo deu errado no vínculo (raro) → erro.
-  // Senão, mesmo que o import do arquivo falhe por conteúdo, FECHA o modal e
-  // manda o result pro histórico (não prende o usuário em loop).
-  if (result.unmapped) {
-    return {
-      ok: false,
-      message: `Unidade criada, mas a loja ${storeId} ainda não foi reconhecida. Recarregue a página e tente de novo.`,
-      result,
-    }
-  }
-  if (!result.ok) {
-    console.warn(
-      `createUnitAndImport: unidade criada, mas import do arquivo não concluiu (loja ${storeId}): ${result.message ?? "sem detalhe"}`,
-    )
+  const result: ImportFileResult = {
+    filename: file.name,
+    originalFilename: file.name,
+    ok: false,
+    unmapped: {
+      storeId,
+      platform: sourcePlatform,
+      cnpj: null,
+      suggestedName: name,
+      suggestedCity: city,
+      reportTypeLabel: "",
+    },
   }
   return { ok: true, result }
   } catch (e) {
@@ -3840,9 +3818,8 @@ export async function linkUnitAndImport(
   _prev: LinkUnitAndImportState,
   formData: FormData,
 ): Promise<LinkUnitAndImportState> {
-  let userId: string
   try {
-    ;({ userId } = await requireModulePermission("importacao", "edit"))
+    await requireModulePermission("importacao", "edit")
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Não autenticado" }
   }
@@ -3919,52 +3896,28 @@ export async function linkUnitAndImport(
     }
   }
 
-  // Reprocessa o arquivo — agora o storeMap vai conhecer essa loja
-  const storeMaps = await loadAllStoreMaps(admin)
-  const out = await processFile(file, storeMaps, admin, userId)
-
-  const arr = Array.isArray(out) ? out : [out]
-  const result =
-    arr.find((r) => {
-      if (r.summary && "storeId" in r.summary) {
-        return r.summary.storeId === storeId
-      }
-      if (r.unmapped) return r.unmapped.storeId === storeId
-      return false
-    }) ??
-    arr[0] ?? {
-      filename: file.name,
-      ok: false,
-      message: "Nenhum resultado retornado.",
-    }
-
-  revalidateTag("reports", "max")
+  // NÃO reprocessa o arquivo aqui (mesmo motivo do createUnitAndImport): um
+  // relatório de Pedidos pesado estoura o tempo da função dentro do modal e
+  // trava a tela em loop. O vínculo já resolveu a "loja desconhecida" → ok=true
+  // fecha o modal; o import roda em seguida pelo rescan do cliente
+  // (recheckAndImport), separado, podendo demorar sem travar.
   revalidateTag("units", "max")
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   revalidatePath("/")
 
-  // O VÍNCULO já foi salvo acima — a "loja desconhecida" ESTÁ resolvida. O
-  // objetivo do modal terminou aqui. Se a loja AINDA volta unmapped, aí sim o
-  // vínculo não pegou (raro) → mantém erro pra não fechar num estado errado.
-  if (result.unmapped) {
-    console.error(
-      `linkUnitAndImport: vínculo salvo mas loja ${storeId} voltou unmapped.`,
-    )
-    return {
-      ok: false,
-      message: `Vínculo salvo, mas a loja ${storeId} ainda não foi reconhecida. Recarregue a página e tente de novo.`,
-      result,
-    }
-  }
-  // Se o import do arquivo falhou por CONTEÚDO (ex.: "nenhum pedido válido"),
-  // o vínculo já resolveu a loja desconhecida → FECHA o modal e manda o
-  // resultado pro histórico (não prende o usuário em loop). ok=true = "modal
-  // resolvido"; o result.ok/message mostra como o arquivo entrou.
-  if (!result.ok) {
-    console.warn(
-      `linkUnitAndImport: vínculo OK, mas import do arquivo não concluiu (loja ${storeId}): ${result.message ?? "sem detalhe"}`,
-    )
+  const result: ImportFileResult = {
+    filename: file.name,
+    originalFilename: file.name,
+    ok: false,
+    unmapped: {
+      storeId,
+      platform,
+      cnpj: null,
+      suggestedName: null,
+      suggestedCity: null,
+      reportTypeLabel: "",
+    },
   }
   return { ok: true, result }
   } catch (e) {
