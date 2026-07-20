@@ -647,3 +647,115 @@ export async function getClientDetail(
     invoices,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Analytics da plataforma — tendências e distribuição (visão de dono).
+// ─────────────────────────────────────────────────────────────────────────
+
+export type PlanoBreak = {
+  tier: "essencial" | "pro" | "ai" | "sem"
+  label: string
+  clientes: number
+  mrr: number
+}
+export type PlatformAnalytics = {
+  meses: { ym: string; label: string }[]
+  receitaPorMes: number[]
+  novosPorMes: number[]
+  canceladosPorMes: number[]
+  porPlano: PlanoBreak[]
+  resumo: {
+    mrr: number
+    clientesAtivos: number
+    pagantes: number
+    trials: number
+    arpa: number
+    recebidoTotal: number
+  }
+}
+
+const MES_ABREV = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+]
+
+export async function getPlatformAnalytics(
+  monthsBack = 6,
+): Promise<PlatformAnalytics | null> {
+  if (!(await isSuperadmin())) return null
+
+  const { clients, totals } = await getClientsOverview()
+  const admin = createAdminClient()
+
+  // Janela dos últimos N meses (inclui o corrente).
+  const now = new Date()
+  const meses: { ym: string; label: string }[] = []
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    meses.push({ ym, label: MES_ABREV[d.getMonth()] })
+  }
+  const idx = new Map(meses.map((m, i) => [m.ym, i]))
+
+  // Receita recebida por mês (pagamentos registrados).
+  const receitaPorMes = new Array(meses.length).fill(0)
+  const { data: pays } = await admin
+    .from("holding_payments")
+    .select("paid_on, amount")
+  for (const p of pays ?? []) {
+    const ym = String(p.paid_on ?? "").slice(0, 7)
+    const i = idx.get(ym)
+    if (i != null) receitaPorMes[i] += Number(p.amount) || 0
+  }
+
+  // Novos clientes por mês (created_at das holdings).
+  const novosPorMes = new Array(meses.length).fill(0)
+  for (const c of clients) {
+    const i = idx.get((c.createdAt ?? "").slice(0, 7))
+    if (i != null) novosPorMes[i] += 1
+  }
+
+  // Cancelados por mês (último evento do Asaas = cancelamento).
+  const canceladosPorMes = new Array(meses.length).fill(0)
+  for (const c of clients) {
+    if (c.asaasLastEvent !== "SUBSCRIPTION_CANCELED") continue
+    const i = idx.get((c.asaasLastEventAt ?? "").slice(0, 7))
+    if (i != null) canceladosPorMes[i] += 1
+  }
+
+  // Distribuição por plano (clientes + MRR).
+  const base: Record<PlanoBreak["tier"], PlanoBreak> = {
+    essencial: { tier: "essencial", label: "Essencial", clientes: 0, mrr: 0 },
+    pro: { tier: "pro", label: "Pro", clientes: 0, mrr: 0 },
+    ai: { tier: "ai", label: "AI", clientes: 0, mrr: 0 },
+    sem: { tier: "sem", label: "Sem plano", clientes: 0, mrr: 0 },
+  }
+  for (const c of clients) {
+    const t = (c.planTier ?? "sem") as PlanoBreak["tier"]
+    const b = base[t] ?? base.sem
+    b.clientes += 1
+    b.mrr += c.computedMonthly
+  }
+  const porPlano = [base.essencial, base.pro, base.ai, base.sem].filter(
+    (p) => p.clientes > 0,
+  )
+
+  const pagantes = clients.filter((c) => c.billingStatus === "paid").length
+  const trials = clients.filter((c) => c.billingStatus === "trial").length
+
+  return {
+    meses,
+    receitaPorMes,
+    novosPorMes,
+    canceladosPorMes,
+    porPlano,
+    resumo: {
+      mrr: totals.mrr,
+      clientesAtivos: totals.clients,
+      pagantes,
+      trials,
+      arpa: pagantes > 0 ? totals.mrr / pagantes : 0,
+      recebidoTotal: receitaPorMes.reduce((s, v) => s + v, 0),
+    },
+  }
+}

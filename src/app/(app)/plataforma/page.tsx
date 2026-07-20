@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import {
   AlertTriangle,
@@ -5,6 +6,7 @@ import {
   CheckCircle2,
   Clock,
   Gift,
+  TrendingUp,
   UserMinus,
   UserPlus,
   Users,
@@ -121,6 +123,13 @@ export default async function PlataformaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/plataforma/analytics"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <TrendingUp className="size-4" />
+            Analytics
+          </Link>
           <PlanSettingsDialog precos={defaultPlan} pacotePreco={pacote.preco} />
           <NovoClienteDialog />
         </div>
