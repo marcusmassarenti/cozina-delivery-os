@@ -3,7 +3,7 @@ import { ArrowUpRight, type LucideIcon } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 
-export type KpiTone = "positive" | "neutral" | "warning"
+export type KpiTone = "positive" | "neutral" | "warning" | "negative"
 
 export type Kpi = {
   label: string
@@ -13,6 +13,12 @@ export type Kpi = {
   icon: LucideIcon
   /** Plataformas que alimentam esse KPI. Aparece como mini badges no canto. */
   platforms?: PlatformId[]
+  /**
+   * Cobertura por plataforma: mostra TODAS as plataformas, apagando (cinza) a
+   * que não tem dado no período. Deixa claro num relance se todas entraram.
+   * Tem prioridade sobre `platforms`.
+   */
+  platformCoverage?: { id: PlatformId; on: boolean }[]
   /** Se presente, o card vira link pra essa tela. */
   href?: string
 }
@@ -21,6 +27,7 @@ const toneClass: Record<KpiTone, string> = {
   positive: "text-emerald-600 dark:text-emerald-400",
   neutral: "text-muted-foreground",
   warning: "text-amber-600 dark:text-amber-400",
+  negative: "text-rose-600 dark:text-rose-400",
 }
 
 export function KpiCard({ kpi }: { kpi: Kpi }) {
@@ -40,13 +47,24 @@ export function KpiCard({ kpi }: { kpi: Kpi }) {
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-accent-foreground">
           <Icon className="size-3.5" />
         </div>
-        {kpi.platforms && kpi.platforms.length > 0 && (
+        {kpi.platformCoverage && kpi.platformCoverage.length > 0 ? (
+          <div className="flex items-center gap-0.5">
+            {kpi.platformCoverage.map((p) => (
+              <PlatformLogo
+                key={p.id}
+                platform={p.id}
+                size="sm"
+                className={p.on ? "" : "opacity-25 grayscale"}
+              />
+            ))}
+          </div>
+        ) : kpi.platforms && kpi.platforms.length > 0 ? (
           <div className="flex items-center gap-0.5">
             {kpi.platforms.map((p) => (
               <PlatformLogo key={p} platform={p} size="sm" />
             ))}
           </div>
-        )}
+        ) : null}
       </div>
 
       <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -32,7 +32,7 @@ export const SECTION_META: Record<
   kpis: {
     number: 1,
     label: "Performance da Operação",
-    description: "KPIs gerais (pedidos, ticket, faturamento)",
+    description: "KPIs, evolução no tempo e pra onde vai o bruto",
   },
   plataformas: {
     number: 2,
@@ -52,7 +52,7 @@ export const SECTION_META: Record<
   unidades: {
     number: 5,
     label: "Detalhamento por Unidade",
-    description: "Tabela com cada loja e suas margens",
+    description: "Ranking de lojas com detalhe e margem por loja",
   },
 }
 

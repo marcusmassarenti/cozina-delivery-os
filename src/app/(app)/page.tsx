@@ -1,10 +1,11 @@
 import { Suspense } from "react"
+import Link from "next/link"
 import {
   AlertTriangle,
   Bike,
   CalendarDays,
+  ChevronRight,
   DollarSign,
-  Filter,
   MessageCircle,
   Package,
   Percent,
@@ -13,7 +14,6 @@ import {
   Star,
   ThumbsDown,
   ThumbsUp,
-  TrendingUp,
   XCircle,
 } from "lucide-react"
 
@@ -21,15 +21,18 @@ import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
 import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
-import { UnitsTable } from "@/components/dashboard/units-table"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
-import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
+import { type Kpi } from "@/components/shared/kpi-card"
 import { SectionDivider } from "@/components/shared/section-divider"
 import {
-  getVisibleUnits,
-  networkTotalsFromUnits,
-  platformTotalsFromUnits,
-} from "@/lib/data/units"
+  EvolucaoFaturamento,
+  EvolucaoFaturamentoSkeleton,
+} from "@/components/dashboard/graficos/evolucao-faturamento"
+import { RankingDetalhado } from "@/components/dashboard/graficos/ranking-detalhado"
+import { ComposicaoBruto } from "@/components/dashboard/graficos/composicao-bruto-chart"
+import { HeroFaixa, type HeroMetric } from "@/components/dashboard/hero-faixa"
+import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
+import { getVisibleUnits } from "@/lib/data/units"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getOnboardingProgress } from "@/lib/data/onboarding"
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist"
@@ -70,7 +73,6 @@ import {
   formatRangeLabel,
   rangeIsFullMonth,
   daysElapsedInMonth,
-  decomposeRangeByMonth,
 } from "@/lib/period"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import {
@@ -128,7 +130,18 @@ export default async function Home({
     ? (sp.plataforma as "ifood" | "99food" | "keeta")
     : null
   const onlyComFaturamento = sp.ativo === "1"
-  const brandLogoUrl = (await getCurrentUserContext()).logoUrl
+  const userCtx = await getCurrentUserContext()
+  const brandLogoUrl = userCtx.logoUrl
+  const primeiroNome = userCtx.fullName.split(" ")[0]
+  const horaBR = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  )
+  const saudacao =
+    horaBR < 12 ? "Bom dia" : horaBR < 18 ? "Boa tarde" : "Boa noite"
 
   // Fase 1: precisa de allUnits pra resolver unidadesFilter ANTES de chamar
   // as queries de rede (que agora respeitam o filtro de unidades)
@@ -184,13 +197,15 @@ export default async function Home({
     Promise.all([
       getNetworkFunnelForMonth(year, month, scopeIds),
       getNetworkCancelamentosPorMotivo(year, month, 5, scopeIds),
-      getNetworkTopItemsForMonth(year, month, 5, scopeIds),
+      // Lista completa (limit alto) pra calcular o % que os 5 tops representam
+      // do total vendido; o TopItemsList corta pros 5 na hora de exibir.
+      getNetworkTopItemsForMonth(year, month, 500, scopeIds),
       getNetworkAvaliacoesForMonth(year, month, scopeIds),
       getNetworkNinefoodCancelamentosForMonth(year, month, 5, scopeIds),
-      getNetworkNinefoodTopItemsForMonth(year, month, 5, scopeIds),
+      getNetworkNinefoodTopItemsForMonth(year, month, 500, scopeIds),
       getNetworkNinefoodAvaliacoesForMonth(year, month, scopeIds),
       getNetworkKeetaCancelamentosForMonth(year, month, 5, scopeIds),
-      getNetworkKeetaTopItemsForMonth(year, month, 5, scopeIds),
+      getNetworkKeetaTopItemsForMonth(year, month, 500, scopeIds),
       getNetworkKeetaAvaliacoesForMonth(year, month, scopeIds),
     ])
 
@@ -291,6 +306,7 @@ export default async function Home({
   ).length
   const hasAnyImported =
     unitsWithImported > 0 || unitsWith99 > 0 || unitsWithKeeta > 0
+
   const hasFunnelData = networkFunnel.totals.visitas > 0
   const hasCancelData = networkCancels.length > 0
   const hasTopItemsData = networkTopItems.length > 0
@@ -332,7 +348,7 @@ export default async function Home({
     : "?metrica=cancelamentos"
   const kpis: Kpi[] = [
     {
-      label: "Pedidos Totais",
+      label: "Pedidos",
       value: fmtNum(network.pedidos),
       tone: "positive",
       icon: CalendarDays,
@@ -368,7 +384,7 @@ export default async function Home({
       href: `/financeiro${periodQ}`,
     },
     {
-      label: "Total Bruto",
+      label: "Faturamento Bruto",
       value: fmtBRLShort(network.faturamentoBruto),
       tone: "positive",
       icon: DollarSign,
@@ -376,7 +392,7 @@ export default async function Home({
       href: `/financeiro${periodQ}`,
     },
     {
-      label: "Total Líquido",
+      label: "Líquido pra Você",
       value: fmtBRLShort(network.faturamentoLiquido),
       tone: "positive",
       icon: DollarSign,
@@ -440,10 +456,162 @@ export default async function Home({
   // Primeiros passos (onboarding guiado) — some quando os 3 passos estão feitos.
   const onboarding = await getOnboardingProgress()
 
+  // Setas do herói: variação vs o MESMO período do mês passado (mês corrente até
+  // hoje × mês passado nos mesmos dias). Só quando o filtro é um mês inteiro.
+  let heroDeltas: {
+    bruto: number | null
+    liquido: number | null
+    pedidos: number | null
+    ticket: number | null
+    repasse: number | null
+    mediaDia: number | null
+  } = {
+    bruto: null,
+    liquido: null,
+    pedidos: null,
+    ticket: null,
+    repasse: null,
+    mediaDia: null,
+  }
+  if (isFullMonth && activeUnitIds.length > 0) {
+    const hojeBR = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date())
+    const [hY, hM, hD] = hojeBR.split("-").map(Number)
+    const ehMesCorrente = hY === year && hM === month
+    const corte = ehMesCorrente ? hD : new Date(year, month, 0).getDate()
+    const prevM = month === 1 ? 12 : month - 1
+    const prevY = month === 1 ? year - 1 : year
+    const cortePrev = Math.min(corte, new Date(prevY, prevM, 0).getDate())
+    const p2 = (n: number) => String(n).padStart(2, "0")
+    const [curMap, prevMap] = await Promise.all([
+      getRealMonthlyForUnits(activeUnitIds, year, month, {
+        start: `${year}-${p2(month)}-01`,
+        end: `${year}-${p2(month)}-${p2(corte)}`,
+      }),
+      getRealMonthlyForUnits(activeUnitIds, prevY, prevM, {
+        start: `${prevY}-${p2(prevM)}-01`,
+        end: `${prevY}-${p2(prevM)}-${p2(cortePrev)}`,
+      }),
+    ])
+    const agg = (map: Map<string, { faturamentoBruto: number; faturamentoLiquido: number; pedidos: number }>) => {
+      let b = 0
+      let l = 0
+      let p = 0
+      for (const m of map.values()) {
+        b += m.faturamentoBruto
+        l += m.faturamentoLiquido
+        p += m.pedidos
+      }
+      return { b, l, p }
+    }
+    const c = agg(curMap)
+    const pr = agg(prevMap)
+    const pct = (a: number, b: number) => (b > 0 ? ((a - b) / b) * 100 : null)
+    // Derivados do mesmo dado (sem query nova): ticket = bruto/pedidos,
+    // repasse = líquido/bruto, média/dia = pedidos/dias corridos.
+    const ratio = (num: number, den: number) => (den > 0 ? num / den : 0)
+    heroDeltas = {
+      bruto: pct(c.b, pr.b),
+      liquido: pct(c.l, pr.l),
+      pedidos: pct(c.p, pr.p),
+      ticket: pct(ratio(c.b, c.p), ratio(pr.b, pr.p)),
+      repasse: pct(ratio(c.l, c.b), ratio(pr.l, pr.b)),
+      mediaDia: pct(ratio(c.p, corte), ratio(pr.p, cortePrev)),
+    }
+  }
+
+  // Cobertura por plataforma nos cards: mostra as 3, apagando a que não tem
+  // dado no período — dá pra ver num relance se todas entraram.
+  const finCobertura: { id: PlatformId; on: boolean }[] = plataformaFilter
+    ? [{ id: plataformaFilter, on: true }]
+    : [
+        { id: "ifood", on: unitsWithImported > 0 },
+        { id: "99food", on: unitsWith99 > 0 },
+        { id: "keeta", on: unitsWithKeeta > 0 },
+      ]
+  const avalCobertura: { id: PlatformId; on: boolean }[] = plataformaFilter
+    ? [{ id: plataformaFilter, on: true }]
+    : [
+        { id: "ifood", on: hasAvaliacoesData },
+        { id: "99food", on: hasAvaliacoes99Data },
+        { id: "keeta", on: hasAvaliacoesKeetaData },
+      ]
+  for (const k of kpis) {
+    k.platformCoverage =
+      k.label === "Nota Média" ? avalCobertura : finCobertura
+  }
+
+  // Primeira linha única (manchete clean): dinheiro primeiro, operação depois.
+  const ORDEM_KPI = [
+    "Faturamento Bruto",
+    "Líquido pra Você",
+    "Pedidos",
+    "Nota Média",
+    "Pedidos Cancelados",
+    "Média Pedidos/Dia",
+    "Ticket Médio",
+    "Taxa de Repasse",
+    "Custo de Entrega",
+  ]
+  const kpisOrdenados = ORDEM_KPI.map((l) =>
+    kpis.find((k) => k.label === l),
+  ).filter((k): k is Kpi => Boolean(k))
+
+  // Métricas no formato limpo (HeroFaixa): cada card leva a seta ↗↘ vs mês
+  // passado quando dá pra comparar; a legenda descritiva (trend) vai no sub.
+  const DELTA_MANCHETE: Record<string, number | null | undefined> = {
+    "Faturamento Bruto": heroDeltas.bruto,
+    "Líquido pra Você": heroDeltas.liquido,
+    Pedidos: heroDeltas.pedidos,
+    "Ticket Médio": heroDeltas.ticket,
+    "Taxa de Repasse": heroDeltas.repasse,
+    "Média Pedidos/Dia": heroDeltas.mediaDia,
+  }
+  const SUB_MANCHETE: Record<string, string> = {
+    "Líquido pra Você": "o que de fato entra",
+  }
+  const manchete: HeroMetric[] = kpisOrdenados.map((k) => ({
+    label: k.label,
+    value: k.value,
+    delta: DELTA_MANCHETE[k.label],
+    sub: SUB_MANCHETE[k.label] ?? k.trend,
+    platformCoverage: k.platformCoverage,
+  }))
+
+  // "Pra onde vai o bruto" POR PLATAFORMA: o líquido que fica + a taxa de cada
+  // plataforma, com o logo de cada uma.
+  const CORES_PLAT: Record<string, string> = {
+    ifood: "#EA1D2C",
+    "99food": "#E0A400",
+    keeta: "#0E9E96",
+  }
+  const liquidoRede = platforms.reduce((s, p) => s + p.liquido, 0)
+  const composicaoSegmentos = [
+    { nome: "Líquido pra você", valor: liquidoRede, cor: "#16A34A" },
+    ...platforms
+      .filter((p) => p.bruto - p.liquido > 0)
+      .map((p) => ({
+        nome: `Taxas ${p.name}`,
+        valor: p.bruto - p.liquido,
+        cor: CORES_PLAT[p.id] ?? "#94A3B8",
+        plat: p.id,
+      })),
+  ]
+  const brutoComposicao =
+    liquidoRede +
+    platforms.reduce((s, p) => s + Math.max(0, p.bruto - p.liquido), 0)
+
   return (
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            {saudacao}, {primeiroNome} 👋
+          </p>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
             <DashboardTour />
@@ -505,6 +673,60 @@ export default async function Home({
         </div>
       )}
 
+      {/* LINHA 1: os 9 números juntos (manchete + operação), cada card com os
+          logos das 3 plataformas (apagadas as sem dado). */}
+      {status.ok && allUnits.length > 0 && (
+        <DashboardSection id="kpis">
+          <div className="flex items-center justify-between gap-3">
+            <SectionDivider number={1} label="Performance da Operação" />
+            {hasAnyImported && (
+              <div className="flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  <Sparkles className="size-3" />
+                  {unitsWithImported}/{activeCount} iFood
+                </span>
+                {unitsWith99 > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                    <Sparkles className="size-3" />
+                    {unitsWith99}/{activeCount} 99 Food
+                  </span>
+                )}
+                {unitsWithKeeta > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-100 px-2.5 py-1 text-[10px] font-semibold text-lime-800 dark:bg-lime-950/40 dark:text-lime-400">
+                    <Sparkles className="size-3" />
+                    {unitsWithKeeta}/{activeCount} Keeta
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div data-tour="db-kpis" className="flex flex-col gap-3">
+            {/* Linha 1: os 4 do topo (dinheiro), maiores. */}
+            <HeroFaixa metrics={manchete.slice(0, 4)} cols={4} big />
+            {/* Linha 2: os 5 de operação. */}
+            <HeroFaixa metrics={manchete.slice(4)} cols={5} />
+          </div>
+        </DashboardSection>
+      )}
+
+      {/* LINHA 2: evolução da rede + pra onde vai o bruto, lado a lado. */}
+      {status.ok && allUnits.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <Suspense fallback={<EvolucaoFaturamentoSkeleton />}>
+            <EvolucaoFaturamento
+              unitIds={activeUnitIds}
+              year={year}
+              month={month}
+              metricas={["faturamento", "ticket", "pedidos"]}
+            />
+          </Suspense>
+          <ComposicaoBruto
+            bruto={brutoComposicao}
+            segmentos={composicaoSegmentos}
+          />
+        </div>
+      )}
+
       {status.ok && units.length > 0 && (
         <DashboardSection id="atencao">
           <Suspense fallback={<AttentionSkeleton />}>
@@ -513,6 +735,7 @@ export default async function Home({
               year={year}
               month={month}
               lojasLabel={lojasNoun}
+              title="Lojas que precisam de atenção"
             />
           </Suspense>
         </DashboardSection>
@@ -528,80 +751,70 @@ export default async function Home({
         </div>
       ) : (
         <>
-          <DashboardSection id="kpis">
-          <div className="flex items-center justify-between gap-3">
-            <SectionDivider number={1} label="Performance da Operação" />
-            {hasAnyImported && (
-              <div className="flex flex-wrap gap-1.5">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
-                  <Sparkles className="size-3" />
-                  {unitsWithImported}/{activeCount}{" "}
-                  iFood
-                </span>
-                {unitsWith99 > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                    <Sparkles className="size-3" />
-                    {unitsWith99}/{activeCount} 99
-                    Food
-                  </span>
-                )}
-                {unitsWithKeeta > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-100 px-2.5 py-1 text-[10px] font-semibold text-lime-800 dark:bg-lime-950/40 dark:text-lime-400">
-                    <Sparkles className="size-3" />
-                    {unitsWithKeeta}/{activeCount}{" "}
-                    Keeta
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <div
-            data-tour="db-kpis"
-            className={`grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 ${
-              kpis.length >= 8
-                ? "xl:grid-cols-4"
-                : kpis.length === 7
-                  ? "xl:grid-cols-7"
-                  : "xl:grid-cols-6"
-            }`}
-          >
-            {kpis.map((kpi) => (
-              <KpiCard key={kpi.label} kpi={kpi} />
-            ))}
-          </div>
-          </DashboardSection>
-
           <DashboardSection id="plataformas">
           <SectionDivider
             number={2}
             label={`Visão Geral por Plataforma (${scopeLabel})`}
           />
           <div data-tour="db-plataformas" className="grid gap-3 md:grid-cols-3">
-            {platforms.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3"
-              >
-                <PlatformLogo platform={p.id} size="md" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold">{p.name}</span>
-                    <span className="text-sm font-bold tabular-nums">
-                      {fmtBRLShort(p.bruto)}
-                    </span>
+            {platforms.map((p) => {
+              const taxa = Math.max(0, p.bruto - p.liquido)
+              const pctTaxa = Math.max(0, 100 - p.pctLoja)
+              return (
+                <div
+                  key={p.id}
+                  className="rounded-lg border bg-card px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <PlatformLogo platform={p.id} size="md" />
+                      <span className="text-sm font-semibold">{p.name}</span>
+                    </div>
+                    <div className="text-right leading-none">
+                      <span className="text-sm font-bold tabular-nums">
+                        {fmtBRLShort(p.bruto)}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
+                        bruto
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full bg-emerald-500"
-                      style={{ width: `${p.pctLoja}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    {fmtPct(p.pctLoja)} líquido pra loja
-                  </p>
+                  {p.bruto > 0 ? (
+                    <>
+                      <div className="mt-2.5 flex h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="bg-emerald-500"
+                          style={{ width: `${p.pctLoja}%` }}
+                          title={`Líquido pra loja: ${fmtPct(p.pctLoja)} · ${fmtBRLShort(p.liquido)}`}
+                        />
+                        <div
+                          className="bg-slate-500 dark:bg-slate-600"
+                          style={{ width: `${pctTaxa}%` }}
+                          title={`Taxa ${p.name}: ${fmtPct(pctTaxa)} · ${fmtBRLShort(taxa)}`}
+                        />
+                      </div>
+                      <div className="mt-1.5 flex items-baseline justify-between text-[11px] tabular-nums leading-tight">
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          <span className="font-bold">{fmtPct(p.pctLoja)}</span>{" "}
+                          líquido{" "}
+                          <span className="text-muted-foreground">
+                            {fmtBRLShort(p.liquido)}
+                          </span>
+                        </span>
+                        <span className="text-slate-700 dark:text-slate-400">
+                          taxa{" "}
+                          <span className="font-bold">{fmtBRLShort(taxa)}</span>
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Sem movimento no mês
+                    </p>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           </DashboardSection>
 
@@ -663,35 +876,6 @@ export default async function Home({
                               {fmtPct(networkFunnel.totals.conversaoPct)}
                             </span>
                           </div>
-                          {networkFunnel.topUnits.length > 1 && (
-                            <div className="mt-3 border-t pt-3">
-                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                Por unidade (concluídos)
-                              </p>
-                              <div className="space-y-1">
-                                {networkFunnel.topUnits
-                                  .slice(0, 5)
-                                  .map((u) => (
-                                    <div
-                                      key={u.unitId}
-                                      className="flex items-center justify-between text-xs"
-                                    >
-                                      <span className="truncate">
-                                        #{u.code} {u.name}
-                                      </span>
-                                      <div className="flex items-center gap-2 tabular-nums">
-                                        <span className="font-semibold">
-                                          {fmtNum(u.concluidos)}
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground">
-                                          ({fmtPct(u.conversaoPct)})
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
                         </>
                       ) : (
                         <p className="py-6 text-center text-xs text-muted-foreground">
@@ -828,10 +1012,9 @@ export default async function Home({
                 label={`Satisfação dos clientes (${scopeLabel})`}
               />
               <div className="grid gap-4 lg:grid-cols-3">
-                {/* Distribuição das notas */}
-                {/* Distribuição das notas */}
+                {/* Avaliações — distribuição das notas 1-5 */}
                 <PlatformTabbedCard
-                  title="Distribuição das notas"
+                  title="Avaliações"
                   slots={[
                     {
                       platform: "ifood",
@@ -1036,11 +1219,11 @@ export default async function Home({
                   })),
                 ]
                   .sort((a, b) => (a.data > b.data ? -1 : 1))
-                  .slice(0, 8)
+                  .slice(0, 5)
                 if (merged.length === 0) return null
                 return (
                   <div className="rounded-xl border bg-card overflow-hidden">
-                    <div className="flex items-center gap-2 border-b px-5 py-3">
+                    <div className="flex items-center gap-2 border-b px-4 py-2">
                       <MessageCircle className="size-4 text-muted-foreground" />
                       <h3 className="text-sm font-semibold">
                         Últimos comentários
@@ -1051,7 +1234,7 @@ export default async function Home({
                     </div>
                     <div className="divide-y">
                       {merged.map((c) => (
-                        <div key={c.id} className="px-5 py-3">
+                        <div key={c.id} className="px-4 py-2">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <PlatformLogo
@@ -1088,12 +1271,19 @@ export default async function Home({
                               })}
                             </span>
                           </div>
-                          <p className="mt-1 text-sm italic text-foreground/90 line-clamp-2">
+                          <p className="mt-0.5 text-[13px] italic text-foreground/90 line-clamp-1">
                             &ldquo;{c.comentario}&rdquo;
                           </p>
                         </div>
                       ))}
                     </div>
+                    <Link
+                      href={`/avaliacoes${periodQ}`}
+                      className="flex items-center justify-center gap-1 border-t px-4 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-muted/50"
+                    >
+                      Ver mais avaliações
+                      <ChevronRight className="size-3.5" />
+                    </Link>
                   </div>
                 )
               })()}
@@ -1105,8 +1295,13 @@ export default async function Home({
               number={hasAvaliacoesData ? 5 : 4}
               label="Detalhamento por Unidade"
             />
+            {/* Ranking clicável que já carrega o detalhe da loja selecionada —
+                cobre o detalhamento sem a tabela gigante ocupar a home. */}
             <div data-tour="db-lojas">
-              <UnitsTable units={unitsToShow} brandLogoUrl={brandLogoUrl} />
+              <RankingDetalhado
+                units={unitsToShow}
+                brandLogoUrl={brandLogoUrl}
+              />
             </div>
           </DashboardSection>
         </>
@@ -1476,27 +1671,46 @@ function CancelList({
 }: {
   items: Array<{ motivo: string; pedidos: number; perda: number }>
 }) {
+  // Hero da perda (número acionável) + lista de motivos por perda R$. A perda
+  // vem negativa do dado → usa o módulo.
+  const ordenado = [...items].sort(
+    (a, b) => Math.abs(b.perda) - Math.abs(a.perda),
+  )
+  const totalPerda = ordenado.reduce((s, c) => s + Math.abs(c.perda), 0)
+  const totalCancel = ordenado.reduce((s, c) => s + c.pedidos, 0)
   return (
-    <div className="space-y-2">
-      {items.map((c) => (
-        <div
-          key={c.motivo}
-          className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="line-clamp-1 text-xs font-medium">{c.motivo}</p>
-            <p className="text-[10px] text-rose-700 tabular-nums dark:text-rose-400">
-              perda {fmtBRL(c.perda)}
+    <div>
+      <div className="mb-3 rounded-md bg-rose-50 px-3 py-2 dark:bg-rose-950/30">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700/70 dark:text-rose-400/70">
+          Perda no mês
+        </p>
+        <div className="flex items-baseline gap-2">
+          <span className="text-xl font-bold tabular-nums text-rose-700 dark:text-rose-400">
+            −{fmtBRL(totalPerda)}
+          </span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            · {fmtNum(totalCancel)} cancel.
+          </span>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {ordenado.map((c, idx) => (
+          <div key={c.motivo} className="flex items-center gap-2">
+            <span className="w-3.5 shrink-0 text-right text-[10px] font-bold tabular-nums text-muted-foreground">
+              {idx + 1}
+            </span>
+            <p className="min-w-0 flex-1 line-clamp-1 text-xs font-medium">
+              {c.motivo}
             </p>
-          </div>
-          <div className="ml-3 flex items-center gap-1.5">
-            <XCircle className="size-3.5 text-rose-600" />
-            <span className="text-sm font-bold tabular-nums">
-              {fmtNum(c.pedidos)}
+            <span className="shrink-0 text-[11px] font-bold tabular-nums text-rose-700 dark:text-rose-400">
+              −{fmtBRL(Math.abs(c.perda))}
+            </span>
+            <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+              {fmtNum(c.pedidos)}×
             </span>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
@@ -1594,37 +1808,71 @@ function TagsList({
   )
 }
 
-/** Lista compartilhada de top produtos (iFood ou 99 Food). */
+/** Lista compartilhada de top produtos (iFood/99/Keeta). Recebe a lista
+ *  COMPLETA (pra calcular % do total) e exibe só o pódio dos 5. */
 function TopItemsList({
   items,
 }: {
   items: Array<{ nomeItem: string; qtdVendida: number; valorTotal: number }>
 }) {
+  const totalGeral = items.reduce((s, i) => s + i.valorTotal, 0)
+  const top5 = [...items]
+    .sort((a, b) => b.valorTotal - a.valorTotal)
+    .slice(0, 5)
+  const somaTop5 = top5.reduce((s, i) => s + i.valorTotal, 0)
+  const pctTop5 = totalGeral > 0 ? Math.round((somaTop5 / totalGeral) * 100) : 0
+  const pct = (v: number) =>
+    totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0
+
   return (
-    <div className="space-y-2">
-      {items.map((it, idx) => (
-        <div
-          key={it.nomeItem}
-          className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold tabular-nums text-muted-foreground">
+    <div>
+      {/* Peso dos 5 mais vendidos no total de produtos */}
+      <div className="mb-3 rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/70 dark:text-emerald-400/70">
+          Os 5 mais vendidos
+        </p>
+        <div className="flex items-baseline gap-2">
+          <span className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+            {pctTop5}%
+          </span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            do total vendido
+          </span>
+        </div>
+      </div>
+
+      {/* Pódio numerado: top 3 com badge dourado; % de cada no total à direita. */}
+      <div className="space-y-2">
+        {top5.map((it, idx) => (
+          <div key={it.nomeItem} className="flex items-center gap-2">
+            <span
+              className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tabular-nums ${
+                idx < 3
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
               {idx + 1}
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-1 text-xs font-medium">{it.nomeItem}</p>
-              <p className="text-[10px] tabular-nums text-muted-foreground">
-                {fmtNum(it.qtdVendida)} vendidos
-              </p>
+            <p className="min-w-0 flex-1 line-clamp-1 text-xs font-medium">
+              {it.nomeItem}
+            </p>
+            <div className="shrink-0 text-right leading-tight">
+              <span className="flex items-baseline justify-end gap-1">
+                <span className="text-[11px] font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  {fmtBRLShort(it.valorTotal)}
+                </span>
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {pct(it.valorTotal)}%
+                </span>
+              </span>
+              <span className="block text-[10px] tabular-nums text-muted-foreground">
+                {fmtNum(it.qtdVendida)} un
+              </span>
             </div>
           </div>
-          <div className="ml-3 text-right">
-            <p className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-              {fmtBRLShort(it.valorTotal)}
-            </p>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }

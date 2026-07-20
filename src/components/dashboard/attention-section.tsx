@@ -15,14 +15,18 @@ export async function AttentionSection({
   year,
   month,
   lojasLabel,
+  title,
 }: {
   units: UnitLite[]
   year: number
   month: number
   lojasLabel: string
+  title?: string
 }) {
   const items = await getAttentionItems(units, year, month)
-  return <AttentionPanel items={items} lojasLabel={lojasLabel} />
+  return (
+    <AttentionPanel items={items} lojasLabel={lojasLabel} title={title} />
+  )
 }
 
 /** Esqueleto exibido enquanto o painel carrega (mesma altura aproximada). */

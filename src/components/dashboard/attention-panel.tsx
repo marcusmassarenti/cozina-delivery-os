@@ -38,10 +38,13 @@ type Grupo = {
 export function AttentionPanel({
   items,
   lojasLabel = "todas as lojas",
+  title = "Precisa de atenção",
 }: {
   items: AttentionItem[]
   /** "todas as lojas" (admin) | "sua loja" | "suas lojas" (franqueado) */
   lojasLabel?: string
+  /** Título da seção (default: "Precisa de atenção"). */
+  title?: string
 }) {
   if (items.length === 0) {
     return (
@@ -76,7 +79,7 @@ export function AttentionPanel({
 
       <div className="flex items-center gap-2">
         <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-        <h2 className="text-sm font-semibold">Precisa de atenção</h2>
+        <h2 className="text-sm font-semibold">{title}</h2>
         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
           {lojas.length} loja{lojas.length !== 1 ? "s" : ""}
           {urgentes > 0 ? ` · ${urgentes} urgente${urgentes !== 1 ? "s" : ""}` : ""}

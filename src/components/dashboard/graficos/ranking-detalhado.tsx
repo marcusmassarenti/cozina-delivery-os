@@ -1,0 +1,257 @@
+"use client"
+
+import * as React from "react"
+import Link from "next/link"
+import { ChevronRight } from "lucide-react"
+
+import { BrandLogo } from "@/components/brand-logo"
+import { PlatformLogo } from "@/components/platform-logo"
+import type { Unit } from "@/lib/data/units"
+import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
+
+/**
+ * Ranking + detalhe num card só: as lojas viram barras clicáveis (por
+ * faturamento bruto) e, ao selecionar uma, todo o detalhe dela — pedidos,
+ * ticket, bruto, líquido, % loja e a margem por plataforma — aparece ao lado,
+ * sem precisar da tabela gigante embaixo. Substitui o ranking + tabela por um
+ * bloco compacto; a tabela completa fica atrás de um toggle.
+ */
+export function RankingDetalhado({
+  units,
+  brandLogoUrl = null,
+}: {
+  units: Unit[]
+  brandLogoUrl?: string | null
+}) {
+  const ordenadas = React.useMemo(
+    () =>
+      [...units].sort(
+        (a, b) => b.monthly.faturamentoBruto - a.monthly.faturamentoBruto,
+      ),
+    [units],
+  )
+  const comFat = ordenadas.filter((u) => u.monthly.faturamentoBruto > 0)
+  const max = Math.max(1, ...comFat.map((u) => u.monthly.faturamentoBruto))
+
+  const [selCode, setSelCode] = React.useState<string | null>(
+    ordenadas[0]?.code ?? null,
+  )
+  const sel =
+    ordenadas.find((u) => u.code === selCode) ?? ordenadas[0] ?? null
+
+  if (ordenadas.length === 0) {
+    return (
+      <div className="rounded-xl border bg-card p-4">
+        <p className="py-6 text-center text-xs text-muted-foreground">
+          Nenhuma unidade pra ranquear.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+      {/* ─── Ranking clicável ─────────────────────────────────── */}
+      <div className="rounded-xl border bg-card p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold tracking-tight">
+            Ranking de lojas
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Faturamento bruto no período — clique pra ver o detalhe
+          </p>
+        </div>
+        {comFat.length === 0 ? (
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            Sem faturamento no período.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {comFat.map((u, i) => {
+              const ativo = u.code === sel?.code
+              return (
+                <button
+                  key={u.code}
+                  type="button"
+                  onClick={() => setSelCode(u.code)}
+                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                    ativo ? "bg-muted" : "hover:bg-muted/50"
+                  }`}
+                >
+                  <span className="w-4 shrink-0 text-right font-semibold tabular-nums text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <span className="w-24 shrink-0 truncate" title={u.name}>
+                    {u.name}
+                  </span>
+                  <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-muted/50">
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded transition-[width] ${
+                        ativo ? "bg-primary" : "bg-primary/55"
+                      }`}
+                      style={{
+                        width: `${(u.monthly.faturamentoBruto / max) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="w-16 shrink-0 text-right font-medium tabular-nums">
+                    {fmtBRLShort(u.monthly.faturamentoBruto)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Detalhe da loja selecionada ──────────────────────── */}
+      {sel && <DetalheLoja unit={sel} brandLogoUrl={brandLogoUrl} />}
+    </div>
+  )
+}
+
+function DetalheLoja({
+  unit,
+  brandLogoUrl,
+}: {
+  unit: Unit
+  brandLogoUrl: string | null
+}) {
+  const m = unit.monthly
+  const hasData = m.pedidos > 0
+  const taxas = m.faturamentoBruto - m.faturamentoLiquido
+  const pctLoja =
+    m.faturamentoBruto > 0
+      ? (m.faturamentoLiquido / m.faturamentoBruto) * 100
+      : 0
+  const pctTone =
+    pctLoja >= 60
+      ? "text-emerald-700 dark:text-emerald-400"
+      : pctLoja >= 50
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-rose-700 dark:text-rose-400"
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      {/* Cabeçalho da loja */}
+      <div className="mb-3 flex items-center gap-2">
+        <BrandLogo
+          size="md"
+          logoUrl={unit.logoUrl ?? brandLogoUrl}
+          name={unit.name}
+        />
+        <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+          #{unit.code}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+          {unit.name}
+        </span>
+      </div>
+
+      {!hasData ? (
+        <p className="py-6 text-center text-xs text-muted-foreground">
+          Sem dados importados neste mês.
+        </p>
+      ) : (
+        <>
+          {/* Números-chave */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Kpi label="Pedidos" value={fmtNum(m.pedidos)} />
+            <Kpi label="Ticket" value={fmtBRL(m.ticketMedio)} />
+            <Kpi label="Bruto" value={fmtBRLShort(m.faturamentoBruto)} />
+            <Kpi label="Líquido" value={fmtBRLShort(m.faturamentoLiquido)} />
+          </div>
+
+          {/* % Loja */}
+          <div className="mt-2 flex items-baseline justify-between rounded-md bg-muted/50 px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              % que fica na loja
+            </span>
+            <span className={`text-base font-bold ${pctTone}`}>
+              {fmtPct(pctLoja)}
+              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                (− {fmtBRLShort(taxas)} em taxas)
+              </span>
+            </span>
+          </div>
+
+          {/* Margem por plataforma */}
+          <p className="mt-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Margem por plataforma
+          </p>
+          <div className="flex flex-col gap-2">
+            {m.platforms.map((p) => {
+              const pTaxas = p.bruto - p.liquido
+              const pctTaxas = Math.max(0, 100 - p.pctLoja)
+              const hasP = p.bruto > 0
+              return (
+                <div key={p.id} className="rounded-md border bg-card p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <PlatformLogo platform={p.id} size="sm" />
+                      <span className="text-xs font-semibold">{p.name}</span>
+                    </div>
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                      {fmtBRLShort(p.bruto)}
+                    </span>
+                  </div>
+                  {hasP ? (
+                    <>
+                      <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="bg-emerald-500"
+                          style={{ width: `${p.pctLoja}%` }}
+                        />
+                        <div
+                          className="bg-slate-500 dark:bg-slate-600"
+                          style={{ width: `${pctTaxas}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 flex items-baseline justify-between text-[10px] tabular-nums leading-tight">
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          <span className="font-bold">{fmtPct(p.pctLoja)}</span>{" "}
+                          <span className="text-muted-foreground">
+                            {fmtBRLShort(p.liquido)}
+                          </span>
+                        </span>
+                        <span className="text-slate-700 dark:text-slate-400">
+                          <span className="font-bold">{fmtPct(pctTaxas)}</span>{" "}
+                          <span className="text-muted-foreground">
+                            {fmtBRLShort(pTaxas)}
+                          </span>
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Sem movimento
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      <Link
+        href={`/unidades/${unit.code}`}
+        className="mt-3 flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+      >
+        Ir para a unidade
+        <ChevronRight className="size-3.5" />
+      </Link>
+    </div>
+  )
+}
+
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-md border bg-card px-2.5 py-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span className="text-sm font-semibold tabular-nums">{value}</span>
+    </div>
+  )
+}

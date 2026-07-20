@@ -12,12 +12,18 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 export function UnitsTable({
   units,
   brandLogoUrl = null,
+  compact = false,
 }: {
   units: Unit[]
   /** Logo da empresa (white-label) pro avatar das lojas. */
   brandLogoUrl?: string | null
+  /** Densidade menor: linhas mais baixas e logo menor. */
+  compact?: boolean
 }) {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
+  const rowPad = compact ? "px-4 py-2" : "px-5 py-4"
+  const headPad = compact ? "px-4 py-2" : "px-5 py-3"
+  const logoSize = compact ? "sm" : "md"
 
   const toggle = (code: string) =>
     setExpanded((prev) => {
@@ -35,7 +41,7 @@ export function UnitsTable({
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
       {/* Cabeçalho da tabela — só desktop */}
-      <div className="hidden md:grid md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className={`hidden md:grid md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 border-b ${headPad} text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}>
         <div></div>
         <div>Unidade</div>
         <div className="text-right">Pedidos</div>
@@ -155,7 +161,7 @@ export function UnitsTable({
             <button
               type="button"
               onClick={() => toggle(unit.code)}
-              className={`hidden md:grid w-full md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 px-5 py-4 text-sm transition-colors hover:bg-muted/50 ${
+              className={`hidden md:grid w-full md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto] items-center gap-3 ${rowPad} text-sm transition-colors hover:bg-muted/50 ${
                 idx < sortedUnits.length - 1 && !isOpen ? "border-b" : ""
               }`}
             >
@@ -165,7 +171,7 @@ export function UnitsTable({
                 <ChevronRight className="size-4 text-muted-foreground" />
               )}
               <div className="flex min-w-0 items-center gap-3 text-left">
-                <BrandLogo size="md" logoUrl={unit.logoUrl ?? brandLogoUrl} name={unit.name} />
+                <BrandLogo size={logoSize} logoUrl={unit.logoUrl ?? brandLogoUrl} name={unit.name} />
                 <span className="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                   #{unit.code}
                 </span>
