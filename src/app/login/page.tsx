@@ -97,9 +97,6 @@ export default async function LoginPage() {
               </Link>
               .
             </p>
-            <p className="mt-3 text-center text-[10px] text-muted-foreground/70">
-              Powered by Cozina Foods
-            </p>
           </div>
         </div>
       </div>

@@ -210,11 +210,12 @@ export function ImportForm({
   }
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-4"
-    >
+    // IMPORTANTE: o ResultsList e o CreateUnitDialog têm seus PRÓPRIOS <form>
+    // (Atualizar / Criar / Vincular). Eles NÃO podem ficar dentro do <form> de
+    // upload — form aninhado é HTML inválido e quebra a hidratação (os botões
+    // param de funcionar → "loop"). Por isso o <form> de upload fecha antes.
+    <div className="flex flex-col gap-4">
+      <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
       {/* Dropzone */}
       <label
         htmlFor="files"
@@ -308,6 +309,7 @@ export function ImportForm({
             : "Importar todos"}
         </Button>
       </div>
+      </form>
 
       {localResults.length > 0 && (
         <ResultsList
@@ -332,7 +334,7 @@ export function ImportForm({
           onSuccess={handleWizardSuccess}
         />
       )}
-    </form>
+    </div>
   )
 }
 
