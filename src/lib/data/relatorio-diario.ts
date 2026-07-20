@@ -66,6 +66,18 @@ export async function getImportCoverageForMonth(
     .limit(1)
   if (filterUnitIds) qi = qi.in("unit_id", filterUnitIds)
 
+  // O relatório de PEDIDOS do iFood (ifood_pedidos) também é dado importado e
+  // já traz bruto+líquido. Sem isto, quem sobe só o Pedidos (sem a Conciliação)
+  // via "nenhum dado importado" — falso alarme.
+  let qiPed = admin
+    .from("ifood_pedidos")
+    .select("data")
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .order("data", { ascending: false })
+    .limit(1)
+  if (filterUnitIds) qiPed = qiPed.in("unit_id", filterUnitIds)
+
   let qn = admin
     .from("ninefood_daily_loja")
     .select("data")
@@ -84,11 +96,18 @@ export async function getImportCoverageForMonth(
     .limit(1)
   if (filterUnitIds) qk = qk.in("unit_id", filterUnitIds)
 
-  const [{ data: di }, { data: dn }, { data: dk }] = await Promise.all([
-    qi,
-    qn,
-    qk,
-  ])
+  const [{ data: di }, { data: diPed }, { data: dn }, { data: dk }] =
+    await Promise.all([qi, qiPed, qn, qk])
+
+  // iFood: mais recente entre a Conciliação e o relatório de Pedidos.
+  const ifoodLatest =
+    [
+      di?.[0]?.data_fato_gerador as string | undefined,
+      diPed?.[0]?.data as string | undefined,
+    ]
+      .filter((d): d is string => !!d)
+      .sort()
+      .pop() ?? null
 
   // 99 Food também vem pela API (ninefood_api_bill). Considera a última
   // business_date com financeiro no mês e usa a MAIS RECENTE entre import e API.
@@ -123,7 +142,7 @@ export async function getImportCoverageForMonth(
       .pop() ?? null
 
   return {
-    ifood: parseDay(di?.[0]?.data_fato_gerador as string | undefined),
+    ifood: parseDay(ifoodLatest),
     ninefood: parseDay(ninefoodLatest),
     keeta: parseDay(dk?.[0]?.data as string | undefined),
   }

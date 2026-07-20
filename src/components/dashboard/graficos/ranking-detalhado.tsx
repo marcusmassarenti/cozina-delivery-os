@@ -180,7 +180,9 @@ export function DetalheLoja({
             Margem por plataforma
           </p>
           <div className="flex flex-col gap-2">
-            {m.platforms.map((p) => {
+            {m.platforms
+              .filter((p) => unit.platforms.includes(p.id))
+              .map((p) => {
               const pTaxas = p.bruto - p.liquido
               const pctTaxas = Math.max(0, 100 - p.pctLoja)
               const hasP = p.bruto > 0

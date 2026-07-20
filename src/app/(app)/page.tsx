@@ -802,7 +802,9 @@ export default async function Home({
             label={`Visão Geral por Plataforma (${scopeLabel})`}
           />
           <div data-tour="db-plataformas" className="grid gap-3 md:grid-cols-3">
-            {platforms.map((p) => {
+            {platforms
+              .filter((p) => tenantPlatforms.includes(p.id))
+              .map((p) => {
               const taxa = Math.max(0, p.bruto - p.liquido)
               const pctTaxa = Math.max(0, 100 - p.pctLoja)
               return (
