@@ -2,7 +2,11 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSuperadmin } from "@/lib/auth/permissions"
-import { asaasListInvoices, type AsaasInvoice } from "@/lib/asaas/client"
+import {
+  asaasGetCustomer,
+  asaasListInvoices,
+  type AsaasInvoice,
+} from "@/lib/asaas/client"
 import type { PlatformId } from "@/components/platform-logo"
 import {
   computeBillingStatus,
@@ -363,9 +367,14 @@ export type ClientInvoice = {
 export type ClientDetail = ClientOverview & {
   fiscal: ClientFiscal
   fiscalPreenchido: boolean
+  /** Dados fiscais vieram do Asaas (cliente ainda não preencheu no sistema). */
+  fiscalFromAsaas: boolean
+  /** Endereço fiscal já formatado numa linha (ou "" se vazio). */
+  enderecoFmt: string
   /** Contato principal: o admin da conta (quem cadastrou). */
   contactName: string | null
-  contactEmail: string | null
+  /** E-mail de login do admin (auth). */
+  loginEmail: string | null
   contactWhatsapp: string | null
   usersList: ClientUser[]
   unitsFull: ClientUnitFull[]
@@ -409,9 +418,47 @@ export async function getClientDetail(
     telefone: (h?.nf_telefone as string) ?? "",
     email: (h?.nf_email as string) ?? "",
   }
-  const fiscalPreenchido = Boolean(fiscal.cpfCnpj || fiscal.cep)
+  let fiscalPreenchido = Boolean(fiscal.cpfCnpj || fiscal.cep)
   const asaasCustomerId = (h?.asaas_customer_id as string) ?? null
   const asaasSubscriptionId = (h?.asaas_subscription_id as string) ?? null
+
+  // Backfill: se o cliente ainda não preencheu os dados fiscais no sistema mas
+  // já tem cliente no Asaas, puxa de lá (CNPJ, endereço, e-mail de cobrança).
+  // Mesma lógica do "Minha conta › Informações".
+  let fiscalFromAsaas = false
+  if (!fiscalPreenchido && asaasCustomerId) {
+    const cust = await asaasGetCustomer(asaasCustomerId)
+    if (cust) {
+      const doc = (cust.cpfCnpj ?? "").replace(/\D/g, "")
+      fiscal.accountType =
+        doc.length === 14 ? "PJ" : doc.length === 11 ? "PF" : null
+      fiscal.razaoSocial = cust.name ?? ""
+      fiscal.cpfCnpj = doc
+      fiscal.cep = (cust.postalCode ?? "").replace(/\D/g, "")
+      fiscal.logradouro = cust.address ?? ""
+      fiscal.numero = cust.addressNumber ?? ""
+      fiscal.complemento = cust.complement ?? ""
+      fiscal.bairro = cust.province ?? ""
+      fiscal.cidade = cust.cityName ?? ""
+      fiscal.uf = cust.state ?? ""
+      fiscal.telefone = cust.mobilePhone ?? ""
+      fiscal.email = cust.email ?? ""
+      fiscalPreenchido = Boolean(fiscal.cpfCnpj || fiscal.cep || fiscal.email)
+      fiscalFromAsaas = fiscalPreenchido
+    }
+  }
+  const enderecoFmt = [
+    fiscal.logradouro,
+    fiscal.numero && `nº ${fiscal.numero}`,
+    fiscal.complemento,
+    fiscal.bairro,
+    fiscal.cidade && fiscal.uf
+      ? `${fiscal.cidade}/${fiscal.uf}`
+      : fiscal.cidade || fiscal.uf,
+    fiscal.cep && `CEP ${fiscal.cep}`,
+  ]
+    .filter(Boolean)
+    .join(", ")
 
   // 2) Marcas e lojas do cliente (com cnpj + plataformas ativas)
   const { data: brandRows } = await admin
@@ -570,8 +617,10 @@ export async function getClientDetail(
     ...base,
     fiscal,
     fiscalPreenchido,
+    fiscalFromAsaas,
+    enderecoFmt,
     contactName: contact?.name ?? null,
-    contactEmail: contact?.email ?? null,
+    loginEmail: contact?.email ?? null,
     contactWhatsapp: contact?.whatsapp ?? null,
     usersList,
     unitsFull,

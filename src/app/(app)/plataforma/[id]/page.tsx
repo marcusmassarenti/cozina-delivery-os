@@ -145,16 +145,7 @@ export default async function ClientDetailPage({
   }
   const contactWa = waLink(c.contactWhatsapp)
   const f = c.fiscal
-  const endereco = [
-    f.logradouro,
-    f.numero && `nº ${f.numero}`,
-    f.complemento,
-    f.bairro,
-    f.cidade && f.uf ? `${f.cidade}/${f.uf}` : f.cidade || f.uf,
-    f.cep && `CEP ${f.cep}`,
-  ]
-    .filter(Boolean)
-    .join(", ")
+  const endereco = c.enderecoFmt
 
   return (
     <div className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
@@ -198,14 +189,15 @@ export default async function ClientDetailPage({
         {/* Dados básicos & contato */}
         <Card title="Dados básicos & contato" icon={User}>
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Empresa">{c.name}</Field>
             <Field label="Titular">{c.contactName}</Field>
-            <Field label="E-mail">
-              {c.contactEmail ? (
+            <Field label="E-mail de login">
+              {c.loginEmail ? (
                 <a
-                  href={`mailto:${c.contactEmail}`}
+                  href={`mailto:${c.loginEmail}`}
                   className="text-primary hover:underline"
                 >
-                  {c.contactEmail}
+                  {c.loginEmail}
                 </a>
               ) : null}
             </Field>
@@ -264,9 +256,18 @@ export default async function ClientDetailPage({
       </div>
 
       {/* Dados fiscais / NF */}
-      <Card title="Dados fiscais (Nota Fiscal)" icon={ReceiptText}>
+      <Card title="Dados fiscais & empresa (Nota Fiscal)" icon={ReceiptText}>
         {c.fiscalPreenchido ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {c.fiscalFromAsaas && (
+              <div className="sm:col-span-2 lg:col-span-3 -mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="rounded-full bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                  via Asaas
+                </span>
+                Cliente ainda não preencheu no sistema — dados puxados do cadastro
+                de cobrança.
+              </div>
+            )}
             <Field label="Tipo">
               {f.accountType === "PJ"
                 ? "Pessoa Jurídica"
