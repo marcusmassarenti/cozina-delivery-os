@@ -6,7 +6,6 @@ import { DeliveryOsMark } from "@/components/delivery-os-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { LoginForm } from "./_components/login-form"
 
 export default async function LoginPage() {
@@ -16,56 +15,12 @@ export default async function LoginPage() {
     redirect("/")
   }
 
-  // Imagem da tela de login (definida pelo dono na Personalização). Se não
-  // houver, o hero é genérico. Falha silenciosa se a coluna ainda não existir.
-  let loginImage: string | null = null
-  try {
-    const admin = createAdminClient()
-    const { data: row } = await admin
-      .from("holdings")
-      .select("login_image_url")
-      .not("login_image_url", "is", null)
-      .order("created_at")
-      .limit(1)
-      .maybeSingle()
-    loginImage = (row?.login_image_url as string | null) ?? null
-  } catch {
-    loginImage = null
-  }
-
   return (
     <TooltipProvider>
       <div className="grid min-h-screen lg:grid-cols-2">
-        {loginImage ? (
-          <div className="relative hidden overflow-hidden bg-zinc-950 lg:block">
-            <div className="absolute inset-0 bg-zinc-950" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={loginImage}
-              alt=""
-              aria-hidden
-              className="absolute inset-0 size-full object-cover opacity-60 [object-position:55%_55%]"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/95" />
-            <div className="relative z-10 flex h-full flex-col p-12">
-              <div className="flex items-center gap-2">
-                <DeliveryOsMark className="size-9" />
-                <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/80">
-                  Delivery OS
-                </span>
-              </div>
-              <div className="mt-auto max-w-2xl">
-                <h1 className="text-[1.75rem] font-bold leading-[1.2] text-white drop-shadow-lg xl:text-[2.5rem]">
-                  Toda a sua operação
-                  <br />
-                  <span className="text-[#ff4d1c]">num só painel.</span>
-                </h1>
-              </div>
-            </div>
-          </div>
-        ) : (
-        /* Hero panel — genérico (white-label, sem marca de restaurante) */
+        {/* Hero panel — SEMPRE genérico do Delivery OS. O login é compartilhado
+            (antes de saber qual cliente é), então nunca mostra a marca de um
+            tenant específico. */}
         <div className="relative hidden overflow-hidden bg-zinc-950 lg:block">
           {/* Brilhos abstratos com a cor da marca */}
           <div className="absolute -left-32 top-12 size-[460px] rounded-full bg-[#ff4d1c]/25 blur-[130px]" />
@@ -106,7 +61,6 @@ export default async function LoginPage() {
             </div>
           </div>
         </div>
-        )}
 
         {/* Form panel */}
         <div className="relative flex flex-col justify-center bg-background p-8 lg:p-16">
