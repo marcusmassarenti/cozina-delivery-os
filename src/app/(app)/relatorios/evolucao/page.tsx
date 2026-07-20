@@ -68,10 +68,14 @@ export default async function EvolucaoPage({
   }))
 
   // --- Filtros ---
+  // Só as plataformas habilitadas no tenant (default quando nenhuma no filtro).
+  const tenantPlats: PlatformId[] = ALL_PLAT.filter((p) =>
+    allUnitsRaw.some((u) => u.active && u.platforms.includes(p)),
+  )
   const platParam = (sp.plat?.split(",") ?? []).filter((p): p is PlatformId =>
     (ALL_PLAT as string[]).includes(p),
   )
-  const plataformas = platParam.length > 0 ? platParam : ALL_PLAT
+  const plataformas = platParam.length > 0 ? platParam : tenantPlats
 
   const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
   const selectedUnits =

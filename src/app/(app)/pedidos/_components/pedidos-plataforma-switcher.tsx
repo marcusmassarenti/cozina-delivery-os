@@ -12,8 +12,11 @@ import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
  */
 export function PedidosPlataformaSwitcher({
   current,
+  platforms,
 }: {
   current: "ifood" | "99food" | "keeta"
+  /** Plataformas habilitadas no escopo — só essas viram aba. */
+  platforms: PlatformId[]
 }) {
   const navigate = useNavigate()
   const sp = useSearchParams()
@@ -26,11 +29,13 @@ export function PedidosPlataformaSwitcher({
     navigate(qs ? `/pedidos?${qs}` : "/pedidos")
   }
 
-  const opts: { id: PlatformId; label: string }[] = [
-    { id: "ifood", label: "iFood" },
-    { id: "99food", label: "99 Food" },
-    { id: "keeta", label: "Keeta" },
-  ]
+  const opts: { id: PlatformId; label: string }[] = (
+    [
+      { id: "ifood", label: "iFood" },
+      { id: "99food", label: "99 Food" },
+      { id: "keeta", label: "Keeta" },
+    ] as { id: PlatformId; label: string }[]
+  ).filter((o) => platforms.includes(o.id))
 
   return (
     <div className="inline-flex items-center rounded-lg border bg-card p-0.5">

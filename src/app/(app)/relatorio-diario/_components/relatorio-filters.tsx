@@ -3,7 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import {
   METRIC_OPTIONS,
   PLATFORM_OPTIONS,
@@ -18,9 +18,12 @@ import {
 export function RelatorioFilters({
   metric,
   platform,
+  platforms,
 }: {
   metric: DailyMetric
   platform: ReportPlatform
+  /** Plataformas habilitadas no escopo — só essas (+ "todas") viram opção. */
+  platforms: PlatformId[]
 }) {
   const navigate = useNavigate()
   const pathname = usePathname()
@@ -58,7 +61,9 @@ export function RelatorioFilters({
 
       {/* Plataforma */}
       <div className="flex items-center gap-1 rounded-md border bg-card p-1">
-        {PLATFORM_OPTIONS.map((p) => {
+        {PLATFORM_OPTIONS.filter(
+          (p) => p.id === "todas" || platforms.includes(p.id as PlatformId),
+        ).map((p) => {
           const active = p.id === platform
           return (
             <button

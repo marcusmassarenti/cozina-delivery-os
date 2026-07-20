@@ -122,6 +122,8 @@ export default async function RelatoriosPage({
   ])
   const t = report.totals
   const antecipTotal = Array.from(antecipMap.values()).reduce((a, b) => a + b, 0)
+  // Só as plataformas habilitadas no tenant no DRE por plataforma.
+  const drePlatsShown = drePlats.filter((p) => tenantPlatforms.includes(p.id))
 
   // VR da rede pro DRE detalhado (mesma regra do /financeiro e do detalhe da loja)
   const vrInfoRede: VrInfo | undefined =
@@ -142,7 +144,7 @@ export default async function RelatoriosPage({
       label: "Pedidos totais",
       value: fmtNum(t.pedidos),
       icon: ShoppingBag,
-      platforms: [...ALL_PLATFORMS],
+      platforms: tenantPlatforms,
     },
     {
       label: "Média pedidos/dia",
@@ -159,7 +161,7 @@ export default async function RelatoriosPage({
       label: "Total bruto",
       value: fmtBRL(t.bruto),
       icon: DollarSign,
-      platforms: [...ALL_PLATFORMS],
+      platforms: tenantPlatforms,
     },
     {
       label: "Total líquido",
@@ -297,11 +299,11 @@ export default async function RelatoriosPage({
       </div>
 
       {/* DRE detalhado por plataforma (mesmo componente do detalhe da loja) */}
-      {drePlats.length > 0 ? (
+      {drePlatsShown.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <DreDetalhado
-              platforms={drePlats}
+              platforms={drePlatsShown}
               totalBruto={t.bruto}
               totalLiquido={t.liquidoPlataformas}
               cmv={t.cmvTotal}
@@ -313,7 +315,7 @@ export default async function RelatoriosPage({
             />
           </div>
           <BrutoBreakdown
-            platforms={drePlats.map((p) => ({
+            platforms={drePlatsShown.map((p) => ({
               id: p.id,
               bruto: p.bruto,
               liquido: p.liquido,

@@ -72,8 +72,10 @@ export function AvaliacoesFilters({
     pushWith({ plataforma: p })
   }
 
-  // Plataformas com avaliação (filtro da visão de rede)
-  const NETWORK_PLATFORMS: PlatformId[] = ["ifood", "99food", "keeta"]
+  // Plataformas da visão de rede = só as habilitadas em ALGUMA loja do tenant.
+  const NETWORK_PLATFORMS: PlatformId[] = (
+    ["ifood", "99food", "keeta"] as PlatformId[]
+  ).filter((p) => unitOptions.some((u) => u.platforms.includes(p)))
 
   // Filtro de estrelas (notas) — filtra a lista de comentários
   const notasSelected = (searchParams.get("notas") ?? "")

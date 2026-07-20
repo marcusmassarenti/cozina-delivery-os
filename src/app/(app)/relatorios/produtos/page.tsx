@@ -62,9 +62,15 @@ export default async function ProdutosPage({
     label: formatPeriodLabel(p),
   }))
 
-  const plataforma: PlatformId = (ALL_PLAT as string[]).includes(sp.plat ?? "")
+  // Só as plataformas habilitadas no tenant; default = a 1ª habilitada.
+  const tenantPlats: PlatformId[] = ALL_PLAT.filter((p) =>
+    allUnitsRaw.some((u) => u.active && u.platforms.includes(p)),
+  )
+  const plataforma: PlatformId = tenantPlats.includes(
+    (sp.plat ?? "") as PlatformId,
+  )
     ? (sp.plat as PlatformId)
-    : "ifood"
+    : (tenantPlats[0] ?? "ifood")
   const lojaCodes = (sp.lojas?.split(",") ?? []).filter(Boolean)
   const selectedUnits =
     lojaCodes.length > 0

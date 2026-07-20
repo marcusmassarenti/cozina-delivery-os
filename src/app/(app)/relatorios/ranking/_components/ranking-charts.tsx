@@ -82,13 +82,17 @@ export function BarEmpilhadaPlataforma({
   }[]
 }) {
   const max = Math.max(1, ...data.map((d) => d.total))
+  // Só as plataformas com dado no conjunto (loja só-iFood não mostra 99/Keeta).
+  const platsPresent = PLATS.filter((p) =>
+    data.some((d) => d.perPlatform[p] > 0),
+  )
   return (
     <ChartCard
       title="Faturamento por loja × plataforma"
       subtitle="Composição de cada loja"
     >
       <div className="mb-3 flex flex-wrap gap-3">
-        {PLATS.map((p) => (
+        {platsPresent.map((p) => (
           <span key={p} className="flex items-center gap-1.5 text-[11px]">
             <span
               className="size-2.5 rounded-sm"
@@ -105,7 +109,7 @@ export function BarEmpilhadaPlataforma({
               {d.name}
             </div>
             <div className="flex h-5 flex-1 overflow-hidden rounded-sm bg-muted/30">
-              {PLATS.map((p) => {
+              {platsPresent.map((p) => {
                 const v = d.perPlatform[p]
                 if (v <= 0) return null
                 return (
@@ -278,7 +282,7 @@ export function PizzaPlataforma({
           )}
         </svg>
         <div className="flex flex-col gap-2">
-          {PLATS.map((p) => {
+          {PLATS.filter((p) => perPlatform[p] > 0).map((p) => {
             const frac = total > 0 ? perPlatform[p] / total : 0
             return (
               <div key={p} className="flex items-center gap-2 text-xs">

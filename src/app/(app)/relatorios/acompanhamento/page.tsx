@@ -88,6 +88,12 @@ export default async function AcompanhamentoPage({
   const ddmm = (iso: string | null) =>
     iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—"
 
+  // Só as plataformas habilitadas em alguma loja do tenant.
+  const tenantPlats = (["ifood", "99food", "keeta"] as const).filter((p) =>
+    acomp.brands.some((b) =>
+      b.units.some((u) => u.platforms.some((up) => String(up) === p)),
+    ),
+  )
   const num = (n: number) => (n === 0 ? "—" : fmtBRL(n))
   // Falta = quanto ainda falta pra bater a meta. Vermelho quando falta;
   // quando bate/passa, mostra "✓ bateu" (sem número verde confuso na coluna).
@@ -161,7 +167,7 @@ export default async function AcompanhamentoPage({
       {/* Alerta: até qual data cada plataforma está sincronizada */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
         <span className="font-semibold">Dados sincronizados até:</span>
-        {(["ifood", "99food", "keeta"] as const).map((plat) => (
+        {tenantPlats.map((plat) => (
           <span key={plat} className="inline-flex items-center gap-1.5">
             <PlatformLogo platform={plat} size="sm" />
             <span className="tabular-nums">

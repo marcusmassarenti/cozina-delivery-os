@@ -1,4 +1,4 @@
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import {
@@ -81,6 +81,9 @@ export default async function PedidosPage({
       ? activeUnits.filter((u) => lojaCodes.includes(u.code))
       : activeUnits
   const ids = filteredUnits.map((u) => u.id)
+  const tenantPlats: PlatformId[] = (
+    ["ifood", "99food", "keeta"] as PlatformId[]
+  ).filter((p) => filteredUnits.some((u) => u.platforms.includes(p)))
 
   // Dados específicos da plataforma selecionada (sempre consolidado das lojas
   // escolhidas — ou todas, se nada filtrado).
@@ -172,7 +175,10 @@ export default async function PedidosPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <PedidosPlataformaSwitcher current={plataforma} />
+          <PedidosPlataformaSwitcher
+            current={plataforma}
+            platforms={tenantPlats}
+          />
           <LojaFilter
             units={activeUnits.map((u) => ({ code: u.code, name: u.name }))}
           />

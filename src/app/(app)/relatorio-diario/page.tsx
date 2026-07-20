@@ -89,6 +89,13 @@ export default async function RelatorioDiarioPage({
     lojaCodes.length > 0
       ? activeUnits.filter((u) => lojaCodes.includes(u.code))
       : activeUnits
+  // Plataformas habilitadas no escopo (só essas viram opção/logo).
+  const scopedUnits = allUnits.filter(
+    (u) => u.active && (lojaCodes.length === 0 || lojaCodes.includes(u.code)),
+  )
+  const tenantPlats: PlatformId[] = (
+    ["ifood", "99food", "keeta"] as PlatformId[]
+  ).filter((p) => scopedUnits.some((u) => u.platforms.includes(p)))
 
   // Busca as 4 séries (todas + 3 plataformas) pro mesmo escopo de lojas — o
   // `matrix` da métrica/plataforma selecionada é derivado de uma delas, e as 4
@@ -132,9 +139,9 @@ export default async function RelatorioDiarioPage({
   const metricLabel =
     METRIC_OPTIONS.find((m) => m.id === metric)?.label ?? "Faturamento Bruto"
 
-  // Plataformas ativas (pros logos nos cabeçalhos). "todas" = as 3.
+  // Plataformas ativas (pros logos nos cabeçalhos). "todas" = as habilitadas.
   const activePlatforms: PlatformId[] =
-    platform === "todas" ? ["ifood", "99food", "keeta"] : [platform]
+    platform === "todas" ? tenantPlats : [platform]
 
   // ─── Helpers de valor/format conforme a métrica ──────────────────
   const fmt = (v: number) =>
@@ -241,7 +248,11 @@ export default async function RelatorioDiarioPage({
       )}
 
       <div className="print:hidden">
-        <RelatorioFilters metric={metric} platform={platform} />
+        <RelatorioFilters
+          metric={metric}
+          platform={platform}
+          platforms={tenantPlats}
+        />
       </div>
 
       {!matrix.hasData ? (
