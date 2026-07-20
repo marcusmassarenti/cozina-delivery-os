@@ -501,3 +501,37 @@ export async function configurarNfAutomatica(): Promise<NfSetupState> {
     }
   }
 }
+
+/** Busca o detalhe de um cliente sob demanda (pro drawer da lista). */
+export async function fetchClientDetail(id: string) {
+  const { getClientDetail } = await import("@/lib/data/plataforma")
+  return getClientDetail(id)
+}
+
+/**
+ * Exclusão em massa (super-admin). Reusa deleteClient por id — pula a própria
+ * empresa. Retorna quantos foram e a lista de erros.
+ */
+export async function deleteClients(
+  ids: string[],
+): Promise<{ ok: boolean; deleted: number; failed: number; message?: string }> {
+  let deleted = 0
+  let failed = 0
+  const erros: string[] = []
+  for (const id of ids) {
+    const res = await deleteClient(id)
+    if (res.ok) deleted += 1
+    else {
+      failed += 1
+      if (res.message) erros.push(res.message)
+    }
+  }
+  revalidatePath("/plataforma")
+  revalidatePath("/", "layout")
+  return {
+    ok: failed === 0,
+    deleted,
+    failed,
+    message: erros.length ? erros.slice(0, 3).join(" · ") : undefined,
+  }
+}
