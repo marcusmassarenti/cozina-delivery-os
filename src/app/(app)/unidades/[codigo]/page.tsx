@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { ArrowLeft, FileText } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import {
   Tabs,
   TabsContent,
@@ -250,7 +250,7 @@ export default async function UnidadeDetalhePage({
             coverage={coverage}
             month={month}
             periodLabel={formatPeriodLabel({ year, month })}
-            platforms={["ifood", "99food", "keeta"]}
+            platforms={platforms}
           />
           <HeroKpis
             monthly={m}
@@ -261,6 +261,7 @@ export default async function UnidadeDetalhePage({
           <DetailTabs
             unit={unit}
             monthlyMerged={m}
+            platforms={platforms}
             usaIfood={usaIfood}
             usa99={usa99}
             usaKeeta={usaKeeta}
@@ -439,6 +440,7 @@ function HeroKpis({
 function DetailTabs({
   unit,
   monthlyMerged,
+  platforms,
   usaIfood,
   usa99,
   usaKeeta,
@@ -449,6 +451,8 @@ function DetailTabs({
 }: {
   unit: Unit
   monthlyMerged: UnitMonthly
+  /** Plataformas habilitadas na loja (unit_platforms.active) — só essas viram chip. */
+  platforms: PlatformId[]
   usaIfood: boolean
   usa99: boolean
   usaKeeta: boolean
@@ -499,7 +503,7 @@ function DetailTabs({
         </Suspense>
       ),
     },
-  ]
+  ].filter((s) => platforms.includes(s.platform))
   const avaliacoesSlots = [
     {
       platform: "ifood" as const,
@@ -528,7 +532,7 @@ function DetailTabs({
         </Suspense>
       ),
     },
-  ]
+  ].filter((s) => platforms.includes(s.platform))
 
   return (
     <Tabs defaultValue="financeiro">

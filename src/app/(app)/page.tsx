@@ -35,7 +35,11 @@ import {
 import { ComposicaoBruto } from "@/components/dashboard/graficos/composicao-bruto-chart"
 import { HeroFaixa, type HeroMetric } from "@/components/dashboard/hero-faixa"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
-import { getVisibleUnits } from "@/lib/data/units"
+import {
+  getVisibleUnits,
+  getTenantPlatforms,
+  isApiSyncEnabled,
+} from "@/lib/data/units"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getOnboardingProgress } from "@/lib/data/onboarding"
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist"
@@ -163,6 +167,12 @@ export default async function Home({
     ? allUnits.filter((u) => unidadesFilter.has(u.code))
     : allUnits
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
+  // Plataformas habilitadas do tenant (só essas na cobertura) + se o sync via
+  // API está ligado (SaaS: só importação manual → sem botões de Sincronizar).
+  const [tenantPlatforms, apiSync] = await Promise.all([
+    getTenantPlatforms(activeUnitIds),
+    isApiSyncEnabled(),
+  ])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
   // nº de lojas filtradas.
@@ -552,20 +562,26 @@ export default async function Home({
 
   // Cobertura por plataforma nos cards: mostra as 3, apagando a que não tem
   // dado no período — dá pra ver num relance se todas entraram.
+  // Só as plataformas HABILITADAS no tenant entram nos logos dos KPIs (loja
+  // só-iFood não mostra 99/Keeta nem apagados).
   const finCobertura: { id: PlatformId; on: boolean }[] = plataformaFilter
     ? [{ id: plataformaFilter, on: true }]
-    : [
-        { id: "ifood", on: unitsWithImported > 0 },
-        { id: "99food", on: unitsWith99 > 0 },
-        { id: "keeta", on: unitsWithKeeta > 0 },
-      ]
+    : (
+        [
+          { id: "ifood", on: unitsWithImported > 0 },
+          { id: "99food", on: unitsWith99 > 0 },
+          { id: "keeta", on: unitsWithKeeta > 0 },
+        ] as { id: PlatformId; on: boolean }[]
+      ).filter((p) => tenantPlatforms.includes(p.id))
   const avalCobertura: { id: PlatformId; on: boolean }[] = plataformaFilter
     ? [{ id: plataformaFilter, on: true }]
-    : [
-        { id: "ifood", on: hasAvaliacoesData },
-        { id: "99food", on: hasAvaliacoes99Data },
-        { id: "keeta", on: hasAvaliacoesKeetaData },
-      ]
+    : (
+        [
+          { id: "ifood", on: hasAvaliacoesData },
+          { id: "99food", on: hasAvaliacoes99Data },
+          { id: "keeta", on: hasAvaliacoesKeetaData },
+        ] as { id: PlatformId; on: boolean }[]
+      ).filter((p) => tenantPlatforms.includes(p.id))
   for (const k of kpis) {
     k.platformCoverage =
       k.label === "Nota Média" ? avalCobertura : finCobertura
@@ -691,6 +707,8 @@ export default async function Home({
           year={year}
           month={month}
           periodLabel={formatPeriodLabel({ year, month })}
+          platformsEnabled={tenantPlatforms}
+          apiSync={apiSync}
         />
       ) : (
         <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">

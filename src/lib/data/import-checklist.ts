@@ -139,6 +139,14 @@ export async function getImportChecklistForMonth(
     linkedByPlatform.get(p)!.add(r.unit_id)
   }
 
+  // Plataformas realmente HABILITADAS no escopo (unit_platforms.active) — só
+  // essas entram no checklist. Loja só-iFood não mostra linhas de 99/Keeta.
+  const enabledPlatforms = new Set<PlatformId>()
+  for (const r of platRows ?? []) {
+    if (allowSet && !allowSet.has(r.unit_id)) continue
+    enabledPlatforms.add(r.platform as PlatformId)
+  }
+
   // Log de importação do mês (só perStore iFood — pequeno e rápido).
   let impQuery = admin
     .from("platform_imports")
@@ -235,10 +243,13 @@ export async function getImportChecklistForMonth(
     }),
   )
 
+  // Só mostra as plataformas habilitadas no escopo.
+  const reportsShown = reports.filter((r) => enabledPlatforms.has(r.platform))
+
   let okCount = 0
   let atrasadoCount = 0
   let faltaCount = 0
-  for (const r of reports) {
+  for (const r of reportsShown) {
     if (r.status === "ok") okCount++
     else if (r.status === "falta") faltaCount++
     else atrasadoCount++ // parcial + atrasado
@@ -248,7 +259,7 @@ export async function getImportChecklistForMonth(
     year,
     month,
     totalUnits: units.length,
-    reports,
+    reports: reportsShown,
     okCount,
     atrasadoCount,
     faltaCount,

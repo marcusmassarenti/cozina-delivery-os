@@ -41,19 +41,27 @@ const PLAT_LABEL: Record<PlatformId, string> = {
  * de frescor (último dia do mês OU ontem, o que for menor) — não comparando as
  * plataformas entre si. Atrasado = dado mais de 2 dias atrás do alvo.
  *
- * Os botões "Sincronizar iFood" e "Sincronizar 99" ficam juntos aqui,
- * liberados pra qualquer usuário que vê o dashboard.
+ * Só aparecem as plataformas HABILITADAS no tenant (`platformsEnabled`). Os
+ * botões "Sincronizar iFood/99" (sync via API) só aparecem quando `apiSync`
+ * está ligado — pra SaaS que só importa manual, ficam ocultos.
  */
 export function ImportCoverageBanner({
   coverage,
   year,
   month,
   periodLabel,
+  platformsEnabled,
+  apiSync = false,
 }: {
   coverage: ImportCoverage
   year: number
   month: number
   periodLabel: string
+  /** Plataformas habilitadas no tenant (união de unit_platforms.active). Se
+   *  omitido, mostra as 3 (compat). */
+  platformsEnabled?: PlatformId[]
+  /** Liga os botões de sync via API (só pra quem tem a integração habilitada). */
+  apiSync?: boolean
 }) {
   // Alvo: menor entre fim do mês e ontem (D-1). "Ontem" é calculado em horário
   // de Brasília — senão, na Vercel (UTC), depois das 21h o D-1 pula um dia.
@@ -74,11 +82,13 @@ export function ImportCoverageBanner({
     return lag !== null && lag > ATRASO_TOLERANCIA_DIAS
   }
 
-  const platforms: { id: PlatformId; cov: PlatformCoverage }[] = [
-    { id: "ifood", cov: coverage.ifood },
-    { id: "99food", cov: coverage.ninefood },
-    { id: "keeta", cov: coverage.keeta },
-  ]
+  const platforms: { id: PlatformId; cov: PlatformCoverage }[] = (
+    [
+      { id: "ifood", cov: coverage.ifood },
+      { id: "99food", cov: coverage.ninefood },
+      { id: "keeta", cov: coverage.keeta },
+    ] as { id: PlatformId; cov: PlatformCoverage }[]
+  ).filter((p) => !platformsEnabled || platformsEnabled.includes(p.id))
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
   const noData = withData.length === 0
   const anyBehind = platforms.some((p) => isBehind(p.cov))
@@ -162,11 +172,18 @@ export function ImportCoverageBanner({
           </Link>
         ) : null}
 
-        {/* Controles de sincronização juntos — liberados pra quem vê o dashboard. */}
-        <div className="ml-auto flex items-center gap-1.5">
-          <SyncIfoodButton />
-          <Ninefood99QuickSync year={year} month={month} />
-        </div>
+        {/* Sync via API — só aparece se o tenant tem a integração habilitada
+            (e por plataforma habilitada). SaaS que só importa manual não vê. */}
+        {apiSync && (
+          <div className="ml-auto flex items-center gap-1.5">
+            {(!platformsEnabled || platformsEnabled.includes("ifood")) && (
+              <SyncIfoodButton />
+            )}
+            {(!platformsEnabled || platformsEnabled.includes("99food")) && (
+              <Ninefood99QuickSync year={year} month={month} />
+            )}
+          </div>
+        )}
       </div>
     </TooltipProvider>
   )

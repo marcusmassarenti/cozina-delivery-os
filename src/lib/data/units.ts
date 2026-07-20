@@ -298,6 +298,47 @@ export async function getDefaultBrand(): Promise<{ id: string; name: string }> {
   return data
 }
 
+/**
+ * Liga o "Sincronizar" via API (iFood/99) pro tenant atual. False = só
+ * importação manual de relatório (padrão do SaaS até habilitarmos a API).
+ */
+export async function isApiSyncEnabled(): Promise<boolean> {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return false
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from("holdings")
+    .select("api_sync_enabled")
+    .eq("id", holdingId)
+    .maybeSingle()
+  return Boolean((data as { api_sync_enabled?: boolean } | null)?.api_sync_enabled)
+}
+
+/**
+ * União das plataformas HABILITADAS (unit_platforms.active) nas unidades dadas
+ * (ou todas). Ordem canônica ifood → 99 → keeta. Usado pra só mostrar no
+ * dashboard/cobertura as plataformas que o tenant realmente usa.
+ */
+export async function getTenantPlatforms(
+  unitIds?: string[],
+): Promise<PlatformId[]> {
+  const supabase = createAdminClient()
+  let q = supabase
+    .from("unit_platforms")
+    .select("platform")
+    .eq("active", true)
+  if (unitIds) {
+    if (unitIds.length === 0) return []
+    q = q.in("unit_id", unitIds)
+  }
+  const { data } = await q
+  const set = new Set<string>()
+  for (const r of data ?? []) set.add((r as { platform: string }).platform)
+  return (["ifood", "99food", "keeta"] as PlatformId[]).filter((p) =>
+    set.has(p),
+  )
+}
+
 //-------- Agregados ---------------------------------------------
 
 export function networkTotalsFromUnits(units: Unit[]) {

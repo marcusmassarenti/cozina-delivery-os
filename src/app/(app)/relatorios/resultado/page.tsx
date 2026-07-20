@@ -20,7 +20,11 @@ import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { getAvailablePeriods, getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
-import { getVisibleUnits } from "@/lib/data/units"
+import {
+  getVisibleUnits,
+  getTenantPlatforms,
+  isApiSyncEnabled,
+} from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getNetworkReportForMonth } from "@/lib/data/relatorio-rede"
@@ -98,6 +102,10 @@ export default async function RelatoriosPage({
         ? undefined // admin/gerente: rede inteira
         : allUnits.map((u) => u.id) // franqueado: só as lojas dele
   const scopedIds = filterIds ?? allUnits.map((u) => u.id)
+  const [tenantPlatforms, apiSync] = await Promise.all([
+    getTenantPlatforms(scopedIds),
+    isApiSyncEnabled(),
+  ])
   const years = [
     ...new Set((await getAvailablePeriods()).map((p) => p.year)),
   ].sort((a, b) => b - a)
@@ -275,6 +283,8 @@ export default async function RelatoriosPage({
           year={refMonth.year}
           month={refMonth.month}
           periodLabel={periodLabel}
+          platformsEnabled={tenantPlatforms}
+          apiSync={apiSync}
         />
       )}
 
