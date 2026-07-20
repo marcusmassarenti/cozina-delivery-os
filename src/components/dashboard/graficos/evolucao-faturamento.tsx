@@ -87,11 +87,14 @@ export async function EvolucaoFaturamento({
   year,
   month,
   metricas,
+  escopo = "da rede",
 }: {
   unitIds: string[]
   year: number
   month: number
   metricas?: string[]
+  /** Genitivo do escopo pro título: "da rede" | "da loja" | "das lojas". */
+  escopo?: string
 }) {
   const periods = Array.from({ length: month }, (_, i) => ({
     year,
@@ -163,7 +166,9 @@ export async function EvolucaoFaturamento({
   return (
     <div className="rounded-xl border bg-card p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold tracking-tight">Evolução da rede</h3>
+        <h3 className="text-sm font-semibold tracking-tight">
+          Evolução {escopo}
+        </h3>
         <p className="text-xs text-muted-foreground">
           Mês a mês em {year}, por plataforma — escolha a métrica
         </p>

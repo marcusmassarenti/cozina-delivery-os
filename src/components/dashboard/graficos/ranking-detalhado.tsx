@@ -110,12 +110,12 @@ export function RankingDetalhado({
   )
 }
 
-function DetalheLoja({
+export function DetalheLoja({
   unit,
-  brandLogoUrl,
+  brandLogoUrl = null,
 }: {
   unit: Unit
-  brandLogoUrl: string | null
+  brandLogoUrl?: string | null
 }) {
   const m = unit.monthly
   const hasData = m.pedidos > 0

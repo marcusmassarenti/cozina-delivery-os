@@ -28,7 +28,10 @@ import {
   EvolucaoFaturamento,
   EvolucaoFaturamentoSkeleton,
 } from "@/components/dashboard/graficos/evolucao-faturamento"
-import { RankingDetalhado } from "@/components/dashboard/graficos/ranking-detalhado"
+import {
+  RankingDetalhado,
+  DetalheLoja,
+} from "@/components/dashboard/graficos/ranking-detalhado"
 import { ComposicaoBruto } from "@/components/dashboard/graficos/composicao-bruto-chart"
 import { HeroFaixa, type HeroMetric } from "@/components/dashboard/hero-faixa"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -177,6 +180,29 @@ export default async function Home({
       ? "sua loja"
       : "suas lojas"
     : "todas as lojas"
+
+  // ── Escopo pros títulos (rede / 1 loja / várias) ──────────────────
+  // 1 loja: SaaS de loja única OU franqueado com 1 unidade. Rede: admin sem
+  // filtro. Várias: admin filtrando N ou franqueado com N lojas.
+  const umaLoja = activeCount === 1
+  const escopoRede = !isScoped && !unidadesFilter
+  // Genitivo pro título da evolução: "da rede" / "da loja" / "das lojas".
+  const daEscopo = escopoRede
+    ? "da rede"
+    : umaLoja
+      ? "da loja"
+      : "das lojas"
+  // Título do painel de atenção. Rede (admin sem filtro) = genérico; senão
+  // possessivo (loja única do SaaS/franqueado, ou seleção do próprio escopo).
+  const tituloAtencao = escopoRede
+    ? "Lojas que precisam de atenção"
+    : umaLoja
+      ? "Sua loja precisa de atenção"
+      : "Suas lojas precisam de atenção"
+  // Título do detalhamento — some o "por unidade" quando é loja única.
+  const tituloDetalhe = umaLoja
+    ? "Detalhamento da loja"
+    : "Detalhamento por Unidade"
   // Sentinela: as network functions tratam [] como "rede inteira". Pro
   // franqueado SEM lojas visíveis, isso vazaria a rede — então mando um ID
   // impossível pra forçar resultado vazio (fail-closed).
@@ -718,6 +744,7 @@ export default async function Home({
               year={year}
               month={month}
               metricas={["faturamento", "ticket", "pedidos"]}
+              escopo={daEscopo}
             />
           </Suspense>
           <ComposicaoBruto
@@ -735,7 +762,7 @@ export default async function Home({
               year={year}
               month={month}
               lojasLabel={lojasNoun}
-              title="Lojas que precisam de atenção"
+              title={tituloAtencao}
             />
           </Suspense>
         </DashboardSection>
@@ -869,8 +896,7 @@ export default async function Home({
                           </div>
                           <div className="mt-3 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
                             <span className="text-xs font-medium text-emerald-900 dark:text-emerald-300">
-                              Conversão{" "}
-                              {unidadesFilter ? "filtrada" : "da rede"}
+                              Conversão {unidadesFilter ? "filtrada" : daEscopo}
                             </span>
                             <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
                               {fmtPct(networkFunnel.totals.conversaoPct)}
@@ -1293,15 +1319,22 @@ export default async function Home({
           <DashboardSection id="unidades">
             <SectionDivider
               number={hasAvaliacoesData ? 5 : 4}
-              label="Detalhamento por Unidade"
+              label={tituloDetalhe}
             />
-            {/* Ranking clicável que já carrega o detalhe da loja selecionada —
-                cobre o detalhamento sem a tabela gigante ocupar a home. */}
+            {/* 1 loja: ranking não faz sentido → mostra o detalhe direto. Várias:
+                ranking clicável que já carrega o detalhe da loja selecionada. */}
             <div data-tour="db-lojas">
-              <RankingDetalhado
-                units={unitsToShow}
-                brandLogoUrl={brandLogoUrl}
-              />
+              {umaLoja && unitsToShow[0] ? (
+                <DetalheLoja
+                  unit={unitsToShow[0]}
+                  brandLogoUrl={brandLogoUrl}
+                />
+              ) : (
+                <RankingDetalhado
+                  units={unitsToShow}
+                  brandLogoUrl={brandLogoUrl}
+                />
+              )}
             </div>
           </DashboardSection>
         </>
