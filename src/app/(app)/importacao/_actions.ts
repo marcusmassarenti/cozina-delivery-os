@@ -3717,7 +3717,24 @@ export async function createUnitAndImport(
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   revalidatePath("/")
-  return { ok: result.ok, result }
+
+  // A UNIDADE já foi criada + vinculada acima — o objetivo do modal terminou.
+  // Se a loja AINDA volta unmapped, algo deu errado no vínculo (raro) → erro.
+  // Senão, mesmo que o import do arquivo falhe por conteúdo, FECHA o modal e
+  // manda o result pro histórico (não prende o usuário em loop).
+  if (result.unmapped) {
+    return {
+      ok: false,
+      message: `Unidade criada, mas a loja ${storeId} ainda não foi reconhecida. Recarregue a página e tente de novo.`,
+      result,
+    }
+  }
+  if (!result.ok) {
+    console.warn(
+      `createUnitAndImport: unidade criada, mas import do arquivo não concluiu (loja ${storeId}): ${result.message ?? "sem detalhe"}`,
+    )
+  }
+  return { ok: true, result }
   } catch (e) {
     console.error("createUnitAndImport falhou:", e)
     return {
@@ -3927,22 +3944,27 @@ export async function linkUnitAndImport(
   revalidatePath("/unidades")
   revalidatePath("/")
 
-  // O VÍNCULO já foi salvo acima. Se o reprocesso do arquivo não concluiu
-  // (erro ao gravar OU não bateu com o vínculo), NÃO deixa o diálogo congelado
-  // sem feedback: devolve o motivo. Assim o usuário vê o que aconteceu e sabe
-  // que o vínculo persistiu (pode clicar "Atualizar" pra reimportar).
-  if (!result.ok) {
+  // O VÍNCULO já foi salvo acima — a "loja desconhecida" ESTÁ resolvida. O
+  // objetivo do modal terminou aqui. Se a loja AINDA volta unmapped, aí sim o
+  // vínculo não pegou (raro) → mantém erro pra não fechar num estado errado.
+  if (result.unmapped) {
     console.error(
-      `linkUnitAndImport: vínculo salvo mas reprocesso falhou (loja ${storeId}):`,
-      result.message ?? (result.unmapped ? "voltou unmapped" : "sem detalhe"),
+      `linkUnitAndImport: vínculo salvo mas loja ${storeId} voltou unmapped.`,
     )
     return {
       ok: false,
-      message:
-        result.message ??
-        `Vínculo salvo, mas não deu pra importar o arquivo agora (loja ${storeId}). Clique em "Atualizar" pra reimportar, ou reenvie o arquivo.`,
+      message: `Vínculo salvo, mas a loja ${storeId} ainda não foi reconhecida. Recarregue a página e tente de novo.`,
       result,
     }
+  }
+  // Se o import do arquivo falhou por CONTEÚDO (ex.: "nenhum pedido válido"),
+  // o vínculo já resolveu a loja desconhecida → FECHA o modal e manda o
+  // resultado pro histórico (não prende o usuário em loop). ok=true = "modal
+  // resolvido"; o result.ok/message mostra como o arquivo entrou.
+  if (!result.ok) {
+    console.warn(
+      `linkUnitAndImport: vínculo OK, mas import do arquivo não concluiu (loja ${storeId}): ${result.message ?? "sem detalhe"}`,
+    )
   }
   return { ok: true, result }
   } catch (e) {
