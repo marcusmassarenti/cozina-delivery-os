@@ -71,6 +71,23 @@ export function parseFinanceiroRows(
   if (!storeId) {
     throw new Error("Coluna 'loja_id_curto' vazia — não conseguiu identificar a loja")
   }
+
+  // Guarda contra extrato CONSOLIDADO (rede inteira num arquivo só). O
+  // financeiro do iFood é sempre por loja; se o arquivo mistura lojas, o
+  // pipeline (que usa a 1ª linha como header) jogaria TODAS as linhas numa
+  // unidade só — inflando essa loja com o faturamento da rede. Barra na hora.
+  const storesNoArquivo = new Set(
+    rows
+      .map((r) =>
+        String(r["loja_id_curto"] ?? r["loja_id_externo"] ?? "").trim(),
+      )
+      .filter(Boolean),
+  )
+  if (storesNoArquivo.size > 1) {
+    throw new Error(
+      `Este arquivo tem ${storesNoArquivo.size} lojas diferentes — parece o extrato consolidado da rede, não o de uma loja. Baixe e importe o extrato financeiro de cada loja separadamente.`,
+    )
+  }
   const storeCnpj = toStringOrNull(first["cnpj"])
   const competenciaRaw = String(first["competencia"] ?? "").trim()
   if (!competenciaRaw) {
