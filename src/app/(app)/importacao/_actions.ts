@@ -6,6 +6,7 @@ import * as XLSX from "xlsx"
 
 import { requireModulePermission } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getDefaultBrand } from "@/lib/data/units"
 import { parseIfoodReport } from "@/lib/import/ifood"
 import type {
   ParsedAvaliacoes,
@@ -3624,21 +3625,24 @@ export async function createUnitAndImport(
     }
   }
 
-  // Pega marca padrão
-  const { data: brand, error: bErr } = await admin
-    .from("brands")
-    .select("id")
-    .eq("slug", "churrasco-no-pote")
-    .maybeSingle()
-  if (bErr || !brand) {
+  // Marca padrão MULTI-TENANT: a 1ª marca da holding do usuário logado (não
+  // fixa Churrasco no Pote) — senão cria na empresa errada e some pro cliente.
+  let brand: { id: string }
+  try {
+    brand = await getDefaultBrand()
+  } catch (e) {
     return {
       ok: false,
-      message: "Marca padrão não encontrada — rodou as migrations iniciais?",
+      message: e instanceof Error ? e.message : "Marca não encontrada.",
     }
   }
 
-  // Gera próximo código numérico
-  const { data: allCodes } = await admin.from("units").select("code")
+  // Gera próximo código numérico ESCOPADO À MARCA (código é unique por brand;
+  // cada empresa começa no #01, não herda o maior da plataforma inteira).
+  const { data: allCodes } = await admin
+    .from("units")
+    .select("code")
+    .eq("brand_id", brand.id)
   let max = 0
   for (const row of allCodes ?? []) {
     const n = parseInt(row.code, 10)
