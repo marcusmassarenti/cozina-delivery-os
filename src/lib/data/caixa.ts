@@ -71,6 +71,16 @@ export type FinAccount = {
   stats?: { pagas: number; aPagar: number; recebidas: number; aReceber: number; count: number }
 }
 
+export type DreGroup =
+  | "receita"
+  | "deducao"
+  | "cmv"
+  | "cmo"
+  | "fixa"
+  | "variavel"
+  | "investimento"
+export type Natureza = "fixo" | "variavel"
+
 export type FinCategory = {
   id: string
   name: string
@@ -79,6 +89,8 @@ export type FinCategory = {
   icon: string | null
   color: string | null
   sortOrder: number
+  dreGroup: DreGroup | null
+  natureza: Natureza | null
   children: FinCategory[]
 }
 
@@ -291,7 +303,7 @@ export async function getCategories(holdingId: string): Promise<FinCategory[]> {
   const admin = createAdminClient()
   const { data } = await admin
     .from("fin_categories")
-    .select("id, name, parent_id, kind, icon, color, sort_order")
+    .select("id, name, parent_id, kind, icon, color, sort_order, dre_group, natureza")
     .eq("holding_id", holdingId)
     .order("sort_order")
     .order("name")
@@ -303,6 +315,8 @@ export async function getCategories(holdingId: string): Promise<FinCategory[]> {
     icon: r.icon ?? null,
     color: r.color ?? null,
     sortOrder: r.sort_order ?? 0,
+    dreGroup: (r.dre_group as DreGroup | null) ?? null,
+    natureza: (r.natureza as Natureza | null) ?? null,
     children: [],
   }))
   const byId = new Map(flat.map((c) => [c.id, c]))

@@ -122,6 +122,8 @@ export async function saveCategory(formData: FormData): Promise<ActionState> {
       kind: String(formData.get("kind") ?? "despesa"),
       icon: txt(formData.get("icon")),
       color: txt(formData.get("color")),
+      dre_group: txt(formData.get("dre_group")),
+      natureza: txt(formData.get("natureza")),
     }
     if (!row.name) return { ok: false, message: "Dê um nome à categoria." }
     if (id) {
@@ -631,26 +633,42 @@ export async function uploadLogo(
 }
 
 // ──────────────────── Seed de categorias padrão (restaurante) ────────────────
+// Já classificadas por grupo de DRE (dre) e natureza (nat: fixo/variável) — é o
+// que destrava DRE gerencial, margem de contribuição e ponto de equilíbrio.
 const DEFAULTS: {
   name: string
   kind: "despesa" | "receita"
   icon: string
+  dre: "receita" | "deducao" | "cmv" | "cmo" | "fixa" | "variavel" | "investimento"
+  nat: "fixo" | "variavel"
   subs?: string[]
 }[] = [
-  { name: "Aluguel", kind: "despesa", icon: "Home" },
-  { name: "Impostos", kind: "despesa", icon: "Landmark" },
-  { name: "Fornecedores", kind: "despesa", icon: "Truck", subs: ["Carnes", "Bebidas", "Embalagens", "Hortifruti", "Mercearia"] },
-  { name: "Folha de Pagamento", kind: "despesa", icon: "Users" },
-  { name: "Energia", kind: "despesa", icon: "Zap" },
-  { name: "Água", kind: "despesa", icon: "Droplet" },
-  { name: "Internet / Telefone", kind: "despesa", icon: "Wifi" },
-  { name: "Marketing", kind: "despesa", icon: "Megaphone" },
-  { name: "Taxas de Delivery", kind: "despesa", icon: "Bike" },
-  { name: "Manutenção", kind: "despesa", icon: "Wrench" },
-  { name: "Outras Despesas", kind: "despesa", icon: "MoreHorizontal" },
-  { name: "Delivery", kind: "receita", icon: "Bike", subs: ["iFood", "99 Food", "Keeta"] },
-  { name: "Salão / Balcão", kind: "receita", icon: "Store" },
-  { name: "Outras Receitas", kind: "receita", icon: "Plus" },
+  // Receita
+  { name: "Delivery", kind: "receita", icon: "Bike", dre: "receita", nat: "variavel", subs: ["iFood", "99 Food", "Keeta"] },
+  { name: "Salão / Balcão", kind: "receita", icon: "Store", dre: "receita", nat: "variavel" },
+  { name: "Outras Receitas", kind: "receita", icon: "Plus", dre: "receita", nat: "variavel" },
+  // Deduções da receita (variáveis)
+  { name: "Taxas de Delivery", kind: "despesa", icon: "Bike", dre: "deducao", nat: "variavel", subs: ["Comissão marketplace", "Taxa de entrega", "Antecipação de recebíveis"] },
+  { name: "Taxas de Cartão / Maquininha", kind: "despesa", icon: "CreditCard", dre: "deducao", nat: "variavel" },
+  { name: "Impostos sobre Venda (Simples / DAS)", kind: "despesa", icon: "Landmark", dre: "deducao", nat: "variavel" },
+  // CMV — custo de mercadoria (variável)
+  { name: "Insumos / CMV", kind: "despesa", icon: "Truck", dre: "cmv", nat: "variavel", subs: ["Carnes", "Bebidas", "Hortifruti", "Mercearia", "Embalagens / Descartáveis", "Gás (GLP)"] },
+  // CMO — mão de obra
+  { name: "Folha de Pagamento", kind: "despesa", icon: "Users", dre: "cmo", nat: "fixo", subs: ["Salários", "Encargos (INSS/FGTS)", "VT / VR", "Freelas / Extras"] },
+  { name: "Pró-labore / Retirada", kind: "despesa", icon: "UserCog", dre: "cmo", nat: "fixo" },
+  // Despesas fixas / ocupação
+  { name: "Aluguel", kind: "despesa", icon: "Home", dre: "fixa", nat: "fixo", subs: ["Condomínio", "IPTU", "Seguro"] },
+  { name: "Energia", kind: "despesa", icon: "Zap", dre: "fixa", nat: "fixo" },
+  { name: "Água", kind: "despesa", icon: "Droplet", dre: "fixa", nat: "fixo" },
+  { name: "Internet / Telefone", kind: "despesa", icon: "Wifi", dre: "fixa", nat: "fixo" },
+  { name: "Software / Sistemas (PDV)", kind: "despesa", icon: "MonitorSmartphone", dre: "fixa", nat: "fixo" },
+  { name: "Contador", kind: "despesa", icon: "Calculator", dre: "fixa", nat: "fixo" },
+  { name: "Taxas Bancárias", kind: "despesa", icon: "Landmark", dre: "fixa", nat: "fixo" },
+  { name: "Marketing", kind: "despesa", icon: "Megaphone", dre: "fixa", nat: "fixo" },
+  { name: "Manutenção", kind: "despesa", icon: "Wrench", dre: "fixa", nat: "fixo" },
+  { name: "Outras Despesas", kind: "despesa", icon: "MoreHorizontal", dre: "variavel", nat: "variavel" },
+  // Investimentos (não-operacional)
+  { name: "Investimentos / Equipamentos", kind: "despesa", icon: "Hammer", dre: "investimento", nat: "fixo" },
 ]
 
 export async function seedDefaultCategories(): Promise<ActionState> {
@@ -666,7 +684,15 @@ export async function seedDefaultCategories(): Promise<ActionState> {
     for (const c of DEFAULTS) {
       const { data: parent, error } = await admin
         .from("fin_categories")
-        .insert({ holding_id: holdingId, name: c.name, kind: c.kind, icon: c.icon, sort_order: order++ })
+        .insert({
+          holding_id: holdingId,
+          name: c.name,
+          kind: c.kind,
+          icon: c.icon,
+          dre_group: c.dre,
+          natureza: c.nat,
+          sort_order: order++,
+        })
         .select("id")
         .single()
       if (error) return { ok: false, message: error.message }
@@ -679,6 +705,8 @@ export async function seedDefaultCategories(): Promise<ActionState> {
             kind: c.kind,
             parent_id: parent.id,
             icon: c.icon,
+            dre_group: c.dre,
+            natureza: c.nat,
             sort_order: so++,
           })),
         )

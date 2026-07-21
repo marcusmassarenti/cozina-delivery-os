@@ -1,5 +1,6 @@
 import {
   Building2,
+  BarChart3,
   Cable,
   CalendarRange,
   ClipboardList,
@@ -132,6 +133,13 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "A pagar & receber",
         href: "/caixa/aging",
         icon: Scale,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
+        label: "DRE Gerencial",
+        href: "/caixa/dre",
+        icon: BarChart3,
         module: "financeiro",
         proOnly: true,
       },

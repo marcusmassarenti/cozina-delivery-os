@@ -2,15 +2,35 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Plus, Sparkles, Trash2, X } from "lucide-react"
+import { Loader2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react"
 
-import type { FinCategory } from "@/lib/data/caixa"
+import type { DreGroup, FinCategory } from "@/lib/data/caixa"
 
 import { deleteCategory, saveCategory, seedDefaultCategories } from "../_actions"
 import { FIN_ICON_NAMES, FinIcon } from "./fin-icon"
 
+const DRE_LABELS: Record<DreGroup, string> = {
+  receita: "Receita",
+  deducao: "Dedução (taxas/impostos)",
+  cmv: "CMV (insumos)",
+  cmo: "Mão de obra",
+  fixa: "Despesa fixa",
+  variavel: "Despesa variável",
+  investimento: "Investimento",
+}
+const DRE_SHORT: Record<DreGroup, string> = {
+  receita: "Receita",
+  deducao: "Dedução",
+  cmv: "CMV",
+  cmo: "Mão de obra",
+  fixa: "Fixa",
+  variavel: "Variável",
+  investimento: "Investimento",
+}
+
 export function CategoriaManager({ categories }: { categories: FinCategory[] }) {
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<FinCategory | null>(null)
   const [kindTab, setKindTab] = useState<"despesa" | "receita">("despesa")
   const [icon, setIcon] = useState("Tag")
   const [color, setColor] = useState(CORES[0])
@@ -19,8 +39,16 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
   const router = useRouter()
 
   function abrirNova() {
+    setEditing(null)
     setIcon("Tag")
     setColor(CORES[0])
+    setError(null)
+    setOpen(true)
+  }
+  function abrirEditar(c: FinCategory) {
+    setEditing(c)
+    setIcon(c.icon ?? "Tag")
+    setColor(c.color ?? CORES[0])
     setError(null)
     setOpen(true)
   }
@@ -73,7 +101,7 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed bg-accent/40 py-5 text-sm font-medium hover:bg-accent disabled:opacity-50"
         >
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-          Criar categorias padrão de restaurante
+          Criar plano de contas padrão de restaurante
         </button>
       )}
 
@@ -82,15 +110,26 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
           <div key={p.id} className="rounded-xl border bg-card p-3 shadow-sm">
             <div className="flex items-center gap-2">
               <div
-                className={`flex size-8 items-center justify-center rounded-lg ${
-                  p.kind === "despesa"
-                    ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40"
-                    : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40"
-                }`}
+                className="flex size-8 items-center justify-center rounded-lg"
+                style={{
+                  backgroundColor: p.color ? `${p.color}22` : undefined,
+                  color: p.color ?? undefined,
+                }}
               >
                 <FinIcon name={p.icon} className="size-4" />
               </div>
-              <span className="flex-1 font-medium">{p.name}</span>
+              <div className="flex-1">
+                <span className="font-medium">{p.name}</span>
+                {p.dreGroup && (
+                  <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {DRE_SHORT[p.dreGroup]}
+                    {p.natureza ? ` · ${p.natureza === "fixo" ? "fixo" : "var"}` : ""}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => abrirEditar(p)} className="rounded p-1 hover:bg-accent">
+                <Pencil className="size-3.5 text-muted-foreground" />
+              </button>
               <button onClick={() => confirm("Excluir categoria e subcategorias?") && run(() => deleteCategory(p.id))} className="rounded p-1 hover:bg-accent">
                 <Trash2 className="size-3.5 text-muted-foreground" />
               </button>
@@ -101,6 +140,9 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
                   <div key={c.id} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <FinIcon name={c.icon} className="size-3.5" />
                     <span className="flex-1">{c.name}</span>
+                    <button onClick={() => abrirEditar(c)} className="rounded p-1 hover:bg-accent">
+                      <Pencil className="size-3 text-muted-foreground" />
+                    </button>
                     <button onClick={() => confirm("Excluir subcategoria?") && run(() => deleteCategory(c.id))} className="rounded p-1 hover:bg-accent">
                       <Trash2 className="size-3 text-muted-foreground" />
                     </button>
@@ -121,36 +163,61 @@ export function CategoriaManager({ categories }: { categories: FinCategory[] }) 
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-xl border bg-card p-5 shadow-xl">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Nova categoria</h2>
+              <h2 className="text-base font-semibold">{editing ? "Editar categoria" : "Nova categoria"}</h2>
               <button onClick={() => setOpen(false)} className="rounded p-1 hover:bg-accent">
                 <X className="size-4" />
               </button>
             </div>
             <form
+              key={editing?.id ?? "new"}
               onSubmit={(e) => {
                 e.preventDefault()
                 run(() => saveCategory(new FormData(e.currentTarget)), e.currentTarget)
               }}
               className="space-y-3"
             >
+              {editing && <input type="hidden" name="id" value={editing.id} />}
               <Field label="Nome">
-                <input name="name" required placeholder="Ex: Aluguel" className={inputCls} />
+                <input name="name" required defaultValue={editing?.name} placeholder="Ex: Aluguel" className={inputCls} />
               </Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Tipo">
-                  <select name="kind" defaultValue={kindTab} className={inputCls}>
+                  <select name="kind" defaultValue={editing?.kind ?? kindTab} className={inputCls}>
                     <option value="despesa">Despesa</option>
                     <option value="receita">Receita</option>
                   </select>
                 </Field>
                 <Field label="Subcategoria de (opcional)">
-                  <select name="parent_id" defaultValue="" className={inputCls}>
+                  <select name="parent_id" defaultValue={editing?.parentId ?? ""} className={inputCls}>
                     <option value="">— principal</option>
-                    {parents.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
+                    {parents
+                      .filter((p) => p.id !== editing?.id)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+              </div>
+
+              {/* Classificação DRE */}
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Grupo no DRE">
+                  <select name="dre_group" defaultValue={editing?.dreGroup ?? ""} className={inputCls}>
+                    <option value="">— não classificado</option>
+                    {(Object.keys(DRE_LABELS) as DreGroup[]).map((g) => (
+                      <option key={g} value={g}>
+                        {DRE_LABELS[g]}
                       </option>
                     ))}
+                  </select>
+                </Field>
+                <Field label="Natureza">
+                  <select name="natureza" defaultValue={editing?.natureza ?? ""} className={inputCls}>
+                    <option value="">—</option>
+                    <option value="fixo">Fixo</option>
+                    <option value="variavel">Variável</option>
                   </select>
                 </Field>
               </div>
