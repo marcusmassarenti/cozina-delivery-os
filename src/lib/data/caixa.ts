@@ -557,6 +557,8 @@ export type CaixaDashboard = {
   proximosRecebimentos: FinEntry[]
   maioresGastos: CategoryTotal[]
   maioresReceitas: CategoryTotal[]
+  /** Todas as categorias de despesa ordenadas — pra Curva ABC. */
+  gastosAbc: CategoryTotal[]
   ultimosLancamentos: FinEntry[]
 }
 
@@ -650,7 +652,7 @@ export async function getCaixaDashboard(
       gastoCat.set(e.categoryId ?? "—", (gastoCat.get(e.categoryId ?? "—") ?? 0) + e.value)
     }
   }
-  const toCatTotals = (m: Map<string, number>): CategoryTotal[] =>
+  const toCatTotals = (m: Map<string, number>, limit = 5): CategoryTotal[] =>
     [...m.entries()]
       .map(([cid, total]) => {
         const c = cid === "—" ? null : catById.get(cid)
@@ -662,7 +664,7 @@ export async function getCaixaDashboard(
         }
       })
       .sort((a, b) => b.total - a.total)
-      .slice(0, 5)
+      .slice(0, limit)
 
   const cartoes = accounts
     .filter((a) => a.kind === "cartao")
@@ -694,6 +696,7 @@ export async function getCaixaDashboard(
     proximosRecebimentos,
     maioresGastos: toCatTotals(gastoCat),
     maioresReceitas: toCatTotals(receitaCat),
+    gastosAbc: toCatTotals(gastoCat, 999),
     ultimosLancamentos: periodCash.slice(0, 8),
   }
 }

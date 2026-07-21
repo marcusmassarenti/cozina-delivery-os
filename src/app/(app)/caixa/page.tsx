@@ -246,9 +246,9 @@ export default async function VisaoGeralPage({
         />
       </div>
 
-      {/* Maiores gastos / receitas */}
+      {/* Curva ABC de despesas / maiores receitas */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <BarsCard title="Maiores gastos do mês" items={dash.maioresGastos} tone="neg" />
+        <AbcCard items={dash.gastosAbc} />
         <BarsCard title="Maiores receitas do mês" items={dash.maioresReceitas} tone="pos" />
       </div>
 
@@ -473,6 +473,62 @@ function BarsCard({ title, items, tone }: { title: string; items: CategoryTotal[
       )}
     </div>
   )
+}
+
+/** Curva ABC de despesas: categorias ordenadas + % acumulado + classe A/B/C.
+ *  A = até 80% do gasto (o que mais pesa), B = 80–95%, C = cauda. */
+function AbcCard({ items }: { items: CategoryTotal[] }) {
+  const total = items.reduce((s, i) => s + i.total, 0)
+  let acc = 0
+  const linhas = items.map((i) => {
+    acc += i.total
+    const accPct = total > 0 ? (acc / total) * 100 : 0
+    const classe = accPct <= 80 ? "A" : accPct <= 95 ? "B" : "C"
+    return { ...i, accPct, sharePct: total > 0 ? (i.total / total) * 100 : 0, classe }
+  })
+  const classeCls: Record<string, string> = {
+    A: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+    B: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    C: "bg-muted text-muted-foreground",
+  }
+  const nA = linhas.filter((l) => l.classe === "A").length
+  return (
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <ArrowDownRight className="size-4" /> Curva ABC de despesas
+        </h3>
+        {nA > 0 && (
+          <span className="text-[11px] text-muted-foreground">
+            {nA} categoria{nA !== 1 ? "s" : ""} = 80% do gasto
+          </span>
+        )}
+      </div>
+      {linhas.length === 0 ? (
+        <Empty>Sem despesas neste período.</Empty>
+      ) : (
+        <div className="space-y-2">
+          {linhas.slice(0, 12).map((l) => (
+            <div key={l.categoryId ?? l.name} className="flex items-center gap-2 text-sm">
+              <span className={`flex size-5 shrink-0 items-center justify-center rounded text-[10px] font-bold ${classeCls[l.classe]}`}>
+                {l.classe}
+              </span>
+              <FinIcon name={l.icon} className="size-3.5 text-muted-foreground" />
+              <span className="flex-1 truncate">{l.name}</span>
+              <span className="w-10 text-right text-[11px] tabular-nums text-muted-foreground">
+                {fmtPctInt(l.sharePct)}
+              </span>
+              <span className="w-24 text-right font-semibold tabular-nums text-rose-600">{fmtBRL(l.total)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function fmtPctInt(n: number): string {
+  return `${Math.round(n)}%`
 }
 
 function TopCard({ title, items, tone }: { title: string; items: TitularTotal[]; tone: "pos" | "neg" }) {
