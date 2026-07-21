@@ -37,6 +37,40 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.1",
+    date: "2026-07-21",
+    tag: "Correções",
+    title: "Cancelamentos do 99 Food: perda real e motivo em português",
+    summary:
+      "O card de cancelamentos do 99 mostrava perda R$ 0,00 e escondia a maioria dos casos. Agora mostra o valor de verdade que você deixou de faturar, em português.",
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "correcao",
+            title: "A perda do 99 aparecia zerada",
+            desc: "Pedido cancelado no 99 vem com a receita zerada (a venda não aconteceu), e era esse campo que somávamos. Agora usamos o valor original do pedido — o que você de fato deixou de faturar.",
+            antes: "Perda no mês: R$ 0,00",
+            depois: "Perda no mês: −R$ 1.298,93 (julho, rede)",
+          },
+          {
+            kind: "correcao",
+            title: "A maioria dos cancelamentos não aparecia",
+            desc: "O ranking agrupava só por motivo, e o 99 só preenche motivo quando o cancelamento é do comerciante. Todo o resto sumia da lista. Agora, sem motivo, entra a parte responsável.",
+            antes: "7 cancelamentos no ranking",
+            depois: "18 cancelamentos no ranking",
+          },
+          {
+            kind: "melhoria",
+            title: "Motivo de cancelamento em português",
+            desc: "Os códigos crus do 99 viraram texto legível: “B/P/C/D duty” agora é Loja, Plataforma, Cliente ou Entregador, e motivos como “Shop-Item sold out” viraram “Item esgotado”.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-07-18",
     tag: "Melhorias",

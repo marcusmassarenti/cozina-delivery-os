@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
+import { cancelamentoRankingLabel } from "@/lib/ninefood/cancelamento"
 
 /**
  * Pagina uma query do Supabase via .range() em loop. O hard-cap de 1000
@@ -1093,13 +1094,20 @@ export async function getNetworkNinefoodTopItemsForMonth(
 
 /**
  * O 99 Food não tem códigos numéricos como o iFood (411, 412). O motivo
- * vem como texto livre em `motivos_cancelamento_comerciante`. Normalizamos
- * pra agrupar variações comuns (lowercase + trim).
+ * vem como texto livre em inglês em `motivos_cancelamento_comerciante` e só
+ * é preenchido quando o cancelamento é do comerciante — na maioria dos casos
+ * a única pista é a parte responsável ("B/P/C/D duty"). Traduzimos os dois
+ * pro pt-BR e agrupamos pelo rótulo final (lowercase + trim).
  */
 export type NinefoodCancelamentoMotivo = {
   motivo: string
   pedidos: number
-  /** No 99 não temos perda direta — somamos o `receita_vendas` quando vier */
+  /**
+   * Valor do pedido que se perdeu. No 99 o `receita_vendas` do pedido
+   * cancelado vem zerado (a venda não aconteceu), então o que representa a
+   * perda é o `preco_original_item` — o valor do pedido antes de cair.
+   * Usamos `receita_vendas` só quando ela vier preenchida.
+   */
   perdaFinanceira: number
 }
 
@@ -1120,11 +1128,12 @@ export async function getNetworkNinefoodCancelamentosForMonth(
     motivos_cancelamento_comerciante: string | null
     parte_responsavel_cancelamento: string | null
     receita_vendas: number | string | null
+    preco_original_item: number | string | null
   }>((from, to) => {
     let q = admin
       .from("ninefood_pedidos")
       .select(
-        "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, receita_vendas",
+        "motivos_cancelamento_comerciante, parte_responsavel_cancelamento, receita_vendas, preco_original_item",
       )
       .not("horario_cancelamento", "is", null)
       .gte("horario_pedido", startIso)
@@ -1138,19 +1147,26 @@ export async function getNetworkNinefoodCancelamentosForMonth(
 
   const acc = new Map<string, NinefoodCancelamentoMotivo>()
   for (const r of data ?? []) {
-    const raw = r.motivos_cancelamento_comerciante
-      ? String(r.motivos_cancelamento_comerciante).trim()
-      : ""
-    if (!raw) continue
+    // Traduz pro pt-BR e, quando a 99 não manda motivo (maioria dos casos),
+    // cai na parte responsável ("B duty" → "Loja"). Só fica de fora quem não
+    // tem nem motivo nem responsável.
+    const label = cancelamentoRankingLabel(
+      r.motivos_cancelamento_comerciante,
+      r.parte_responsavel_cancelamento,
+    )
+    if (!label) continue
     // Normaliza pra agrupar variações
-    const key = raw.toLowerCase()
+    const key = label.toLowerCase()
     const cur = acc.get(key) ?? {
-      motivo: raw, // mantém a 1ª capitalização vista
+      motivo: label,
       pedidos: 0,
       perdaFinanceira: 0,
     }
     cur.pedidos += 1
-    cur.perdaFinanceira += Number(r.receita_vendas ?? 0)
+    // Pedido cancelado costuma vir com receita zerada — nesse caso a perda é
+    // o valor original do pedido.
+    const receita = Number(r.receita_vendas ?? 0)
+    cur.perdaFinanceira += receita || Number(r.preco_original_item ?? 0)
     acc.set(key, cur)
   }
   return Array.from(acc.values())
