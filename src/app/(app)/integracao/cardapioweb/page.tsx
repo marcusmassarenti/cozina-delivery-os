@@ -1,9 +1,11 @@
 import Link from "next/link"
-import { ArrowLeft, Store, Utensils } from "lucide-react"
+import { ArrowLeft, Cake, Store, Utensils, Wallet } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getResumoClientes } from "@/lib/cardapioweb/clientes"
 import { fmtBRL, fmtNum } from "@/lib/format"
 
+import { ClientesButton } from "./_components/clientes-button"
 import { SyncButton } from "./_components/sync-button"
 
 export const dynamic = "force-dynamic"
@@ -26,6 +28,9 @@ type StateRow = {
   backfill_concluido: boolean
   ultimo_run_at: string | null
   ultimo_erro: string | null
+  clientes_pagina: number
+  clientes_total: number | null
+  clientes_ultima_volta: string | null
 }
 
 async function carregar() {
@@ -41,7 +46,7 @@ async function carregar() {
     admin
       .from("cardapioweb_sync_state")
       .select(
-        "install_id, backfill_cursor, backfill_concluido, ultimo_run_at, ultimo_erro",
+        "install_id, backfill_cursor, backfill_concluido, ultimo_run_at, ultimo_erro, clientes_pagina, clientes_total, clientes_ultima_volta",
       ),
   ])
 
@@ -77,6 +82,7 @@ async function carregar() {
         pedidos: tot.count ?? 0,
         detalhados: det.count ?? 0,
         faturamento: soma,
+        clientes: await getResumoClientes(i.id),
       }
     }),
   )
@@ -234,6 +240,57 @@ export default async function CardapioWebPage() {
                   </div>
                 )}
 
+                {/* Clientes — dado que nenhuma outra plataforma nossa dá */}
+                <div className="mt-4 rounded-lg border bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Base de clientes
+                      </h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {st?.clientes_total
+                          ? `${fmtNum(st.clientes_total)} no Cardápio Web`
+                          : "ainda não varrida"}
+                        {st?.clientes_ultima_volta
+                          ? " · cadastro atualizado"
+                          : st && st.clientes_pagina > 1
+                            ? ` · varredura na página ${st.clientes_pagina}`
+                            : ""}
+                      </p>
+                    </div>
+                    <ClientesButton installId={i.id} />
+                  </div>
+
+                  {s && s.clientes.total > 0 && (
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      <Mini label="Cadastrados" valor={fmtNum(s.clientes.total)} />
+                      <Mini
+                        label="Novos no mês"
+                        valor={fmtNum(s.clientes.novosNoMes)}
+                      />
+                      <Mini
+                        label="Com cashback"
+                        valor={fmtNum(s.clientes.comCashback)}
+                        icone={<Wallet className="size-3" />}
+                      />
+                      <Mini
+                        label="Cashback parado"
+                        valor={fmtBRL(s.clientes.saldoCashback)}
+                        destaque
+                      />
+                      <Mini
+                        label="Com pontos"
+                        valor={fmtNum(s.clientes.comPontos)}
+                      />
+                      <Mini
+                        label="Aniversário no mês"
+                        valor={fmtNum(s.clientes.aniversariantesMes)}
+                        icone={<Cake className="size-3" />}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 {st?.ultimo_erro && (
                   <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
                     Último erro: {st.ultimo_erro}
@@ -285,6 +342,35 @@ export default async function CardapioWebPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Métrica compacta do bloco de clientes. */
+function Mini({
+  label,
+  valor,
+  icone,
+  destaque,
+}: {
+  label: string
+  valor: string
+  icone?: React.ReactNode
+  destaque?: boolean
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {icone}
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 text-sm font-bold tabular-nums ${
+          destaque ? "text-emerald-700 dark:text-emerald-400" : ""
+        }`}
+      >
+        {valor}
+      </p>
     </div>
   )
 }
