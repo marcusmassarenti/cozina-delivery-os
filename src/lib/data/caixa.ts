@@ -341,6 +341,8 @@ export type EntryFilters = {
   loja?: Loja
   /** só pendentes já vencidos (paid_date null e due_date < hoje) — em aberto */
   openOverdue?: boolean
+  /** todos os pendentes (paid_date null), sem filtro de mês — pra aging */
+  pendingOnly?: boolean
 }
 
 export async function getEntries(
@@ -358,6 +360,7 @@ export async function getEntries(
   if (filters.categoryId) q = q.eq("category_id", filters.categoryId)
   if (filters.search) q = q.ilike("description", `%${filters.search}%`)
   if (filters.openOverdue) q = q.is("paid_date", null).lt("due_date", todayISO())
+  if (filters.pendingOnly) q = q.is("paid_date", null)
   q = q.order("due_date", { ascending: false }).order("created_at", { ascending: false })
 
   const { data } = await q
