@@ -14,9 +14,11 @@
  *  - Em caso de erro descompactando, devolve o .zip original na lista
  *    pra o processador retornar mensagem de erro amigável.
  */
-import "server-only"
-
-import JSZip from "jszip"
+// Sem "server-only" de propósito: o CLIENTE também precisa expandir o zip.
+// Se só o servidor expandisse, a lista de arquivos do navegador continuaria
+// com o .zip e os resultados viriam com os nomes internos — aí o "Criar e
+// importar" / "Verificar de novo" não achavam o arquivo e o botão não fazia
+// nada. O módulo é puro (jszip + File), não toca em segredo nenhum.
 
 const SUPPORTED_INNER_EXTS = [".xlsx", ".xls", ".csv"] as const
 
@@ -55,6 +57,8 @@ export async function expandZips(input: File[]): Promise<ExpandResult> {
       continue
     }
     try {
+      // Import dinâmico: mantém o jszip fora do bundle de quem não sobe zip.
+      const JSZip = (await import("jszip")).default
       const buf = await file.arrayBuffer()
       const zip = await JSZip.loadAsync(buf)
       let extracted = 0

@@ -27,6 +27,7 @@ import {
   type RecheckAndImportState,
 } from "../_actions"
 import { CreateUnitDialog, type AvailableUnit } from "./create-unit-dialog"
+import { expandZips } from "@/lib/import/expand-zips"
 
 const initial: ImportBatchState = { ok: false }
 
@@ -48,6 +49,8 @@ export function ImportForm({
   // + idx atual. Quando uma criação termina, avança pro próximo.
   const [wizardQueue, setWizardQueue] = React.useState<ImportFileResult[]>([])
   const [wizardIdx, setWizardIdx] = React.useState<number | null>(null)
+  /** true enquanto abre um .zip escolhido pelo usuário. */
+  const [expandindo, setExpandindo] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const formRef = React.useRef<HTMLFormElement>(null)
   const router = useRouter()
@@ -173,12 +176,32 @@ export function ImportForm({
       )
     : undefined
 
-  function addFiles(list: FileList | null) {
+  /**
+   * Expande .zip JÁ NO NAVEGADOR. O 99 Food exporta zipado; se só o servidor
+   * expandisse, a lista daqui ficaria com o .zip enquanto os resultados vêm
+   * com os nomes internos — e o "Criar e importar" / "Verificar de novo" não
+   * achavam o arquivo (o botão não fazia nada). Expandindo aqui, cada .xlsx
+   * interno vira um arquivo de verdade na lista e tudo casa.
+   */
+  async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return
     const incoming = Array.from(list)
+    const temZip = incoming.some((f) => f.name.toLowerCase().endsWith(".zip"))
+    let expandidos = incoming
+    if (temZip) {
+      setExpandindo(true)
+      try {
+        const { files: out } = await expandZips(incoming)
+        expandidos = out
+      } catch {
+        expandidos = incoming // deixa o servidor tentar; ele tem fallback
+      } finally {
+        setExpandindo(false)
+      }
+    }
     setFiles((prev) => {
       const all = [...prev]
-      for (const f of incoming) {
+      for (const f of expandidos) {
         if (!all.some((x) => x.name === f.name && x.size === f.size)) {
           all.push(f)
         }
@@ -206,7 +229,7 @@ export function ImportForm({
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
-    addFiles(e.dataTransfer.files)
+    void addFiles(e.dataTransfer.files)
   }
 
   return (
@@ -245,7 +268,7 @@ export function ImportForm({
         multiple
         accept=".xlsx,.csv,.zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,text/csv"
         className="sr-only"
-        onChange={(e) => addFiles(e.target.files)}
+        onChange={(e) => void addFiles(e.target.files)}
       />
 
       {/* Lista de selecionados */}
@@ -300,13 +323,15 @@ export function ImportForm({
         <Button
           type="submit"
           data-tour="import-btn"
-          disabled={submitting || files.length === 0}
+          disabled={submitting || expandindo || files.length === 0}
         >
-          {submitting
-            ? progress
-              ? `Importando ${progress.done + 1}/${progress.total}...`
-              : "Importando..."
-            : "Importar todos"}
+          {expandindo
+            ? "Abrindo o .zip..."
+            : submitting
+              ? progress
+                ? `Importando ${progress.done + 1}/${progress.total}...`
+                : "Importando..."
+              : "Importar todos"}
         </Button>
       </div>
       </form>
