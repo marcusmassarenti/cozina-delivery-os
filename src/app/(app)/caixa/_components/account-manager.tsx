@@ -49,7 +49,7 @@ export function AccountManager({
   const router = useRouter()
 
   function remove(id: string) {
-    if (!confirm("Excluir conta?")) return
+    if (!confirm("Excluir conta e TODOS os lançamentos dela? Essa ação não pode ser desfeita.")) return
     start(async () => {
       await deleteAccount(id)
       router.refresh()

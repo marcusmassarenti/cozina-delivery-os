@@ -38,6 +38,16 @@ export default async function LancamentosPage({
   ])
   // Compras de cartão ficam na aba Cartões (não na lista do caixa).
   const entries = await getEntries(holdingId, { year, month, excludeAccountIds: cardIds, loja })
+  // Contas vencidas e não pagas de QUALQUER mês — senão uma conta em atraso de
+  // um mês anterior sumia da lista (vive na competência dela).
+  const monthIds = new Set(entries.map((e) => e.id))
+  const emAberto = (
+    await getEntries(holdingId, { openOverdue: true, excludeAccountIds: cardIds, loja })
+  ).filter((e) => !monthIds.has(e.id))
+  const totalEmAberto = emAberto.reduce(
+    (s, e) => s + (e.kind === "despesa" ? e.value : -e.value),
+    0,
+  )
 
   const now = new Date()
   const periods: { year: number; month: number }[] = []
@@ -81,6 +91,24 @@ export default async function LancamentosPage({
           </div>
         ))}
       </div>
+
+      {emAberto.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
+          <div className="flex items-center gap-2 text-sm font-semibold text-rose-700 dark:text-rose-400">
+            <AlertTriangle className="size-4" />
+            Em aberto de meses anteriores ({emAberto.length}) ·{" "}
+            <span className="tabular-nums">{fmtBRL(Math.abs(totalEmAberto))}</span>
+            {totalEmAberto >= 0 ? " a pagar" : " a receber"}
+          </div>
+          <EntriesList
+            entries={emAberto}
+            categories={categories}
+            accounts={accounts}
+            contacts={contacts}
+            units={units}
+          />
+        </div>
+      )}
 
       <EntriesList entries={entries} categories={categories} accounts={accounts} contacts={contacts} units={units} />
     </div>

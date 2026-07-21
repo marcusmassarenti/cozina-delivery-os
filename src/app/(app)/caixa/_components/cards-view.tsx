@@ -168,12 +168,16 @@ function CardItem({
   const router = useRouter()
   const inv = invoices[idx]
 
+  // Contas que podem pagar a fatura (dinheiro/banco — nunca outro cartão).
+  const contasPagadoras = contas.filter((c) => c.kind !== "cartao")
+  const [payFrom, setPayFrom] = useState(contasPagadoras[0]?.id ?? "")
+
   const totalAberto = invoices.filter((i) => !i.paid).reduce((s, i) => s + i.total, 0)
   const disponivel = account.cardLimit != null ? account.cardLimit - totalAberto : null
 
   function pagar() {
     if (!inv) return
-    const contaId = contas[0]?.id
+    const contaId = payFrom || contasPagadoras[0]?.id
     if (!contaId) return alert("Cadastre uma conta antes de pagar a fatura.")
     if (!confirm(`Pagar a fatura de ${MESES[inv.month - 1]}/${inv.year} (${fmtBRL(inv.total)})?`)) return
     start(async () => {
@@ -184,7 +188,12 @@ function CardItem({
   }
 
   function remove() {
-    if (!confirm("Excluir cartão e seus lançamentos?")) return
+    if (
+      !confirm(
+        "Excluir cartão e TODOS os lançamentos dele? Essa ação não pode ser desfeita.",
+      )
+    )
+      return
     start(async () => {
       await deleteAccount(account.id)
       router.refresh()
@@ -274,14 +283,32 @@ function CardItem({
           </div>
         )}
         {inv && !inv.paid && inv.total > 0 && (
-          <button
-            onClick={pagar}
-            disabled={pending}
-            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {pending && <Loader2 className="size-3.5 animate-spin" />}
-            Pagar fatura ({fmtBRL(inv.total)})
-          </button>
+          <div className="mt-3 flex flex-col gap-2">
+            {contasPagadoras.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="shrink-0">Pagar com</span>
+                <select
+                  value={payFrom}
+                  onChange={(e) => setPayFrom(e.target.value)}
+                  className="h-8 flex-1 rounded-md border bg-card px-2 text-xs font-medium text-foreground"
+                >
+                  {contasPagadoras.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              onClick={pagar}
+              disabled={pending}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {pending && <Loader2 className="size-3.5 animate-spin" />}
+              Pagar fatura ({fmtBRL(inv.total)})
+            </button>
+          </div>
         )}
         {inv?.paid && inv.total > 0 && (
           <p className="mt-3 text-center text-xs font-medium text-emerald-600">✓ Fatura paga</p>

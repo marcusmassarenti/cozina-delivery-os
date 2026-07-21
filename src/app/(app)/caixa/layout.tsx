@@ -36,8 +36,7 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
           </h1>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             Contas a pagar e a receber, contas bancárias, cartões, categorias e
-            importação OFX dos bancos — tudo num lugar. Faça o upgrade pra
-            liberar.
+            fluxo de caixa — tudo num lugar. Faça o upgrade pra liberar.
           </p>
         </div>
         <Link

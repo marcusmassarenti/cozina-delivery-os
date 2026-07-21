@@ -339,6 +339,8 @@ export type EntryFilters = {
   excludeAccountIds?: string[]
   /** filtro de loja: "todas" | "rede" | <unitId> */
   loja?: Loja
+  /** só pendentes já vencidos (paid_date null e due_date < hoje) — em aberto */
+  openOverdue?: boolean
 }
 
 export async function getEntries(
@@ -355,6 +357,7 @@ export async function getEntries(
   if (filters.accountId) q = q.eq("account_id", filters.accountId)
   if (filters.categoryId) q = q.eq("category_id", filters.categoryId)
   if (filters.search) q = q.ilike("description", `%${filters.search}%`)
+  if (filters.openOverdue) q = q.is("paid_date", null).lt("due_date", todayISO())
   q = q.order("due_date", { ascending: false }).order("created_at", { ascending: false })
 
   const { data } = await q
@@ -419,7 +422,7 @@ export async function getCaixaSummary(
 ): Promise<CaixaSummary> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
-  const [{ data: accs }, { data: rows }] = await Promise.all([
+  const [{ data: accs }, { data: rows }, { data: efetAll }] = await Promise.all([
     scopeUnits(
       lojaWhere(
         admin.from("fin_accounts").select("id, kind, initial_balance").eq("holding_id", holdingId),
@@ -427,6 +430,7 @@ export async function getCaixaSummary(
       ),
       allowed,
     ),
+    // Movimentação DO PERÍODO (competência) → alimenta receita/despesa/a pagar/a receber.
     scopeUnits(
       lojaWhere(
         admin
@@ -439,6 +443,19 @@ export async function getCaixaSummary(
       ),
       allowed,
     ),
+    // Saldo é regime de CAIXA e acumulado — todos os efetivados, sem filtro de mês.
+    // (Antes só somava o mês corrente e divergia das telas de Contas/Dashboard.)
+    scopeUnits(
+      lojaWhere(
+        admin
+          .from("fin_entries")
+          .select("kind, value, account_id")
+          .eq("holding_id", holdingId)
+          .not("paid_date", "is", null),
+        loja,
+      ),
+      allowed,
+    ),
   ])
 
   // Cartões não contam como saldo em conta, e suas compras não entram no caixa.
@@ -447,10 +464,19 @@ export async function getCaixaSummary(
   const cardSet = new Set(accsT.filter((a) => a.kind === "cartao").map((a) => a.id))
 
   const today = todayISO()
+  // Saldo em caixa = saldo inicial das contas (não-cartão) + TODOS os efetivados.
+  let saldo = accsT
+    .filter((a) => a.kind !== "cartao")
+    .reduce((a, r) => a + Number(r.initial_balance ?? 0), 0)
+  for (const r of efetAll ?? []) {
+    if (r.account_id && cardSet.has(r.account_id)) continue // compra de cartão fica na fatura
+    const v = Number(r.value ?? 0)
+    if (r.kind === "receita") saldo += v
+    else if (r.kind === "despesa") saldo -= v
+  }
+
   const s: CaixaSummary = {
-    saldo: accsT
-      .filter((a) => a.kind !== "cartao")
-      .reduce((a, r) => a + Number(r.initial_balance ?? 0), 0),
+    saldo,
     receitaEfetivada: 0,
     despesaEfetivada: 0,
     aReceber: 0,
@@ -458,24 +484,21 @@ export async function getCaixaSummary(
     vencidoPagar: 0,
     vencidoReceber: 0,
   }
+  // Métricas do período (competência do mês selecionado).
   for (const r of rows ?? []) {
     if (r.account_id && cardSet.has(r.account_id)) continue // compra de cartão → fica na fatura
     const v = Number(r.value ?? 0)
     const efetivado = !!r.paid_date
     const atrasado = !efetivado && r.due_date && r.due_date < today
     if (r.kind === "receita") {
-      if (efetivado) {
-        s.receitaEfetivada += v
-        s.saldo += v
-      } else {
+      if (efetivado) s.receitaEfetivada += v
+      else {
         s.aReceber += v
         if (atrasado) s.vencidoReceber += v
       }
     } else if (r.kind === "despesa") {
-      if (efetivado) {
-        s.despesaEfetivada += v
-        s.saldo -= v
-      } else {
+      if (efetivado) s.despesaEfetivada += v
+      else {
         s.aPagar += v
         if (atrasado) s.vencidoPagar += v
       }
@@ -846,10 +869,13 @@ export async function getTopTitulares(
     const m = new Map<string, TitularTotal>()
     for (const e of entries) {
       if (e.kind !== kind || !e.titular) continue
-      const t = m.get(e.titular) ?? { name: e.titular, total: 0, count: 0 }
+      // Normaliza a chave (espaços/caixa) pra "iFood" e "iFood " não virarem dois.
+      const key = e.titular.replace(/\s+/g, " ").trim().toLowerCase()
+      if (!key) continue
+      const t = m.get(key) ?? { name: e.titular.trim(), total: 0, count: 0 }
       t.total += e.value
       t.count++
-      m.set(e.titular, t)
+      m.set(key, t)
     }
     return [...m.values()].sort((a, b) => b.total - a.total).slice(0, 5)
   }

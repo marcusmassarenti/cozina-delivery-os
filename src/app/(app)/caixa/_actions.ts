@@ -91,6 +91,16 @@ export async function saveAccount(formData: FormData): Promise<ActionState> {
 export async function deleteAccount(id: string): Promise<ActionState> {
   try {
     const { holdingId, admin } = await ctx()
+    // Apaga os lançamentos ligados à conta ANTES de excluí-la. Sem isso, o
+    // ON DELETE SET NULL deixava os lançamentos órfãos (account_id null): uma
+    // compra de cartão órfã deixava de ser "cartão" e vazava pro fluxo de caixa
+    // como despesa a pagar — o oposto do que a tela promete.
+    const { error: delEntries } = await admin
+      .from("fin_entries")
+      .delete()
+      .eq("holding_id", holdingId)
+      .or(`account_id.eq.${id},to_account_id.eq.${id}`)
+    if (delEntries) return { ok: false, message: delEntries.message }
     const { error } = await admin.from("fin_accounts").delete().eq("id", id).eq("holding_id", holdingId)
     if (error) return { ok: false, message: error.message }
     revalidatePath("/caixa", "layout")
@@ -208,7 +218,7 @@ export async function saveEntry(formData: FormData): Promise<ActionState> {
       account_id: accountId,
       to_account_id: isTransfer ? txt(formData.get("to_account_id")) : null,
       category_id: isTransfer ? null : txt(formData.get("category_id")),
-      titular: txt(formData.get("titular")),
+      titular: txt(formData.get("titular"))?.replace(/\s+/g, " ") ?? null,
       description: txt(formData.get("description")),
       tags,
       unit_id: txt(formData.get("unit_id")), // loja (puxada da conta no modal)
@@ -326,6 +336,14 @@ export async function payCardInvoice(
       .is("paid_date", null)
     const total = (rows ?? []).reduce((s, r) => s + Number(r.value ?? 0), 0)
     if (total <= 0) return { ok: false, message: "Fatura sem valor em aberto." }
+    // A despesa de pagamento herda a loja da conta pagadora — senão o
+    // pagamento cai na "Rede" e o saldo por loja fica errado.
+    const { data: payAcc } = await admin
+      .from("fin_accounts")
+      .select("unit_id")
+      .eq("id", fromAccountId)
+      .eq("holding_id", holdingId)
+      .maybeSingle()
     // marca as compras como pagas (a fatura foi quitada)
     await admin
       .from("fin_entries")
@@ -341,6 +359,7 @@ export async function payCardInvoice(
       kind: "despesa",
       value: total,
       account_id: fromAccountId,
+      unit_id: (payAcc?.unit_id as string | null) ?? null,
       due_date: today,
       paid_date: today,
       is_card_payment: true,
