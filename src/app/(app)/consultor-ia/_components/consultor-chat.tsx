@@ -52,6 +52,7 @@ const SUGESTOES = [
   "Qual loja vende mais?",
   "Meu cancelamento está alto?",
   "Compare o ticket médio das minhas lojas",
+  "Como importo um relatório?",
 ]
 
 export function ConsultorChat({
@@ -429,8 +430,8 @@ export function ConsultorChat({
                       {saudacao}, {nome} 👋
                     </h2>
                     <p className="mt-1.5 text-sm text-muted-foreground">
-                      Pergunte sobre a sua operação — eu respondo com os números
-                      reais das suas lojas.
+                      Pergunte sobre a sua operação (com os números reais das
+                      suas lojas) ou tire dúvidas de como usar o sistema.
                     </p>
                     <div className="mx-auto mt-5 flex max-w-lg flex-wrap justify-center gap-2">
                       {SUGESTOES.map((s) => (

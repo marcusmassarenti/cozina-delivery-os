@@ -78,7 +78,8 @@ function Upsell() {
       </p>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
         Um consultor que responde na hora sobre o seu faturamento, CMV,
-        cancelamento e taxas — usando os números reais das suas lojas.
+        cancelamento e taxas (com os números reais das suas lojas) e ainda tira
+        dúvidas de como usar o sistema.
       </p>
       <Link
         href="/assinatura?plano=ai"
