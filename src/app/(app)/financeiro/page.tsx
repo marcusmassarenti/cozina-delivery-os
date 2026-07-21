@@ -29,6 +29,7 @@ import {
 } from "@/lib/data/resultado"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import { getNetworkPagamentoResumo } from "@/lib/data/ifood-pedidos"
+import { getCaixaCustosPorGrupo } from "@/lib/data/dre-gerencial"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { formatPeriodLabel, parsePeriodParam } from "@/lib/period"
 import {
@@ -86,6 +87,14 @@ export default async function ResultadoPage({
       getAvailablePeriods(),
     ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
+
+  // Custos operacionais que vivem no Caixa (aluguel, folha, fixas…) — unem o
+  // DRE do delivery com as despesas de operação numa visão só.
+  const caixaCustos = await getCaixaCustosPorGrupo(
+    matrixUnits.map((u) => u.id),
+    year,
+    month,
+  )
 
   // Séries diárias por plataforma pro gráfico interativo (faturamento + pedidos)
   const toSeries = (m: typeof dTodas) => ({
@@ -274,6 +283,64 @@ export default async function ResultadoPage({
               operacao={totals.custoOperacao}
             />
           </div>
+
+          {/* Despesas operacionais do Caixa (aluguel, folha, fixas) — completam
+              o DRE do delivery. Só aparece quando há custo lançado no Caixa. */}
+          {caixaCustos && caixaCustos.total > 0 && (
+            <div className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Despesas operacionais (do Caixa)</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Custos de operação lançados no Financeiro — completam o resultado
+                  </p>
+                </div>
+                <span className="text-lg font-semibold tabular-nums text-rose-600">
+                  −{fmtBRL(caixaCustos.total)}
+                </span>
+              </div>
+
+              <div className="divide-y rounded-lg border">
+                {caixaCustos.detalhe.map((g) => (
+                  <div key={g.grupo} className="flex items-center justify-between px-3 py-2">
+                    <span className="text-sm">
+                      {g.label}
+                      {totals.bruto > 0 && (
+                        <span className="ml-2 text-[11px] text-muted-foreground">
+                          {fmtPct((g.total / totals.bruto) * 100)} do bruto
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-sm font-medium tabular-nums text-rose-600">
+                      {fmtBRL(g.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Resultado final unindo delivery + caixa */}
+              <div className="mt-3 flex items-center justify-between border-t pt-3">
+                <span className="text-sm font-semibold">Resultado após despesas do Caixa</span>
+                <span
+                  className={`text-lg font-semibold tabular-nums ${
+                    margemSemVr - caixaCustos.total >= 0 ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {fmtBRL(margemSemVr - caixaCustos.total)}
+                </span>
+              </div>
+              {margemSemVr > 0 && totals.bruto > 0 && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Ponto de equilíbrio ≈{" "}
+                  <strong className="tabular-nums">
+                    {fmtBRL((caixaCustos.cmo + caixaCustos.fixa) / (margemSemVr / totals.bruto))}
+                  </strong>{" "}
+                  de faturamento pra cobrir os custos fixos (
+                  {fmtBRL(caixaCustos.cmo + caixaCustos.fixa)}).
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Tendência diária da rede: faturamento + pedidos, por plataforma */}
           {dTodas.hasData && (

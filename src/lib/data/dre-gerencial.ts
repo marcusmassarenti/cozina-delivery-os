@@ -1,5 +1,6 @@
 import "server-only"
 
+import { createAdminClient } from "@/lib/supabase/admin"
 import {
   getCaixaHoldingId,
   getCategoriesFlat,
@@ -162,4 +163,89 @@ export async function getDreGerencial(
       .sort((a, b) => b.total - a.total),
     temClassificacao: classificados > 0,
   }
+}
+
+// ─── Custos operacionais do CAIXA por grupo de DRE (pra unir no DRE Grupo) ────
+export type CaixaCustos = {
+  cmo: number
+  fixa: number
+  cmv: number
+  variavel: number
+  deducao: number
+  total: number
+  detalhe: { grupo: DreGroup; label: string; total: number; categorias: { name: string; total: number }[] }[]
+}
+
+const CUSTO_LABEL: Partial<Record<DreGroup, string>> = {
+  cmo: "Mão de obra",
+  fixa: "Despesas fixas / ocupação",
+  cmv: "Insumos (CMV) lançados no caixa",
+  variavel: "Despesas variáveis",
+  deducao: "Impostos / taxas (caixa)",
+}
+
+/**
+ * Custos operacionais que vivem no Caixa (aluguel, folha, fixas…), agrupados
+ * por DRE, pro período e conjunto de lojas. Alimenta o DRE Grupo com a parte
+ * que o DRE do delivery não tem. Ignora pagamento de fatura de cartão e CAPEX.
+ */
+export async function getCaixaCustosPorGrupo(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<CaixaCustos | null> {
+  const holdingId = await getCaixaHoldingId()
+  if (!holdingId) return null
+  const cats = await getCategoriesFlat(holdingId)
+  const catById = new Map(cats.map((c) => [c.id, c]))
+  const nome = (id: string | null): string => {
+    if (!id) return "Sem categoria"
+    const c = catById.get(id)
+    if (!c) return "Sem categoria"
+    return c.parentId ? (catById.get(c.parentId)?.name ?? c.name) : c.name
+  }
+  const grupoDe = (id: string | null): DreGroup | null => {
+    if (!id) return null
+    const c = catById.get(id)
+    if (!c) return null
+    return c.dreGroup ?? (c.parentId ? (catById.get(c.parentId)?.dreGroup ?? null) : null)
+  }
+
+  const admin = createAdminClient()
+  let q = admin
+    .from("fin_entries")
+    .select("value, category_id, is_card_payment")
+    .eq("holding_id", holdingId)
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .eq("kind", "despesa")
+  if (unitIds.length) q = q.in("unit_id", unitIds)
+  const { data } = await q
+
+  const soma: Record<"cmo" | "fixa" | "cmv" | "variavel" | "deducao", number> = {
+    cmo: 0, fixa: 0, cmv: 0, variavel: 0, deducao: 0,
+  }
+  const det: Record<string, Map<string, number>> = {
+    cmo: new Map(), fixa: new Map(), cmv: new Map(), variavel: new Map(), deducao: new Map(),
+  }
+  for (const r of (data ?? []) as Array<{ value: number | null; category_id: string | null; is_card_payment: boolean | null }>) {
+    if (r.is_card_payment) continue
+    const g = grupoDe(r.category_id)
+    if (!g || g === "receita" || g === "investimento") continue
+    const v = Number(r.value ?? 0)
+    soma[g] += v
+    det[g].set(nome(r.category_id), (det[g].get(nome(r.category_id)) ?? 0) + v)
+  }
+
+  const total = soma.cmo + soma.fixa + soma.cmv + soma.variavel + soma.deducao
+  const detalhe = (["cmo", "fixa", "cmv", "variavel", "deducao"] as const)
+    .filter((g) => soma[g] > 0)
+    .map((g) => ({
+      grupo: g as DreGroup,
+      label: CUSTO_LABEL[g] ?? g,
+      total: soma[g],
+      categorias: [...det[g].entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total),
+    }))
+
+  return { ...soma, total, detalhe }
 }
