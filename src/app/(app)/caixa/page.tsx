@@ -26,9 +26,19 @@ import {
   type TitularTotal,
 } from "@/lib/data/caixa"
 
+import { getFluxoCaixa } from "@/lib/data/fluxo-caixa"
+
 import { FinIcon } from "./_components/fin-icon"
 import { BankBadge } from "./_components/bank-badge"
 import { LojasComparativo } from "./_components/lojas-comparativo"
+
+function fmtDiaLongo(iso: string): string {
+  return new Date(`${iso}T12:00:00-03:00`).toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+  })
+}
 
 function fmtDate(d: string | null) {
   if (!d) return "—"
@@ -55,6 +65,8 @@ export default async function VisaoGeralPage({
   // No Consolidado, mostra o comparativo por loja.
   const consolidado = !loja || loja === "todas"
   const lojas = consolidado ? await getCaixaPorLoja(holdingId, year, month) : []
+  // Resumo do fluxo de caixa projetado (30 dias) pro topo.
+  const fluxo = await getFluxoCaixa(30, loja)
 
   const now = new Date()
   const periods: { year: number; month: number }[] = []
@@ -108,13 +120,57 @@ export default async function VisaoGeralPage({
         />
       </div>
 
+      {/* Fluxo de caixa projetado (30 dias) — resumo + alerta de ruptura */}
+      {fluxo && (
+        <Link
+          href={`/caixa/fluxo${loja ? `?loja=${loja}` : ""}`}
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 shadow-sm transition-colors hover:bg-muted/40 ${
+            fluxo.primeiroDiaNegativo
+              ? "border-rose-300 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/20"
+              : "bg-card"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <TrendingUp className={`size-5 ${fluxo.primeiroDiaNegativo ? "text-rose-600" : "text-primary"}`} />
+            <div>
+              <div className="text-sm font-semibold">Fluxo de caixa · próximos 30 dias</div>
+              {fluxo.primeiroDiaNegativo ? (
+                <div className="text-xs font-medium text-rose-600">
+                  ⚠ Saldo fica negativo em {fmtDiaLongo(fluxo.primeiroDiaNegativo)} (mín. {fmtBRL(fluxo.saldoMinimo)})
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  Inclui {fmtBRL(fluxo.totalEntradasDelivery)} de repasses de delivery previstos
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-5">
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Saldo hoje</div>
+              <div className="text-sm font-semibold tabular-nums">{fmtBRL(fluxo.saldoAtual)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Projetado 30d</div>
+              <div className={`text-lg font-semibold tabular-nums ${fluxo.saldoProjetadoFim < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                {fmtBRL(fluxo.saldoProjetadoFim)}
+              </div>
+            </div>
+          </div>
+        </Link>
+      )}
+
       {/* Comparativo por loja (só no Consolidado) */}
       {consolidado && <LojasComparativo lojas={lojas} periodo={sp.periodo} />}
 
-      {/* Pagamentos / Recebimentos */}
+      {/* Pagamentos / Recebimentos → abre o aging */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <PanelCard title="Pagamentos" panel={dash.pagamentos} tone="neg" />
-        <PanelCard title="Recebimentos" panel={dash.recebimentos} tone="pos" />
+        <Link href={`/caixa/aging${loja ? `?loja=${loja}` : ""}`} className="rounded-xl transition-colors hover:opacity-90">
+          <PanelCard title="Pagamentos" panel={dash.pagamentos} tone="neg" />
+        </Link>
+        <Link href={`/caixa/aging${loja ? `?loja=${loja}` : ""}`} className="rounded-xl transition-colors hover:opacity-90">
+          <PanelCard title="Recebimentos" panel={dash.recebimentos} tone="pos" />
+        </Link>
       </div>
 
       {/* Contas / Cartões */}
