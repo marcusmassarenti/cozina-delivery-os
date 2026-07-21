@@ -15,6 +15,7 @@ import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { currentPeriod } from "@/lib/period"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
+import { temaCancelamentoKeeta } from "@/lib/keeta/cancelamento"
 import type {
   NinefoodCoverageCell,
   NinefoodCoverageMatrix,
@@ -366,6 +367,7 @@ export async function getNetworkKeetaTopItemsForMonth(
 }
 
 export type KeetaCancelamentoMotivo = {
+  /** Tema do cancelamento, não a frase do cliente — ver lib/keeta/cancelamento */
   motivo: string
   pedidos: number
   /** Perda = soma das vendas de itens dos pedidos cancelados */
@@ -373,8 +375,13 @@ export type KeetaCancelamentoMotivo = {
 }
 
 /**
- * Top motivos de cancelamento na rede (Keeta). O motivo vem como texto livre
- * em `motivo_cancelamento`. Normaliza (lowercase + trim) pra agrupar.
+ * Top motivos de cancelamento na rede (Keeta).
+ *
+ * A Keeta não manda motivo estruturado: `motivo_cancelamento` é o texto que
+ * o cliente escreveu, com os links das fotos colados no fim. Agrupar por
+ * esse texto dava 1 ocorrência por cancelamento (153 pedidos = 153
+ * "motivos") e vazava URL no card. Agora classificamos em tema, então o
+ * ranking responde "o que mais faz cancelar".
  */
 export async function getNetworkKeetaCancelamentosForMonth(
   year: number,
@@ -402,15 +409,12 @@ export async function getNetworkKeetaCancelamentosForMonth(
 
   const acc = new Map<string, KeetaCancelamentoMotivo>()
   for (const r of rows) {
-    const raw = r.motivo_cancelamento
-      ? String(r.motivo_cancelamento).trim()
-      : ""
-    if (!raw) continue
-    const key = raw.toLowerCase()
-    const cur = acc.get(key) ?? { motivo: raw, pedidos: 0, perdaFinanceira: 0 }
+    if (!r.motivo_cancelamento) continue
+    const tema = temaCancelamentoKeeta(r.motivo_cancelamento)
+    const cur = acc.get(tema) ?? { motivo: tema, pedidos: 0, perdaFinanceira: 0 }
     cur.pedidos += 1
     cur.perdaFinanceira += Number(r.vendas_itens) || 0
-    acc.set(key, cur)
+    acc.set(tema, cur)
   }
   return Array.from(acc.values())
     .sort((a, b) => b.pedidos - a.pedidos)

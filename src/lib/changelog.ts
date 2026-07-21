@@ -37,6 +37,33 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.2",
+    date: "2026-07-21",
+    tag: "Melhorias",
+    title: "Cancelamentos da Keeta agora agrupam por tema",
+    summary:
+      "A Keeta manda o texto que o cliente escreveu, não um motivo. O card virou um ranking de temas — dá pra ver o que mais faz cancelar, em vez de ler 5 reclamações soltas.",
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Top cancelamentos da Keeta agrupado por tema",
+            desc: "Cada reclamação é classificada em Item faltando, Item errado, Embalagem/derramou, Qualidade, Atraso, Corpo estranho e outros. Assim o card responde onde está o problema.",
+            antes: "153 cancelamentos = 153 “motivos”, cada um aparecendo 1×",
+            depois: "Item faltando 7× · Item errado 5× · Sem descrição 3×",
+          },
+          {
+            kind: "correcao",
+            title: "Link de foto vazava no card",
+            desc: "A Keeta cola os endereços das fotos no fim do texto da reclamação, e isso ia direto pra tela. Agora é removido antes de exibir.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.1",
     date: "2026-07-21",
     tag: "Correções",
