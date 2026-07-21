@@ -15,6 +15,7 @@ import {
   Star,
   Store,
   Tag,
+  TrendingUp,
   UserCog,
   Users,
   Wallet,
@@ -111,6 +112,13 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "financeiro",
         proOnly: true,
         exact: true,
+      },
+      {
+        label: "Fluxo de Caixa",
+        href: "/caixa/fluxo",
+        icon: TrendingUp,
+        module: "financeiro",
+        proOnly: true,
       },
       {
         label: "Lançamentos",
