@@ -19,6 +19,7 @@ import {
   TrendingUp,
   UserCog,
   Users,
+  UtensilsCrossed,
   Wallet,
 } from "lucide-react"
 
@@ -179,6 +180,13 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Conexões",
         href: "/conexoes",
         icon: Cable,
+        module: "conexoes",
+        superadminOnly: true,
+      },
+      {
+        label: "Cardápio Web",
+        href: "/integracao/cardapioweb",
+        icon: UtensilsCrossed,
         module: "conexoes",
         superadminOnly: true,
       },
