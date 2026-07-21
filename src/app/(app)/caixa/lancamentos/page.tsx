@@ -15,6 +15,7 @@ import {
 } from "@/lib/data/caixa"
 
 import { EntriesList } from "../_components/entries-list"
+import { OfxImport } from "../_components/ofx-import"
 
 export default async function LancamentosPage({
   searchParams,
@@ -69,7 +70,10 @@ export default async function LancamentosPage({
         <p className="text-sm text-muted-foreground">
           Movimentação de {formatRangeLabel(periodRange)}
         </p>
-        <PeriodSelector current={periodRange} options={periods} enableRange />
+        <div className="flex items-center gap-2">
+          <OfxImport accounts={accounts} />
+          <PeriodSelector current={periodRange} options={periods} enableRange />
+        </div>
       </div>
 
       {!isFullMonth && (

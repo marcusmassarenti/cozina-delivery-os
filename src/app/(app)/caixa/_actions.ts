@@ -718,3 +718,75 @@ export async function seedDefaultCategories(): Promise<ActionState> {
     return { ok: false, message: e instanceof Error ? e.message : "Erro." }
   }
 }
+
+/**
+ * Importa um extrato bancário OFX numa conta: cria os lançamentos das
+ * transações (entrada/saída pelo sinal), já efetivados e conciliados, sem
+ * reimportar o que já veio (dedup por FITID). Categorização fica pra depois.
+ */
+export async function importOfx(
+  accountId: string,
+  conteudo: string,
+): Promise<{ ok: boolean; imported: number; skipped: number; message?: string }> {
+  try {
+    const { parseOfx } = await import("@/lib/ofx")
+    const { holdingId, admin } = await ctx()
+
+    const { data: acc } = await admin
+      .from("fin_accounts")
+      .select("id, kind, unit_id")
+      .eq("id", accountId)
+      .eq("holding_id", holdingId)
+      .maybeSingle()
+    if (!acc) return { ok: false, imported: 0, skipped: 0, message: "Conta não encontrada." }
+    if (acc.kind === "cartao")
+      return { ok: false, imported: 0, skipped: 0, message: "Importe o extrato numa conta (não em cartão)." }
+    await assertUnitAllowed((acc.unit_id as string) ?? null)
+
+    const res = parseOfx(conteudo)
+    if (res.invalido) return { ok: false, imported: 0, skipped: 0, message: "Arquivo não parece um extrato OFX." }
+    if (res.vazio) return { ok: false, imported: 0, skipped: 0, message: "Nenhuma transação encontrada no arquivo." }
+
+    // Dedup contra o que já existe nessa conta
+    const { data: existentes } = await admin
+      .from("fin_entries")
+      .select("fit_id")
+      .eq("holding_id", holdingId)
+      .eq("account_id", accountId)
+      .not("fit_id", "is", null)
+    const jaTem = new Set((existentes ?? []).map((r) => r.fit_id as string))
+
+    const vistos = new Set<string>()
+    const novos = res.transacoes.filter((t) => {
+      if (jaTem.has(t.fitId) || vistos.has(t.fitId)) return false
+      vistos.add(t.fitId)
+      return true
+    })
+    const skipped = res.transacoes.length - novos.length
+    if (novos.length === 0)
+      return { ok: true, imported: 0, skipped, message: "Tudo já tinha sido importado." }
+
+    const rows = novos.map((t) => ({
+      holding_id: holdingId,
+      kind: t.valor >= 0 ? "receita" : "despesa",
+      value: Math.abs(t.valor),
+      account_id: accountId,
+      unit_id: (acc.unit_id as string) ?? null,
+      due_date: t.data,
+      paid_date: t.data,
+      ref_year: Number(t.data.slice(0, 4)),
+      ref_month: Number(t.data.slice(5, 7)),
+      description: t.descricao,
+      fit_id: t.fitId,
+      source: "manual",
+      reconciled: true,
+    }))
+    const { error } = await admin.from("fin_entries").insert(rows)
+    if (error) return { ok: false, imported: 0, skipped, message: error.message }
+
+    revalidatePath("/caixa", "layout")
+    return { ok: true, imported: rows.length, skipped }
+  } catch (e) {
+    return { ok: false, imported: 0, skipped: 0, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
