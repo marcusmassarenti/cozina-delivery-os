@@ -17,7 +17,7 @@ Resumo da postura de segurança + runbook operacional. Base pra handoff.
 | **Webhook Asaas (pagamento)** | ✅ Valida `asaas-access-token` com `timingSafeEqual` + **fail-closed** + idempotência (`asaas_processed_events`). |
 | **Crons** | ✅ Exigem `Authorization: Bearer <CRON_SECRET>` (fail-closed). |
 | **IA (diagnóstico)** | ✅ `system` em role separada, saída validada como JSON, sem secret no contexto. + regra anti-injection (trata dado/reviews como conteúdo, nunca instrução). |
-| **Webhook 99food** | ⚠️ Proteção **progressiva** (ver §3). Só enfileira eventos (não é pagamento). |
+| **Webhook 99food** | ✅ **Travado** (21/jul/2026): `NINEFOOD_WEBHOOK_SECRET` na Vercel + `?token=` na URL do portal da 99. Verificado em prod: POST sem token → **401**, GET → 200. Antes era progressivo (ver §3). |
 
 **Nenhum P0/P1 explorável encontrado.** Só 2 P2 (webhook 99 + hardening da IA), ambos tratados.
 
@@ -36,7 +36,7 @@ Secrets que o sistema usa (conferir em Vercel → projeto `cozina-delivery-os` �
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Públicos (client) | — |
 | `ASAAS_WEBHOOK_TOKEN` | Trava o webhook de cobrança | **Sim** (sem ele, webhook recusa) |
 | `CRON_SECRET` | Trava os crons | **Sim** |
-| `NINEFOOD_WEBHOOK_SECRET` | Trava o webhook da 99 (ver §3) | Não (progressivo) |
+| `NINEFOOD_WEBHOOK_SECRET` | Trava o webhook da 99 (ver §3) | **Sim** (setado 21/jul/2026 — POST sem token = 401) |
 | `NINEFOOD_APP_ID` / `NINEFOOD_APP_SECRET` | API da 99 | — |
 | `ANTHROPIC_API_KEY` | IA (diagnóstico) | — |
 | (iFood client id/secret) | API do iFood | — |
@@ -75,7 +75,7 @@ Ao passar o projeto pra outro dev, rotacionar por **higiene** (quem sai perde o 
 
 ## 5. Pendências / recomendações residuais
 
-- [ ] (opcional) Travar o webhook da 99 seguindo o §3.
+- [x] ~~Travar o webhook da 99 seguindo o §3.~~ **FEITO 21/jul/2026** — secret na Vercel + `?token=` no portal; verificado (POST sem token → 401, sem downtime).
 - [ ] (futuro) Policies de write (`WITH CHECK`) como defesa-em-profundidade.
 - [ ] (futuro) Ambiente de **staging** pra permitir auditoria ofensiva ativa (hoje não dá sem tocar produção).
 - [ ] Multi-atendimento com agentes por setor ("PASS") é **outro repo** (Cozina Atendimento) — auditar à parte se necessário.
