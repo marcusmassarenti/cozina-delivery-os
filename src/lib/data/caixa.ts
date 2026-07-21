@@ -898,3 +898,72 @@ export async function getTopTitulares(
   }
   return { clientes: agg("receita"), fornecedores: agg("despesa") }
 }
+
+// ─────────────────────── Evolução mês a mês (comparativo) ────────────────────
+export type EvolMes = {
+  ym: string
+  year: number
+  month: number
+  receita: number
+  despesa: number
+  resultado: number
+}
+
+/** Receita / despesa / resultado por competência nos últimos N meses. */
+export async function getEvolucaoCaixa(
+  months = 12,
+  loja?: Loja,
+): Promise<EvolMes[]> {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return []
+  const admin = createAdminClient()
+  const allowed = await getAccessibleUnitIds()
+
+  const now = new Date()
+  const wins: { year: number; month: number }[] = []
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    wins.push({ year: d.getFullYear(), month: d.getMonth() + 1 })
+  }
+  const startYear = wins[0].year
+
+  let q = admin
+    .from("fin_entries")
+    .select("ref_year, ref_month, kind, value, is_card_payment")
+    .eq("holding_id", holdingId)
+    .gte("ref_year", startYear)
+    .neq("kind", "transferencia")
+  q = lojaWhere(q, loja)
+  q = scopeUnits(q, allowed)
+  const { data } = await q
+
+  const map = new Map<string, { receita: number; despesa: number }>()
+  for (const r of (data ?? []) as Array<{
+    ref_year: number
+    ref_month: number
+    kind: string
+    value: number | null
+    is_card_payment: boolean | null
+  }>) {
+    if (r.is_card_payment) continue // pagamento de fatura = caixa, não resultado
+    const key = `${r.ref_year}-${String(r.ref_month).padStart(2, "0")}`
+    const b = map.get(key) ?? { receita: 0, despesa: 0 }
+    const v = Number(r.value ?? 0)
+    if (r.kind === "receita") b.receita += v
+    else if (r.kind === "despesa") b.despesa += v
+    map.set(key, b)
+  }
+
+  return wins.map((w) => {
+    const key = `${w.year}-${String(w.month).padStart(2, "0")}`
+    const b = map.get(key) ?? { receita: 0, despesa: 0 }
+    return {
+      ym: key,
+      year: w.year,
+      month: w.month,
+      receita: Math.round(b.receita * 100) / 100,
+      despesa: Math.round(b.despesa * 100) / 100,
+      resultado: Math.round((b.receita - b.despesa) * 100) / 100,
+    }
+  })
+}

@@ -144,6 +144,13 @@ export const NAV_GROUPS: NavGroup[] = [
         proOnly: true,
       },
       {
+        label: "Evolução",
+        href: "/caixa/evolucao",
+        icon: TrendingUp,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
         label: "Contas",
         href: "/caixa/contas",
         icon: Wallet,
