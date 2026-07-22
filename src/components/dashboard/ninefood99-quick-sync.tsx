@@ -229,21 +229,21 @@ function Group({
       ) : (
         <ul className="mt-1.5 space-y-1">
           {rows.map((r) => (
-            <li
-              key={r.key}
-              className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-1.5"
-            >
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-sm font-medium">{r.name}</span>
+            // Nome em cima (inteiro, sem truncar) e números embaixo: numa
+            // linha só o nome era o primeiro a ser cortado — e é justamente
+            // o que diz QUAL loja sincronizou.
+            <li key={r.key} className="rounded-md border bg-card px-3 py-2">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="text-sm font-medium">{r.name}</span>
                 {r.nova && (
-                  <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
                     nova loja conectada
                   </span>
                 )}
-              </span>
-              <span className="shrink-0 text-right text-[11px] text-muted-foreground">
+              </div>
+              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                 {r.detail}
-              </span>
+              </p>
             </li>
           ))}
         </ul>

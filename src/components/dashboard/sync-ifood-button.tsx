@@ -316,24 +316,24 @@ function Group({
           {items.map((v) => (
             <li
               key={v.code}
-              className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-1.5"
+              className="rounded-md border bg-card px-3 py-2"
             >
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-sm font-medium">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="text-sm font-medium">
                   <span className="text-muted-foreground tabular-nums">
                     {v.code}
                   </span>{" "}
                   {v.name}
                 </span>
                 {v.nova && (
-                  <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
                     nova loja conectada
                   </span>
                 )}
-              </span>
-              <span className="shrink-0 text-right text-[11px] text-muted-foreground">
+              </div>
+              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                 {v.detail}
-              </span>
+              </p>
             </li>
           ))}
         </ul>
