@@ -363,6 +363,42 @@ export function DreDetalhado({
         </>
       )}
 
+      {/* Ponte com o Portal do iFood: os DOIS totais que o lojista confere
+          lá, calculados daqui e na nomenclatura de lá. É o antídoto da
+          dúvida "por que difere do portal?" — os cards do portal usam base
+          bruta (incluem venda e taxa de pedido cancelado e compensam em
+          "Ajustes"), então linha-a-linha nunca fecha; os totais fecham. */}
+      {(() => {
+        const pIfood = platforms.find((p) => p.id === "ifood")
+        if (!pIfood || (sel !== "todas" && sel !== "ifood")) return null
+        const repasse = pIfood.liquido
+        const totalFaturamento = repasse + (pIfood.recebidoDireto ?? 0)
+        return (
+          <div className="mt-3 rounded-md border border-emerald-200/60 bg-emerald-50/50 px-3 py-2 dark:border-emerald-900/30 dark:bg-emerald-950/20">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/80 dark:text-emerald-400/80">
+              Confere com o Portal do iFood (Financeiro)
+            </p>
+            <div className="mt-1 space-y-0.5 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span>“Total faturamento” do portal</span>
+                <span className="font-bold tabular-nums">
+                  {fmtBRL(totalFaturamento)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>“Total em repasses” do portal</span>
+                <span className="font-bold tabular-nums">{fmtBRL(repasse)}</span>
+              </div>
+            </div>
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              O “Valor das vendas” do portal inclui pedidos cancelados (e as
+              taxas deles) — por isso lá o bruto e as taxas aparecem maiores.
+              Os totais acima fecham ao centavo.
+            </p>
+          </div>
+        )
+      })()}
+
       <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
         A <b>margem</b> é só das vendas das plataformas (mesma do Resumo). O{" "}
         <b>VR</b> (líquido = recebido − 8%) e o <b>recebido direto pela loja</b>{" "}

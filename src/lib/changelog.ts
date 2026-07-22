@@ -59,6 +59,11 @@ export const CHANGELOG: Release[] = [
             title: "Bruto com explicação no hover",
             desc: "Passe o mouse no Bruto: ele é vendas menos cancelamentos. O “Valor das vendas” do portal iFood mostra antes de descontar os cancelados — por isso lá aparece um pouco maior.",
           },
+          {
+            kind: "novo",
+            title: "“Confere com o Portal do iFood” no fim do DRE",
+            desc: "O DRE agora mostra o “Total faturamento” e o “Total em repasses” na mesma nomenclatura do portal — os dois fecham ao centavo com a tela do iFood, sem precisar de calculadora.",
+          },
         ],
       },
     ],
