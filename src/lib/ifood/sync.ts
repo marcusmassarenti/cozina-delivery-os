@@ -33,6 +33,9 @@ export type UnitSyncResult = {
   unitCode: string
   unitName: string
   merchantId: string
+  /** true = a loja não tinha NENHUM lançamento iFood antes desta sync —
+   *  estreia na integração (vira o aviso "loja nova conectada"). */
+  primeiraSincronizacao?: boolean
   reconciliation: {
     competencia: string
     skipped?: string
@@ -244,10 +247,25 @@ async function syncOneUnit(
     reconciliation: [],
   }
 
+  // Estreia? Sem NENHUM lançamento anterior = loja recém-conectada.
+  const { count: jaTinhaAlgo } = await admin
+    .from("ifood_financeiro_lancamentos")
+    .select("id", { count: "exact", head: true })
+    .eq("unit_id", u.unitId)
+  const estreando = (jaTinhaAlgo ?? 0) === 0
+
   // As competências rodam em paralelo (cada On Demand leva ~30–60s gerando).
   r.reconciliation = await Promise.all(
     competencias.map((c) => syncReconciliationCompetencia(u, c, force, admin)),
   )
+
+  // Só é "estreia" de verdade se a rodada trouxe dado (senão o aviso
+  // apareceria toda vez pra loja vinculada mas ainda sem movimento).
+  if (estreando) {
+    r.primeiraSincronizacao = r.reconciliation.some(
+      (c) => (c.persisted ?? 0) > 0,
+    )
+  }
 
   // Taxa de antecipação por competência (complementar) — grava em
   // ifood_antecipacoes pro DRE; não entra no resultado retornado.

@@ -150,6 +150,7 @@ export function Ninefood99QuickSync({
                 rows={fin.map((r) => ({
                   key: r.appShopId,
                   name: r.name ?? r.appShopId.slice(0, 8),
+                  nova: r.primeiraSincronizacao,
                   detail:
                     `${r.count.toLocaleString("pt-BR")} pedidos · ` +
                     `${(r.novos ?? 0) > 0 ? `+${(r.novos ?? 0).toLocaleString("pt-BR")} novos · ` : ""}` +
@@ -202,7 +203,7 @@ function Group({
   title: string
   subtitle?: string
   empty: string
-  rows: { key: string; name: string; detail: string }[]
+  rows: { key: string; name: string; detail: string; nova?: boolean }[]
 }) {
   const toneCls =
     tone === "emerald"
@@ -232,7 +233,14 @@ function Group({
               key={r.key}
               className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-1.5"
             >
-              <span className="truncate text-sm font-medium">{r.name}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-sm font-medium">{r.name}</span>
+                {r.nova && (
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                    nova loja conectada
+                  </span>
+                )}
+              </span>
               <span className="shrink-0 text-right text-[11px] text-muted-foreground">
                 {r.detail}
               </span>

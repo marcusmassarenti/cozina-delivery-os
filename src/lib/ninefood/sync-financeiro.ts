@@ -42,6 +42,9 @@ export type ShopSyncResult = {
   bruto: number
   /** Σ líquido a repassar (settlementAmount, todos os tipos), em R$ */
   liquido: number
+  /** true = a loja não tinha NENHUM lançamento antes desta sync — é a
+   *  estreia dela na integração (vira o aviso "loja nova conectada"). */
+  primeiraSincronizacao?: boolean
   error?: string
 }
 
@@ -172,6 +175,14 @@ export async function syncNinefoodFinanceiro(opts: {
       // "Dado novo": antes de gravar, descobre quais (order_id, order_type) já
       // existiam pra essa loja. O que sobrar é genuinamente novo (a tabela é
       // upsert, então rodar de novo não infla — só reescreve os já-presentes).
+      // Estreia? Sem NENHUM lançamento anterior (qualquer período) = loja
+      // recém-conectada — o dialog destaca com "nova loja".
+      const { count: jaTinhaAlgo } = await admin
+        .from("ninefood_api_bill")
+        .select("order_id", { count: "exact", head: true })
+        .eq("app_shop_id", link.app_shop_id)
+      res.primeiraSincronizacao = (jaTinhaAlgo ?? 0) === 0 && records.length > 0
+
       const existing = new Set<string>()
       for (let i = 0; i < records.length; i += 500) {
         const ids = records.slice(i, i + 500).map((r) => r.order_id)

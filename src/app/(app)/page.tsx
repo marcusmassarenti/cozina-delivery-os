@@ -929,6 +929,38 @@ export default async function Home({
                         </p>
                       ),
                     },
+                    // 99 e Keeta entram como abas pra manter o padrão visual
+                    // dos cards vizinhos (pedido do Marcus) — mas o funil de
+                    // visitas→pedido só existe no relatório do iFood; as
+                    // outras plataformas não expõem esse dado.
+                    ...(unitsWith99 > 0
+                      ? [
+                          {
+                            platform: "99food" as const,
+                            empty: true,
+                            content: (
+                              <p className="py-6 text-center text-xs text-muted-foreground">
+                                O 99 Food não expõe o funil de conversão
+                                (visitas → pedido) nos relatórios da loja.
+                              </p>
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(unitsWithKeeta > 0
+                      ? [
+                          {
+                            platform: "keeta" as const,
+                            empty: true,
+                            content: (
+                              <p className="py-6 text-center text-xs text-muted-foreground">
+                                A Keeta não expõe o funil de conversão
+                                (visitas → pedido) nos relatórios da loja.
+                              </p>
+                            ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
 

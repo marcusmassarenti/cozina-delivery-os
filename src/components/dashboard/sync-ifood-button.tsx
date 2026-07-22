@@ -50,6 +50,7 @@ type UnitResult = {
   unitCode: string
   unitName?: string
   merchantId: string
+  primeiraSincronizacao?: boolean
   reconciliation?: ReconLine[]
 }
 type SyncRunResult = {
@@ -69,6 +70,8 @@ type StoreVerdict = {
   persisted: number
   months: string[]
   detail: string
+  /** Estreia da loja na integração — destaca "nova loja conectada". */
+  nova?: boolean
 }
 
 /** Decide se a loja puxou online, é só manual (sem arquivo) ou deu erro. */
@@ -97,6 +100,7 @@ function classify(u: UnitResult): StoreVerdict {
       name,
       bucket: "online",
       persisted,
+      nova: u.primeiraSincronizacao,
       months: okMonths,
       // Por competência: "jun/26: 7.650 (+51) · mai/26: 6.040 (atualizado)".
       detail: okLines
@@ -314,11 +318,18 @@ function Group({
               key={v.code}
               className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-1.5"
             >
-              <span className="truncate text-sm font-medium">
-                <span className="text-muted-foreground tabular-nums">
-                  {v.code}
-                </span>{" "}
-                {v.name}
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-sm font-medium">
+                  <span className="text-muted-foreground tabular-nums">
+                    {v.code}
+                  </span>{" "}
+                  {v.name}
+                </span>
+                {v.nova && (
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                    nova loja conectada
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-right text-[11px] text-muted-foreground">
                 {v.detail}
