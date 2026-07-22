@@ -7,17 +7,9 @@ import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getEnabledReports } from "@/lib/data/report-prefs"
-import {
-  assertCanView,
-  getAccessibleUnitIds,
-  getCurrentHoldingId,
-} from "@/lib/auth/permissions"
+import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
 
 import { DownloadGuide } from "./_components/download-guide"
-import {
-  IfoodConnectCard,
-  type SolicitacaoIfood,
-} from "./_components/ifood-connect-card"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
 import { ImportTour } from "./_components/import-tour"
@@ -112,27 +104,6 @@ export default async function ImportacaoPage({
   }))
   const recentResult = await getRecentImports(histPage)
 
-  // Solicitações de conexão iFood da empresa atual (fila de autoatendimento).
-  const holdingIdAtual = await getCurrentHoldingId()
-  const unitById = new Map(activeUnits.map((u) => [u.id, `${u.code} · ${u.name}`]))
-  let solicitacoesIfood: SolicitacaoIfood[] = []
-  if (holdingIdAtual) {
-    const { data: sols } = await createAdminClient()
-      .from("ifood_activation_requests")
-      .select("id, cnpj, status, nota, unit_id, created_at")
-      .eq("holding_id", holdingIdAtual)
-      .order("created_at", { ascending: false })
-      .limit(10)
-    solicitacoesIfood = (sols ?? []).map((s) => ({
-      id: s.id as string,
-      cnpj: s.cnpj as string,
-      status: s.status as SolicitacaoIfood["status"],
-      nota: (s.nota as string | null) ?? null,
-      unitLabel: s.unit_id ? (unitById.get(s.unit_id as string) ?? null) : null,
-      createdAt: s.created_at as string,
-    }))
-  }
-
   const recent = recentResult.items
   const recentTotal = recentResult.total
   const recentTotalPages = Math.max(
@@ -171,13 +142,6 @@ export default async function ImportacaoPage({
       <div data-tour="download">
         <DownloadGuide enabled={enabledReports} />
       </div>
-
-      {/* Conexão iFood via API — autoatendimento com fila (app centralizado
-          não tem código de ativação; o fluxo real é solicitação por CNPJ). */}
-      <IfoodConnectCard
-        units={availableUnitsLite}
-        solicitacoes={solicitacoesIfood}
-      />
 
       <div data-tour="checklist">
         <Suspense fallback={<ChecklistSkeleton />}>

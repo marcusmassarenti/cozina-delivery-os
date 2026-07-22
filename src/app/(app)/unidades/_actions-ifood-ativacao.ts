@@ -55,14 +55,13 @@ export async function solicitarAtivacaoIfood(
     return { ok: false, message: "CNPJ inválido — confira os 14 dígitos." }
   }
 
-  // A unidade é opcional (loja pode ainda nem estar cadastrada aqui), mas
-  // quando vier precisa ser uma unidade que o usuário realmente enxerga.
-  const unitId = String(formData.get("unit_id") ?? "").trim() || null
-  if (unitId) {
-    const acessiveis = await getAccessibleUnitIds()
-    if (acessiveis !== null && !acessiveis.includes(unitId)) {
-      return { ok: false, message: "Unidade inválida." }
-    }
+  // O pedido nasce DA página da unidade, então ela é obrigatória — e
+  // precisa ser uma unidade que o usuário realmente enxerga.
+  const unitId = String(formData.get("unit_id") ?? "").trim()
+  if (!unitId) return { ok: false, message: "Unidade não informada." }
+  const acessiveis = await getAccessibleUnitIds()
+  if (acessiveis !== null && !acessiveis.includes(unitId)) {
+    return { ok: false, message: "Unidade inválida." }
   }
 
   // Evita pedido duplicado do mesmo CNPJ ainda em andamento.
@@ -93,7 +92,7 @@ export async function solicitarAtivacaoIfood(
     return { ok: false, message: `Falha ao registrar: ${error.message}` }
   }
 
-  revalidatePath("/importacao")
+  revalidatePath("/unidades")
   return {
     ok: true,
     message:

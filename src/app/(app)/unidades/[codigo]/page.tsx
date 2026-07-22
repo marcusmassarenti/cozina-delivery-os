@@ -47,8 +47,13 @@ import { getRealMonthlyForUnitsForRange } from "@/lib/data/range-aggregation"
 import { AlertTriangle } from "lucide-react"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { PlatformSwitcher } from "@/components/shared/platform-switcher"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { EditUnitDialog } from "../_components/edit-unit-dialog"
 import { AvaliacoesTab } from "./_components/avaliacoes-tab"
+import {
+  IfoodApiStatus,
+  type IfoodApiEstado,
+} from "./_components/ifood-api-status"
 import { Avaliacoes99Tab } from "./_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "./_components/avaliacoes-keeta-tab"
 import { CardapioTab } from "./_components/cardapio-tab"
@@ -82,6 +87,35 @@ export default async function UnidadeDetalhePage({
   if (accessibleIds !== null && !accessibleIds.includes(unit.id)) notFound()
 
   const canEditUnit = await userCan("unidades", "edit")
+
+  // Situação da conexão iFood-via-API desta loja (faixa no cabeçalho):
+  // vinculada (api_store_id) > última solicitação em aberto > nada.
+  const adminDb = createAdminClient()
+  const [{ data: upIfood }, { data: ultimaSolicitacao }] = await Promise.all([
+    adminDb
+      .from("unit_platforms")
+      .select("api_store_id, active")
+      .eq("unit_id", unit.id)
+      .eq("platform", "ifood")
+      .maybeSingle(),
+    adminDb
+      .from("ifood_activation_requests")
+      .select("status, nota")
+      .eq("unit_id", unit.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+  const ifoodApiEstado: IfoodApiEstado = upIfood?.api_store_id
+    ? { tipo: "conectada" }
+    : ultimaSolicitacao?.status === "pendente"
+      ? { tipo: "pendente" }
+      : ultimaSolicitacao?.status === "solicitada"
+        ? { tipo: "solicitada" }
+        : ultimaSolicitacao?.status === "recusada"
+          ? { tipo: "recusada", nota: ultimaSolicitacao.nota as string | null }
+          : { tipo: "nenhuma" }
+  const mostraIfoodApi = Boolean(upIfood?.active)
 
   // Fechamento de sociedade (acerto 50/50) — só na JK por enquanto.
   const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
@@ -234,6 +268,15 @@ export default async function UnidadeDetalhePage({
           )}
         </div>
       </div>
+
+      {mostraIfoodApi && (
+        <IfoodApiStatus
+          unitId={unit.id}
+          unitCnpj={unit.cnpj}
+          estado={ifoodApiEstado}
+          podeSolicitar={canEditUnit}
+        />
+      )}
 
       {!isFullMonth && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
