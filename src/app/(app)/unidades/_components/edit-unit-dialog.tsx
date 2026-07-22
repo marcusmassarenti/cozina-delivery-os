@@ -4,7 +4,17 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Cable, Calendar, Compass, Pencil, Power, Store } from "lucide-react"
+import {
+  Cable,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Compass,
+  Pencil,
+  Plug,
+  Power,
+  Store,
+} from "lucide-react"
 
 import { CoachTour, type CoachStep } from "@/components/onboarding/coach-tour"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -28,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { updateUnit, type CreateUnitState } from "../_actions"
+import { solicitarAtivacaoIfood } from "../_actions-ifood-ativacao"
 import { UnitLogoUploader } from "./unit-logo-uploader"
 
 const UFs = [
@@ -100,19 +111,33 @@ export type EditUnitInitial = {
   logoUrl?: string | null
 }
 
+/** Situação da conexão iFood-via-API, resumida pro cadastro. */
+export type IfoodApiCadastro = "conectada" | "andamento" | "disponivel"
+
 export function EditUnitDialog({
   unit,
   inline,
+  ifoodApi,
 }: {
   unit: EditUnitInitial
   inline?: boolean
+  /** Omitido = loja sem iFood ativo (bloco não aparece). */
+  ifoodApi?: IfoodApiCadastro
 }) {
   const [open, setOpen] = React.useState(false)
   const [tourOpen, setTourOpen] = React.useState(false)
   const [state, formAction] = useActionState(updateUnit, initial)
+  const [solicitacaoState, solicitarAction] = useActionState(
+    solicitarAtivacaoIfood,
+    { ok: false },
+  )
   const [cnpj, setCnpj] = React.useState(unit.cnpj ? maskCnpj(unit.cnpj) : "")
   const [uf, setUf] = React.useState(unit.state ?? "SP")
   const router = useRouter()
+
+  React.useEffect(() => {
+    if (solicitacaoState.ok) router.refresh()
+  }, [solicitacaoState.ok, router])
 
   React.useEffect(() => {
     if (state.ok) {
@@ -258,6 +283,71 @@ export function EditUnitDialog({
               platformInauguracoes={unit.platformInauguracoes ?? {}}
             />
           </div>
+
+          {/* Conexão iFood via API — status mora AQUI no cadastro (pedido do
+              Marcus: banner permanente na página poluía). O botão usa
+              formAction pra disparar a action de solicitação SEM form
+              aninhado (inválido em HTML) — os campos do cadastro vão juntos,
+              e a action lê o cnpj_api. */}
+          {ifoodApi === "conectada" && (
+            <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+              <CheckCircle2 className="size-3.5 shrink-0" />
+              <span>
+                <b>iFood conectado via API</b> — financeiro entra sozinho, sem
+                importação manual.
+              </span>
+            </div>
+          )}
+          {ifoodApi === "andamento" && (
+            <div className="flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
+              <Clock className="size-3.5 shrink-0" />
+              <span>
+                <b>Conexão iFood via API em andamento</b> — acompanhe o status
+                na página da loja.
+              </span>
+            </div>
+          )}
+          {ifoodApi === "disponivel" && (
+            <div className="flex flex-col gap-2 rounded-md border bg-muted/30 px-3 py-2.5">
+              <p className="text-xs">
+                <b>Conectar iFood via API</b>{" "}
+                <span className="text-muted-foreground">
+                  — o financeiro passa a entrar sozinho, sem importação manual.
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="unit_id" value={unit.unitId} />
+                <input
+                  name="cnpj_api"
+                  inputMode="numeric"
+                  defaultValue={unit.cnpj ? maskCnpj(unit.cnpj) : ""}
+                  placeholder="CNPJ da loja no iFood"
+                  className="h-8 w-44 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  formAction={solicitarAction}
+                  formNoValidate
+                >
+                  <Plug className="size-3.5" />
+                  Solicitar conexão
+                </Button>
+              </div>
+              {solicitacaoState.message && (
+                <p
+                  className={`text-[11px] ${
+                    solicitacaoState.ok
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-amber-700 dark:text-amber-400"
+                  }`}
+                >
+                  {solicitacaoState.message}
+                </p>
+              )}
+            </div>
+          )}
 
           <div data-tour="u-ativa" className="flex items-center gap-2">
             <input

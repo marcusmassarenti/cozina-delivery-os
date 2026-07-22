@@ -50,7 +50,11 @@ export async function solicitarAtivacaoIfood(
     return { ok: false, message: "Não consegui identificar a sua empresa." }
   }
 
-  const cnpj = normalizarCnpj(String(formData.get("cnpj") ?? ""))
+  // "cnpj_api" vem do bloco dentro do cadastro (Editar unidade), que já tem
+  // um campo "cnpj" próprio (o do cadastro) — nome distinto evita colisão.
+  const cnpj = normalizarCnpj(
+    String(formData.get("cnpj_api") ?? formData.get("cnpj") ?? ""),
+  )
   if (!cnpj) {
     return { ok: false, message: "CNPJ inválido — confira os 14 dígitos." }
   }

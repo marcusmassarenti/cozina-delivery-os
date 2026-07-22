@@ -4,16 +4,9 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import {
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Plug,
-  XCircle,
-} from "lucide-react"
+import { Clock, ExternalLink, Plug, XCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { PlatformLogo } from "@/components/platform-logo"
 
 import {
   solicitarAtivacaoIfood,
@@ -78,17 +71,10 @@ export function IfoodApiStatus({
     if (state.ok) router.refresh()
   }, [state.ok, router])
 
-  if (estado.tipo === "conectada") {
-    return (
-      <Faixa tom="emerald">
-        <CheckCircle2 className="size-3.5 shrink-0" />
-        <span>
-          <b>iFood conectado via API</b> — o financeiro entra sozinho, todos os
-          dias, sem importação manual.
-        </span>
-      </Faixa>
-    )
-  }
+  // "conectada" e o convite de conectar moram no CADASTRO (Editar unidade)
+  // — pedido do Marcus: banner permanente poluía a página. A faixa aqui é
+  // só pros estados transitórios, e some sozinha quando a conexão fecha.
+  if (estado.tipo === "conectada" || estado.tipo === "nenhuma") return null
 
   if (estado.tipo === "pendente") {
     return (
@@ -147,29 +133,7 @@ export function IfoodApiStatus({
     )
   }
 
-  // nenhuma: só admins veem o convite (franqueado não tem o que fazer aqui)
-  if (!podeSolicitar) return null
-
-  return (
-    <Faixa tom="neutra">
-      <PlatformLogo platform="ifood" className="size-4 shrink-0" />
-      <span>
-        <b>Conectar iFood via API</b> — o financeiro passa a entrar sozinho,
-        sem importação manual.
-      </span>
-      {!aberto ? (
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          className="ml-auto shrink-0 rounded-md border bg-card px-2.5 py-1 text-[11px] font-semibold transition-colors hover:bg-muted"
-        >
-          Conectar
-        </button>
-      ) : (
-        <FormSolicitar unitId={unitId} unitCnpj={unitCnpj} action={action} state={state} />
-      )}
-    </Faixa>
-  )
+  return null
 }
 
 function FormSolicitar({

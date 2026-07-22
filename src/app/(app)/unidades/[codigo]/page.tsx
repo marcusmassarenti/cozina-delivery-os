@@ -48,7 +48,10 @@ import { AlertTriangle } from "lucide-react"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { PlatformSwitcher } from "@/components/shared/platform-switcher"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { EditUnitDialog } from "../_components/edit-unit-dialog"
+import {
+  EditUnitDialog,
+  type IfoodApiCadastro,
+} from "../_components/edit-unit-dialog"
 import { AvaliacoesTab } from "./_components/avaliacoes-tab"
 import {
   IfoodApiStatus,
@@ -115,7 +118,19 @@ export default async function UnidadeDetalhePage({
         : ultimaSolicitacao?.status === "recusada"
           ? { tipo: "recusada", nota: ultimaSolicitacao.nota as string | null }
           : { tipo: "nenhuma" }
-  const mostraIfoodApi = Boolean(upIfood?.active)
+  // A FAIXA na página só aparece em estado transitório (tem ação em curso);
+  // status permanente (conectada) e o convite moram no cadastro (Editar).
+  const mostraFaixaIfood =
+    Boolean(upIfood?.active) &&
+    ["pendente", "solicitada", "recusada"].includes(ifoodApiEstado.tipo)
+  // Resumo pro bloco dentro do Editar unidade.
+  const ifoodApiCadastro: IfoodApiCadastro | undefined = upIfood?.active
+    ? ifoodApiEstado.tipo === "conectada"
+      ? "conectada"
+      : ifoodApiEstado.tipo === "pendente" || ifoodApiEstado.tipo === "solicitada"
+        ? "andamento"
+        : "disponivel"
+    : undefined
 
   // Fechamento de sociedade (acerto 50/50) — só na JK por enquanto.
   const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
@@ -249,6 +264,7 @@ export default async function UnidadeDetalhePage({
           </Link>
           {canEditUnit && (
             <EditUnitDialog
+              ifoodApi={ifoodApiCadastro}
               unit={{
                 unitId: unit.id,
                 code: unit.code,
@@ -269,7 +285,7 @@ export default async function UnidadeDetalhePage({
         </div>
       </div>
 
-      {mostraIfoodApi && (
+      {mostraFaixaIfood && (
         <IfoodApiStatus
           unitId={unit.id}
           unitCnpj={unit.cnpj}
