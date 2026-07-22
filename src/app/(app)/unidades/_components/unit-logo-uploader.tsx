@@ -79,6 +79,20 @@ export function UnitLogoUploader({
             )}
           </span>
         </button>
+        {/* Sem logo, o avatar cai na inicial da loja e ninguém adivinha que
+            aquilo é clicável — o rótulo diz o que fazer. */}
+        {!currentLogo && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+            className="text-[10px] font-medium leading-tight text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+          >
+            Adicionar
+            <br />
+            logo
+          </button>
+        )}
         {currentLogo && (
           <button
             type="button"
