@@ -172,7 +172,7 @@ export function EditUnitDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-6rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-7">
             <DialogTitle>Editar unidade</DialogTitle>
@@ -200,13 +200,13 @@ export function EditUnitDialog({
         <form
           action={formAction}
           {...validacaoPtBr}
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-3"
         >
           <input type="hidden" name="unitId" value={unit.unitId} />
 
           {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
               dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
 
           <div data-tour="u-nome">
             <Field label="Nome *" error={state.fieldErrors?.name}>

@@ -86,7 +86,7 @@ export function NewUnitDialog({
           </button>
         }
       />
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-6rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Nova unidade</DialogTitle>
           <DialogDescription>
@@ -98,11 +98,11 @@ export function NewUnitDialog({
         <form
           action={formAction}
           {...validacaoPtBr}
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-3"
         >
           {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
               dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Nome *" error={state.fieldErrors?.name}>
             <Input
               name="name"

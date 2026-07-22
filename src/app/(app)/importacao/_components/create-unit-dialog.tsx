@@ -98,7 +98,7 @@ export function CreateUnitDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-6rem)] overflow-y-auto sm:max-w-2xl">
         <DialogInner
           key={unmapped.storeId}
           unmapped={unmapped}
@@ -353,7 +353,7 @@ function LinkForm({
         fd.set("file", file, file.name)
         formAction(fd)
       }}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3"
     >
       <input type="hidden" name="storeId" value={unmapped.storeId} />
       <input type="hidden" name="platform" value={unmapped.platform} />
@@ -476,14 +476,14 @@ function CreateForm({
         formAction(fd)
       }}
       {...validacaoPtBr}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3"
     >
       <input type="hidden" name="storeId" value={unmapped.storeId} />
       <input type="hidden" name="platform" value={unmapped.platform} />
 
       {/* 2 colunas no desktop — dialog comprido exigia zoom 50% em monitor
           pequeno (feedback de cliente). */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
 
       <Field label="Nome *">
         <Input
