@@ -119,12 +119,15 @@ export function EditUnitDialog({
   unit,
   inline,
   ifoodApi,
+  nineApiConectada,
   cadastroExigente,
 }: {
   unit: EditUnitInitial
   inline?: boolean
   /** Omitido = loja sem iFood ativo (bloco não aparece). */
   ifoodApi?: IfoodApiCadastro
+  /** true = a loja sincroniza financeiro+cardápio pela API do 99. */
+  nineApiConectada?: boolean
   /** Cliente SaaS: CNPJ + inauguração + plataforma obrigatórios (o
    *  superadmin fica isento — casos legados da Cozina). */
   cadastroExigente?: boolean
@@ -320,12 +323,20 @@ export function EditUnitDialog({
               formAction pra disparar a action de solicitação SEM form
               aninhado (inválido em HTML) — os campos do cadastro vão juntos,
               e a action lê o cnpj_api. */}
-          {ifoodApi === "conectada" && (
+          {(ifoodApi === "conectada" || nineApiConectada) && (
             <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
               <CheckCircle2 className="size-3.5 shrink-0" />
               <span>
-                <b>iFood conectado via API</b> — financeiro entra sozinho, sem
-                importação manual.
+                <b>
+                  {[
+                    ifoodApi === "conectada" ? "iFood" : null,
+                    nineApiConectada ? "99 Food" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" e ")}{" "}
+                  conectado via API
+                </b>{" "}
+                — financeiro entra sozinho, sem importação manual.
               </span>
             </div>
           )}

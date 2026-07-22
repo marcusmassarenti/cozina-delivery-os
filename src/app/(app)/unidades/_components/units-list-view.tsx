@@ -48,6 +48,7 @@ export function UnitsListView({
   ninefoodSyncedIds = [],
   brandLogoUrl = null,
   cadastroExigente = false,
+  ifoodApiPorUnidade = {},
 }: {
   units: Unit[]
   canEdit?: boolean
@@ -58,6 +59,8 @@ export function UnitsListView({
   brandLogoUrl?: string | null
   /** Cliente SaaS: CNPJ + inauguração + plataforma obrigatórios no cadastro. */
   cadastroExigente?: boolean
+  /** Situação iFood-via-API por unidade (conectada/andamento). */
+  ifoodApiPorUnidade?: Record<string, "conectada" | "andamento">
 }) {
   const navigate = useNavigate()
   const [search, setSearch] = React.useState("")
@@ -270,6 +273,12 @@ export function UnitsListView({
                     <EditUnitDialog
                       inline
                       cadastroExigente={cadastroExigente}
+                      ifoodApi={
+                        unit.platforms.includes("ifood")
+                          ? (ifoodApiPorUnidade[unit.id] ?? "disponivel")
+                          : undefined
+                      }
+                      nineApiConectada={ninefoodSyncedIds.includes(unit.id)}
                       unit={{
                         unitId: unit.id,
                         code: unit.code,

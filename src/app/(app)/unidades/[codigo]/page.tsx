@@ -95,7 +95,8 @@ export default async function UnidadeDetalhePage({
   // Situação da conexão iFood-via-API desta loja (faixa no cabeçalho):
   // vinculada (api_store_id) > última solicitação em aberto > nada.
   const adminDb = createAdminClient()
-  const [{ data: upIfood }, { data: ultimaSolicitacao }] = await Promise.all([
+  const [{ data: upIfood }, { data: ultimaSolicitacao }, { data: nineLink }] =
+    await Promise.all([
     adminDb
       .from("unit_platforms")
       .select("api_store_id, active")
@@ -109,7 +110,15 @@ export default async function UnidadeDetalhePage({
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    adminDb
+      .from("ninefood_store_links")
+      .select("app_shop_id")
+      .eq("unit_id", unit.id)
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle(),
   ])
+  const nineApiConectada = Boolean(nineLink)
   const ifoodApiEstado: IfoodApiEstado = upIfood?.api_store_id
     ? { tipo: "conectada" }
     : ultimaSolicitacao?.status === "pendente"
@@ -266,6 +275,7 @@ export default async function UnidadeDetalhePage({
           {canEditUnit && (
             <EditUnitDialog
               ifoodApi={ifoodApiCadastro}
+              nineApiConectada={nineApiConectada}
               cadastroExigente={cadastroExigente}
               unit={{
                 unitId: unit.id,
