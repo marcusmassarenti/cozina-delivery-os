@@ -47,6 +47,7 @@ export function UnitsListView({
   canDelete = false,
   ninefoodSyncedIds = [],
   brandLogoUrl = null,
+  cadastroExigente = false,
 }: {
   units: Unit[]
   canEdit?: boolean
@@ -55,6 +56,8 @@ export function UnitsListView({
   ninefoodSyncedIds?: string[]
   /** Logo da empresa (white-label) pro avatar das lojas. */
   brandLogoUrl?: string | null
+  /** Cliente SaaS: CNPJ + inauguração + plataforma obrigatórios no cadastro. */
+  cadastroExigente?: boolean
 }) {
   const navigate = useNavigate()
   const [search, setSearch] = React.useState("")
@@ -139,7 +142,7 @@ export function UnitsListView({
               className="h-9 w-48 rounded-md border bg-card pl-8 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
           </div>
-          {canEdit && <NewUnitDialog />}
+          {canEdit && <NewUnitDialog cadastroExigente={cadastroExigente} />}
         </div>
       </div>
 
@@ -266,6 +269,7 @@ export function UnitsListView({
                   {canEdit && (
                     <EditUnitDialog
                       inline
+                      cadastroExigente={cadastroExigente}
                       unit={{
                         unitId: unit.id,
                         code: unit.code,

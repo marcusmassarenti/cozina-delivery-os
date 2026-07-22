@@ -33,8 +33,11 @@ const initial: ImportBatchState = { ok: false }
 
 export function ImportForm({
   availableUnits,
+  cadastroExigente = false,
 }: {
   availableUnits: AvailableUnit[]
+  /** Cliente SaaS: CNPJ + inauguração obrigatórios no "criar e importar". */
+  cadastroExigente?: boolean
 }) {
   const [submitting, setSubmitting] = React.useState(false)
   const [progress, setProgress] = React.useState<{
@@ -347,6 +350,7 @@ export function ImportForm({
 
       {currentWizardResult?.unmapped && currentWizardFile && (
         <CreateUnitDialog
+          cadastroExigente={cadastroExigente}
           open
           onOpenChange={handleWizardClose}
           unmapped={currentWizardResult.unmapped}

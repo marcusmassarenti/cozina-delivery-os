@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache"
 
 import { requireModulePermission, requireUnitAccess } from "@/lib/auth/guards"
+import { isSuperadmin } from "@/lib/auth/permissions"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { validateImageUpload } from "@/lib/upload/image"
@@ -69,6 +70,31 @@ async function generateNextCode(
   return String(max + 1).padStart(2, "0")
 }
 
+/**
+ * Regras extras de cadastro pro CLIENTE SaaS (pedido do Marcus): CNPJ,
+ * inauguração e ao menos uma plataforma são OBRIGATÓRIOS — é o que permite
+ * o "Conectar iFood via API" reusar o CNPJ do cadastro sem pedir de novo, e
+ * a Cobertura funcionar desde o primeiro mês.
+ *
+ * O superadmin (Marcus) fica isento: as lojas da Cozina têm casos legados
+ * (CNPJ em formalização etc.) e ele sabe o que está fazendo.
+ */
+async function aplicarCadastroExigente(
+  fieldErrors: Record<string, string>,
+  dados: {
+    cnpjRaw: string
+    dataInauguracao: string | null
+    platformsCount: number
+  },
+): Promise<void> {
+  if (await isSuperadmin()) return
+  if (!dados.cnpjRaw) fieldErrors.cnpj = "CNPJ obrigatório"
+  if (!dados.dataInauguracao)
+    fieldErrors.data_inauguracao = "Inauguração obrigatória"
+  if (dados.platformsCount === 0)
+    fieldErrors.platforms = "Selecione ao menos uma plataforma"
+}
+
 export async function createUnit(
   _prevState: CreateUnitState,
   formData: FormData,
@@ -93,6 +119,11 @@ export async function createUnit(
   if (!state || state.length !== 2)
     fieldErrors.state = "UF deve ter 2 letras"
   if (cnpjRaw && !isValidCnpj(cnpjRaw)) fieldErrors.cnpj = "CNPJ inválido"
+  await aplicarCadastroExigente(fieldErrors, {
+    cnpjRaw,
+    dataInauguracao,
+    platformsCount: platforms.length,
+  })
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
@@ -268,6 +299,11 @@ export async function updateUnit(
   if (!state || state.length !== 2)
     fieldErrors.state = "UF deve ter 2 letras"
   if (cnpjRaw && !isValidCnpj(cnpjRaw)) fieldErrors.cnpj = "CNPJ inválido"
+  await aplicarCadastroExigente(fieldErrors, {
+    cnpjRaw,
+    dataInauguracao,
+    platformsCount: platforms.length,
+  })
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, message: "Corrija os campos destacados." }

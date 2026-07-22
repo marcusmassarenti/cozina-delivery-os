@@ -83,6 +83,7 @@ export function CreateUnitDialog({
   availableUnits,
   progress,
   onSuccess,
+  cadastroExigente = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -91,6 +92,8 @@ export function CreateUnitDialog({
   availableUnits: AvailableUnit[]
   progress?: { current: number; total: number }
   onSuccess: (result: ImportFileResult) => void
+  /** Cliente SaaS: CNPJ + inauguração obrigatórios no cadastro. */
+  cadastroExigente?: boolean
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,6 +106,7 @@ export function CreateUnitDialog({
           progress={progress}
           onSuccess={onSuccess}
           onCancel={() => onOpenChange(false)}
+          cadastroExigente={cadastroExigente}
         />
       </DialogContent>
     </Dialog>
@@ -147,6 +151,7 @@ function DialogInner({
   progress,
   onSuccess,
   onCancel,
+  cadastroExigente = false,
 }: {
   unmapped: NonNullable<ImportFileResult["unmapped"]>
   file: File
@@ -154,6 +159,7 @@ function DialogInner({
   progress?: { current: number; total: number }
   onSuccess: (result: ImportFileResult) => void
   onCancel: () => void
+  cadastroExigente?: boolean
 }) {
   // Filtra unidades que já têm essa plataforma com OUTRO ID (não pode reusar)
   const eligibleUnits = availableUnits.filter((u) => {
@@ -245,6 +251,7 @@ function DialogInner({
           progress={progress}
           onSuccess={onSuccess}
           onCancel={onCancel}
+          cadastroExigente={cadastroExigente}
         />
       )}
     </>
@@ -429,12 +436,14 @@ function CreateForm({
   progress,
   onSuccess,
   onCancel,
+  cadastroExigente = false,
 }: {
   unmapped: NonNullable<ImportFileResult["unmapped"]>
   file: File
   progress?: { current: number; total: number }
   onSuccess: (result: ImportFileResult) => void
   onCancel: () => void
+  cadastroExigente?: boolean
 }) {
   const [state, formAction] = useActionState(createUnitAndImport, createInitial)
   const [name, setName] = React.useState(unmapped.suggestedName ?? "")
@@ -509,13 +518,22 @@ function CreateForm({
         </Field>
       </div>
 
-      <Field label="CNPJ (do relatório)">
+      <Field label={cadastroExigente ? "CNPJ" : "CNPJ (do relatório)"}>
         <Input
           name="cnpj"
           value={cnpj}
           onChange={(e) => setCnpj(maskCnpj(e.target.value))}
           placeholder="00.000.000/0000-00"
           maxLength={18}
+          required={cadastroExigente}
+        />
+      </Field>
+
+      <Field label="Inauguração da unidade">
+        <Input
+          name="data_inauguracao"
+          type="date"
+          required={cadastroExigente}
         />
       </Field>
 

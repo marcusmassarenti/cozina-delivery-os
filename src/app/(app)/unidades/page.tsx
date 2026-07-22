@@ -1,5 +1,5 @@
 import { getVisibleUnits } from "@/lib/data/units"
-import { assertCanView, userCan } from "@/lib/auth/permissions"
+import { assertCanView, isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { UnitsListView } from "./_components/units-list-view"
@@ -7,12 +7,13 @@ import { UnitsListView } from "./_components/units-list-view"
 export default async function UnidadesPage() {
   await assertCanView("unidades")
   const admin = createAdminClient()
-  const [units, canEdit, canDelete, links, ctx] = await Promise.all([
+  const [units, canEdit, canDelete, links, ctx, superadmin] = await Promise.all([
     getVisibleUnits(),
     userCan("unidades", "edit"),
     userCan("unidades", "delete"),
     admin.from("ninefood_store_links").select("unit_id").eq("active", true),
     getCurrentUserContext(),
+    isSuperadmin(),
   ])
   // unidades que sincronizam financeiro/cardápio pela API do 99
   const ninefoodSyncedIds = ((links.data ?? []) as { unit_id: string | null }[])
@@ -27,6 +28,7 @@ export default async function UnidadesPage() {
         canDelete={canDelete}
         ninefoodSyncedIds={ninefoodSyncedIds}
         brandLogoUrl={ctx.logoUrl}
+        cadastroExigente={!superadmin}
       />
     </div>
   )

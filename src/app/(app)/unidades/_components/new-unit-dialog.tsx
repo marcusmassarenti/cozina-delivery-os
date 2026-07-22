@@ -51,7 +51,12 @@ function maskCnpj(v: string) {
     .replace(/(\d{4})(\d)/, "$1-$2")
 }
 
-export function NewUnitDialog() {
+export function NewUnitDialog({
+  cadastroExigente,
+}: {
+  /** Cliente SaaS: CNPJ + inauguração + plataforma obrigatórios. */
+  cadastroExigente?: boolean
+}) {
   const [open, setOpen] = React.useState(false)
   const [state, formAction] = useActionState(createUnit, initial)
   const [cnpj, setCnpj] = React.useState("")
@@ -123,19 +128,30 @@ export function NewUnitDialog() {
             </div>
           </div>
 
-          <Field label="CNPJ (opcional)" error={state.fieldErrors?.cnpj}>
+          <Field
+            label={cadastroExigente ? "CNPJ" : "CNPJ (opcional)"}
+            error={state.fieldErrors?.cnpj}
+          >
             <Input
               name="cnpj"
               placeholder="00.000.000/0000-00"
               value={cnpj}
               onChange={(e) => setCnpj(maskCnpj(e.target.value))}
               maxLength={18}
+              required={cadastroExigente}
             />
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Inauguração da unidade">
-              <Input name="data_inauguracao" type="date" />
+            <Field
+              label="Inauguração da unidade"
+              error={state.fieldErrors?.data_inauguracao}
+            >
+              <Input
+                name="data_inauguracao"
+                type="date"
+                required={cadastroExigente}
+              />
             </Field>
             <Field label="Encerramento (se fechou)">
               <Input name="data_encerramento" type="date" />
@@ -149,6 +165,11 @@ export function NewUnitDialog() {
                 <PlatformCheckbox key={p.id} platform={p} />
               ))}
             </div>
+            {state.fieldErrors?.platforms && (
+              <p className="text-[11px] text-rose-600">
+                {state.fieldErrors.platforms}
+              </p>
+            )}
             <p className="text-[10px] text-muted-foreground">
               Marque as plataformas onde essa loja opera. Pode mudar depois.
             </p>

@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import * as XLSX from "xlsx"
 
 import { requireModulePermission } from "@/lib/auth/guards"
+import { isSuperadmin } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getDefaultBrand } from "@/lib/data/units"
 import { parseIfoodReport } from "@/lib/import/ifood"
@@ -3599,6 +3600,21 @@ export async function createUnitAndImport(
   if (!city) return { ok: false, message: "Cidade obrigatória." }
   if (!stateUf || stateUf.length !== 2)
     return { ok: false, message: "UF deve ter 2 letras (ex.: SP)." }
+
+  // Cadastro exigente pro cliente SaaS (mesma régua do createUnit/updateUnit):
+  // CNPJ e inauguração obrigatórios. Plataforma já é garantida acima (a de
+  // origem do relatório entra sempre). Superadmin fica isento.
+  const dataInauguracaoRaw = String(
+    formData.get("data_inauguracao") ?? "",
+  ).trim()
+  if (!(await isSuperadmin())) {
+    if (cnpjRaw.replace(/\D/g, "").length !== 14) {
+      return { ok: false, message: "CNPJ obrigatório (14 dígitos)." }
+    }
+    if (!dataInauguracaoRaw) {
+      return { ok: false, message: "Data de inauguração obrigatória." }
+    }
+  }
   const platformLabel =
     sourcePlatform === "ifood"
       ? "iFood"
@@ -3661,6 +3677,7 @@ export async function createUnitAndImport(
       cnpj: cnpjClean.length === 14 ? cnpjClean : null,
       active,
       brand_id: brand.id,
+      data_inauguracao: dataInauguracaoRaw || null,
     })
     .select("id, code, name")
     .single()

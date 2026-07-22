@@ -31,7 +31,7 @@ import {
   getKeetaResumoForMonth,
 } from "@/lib/data/keeta-imported"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
-import { userCan } from "@/lib/auth/permissions"
+import { isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
@@ -90,6 +90,7 @@ export default async function UnidadeDetalhePage({
   if (accessibleIds !== null && !accessibleIds.includes(unit.id)) notFound()
 
   const canEditUnit = await userCan("unidades", "edit")
+  const cadastroExigente = !(await isSuperadmin())
 
   // Situação da conexão iFood-via-API desta loja (faixa no cabeçalho):
   // vinculada (api_store_id) > última solicitação em aberto > nada.
@@ -265,6 +266,7 @@ export default async function UnidadeDetalhePage({
           {canEditUnit && (
             <EditUnitDialog
               ifoodApi={ifoodApiCadastro}
+              cadastroExigente={cadastroExigente}
               unit={{
                 unitId: unit.id,
                 code: unit.code,

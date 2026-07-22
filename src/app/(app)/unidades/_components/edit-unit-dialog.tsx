@@ -118,11 +118,15 @@ export function EditUnitDialog({
   unit,
   inline,
   ifoodApi,
+  cadastroExigente,
 }: {
   unit: EditUnitInitial
   inline?: boolean
   /** Omitido = loja sem iFood ativo (bloco não aparece). */
   ifoodApi?: IfoodApiCadastro
+  /** Cliente SaaS: CNPJ + inauguração + plataforma obrigatórios (o
+   *  superadmin fica isento — casos legados da Cozina). */
+  cadastroExigente?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
   const [tourOpen, setTourOpen] = React.useState(false)
@@ -236,22 +240,30 @@ export function EditUnitDialog({
             </div>
           </div>
 
-          <Field label="CNPJ (opcional)" error={state.fieldErrors?.cnpj}>
+          <Field
+            label={cadastroExigente ? "CNPJ" : "CNPJ (opcional)"}
+            error={state.fieldErrors?.cnpj}
+          >
             <Input
               name="cnpj"
               placeholder="00.000.000/0000-00"
               value={cnpj}
               onChange={(e) => setCnpj(maskCnpj(e.target.value))}
               maxLength={18}
+              required={cadastroExigente}
             />
           </Field>
 
           <div data-tour="u-inauguracao" className="grid grid-cols-2 gap-3">
-            <Field label="Inauguração da unidade">
+            <Field
+              label="Inauguração da unidade"
+              error={state.fieldErrors?.data_inauguracao}
+            >
               <Input
                 name="data_inauguracao"
                 type="date"
                 defaultValue={unit.dataInauguracao ?? ""}
+                required={cadastroExigente}
               />
             </Field>
             <Field label="Encerramento (se fechou)">
@@ -278,6 +290,11 @@ export function EditUnitDialog({
                 />
               ))}
             </div>
+            {state.fieldErrors?.platforms && (
+              <p className="text-[11px] text-rose-600">
+                {state.fieldErrors.platforms}
+              </p>
+            )}
             <PlatformIdsBlock
               externalStoreIds={unit.externalStoreIds ?? {}}
               platformInauguracoes={unit.platformInauguracoes ?? {}}
@@ -317,13 +334,18 @@ export function EditUnitDialog({
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input type="hidden" name="unit_id" value={unit.unitId} />
-                <input
-                  name="cnpj_api"
-                  inputMode="numeric"
-                  defaultValue={unit.cnpj ? maskCnpj(unit.cnpj) : ""}
-                  placeholder="CNPJ da loja no iFood"
-                  className="h-8 w-44 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
-                />
+                {/* Cliente SaaS: o CNPJ já é obrigatório no cadastro acima —
+                    o formAction envia o form inteiro, então a action lê o
+                    campo "cnpj" direto. Sem pedir duas vezes. */}
+                {!cadastroExigente && (
+                  <input
+                    name="cnpj_api"
+                    inputMode="numeric"
+                    defaultValue={unit.cnpj ? maskCnpj(unit.cnpj) : ""}
+                    placeholder="CNPJ da loja no iFood"
+                    className="h-8 w-44 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
+                  />
+                )}
                 <Button
                   type="submit"
                   size="sm"
@@ -334,6 +356,11 @@ export function EditUnitDialog({
                   <Plug className="size-3.5" />
                   Solicitar conexão
                 </Button>
+                {cadastroExigente && (
+                  <span className="text-[10px] text-muted-foreground">
+                    usa o CNPJ do cadastro acima
+                  </span>
+                )}
               </div>
               {solicitacaoState.message && (
                 <p

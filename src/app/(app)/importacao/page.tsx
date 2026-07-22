@@ -7,7 +7,11 @@ import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getEnabledReports } from "@/lib/data/report-prefs"
-import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
+import {
+  assertCanView,
+  getAccessibleUnitIds,
+  isSuperadmin,
+} from "@/lib/auth/permissions"
 
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
@@ -162,7 +166,10 @@ export default async function ImportacaoPage({
             </span>
           </div>
         )}
-        <ImportForm availableUnits={availableUnitsLite} />
+        <ImportForm
+          availableUnits={availableUnitsLite}
+          cadastroExigente={!(await isSuperadmin())}
+        />
       </div>
 
       <SectionDivider number={2} label="Histórico de importações" />
