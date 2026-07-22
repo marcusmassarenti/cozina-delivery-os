@@ -124,7 +124,6 @@ export function DreDetalhado({
   const plat = isTodas ? null : platforms.find((p) => p.id === sel)
   const bruto = isTodas ? totalBruto : plat?.bruto ?? 0
   const liquido = isTodas ? totalLiquido : plat?.liquido ?? 0
-  const taxas = Math.max(0, bruto - liquido)
   const vr = isTodas ? vrTotal : plat?.vrLiquido ?? 0
   // "Recebido direto pela loja" — só iFood tem (PIX/dinheiro/VR/maquininha
   // em pedidos do app). Entra como receita extra, igual o VR mas DIFERENTE
@@ -132,6 +131,12 @@ export function DreDetalhado({
   const recebidoDireto = isTodas
     ? recebidoDiretoTotal
     : plat?.recebidoDireto ?? 0
+  // Taxas REAIS = bruto − repasse − recebido direto. Antes a linha era só
+  // "bruto − repasse", o que embutia o dinheiro que a loja recebeu na
+  // entrega (que o iFood desconta do repasse) e inflava a % de taxa — um
+  // cliente comparou com o portal e viu "31%" onde a taxa real era menor.
+  // Agora cada linha bate 1-a-1 com o Portal do Parceiro.
+  const taxas = Math.max(0, bruto - liquido - recebidoDireto)
   // Antecipação é exclusiva do iFood — aparece em "Todas" ou com o iFood
   // selecionado. É custo financeiro: leva ao "Recebido real no caixa" SEM
   // alterar a margem abaixo (que continua no líquido do repasse).
@@ -229,6 +234,19 @@ export function DreDetalhado({
               />
             )}
       </div>
+
+      {/* O iFood NÃO repassa o que o cliente pagou direto na entrega (PIX/
+          dinheiro/maquininha) — a loja já recebeu. Sai aqui e volta como
+          ganho à parte lá embaixo; sem esta linha o leitor não fecha a
+          conta bruto → repasse com o Portal. */}
+      {recebidoDireto > 0.005 && (
+        <Row
+          label="(−) Recebido direto na entrega (não repassado — você já recebeu)"
+          value={`− ${fmtBRL(recebidoDireto)}`}
+          muted
+          pct={pctOf(recebidoDireto)}
+        />
+      )}
 
       <Divider />
       <Row

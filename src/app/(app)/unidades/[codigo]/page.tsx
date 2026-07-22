@@ -396,10 +396,14 @@ function HeroKpis({
     value: string
     sub?: string
     tone?: "pos" | "neg" | "warn"
+    /** Tooltip (hover) — explica o conceito quando difere do portal. */
+    title?: string
   }[] = [
     {
       label: "Bruto",
       value: fmtBRL(m.faturamentoBruto),
+      title:
+        "Vendas menos cancelamentos. O \u201CValor das vendas\u201D do portal iFood mostra ANTES de descontar os pedidos cancelados \u2014 por isso l\u00E1 aparece um valor um pouco maior.",
       sub: `${fmtNum(m.pedidos)} pedidos`,
     },
     {
@@ -452,7 +456,11 @@ function HeroKpis({
       {/* Faixa de KPIs densa */}
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s) => (
-          <div key={s.label} className="bg-card px-3 py-2.5">
+          <div
+            key={s.label}
+            title={s.title}
+            className={`bg-card px-3 py-2.5 ${s.title ? "cursor-help" : ""}`}
+          >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {s.label}
             </p>

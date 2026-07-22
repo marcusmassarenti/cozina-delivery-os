@@ -37,6 +37,33 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.3",
+    date: "2026-07-22",
+    tag: "Melhorias",
+    title: "DRE agora bate linha a linha com o Portal do iFood",
+    summary:
+      "As taxas mostravam um percentual maior que o real, e o Bruto parecia diferente do portal. Agora cada linha do DRE casa com a tela do iFood — e o Bruto explica a diferença no hover.",
+    areas: [
+      {
+        area: "Financeiro da loja",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Taxas reais separadas do dinheiro recebido na entrega",
+            desc: "O que você recebe direto do cliente (PIX, dinheiro, maquininha) não é taxa — o iFood só desconta do repasse porque você já embolsou. Virou linha própria no DRE, e a linha de taxas passou a mostrar só as taxas de verdade.",
+            antes: "Taxas das plataformas: 31% (com o recebido-direto embutido)",
+            depois: "Taxas reais + linha “Recebido direto na entrega” separada",
+          },
+          {
+            kind: "melhoria",
+            title: "Bruto com explicação no hover",
+            desc: "Passe o mouse no Bruto: ele é vendas menos cancelamentos. O “Valor das vendas” do portal iFood mostra antes de descontar os cancelados — por isso lá aparece um pouco maior.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.2",
     date: "2026-07-21",
     tag: "Melhorias",

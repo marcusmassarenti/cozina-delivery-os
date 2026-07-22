@@ -158,7 +158,11 @@ export async function FinanceiroLojaTab({
   ): DrePlat | null => {
     const p = m.platforms.find((x) => x.id === id)
     if (!p || p.bruto <= 0) return null
-    const taxaTotal = Math.max(0, p.bruto - p.liquido)
+    // Taxas reais: sem o recebido-direto (que tem linha própria no DRE).
+    const taxaTotal = Math.max(
+      0,
+      p.bruto - p.liquido - (p.recebidoDireto ?? 0),
+    )
     const lista: { label: string; value: number; credit?: boolean }[] =
       itens.filter((i) => i.value > 0)
     const resto = taxaTotal - lista.reduce((a, i) => a + i.value, 0)
