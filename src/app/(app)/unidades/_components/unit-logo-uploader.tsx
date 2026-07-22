@@ -15,10 +15,14 @@ export function UnitLogoUploader({
   unitId,
   unitName,
   currentLogo,
+  compact,
 }: {
   unitId: string
   unitName: string
   currentLogo: string | null
+  /** Só o avatar clicável (badge de trocar + lixeira mini) — usado no
+   *  cabeçalho do Editar pra não gastar uma linha inteira do dialog. */
+  compact?: boolean
 }) {
   const router = useRouter()
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -47,6 +51,52 @@ export function UnitLogoUploader({
       if (r.ok) router.refresh()
       else setError(r.message ?? "Falha ao remover")
     })
+  }
+
+  if (compact) {
+    return (
+      <div className="flex shrink-0 items-center gap-1" title="Logo da loja — PNG, JPG, WEBP ou SVG, até 2 MB">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="hidden"
+          onChange={onPick}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          className="group relative rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={currentLogo ? "Trocar logo da loja" : "Enviar logo da loja"}
+        >
+          <BrandLogo size="md" logoUrl={currentLogo} name={unitName} />
+          <span className="absolute -right-1 -bottom-1 rounded-full border bg-background p-0.5 shadow-sm transition-colors group-hover:bg-accent">
+            {busy ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <ImageUp className="size-3" />
+            )}
+          </span>
+        </button>
+        {currentLogo && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRemove}
+            title="Remover logo"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <Trash2 className="size-3" />
+          </button>
+        )}
+        {error && (
+          <span className="max-w-40 text-[10px] leading-tight text-rose-600">
+            {error}
+          </span>
+        )}
+      </div>
+    )
   }
 
   return (

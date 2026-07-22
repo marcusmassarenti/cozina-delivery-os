@@ -483,20 +483,20 @@ function CreateForm({
 
       {/* 2 colunas no desktop — dialog comprido exigia zoom 50% em monitor
           pequeno (feedback de cliente). */}
-      <div className="grid gap-3 sm:grid-cols-2">
-
-      <Field label="Nome *">
-        <Input
-          name="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="ex.: Loja Centro"
-          required
-        />
-      </Field>
-
-      <div className="grid grid-cols-3 gap-3">
-        <div className="col-span-2">
+      {/* 12 colunas: labels numa linha e campos alinhados. */}
+      <div className="grid gap-3 sm:grid-cols-12">
+        <div className="sm:col-span-5">
+          <Field label="Nome *">
+            <Input
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="ex.: Loja Centro"
+              required
+            />
+          </Field>
+        </div>
+        <div className="sm:col-span-5">
           <Field label="Cidade *">
             <Input
               name="city"
@@ -507,48 +507,44 @@ function CreateForm({
             />
           </Field>
         </div>
-        <Field label="UF">
-          <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {UFs.map((u) => (
-                <SelectItem key={u} value={u}>
-                  {u}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <input type="hidden" name="state" value={uf} />
-        </Field>
-      </div>
-
-      <Field label={cadastroExigente ? "CNPJ *" : "CNPJ (do relatório)"}>
-        <Input
-          name="cnpj"
-          value={cnpj}
-          onChange={(e) => setCnpj(maskCnpj(e.target.value))}
-          placeholder="00.000.000/0000-00"
-          maxLength={18}
-          required={cadastroExigente}
-        />
-      </Field>
-
-      <Field
-        label={
-          cadastroExigente
-            ? "Inauguração da unidade *"
-            : "Inauguração da unidade"
-        }
-      >
-        <Input
-          name="data_inauguracao"
-          type="date"
-          required={cadastroExigente}
-        />
-      </Field>
-
+        <div className="sm:col-span-2">
+          <Field label="UF">
+            <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UFs.map((u) => (
+                  <SelectItem key={u} value={u}>
+                    {u}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <input type="hidden" name="state" value={uf} />
+          </Field>
+        </div>
+        <div className="sm:col-span-6">
+          <Field label={cadastroExigente ? "CNPJ *" : "CNPJ (do relatório)"}>
+            <Input
+              name="cnpj"
+              value={cnpj}
+              onChange={(e) => setCnpj(maskCnpj(e.target.value))}
+              placeholder="00.000.000/0000-00"
+              maxLength={18}
+              required={cadastroExigente}
+            />
+          </Field>
+        </div>
+        <div className="sm:col-span-6">
+          <Field label={cadastroExigente ? "Inauguração *" : "Inauguração"}>
+            <Input
+              name="data_inauguracao"
+              type="date"
+              required={cadastroExigente}
+            />
+          </Field>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">

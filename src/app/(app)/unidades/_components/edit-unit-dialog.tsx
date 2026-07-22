@@ -175,7 +175,15 @@ export function EditUnitDialog({
       <DialogContent className="max-h-[calc(100dvh-6rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-7">
-            <DialogTitle>Editar unidade</DialogTitle>
+            <div className="flex items-center gap-2.5">
+              <UnitLogoUploader
+                compact
+                unitId={unit.unitId}
+                unitName={unit.name}
+                currentLogo={unit.logoUrl ?? null}
+              />
+              <DialogTitle>Editar unidade</DialogTitle>
+            </div>
             <button
               type="button"
               onClick={() => setTourOpen(true)}
@@ -191,12 +199,6 @@ export function EditUnitDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <UnitLogoUploader
-          unitId={unit.unitId}
-          unitName={unit.name}
-          currentLogo={unit.logoUrl ?? null}
-        />
-
         <form
           action={formAction}
           {...validacaoPtBr}
@@ -204,23 +206,21 @@ export function EditUnitDialog({
         >
           <input type="hidden" name="unitId" value={unit.unitId} />
 
-          {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
-              dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
-          <div className="grid gap-3 sm:grid-cols-2">
-
-          <div data-tour="u-nome">
-            <Field label="Nome *" error={state.fieldErrors?.name}>
-              <Input
-                name="name"
-                defaultValue={unit.name}
-                placeholder="ex.: Loja Centro"
-                required
-              />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
+          {/* Grade de 12 colunas: labels sempre numa linha e campos alinhados
+              em terços — o "Encerramento (se fechou)" quebrava em 2 linhas e
+              desalinhava a fileira (feedback do Marcus). */}
+          <div className="grid gap-3 sm:grid-cols-12">
+            <div data-tour="u-nome" className="sm:col-span-5">
+              <Field label="Nome *" error={state.fieldErrors?.name}>
+                <Input
+                  name="name"
+                  defaultValue={unit.name}
+                  placeholder="ex.: Loja Centro"
+                  required
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-5">
               <Field label="Cidade *" error={state.fieldErrors?.city}>
                 <Input
                   name="city"
@@ -230,7 +230,7 @@ export function EditUnitDialog({
                 />
               </Field>
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Field label="UF" error={state.fieldErrors?.state}>
                 <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
                   <SelectTrigger>
@@ -247,46 +247,43 @@ export function EditUnitDialog({
                 <input type="hidden" name="state" value={uf} />
               </Field>
             </div>
-          </div>
-
-          <Field
-            label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
-            error={state.fieldErrors?.cnpj}
-          >
-            <Input
-              name="cnpj"
-              placeholder="00.000.000/0000-00"
-              value={cnpj}
-              onChange={(e) => setCnpj(maskCnpj(e.target.value))}
-              maxLength={18}
-              required={cadastroExigente}
-            />
-          </Field>
-
-          <div data-tour="u-inauguracao" className="grid grid-cols-2 gap-3">
-            <Field
-              label={
-                cadastroExigente
-                  ? "Inauguração da unidade *"
-                  : "Inauguração da unidade"
-              }
-              error={state.fieldErrors?.data_inauguracao}
-            >
-              <Input
-                name="data_inauguracao"
-                type="date"
-                defaultValue={unit.dataInauguracao ?? ""}
-                required={cadastroExigente}
-              />
-            </Field>
-            <Field label="Encerramento (se fechou)">
-              <Input
-                name="data_encerramento"
-                type="date"
-                defaultValue={unit.dataEncerramento ?? ""}
-              />
-            </Field>
-          </div>
+            <div className="sm:col-span-4">
+              <Field
+                label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
+                error={state.fieldErrors?.cnpj}
+              >
+                <Input
+                  name="cnpj"
+                  placeholder="00.000.000/0000-00"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(maskCnpj(e.target.value))}
+                  maxLength={18}
+                  required={cadastroExigente}
+                />
+              </Field>
+            </div>
+            <div data-tour="u-inauguracao" className="sm:col-span-4">
+              <Field
+                label={cadastroExigente ? "Inauguração *" : "Inauguração"}
+                error={state.fieldErrors?.data_inauguracao}
+              >
+                <Input
+                  name="data_inauguracao"
+                  type="date"
+                  defaultValue={unit.dataInauguracao ?? ""}
+                  required={cadastroExigente}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-4">
+              <Field label="Encerramento (se fechou)">
+                <Input
+                  name="data_encerramento"
+                  type="date"
+                  defaultValue={unit.dataEncerramento ?? ""}
+                />
+              </Field>
+            </div>
           </div>
 
           <p className="-mt-2 text-[11px] text-muted-foreground">

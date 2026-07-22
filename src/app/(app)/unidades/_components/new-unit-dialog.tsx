@@ -102,22 +102,19 @@ export function NewUnitDialog({
         >
           {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
               dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
-          <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Nome *" error={state.fieldErrors?.name}>
-            <Input
-              name="name"
-              placeholder="ex.: Loja Centro"
-              required
-            />
-          </Field>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
+          {/* 12 colunas: labels numa linha e campos alinhados em terços. */}
+          <div className="grid gap-3 sm:grid-cols-12">
+            <div className="sm:col-span-5">
+              <Field label="Nome *" error={state.fieldErrors?.name}>
+                <Input name="name" placeholder="ex.: Loja Centro" required />
+              </Field>
+            </div>
+            <div className="sm:col-span-5">
               <Field label="Cidade *" error={state.fieldErrors?.city}>
                 <Input name="city" placeholder="ex.: São Paulo" required />
               </Field>
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Field label="UF" error={state.fieldErrors?.state}>
                 <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
                   <SelectTrigger>
@@ -134,42 +131,38 @@ export function NewUnitDialog({
                 <input type="hidden" name="state" value={uf} />
               </Field>
             </div>
-          </div>
-
-          <Field
-            label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
-            error={state.fieldErrors?.cnpj}
-          >
-            <Input
-              name="cnpj"
-              placeholder="00.000.000/0000-00"
-              value={cnpj}
-              onChange={(e) => setCnpj(maskCnpj(e.target.value))}
-              maxLength={18}
-              required={cadastroExigente}
-            />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field
-              label={
-                cadastroExigente
-                  ? "Inauguração da unidade *"
-                  : "Inauguração da unidade"
-              }
-              error={state.fieldErrors?.data_inauguracao}
-            >
-              <Input
-                name="data_inauguracao"
-                type="date"
-                required={cadastroExigente}
-              />
-            </Field>
-            <Field label="Encerramento (se fechou)">
-              <Input name="data_encerramento" type="date" />
-            </Field>
-          </div>
-
+            <div className="sm:col-span-4">
+              <Field
+                label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
+                error={state.fieldErrors?.cnpj}
+              >
+                <Input
+                  name="cnpj"
+                  placeholder="00.000.000/0000-00"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(maskCnpj(e.target.value))}
+                  maxLength={18}
+                  required={cadastroExigente}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-4">
+              <Field
+                label={cadastroExigente ? "Inauguração *" : "Inauguração"}
+                error={state.fieldErrors?.data_inauguracao}
+              >
+                <Input
+                  name="data_inauguracao"
+                  type="date"
+                  required={cadastroExigente}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-4">
+              <Field label="Encerramento (se fechou)">
+                <Input name="data_encerramento" type="date" />
+              </Field>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2">
