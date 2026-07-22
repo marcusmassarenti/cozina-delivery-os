@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 
-import { assertCanView } from "@/lib/auth/permissions"
+import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
+import { isApiSyncEnabled } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   syncNinefoodFinanceiro,
@@ -18,6 +19,29 @@ export type Ninefood99SyncState = {
   message?: string
   competencia?: string
   results?: ShopSyncResult[]
+}
+
+/**
+ * Resolve QUAIS lojas 99 o usuário atual pode sincronizar.
+ *
+ * O sync manual é escopado ao tenant (mesma correção do iFood): sem isso,
+ * qualquer clique sincronizava os links de TODOS os clientes e devolvia
+ * nome das lojas alheias na resposta. O cron continua global — é nosso.
+ *
+ * Retorna null = sem restrição (admin de plataforma puro, sem empresa).
+ * Retorna [] = a conta não tem nenhuma loja 99 vinculada → nada a fazer.
+ */
+async function appShopIdsDoUsuario(): Promise<string[] | null> {
+  const unitIds = await getAccessibleUnitIds()
+  if (unitIds === null) return null
+  if (unitIds.length === 0) return []
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ninefood_store_links")
+    .select("app_shop_id")
+    .eq("active", true)
+    .in("unit_id", unitIds)
+  return (data ?? []).map((r) => r.app_shop_id as string)
 }
 
 /**
@@ -49,8 +73,20 @@ export async function runNinefood99Sync(
   const startDate = `${m[1]}${m[2]}01`
   const endDate = `${m[1]}${m[2]}${pad(lastDay)}`
 
+  if (!(await isApiSyncEnabled())) {
+    return { ok: false, message: "Sync via API não habilitado para esta conta." }
+  }
+  const escopo = await appShopIdsDoUsuario()
+  if (escopo !== null && escopo.length === 0) {
+    return { ok: false, message: "Nenhuma loja 99 vinculada à sua conta." }
+  }
+
   try {
-    const { results } = await syncNinefoodFinanceiro({ startDate, endDate })
+    const { results } = await syncNinefoodFinanceiro({
+      startDate,
+      endDate,
+      appShopIds: escopo ?? undefined,
+    })
     revalidatePath("/importacao")
     revalidatePath("/financeiro")
     revalidatePath("/")
@@ -115,8 +151,25 @@ export async function runNinefood99SyncAll(
   const endDate = `${year}${mm}${String(lastDay).padStart(2, "0")}`
 
   try {
-    const fin = await syncNinefoodFinanceiro({ startDate, endDate })
-    const card = await syncNinefoodCardapio()
+    if (!(await isApiSyncEnabled())) {
+      return {
+        ok: false,
+        message: "Sync via API não habilitado para esta conta.",
+      }
+    }
+    const escopo = await appShopIdsDoUsuario()
+    if (escopo !== null && escopo.length === 0) {
+      return { ok: false, message: "Nenhuma loja 99 vinculada à sua conta." }
+    }
+
+    const fin = await syncNinefoodFinanceiro({
+      startDate,
+      endDate,
+      appShopIds: escopo ?? undefined,
+    })
+    const card = await syncNinefoodCardapio({
+      appShopIds: escopo ?? undefined,
+    })
 
     // grava no histórico de importações com origem = 'api' (aparece junto dos
     // relatórios manuais, distinguível pela origem)
@@ -198,8 +251,17 @@ export async function runNinefood99Cardapio(
   } catch {
     return { ok: false, message: "Você não tem permissão para sincronizar." }
   }
+  if (!(await isApiSyncEnabled())) {
+    return { ok: false, message: "Sync via API não habilitado para esta conta." }
+  }
+  const escopo = await appShopIdsDoUsuario()
+  if (escopo !== null && escopo.length === 0) {
+    return { ok: false, message: "Nenhuma loja 99 vinculada à sua conta." }
+  }
   try {
-    const { results } = await syncNinefoodCardapio()
+    const { results } = await syncNinefoodCardapio({
+      appShopIds: escopo ?? undefined,
+    })
     revalidatePath("/importacao")
     const comErro = results.filter((r) => r.error)
     return {

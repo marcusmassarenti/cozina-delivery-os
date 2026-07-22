@@ -4,6 +4,10 @@ import { ArrowLeft, Shield, Store } from "lucide-react"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 import { LinkRow, RefreshButton, RunSyncButton } from "./_components/link-row"
+import {
+  SolicitacoesPanel,
+  type SolicitacaoAdmin,
+} from "./_components/solicitacoes-panel"
 
 type MerchantRow = {
   id: string
@@ -63,8 +67,36 @@ async function getData() {
   return { merchants, units, byMerchant }
 }
 
+/** Fila de solicitações de conexão feitas pelos clientes (todas as holdings). */
+async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ifood_activation_requests")
+    .select(
+      "id, cnpj, status, nota, created_at, holdings(name), units(code, name)",
+    )
+    .order("created_at", { ascending: false })
+    .limit(30)
+  return (data ?? []).map((s) => {
+    const h = s.holdings as unknown as { name: string } | null
+    const u = s.units as unknown as { code: string; name: string } | null
+    return {
+      id: s.id as string,
+      cnpj: s.cnpj as string,
+      status: s.status as SolicitacaoAdmin["status"],
+      nota: (s.nota as string | null) ?? null,
+      holdingName: h?.name ?? "(sem empresa)",
+      unitLabel: u ? `${u.code} · ${u.name}` : null,
+      createdAt: s.created_at as string,
+    }
+  })
+}
+
 export default async function IfoodMerchantsPage() {
-  const { merchants, units, byMerchant } = await getData()
+  const [{ merchants, units, byMerchant }, solicitacoes] = await Promise.all([
+    getData(),
+    getSolicitacoes(),
+  ])
   const linkedCount = Object.keys(byMerchant).length
 
   return (
@@ -94,6 +126,8 @@ export default async function IfoodMerchantsPage() {
           <RefreshButton />
         </div>
       </div>
+
+      <SolicitacoesPanel solicitacoes={solicitacoes} />
 
       <div className="grid gap-3 md:grid-cols-3">
         <StatCard label="Merchants no cache" value={String(merchants.length)} />

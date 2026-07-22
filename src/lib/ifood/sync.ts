@@ -75,15 +75,23 @@ function ym(d: Date): string {
   return `${yyyy}-${mm}`
 }
 
-/** Lista unidades com iFood ativo e merchant mapeado. */
-async function listIfoodUnits() {
+/**
+ * Lista unidades com iFood ativo e merchant mapeado.
+ *
+ * `unitIds` restringe às unidades dadas — é o que escopa o SYNC MANUAL à
+ * empresa de quem clicou. O cron não passa filtro (roda pra rede toda, que
+ * é o correto: ele é nosso, não do tenant).
+ */
+async function listIfoodUnits(unitIds?: string[] | null) {
   const admin = createAdminClient()
-  const { data, error } = await admin
+  let q = admin
     .from("unit_platforms")
     .select("unit_id, api_store_id, units!inner(id, code, name)")
     .eq("platform", "ifood")
     .eq("active", true)
     .not("api_store_id", "is", null)
+  if (unitIds) q = q.in("unit_id", unitIds)
+  const { data, error } = await q
 
   if (error) throw new Error(`Falha ao listar unidades: ${error.message}`)
   return (data ?? [])
@@ -289,7 +297,13 @@ async function syncOneUnit(
  * dentro de 6h o iFood devolve 409 e o arquivo já está pronto → fica rápido.
  */
 export async function syncIfoodAll(
-  opts: { force?: boolean; competences?: string[] } = {},
+  opts: {
+    force?: boolean
+    competences?: string[]
+    /** Restringe às unidades dadas (sync manual escopado por tenant).
+     *  Omitido/null = todas (cron). Array vazio = nada a sincronizar. */
+    unitIds?: string[] | null
+  } = {},
 ): Promise<{
   ranAt: string
   unitsProcessed: number
@@ -297,7 +311,7 @@ export async function syncIfoodAll(
   results: UnitSyncResult[]
 }> {
   const force = opts.force === true
-  const units = await listIfoodUnits()
+  const units = await listIfoodUnits(opts.unitIds)
   const admin = createAdminClient()
 
   // Competências: por padrão mês corrente + anterior; ou as passadas em

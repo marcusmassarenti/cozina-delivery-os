@@ -1,13 +1,19 @@
 /**
- * Dispara manualmente o sync iFood (mesma lógica do cron diário).
+ * Dispara manualmente o sync iFood — ESCOPADO ao tenant de quem clicou.
  *
- * Útil pra testar a integração sob demanda sem precisar do CRON_SECRET —
- * liberado pra qualquer usuário que vê o dashboard (mesmo nível do botão
- * "Sincronizar 99"); exige login, não é público.
+ * Diferente do cron (que roda a rede toda, porque é nosso), o botão
+ * "Sincronizar iFood" só processa as lojas que o usuário enxerga
+ * (getAccessibleUnitIds). Antes ele rodava global: qualquer usuário logado
+ * disparava o sync de TODOS os tenants e a resposta devolvia nome/código
+ * das lojas dos outros — vazamento de metadado + queima de rate limit.
  *
- * NÃO substitui o cron — o cron continua rodando às 06h BRT via vercel.json.
+ * Guardas:
+ *  1. login com acesso ao dashboard
+ *  2. holding com `api_sync_enabled` (a mesma flag que mostra o botão)
+ *  3. unidades restritas às do usuário
  */
-import { userCan } from "@/lib/auth/permissions"
+import { getAccessibleUnitIds, userCan } from "@/lib/auth/permissions"
+import { isApiSyncEnabled } from "@/lib/data/units"
 import { syncIfoodAll } from "@/lib/ifood/sync"
 
 export const runtime = "nodejs"
@@ -18,10 +24,28 @@ export async function POST() {
   if (!(await userCan("dashboard", "view"))) {
     return new Response("Unauthorized", { status: 401 })
   }
+  if (!(await isApiSyncEnabled())) {
+    return Response.json(
+      { ok: false, error: "Sync via API não habilitado para esta conta." },
+      { status: 403 },
+    )
+  }
+
+  // null = admin de plataforma sem empresa (vê tudo) — mantém global.
+  const unitIds = await getAccessibleUnitIds()
+  if (unitIds !== null && unitIds.length === 0) {
+    return Response.json({
+      ok: true,
+      ranAt: new Date().toISOString(),
+      unitsProcessed: 0,
+      results: [],
+    })
+  }
+
   try {
     // Disparo manual sempre força (ignora o throttle de 6h) — o operador
     // clicou "Sincronizar agora" de propósito.
-    const out = await syncIfoodAll({ force: true })
+    const out = await syncIfoodAll({ force: true, unitIds })
     return Response.json({ ok: true, ...out })
   } catch (e) {
     return Response.json(

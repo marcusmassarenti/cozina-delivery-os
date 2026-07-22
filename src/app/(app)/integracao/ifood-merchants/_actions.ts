@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import { requireSuperadmin } from "@/lib/auth/guards"
 import {
   listIfoodMerchants,
   type IfoodMerchant,
@@ -127,4 +128,52 @@ export async function unlinkMerchant(
       error: e instanceof Error ? e.message : String(e),
     }
   }
+}
+
+// ─── Fila de solicitações de ativação (autoatendimento dos clientes) ────
+
+export type SolicitacaoUpdateState = {
+  ok: boolean
+  error?: string
+  message?: string
+}
+
+/**
+ * Atualiza o status de uma solicitação de conexão iFood.
+ *
+ * pendente → solicitada: você enviou a solicitação no Portal do
+ * Desenvolvedor (aba Permissões, busca por CNPJ) — o cliente passa a ver
+ * "aprove no seu Portal do Parceiro".
+ * solicitada → ativa: a loja apareceu no GET /merchants e foi vinculada.
+ * → recusada: use a nota pra explicar (aparece pro cliente).
+ */
+export async function atualizarSolicitacaoIfood(
+  _prev: SolicitacaoUpdateState,
+  formData: FormData,
+): Promise<SolicitacaoUpdateState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Apenas o admin da plataforma." }
+  }
+
+  const id = String(formData.get("id") ?? "").trim()
+  const status = String(formData.get("status") ?? "").trim()
+  const nota = String(formData.get("nota") ?? "").trim() || null
+
+  if (!id) return { ok: false, error: "id ausente" }
+  if (!["pendente", "solicitada", "ativa", "recusada"].includes(status)) {
+    return { ok: false, error: "status inválido" }
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("ifood_activation_requests")
+    .update({ status, nota, updated_at: new Date().toISOString() })
+    .eq("id", id)
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/integracao/ifood-merchants")
+  revalidatePath("/importacao")
+  return { ok: true, message: "Status atualizado." }
 }
