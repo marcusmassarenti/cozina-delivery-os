@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { validacaoPtBr } from "@/components/shared/form-validacao-ptbr"
 import { createUnit, type CreateUnitState } from "../_actions"
 
 const UFs = [
@@ -85,7 +86,7 @@ export function NewUnitDialog({
           </button>
         }
       />
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Nova unidade</DialogTitle>
           <DialogDescription>
@@ -94,8 +95,15 @@ export function NewUnitDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={formAction} className="flex flex-col gap-4">
-          <Field label="Nome" error={state.fieldErrors?.name}>
+        <form
+          action={formAction}
+          {...validacaoPtBr}
+          className="flex flex-col gap-4"
+        >
+          {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
+              dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
+          <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Nome *" error={state.fieldErrors?.name}>
             <Input
               name="name"
               placeholder="ex.: Loja Centro"
@@ -105,7 +113,7 @@ export function NewUnitDialog({
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <Field label="Cidade" error={state.fieldErrors?.city}>
+              <Field label="Cidade *" error={state.fieldErrors?.city}>
                 <Input name="city" placeholder="ex.: São Paulo" required />
               </Field>
             </div>
@@ -129,7 +137,7 @@ export function NewUnitDialog({
           </div>
 
           <Field
-            label={cadastroExigente ? "CNPJ" : "CNPJ (opcional)"}
+            label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
             error={state.fieldErrors?.cnpj}
           >
             <Input
@@ -144,7 +152,11 @@ export function NewUnitDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <Field
-              label="Inauguração da unidade"
+              label={
+                cadastroExigente
+                  ? "Inauguração da unidade *"
+                  : "Inauguração da unidade"
+              }
               error={state.fieldErrors?.data_inauguracao}
             >
               <Input
@@ -158,8 +170,12 @@ export function NewUnitDialog({
             </Field>
           </div>
 
+          </div>
+
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium">Plataformas ativas</Label>
+            <Label className="text-xs font-medium">
+              {cadastroExigente ? "Plataformas ativas *" : "Plataformas ativas"}
+            </Label>
             <div className="grid grid-cols-3 gap-2">
               {PLATFORMS.map((p) => (
                 <PlatformCheckbox key={p.id} platform={p} />

@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { validacaoPtBr } from "@/components/shared/form-validacao-ptbr"
 import { updateUnit, type CreateUnitState } from "../_actions"
 import { solicitarAtivacaoIfood } from "../_actions-ifood-ativacao"
 import { UnitLogoUploader } from "./unit-logo-uploader"
@@ -61,7 +62,7 @@ const EDIT_STEPS: CoachStep[] = [
     selector: '[data-tour="u-nome"]',
     icon: <Store className="size-4" />,
     title: "Identificação da loja",
-    body: "Nome da loja (como aparece no sistema), cidade e UF. O CNPJ é opcional — serve só de registro da unidade.",
+    body: "Nome da loja (como aparece no sistema), cidade e UF. O CNPJ identifica a loja nas plataformas — é ele que usamos pra conectar o iFood via API.",
   },
   {
     selector: '[data-tour="u-inauguracao"]',
@@ -171,7 +172,7 @@ export function EditUnitDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-7">
             <DialogTitle>Editar unidade</DialogTitle>
@@ -196,11 +197,19 @@ export function EditUnitDialog({
           currentLogo={unit.logoUrl ?? null}
         />
 
-        <form action={formAction} className="flex flex-col gap-4">
+        <form
+          action={formAction}
+          {...validacaoPtBr}
+          className="flex flex-col gap-4"
+        >
           <input type="hidden" name="unitId" value={unit.unitId} />
 
+          {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
+              dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
+          <div className="grid gap-4 sm:grid-cols-2">
+
           <div data-tour="u-nome">
-            <Field label="Nome" error={state.fieldErrors?.name}>
+            <Field label="Nome *" error={state.fieldErrors?.name}>
               <Input
                 name="name"
                 defaultValue={unit.name}
@@ -212,7 +221,7 @@ export function EditUnitDialog({
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <Field label="Cidade" error={state.fieldErrors?.city}>
+              <Field label="Cidade *" error={state.fieldErrors?.city}>
                 <Input
                   name="city"
                   defaultValue={unit.city ?? ""}
@@ -241,7 +250,7 @@ export function EditUnitDialog({
           </div>
 
           <Field
-            label={cadastroExigente ? "CNPJ" : "CNPJ (opcional)"}
+            label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
             error={state.fieldErrors?.cnpj}
           >
             <Input
@@ -256,7 +265,11 @@ export function EditUnitDialog({
 
           <div data-tour="u-inauguracao" className="grid grid-cols-2 gap-3">
             <Field
-              label="Inauguração da unidade"
+              label={
+                cadastroExigente
+                  ? "Inauguração da unidade *"
+                  : "Inauguração da unidade"
+              }
               error={state.fieldErrors?.data_inauguracao}
             >
               <Input
@@ -274,13 +287,17 @@ export function EditUnitDialog({
               />
             </Field>
           </div>
+          </div>
+
           <p className="-mt-2 text-[11px] text-muted-foreground">
             A inauguração faz a Cobertura ignorar meses antes da loja existir
             (não cobra dado que não tinha como ter).
           </p>
 
           <div data-tour="u-plataformas" className="flex flex-col gap-2">
-            <Label className="text-xs font-medium">Plataformas ativas</Label>
+            <Label className="text-xs font-medium">
+              {cadastroExigente ? "Plataformas ativas *" : "Plataformas ativas"}
+            </Label>
             <div className="grid grid-cols-3 gap-2">
               {PLATFORMS.map((p) => (
                 <PlatformCheckbox

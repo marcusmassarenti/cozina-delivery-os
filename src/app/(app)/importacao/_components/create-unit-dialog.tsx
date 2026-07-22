@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { validacaoPtBr } from "@/components/shared/form-validacao-ptbr"
 
 import {
   createUnitAndImport,
@@ -97,7 +98,7 @@ export function CreateUnitDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogInner
           key={unmapped.storeId}
           unmapped={unmapped}
@@ -474,12 +475,17 @@ function CreateForm({
         fd.set("file", file, file.name)
         formAction(fd)
       }}
+      {...validacaoPtBr}
       className="flex flex-col gap-4"
     >
       <input type="hidden" name="storeId" value={unmapped.storeId} />
       <input type="hidden" name="platform" value={unmapped.platform} />
 
-      <Field label="Nome">
+      {/* 2 colunas no desktop — dialog comprido exigia zoom 50% em monitor
+          pequeno (feedback de cliente). */}
+      <div className="grid gap-4 sm:grid-cols-2">
+
+      <Field label="Nome *">
         <Input
           name="name"
           value={name}
@@ -491,7 +497,7 @@ function CreateForm({
 
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2">
-          <Field label="Cidade">
+          <Field label="Cidade *">
             <Input
               name="city"
               value={city}
@@ -518,7 +524,7 @@ function CreateForm({
         </Field>
       </div>
 
-      <Field label={cadastroExigente ? "CNPJ" : "CNPJ (do relatório)"}>
+      <Field label={cadastroExigente ? "CNPJ *" : "CNPJ (do relatório)"}>
         <Input
           name="cnpj"
           value={cnpj}
@@ -529,13 +535,21 @@ function CreateForm({
         />
       </Field>
 
-      <Field label="Inauguração da unidade">
+      <Field
+        label={
+          cadastroExigente
+            ? "Inauguração da unidade *"
+            : "Inauguração da unidade"
+        }
+      >
         <Input
           name="data_inauguracao"
           type="date"
           required={cadastroExigente}
         />
       </Field>
+
+      </div>
 
       <div className="flex flex-col gap-2">
         <Label className="text-xs font-medium">Plataformas ativas</Label>
