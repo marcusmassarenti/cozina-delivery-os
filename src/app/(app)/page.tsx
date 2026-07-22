@@ -887,6 +887,22 @@ export default async function Home({
                       empty: !hasFunnelData,
                       content: hasFunnelData ? (
                         <>
+                          {/* Hero no topo, alinhado com "Perda no mês" e
+                              "Os 5 mais vendidos" dos cards vizinhos. */}
+                          <div className="mb-3 rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/70 dark:text-emerald-400/70">
+                              Conversão {unidadesFilter ? "filtrada" : daEscopo}
+                            </p>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                                {fmtPct(networkFunnel.totals.conversaoPct)}
+                              </span>
+                              <span className="text-[11px] tabular-nums text-muted-foreground">
+                                · {fmtNum(networkFunnel.totals.concluidos)}{" "}
+                                pedidos
+                              </span>
+                            </div>
+                          </div>
                           <div className="space-y-2">
                             <FunnelBar
                               label="Visitas"
@@ -913,14 +929,6 @@ export default async function Home({
                               color="bg-emerald-500"
                               emphasis
                             />
-                          </div>
-                          <div className="mt-3 flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-                            <span className="text-xs font-medium text-emerald-900 dark:text-emerald-300">
-                              Conversão {unidadesFilter ? "filtrada" : daEscopo}
-                            </span>
-                            <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                              {fmtPct(networkFunnel.totals.conversaoPct)}
-                            </span>
                           </div>
                         </>
                       ) : (
