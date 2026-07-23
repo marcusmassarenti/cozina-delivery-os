@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
@@ -36,6 +37,9 @@ export default function RootLayout({
         >
           {children}
         </ThemeProvider>
+        {/* Web Analytics da Vercel — incluso no plano, custo 0. Conta
+            visitas/páginas de toda a app (landing, login e telas internas). */}
+        <Analytics />
       </body>
     </html>
   );
