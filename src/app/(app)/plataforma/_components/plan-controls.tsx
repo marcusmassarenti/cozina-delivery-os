@@ -41,6 +41,7 @@ export function PlanControls({
   const router = useRouter()
   const [editing, setEditing] = React.useState(false)
   const [busy, setBusy] = React.useState<null | string>(null)
+  const [erro, setErro] = React.useState<string | null>(null)
 
   const atual = planTier ? PLANOS.find((p) => p.id === planTier) : null
   const proximo =
@@ -53,29 +54,52 @@ export function PlanControls({
   // Degustação só faz sentido antes do AI (o AI já tem o Nino de fábrica).
   const podeDegustar = !planTier || planTier !== "ai"
 
-  async function run(fd: FormData, action: typeof setClientPlanTier, tag: string) {
-    setBusy(tag)
-    const res: BillingActionState = await action({ ok: false }, fd)
-    setBusy(null)
-    if (res.ok) {
-      setEditing(false)
-      router.refresh()
-    } else {
-      alert(res.message ?? "Não deu certo.")
-    }
-  }
-
-  function definirPlano(tier: Tier | "") {
+  // Chama a server action DIRETO (sem passar por variável — indireção assim
+  // é frágil no build de produção) e com try/catch: se falhar, o erro aparece
+  // na tela em vez de sumir (o guard relança erros não-auth, e um `void run`
+  // engolia tudo — era por isso que "não acontecia nada").
+  async function definirPlano(tier: Tier | "") {
+    setBusy(`plano:${tier}`)
+    setErro(null)
     const fd = new FormData()
     fd.set("holdingId", holdingId)
     fd.set("tier", tier)
-    void run(fd, setClientPlanTier, `plano:${tier}`)
+    try {
+      const res: BillingActionState = await setClientPlanTier({ ok: false }, fd)
+      if (res.ok) {
+        setEditing(false)
+        router.refresh()
+      } else {
+        setErro(res.message ?? "Não deu certo.")
+      }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao salvar o plano.")
+    } finally {
+      setBusy(null)
+    }
   }
-  function degustacao(acao: "liberar" | "encerrar") {
+
+  async function degustacao(acao: "liberar" | "encerrar") {
+    setBusy(`deg:${acao}`)
+    setErro(null)
     const fd = new FormData()
     fd.set("holdingId", holdingId)
     fd.set("acao", acao)
-    void run(fd, toggleNinoDegustacao, `deg:${acao}`)
+    try {
+      const res: BillingActionState = await toggleNinoDegustacao(
+        { ok: false },
+        fd,
+      )
+      if (res.ok) {
+        router.refresh()
+      } else {
+        setErro(res.message ?? "Não deu certo.")
+      }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao liberar a cortesia.")
+    } finally {
+      setBusy(null)
+    }
   }
 
   const fmtDia = (iso: string) =>
@@ -83,6 +107,11 @@ export function PlanControls({
 
   return (
     <div className="flex flex-col gap-3">
+      {erro && (
+        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+          {erro}
+        </p>
+      )}
       {/* Plano atual + trocar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
