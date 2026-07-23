@@ -69,6 +69,8 @@ export type ClientOverview = {
   billingStatus: BillingStatus
   // Assinatura Asaas
   planTier: "essencial" | "pro" | "ai" | null
+  /** Fim da degustação do Nino AI (cortesia). null = sem degustação. */
+  ninoTrialEndsAt: string | null
   asaasActive: boolean // tem assinatura recorrente no Asaas
   asaasLastEvent: string | null // último evento do webhook (ex.: PAYMENT_CONFIRMED)
   asaasLastEventAt: string | null
@@ -152,7 +154,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, asaas_subscription_id, asaas_last_event",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -175,6 +177,7 @@ export async function getClientsOverview(): Promise<{
         suspend_on: null,
         trial_ends_at: null,
         plan_tier: null,
+        nino_trial_ends_at: null,
         asaas_subscription_id: null,
         asaas_last_event: null,
       }))
@@ -292,6 +295,7 @@ export async function getClientsOverview(): Promise<{
       suspend_on: string | null
       trial_ends_at: string | null
       plan_tier: string | null
+      nino_trial_ends_at: string | null
       asaas_subscription_id: string | null
       asaas_last_event: { event?: string; at?: string } | null
     }
@@ -341,6 +345,7 @@ export async function getClientsOverview(): Promise<{
         hh.plan_tier === "ai"
           ? hh.plan_tier
           : null,
+      ninoTrialEndsAt: hh.nino_trial_ends_at ?? null,
       asaasActive: !!hh.asaas_subscription_id,
       asaasLastEvent: hh.asaas_last_event?.event ?? null,
       asaasLastEventAt: hh.asaas_last_event?.at ?? null,

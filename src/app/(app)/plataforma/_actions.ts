@@ -535,3 +535,65 @@ export async function deleteClients(
     message: erros.length ? erros.slice(0, 3).join(" · ") : undefined,
   }
 }
+
+/**
+ * Define/troca o plano de UM cliente (super-admin). Antes o plan_tier só era
+ * escrito pelo self-service do próprio cliente ou pelo webhook do Asaas — o
+ * dono não tinha como carimbar o plano de quem provisionou/cobra manual (por
+ * isso ficava NULL e "não sabia o plano de cada um"). Valor vazio = limpa.
+ */
+export async function setClientPlanTier(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+    const tier = String(formData.get("tier") ?? "").trim()
+    if (tier && !["essencial", "pro", "ai"].includes(tier))
+      return { ok: false, message: "Plano inválido." }
+    const { error } = await admin
+      .from("holdings")
+      .update({ plan_tier: tier || null })
+      .eq("id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/plataforma")
+    revalidatePath("/", "layout")
+    return { ok: true }
+  })
+}
+
+/** Dias de degustação do Nino (cortesia). */
+const NINO_DEGUSTACAO_DIAS = 7
+
+/**
+ * Liga/desliga a degustação do Nino AI de um cliente (super-admin). Liga =
+ * nino_trial_ends_at daqui a NINO_DEGUSTACAO_DIAS; desliga = limpa. Libera só o
+ * Nino (com cota enxuta), sem virar plano AI nem mexer no Financeiro.
+ */
+export async function toggleNinoDegustacao(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+    const ligar = String(formData.get("acao") ?? "") === "liberar"
+    let ends: string | null = null
+    if (ligar) {
+      const d = new Date()
+      d.setDate(d.getDate() + NINO_DEGUSTACAO_DIAS)
+      ends = d.toISOString()
+    }
+    const { error } = await admin
+      .from("holdings")
+      .update({ nino_trial_ends_at: ends })
+      .eq("id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/plataforma")
+    revalidatePath("/", "layout")
+    return { ok: true }
+  })
+}

@@ -82,6 +82,11 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "novo",
+            title: "Plano do cliente + upgrade + degustação do Nino",
+            desc: "No detalhe do cliente agora dá pra ver e DEFINIR o plano (Essencial/Pro/DeliveryOS AI) — antes ficava em branco pra quem paga manual. Mostra o upgrade sugerido num clique e, nos planos Essencial/Pro, um botão pra liberar 7 dias de degustação do Nino AI (cota enxuta de ~20 mensagens, sem virar plano AI).",
+          },
+          {
+            kind: "novo",
             title: "Tela “Conexões de API” dentro de Clientes",
             desc: "Uma lista de todas as lojas de todos os clientes mostrando de qual cliente é cada uma, quais plataformas tem, e quais estão conectadas por API (iFood / 99). Com busca e filtros “Conectadas via API” / “Sem API”. O modal de lojas do cliente também ganhou os selos de plataforma e API por loja.",
           },

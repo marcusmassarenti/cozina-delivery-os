@@ -7,6 +7,7 @@ import {
   MapPin,
   Phone,
   ReceiptText,
+  Sparkles,
   Store,
   User,
   Users,
@@ -16,6 +17,8 @@ import { PlatformLogo } from "@/components/platform-logo"
 import type { ClientDetail } from "@/lib/data/plataforma"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
+
+import { PlanControls } from "./plan-controls"
 
 /** Dias de hoje até uma data ISO (fuso SP). Inline pra não puxar server-only. */
 function daysUntil(dateISO: string): number {
@@ -253,6 +256,14 @@ export function ClientDetailView({
           </div>
         </Card>
       </div>
+
+      <Card title="Plano & Nino AI" icon={Sparkles}>
+        <PlanControls
+          holdingId={c.id}
+          planTier={c.planTier}
+          ninoTrialEndsAt={c.ninoTrialEndsAt}
+        />
+      </Card>
 
       <Card title="Dados fiscais & empresa (Nota Fiscal)" icon={ReceiptText}>
         {c.fiscalPreenchido ? (

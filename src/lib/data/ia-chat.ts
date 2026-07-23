@@ -22,7 +22,11 @@ import { getCancelamentosPorMotivo } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import type { PlatformId } from "@/components/platform-logo"
-import { isAiPlan } from "@/lib/data/billing"
+import {
+  getNinoDegustacao,
+  isAiPlan,
+  NINO_DEGUSTACAO_COTA,
+} from "@/lib/data/billing"
 import { asaasCreatePayment } from "@/lib/asaas/client"
 import {
   askClaudeChat,
@@ -134,23 +138,27 @@ export type ConsultorEstado = {
   configurado: boolean
   /** Nº de lojas ativas visíveis pro usuário. */
   lojas: number
-  /** Bolsa grátis do mês (50 × lojas). */
+  /** Bolsa grátis do mês (50 × lojas) — ou a cota enxuta na degustação. */
   limiteMes: number
   /** Grátis já usadas neste mês. */
   usadasMes: number
   /** Saldo de créditos comprados (acumula). */
   creditos: number
+  /** Degustação do Nino ativa (cortesia) + até quando. */
+  degustacao: { ativa: boolean; ate: string | null }
 }
 
 /** Estado pro cabeçalho da tela: plano, quota do mês e saldo comprado. */
 export async function getConsultorEstado(): Promise<ConsultorEstado> {
-  const [ai, holdingId, units] = await Promise.all([
+  const [ai, holdingId, units, deg] = await Promise.all([
     isAiPlan(),
     getCurrentHoldingId(),
     getVisibleUnits(),
+    getNinoDegustacao(),
   ])
   const lojas = units.length
-  const limiteMes = lojas * limitePorLoja()
+  // Na degustação a bolsa é a cota enxuta (total), não 50×lojas.
+  const limiteMes = deg.ativa ? NINO_DEGUSTACAO_COTA : lojas * limitePorLoja()
 
   let usadasMes = 0
   let creditos = 0
@@ -180,6 +188,7 @@ export async function getConsultorEstado(): Promise<ConsultorEstado> {
     limiteMes,
     usadasMes,
     creditos,
+    degustacao: deg,
   }
 }
 
@@ -834,11 +843,12 @@ export async function perguntarConsultor(
     }
   }
 
-  const [ai, holdingId, units, auth] = await Promise.all([
+  const [ai, holdingId, units, auth, deg] = await Promise.all([
     isAiPlan(),
     getCurrentHoldingId(),
     getVisibleUnits(),
     requireAuth(),
+    getNinoDegustacao(),
   ])
   if (!ai) {
     return {
@@ -851,7 +861,9 @@ export async function perguntarConsultor(
     return { ok: false, motivo: "erro", mensagem: "Conta não identificada." }
   }
 
-  const limiteGratis = units.length * limitePorLoja()
+  const limiteGratis = deg.ativa
+    ? NINO_DEGUSTACAO_COTA
+    : units.length * limitePorLoja()
   const fonte = await consumirCota(holdingId, limiteGratis)
   if (fonte === null) {
     return {
@@ -985,11 +997,12 @@ export async function* perguntarConsultorStream(
     return
   }
 
-  const [ai, holdingId, units, auth] = await Promise.all([
+  const [ai, holdingId, units, auth, deg] = await Promise.all([
     isAiPlan(),
     getCurrentHoldingId(),
     getVisibleUnits(),
     requireAuth(),
+    getNinoDegustacao(),
   ])
   if (!ai) {
     yield {
@@ -1004,7 +1017,9 @@ export async function* perguntarConsultorStream(
     return
   }
 
-  const limiteGratis = units.length * limitePorLoja()
+  const limiteGratis = deg.ativa
+    ? NINO_DEGUSTACAO_COTA
+    : units.length * limitePorLoja()
   const fonte = await consumirCota(holdingId, limiteGratis)
   if (fonte === null) {
     yield { type: "error", motivo: "cota", mensagem: "Suas perguntas do mês acabaram." }

@@ -91,6 +91,8 @@ export async function getCurrentHoldingBilling(): Promise<{
   suspendOn: string | null
   trialEndsAt: string | null
   planTier: string | null
+  /** Fim da degustação do Nino AI (cortesia). No futuro = Nino liberado. */
+  ninoTrialEndsAt: string | null
 } | null> {
   try {
     const holdingId = await getCurrentHoldingId()
@@ -99,7 +101,7 @@ export async function getCurrentHoldingBilling(): Promise<{
     const { data } = await admin
       .from("holdings")
       .select(
-        "created_at, payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at, plan_tier",
+        "created_at, payment_method, monthly_fee, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at",
       )
       .eq("id", holdingId)
       .maybeSingle()
@@ -123,10 +125,33 @@ export async function getCurrentHoldingBilling(): Promise<{
       suspendOn: b.suspendOn,
       trialEndsAt: b.trialEndsAt,
       planTier: (data.plan_tier as string | null) ?? null,
+      ninoTrialEndsAt: (data.nino_trial_ends_at as string | null) ?? null,
     }
   } catch {
     return null
   }
+}
+
+/** Cota enxuta do Nino durante a degustação (cortesia) — total, não mensal. */
+export const NINO_DEGUSTACAO_COTA = 20
+
+/**
+ * Degustação do Nino ativa? (cortesia do dono pra Essencial/Pro experimentarem).
+ * Só conta como degustação quando NÃO é plano AI de fato nem trial geral — aí a
+ * cota é a enxuta. Super-admin nunca está "em degustação" (tem tudo).
+ */
+export async function getNinoDegustacao(): Promise<{
+  ativa: boolean
+  ate: string | null
+}> {
+  if (await isSuperadmin()) return { ativa: false, ate: null }
+  const b = await getCurrentHoldingBilling()
+  if (!b?.ninoTrialEndsAt) return { ativa: false, ate: null }
+  const ativa =
+    new Date(b.ninoTrialEndsAt) > new Date() &&
+    b.status !== "trial" &&
+    planRank(b.planTier) < PLAN_RANK.ai
+  return { ativa, ate: ativa ? b.ninoTrialEndsAt : null }
 }
 
 /**
@@ -160,5 +185,8 @@ export async function isAiPlan(): Promise<boolean> {
   const b = await getCurrentHoldingBilling()
   if (!b) return false
   if (b.status === "trial") return true
+  // Degustação do Nino (cortesia): libera o Nino mesmo no Essencial/Pro
+  // enquanto não vence. A cota nesse período é a enxuta (ver ia-chat).
+  if (b.ninoTrialEndsAt && new Date(b.ninoTrialEndsAt) > new Date()) return true
   return planRank(b.planTier) >= PLAN_RANK.ai
 }
