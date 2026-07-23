@@ -39,7 +39,12 @@ export async function refreshMerchants(
       id: m.id,
       name: m.name ?? null,
       corporate_name: m.corporateName ?? null,
-      cnpj: m.documents?.CNPJ?.value ?? null,
+      // NÃO grava cnpj aqui: a Merchant API não devolve documents/CNPJ, então
+      // isso sempre viria null e APAGARIA o CNPJ que o auto-vínculo descobriu
+      // pela Conciliação (que é a única fonte real). Só preenche se vier algo.
+      ...(m.documents?.CNPJ?.value
+        ? { cnpj: m.documents.CNPJ.value }
+        : {}),
       city: m.address?.city ?? null,
       state: m.address?.state ?? null,
       merchant_state: m.merchantState ?? null,

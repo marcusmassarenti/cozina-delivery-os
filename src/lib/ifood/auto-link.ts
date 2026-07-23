@@ -22,6 +22,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 import { listIfoodMerchants, type IfoodMerchant } from "./merchants"
+import { downloadReconciliationRows } from "./reconciliation"
 import { syncIfoodAll } from "./sync"
 
 /** Normaliza nome pra comparar: minúsculo, sem acento, sem pontuação, sem
@@ -55,8 +56,66 @@ function coberturaNome(unitNome: string, merchant: IfoodMerchant): number {
   return hit / u.size
 }
 
-/** Confiança mínima pra vincular sozinho (nome da loja bem coberto). */
+/** Nome bem coberto — usado só pra PRIORIZAR candidatos e detectar conflito. */
 const LIMIAR_AUTO = 0.8
+/** Teto de merchants testados por loja (cada teste baixa uma conciliação). */
+const MAX_TESTES_CNPJ = 3
+
+/** Só dígitos — CNPJ vem mascarado num lado e cru no outro. */
+function soDigitos(v: string | null | undefined): string {
+  return (v ?? "").replace(/\D/g, "")
+}
+
+/** YYYY-MM do mês corrente e do anterior (onde procurar extrato). */
+function competenciasParaSondar(): string[] {
+  const d = new Date()
+  const ym = (x: Date) =>
+    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`
+  return [ym(d), ym(new Date(d.getFullYear(), d.getMonth() - 1, 1))]
+}
+
+/**
+ * CNPJ REAL de um merchant do iFood.
+ *
+ * ⚠️ A Merchant API não expõe CNPJ (nem na lista nem no detalhe) — mas a
+ * **Conciliação** traz (coluna `cnpj`, ao lado de `loja_id`). Então a gente
+ * descobre baixando um extrato e guarda em `ifood_merchants.cnpj`, pra as
+ * próximas rodadas saírem de graça do cache.
+ * Devolve null quando a loja ainda não tem extrato (sem movimento).
+ */
+async function cnpjDoMerchant(
+  merchantId: string,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("ifood_merchants")
+    .select("cnpj")
+    .eq("id", merchantId)
+    .maybeSingle()
+  const cache = soDigitos((data as { cnpj?: string | null } | null)?.cnpj)
+  if (cache.length === 14) return cache
+
+  for (const comp of competenciasParaSondar()) {
+    try {
+      const r = await downloadReconciliationRows(merchantId, comp)
+      if (!r.ok) continue
+      const linha = r.rows.find(
+        (x) => soDigitos(String(x.cnpj ?? "")).length === 14,
+      )
+      const cnpj = soDigitos(String(linha?.cnpj ?? ""))
+      if (cnpj.length === 14) {
+        await admin
+          .from("ifood_merchants")
+          .update({ cnpj })
+          .eq("id", merchantId)
+        return cnpj
+      }
+    } catch {
+      /* segue pro próximo mês */
+    }
+  }
+  return null
+}
 
 export type AutoLinkResult = {
   ok: boolean
@@ -68,12 +127,16 @@ export type AutoLinkResult = {
     unitName: string
     merchantId: string
     score: number
+    /** CNPJ conferido na conciliação do merchant (o que autorizou o vínculo). */
+    cnpj: string
   }[]
-  /** Solicitações abertas sem match confiável — o admin confirma na tela. */
+  /** Solicitações abertas sem CONFIRMAÇÃO de CNPJ — o admin resolve na tela. */
   ambiguas: {
     unitId: string
     unitName: string
     sugestao: { merchantId: string; name: string | null; score: number } | null
+    /** Por que não vinculou (CNPJ conflitante, sem extrato, etc.). */
+    motivo: string
   }[]
   merchantsVistos: number
 }
@@ -131,9 +194,10 @@ export async function autoLinkIfoodMerchants(
 
   // 2) Unidades COM solicitação aberta (pendente/solicitada) e iFood ativo
   //    sem vínculo — só essas entram no casamento (o cliente pediu).
+  //    O `cnpj` do pedido é a chave de VERIFICAÇÃO (ver validação abaixo).
   let reqQ = admin
     .from("ifood_activation_requests")
-    .select("unit_id, status, units!inner(id, code, name)")
+    .select("unit_id, status, cnpj, units!inner(id, code, name)")
     .in("status", ["pendente", "solicitada"])
   if (restrictUnitIds) reqQ = reqQ.in("unit_id", restrictUnitIds)
   const { data: reqs, error: e1 } = await reqQ
@@ -149,6 +213,7 @@ export async function autoLinkIfoodMerchants(
 
   const abertas = ((reqs ?? []) as unknown as {
     unit_id: string
+    cnpj: string | null
     units: { id: string; code: string; name: string }
   }[]).filter((row) => !jaVinculados.has(row.unit_id))
 
@@ -157,41 +222,64 @@ export async function autoLinkIfoodMerchants(
   const usados = new Set<string>()
 
   for (const row of abertas) {
-    // Melhor candidato por cobertura de nome (só os ainda não usados).
-    let best: { m: IfoodMerchant; score: number } | null = null
-    let segundo = 0
-    for (const m of candidatos) {
-      if (usados.has(m.id)) continue
-      const score = coberturaNome(row.units.name, m)
-      if (!best || score > best.score) {
-        if (best) segundo = best.score
-        best = { m, score }
-      } else if (score > segundo) {
-        segundo = score
+    const cnpjPedido = soDigitos(row.cnpj)
+    if (cnpjPedido.length !== 14) {
+      ambiguas.push({
+        unitId: row.unit_id,
+        unitName: row.units.name,
+        sugestao: null,
+        motivo: "Solicitação sem CNPJ válido — não dá pra verificar.",
+      })
+      continue
+    }
+
+    // Ordena candidatos por cobertura de nome: o nome NÃO decide, só define
+    // quem testamos primeiro (cada teste custa uma conciliação).
+    const ordenados = candidatos
+      .filter((m) => !usados.has(m.id))
+      .map((m) => ({ m, score: coberturaNome(row.units.name, m) }))
+      .sort((a, b) => b.score - a.score)
+
+    // Quem DECIDE é o CNPJ: pega o CNPJ real do merchant (cache → conciliação)
+    // e só vincula quando bate com o CNPJ que o cliente pediu. É o que impede
+    // trocar filiais de mesmo nome/raiz (ex.: 32.196.377/0001, /0002, /0003).
+    let escolhido: { m: IfoodMerchant; score: number } | null = null
+    let testados = 0
+    let conflito: string | null = null
+    for (const cand of ordenados) {
+      if (testados >= MAX_TESTES_CNPJ) break
+      const cnpjMerchant = await cnpjDoMerchant(cand.m.id, admin)
+      if (!cnpjMerchant) continue // sem extrato pra verificar; tenta o próximo
+      testados++
+      if (cnpjMerchant === cnpjPedido) {
+        escolhido = cand
+        break
+      }
+      if (cand.score >= LIMIAR_AUTO) {
+        // Nome batia forte mas o CNPJ é de OUTRA loja — o caso perigoso.
+        conflito = `O merchant "${cand.m.name ?? cand.m.id}" tem nome parecido mas é o CNPJ ${cnpjMerchant} (o pedido é ${cnpjPedido}).`
       }
     }
 
-    // Vincula só com alta confiança E sem empate (margem sobre o 2º lugar).
-    const confiavel =
-      best && best.score >= LIMIAR_AUTO && best.score - segundo >= 0.3
-    if (best && confiavel) {
+    if (escolhido) {
       const { error: eUp } = await admin.from("unit_platforms").upsert(
         {
           unit_id: row.unit_id,
           platform: "ifood",
           active: true,
-          api_store_id: best.m.id,
+          api_store_id: escolhido.m.id,
         },
         { onConflict: "unit_id,platform", ignoreDuplicates: false },
       )
       if (!eUp) {
-        usados.add(best.m.id)
+        usados.add(escolhido.m.id)
         vinculadas.push({
           unitId: row.unit_id,
           unitCode: row.units.code,
           unitName: row.units.name,
-          merchantId: best.m.id,
-          score: best.score,
+          merchantId: escolhido.m.id,
+          score: escolhido.score,
+          cnpj: cnpjPedido,
         })
         await admin
           .from("ifood_activation_requests")
@@ -201,13 +289,24 @@ export async function autoLinkIfoodMerchants(
         continue
       }
     }
-    // Sem match confiável → sugestão pro admin confirmar na tela.
+
+    // Não confirmou por CNPJ → NÃO vincula (o admin resolve na tela).
+    const melhor = ordenados[0]
     ambiguas.push({
       unitId: row.unit_id,
       unitName: row.units.name,
-      sugestao: best
-        ? { merchantId: best.m.id, name: best.m.name ?? null, score: best.score }
+      sugestao: melhor
+        ? {
+            merchantId: melhor.m.id,
+            name: melhor.m.name ?? null,
+            score: melhor.score,
+          }
         : null,
+      motivo:
+        conflito ??
+        (testados === 0
+          ? "Nenhum merchant candidato tem extrato pra confirmar o CNPJ ainda (loja sem movimento?)."
+          : `Nenhum dos ${testados} merchants testados tem o CNPJ ${cnpjPedido}.`),
     })
   }
 
