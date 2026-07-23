@@ -1,16 +1,20 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Plug } from "lucide-react"
+import { ArrowLeft, ArrowUpRight, Plug, Store } from "lucide-react"
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
+import { getSolicitacoesIfoodPendentes } from "@/lib/data/units"
 import type { PlatformId } from "@/components/platform-logo"
 
 import { ConexoesTable, type ConexaoRow } from "./_components/conexoes-table"
 
 export default async function ConexoesPage() {
   if (!(await isSuperadmin())) notFound()
-  const { clients } = await getClientsOverview()
+  const [{ clients }, solicitacoes] = await Promise.all([
+    getClientsOverview(),
+    getSolicitacoesIfoodPendentes(),
+  ])
 
   // Achata as lojas de todos os clientes numa lista só.
   const rows: ConexaoRow[] = []
@@ -46,11 +50,29 @@ export default async function ConexoesPage() {
           <ArrowLeft className="size-3.5" />
           Voltar para clientes
         </Link>
-        <div className="flex items-center gap-2.5">
-          <Plug className="size-5 text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Conexões de API
-          </h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <Plug className="size-5 text-primary" />
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Conexões de API
+            </h1>
+          </div>
+          {/* Atalho pra tela de gerenciar as conexões iFood (fila de
+              solicitações + vincular merchant à unidade), que não fica no
+              menu. Badge quando há cliente esperando. */}
+          <Link
+            href="/integracao/ifood-merchants"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Store className="size-4" />
+            Gerenciar conexões iFood
+            {solicitacoes.total > 0 && (
+              <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#EA1D2C] px-1.5 text-[11px] font-semibold text-white">
+                {solicitacoes.total}
+              </span>
+            )}
+            <ArrowUpRight className="size-3.5 text-muted-foreground" />
+          </Link>
         </div>
         <p className="text-sm text-muted-foreground">
           Todas as lojas dos clientes e o que cada uma tem conectado por API.
