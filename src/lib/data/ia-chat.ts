@@ -33,6 +33,7 @@ import {
   streamClaudeChat,
   isAnthropicConfigured,
   type ChatTurn,
+  type SystemBloco,
 } from "@/lib/anthropic/client"
 import { registrarUsoIa } from "@/lib/data/ia-custos"
 
@@ -520,7 +521,10 @@ function montarContexto(
       if (!atual && historico.length === 0) return null
       return {
         ...(atual ?? { loja: u.name }),
-        historico_mensal: historico,
+        // Tabela — colunas em `legenda_das_tabelas.historico_mensal`.
+        historico_mensal: historico.map((h) =>
+          linha(h.mes, h.bruto, h.liquido, h.pedidos, h.cancelados),
+        ),
         // Motivos de cancelamento (iFood) da loja no mês, com perda em R$.
         cancelamentos: cancelMap.get(u.id) ?? null,
         // Nota por canal + quantas avaliações 1-2★ a loja teve no mês.
@@ -567,11 +571,19 @@ function montarContexto(
   }
   const historico_rede_mensal = [...redeMes.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([mes, v]) => ({ mes, faturamento_bruto: round(v.bruto), pedidos: v.pedidos }))
+    .map(([mes, v]) => linha(mes, round(v.bruto), v.pedidos))
 
-  return JSON.stringify({
+  const payload = {
     mes_corrente: periodo,
     contexto_temporal: temporal,
+    // As listas grandes vêm como tabela "valor|valor|valor" pra não repetir o
+    // nome do campo em toda linha. Esta é a legenda das colunas.
+    legenda_das_tabelas: {
+      historico_mensal: "mes|bruto|liquido|pedidos|cancelados",
+      historico_rede_mensal: "mes|faturamento_bruto|pedidos",
+      por_plataforma: "plataforma|bruto|liquido|taxa_da_plataforma",
+      periodos_por_loja: "loja|bruto|pedidos|cancelados",
+    },
     rede_mes_corrente: {
       lojas: units.length,
       faturamento_bruto: round(rede.bruto),
@@ -589,7 +601,8 @@ function montarContexto(
     reclamacoes_recentes: reputacao.reclamacoes_recentes,
     historico_rede_mensal,
     por_loja,
-  })
+  }
+  return JSON.stringify(payload)
 }
 
 /** Extrai os números que importam de uma UnitMonthly (compacto, arredondado). */
@@ -615,12 +628,15 @@ function numerosDaLoja(
         ? round((cmvTotal / m.faturamentoLiquido) * 100)
         : null,
     margem_lucro_pct: m.margemLucroPct || null,
-    por_plataforma: m.platforms.map((p) => ({
-      plataforma: p.name,
-      bruto: round(p.bruto),
-      liquido: round(p.liquido),
-      taxa_da_plataforma: round(p.bruto - p.liquido - (p.promocoesLoja || 0)),
-    })),
+    // Tabela — colunas em `legenda_das_tabelas.por_plataforma`.
+    por_plataforma: m.platforms.map((p) =>
+      linha(
+        p.name,
+        round(p.bruto),
+        round(p.liquido),
+        round(p.bruto - p.liquido - (p.promocoesLoja || 0)),
+      ),
+    ),
     // Quebra do que o iFood desconta (só iFood — as outras plataformas ainda
     // não trazem esse detalhamento). Ajuda a responder "pra onde vai minha taxa".
     quebra_taxas_ifood: quebraTaxasIfood(m),
@@ -643,6 +659,22 @@ function quebraTaxasIfood(m: import("@/lib/mock-monthly").UnitMonthly) {
 
 function round(n: number): number {
   return Math.round(n * 100) / 100
+}
+
+/**
+ * Junta valores numa LINHA separada por "|".
+ *
+ * Motivo: no contexto da IA, listas grandes (histórico mês a mês, plataformas,
+ * quinzenas por loja) eram arrays de objetos — e aí o nome de cada campo era
+ * reenviado em toda linha. Numa rede de 13 lojas isso é ~30% do prompt gasto
+ * repetindo "faturamento_bruto" centenas de vezes.
+ *
+ * Vira tabela: a legenda das colunas vai UMA vez no topo do contexto
+ * (`legenda_das_tabelas`) e cada linha carrega só os valores. Nenhum número é
+ * perdido — só a repetição. Null vira campo vazio.
+ */
+function linha(...vals: (string | number | null)[]): string {
+  return vals.map((v) => (v === null ? "" : String(v))).join("|")
 }
 
 const TODAS_PLATAFORMAS: PlatformId[] = ["ifood", "99food", "keeta"]
@@ -709,7 +741,8 @@ function mesAnterior(year: number, month: number): { year: number; month: number
 
 type ResumoPeriodo = {
   rede: { bruto: number; liquido: number; pedidos: number; cancelados: number }
-  por_loja: { loja: string; bruto: number; pedidos: number; cancelados: number }[]
+  /** Tabela — colunas em `legenda_das_tabelas.periodos_por_loja`. */
+  por_loja: string[]
 }
 
 /** Soma da rede + por loja de UMA janela de dias (start..end) de um mês. */
@@ -735,12 +768,9 @@ async function resumoDePeriodo(
     rede.liquido += m.totalLiquido
     rede.pedidos += m.pedidos
     rede.cancelados += m.pedidosCancelados
-    por_loja.push({
-      loja: u.name,
-      bruto: round(m.faturamentoBruto),
-      pedidos: m.pedidos,
-      cancelados: m.pedidosCancelados,
-    })
+    por_loja.push(
+      linha(u.name, round(m.faturamentoBruto), m.pedidos, m.pedidosCancelados),
+    )
   }
   return {
     rede: {
@@ -778,6 +808,8 @@ const SYSTEM_BASE = `Você é o Nino, a IA consultora do Delivery OS: um consult
 
 Você recebe os NÚMEROS REAIS da conta e responde as perguntas do dono sobre a operação: faturamento, CMV, ticket, cancelamento, taxas por plataforma, comparação entre lojas, resumo da rede, evolução ao longo do ano.
 
+FORMATO DAS TABELAS: pra economizar espaço, as listas grandes ("historico_mensal", "historico_rede_mensal", "por_plataforma" e o "por_loja" dentro de "periodos") NÃO são objetos — cada item é uma LINHA de valores separados por "|", na ordem descrita em "legenda_das_tabelas". Ex.: com a legenda "mes|bruto|liquido|pedidos|cancelados", a linha "03/2026|150000|120000|2400|30" quer dizer março/2026 com bruto R$ 150.000, líquido R$ 120.000, 2.400 pedidos e 30 cancelados. Campo vazio entre dois "|" significa que o dado não existe (null). Leia SEMPRE a legenda antes de interpretar uma linha — não chute a ordem das colunas. E atenção: a ordem em que as linhas aparecem NÃO é ranking — quando for montar um "top 5" ou "quem vende mais", ORDENE você mesmo pelo valor antes de listar.
+
 O contexto tem:
 - "contexto_temporal": a data de hoje, o dia do mês, dias decorridos, dias no mês e dias restantes. Use pra PROJETAR o fechamento do mês (regra de três: faturamento_do_mes ÷ dias_decorridos × dias_no_mes) e dizer "no ritmo atual você fecha em ~R$ X" ou "faltam N dias". Deixe claro que é projeção, não certeza.
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
@@ -814,6 +846,32 @@ SUPORTE DE USO DO SISTEMA (você também é o help do produto):
 - Use o MANUAL DO SISTEMA abaixo como fonte da verdade sobre o produto. Quando a dúvida for de uso, responda direto e prático: diga o caminho no menu (ex.: "Financeiro › Lançamentos › Novo Lançamento") e o passo a passo curto. Cite o nome exato da tela/botão.
 - Se a dúvida for de uso mas não estiver literalmente no manual, RACIOCINE a partir do que o manual descreve e do bom senso do produto pra ajudar — não trave nem mande "abrir um chamado". Se realmente não souber com certeza, seja honesto e aponte o caminho mais provável ou a Central de Ajuda / botão "Como funciona" da tela.
 - Separe as coisas quando fizer sentido: dúvida de USO você responde do manual; pergunta de NÚMERO você responde do contexto de dados.`
+
+/**
+ * Monta o `system` do Nino em DOIS blocos, ambos com prompt caching ligado.
+ *
+ * A ordem é o que faz o cache render, porque ele casa por PREFIXO:
+ *  1) regras + manual — bytes IDÊNTICOS pra todos os clientes, então o cache
+ *     aproveita entre contas diferentes;
+ *  2) os números da conta — mudam por cliente, mas ficam iguais entre as
+ *     perguntas da mesma conversa (é aqui que mora ~85% do prompt).
+ *
+ * Leitura do cache custa 10% do preço normal; a gravação custa 25% a mais e
+ * expira em ~5 min. Ou seja: conversa (perguntas em sequência) sai bem mais
+ * barata, pergunta solta sai um pouco mais cara.
+ */
+function systemDoNino(periodo: string, contexto: string): SystemBloco[] {
+  return [
+    {
+      text: `${SYSTEM_BASE}\n\n=== MANUAL DO SISTEMA ===\n${SISTEMA_MANUAL}`,
+      cache: true,
+    },
+    {
+      text: `CONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,
+      cache: true,
+    },
+  ]
+}
 
 /**
  * Responde uma pergunta do chat. Faz, em ordem: gate de plano AI → consome a
@@ -905,12 +963,7 @@ export async function perguntarConsultor(
     const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao)
 
     const resposta = await askClaudeChat({
-      system: `${SYSTEM_BASE}
-
-=== MANUAL DO SISTEMA ===
-${SISTEMA_MANUAL}
-
-CONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,
+      system: systemDoNino(periodo, contexto),
       // Mantém a conversa curta (últimos 8 turnos) — barato e suficiente.
       messages: messages.slice(-8),
       // Deixa o Nino pesquisar mercado/setor quando a pergunta for externa. O
@@ -1059,12 +1112,7 @@ export async function* perguntarConsultorStream(
     const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao)
 
     const stream = streamClaudeChat({
-      system: `${SYSTEM_BASE}
-
-=== MANUAL DO SISTEMA ===
-${SISTEMA_MANUAL}
-
-CONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${contexto}`,
+      system: systemDoNino(periodo, contexto),
       messages: messages.slice(-8),
       webSearch: true,
       maxTokens: 1400,

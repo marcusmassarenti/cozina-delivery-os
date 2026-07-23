@@ -72,6 +72,31 @@ export async function askClaude(opts: AskOpts): Promise<string> {
 export type ChatTurn = { role: "user" | "assistant"; content: string }
 
 /**
+ * Bloco do `system`. Marcar `cache: true` liga o PROMPT CACHING naquele ponto:
+ * a Anthropic guarda o prefixo do prompt e, numa próxima chamada com o MESMO
+ * início (byte a byte), cobra 10% em vez de 100% por aqueles tokens.
+ *
+ * O preço disso é que a GRAVAÇÃO custa 25% a mais e o cache expira em ~5 min.
+ * Ou seja: compensa quando a pessoa faz perguntas em sequência (o normal numa
+ * conversa) e sai levemente mais caro na pergunta solta.
+ *
+ * Ordem importa: o cache casa por PREFIXO. Por isso o bloco fixo (regras +
+ * manual, igual pra todos os clientes) vem antes do contexto (números da conta,
+ * que mudam por cliente) — assim o pedaço fixo é reaproveitado entre clientes.
+ */
+export type SystemBloco = { text: string; cache?: boolean }
+
+/** `system` vira string simples ou lista de blocos (com marcação de cache). */
+function systemPayload(system: string | SystemBloco[]) {
+  if (typeof system === "string") return system
+  return system.map((b) => ({
+    type: "text",
+    text: b.text,
+    ...(b.cache ? { cache_control: { type: "ephemeral" } } : {}),
+  }))
+}
+
+/**
  * Consumo de UMA resposta da IA — base pro custo por cliente.
  * A API devolve isso em `usage`; a gente só descartava. Acumula entre as
  * iterações do loop de busca web (stop_reason "pause_turn").
@@ -121,7 +146,7 @@ function somarUso(acc: UsoIa, u: UsageApi | undefined | null): void {
  * do que já foi dito.
  */
 export async function askClaudeChat(opts: {
-  system: string
+  system: string | SystemBloco[]
   messages: ChatTurn[]
   maxTokens?: number
   model?: string
@@ -163,7 +188,7 @@ export async function askClaudeChat(opts: {
       body: JSON.stringify({
         model: opts.model || diagnosticoModel(),
         max_tokens: opts.maxTokens ?? (opts.webSearch ? 1500 : 1200),
-        system: opts.system,
+        system: systemPayload(opts.system),
         messages: apiMessages,
         ...(tools ? { tools } : {}),
       }),
@@ -210,7 +235,7 @@ export type ChatStreamEvent =
  * na web…" quando ele de fato pesquisa — não por adivinhação.
  */
 export async function* streamClaudeChat(opts: {
-  system: string
+  system: string | SystemBloco[]
   messages: ChatTurn[]
   maxTokens?: number
   model?: string
@@ -236,7 +261,7 @@ export async function* streamClaudeChat(opts: {
     body: JSON.stringify({
       model: opts.model || diagnosticoModel(),
       max_tokens: opts.maxTokens ?? (opts.webSearch ? 1500 : 1200),
-      system: opts.system,
+      system: systemPayload(opts.system),
       messages: opts.messages,
       stream: true,
       ...(tools ? { tools } : {}),
