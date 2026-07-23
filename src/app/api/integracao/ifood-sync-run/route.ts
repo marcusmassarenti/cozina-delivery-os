@@ -15,6 +15,7 @@
 import { getAccessibleUnitIds, userCan } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isApiSyncEnabled } from "@/lib/data/units"
+import { autoLinkAndBackfill } from "@/lib/ifood/auto-link"
 import { syncIfoodAll } from "@/lib/ifood/sync"
 
 export const runtime = "nodejs"
@@ -44,6 +45,15 @@ export async function POST() {
   }
 
   try {
+    // Antes do sync: casa lojas recém-autorizadas do escopo do usuário (por
+    // CNPJ) e puxa o histórico delas — quem clica já vê a loja nova entrar.
+    let autoLink: Awaited<ReturnType<typeof autoLinkAndBackfill>> | null = null
+    try {
+      autoLink = await autoLinkAndBackfill(unitIds)
+    } catch {
+      autoLink = null
+    }
+
     // Disparo manual sempre força (ignora o throttle de 6h) — o operador
     // clicou "Sincronizar agora" de propósito.
     const out = await syncIfoodAll({ force: true, unitIds })
@@ -67,7 +77,7 @@ export async function POST() {
         .map((r) => r.units.name)
         .sort((a, b) => a.localeCompare(b, "pt-BR"))
     }
-    return Response.json({ ok: true, semVinculo, ...out })
+    return Response.json({ ok: true, semVinculo, autoLink, ...out })
   } catch (e) {
     return Response.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },

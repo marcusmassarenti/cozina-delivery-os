@@ -60,6 +60,11 @@ type SyncRunResult = {
   /** Lojas do usuário com iFood ativo mas SEM vínculo com a API — não
    *  entram no sync; o dialog explica em vez de parecer que "faltou". */
   semVinculo?: string[]
+  /** Auto-vínculo por CNPJ: lojas recém-conectadas e histórico puxado. */
+  autoLink?: {
+    vinculadas?: { unitCode: string; unitName: string }[]
+    backfill?: { unitCode: string; unitName: string; linhas: number; meses: number }[]
+  } | null
   error?: string
 }
 
@@ -229,6 +234,35 @@ export function SyncIfoodButton() {
             </div>
           ) : (
             <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+              {/* Loja(s) que se conectaram sozinhas nesta rodada (auto-vínculo
+                  por CNPJ) — o histórico já foi puxado. */}
+              {(result?.autoLink?.vinculadas?.length ?? 0) > 0 && (
+                <div className="rounded-md border border-emerald-300/60 bg-emerald-50/60 px-3 py-2 text-xs dark:border-emerald-800/50 dark:bg-emerald-950/25">
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                    {result!.autoLink!.vinculadas!.length === 1
+                      ? "🎉 1 loja nova conectada ao iFood"
+                      : `🎉 ${result!.autoLink!.vinculadas!.length} lojas novas conectadas ao iFood`}
+                  </p>
+                  <div className="mt-1 space-y-0.5 text-muted-foreground">
+                    {result!.autoLink!.vinculadas!.map((v) => {
+                      const bf = result!.autoLink!.backfill?.find(
+                        (b) => b.unitCode === v.unitCode,
+                      )
+                      return (
+                        <div key={v.unitCode}>
+                          <b className="text-foreground">
+                            {v.unitCode} · {v.unitName}
+                          </b>
+                          {bf
+                            ? ` — histórico puxado (${bf.meses} ${bf.meses === 1 ? "mês" : "meses"}, ${bf.linhas.toLocaleString("pt-BR")} lançamentos)`
+                            : " — vinculada; histórico entra na próxima sync"}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Período sincronizado + onde entrou dado novo. */}
               {comps.length > 0 && (
                 <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">

@@ -87,6 +87,11 @@ export const CHANGELOG: Release[] = [
           },
           {
             kind: "novo",
+            title: "Loja nova se conecta e puxa o histórico sozinha",
+            desc: "Assim que você aprova a loja no Portal do iFood, o sistema casa ela com o cadastro (pelo nome, entre as que pediram conexão), vincula e puxa o histórico do ano — no sync diário e ao clicar Sincronizar. Sem mexer em nada manualmente. Casos duvidosos ficam pra você confirmar num clique.",
+          },
+          {
+            kind: "novo",
             title: "Botão “Sincronizar iFood” aparece com loja vinculada",
             desc: "Assim que a primeira loja da sua conta é conectada à API do iFood, o botão de sincronizar aparece no Dashboard — e some se nenhuma loja tiver vínculo. O mesmo vale pro botão do 99 Food.",
           },
