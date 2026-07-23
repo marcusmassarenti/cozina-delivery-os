@@ -36,10 +36,6 @@ export default async function ConexoesPage() {
       a.unitName.localeCompare(b.unitName, "pt-BR"),
   )
 
-  const totalLojas = rows.length
-  const comIfood = rows.filter((r) => r.ifoodApi).length
-  const com99 = rows.filter((r) => r.ninefoodApi).length
-
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-2">
@@ -58,20 +54,10 @@ export default async function ConexoesPage() {
         </div>
         <p className="text-sm text-muted-foreground">
           Todas as lojas dos clientes e o que cada uma tem conectado por API.
-          Loja conectada puxa o financeiro sozinha; as demais dependem de
-          importação de planilha.
+          Clique numa plataforma pra ver só as lojas que a usam. Loja conectada
+          via API puxa o financeiro sozinha; as demais dependem de importação de
+          planilha.
         </p>
-        <div className="mt-1 flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full border bg-card px-2.5 py-1 font-medium">
-            {totalLojas} loja{totalLojas !== 1 ? "s" : ""}
-          </span>
-          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400">
-            {comIfood} via API do iFood
-          </span>
-          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400">
-            {com99} via API do 99
-          </span>
-        </div>
       </div>
 
       <ConexoesTable rows={rows} />

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Check, Minus, Search } from "lucide-react"
+import { Check, Minus, Plug, Search } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 
@@ -19,18 +19,54 @@ export type ConexaoRow = {
   ninefoodApi: boolean
 }
 
-type Filtro = "todas" | "api" | "sem"
+const PLATS: { id: PlatformId; label: string }[] = [
+  { id: "ifood", label: "iFood" },
+  { id: "99food", label: "99 Food" },
+  { id: "keeta", label: "Keeta" },
+]
 
 export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
   const [query, setQuery] = React.useState("")
-  const [filtro, setFiltro] = React.useState<Filtro>("todas")
+  // Plataformas habilitadas exigidas (AND) + conexões de API exigidas (AND).
+  const [platSel, setPlatSel] = React.useState<Set<PlatformId>>(new Set())
+  const [apiSel, setApiSel] = React.useState<Set<"ifood" | "99food">>(new Set())
+
+  const togglePlat = (p: PlatformId) =>
+    setPlatSel((s) => {
+      const n = new Set(s)
+      n.has(p) ? n.delete(p) : n.add(p)
+      return n
+    })
+  const toggleApi = (p: "ifood" | "99food") =>
+    setApiSel((s) => {
+      const n = new Set(s)
+      n.has(p) ? n.delete(p) : n.add(p)
+      return n
+    })
+
+  // Contagens por plataforma (habilitada) e por API — pro resumo do topo.
+  const stats = React.useMemo(() => {
+    const s = {
+      ifood: { total: 0, api: 0 },
+      "99food": { total: 0, api: 0 },
+      keeta: { total: 0 },
+    }
+    for (const r of rows) {
+      if (r.platforms.includes("ifood")) s.ifood.total++
+      if (r.platforms.includes("99food")) s["99food"].total++
+      if (r.platforms.includes("keeta")) s.keeta.total++
+      if (r.ifoodApi) s.ifood.api++
+      if (r.ninefoodApi) s["99food"].api++
+    }
+    return s
+  }, [rows])
 
   const filtradas = React.useMemo(() => {
     const q = query.trim().toLowerCase()
     return rows.filter((r) => {
-      const temApi = r.ifoodApi || r.ninefoodApi
-      if (filtro === "api" && !temApi) return false
-      if (filtro === "sem" && temApi) return false
+      for (const p of platSel) if (!r.platforms.includes(p)) return false
+      if (apiSel.has("ifood") && !r.ifoodApi) return false
+      if (apiSel.has("99food") && !r.ninefoodApi) return false
       if (!q) return true
       return (
         r.unitName.toLowerCase().includes(q) ||
@@ -39,18 +75,48 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
         (r.unitCode ?? "").toLowerCase().includes(q)
       )
     })
-  }, [rows, query, filtro])
+  }, [rows, query, platSel, apiSel])
 
-  const FILTROS: { id: Filtro; label: string }[] = [
-    { id: "todas", label: "Todas" },
-    { id: "api", label: "Conectadas via API" },
-    { id: "sem", label: "Sem API" },
-  ]
+  const temFiltro = platSel.size > 0 || apiSel.size > 0
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Resumo por plataforma — clicável (também filtra). */}
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full border bg-card px-2.5 py-1 font-medium">
+          {rows.length} loja{rows.length !== 1 ? "s" : ""}
+        </span>
+        {PLATS.map((p) => {
+          const st = stats[p.id]
+          const api = "api" in st ? st.api : null
+          const on = platSel.has(p.id)
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => togglePlat(p.id)}
+              title={`Filtrar lojas com ${p.label}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-colors ${
+                on
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "bg-card hover:bg-muted"
+              }`}
+            >
+              <PlatformLogo platform={p.id} size="sm" />
+              {st.total} loja{st.total !== 1 ? "s" : ""}
+              {api != null && (
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  · {api} via API
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Busca + filtros de API */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
@@ -59,21 +125,38 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
             className="h-9 w-full rounded-md border bg-background pl-8 pr-3 text-sm outline-none focus:border-ring"
           />
         </div>
-        <div className="flex items-center gap-1 rounded-md border bg-card p-0.5">
-          {FILTROS.map((f) => (
+        <div className="flex items-center gap-1.5">
+          {(["ifood", "99food"] as const).map((p) => {
+            const on = apiSel.has(p)
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => toggleApi(p)}
+                title={`Só lojas conectadas via API do ${p === "ifood" ? "iFood" : "99"}`}
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  on
+                    ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                    : "hover:bg-muted"
+                }`}
+              >
+                <Plug className="size-3" />
+                {p === "ifood" ? "iFood" : "99"} via API
+              </button>
+            )
+          })}
+          {temFiltro && (
             <button
-              key={f.id}
               type="button"
-              onClick={() => setFiltro(f.id)}
-              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                filtro === f.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted"
-              }`}
+              onClick={() => {
+                setPlatSel(new Set())
+                setApiSel(new Set())
+              }}
+              className="rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
             >
-              {f.label}
+              Limpar
             </button>
-          ))}
+          )}
         </div>
       </div>
 
