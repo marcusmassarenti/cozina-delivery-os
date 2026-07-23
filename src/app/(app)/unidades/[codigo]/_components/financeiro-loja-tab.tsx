@@ -16,7 +16,10 @@ import {
   getKeetaRepasseResumo,
   getKeetaFaturaTaxasForMonth,
 } from "@/lib/data/keeta-repasses"
-import { getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
+import {
+  getAntecipacaoFeeByUnits,
+  getFinanceiroResumoForMonth,
+} from "@/lib/data/ifood-imported"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
@@ -94,6 +97,7 @@ export async function FinanceiroLojaTab({
     keetaRepasse,
     keetaPed,
     keetaFaturaTaxas,
+    finResumo,
   ] = await Promise.all([
     getPagamentoResumoForMonth(unitId, year, month),
     getDeliveryFeeForMonth(unitId, year, month),
@@ -107,6 +111,7 @@ export async function FinanceiroLojaTab({
     getKeetaRepasseResumo(year, month, unitId),
     getKeetaPedidoResumoForMonth(unitId, year, month),
     getKeetaFaturaTaxasForMonth(unitId, year, month),
+    getFinanceiroResumoForMonth(unitId, year, month),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -155,6 +160,9 @@ export async function FinanceiroLojaTab({
     name: string,
     itens: { label: string; value: number }[],
     vr: number,
+    // Só o iFood traz (da Conciliação): R$ e qtd de pedidos cancelados, pro
+    // DRE abrir em "Vendas totais − cancelados" igual ao portal.
+    cancel?: { valor: number; qtd: number },
   ): DrePlat | null => {
     const p = m.platforms.find((x) => x.id === id)
     if (!p || p.bruto <= 0) return null
@@ -186,6 +194,8 @@ export async function FinanceiroLojaTab({
       taxaTotal,
       vrLiquido: vr,
       recebidoDireto: p.recebidoDireto ?? 0,
+      perdaCancelamento: cancel?.valor ?? 0,
+      cancelQtd: cancel?.qtd ?? 0,
       itens: lista,
     }
   }
@@ -225,6 +235,12 @@ export async function FinanceiroLojaTab({
         { label: "Outros / anúncios", value: m.outrosDescontosIfood },
       ],
       vrLiquido,
+      finResumo.hasData
+        ? {
+            valor: Math.abs(finResumo.perdaCancelamento),
+            qtd: finResumo.cancelamentoTotalQtd,
+          }
+        : undefined,
     ),
     buildPlat(
       "99food",

@@ -20,6 +20,14 @@ export type DrePlat = {
    * liquido + recebidoDireto = "Total faturamento" do Portal iFood.
    */
   recebidoDireto?: number
+  /**
+   * Apenas iFood: R$ dos pedidos cancelados no mês (da Conciliação). O
+   * portal soma isso no "Valor das vendas"; aqui o DRE mostra a subtração
+   * acontecendo (Vendas totais − cancelados = Faturamento bruto).
+   */
+  perdaCancelamento?: number
+  /** Apenas iFood: quantidade de pedidos cancelados (total). */
+  cancelQtd?: number
   /** Abertura das taxas (pode ser parcial; Keeta vem vazio). `credit` = linha
    * positiva (estorno/promoção que a plataforma devolveu), pra fechar com a
    * taxa líquida real. */
@@ -137,6 +145,15 @@ export function DreDetalhado({
   // cliente comparou com o portal e viu "31%" onde a taxa real era menor.
   // Agora cada linha bate 1-a-1 com o Portal do Parceiro.
   const taxas = Math.max(0, bruto - liquido - recebidoDireto)
+  // Cancelados (só o iFood traz o valor, da Conciliação). Mostrados ANTES do
+  // bruto: a conta começa do número que o lojista vê no portal ("Valor das
+  // vendas", que inclui cancelados) e o desconto acontece na frente dele.
+  const perdaCancel = isTodas
+    ? platforms.reduce((a, p) => a + (p.perdaCancelamento ?? 0), 0)
+    : plat?.perdaCancelamento ?? 0
+  const cancelQtd = isTodas
+    ? platforms.reduce((a, p) => a + (p.cancelQtd ?? 0), 0)
+    : plat?.cancelQtd ?? 0
   // Antecipação é exclusiva do iFood — aparece em "Todas" ou com o iFood
   // selecionado. É custo financeiro: leva ao "Recebido real no caixa" SEM
   // alterar a margem abaixo (que continua no líquido do repasse).
@@ -213,7 +230,33 @@ export function DreDetalhado({
         </div>
       </div>
 
-      <Row label="Faturamento bruto" value={fmtBRL(bruto)} bold pct={100} />
+      {perdaCancel > 0.005 && (
+        <>
+          <Row
+            label={
+              sel === "ifood"
+                ? "Vendas totais — o “Valor das vendas” do portal"
+                : "Vendas totais (antes dos cancelamentos)"
+            }
+            value={fmtBRL(bruto + perdaCancel)}
+            muted
+          />
+          <Row
+            label={`(−) Pedidos cancelados${sel === "ifood" ? "" : " no iFood"}${
+              cancelQtd > 0 ? ` (${fmtNum(cancelQtd)})` : ""
+            } — não viraram venda`}
+            value={`− ${fmtBRL(perdaCancel)}`}
+            muted
+          />
+          <Divider />
+        </>
+      )}
+      <Row
+        label={perdaCancel > 0.005 ? "= Faturamento bruto" : "Faturamento bruto"}
+        value={fmtBRL(bruto)}
+        bold
+        pct={100}
+      />
 
       {/* Taxas: em "Todas" agrupa por plataforma (clicável); por plataforma
           mostra a abertura direto. */}
@@ -391,9 +434,10 @@ export function DreDetalhado({
               </div>
             </div>
             <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-              O “Valor das vendas” do portal inclui pedidos cancelados (e as
-              taxas deles) — por isso lá o bruto e as taxas aparecem maiores.
-              Os totais acima fecham ao centavo.
+              O “Valor das vendas” do portal corresponde à linha{" "}
+              <b>“Vendas totais”</b> no topo do DRE (antes de descontar os
+              cancelados; pequenos ajustes que só existem no portal podem
+              variar). Os totais acima fecham ao centavo.
             </p>
           </div>
         )

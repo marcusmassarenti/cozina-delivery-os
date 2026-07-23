@@ -64,6 +64,14 @@ export const CHANGELOG: Release[] = [
             title: "“Confere com o Portal do iFood” no fim do DRE",
             desc: "O DRE agora mostra o “Total faturamento” e o “Total em repasses” na mesma nomenclatura do portal — os dois fecham ao centavo com a tela do iFood, sem precisar de calculadora.",
           },
+          {
+            kind: "novo",
+            title: "DRE começa do “Valor das vendas” do portal",
+            desc: "Em vez de só explicar a diferença, o DRE agora mostra a conta acontecendo: abre com as Vendas totais (o número que aparece no portal do iFood), desconta os pedidos cancelados na sua frente e chega no Faturamento bruto.",
+            antes: "DRE começava direto no Faturamento bruto (sem cancelados)",
+            depois:
+              "Vendas totais → (−) Pedidos cancelados (19) → = Faturamento bruto",
+          },
         ],
       },
       {
