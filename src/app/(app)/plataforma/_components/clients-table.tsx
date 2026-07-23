@@ -72,7 +72,13 @@ function agoDays(iso: string | null, nowMs: number): number | null {
 const PLAN_LABEL: Record<string, string> = {
   essencial: "Essencial",
   pro: "Pro",
-  ai: "AI",
+  ai: "DeliveryOS AI",
+}
+const PLAN_CLS: Record<string, string> = {
+  essencial:
+    "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  pro: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  ai: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
 }
 
 type FiltroStatus = "todos" | "paid" | "trial" | "pending" | "overdue" | "suspended"
@@ -294,6 +300,7 @@ export function ClientsTable({
                 </th>
                 <th className="px-4 py-2.5 font-semibold">Cliente</th>
                 <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 font-semibold">Plano</th>
                 <th className="px-4 py-2.5 font-semibold">Pagamento</th>
                 <th className="px-4 py-2.5 font-semibold">Vencimento</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Lojas</th>
@@ -341,13 +348,21 @@ export function ClientsTable({
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
+                      {c.planTier ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${PLAN_CLS[c.planTier] ?? ""}`}
+                        >
+                          {PLAN_LABEL[c.planTier] ?? c.planTier}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                          sem plano
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-xs">{c.paymentMethod ?? "—"}</span>
-                        {c.planTier && (
-                          <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                            {PLAN_LABEL[c.planTier] ?? c.planTier}
-                          </span>
-                        )}
                         {c.asaasActive && (
                           <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
                             Asaas ✓
@@ -426,7 +441,7 @@ export function ClientsTable({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
                     {query || status !== "todos"
                       ? "Nenhum cliente com esse filtro."
                       : "Nenhum cliente ainda."}

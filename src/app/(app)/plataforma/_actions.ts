@@ -119,6 +119,9 @@ export async function criarCliente(
           monthly_fee: monthlyFee,
           due_date: dueDate,
           paid: true,
+          // Cliente provisionado pelo dono nasce no Pro (nunca sem plano) —
+          // dá pra trocar depois no card "Plano & Nino AI" do detalhe.
+          plan_tier: "pro",
         })
         .select("id")
         .single()
