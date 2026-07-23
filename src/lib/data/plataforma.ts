@@ -26,6 +26,12 @@ export type HoldingUnit = {
   city: string | null
   state: string | null
   active: boolean
+  /** Plataformas habilitadas na loja (unit_platforms.active). */
+  platforms: PlatformId[]
+  /** Conectada ao iFood via API (unit_platforms.api_store_id preenchido). */
+  ifoodApi: boolean
+  /** Conectada ao 99 via API (ninefood_store_links ativo). */
+  ninefoodApi: boolean
 }
 export type HoldingPayment = {
   id: string
@@ -102,7 +108,8 @@ export async function getClientsOverview(): Promise<{
   if (!(await isSuperadmin())) return empty
 
   const admin = createAdminClient()
-  const [brandsRes, unitsRes, accessRes, paymentsRes] = await Promise.all([
+  const [brandsRes, unitsRes, accessRes, paymentsRes, platRes, nineRes] =
+    await Promise.all([
     admin.from("brands").select("id, holding_id"),
     admin.from("units").select("id, brand_id, active, name, code, city, state"),
     admin.from("user_unit_access").select("user_id, scope_type, scope_id"),
@@ -110,7 +117,36 @@ export async function getClientsOverview(): Promise<{
       .from("holding_payments")
       .select("id, holding_id, paid_on, amount, method, ref_month, note")
       .order("paid_on", { ascending: false }),
+    // Plataformas habilitadas por loja + vínculo de API do iFood.
+    admin
+      .from("unit_platforms")
+      .select("unit_id, platform, active, api_store_id"),
+    // Lojas com vínculo de API do 99.
+    admin.from("ninefood_store_links").select("unit_id").eq("active", true),
   ])
+
+  // unit_id → { plataformas habilitadas, iFood via API }
+  const platsByUnit = new Map<string, Set<PlatformId>>()
+  const ifoodApiUnits = new Set<string>()
+  for (const p of (platRes.data ?? []) as {
+    unit_id: string
+    platform: string
+    active: boolean
+    api_store_id: string | null
+  }[]) {
+    if (p.active) {
+      const set = platsByUnit.get(p.unit_id) ?? new Set<PlatformId>()
+      set.add(p.platform as PlatformId)
+      platsByUnit.set(p.unit_id, set)
+    }
+    if (p.platform === "ifood" && p.active && p.api_store_id)
+      ifoodApiUnits.add(p.unit_id)
+  }
+  const nineApiUnits = new Set(
+    ((nineRes.data ?? []) as { unit_id: string | null }[])
+      .map((r) => r.unit_id)
+      .filter((id): id is string => !!id),
+  )
 
   // holdings com colunas de cobrança — fallback se a migration ainda não rodou
   const hFull = await admin
@@ -210,6 +246,7 @@ export async function getClientsOverview(): Promise<{
     unitCount.set(h, (unitCount.get(h) ?? 0) + 1)
     if (u.active) activeUnitCount.set(h, (activeUnitCount.get(h) ?? 0) + 1)
     const list = unitsByHolding.get(h) ?? []
+    const platSet = platsByUnit.get(u.id)
     list.push({
       id: u.id,
       name: u.name,
@@ -217,6 +254,9 @@ export async function getClientsOverview(): Promise<{
       city: u.city ?? null,
       state: u.state ?? null,
       active: !!u.active,
+      platforms: PLAT_ORDER.filter((p) => platSet?.has(p)),
+      ifoodApi: ifoodApiUnits.has(u.id),
+      ninefoodApi: nineApiUnits.has(u.id),
     })
     unitsByHolding.set(h, list)
   }
@@ -489,19 +529,42 @@ export async function getClientDetail(
     : { data: [] as never[] }
   const unitIds = (unitRows ?? []).map((u) => u.id)
 
-  const { data: platRows } = unitIds.length
-    ? await admin
-        .from("unit_platforms")
-        .select("unit_id, platform, active")
-        .in("unit_id", unitIds)
-        .eq("active", true)
-    : { data: [] as never[] }
+  const [{ data: platRows }, { data: nineRows }] = await Promise.all([
+    unitIds.length
+      ? admin
+          .from("unit_platforms")
+          .select("unit_id, platform, active, api_store_id")
+          .in("unit_id", unitIds)
+      : Promise.resolve({ data: [] as never[] }),
+    unitIds.length
+      ? admin
+          .from("ninefood_store_links")
+          .select("unit_id")
+          .eq("active", true)
+          .in("unit_id", unitIds)
+      : Promise.resolve({ data: [] as never[] }),
+  ])
   const platsByUnit = new Map<string, Set<string>>()
-  for (const p of platRows ?? []) {
-    const set = platsByUnit.get(p.unit_id) ?? new Set<string>()
-    set.add(p.platform as string)
-    platsByUnit.set(p.unit_id, set)
+  const ifoodApiUnits = new Set<string>()
+  for (const p of (platRows ?? []) as {
+    unit_id: string
+    platform: string
+    active: boolean
+    api_store_id: string | null
+  }[]) {
+    if (p.active) {
+      const set = platsByUnit.get(p.unit_id) ?? new Set<string>()
+      set.add(p.platform)
+      platsByUnit.set(p.unit_id, set)
+    }
+    if (p.platform === "ifood" && p.active && p.api_store_id)
+      ifoodApiUnits.add(p.unit_id)
   }
+  const nineApiUnits = new Set(
+    ((nineRows ?? []) as { unit_id: string | null }[])
+      .map((r) => r.unit_id)
+      .filter((id): id is string => !!id),
+  )
   const unitsFull: ClientUnitFull[] = (unitRows ?? [])
     .map((u) => ({
       id: u.id as string,
@@ -515,6 +578,8 @@ export async function getClientDetail(
       platforms: PLAT_ORDER.filter((p) =>
         platsByUnit.get(u.id as string)?.has(p),
       ),
+      ifoodApi: ifoodApiUnits.has(u.id as string),
+      ninefoodApi: nineApiUnits.has(u.id as string),
     }))
     .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
 

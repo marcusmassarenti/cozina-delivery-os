@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock,
   Gift,
+  Plug,
   TrendingUp,
   UserMinus,
   UserPlus,
@@ -123,6 +124,13 @@ export default async function PlataformaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/plataforma/conexoes"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Plug className="size-4" />
+            Conexões
+          </Link>
           <Link
             href="/plataforma/analytics"
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"

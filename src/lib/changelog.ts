@@ -78,6 +78,16 @@ export const CHANGELOG: Release[] = [
         ],
       },
       {
+        area: "Clientes da plataforma",
+        items: [
+          {
+            kind: "novo",
+            title: "Tela “Conexões de API” dentro de Clientes",
+            desc: "Uma lista de todas as lojas de todos os clientes mostrando de qual cliente é cada uma, quais plataformas tem, e quais estão conectadas por API (iFood / 99). Com busca e filtros “Conectadas via API” / “Sem API”. O modal de lojas do cliente também ganhou os selos de plataforma e API por loja.",
+          },
+        ],
+      },
+      {
         area: "Integração iFood",
         items: [
           {
