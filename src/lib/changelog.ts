@@ -82,8 +82,8 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "novo",
-            title: "Plano do cliente + upgrade + degustação do Nino",
-            desc: "No detalhe do cliente agora dá pra ver e DEFINIR o plano (Essencial/Pro/DeliveryOS AI) — antes ficava em branco pra quem paga manual. Mostra o upgrade sugerido num clique e, nos planos Essencial/Pro, um botão pra liberar 7 dias de degustação do Nino AI (cota enxuta de ~20 mensagens, sem virar plano AI).",
+            title: "Plano do cliente + upgrade + Nino “por conta da casa”",
+            desc: "No detalhe do cliente agora dá pra ver e DEFINIR o plano (Essencial/Pro/DeliveryOS AI) — antes ficava em branco pra quem paga manual. Mostra o upgrade sugerido num clique e, nos planos Essencial/Pro, um botão pra liberar 7 dias do Nino AI “por conta da casa” (cota enxuta de ~20 mensagens, sem virar plano AI). O cliente recebe um convite na tela pra abrir o Nino.",
           },
           {
             kind: "melhoria",

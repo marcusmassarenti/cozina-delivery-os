@@ -6,6 +6,7 @@ import { TopBar } from "@/components/top-bar"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
 import { WelcomeSubscribedModal } from "@/components/welcome-subscribed-modal"
 import { WhatsNewModal } from "@/components/whats-new-modal"
+import { NinoCortesiaModal } from "@/components/nino-cortesia-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
@@ -111,6 +112,16 @@ export default async function AppLayout({
         <WhatsNewModal
           onboarded={userContext.onboarded}
           lastSeenVersion={userContext.lastSeenVersion}
+        />
+        <NinoCortesiaModal
+          ativa={
+            !superadmin &&
+            !!billing?.ninoTrialEndsAt &&
+            new Date(billing.ninoTrialEndsAt) > new Date() &&
+            billing.status !== "trial" &&
+            billing.planTier !== "ai"
+          }
+          ate={billing?.ninoTrialEndsAt ?? null}
         />
         <WelcomeSubscribedModal userName={userContext.fullName} />
       </SidebarProvider>

@@ -179,7 +179,9 @@ export function PlanControls({
         <div className="rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
-            <p className="flex-1 text-xs font-semibold">Degustação do Nino AI</p>
+            <p className="flex-1 text-xs font-semibold">
+              Nino AI por conta da casa
+            </p>
             {degAtiva && (
               <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                 ativa até {fmtDia(ninoTrialEndsAt!)}
@@ -189,6 +191,7 @@ export function PlanControls({
           <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
             Libera o Nino AI por 7 dias com uma cota enxuta (~20 mensagens) pro
             cliente experimentar — sem virar plano AI nem mexer no Financeiro.
+            Ao entrar, ele vê um convite pra abrir o Nino.
           </p>
           <div className="mt-2 flex items-center gap-2">
             {degAtiva ? (
