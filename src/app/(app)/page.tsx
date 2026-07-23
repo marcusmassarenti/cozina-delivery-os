@@ -20,6 +20,7 @@ import {
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
 import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
+import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { type Kpi } from "@/components/shared/kpi-card"
@@ -38,6 +39,7 @@ import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import {
   getVisibleUnits,
   getApiSyncVinculos,
+  getSolicitacoesIfoodPendentes,
   getTenantPlatforms,
   isApiSyncEnabled,
 } from "@/lib/data/units"
@@ -171,11 +173,14 @@ export default async function Home({
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
   // Plataformas habilitadas do tenant (só essas na cobertura) + se o sync via
   // API está ligado (SaaS: só importação manual → sem botões de Sincronizar).
-  const [tenantPlatforms, apiSync, apiVinculos] = await Promise.all([
+  const [tenantPlatforms, apiSync, apiVinculos, solicitacoesIfood] =
+    await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
     // Botão de sync por plataforma só com ≥1 loja vinculada de verdade.
     getApiSyncVinculos(),
+    // Aviso (superadmin) de clientes esperando a conexão do iFood.
+    getSolicitacoesIfoodPendentes(),
   ])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
@@ -725,6 +730,12 @@ export default async function Home({
           />
         </div>
       </div>
+
+      {/* Superadmin: clientes esperando a conexão do iFood (autoatendimento). */}
+      <IfoodSolicitacoesAviso
+        total={solicitacoesIfood.total}
+        primeira={solicitacoesIfood.primeira}
+      />
 
       {onboarding && onboarding.done < onboarding.total && (
         <OnboardingChecklist progress={onboarding} />

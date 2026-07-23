@@ -82,6 +82,11 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "novo",
+            title: "Aviso no Dashboard quando um cliente pede conexão iFood",
+            desc: "Quando um cliente clica em “Pedir autorização” no cadastro da loja, aparece uma faixa no topo do seu Dashboard (só admin da plataforma) com a empresa e a loja, e um atalho pra revisar e solicitar no Portal do Desenvolvedor.",
+          },
+          {
+            kind: "novo",
             title: "Botão “Sincronizar iFood” aparece com loja vinculada",
             desc: "Assim que a primeira loja da sua conta é conectada à API do iFood, o botão de sincronizar aparece no Dashboard — e some se nenhuma loja tiver vínculo. O mesmo vale pro botão do 99 Food.",
           },

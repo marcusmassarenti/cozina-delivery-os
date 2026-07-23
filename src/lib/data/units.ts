@@ -3,7 +3,11 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+  isSuperadmin,
+} from "@/lib/auth/roles"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { currentPeriod } from "@/lib/period"
@@ -332,6 +336,38 @@ export async function getApiSyncVinculos(): Promise<{
   }
   const [rIf, r99] = await Promise.all([qIf, q99])
   return { ifood: (rIf.count ?? 0) > 0, ninefood: (r99.count ?? 0) > 0 }
+}
+
+/**
+ * Solicitações de conexão iFood aguardando ação do admin da plataforma
+ * (autoatendimento dos clientes: eles clicam "Pedir autorização" no cadastro).
+ * Só o superadmin resolve — usado pelo aviso no topo do Dashboard.
+ * Conta as em `pendente` (nem foram enviadas ao Portal ainda) — as em
+ * `solicitada` já estão em andamento e esperam o cliente aprovar.
+ */
+export async function getSolicitacoesIfoodPendentes(): Promise<{
+  total: number
+  primeira: { holding: string; loja: string | null } | null
+}> {
+  if (!(await isSuperadmin())) return { total: 0, primeira: null }
+  const admin = createAdminClient()
+  const { data, count } = await admin
+    .from("ifood_activation_requests")
+    .select("cnpj, holdings(name), units(code, name)", { count: "exact" })
+    .eq("status", "pendente")
+    .order("created_at", { ascending: false })
+  const first = (data ?? [])[0] as unknown as
+    | { holdings: { name: string } | null; units: { code: string; name: string } | null }
+    | undefined
+  return {
+    total: count ?? 0,
+    primeira: first
+      ? {
+          holding: first.holdings?.name ?? "cliente",
+          loja: first.units ? `${first.units.code} · ${first.units.name}` : null,
+        }
+      : null,
+  }
 }
 
 export async function isApiSyncEnabled(): Promise<boolean> {
