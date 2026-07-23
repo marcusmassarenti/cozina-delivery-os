@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, CircleCheck, Download } from "lucide-react"
+import { AlertTriangle, CircleCheck, Download, Info } from "lucide-react"
 import Link from "next/link"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
@@ -121,6 +121,20 @@ export function ImportCoverageBanner({
           )}
           Cobertura de importação · {periodLabel}
         </span>
+
+        {/* Mês corrente: explica no hover por que o portal (ao vivo) pode
+            mostrar um pouco mais que o sistema. */}
+        {year === nowParts().year && month === nowParts().month && (
+          <span
+            title={
+              "Comparando com o portal? O portal do iFood mostra as vendas AO VIVO; aqui entra a conciliação financeira, que fecha com algumas horas de defasagem — por isso no mês em aberto o portal pode aparecer um pouco maior. Quando o mês fecha, os números batem ao centavo. Clique em Sincronizar (ou aguarde a sync diária) pra puxar os dias mais recentes."
+            }
+            className="inline-flex cursor-help items-center gap-1 rounded-full border border-current/25 px-2 py-0.5 text-[11px] font-medium opacity-80"
+          >
+            <Info className="size-3" />
+            mês em aberto
+          </span>
+        )}
 
         {noData ? (
           <span>nenhum dado importado neste mês — suba os relatórios em /importacao</span>

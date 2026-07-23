@@ -328,6 +328,10 @@ export default async function UnidadeDetalhePage({
             month={month}
             periodLabel={formatPeriodLabel({ year, month })}
             platforms={platforms}
+            mesEmAberto={
+              year === new Date().getFullYear() &&
+              month === new Date().getMonth() + 1
+            }
           />
           <HeroKpis
             monthly={m}

@@ -276,6 +276,16 @@ export function SyncIfoodButton() {
                 />
               )}
 
+              {/* Defasagem vs o portal — é logo depois do sync que o lojista
+                  abre o portal do lado pra comparar. */}
+              <p className="rounded-md border border-sky-200/60 bg-sky-50/50 px-3 py-2 text-[11px] leading-snug text-muted-foreground dark:border-sky-900/30 dark:bg-sky-950/20">
+                <b className="text-foreground">Comparando com o portal?</b> O
+                portal do iFood mostra as vendas <b>ao vivo</b>; a conciliação
+                financeira fecha com algumas horas de defasagem — no mês em
+                aberto o portal pode aparecer um pouco maior. Quando o mês
+                fecha, os números batem ao centavo.
+              </p>
+
               {/* Lojas fora do sync por não terem a integração — sem este
                   aviso o lojista acha que a sincronização "esqueceu" delas. */}
               {(result?.semVinculo?.length ?? 0) > 0 && (

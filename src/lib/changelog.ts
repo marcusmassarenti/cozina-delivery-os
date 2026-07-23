@@ -90,6 +90,11 @@ export const CHANGELOG: Release[] = [
             title: "Sync explica quais lojas ficaram de fora",
             desc: "O resultado da sincronização agora avisa quantas (e quais) lojas não entraram por ainda não terem a integração com o iFood — o financeiro delas segue via importação de planilha, e dá pra pedir a conexão em Editar unidade.",
           },
+          {
+            kind: "melhoria",
+            title: "Aviso “mês em aberto” ao comparar com o portal",
+            desc: "O portal do iFood mostra as vendas ao vivo; o sistema sincroniza a conciliação financeira, que fecha com algumas horas de defasagem. Agora a faixa de cobertura (dashboard e unidade) e o resultado do sync explicam isso — no mês fechado os números batem ao centavo.",
+          },
         ],
       },
     ],
