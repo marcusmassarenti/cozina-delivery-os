@@ -1254,6 +1254,75 @@ export async function getAntecipacaoFeeByUnits(
   return out
 }
 
+// ─── Cesta dos pedidos cancelados (pro DRE bater com o portal) ───────
+
+/**
+ * Valor de venda (cesta) dos pedidos com Cancelamento Total no mês — o que o
+ * portal do iFood soma no "Valor das vendas" e o nosso bruto exclui. A linha
+ * "Vendas totais" do DRE = bruto + este valor. O `perda_cancelamento` da RPC
+ * NÃO serve pra isso: é o lançamento de estorno (menor que a venda cancelada).
+ * Mesma regra da RPC do bruto: max(valor_cesta_final) por pedido.
+ */
+export async function getCancelamentoCestaForMonth(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<{ qtd: number; valor: number }> {
+  const admin = createAdminClient()
+  const canc = await fetchAllRows<{ pedido_associado_ifood: string | null }>(
+    (from, to) =>
+      admin
+        .from("ifood_financeiro_lancamentos")
+        .select("pedido_associado_ifood")
+        .eq("unit_id", unitId)
+        .eq("ref_year", year)
+        .eq("ref_month", month)
+        .eq("fato_gerador", "Cancelamento Total")
+        .not("pedido_associado_ifood", "is", null)
+        .order("id")
+        .range(from, to),
+    "ifood_financeiro_lancamentos cancelados cesta",
+  )
+  const ids = [
+    ...new Set(
+      canc
+        .map((r) => r.pedido_associado_ifood)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+  if (ids.length === 0) return { qtd: 0, valor: 0 }
+
+  // Cesta por pedido (um pedido tem várias linhas de Venda — comissão, taxa —
+  // todas repetindo a cesta; a RPC usa max(), igual aqui). Chunks pequenos pra
+  // não estourar o limite de linhas por resposta.
+  const porPedido = new Map<string, number>()
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
+    const { data, error } = await admin
+      .from("ifood_financeiro_lancamentos")
+      .select("pedido_associado_ifood, valor_cesta_final")
+      .eq("unit_id", unitId)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .eq("fato_gerador", "Venda")
+      .in("pedido_associado_ifood", chunk)
+      .not("valor_cesta_final", "is", null)
+      .range(0, 4999)
+    if (error)
+      throw new Error(`Falha ao buscar cesta dos cancelados: ${error.message}`)
+    for (const r of data ?? []) {
+      const id = r.pedido_associado_ifood as string
+      const v = Number(r.valor_cesta_final) || 0
+      porPedido.set(id, Math.max(porPedido.get(id) ?? 0, v))
+    }
+  }
+  const valor =
+    Math.round(
+      [...porPedido.values()].reduce((a, b) => a + b, 0) * 100,
+    ) / 100
+  return { qtd: ids.length, valor }
+}
+
 // ─── Cancelamentos por motivo ────────────────────────────────────────
 
 export async function getCancelamentosPorMotivo(

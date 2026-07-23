@@ -18,7 +18,7 @@ import {
 } from "@/lib/data/keeta-repasses"
 import {
   getAntecipacaoFeeByUnits,
-  getFinanceiroResumoForMonth,
+  getCancelamentoCestaForMonth,
 } from "@/lib/data/ifood-imported"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
@@ -97,7 +97,7 @@ export async function FinanceiroLojaTab({
     keetaRepasse,
     keetaPed,
     keetaFaturaTaxas,
-    finResumo,
+    cancelCesta,
   ] = await Promise.all([
     getPagamentoResumoForMonth(unitId, year, month),
     getDeliveryFeeForMonth(unitId, year, month),
@@ -111,7 +111,7 @@ export async function FinanceiroLojaTab({
     getKeetaRepasseResumo(year, month, unitId),
     getKeetaPedidoResumoForMonth(unitId, year, month),
     getKeetaFaturaTaxasForMonth(unitId, year, month),
-    getFinanceiroResumoForMonth(unitId, year, month),
+    getCancelamentoCestaForMonth(unitId, year, month),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -235,11 +235,8 @@ export async function FinanceiroLojaTab({
         { label: "Outros / anúncios", value: m.outrosDescontosIfood },
       ],
       vrLiquido,
-      finResumo.hasData
-        ? {
-            valor: Math.abs(finResumo.perdaCancelamento),
-            qtd: finResumo.cancelamentoTotalQtd,
-          }
+      cancelCesta.valor > 0
+        ? { valor: cancelCesta.valor, qtd: cancelCesta.qtd }
         : undefined,
     ),
     buildPlat(
