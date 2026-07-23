@@ -268,6 +268,29 @@ export function ClientDetailView({
           ninoTrialEndsAt={c.ninoTrialEndsAt}
           onChanged={onChanged}
         />
+        {/* Consumo do Nino no mês — quanto ele usou e quanto custou de API. */}
+        {(c.consumoIa.mensagens > 0 || c.consumoIa.custoUsd > 0) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+            <span className="font-medium text-muted-foreground">
+              Consumo do mês:
+            </span>
+            <span>
+              <b className="tabular-nums">{c.consumoIa.mensagens}</b> mensagens
+            </span>
+            <span>
+              custo de API{" "}
+              <b className="tabular-nums">
+                US$ {c.consumoIa.custoUsd.toFixed(2)}
+              </b>
+            </span>
+            {c.consumoIa.respostasMedidas < c.consumoIa.mensagens && (
+              <span className="text-[11px] text-muted-foreground">
+                ({c.consumoIa.respostasMedidas} com custo medido — o registro
+                começou em 23/07)
+              </span>
+            )}
+          </div>
+        )}
       </Card>
 
       <Card title="Dados fiscais & empresa (Nota Fiscal)" icon={ReceiptText}>

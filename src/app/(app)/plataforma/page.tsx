@@ -7,6 +7,7 @@ import {
   Clock,
   Gift,
   Plug,
+  Sparkles,
   TrendingUp,
   UserMinus,
   UserPlus,
@@ -130,6 +131,13 @@ export default async function PlataformaPage() {
           >
             <Plug className="size-4" />
             Conexões
+          </Link>
+          <Link
+            href="/plataforma/consumo-ia"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Sparkles className="size-4" />
+            Consumo IA
           </Link>
           <Link
             href="/plataforma/analytics"

@@ -8,6 +8,7 @@ import {
   type AsaasInvoice,
 } from "@/lib/asaas/client"
 import type { PlatformId } from "@/components/platform-logo"
+import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
   computeBillingStatus,
   effectiveTrialEnd,
@@ -438,6 +439,8 @@ export type ClientDetail = ClientOverview & {
   asaasCustomerId: string | null
   asaasSubscriptionId: string | null
   invoices: ClientInvoice[]
+  /** Consumo do Nino AI no mês corrente (mensagens + custo de API). */
+  consumoIa: { mensagens: number; custoUsd: number; respostasMedidas: number }
 }
 
 const PLAT_ORDER: PlatformId[] = ["ifood", "99food", "keeta"]
@@ -715,6 +718,7 @@ export async function getClientDetail(
     asaasCustomerId,
     asaasSubscriptionId,
     invoices,
+    consumoIa: await getConsumoIaDoCliente(holdingId),
   }
 }
 

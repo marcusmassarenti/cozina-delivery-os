@@ -23,6 +23,7 @@ import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-ban
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
+import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { type Kpi } from "@/components/shared/kpi-card"
@@ -181,6 +182,7 @@ export default async function Home({
     apiVinculos,
     solicitacoesIfood,
     minhasSolicitacoesIfood,
+    consumoIaPlataforma,
   ] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
@@ -190,6 +192,8 @@ export default async function Home({
     getSolicitacoesIfoodPendentes(),
     // Aviso do CLIENTE: "falta você aprovar" / "sua loja foi conectada".
     getMinhasSolicitacoesIfood(),
+    // Custo de IA da plataforma no mês (a função já é superadmin-only).
+    getConsumoIaPorCliente(),
   ])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
@@ -748,6 +752,34 @@ export default async function Home({
 
       {/* Cliente: falta aprovar no iFood / loja conectada. */}
       <IfoodClienteAviso solicitacoes={minhasSolicitacoesIfood} />
+
+      {/* Dono: quanto a IA custou na plataforma neste mês. */}
+      {consumoIaPlataforma.totalMensagens > 0 && (
+        <Link
+          href="/plataforma/consumo-ia"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-3 py-2 text-xs transition-colors hover:bg-muted/50"
+        >
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <Sparkles className="size-3.5 text-primary" />
+            Nino AI no mês
+          </span>
+          <span className="text-muted-foreground">
+            <b className="tabular-nums text-foreground">
+              {fmtNum(consumoIaPlataforma.totalMensagens)}
+            </b>{" "}
+            mensagens
+          </span>
+          <span className="text-muted-foreground">
+            custo de API{" "}
+            <b className="tabular-nums text-foreground">
+              US$ {consumoIaPlataforma.totalUsd.toFixed(2)}
+            </b>
+          </span>
+          <span className="ml-auto text-[11px] font-semibold text-primary">
+            ver por cliente →
+          </span>
+        </Link>
+      )}
 
       {onboarding && onboarding.done < onboarding.total && (
         <OnboardingChecklist progress={onboarding} />

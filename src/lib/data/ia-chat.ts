@@ -34,6 +34,7 @@ import {
   isAnthropicConfigured,
   type ChatTurn,
 } from "@/lib/anthropic/client"
+import { registrarUsoIa } from "@/lib/data/ia-custos"
 
 /** Perguntas grátis por loja, por mês. Sobrescreve com IA_CHAT_LIMITE_LOJA. */
 export function limitePorLoja(): number {
@@ -917,6 +918,8 @@ CONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${c
       // dispara. maxTokens maior pra caber a análise + o que veio da web.
       webSearch: true,
       maxTokens: 1400,
+      // Telemetria de custo por cliente (não bloqueia a resposta).
+      onUso: (u) => void registrarUsoIa(holdingId, u, "nino"),
     })
     // Persiste o turno (cria a conversa se for a 1ª pergunta).
     const pergunta = messages[messages.length - 1]!.content
@@ -1065,6 +1068,8 @@ CONTEXTO (números reais — mês corrente ${periodo} + histórico do ano):\n${c
       messages: messages.slice(-8),
       webSearch: true,
       maxTokens: 1400,
+      // Telemetria de custo por cliente (não bloqueia a resposta).
+      onUso: (u) => void registrarUsoIa(holdingId, u, "nino"),
     })
     // Repassa os eventos de busca/texto pro cliente; o retorno do gerador é o
     // texto completo (pra persistir).

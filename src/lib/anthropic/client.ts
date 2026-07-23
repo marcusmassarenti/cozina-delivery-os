@@ -72,6 +72,49 @@ export async function askClaude(opts: AskOpts): Promise<string> {
 export type ChatTurn = { role: "user" | "assistant"; content: string }
 
 /**
+ * Consumo de UMA resposta da IA — base pro custo por cliente.
+ * A API devolve isso em `usage`; a gente só descartava. Acumula entre as
+ * iterações do loop de busca web (stop_reason "pause_turn").
+ */
+export type UsoIa = {
+  modelo: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  webSearches: number
+}
+
+type UsageApi = {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+  server_tool_use?: { web_search_requests?: number }
+}
+
+function usoVazio(modelo: string): UsoIa {
+  return {
+    modelo,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    webSearches: 0,
+  }
+}
+
+/** Soma o `usage` de uma resposta no acumulador. */
+function somarUso(acc: UsoIa, u: UsageApi | undefined | null): void {
+  if (!u) return
+  acc.inputTokens += u.input_tokens ?? 0
+  acc.outputTokens += u.output_tokens ?? 0
+  acc.cacheReadTokens += u.cache_read_input_tokens ?? 0
+  acc.cacheWriteTokens += u.cache_creation_input_tokens ?? 0
+  acc.webSearches += u.server_tool_use?.web_search_requests ?? 0
+}
+
+/**
  * Chama o Claude num CHAT multi-turno: o `system` carrega o contexto fixo
  * (os números da loja) e `messages` é o histórico da conversa. Usado pelo
  * Consultor IA, onde uma pergunta de acompanhamento ("e a segunda?") precisa
@@ -90,9 +133,13 @@ export async function askClaudeChat(opts: {
    * `web_search_20250305` (a `_20260209` é só de Opus/Sonnet).
    */
   webSearch?: boolean
+  /** Recebe o consumo (tokens/buscas) pra quem chamou registrar o custo. */
+  onUso?: (uso: UsoIa) => void
 }): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new AnthropicError("ANTHROPIC_API_KEY não configurada.")
+  const modelo = opts.model || diagnosticoModel()
+  const uso = usoVazio(modelo)
 
   // Histórico no formato da API. Se a busca web pausar (stop_reason
   // "pause_turn", quando bate o limite de iterações do loop server-side), a
@@ -132,7 +179,9 @@ export async function askClaudeChat(opts: {
     const json = (await res.json()) as {
       content?: { type: string; text?: string }[]
       stop_reason?: string
+      usage?: UsageApi
     }
+    somarUso(uso, json.usage)
     const blocks = json.content ?? []
     // Com busca web a resposta vem em VÁRIOS blocos de texto (antes e depois da
     // pesquisa) — junta todos, não só o primeiro.
@@ -143,6 +192,7 @@ export async function askClaudeChat(opts: {
     apiMessages.push({ role: "assistant", content: blocks })
   }
 
+  opts.onUso?.(uso)
   const text = textos.join("").trim()
   if (!text) throw new AnthropicError("Resposta do Claude sem texto.")
   return text
@@ -165,9 +215,12 @@ export async function* streamClaudeChat(opts: {
   maxTokens?: number
   model?: string
   webSearch?: boolean
+  /** Recebe o consumo (tokens/buscas) pra quem chamou registrar o custo. */
+  onUso?: (uso: UsoIa) => void
 }): AsyncGenerator<ChatStreamEvent, string, void> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new AnthropicError("ANTHROPIC_API_KEY não configurada.")
+  const uso = usoVazio(opts.model || diagnosticoModel())
 
   const tools = opts.webSearch
     ? [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }]
@@ -219,11 +272,20 @@ export async function* streamClaudeChat(opts: {
         type?: string
         content_block?: { type?: string }
         delta?: { type?: string; text?: string }
+        // No streaming o consumo chega em 2 partes: os tokens de ENTRADA no
+        // message_start e os de SAÍDA no message_delta (evento final).
+        message?: { usage?: UsageApi }
+        usage?: UsageApi
       }
       try {
         evt = JSON.parse(payload)
       } catch {
         continue
+      }
+      if (evt.type === "message_start") {
+        somarUso(uso, evt.message?.usage)
+      } else if (evt.type === "message_delta") {
+        somarUso(uso, evt.usage)
       }
       if (evt.type === "content_block_start") {
         const t = evt.content_block?.type
@@ -248,6 +310,7 @@ export async function* streamClaudeChat(opts: {
     }
   }
 
+  opts.onUso?.(uso)
   const finalText = full.trim()
   if (!finalText) throw new AnthropicError("Resposta do Claude sem texto.")
   return finalText
