@@ -676,6 +676,16 @@ function ResultSummary({ summary }: { summary: ImportSummary }) {
           <Stat label="Líquido" value={fmtBRL(summary.liquido)} />
           <Stat label="Cancelados" value={summary.cancelTotalQtd} />
         </div>
+        {/* É AQUI que o lojista compara com o portal pela primeira vez —
+            sem este aviso, a diferença de base (portal inclui cancelados)
+            vira ticket de suporte. Caso real: Santo Peixe/DG Foods. */}
+        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+          Comparando com o portal do iFood? O{" "}
+          <b>&ldquo;Valor das vendas&rdquo;</b> de lá inclui pedidos
+          cancelados — por isso parece maior que o Bruto daqui. O que bate ao
+          centavo é o <b>Líquido</b> = &ldquo;Total em repasses&rdquo; do
+          portal. O DRE da loja mostra a conferência completa.
+        </p>
       </div>
     )
   }

@@ -66,6 +66,16 @@ export const CHANGELOG: Release[] = [
           },
         ],
       },
+      {
+        area: "Importação",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Aviso sobre o portal logo no resultado da importação",
+            desc: "Ao importar o Financeiro do iFood, o card de resultado já avisa: o “Valor das vendas” do portal inclui pedidos cancelados, e é o Líquido que bate ao centavo com o “Total em repasses”. Assim a comparação não vira susto.",
+          },
+        ],
+      },
     ],
   },
   {
