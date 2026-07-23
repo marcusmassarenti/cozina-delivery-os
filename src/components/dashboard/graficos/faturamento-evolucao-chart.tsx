@@ -128,6 +128,25 @@ export function GraficoPrincipal({
     ativoIdx != null && mostraPct
       ? linhas.reduce((s, l) => s + (l.valores[ativoIdx] ?? 0), 0)
       : 0
+  // Linha-resumo do tooltip: total do mês (faturamento/pedidos) ou média
+  // ponderada (ticket = faturamento do mês ÷ pedidos do mês — não é a média
+  // simples dos tickets, senão loja pequena pesaria igual à grande).
+  const resumoMes = (() => {
+    if (ativoIdx == null) return null
+    if (mostraPct && totalMesAtivo > 0)
+      return { label: "Total do mês", texto: fmt(totalMesAtivo) }
+    if (metrica === "ticket") {
+      const soma = (sp: SeriePlat) =>
+        (["ifood", "ninefood", "keeta"] as const).reduce(
+          (s, k) => s + (sp[k][ativoIdx] ?? 0),
+          0,
+        )
+      const fat = soma(serie.faturamento)
+      const ped = soma(serie.pedidos)
+      if (ped > 0) return { label: "Média do mês", texto: fmtBRL(fat / ped) }
+    }
+    return null
+  })()
 
   return (
     <div>
@@ -288,6 +307,12 @@ export function GraficoPrincipal({
                 </div>
               )
             })}
+            {resumoMes && (
+              <div className="mt-1 flex items-center justify-between gap-3 border-t pt-1">
+                <span className="text-muted-foreground">{resumoMes.label}</span>
+                <span className="font-bold tabular-nums">{resumoMes.texto}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

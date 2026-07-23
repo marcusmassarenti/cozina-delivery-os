@@ -214,7 +214,13 @@ export default async function ResultadoPage({
             <Kpi
               icon={<DollarSign className="size-4" />}
               label="Faturamento Bruto"
-              value={fmtBRLShort(totals.bruto)}
+              value={fmtBRLShort(
+                // Bruto TOTAL (com cancelados iFood) = "Valor das vendas" do
+                // portal; %s seguem na base válida.
+                totals.bruto +
+                  (drePlats.find((p) => p.id === "ifood")
+                    ?.perdaCancelamento ?? 0),
+              )}
               hint={`${fmtNum(totals.pedidos)} pedidos no mês`}
             />
             <Kpi

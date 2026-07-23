@@ -459,8 +459,15 @@ function HeroKpis({
     },
   ]
 
-  const totalBruto = m.platforms.reduce((a, p) => a + p.bruto, 0)
-  const plats = m.platforms.filter((p) => p.bruto > 0)
+  // Barra por plataforma: o segmento iFood também mostra o bruto TOTAL (com
+  // cancelados) — assim a soma da barra bate com o card Bruto acima.
+  const platsView = m.platforms.map((p) =>
+    p.id === "ifood" && cancelCesta && cancelCesta.valor > 0
+      ? { ...p, bruto: p.bruto + cancelCesta.valor }
+      : p,
+  )
+  const totalBruto = platsView.reduce((a, p) => a + p.bruto, 0)
+  const plats = platsView.filter((p) => p.bruto > 0)
 
   const toneCls = (t?: "pos" | "neg" | "warn") =>
     t === "pos"

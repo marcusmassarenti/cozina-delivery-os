@@ -320,8 +320,9 @@ export default async function Home({
   // portal); ticket médio e taxa de repasse seguem na base válida. Não soma
   // quando o filtro de plataforma exclui o iFood.
   let cancelCestaTotal = 0
+  let cestaByUnit = new Map<string, { qtd: number; valor: number }>()
   if (!plataformaFilter || plataformaFilter === "ifood") {
-    const cestaByUnit = await getCancelamentoCestaByUnits(
+    cestaByUnit = await getCancelamentoCestaByUnits(
       unitsToShow.map((u) => u.id),
       year,
       month,
@@ -330,6 +331,21 @@ export default async function Home({
     for (const u of unitsToShow)
       cancelCestaTotal += cestaByUnit.get(u.id)?.valor ?? 0
   }
+
+  // Vitrine por loja (tabela/detalhe): o faturamento exibido também é o TOTAL
+  // com cancelados. Ticket/margem já foram derivados na base válida.
+  const unitsDisplay = unitsToShow.map((u) => {
+    const c = cestaByUnit.get(u.id)
+    return c && c.valor > 0
+      ? {
+          ...u,
+          monthly: {
+            ...u.monthly,
+            faturamentoBruto: u.monthly.faturamentoBruto + c.valor,
+          },
+        }
+      : u
+  })
 
   // Network = totais da rede MESCLADOS (do array filtrado)
   const network = networkTotalsMerged(
@@ -826,6 +842,10 @@ export default async function Home({
               .map((p) => {
               const taxa = Math.max(0, p.bruto - p.liquido)
               const pctTaxa = Math.max(0, 100 - p.pctLoja)
+              // Vitrine: bruto TOTAL (com cancelados) só no iFood; taxa e %s
+              // seguem na base válida.
+              const brutoShow =
+                p.id === "ifood" ? p.bruto + cancelCestaTotal : p.bruto
               return (
                 <div
                   key={p.id}
@@ -838,7 +858,7 @@ export default async function Home({
                     </div>
                     <div className="text-right leading-none">
                       <span className="text-sm font-bold tabular-nums">
-                        {fmtBRLShort(p.bruto)}
+                        {fmtBRLShort(brutoShow)}
                       </span>
                       <span className="mt-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
                         bruto
@@ -1403,14 +1423,14 @@ export default async function Home({
             {/* 1 loja: ranking não faz sentido → mostra o detalhe direto. Várias:
                 ranking clicável que já carrega o detalhe da loja selecionada. */}
             <div data-tour="db-lojas">
-              {umaLoja && unitsToShow[0] ? (
+              {umaLoja && unitsDisplay[0] ? (
                 <DetalheLoja
-                  unit={unitsToShow[0]}
+                  unit={unitsDisplay[0]}
                   brandLogoUrl={brandLogoUrl}
                 />
               ) : (
                 <RankingDetalhado
-                  units={unitsToShow}
+                  units={unitsDisplay}
                   brandLogoUrl={brandLogoUrl}
                 />
               )}

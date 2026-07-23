@@ -10,6 +10,7 @@ import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import {
   getAvaliacoesResumoForMonth,
+  getCancelamentoCestaForMonth,
   getFinanceiroResumoForMonth,
 } from "@/lib/data/ifood-imported"
 import {
@@ -52,8 +53,17 @@ export default async function RelatorioMensalUnidade({
   const { year, month } = parsePeriodParam(sp.periodo)
   const periodLabel = formatPeriodLabel({ year, month })
 
-  const [platforms, monthlyMap, fin, nine, keeta, avalIf, avalNine, avalKeeta] =
-    await Promise.all([
+  const [
+    platforms,
+    monthlyMap,
+    fin,
+    nine,
+    keeta,
+    avalIf,
+    avalNine,
+    avalKeeta,
+    cancelCesta,
+  ] = await Promise.all([
       getUnitPlatforms(unit.id),
       getRealMonthlyForUnits([unit.id], year, month),
       getFinanceiroResumoForMonth(unit.id, year, month),
@@ -62,6 +72,8 @@ export default async function RelatorioMensalUnidade({
       getAvaliacoesResumoForMonth(unit.id, year, month),
       getNinefoodAvaliacoesResumoForMonth(unit.id, year, month),
       getKeetaAvaliacoesResumoForMonth(unit.id, year, month),
+      // Cesta dos cancelados iFood — o bruto exibido é o TOTAL (portal).
+      getCancelamentoCestaForMonth(unit.id, year, month),
     ])
 
   // monthly enriquecido (igual ao detalhe da loja) — alimenta o Financeiro.
@@ -130,7 +142,11 @@ export default async function RelatorioMensalUnidade({
       {/* Resumo (KPIs) */}
       <Secao titulo="Resumo do mês">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Kpi label="Faturamento bruto" value={fmtBRL(m.faturamentoBruto)} />
+          {/* Bruto TOTAL (com cancelados) = "Valor das vendas" do portal. */}
+          <Kpi
+            label="Faturamento bruto"
+            value={fmtBRL(m.faturamentoBruto + cancelCesta.valor)}
+          />
           <Kpi label="Líquido (recebido)" value={fmtBRL(m.totalLiquido)} accent />
           <Kpi
             label="Margem líquida"

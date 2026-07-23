@@ -159,8 +159,13 @@ export default async function RelatoriosPage({
       icon: Receipt,
     },
     {
+      // Bruto TOTAL (com cancelados iFood) = "Valor das vendas" do portal;
+      // %s seguem na base válida.
       label: "Total bruto",
-      value: fmtBRL(t.bruto),
+      value: fmtBRL(
+        t.bruto +
+          (drePlats.find((p) => p.id === "ifood")?.perdaCancelamento ?? 0),
+      ),
       icon: DollarSign,
       platforms: tenantPlatforms,
     },

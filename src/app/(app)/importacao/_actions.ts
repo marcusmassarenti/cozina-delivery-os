@@ -3418,7 +3418,9 @@ async function saveFinanceiro(
     storeId: parsed.storeId,
     competencia: parsed.competencia,
     pedidosUnicos: parsed.totals.pedidosUnicos,
-    bruto: parsed.totals.bruto,
+    // Bruto TOTAL (com cancelados) = "Valor das vendas" do portal — mesma
+    // régua dos heros/DRE.
+    bruto: parsed.totals.bruto + parsed.totals.cancelCestaValor,
     liquido: parsed.totals.liquido,
     cancelTotalQtd: parsed.totals.cancelamentoTotalQtd,
     cancelParcialQtd: parsed.totals.cancelamentoParcialQtd,

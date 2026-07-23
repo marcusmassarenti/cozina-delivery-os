@@ -246,8 +246,12 @@ function computeTotals(
   // Venda, exceto pedidos com cancelamento total. Bate no centavo com o
   // "Valor dos itens" da tela do iFood (≈ Valor das vendas — difere só pelo
   // pequeno ajuste de cancelamentos, que o relatório de conciliação não expõe).
+  // Cesta dos cancelados à parte — o card de resultado mostra o bruto TOTAL
+  // (bruto + cancelados), igual ao "Valor das vendas" do portal e aos heros.
+  let cancelCestaValor = 0
   for (const [pedido, cesta] of cestaVendaPorPedido) {
     if (!pedidosCancTotal.has(pedido)) t.bruto += cesta
+    else cancelCestaValor += cesta
   }
 
   t.pedidosUnicos = pedidosUnicos.size
@@ -268,6 +272,7 @@ function computeTotals(
     pacoteAnuncios: round(t.pacoteAnuncios),
     cancelamentoTotalQtd: t.cancelamentoTotalQtd,
     cancelamentoParcialQtd: t.cancelamentoParcialQtd,
+    cancelCestaValor: round(cancelCestaValor),
     liquido: round(t.liquido),
   }
 }

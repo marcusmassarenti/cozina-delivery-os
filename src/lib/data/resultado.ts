@@ -15,7 +15,10 @@
 import "server-only"
 
 import { getUnits } from "@/lib/data/units"
-import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
+import {
+  getCancelamentoCestaByUnits,
+  getFinanceiroResumoByUnits,
+} from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
@@ -262,6 +265,11 @@ export type NetworkDrePlat = {
   bruto: number
   liquido: number
   taxaTotal: number
+  /** Só iFood: cesta dos pedidos cancelados (o DRE abre em "Vendas totais −
+   * cancelados", igual ao portal). */
+  perdaCancelamento?: number
+  /** Só iFood: quantidade de pedidos cancelados. */
+  cancelQtd?: number
   /** VR líquido à parte (só iFood). */
   vrLiquido: number
   /** Promoção/cupom que a LOJA bancou — separa "taxa real da plataforma" das
@@ -289,13 +297,16 @@ export async function getNetworkDrePlatforms(
   const unitIds = active.map((u) => u.id)
   if (unitIds.length === 0) return []
 
-  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit, keFat] =
+  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit, keFat, cestaByUnit] =
     await Promise.all([
       getFinanceiroResumoByUnits(unitIds, year, month),
       getNinefoodResumoByUnits(unitIds, year, month),
       getKeetaResumoByUnits(unitIds, year, month),
       getRealMonthlyForUnits(unitIds, year, month),
       getKeetaFaturaTaxasByUnits(unitIds, year, month),
+      // Cesta dos cancelados iFood — o DRE da rede abre em "Vendas totais −
+      // cancelados", igual ao portal e ao DRE da loja.
+      getCancelamentoCestaByUnits(unitIds, year, month),
     ])
   const pBruto = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
     m.platforms.find((p) => p.id === id)?.bruto ?? 0
@@ -303,7 +314,15 @@ export async function getNetworkDrePlatforms(
     m.platforms.find((p) => p.id === id)?.liquido ?? 0
 
   const a = {
-    if: { bruto: 0, liq: 0, entrega: 0, comissao: 0, promo: 0 },
+    if: {
+      bruto: 0,
+      liq: 0,
+      entrega: 0,
+      comissao: 0,
+      promo: 0,
+      cancelValor: 0,
+      cancelQtd: 0,
+    },
     ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
     ke: { bruto: 0, liq: 0, promo: 0 },
     vr: 0,
@@ -338,6 +357,11 @@ export async function getNetworkDrePlatforms(
 
     a.if.bruto += ifBruto
     a.if.liq += ifLiq
+    const cc = cestaByUnit.get(u.id)
+    if (cc) {
+      a.if.cancelValor += cc.valor
+      a.if.cancelQtd += cc.qtd
+    }
     if (hasIfood) {
       // Mesmos itens do DRE da loja (mergeMonthly): entrega + comissão +
       // promoção que a loja bancou. Transação/serviço/anúncios não são
@@ -367,6 +391,7 @@ export async function getNetworkDrePlatforms(
     itens: { label: string; value: number }[],
     vr: number,
     promoLoja: number,
+    cancel?: { valor: number; qtd: number },
   ): NetworkDrePlat | null => {
     if (bruto <= 0) return null
     const taxaTotal = Math.max(0, bruto - liq)
@@ -391,6 +416,8 @@ export async function getNetworkDrePlatforms(
       bruto,
       liquido: liq,
       taxaTotal,
+      perdaCancelamento: cancel?.valor ?? 0,
+      cancelQtd: cancel?.qtd ?? 0,
       vrLiquido: vr,
       promocoesLoja: Math.min(Math.abs(promoLoja), taxaTotal),
       itens: lista,
@@ -409,6 +436,7 @@ export async function getNetworkDrePlatforms(
       ],
       a.vr,
       a.if.promo,
+      { valor: a.if.cancelValor, qtd: a.if.cancelQtd },
     ),
     make(
       "99food",
@@ -476,6 +504,8 @@ export async function getNetworkDrePlatformsForRange(
       bruto: number
       liquido: number
       taxaTotal: number
+      perdaCancelamento: number
+      cancelQtd: number
       vrLiquido: number
       promocoesLoja: number
       itens: Map<string, { value: number; credit?: boolean }>
@@ -488,6 +518,8 @@ export async function getNetworkDrePlatformsForRange(
         bruto: 0,
         liquido: 0,
         taxaTotal: 0,
+        perdaCancelamento: 0,
+        cancelQtd: 0,
         vrLiquido: 0,
         promocoesLoja: 0,
         itens: new Map<string, { value: number; credit?: boolean }>(),
@@ -495,6 +527,8 @@ export async function getNetworkDrePlatformsForRange(
       cur.bruto += p.bruto
       cur.liquido += p.liquido
       cur.taxaTotal += p.taxaTotal
+      cur.perdaCancelamento += p.perdaCancelamento ?? 0
+      cur.cancelQtd += p.cancelQtd ?? 0
       cur.vrLiquido += p.vrLiquido
       cur.promocoesLoja += p.promocoesLoja
       for (const it of p.itens) {
@@ -513,6 +547,8 @@ export async function getNetworkDrePlatformsForRange(
       bruto: c.bruto,
       liquido: c.liquido,
       taxaTotal: c.taxaTotal,
+      perdaCancelamento: c.perdaCancelamento,
+      cancelQtd: c.cancelQtd,
       vrLiquido: c.vrLiquido,
       promocoesLoja: c.promocoesLoja,
       itens: [...c.itens].map(([label, e]) => ({

@@ -139,6 +139,9 @@ export type ParsedFinanceiro = {
     pacoteAnuncios: number
     cancelamentoTotalQtd: number
     cancelamentoParcialQtd: number
+    /** Cesta dos pedidos com cancelamento total (o portal soma no "Valor das
+     * vendas"; bruto total exibido = bruto + isto). */
+    cancelCestaValor: number
     liquido: number
   }
 }

@@ -42,10 +42,10 @@ export const CHANGELOG: Release[] = [
     tag: "Melhorias",
     title: "Bruto igual ao portal em todo o painel",
     summary:
-      "O Bruto da unidade e do dashboard agora é o total COM os pedidos cancelados — o mesmo número do portal do iFood. As margens e taxas continuam calculadas sobre a venda válida, como no DRE.",
+      "O Bruto agora é o total COM os pedidos cancelados — o mesmo número do portal do iFood — em todas as telas: unidade, dashboard, DRE Grupo, Resultado, relatório do mês e importação. As margens e taxas continuam calculadas sobre a venda válida, como no DRE.",
     areas: [
       {
-        area: "Unidade e Dashboard",
+        area: "Todas as telas",
         items: [
           {
             kind: "melhoria",
@@ -53,7 +53,12 @@ export const CHANGELOG: Release[] = [
             antes: "Bruto R$ 214.575 (sem cancelados) ≠ portal",
             depois:
               "Bruto R$ 216.280 · “3.334 pedidos · 30 cancelados” — igual ao “Valor das vendas” do portal",
-            desc: "O número principal agora bate com a tela do iFood. O DRE mostra a subtração dos cancelados e todos os percentuais (margem, repasse, ticket) seguem na base válida.",
+            desc: "O número principal agora bate com a tela do iFood em toda parte: heros da unidade e do dashboard, tabela de lojas, visão por plataforma, DRE Grupo (que também abre em “Vendas totais − cancelados”), tela Resultado, relatório do mês e card de resultado da importação. O DRE mostra a subtração dos cancelados e todos os percentuais (margem, repasse, ticket) seguem na base válida.",
+          },
+          {
+            kind: "melhoria",
+            title: "Evolução: total do mês no gráfico",
+            desc: "Ao passar o mouse no gráfico de evolução, além do valor por plataforma agora aparece o total do mês (Faturamento e Pedidos) ou a média ponderada (Ticket médio).",
           },
           {
             kind: "correcao",
