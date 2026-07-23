@@ -10,9 +10,11 @@ Telemetria de referência (só Delivery OS, último ciclo fechado): Build CPU **
 
 ### A.1 Sumário executivo
 
-> **CORREÇÃO (2026-07-23, confirmado no painel):** os dois projetos **já estão na máquina Standard** (a mais barata; "Fallback"). A hipótese DO-1 (tier Turbo caro) está **descartada** — não há ganho de trocar máquina. Logo, as 27h de build vêm de **volume × duração** (muitos deploys × cada build rodando trabalho redundante), não de máquina cara.
+> **CORREÇÃO 1 (confirmado no painel):** os dois projetos **já estão na máquina Standard** (a mais barata; "Fallback"). A hipótese DO-1 (Turbo caro) está **descartada**.
+>
+> **CORREÇÃO 2 (confirmado na doc do Next 16 — `node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md:116,1095`):** no Next 16, **`next build` NÃO roda mais ESLint** (o lint saiu do build) e **usa Turbopack por padrão** (compilador rápido). Ou seja, as duas otimizações de build que a auditoria propôs (tirar lint / usar Turbopack) **já estão feitas de fábrica**. A única checagem que o `next build` ainda roda é o **type-check do TypeScript** — que **deve permanecer**: no fluxo direto-na-`main` (sem PR gate) é a única barreira que impede um deploy quebrado. O CI (`security.yml`) roda `tsc --noEmit`, mas **depois** do push (informativo, não bloqueia).
 
-- **Build CPU (27h12m):** com a máquina já no tier certo, as alavancas reais são: (1) **cada `next build` roda lint + type-check embutidos** que o CI do GitHub já faz separado — trabalho pago em dobro (encurta cada build); (2) **todo push builda**, inclusive commits só de docs; (3) volume de deploys (o histórico mostra muitos pushes diretos na `main`). Correções de baixo risco podem cortar ~20–35% da duração por build.
+- **Build CPU (27h12m):** com máquina no tier certo + Next 16 já sem lint no build + Turbopack default, **não há mudança de código segura a aplicar**. O type-check fica (é a rede de segurança). As 27h são **volume de deploys** (muitos pushes diretos na `main` — ~15-18/dia no histórico) × duração do build. A única alavanca real é **reduzir a frequência de deploy** (agrupar commits / usar branch de trabalho antes de mesclar na main) — decisão de fluxo, não de código. `ignoreCommand` (pular build de commit só-docs) tem ganho marginal e risco de pular build errado; **não recomendado** dado que quase todo commit toca código.
 - **Invocations (69%):** **não há polling no cliente** (vetor limpo — achado positivo). O volume vem de navegação real × **middleware que faz `supabase.auth.getUser()` (chamada de rede) em toda página**. Reduzir isso é a maior alavanca, mas é **alto risco multi-tenant** (auth/sessão) — item de estudo, não de aplicação imediata.
 - **Active CPU (35%):** concentrado em **agregação financeira pesada em JS** (`ifood-imported.ts`, 2.324 linhas) e no **fan-out de ~10 RPCs/mês** de `relatorio-rede.ts` sem `React.cache`.
 - **Ociosos:** Image Optimization, Web Analytics e Observability estão zerados e o código não usa nenhum — Analytics e Observability podem ser ligados de graça; Image Optimization pode ficar desligada.
@@ -38,9 +40,10 @@ Telemetria de referência (só Delivery OS, último ciclo fechado): Build CPU **
 
 | ID | Achado | Métrica | Impacto estimado | Esforço | Risco regressão | Prio |
 |---|---|---|---|---|---|---|
-| **DO-1** | ~~`buildMachineType` → Turbo~~ **DESCARTADO: já está em Standard** | Build CPU | — (sem ação) | — | — | **N/A** |
-| **DO-3** | Lint+typecheck dentro do `next build` (CI já faz) — **maior alavanca de build agora** | Build CPU | −15 a −30% do wall-clock de cada build | Baixo | Médio (manter gate no CI) | **P0** |
-| **DO-2** | Sem `ignoreCommand` → todo push builda (inclusive docs) | Build CPU | Baixo (poucos commits são só-docs) | Baixo | Baixo | **P1** |
+| **DO-1** | ~~`buildMachineType` → Turbo~~ **DESCARTADO: já está em Standard** | Build CPU | — | — | — | **N/A** |
+| **DO-3** | ~~Tirar lint/typecheck do build~~ **DESCARTADO:** Next 16 já tirou o lint do build; typecheck é a rede de segurança do direto-na-main (não tirar) | Build CPU | — | — | Alto se removido | **N/A** |
+| **DO-2** | ~~`ignoreCommand`~~ ganho marginal + risco de pular build errado | Build CPU | ~0 | Baixo | Médio | **N/A** |
+| **DO-10** | **Reduzir frequência de deploy** (agrupar commits antes da main) — única alavanca real de build | Build CPU | Proporcional à redução de pushes | — (hábito) | Nenhum | **P1 (fluxo)** |
 | **DO-4** | Middleware faz `getUser()` de rede em toda navegação | Invocations + CPU | Alta (é a fonte dominante), mas não quantificável sem breakdown por rota | Médio | **Alto (multi-tenant/auth)** | **P1 ⚠️** |
 | **DO-5** | Leituras reusadas sem `React.cache` (relatorio-rede, ifood-imported) | Active CPU + Invocations | Corta re-queries por render; ganho médio | Baixo | Baixo-médio | **P1** |
 | **DO-6** | Agregação financeira pesada em JS (`ifood-imported.ts`) | Active CPU | Alta (driver principal de CPU), mas exige medir por-função | Alto | Médio | **P2** |
