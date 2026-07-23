@@ -103,3 +103,97 @@ export async function solicitarAtivacaoIfood(
       "Solicitação registrada! Vamos conectar sua loja e você acompanha o status aqui.",
   }
 }
+
+/**
+ * O CLIENTE avisa que já aprovou a conexão no Portal do Parceiro dele —
+ * carimba `cliente_confirmou_at` na solicitação `solicitada` da unidade.
+ * Isso acende um sinal no painel do admin (hora de vincular). Só o dono da
+ * conta (admin da holding) confirma, e só numa unidade que ele enxerga.
+ */
+export async function confirmarAprovacaoIfood(
+  _prev: SolicitacaoIfoodState,
+  formData: FormData,
+): Promise<SolicitacaoIfoodState> {
+  let admin: Awaited<ReturnType<typeof requireAdmin>>["admin"]
+  try {
+    admin = (await requireAdmin()).admin
+  } catch {
+    return { ok: false, message: "Só administradores podem confirmar." }
+  }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não identificada." }
+
+  const unitId = String(formData.get("unit_id") ?? "").trim()
+  if (!unitId) return { ok: false, message: "Unidade não informada." }
+  const acessiveis = await getAccessibleUnitIds()
+  if (acessiveis !== null && !acessiveis.includes(unitId)) {
+    return { ok: false, message: "Unidade inválida." }
+  }
+
+  const { error } = await admin
+    .from("ifood_activation_requests")
+    .update({ cliente_confirmou_at: new Date().toISOString() })
+    .eq("holding_id", holdingId)
+    .eq("unit_id", unitId)
+    .eq("status", "solicitada")
+    .is("cliente_confirmou_at", null)
+  if (error) return { ok: false, message: `Falha: ${error.message}` }
+
+  revalidatePath("/")
+  revalidatePath("/unidades")
+  return { ok: true, message: "Avisamos a equipe — falta pouco!" }
+}
+
+/** Situação da conexão iFood de UMA loja do cliente, pro aviso na home. */
+export type MinhaSolicitacao = {
+  id: string
+  unitId: string
+  unitCode: string | null
+  unitName: string
+  status: "pendente" | "solicitada" | "ativa" | "recusada"
+  clienteConfirmou: boolean
+  atualizadaEm: string
+}
+
+/**
+ * Solicitações de conexão iFood do PRÓPRIO cliente (escopo dele), pro aviso
+ * na tela inicial: "falta você aprovar" / "sua loja foi conectada". Só as
+ * relevantes (solicitada ou ativa). Superadmin não usa (tem o painel).
+ */
+export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> {
+  const { isSuperadmin } = await import("@/lib/auth/permissions")
+  if (await isSuperadmin()) return []
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return []
+  const acessiveis = await getAccessibleUnitIds()
+  if (acessiveis !== null && acessiveis.length === 0) return []
+
+  const { createAdminClient } = await import("@/lib/supabase/admin")
+  const db = createAdminClient()
+  let q = db
+    .from("ifood_activation_requests")
+    .select(
+      "id, unit_id, status, cliente_confirmou_at, updated_at, units(code, name)",
+    )
+    .eq("holding_id", holdingId)
+    .in("status", ["solicitada", "ativa"])
+    .order("updated_at", { ascending: false })
+  if (acessiveis !== null) q = q.in("unit_id", acessiveis)
+  const { data } = await q
+  return ((data ?? []) as unknown as {
+    id: string
+    unit_id: string
+    status: MinhaSolicitacao["status"]
+    cliente_confirmou_at: string | null
+    updated_at: string
+    units: { code: string; name: string } | null
+  }[]).map((s) => ({
+    id: s.id,
+    unitId: s.unit_id,
+    unitCode: s.units?.code ?? null,
+    unitName: s.units?.name ?? "sua loja",
+    status: s.status,
+    clienteConfirmou: !!s.cliente_confirmou_at,
+    atualizadaEm: s.updated_at,
+  }))
+}

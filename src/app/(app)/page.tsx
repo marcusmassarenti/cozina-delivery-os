@@ -21,6 +21,8 @@ import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
 import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
+import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
+import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { type Kpi } from "@/components/shared/kpi-card"
@@ -173,14 +175,21 @@ export default async function Home({
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
   // Plataformas habilitadas do tenant (só essas na cobertura) + se o sync via
   // API está ligado (SaaS: só importação manual → sem botões de Sincronizar).
-  const [tenantPlatforms, apiSync, apiVinculos, solicitacoesIfood] =
-    await Promise.all([
+  const [
+    tenantPlatforms,
+    apiSync,
+    apiVinculos,
+    solicitacoesIfood,
+    minhasSolicitacoesIfood,
+  ] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
     // Botão de sync por plataforma só com ≥1 loja vinculada de verdade.
     getApiSyncVinculos(),
     // Aviso (superadmin) de clientes esperando a conexão do iFood.
     getSolicitacoesIfoodPendentes(),
+    // Aviso do CLIENTE: "falta você aprovar" / "sua loja foi conectada".
+    getMinhasSolicitacoesIfood(),
   ])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
@@ -736,6 +745,9 @@ export default async function Home({
         total={solicitacoesIfood.total}
         primeira={solicitacoesIfood.primeira}
       />
+
+      {/* Cliente: falta aprovar no iFood / loja conectada. */}
+      <IfoodClienteAviso solicitacoes={minhasSolicitacoesIfood} />
 
       {onboarding && onboarding.done < onboarding.total && (
         <OnboardingChecklist progress={onboarding} />

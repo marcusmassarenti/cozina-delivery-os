@@ -102,6 +102,11 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "novo",
+            title: "Aviso de conexão iFood na tela inicial + “Já aprovei”",
+            desc: "Quando você pede a conexão de uma loja com o iFood, a tela inicial passa a mostrar o andamento: “falta você aprovar no iFood” (com um botão que abre o Portal do Parceiro e um “Já aprovei no iFood” pra avisar a equipe), e quando fica pronta, um aviso “sua loja foi conectada ao iFood! 🎉”. Assim você sempre sabe em que pé está, sem precisar perguntar.",
+          },
+          {
+            kind: "novo",
             title: "Aviso no Dashboard quando um cliente pede conexão iFood",
             desc: "Quando um cliente clica em “Pedir autorização” no cadastro da loja, aparece uma faixa no topo do seu Dashboard (só admin da plataforma) com a empresa e a loja, e um atalho pra revisar e solicitar no Portal do Desenvolvedor.",
           },

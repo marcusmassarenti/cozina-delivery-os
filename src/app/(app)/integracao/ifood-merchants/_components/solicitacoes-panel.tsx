@@ -20,6 +20,8 @@ export type SolicitacaoAdmin = {
   holdingName: string
   unitLabel: string | null
   createdAt: string
+  /** Quando o cliente apertou "Já aprovei no iFood" (sinal pra vincular). */
+  clienteConfirmouAt: string | null
 }
 
 function fmtCnpj(d: string): string {
@@ -85,7 +87,14 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
         {s.unitLabel && (
           <span className="text-muted-foreground">{s.unitLabel}</span>
         )}
-        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {s.status === "solicitada" && s.clienteConfirmouAt && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+            ✋ cliente confirmou
+          </span>
+        )}
+        <span
+          className={`${s.status === "solicitada" && s.clienteConfirmouAt ? "" : "ml-auto"} rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}
+        >
           {s.status}
         </span>
       </div>
@@ -113,9 +122,12 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
             </span>
           )}
           {s.status === "solicitada" && (
-            <span className="text-[11px] text-muted-foreground">
-              Aguardando o Proprietário aprovar no Portal do Parceiro (propaga
-              em ~10 min; a loja aparece na lista abaixo)
+            <span
+              className={`text-[11px] ${s.clienteConfirmouAt ? "font-medium text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}
+            >
+              {s.clienteConfirmouAt
+                ? "O cliente avisou que já aprovou no Portal do Parceiro — confira se a loja apareceu na lista abaixo e vincule."
+                : "Aguardando o Proprietário aprovar no Portal do Parceiro (propaga em ~10 min; a loja aparece na lista abaixo)"}
             </span>
           )}
         </div>

@@ -1,0 +1,166 @@
+"use client"
+
+import * as React from "react"
+import { useActionState } from "react"
+import { useFormStatus } from "react-dom"
+import { useRouter } from "next/navigation"
+import { CheckCircle2, Clock, ExternalLink, PartyPopper, X } from "lucide-react"
+
+import {
+  confirmarAprovacaoIfood,
+  type MinhaSolicitacao,
+  type SolicitacaoIfoodState,
+} from "@/app/(app)/unidades/_actions-ifood-ativacao"
+
+const PORTAL_PARCEIRO = "https://portal.ifood.com.br/apps"
+
+/**
+ * Aviso da conexão iFood na tela inicial do CLIENTE — fecha a comunicação
+ * dos dois lados:
+ *  - "solicitada": mostra que falta ELE aprovar no Portal do Parceiro, com um
+ *    botão "Já aprovei no iFood" que avisa a equipe (acende sinal no painel).
+ *  - "ativa": comemora "sua loja foi conectada!" — uma vez (guarda no
+ *    navegador que já viu, pela data da ativação).
+ */
+export function IfoodClienteAviso({
+  solicitacoes,
+}: {
+  solicitacoes: MinhaSolicitacao[]
+}) {
+  const ativas = solicitacoes.filter((s) => s.status === "ativa")
+  const pendentesAprovacao = solicitacoes.filter(
+    (s) => s.status === "solicitada",
+  )
+  if (ativas.length === 0 && pendentesAprovacao.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-2">
+      {ativas.map((s) => (
+        <AtivaCard key={s.id} s={s} />
+      ))}
+      {pendentesAprovacao.map((s) => (
+        <SolicitadaCard key={s.id} s={s} />
+      ))}
+    </div>
+  )
+}
+
+function AtivaCard({ s }: { s: MinhaSolicitacao }) {
+  const [visto, setVisto] = React.useState(true)
+  React.useEffect(() => {
+    try {
+      setVisto(localStorage.getItem(`ifood_ativou_${s.id}`) === s.atualizadaEm)
+    } catch {
+      setVisto(false)
+    }
+  }, [s.id, s.atualizadaEm])
+  if (visto) return null
+  function fechar() {
+    setVisto(true)
+    try {
+      localStorage.setItem(`ifood_ativou_${s.id}`, s.atualizadaEm)
+    } catch {
+      /* ignora */
+    }
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/40 dark:bg-emerald-950/25">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+        <PartyPopper className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-foreground">
+          Sua loja{" "}
+          <b>
+            {s.unitCode ? `${s.unitCode} · ` : ""}
+            {s.unitName}
+          </b>{" "}
+          foi conectada ao iFood! 🎉
+        </p>
+        <p className="text-xs text-muted-foreground">
+          O financeiro agora puxa sozinho pela API — histórico e dados novos
+          entram automático.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={fechar}
+        aria-label="Fechar"
+        className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-emerald-100 hover:text-foreground dark:hover:bg-emerald-900/40"
+      >
+        <X className="size-4" />
+      </button>
+    </div>
+  )
+}
+
+function BotaoConfirmar() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-sky-700 disabled:opacity-60"
+    >
+      <CheckCircle2 className="size-3.5" />
+      {pending ? "Enviando…" : "Já aprovei no iFood"}
+    </button>
+  )
+}
+
+function SolicitadaCard({ s }: { s: MinhaSolicitacao }) {
+  const router = useRouter()
+  const [state, action] = useActionState<SolicitacaoIfoodState, FormData>(
+    confirmarAprovacaoIfood,
+    { ok: false },
+  )
+  React.useEffect(() => {
+    if (state.ok) router.refresh()
+  }, [state.ok, router])
+
+  // Já confirmou: só informa que está em finalização.
+  if (s.clienteConfirmou || state.ok) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/50 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/20">
+        <CheckCircle2 className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+        <p className="text-muted-foreground">
+          Recebemos que você aprovou a{" "}
+          <b className="text-foreground">
+            {s.unitCode ? `${s.unitCode} · ` : ""}
+            {s.unitName}
+          </b>{" "}
+          no iFood — estamos finalizando a conexão. Você é avisado aqui quando
+          ficar pronta.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/50 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/20">
+      <Clock className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+      <p className="min-w-0 flex-1 text-muted-foreground">
+        <b className="text-foreground">Falta você aprovar no iFood</b> a conexão
+        da loja{" "}
+        <b className="text-foreground">
+          {s.unitCode ? `${s.unitCode} · ` : ""}
+          {s.unitName}
+        </b>{" "}
+        — o Proprietário aceita o app Delivery OS no Portal do Parceiro.
+      </p>
+      <a
+        href={PORTAL_PARCEIRO}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-800 dark:bg-transparent dark:text-sky-300 dark:hover:bg-sky-950/40"
+      >
+        Abrir Portal
+        <ExternalLink className="size-3" />
+      </a>
+      <form action={action}>
+        <input type="hidden" name="unit_id" value={s.unitId} />
+        <BotaoConfirmar />
+      </form>
+    </div>
+  )
+}
