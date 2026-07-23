@@ -3,7 +3,8 @@ import { ArrowLeft, Shield, Store } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
-import { LinkRow, RefreshButton, RunSyncButton } from "./_components/link-row"
+import { RefreshButton, RunSyncButton } from "./_components/link-row"
+import { MerchantsTable } from "./_components/merchants-table"
 import {
   SolicitacoesPanel,
   type SolicitacaoAdmin,
@@ -29,11 +30,14 @@ type UnitRow = {
   id: string
   code: string
   name: string
+  holdingId: string
+  holdingName: string
 }
 
 async function getData() {
   const admin = createAdminClient()
-  const [merchantsRes, linkedRes, unitsRes] = await Promise.all([
+  const [merchantsRes, linkedRes, unitsRes, brandsRes, holdingsRes] =
+    await Promise.all([
     admin
       .from("ifood_merchants")
       .select("id, name, corporate_name, cnpj, city, state, last_seen_at")
@@ -45,13 +49,48 @@ async function getData() {
       .not("api_store_id", "is", null),
     admin
       .from("units")
-      .select("id, code, name")
+      .select("id, code, name, brand_id")
       .eq("active", true)
       .order("code"),
+    admin.from("brands").select("id, holding_id"),
+    admin.from("holdings").select("id, name"),
   ])
   const merchants = (merchantsRes.data ?? []) as MerchantRow[]
   const linkedRaw = (linkedRes.data ?? []) as unknown as LinkedRow[]
-  const units = (unitsRes.data ?? []) as UnitRow[]
+
+  // unit → holding (via brand) + nome da holding, pro filtro por cliente.
+  const brandHolding = new Map<string, string>()
+  for (const b of (brandsRes.data ?? []) as { id: string; holding_id: string }[])
+    brandHolding.set(b.id, b.holding_id)
+  const holdingName = new Map<string, string>()
+  for (const h of (holdingsRes.data ?? []) as { id: string; name: string }[])
+    holdingName.set(h.id, h.name)
+
+  const units: UnitRow[] = (
+    (unitsRes.data ?? []) as {
+      id: string
+      code: string
+      name: string
+      brand_id: string
+    }[]
+  ).map((u) => {
+    const hId = brandHolding.get(u.brand_id) ?? ""
+    return {
+      id: u.id,
+      code: u.code,
+      name: u.name,
+      holdingId: hId,
+      holdingName: holdingName.get(hId) ?? "—",
+    }
+  })
+
+  // Clientes (holdings) que têm unidade ativa — pro seletor do filtro.
+  const holdingsComUnidade = new Map<string, string>()
+  for (const u of units)
+    if (u.holdingId) holdingsComUnidade.set(u.holdingId, u.holdingName)
+  const holdings = [...holdingsComUnidade.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
 
   // mapa merchant_id → unit
   const byMerchant: Record<string, { unitId: string; code: string; name: string }> = {}
@@ -64,7 +103,7 @@ async function getData() {
       }
     }
   }
-  return { merchants, units, byMerchant }
+  return { merchants, units, holdings, byMerchant }
 }
 
 /** Fila de solicitações de conexão feitas pelos clientes (todas as holdings). */
@@ -95,7 +134,8 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
 }
 
 export default async function IfoodMerchantsPage() {
-  const [{ merchants, units, byMerchant }, solicitacoes] = await Promise.all([
+  const [{ merchants, units, holdings, byMerchant }, solicitacoes] =
+    await Promise.all([
     getData(),
     getSolicitacoes(),
   ])
@@ -140,69 +180,12 @@ export default async function IfoodMerchantsPage() {
         <StatCard label="Unidades ativas na rede" value={String(units.length)} />
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <table className="w-full text-xs">
-          <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">Nome</th>
-              <th className="px-3 py-2 text-left font-medium">CNPJ</th>
-              <th className="px-3 py-2 text-left font-medium">Cidade</th>
-              <th className="px-3 py-2 text-left font-medium">Merchant ID</th>
-              <th className="px-3 py-2 text-left font-medium">Unidade da rede</th>
-            </tr>
-          </thead>
-          <tbody>
-            {merchants.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-12 text-center text-muted-foreground">
-                  Nenhum merchant na cache ainda — clique em{" "}
-                  <strong>Re-puxar da Merchant API</strong>.
-                </td>
-              </tr>
-            ) : (
-              merchants.map((m) => {
-                const linked = byMerchant[m.id]
-                return (
-                  <tr key={m.id} className="border-t align-middle">
-                    <td className="px-3 py-2">
-                      <p className="font-medium">{m.name ?? m.corporate_name ?? "—"}</p>
-                      {m.corporate_name && m.corporate_name !== m.name && (
-                        <p className="text-[10px] text-muted-foreground">
-                          {m.corporate_name}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-muted-foreground">
-                      {m.cnpj ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {[m.city, m.state].filter(Boolean).join("/") || "—"}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                      {m.id}
-                    </td>
-                    <td className="px-3 py-2">
-                      {linked ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{linked.code}</span>
-                          <span className="text-muted-foreground">— {linked.name}</span>
-                          <LinkRow
-                            merchantId={m.id}
-                            currentUnitId={linked.unitId}
-                            units={units}
-                          />
-                        </div>
-                      ) : (
-                        <LinkRow merchantId={m.id} currentUnitId={null} units={units} />
-                      )}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      <MerchantsTable
+        merchants={merchants}
+        units={units}
+        holdings={holdings}
+        byMerchant={byMerchant}
+      />
 
       <div className="rounded-lg border bg-card p-4 text-xs text-muted-foreground">
         <p className="flex items-center gap-1.5 font-medium text-foreground">

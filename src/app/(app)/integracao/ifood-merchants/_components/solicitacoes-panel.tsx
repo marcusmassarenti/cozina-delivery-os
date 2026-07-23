@@ -145,8 +145,12 @@ export function SolicitacoesPanel({
 }: {
   solicitacoes: SolicitacaoAdmin[]
 }) {
-  if (solicitacoes.length === 0) return null
-  const abertas = solicitacoes.filter(
+  // Loja já ativa = jornada concluída → sai da fila (continua visível como
+  // "Vinculado" na tabela de merchants abaixo). A fila mostra só o que ainda
+  // precisa de ação: pendente, solicitada e recusada.
+  const naFila = solicitacoes.filter((s) => s.status !== "ativa")
+  if (naFila.length === 0) return null
+  const abertas = naFila.filter(
     (s) => s.status === "pendente" || s.status === "solicitada",
   )
   return (
@@ -163,10 +167,11 @@ export function SolicitacoesPanel({
         Pedidos feitos pelos clientes na tela de importação. Fluxo: copiar o
         CNPJ → solicitar no Portal do Desenvolvedor → marcar como solicitada →
         quando o cliente aprovar e a loja aparecer aqui, vincular à unidade e
-        ativar.
+        ativar. Loja conectada sai desta lista (fica como <b>Vinculado</b> na
+        tabela abaixo).
       </p>
       <div className="mt-3 space-y-2">
-        {solicitacoes.map((s) => (
+        {naFila.map((s) => (
           <Linha key={s.id} s={s} />
         ))}
       </div>
