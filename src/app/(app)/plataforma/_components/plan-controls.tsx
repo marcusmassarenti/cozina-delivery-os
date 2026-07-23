@@ -33,10 +33,13 @@ export function PlanControls({
   holdingId,
   planTier,
   ninoTrialEndsAt,
+  onChanged,
 }: {
   holdingId: string
   planTier: Tier | null
   ninoTrialEndsAt: string | null
+  /** No drawer, re-busca o detalhe (router.refresh não atualiza o drawer). */
+  onChanged?: () => void
 }) {
   const router = useRouter()
   const [editing, setEditing] = React.useState(false)
@@ -69,6 +72,7 @@ export function PlanControls({
       if (res.ok) {
         setEditing(false)
         router.refresh()
+        onChanged?.()
       } else {
         setErro(res.message ?? "Não deu certo.")
       }
@@ -92,6 +96,7 @@ export function PlanControls({
       )
       if (res.ok) {
         router.refresh()
+        onChanged?.()
       } else {
         setErro(res.message ?? "Não deu certo.")
       }

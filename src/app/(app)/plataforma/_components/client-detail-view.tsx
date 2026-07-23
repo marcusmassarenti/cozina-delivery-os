@@ -148,9 +148,13 @@ function Card({
 export function ClientDetailView({
   detail: c,
   embedded = false,
+  onChanged,
 }: {
   detail: ClientDetail
   embedded?: boolean
+  /** Chamado após uma mudança (plano/cortesia) — no drawer, re-busca o
+   *  detalhe (o router.refresh não atualiza o conteúdo do drawer). */
+  onChanged?: () => void
 }) {
   const st = STATUS[c.billingStatus]
   const waLink = (n: string | null) => {
@@ -262,6 +266,7 @@ export function ClientDetailView({
           holdingId={c.id}
           planTier={c.planTier}
           ninoTrialEndsAt={c.ninoTrialEndsAt}
+          onChanged={onChanged}
         />
       </Card>
 

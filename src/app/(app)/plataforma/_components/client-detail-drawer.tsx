@@ -46,6 +46,15 @@ export function ClientDetailDrawer({
     }
   }, [openId])
 
+  // Re-busca o detalhe depois de uma mudança feita dentro do drawer (ex.:
+  // definir plano / liberar cortesia). O router.refresh() só atualiza a
+  // página de trás; o conteúdo do drawer é buscado à parte, então precisa
+  // recarregar na mão pra refletir na hora.
+  const reload = React.useCallback(() => {
+    if (!openId) return
+    fetchClientDetail(openId).then((d) => setLoaded({ id: openId, detail: d }))
+  }, [openId])
+
   const detail = loaded?.id === openId ? loaded.detail : null
   const loading = openId != null && loaded?.id !== openId
 
@@ -85,7 +94,9 @@ export function ClientDetailDrawer({
               Não foi possível carregar o cliente.
             </p>
           )}
-          {detail && <ClientDetailView detail={detail} embedded />}
+          {detail && (
+            <ClientDetailView detail={detail} embedded onChanged={reload} />
+          )}
         </div>
       </SheetContent>
     </Sheet>
