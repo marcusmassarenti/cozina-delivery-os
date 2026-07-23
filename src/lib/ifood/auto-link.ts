@@ -230,9 +230,11 @@ export function competenciasDoAno(now = new Date()): string[] {
 }
 
 /** Teto de lojas a puxar o histórico completo por rodada — evita estourar o
- *  timeout (300s). Loja vinculada e não backfillada agora entra na próxima
- *  rodada (já está vinculada, e o sync do dia traz mês corrente + anterior). */
-const MAX_BACKFILL_POR_RODADA = 4
+ *  timeout (300s), já que o cron ainda roda o sync da rede toda depois. Loja
+ *  vinculada e não backfillada agora entra na próxima rodada (já está
+ *  vinculada, e o sync do dia traz mês corrente + anterior no meio tempo).
+ *  Como lojas novas chegam aos poucos, 2/rodada dá conta com folga. */
+const MAX_BACKFILL_POR_RODADA = 2
 
 export type AutoLinkBackfillResult = AutoLinkResult & {
   backfill: {

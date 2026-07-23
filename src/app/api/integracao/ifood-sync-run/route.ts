@@ -15,7 +15,7 @@
 import { getAccessibleUnitIds, userCan } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isApiSyncEnabled } from "@/lib/data/units"
-import { autoLinkAndBackfill } from "@/lib/ifood/auto-link"
+import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import { syncIfoodAll } from "@/lib/ifood/sync"
 
 export const runtime = "nodejs"
@@ -45,11 +45,15 @@ export async function POST() {
   }
 
   try {
-    // Antes do sync: casa lojas recém-autorizadas do escopo do usuário (por
-    // CNPJ) e puxa o histórico delas — quem clica já vê a loja nova entrar.
-    let autoLink: Awaited<ReturnType<typeof autoLinkAndBackfill>> | null = null
+    // Antes do sync: só CASA lojas recém-autorizadas do escopo (rápido — o
+    // botão precisa responder em segundos). O backfill do histórico (pesado,
+    // ~2min/loja) fica pro cron diário via autoLinkAndBackfill — rodar aqui
+    // estourava o timeout (300s) e devolvia página de erro não-JSON.
+    // A loja recém-vinculada já pega mês corrente + anterior no sync abaixo.
+    let autoLink: Awaited<ReturnType<typeof autoLinkIfoodMerchants>> | null =
+      null
     try {
-      autoLink = await autoLinkAndBackfill(unitIds)
+      autoLink = await autoLinkIfoodMerchants(unitIds)
     } catch {
       autoLink = null
     }

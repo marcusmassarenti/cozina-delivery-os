@@ -151,10 +151,29 @@ export function SyncIfoodButton() {
     setResult(null)
     try {
       const r = await fetch("/api/integracao/ifood-sync-run", { method: "POST" })
-      const j = (await r.json()) as SyncRunResult
+      // Timeout/erro de servidor vem como texto (ex.: "A server error has
+      // occurred"), não JSON — então nunca chamamos r.json() cru (dava
+      // "Unexpected token 'A'..." na cara do usuário).
+      const txt = await r.text()
+      let j: SyncRunResult
+      try {
+        j = JSON.parse(txt) as SyncRunResult
+      } catch {
+        j = {
+          ok: false,
+          error:
+            r.status === 504 || r.status === 500 || /server error|timeout/i.test(txt)
+              ? "A sincronização demorou mais que o previsto e foi interrompida. O que já sincronizou está salvo — tente de novo em instantes."
+              : `Não foi possível concluir a sincronização (erro ${r.status}). Tente de novo.`,
+        }
+      }
       setResult(j)
-    } catch (e) {
-      setResult({ ok: false, error: e instanceof Error ? e.message : String(e) })
+    } catch {
+      setResult({
+        ok: false,
+        error:
+          "Não foi possível concluir a sincronização. Verifique a conexão e tente de novo.",
+      })
     } finally {
       setPending(false)
       setOpen(true)

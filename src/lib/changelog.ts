@@ -88,7 +88,12 @@ export const CHANGELOG: Release[] = [
           {
             kind: "novo",
             title: "Loja nova se conecta e puxa o histórico sozinha",
-            desc: "Assim que você aprova a loja no Portal do iFood, o sistema casa ela com o cadastro (pelo nome, entre as que pediram conexão), vincula e puxa o histórico do ano — no sync diário e ao clicar Sincronizar. Sem mexer em nada manualmente. Casos duvidosos ficam pra você confirmar num clique.",
+            desc: "Assim que você aprova a loja no Portal do iFood, o sistema casa ela com o cadastro (pelo nome, entre as que pediram conexão) e vincula — no sync e no cron diário. O histórico do ano é puxado pelo cron. Sem mexer em nada manualmente; casos duvidosos ficam pra você confirmar num clique.",
+          },
+          {
+            kind: "correcao",
+            title: "Sincronizar não trava mais com “erro do servidor”",
+            desc: "Em contas com loja recém-conectada, o Sincronizar tentava puxar o histórico inteiro na hora e às vezes estourava o tempo, mostrando um erro técnico feio. Agora o clique só vincula e sincroniza o período recente (rápido), o histórico vem pelo cron, e qualquer falha aparece com uma mensagem clara.",
           },
           {
             kind: "novo",
