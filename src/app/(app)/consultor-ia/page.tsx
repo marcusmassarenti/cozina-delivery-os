@@ -60,6 +60,8 @@ export default async function ConsultorIaPage() {
           lojas={lojas}
           pacote={pacote}
           nome={primeiroNome}
+          degustacao={estado.degustacao}
+          cotaTotal={estado.limiteMes}
         />
       )}
     </div>

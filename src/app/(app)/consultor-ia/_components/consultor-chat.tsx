@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
+  Gift,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -61,12 +63,18 @@ export function ConsultorChat({
   lojas,
   pacote,
   nome,
+  degustacao,
+  cotaTotal,
 }: {
   conversasIniciais: ConversaResumo[]
   restantesIniciais: number
   lojas: Loja[]
   pacote: { preco: number; tamanho: number }
   nome: string
+  /** Cortesia "por conta da casa" ativa (Essencial/Pro) + até quando. */
+  degustacao: { ativa: boolean; ate: string | null }
+  /** Cota total do período (na cortesia = a enxuta; senão 50×lojas). */
+  cotaTotal: number
 }) {
   const [conversas, setConversas] = React.useState(conversasIniciais)
   const [ativaId, setAtivaId] = React.useState<string | null>(null)
@@ -352,28 +360,62 @@ export function ConsultorChat({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {restantes > 0 ? (
-                <>
+            {degustacao.ativa ? (
+              /* Cortesia "por conta da casa": mostra usadas de total + prazo,
+                 e puxa upgrade em vez de vender pacote (o cliente não é AI). */
+              <>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  <Gift className="size-2.5" />
+                  Por conta da casa
+                </span>
+                <span className="text-xs text-muted-foreground">
                   <span className="font-semibold text-foreground tabular-nums">
-                    {restantes}
-                  </span>{" "}
-                  restante{restantes === 1 ? "" : "s"}
-                </>
-              ) : (
-                "Últimas do mês"
-              )}
-            </span>
-            {/* Comprar antes de acabar: só aparece quando a cota está baixa. */}
-            {restantes <= 10 && !bloqueado && (
-              <button
-                type="button"
-                onClick={comprarPacote}
-                disabled={comprando}
-                className="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                {comprando ? "…" : `+${pacote.tamanho} · R$ ${precoStr}`}
-              </button>
+                    {Math.max(0, cotaTotal - restantes)}
+                  </span>
+                  <span className="tabular-nums"> de {cotaTotal}</span>
+                  {degustacao.ate && (
+                    <span className="hidden sm:inline">
+                      {" · até "}
+                      {new Date(degustacao.ate).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </span>
+                  )}
+                </span>
+                <Link
+                  href="/assinatura?plano=ai"
+                  className="rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  Assinar o AI
+                </Link>
+              </>
+            ) : (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {restantes > 0 ? (
+                    <>
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {restantes}
+                      </span>{" "}
+                      restante{restantes === 1 ? "" : "s"}
+                    </>
+                  ) : (
+                    "Últimas do mês"
+                  )}
+                </span>
+                {/* Comprar antes de acabar: só quando a cota está baixa. */}
+                {restantes <= 10 && !bloqueado && (
+                  <button
+                    type="button"
+                    onClick={comprarPacote}
+                    disabled={comprando}
+                    className="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-muted disabled:opacity-60"
+                  >
+                    {comprando ? "…" : `+${pacote.tamanho} · R$ ${precoStr}`}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -383,7 +425,26 @@ export function ConsultorChat({
           </p>
         )}
 
-        {bloqueado ? (
+        {bloqueado && degustacao.ativa ? (
+          /* Cota da cortesia esgotada → convida a assinar o plano AI. */
+          <div className="mx-auto mt-6 w-full max-w-md rounded-xl border bg-card p-6 text-center">
+            <Gift className="mx-auto size-8 text-emerald-600 dark:text-emerald-400" />
+            <p className="mt-3 text-sm font-semibold">
+              Você usou toda a cortesia do Nino 🎁
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+              Curtiu? Assine o plano <b>DeliveryOS AI</b> e tenha o Nino sem
+              limite de cortesia — com a cota cheia do plano.
+            </p>
+            <Link
+              href="/assinatura?plano=ai"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Sparkles className="size-4" />
+              Assinar o DeliveryOS AI
+            </Link>
+          </div>
+        ) : bloqueado ? (
           <div className="mx-auto mt-6 w-full max-w-md rounded-xl border bg-card p-6 text-center">
             <Sparkles className="mx-auto size-8 text-muted-foreground" />
             <p className="mt-3 text-sm font-semibold">
