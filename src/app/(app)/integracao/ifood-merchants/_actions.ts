@@ -167,6 +167,41 @@ export async function atualizarSolicitacaoIfood(
   }
 
   const admin = createAdminClient()
+
+  // GUARDA: "ativa" significa loja CONECTADA. Este botão só fecha a
+  // solicitação — quem cria o vínculo é a tabela de merchants abaixo (ou o
+  // auto-vínculo). Sem esta checagem dava pra marcar ativa sem vínculo
+  // nenhum: a fila dizia "conectada", o cliente via "sua loja foi
+  // conectada" e o sync nunca puxava nada. Aconteceu de verdade com 4
+  // lojas da DG Foods (23/jul).
+  if (status === "ativa") {
+    const { data: req } = await admin
+      .from("ifood_activation_requests")
+      .select("unit_id")
+      .eq("id", id)
+      .maybeSingle()
+    const unitId = (req?.unit_id as string | null) ?? null
+    if (!unitId) {
+      return {
+        ok: false,
+        error: "Solicitação sem unidade — não dá pra ativar.",
+      }
+    }
+    const { data: vinc } = await admin
+      .from("unit_platforms")
+      .select("api_store_id")
+      .eq("unit_id", unitId)
+      .eq("platform", "ifood")
+      .maybeSingle()
+    if (!vinc?.api_store_id) {
+      return {
+        ok: false,
+        error:
+          "Esta loja ainda NÃO está vinculada a um merchant. Vincule na tabela abaixo (escolher unidade → Vincular) e depois ative.",
+      }
+    }
+  }
+
   const { error } = await admin
     .from("ifood_activation_requests")
     .update({ status, nota, updated_at: new Date().toISOString() })
