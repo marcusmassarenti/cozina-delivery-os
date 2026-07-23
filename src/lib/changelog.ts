@@ -85,6 +85,11 @@ export const CHANGELOG: Release[] = [
             title: "Botão “Sincronizar iFood” aparece com loja vinculada",
             desc: "Assim que a primeira loja da sua conta é conectada à API do iFood, o botão de sincronizar aparece no Dashboard — e some se nenhuma loja tiver vínculo. O mesmo vale pro botão do 99 Food.",
           },
+          {
+            kind: "melhoria",
+            title: "Sync explica quais lojas ficaram de fora",
+            desc: "O resultado da sincronização agora avisa quantas (e quais) lojas não entraram por ainda não terem a integração com o iFood — o financeiro delas segue via importação de planilha, e dá pra pedir a conexão em Editar unidade.",
+          },
         ],
       },
     ],

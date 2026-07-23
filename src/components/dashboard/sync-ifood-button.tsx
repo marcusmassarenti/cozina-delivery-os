@@ -57,6 +57,9 @@ type SyncRunResult = {
   ok: boolean
   unitsProcessed?: number
   results?: UnitResult[]
+  /** Lojas do usuário com iFood ativo mas SEM vínculo com a API — não
+   *  entram no sync; o dialog explica em vez de parecer que "faltou". */
+  semVinculo?: string[]
   error?: string
 }
 
@@ -271,6 +274,32 @@ export function SyncIfoodButton() {
                   empty=""
                   items={erro}
                 />
+              )}
+
+              {/* Lojas fora do sync por não terem a integração — sem este
+                  aviso o lojista acha que a sincronização "esqueceu" delas. */}
+              {(result?.semVinculo?.length ?? 0) > 0 && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    {result!.semVinculo!.length === 1
+                      ? "1 loja não entrou na sincronização"
+                      : `${result!.semVinculo!.length} lojas não entraram na sincronização`}
+                  </p>
+                  <p className="mt-0.5">
+                    {result!.semVinculo!.length === 1 ? "Ela" : "Elas"} ainda não{" "}
+                    {result!.semVinculo!.length === 1 ? "tem" : "têm"} a
+                    integração com o iFood — o financeiro dela
+                    {result!.semVinculo!.length === 1 ? "" : "s"} segue via
+                    importação de planilha. Pra conectar, use o botão em{" "}
+                    <b>Editar unidade → iFood via API</b>.
+                  </p>
+                  <p className="mt-1 leading-snug">
+                    {result!.semVinculo!.slice(0, 8).join(" · ")}
+                    {result!.semVinculo!.length > 8
+                      ? ` · +${result!.semVinculo!.length - 8}`
+                      : ""}
+                  </p>
+                </div>
               )}
             </div>
           )}

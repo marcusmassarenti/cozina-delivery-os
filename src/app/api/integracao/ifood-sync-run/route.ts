@@ -13,6 +13,7 @@
  *  3. unidades restritas às do usuário
  */
 import { getAccessibleUnitIds, userCan } from "@/lib/auth/permissions"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { isApiSyncEnabled } from "@/lib/data/units"
 import { syncIfoodAll } from "@/lib/ifood/sync"
 
@@ -46,7 +47,27 @@ export async function POST() {
     // Disparo manual sempre força (ignora o throttle de 6h) — o operador
     // clicou "Sincronizar agora" de propósito.
     const out = await syncIfoodAll({ force: true, unitIds })
-    return Response.json({ ok: true, ...out })
+
+    // Lojas do usuário com iFood ativo mas SEM vínculo com a API — o dialog
+    // avisa por que elas não entraram no sync (senão parece que "faltou").
+    let semVinculo: string[] = []
+    if (unitIds !== null) {
+      const admin = createAdminClient()
+      const { data } = await admin
+        .from("unit_platforms")
+        .select("units!inner(name, active)")
+        .eq("platform", "ifood")
+        .eq("active", true)
+        .is("api_store_id", null)
+        .in("unit_id", unitIds)
+      semVinculo = ((data ?? []) as unknown as {
+        units: { name: string; active: boolean }
+      }[])
+        .filter((r) => r.units.active)
+        .map((r) => r.units.name)
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    }
+    return Response.json({ ok: true, semVinculo, ...out })
   } catch (e) {
     return Response.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
