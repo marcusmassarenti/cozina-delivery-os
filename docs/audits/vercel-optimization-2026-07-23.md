@@ -10,7 +10,9 @@ Telemetria de referência (só Delivery OS, último ciclo fechado): Build CPU **
 
 ### A.1 Sumário executivo
 
-- **Build CPU (27h12m — prioridade máxima):** o `vercel.json` **não declara `buildMachineType`** nem `ignoreCommand`. O build herda o tier padrão da conta (desde fev/2026 = **Turbo**, US$ 0,105/min vs US$ 0,014/min do Standard — 7,5×) e **todo push builda** (inclusive docs). Além disso, o `next build` roda **lint + type-check embutidos**, trabalho que o CI do GitHub já faz separado. As três correções somadas podem derrubar **50–85% do build CPU** — mas a maior parte depende de **2 confirmações no painel** (tier atual e "Ignored Build Step").
+> **CORREÇÃO (2026-07-23, confirmado no painel):** os dois projetos **já estão na máquina Standard** (a mais barata; "Fallback"). A hipótese DO-1 (tier Turbo caro) está **descartada** — não há ganho de trocar máquina. Logo, as 27h de build vêm de **volume × duração** (muitos deploys × cada build rodando trabalho redundante), não de máquina cara.
+
+- **Build CPU (27h12m):** com a máquina já no tier certo, as alavancas reais são: (1) **cada `next build` roda lint + type-check embutidos** que o CI do GitHub já faz separado — trabalho pago em dobro (encurta cada build); (2) **todo push builda**, inclusive commits só de docs; (3) volume de deploys (o histórico mostra muitos pushes diretos na `main`). Correções de baixo risco podem cortar ~20–35% da duração por build.
 - **Invocations (69%):** **não há polling no cliente** (vetor limpo — achado positivo). O volume vem de navegação real × **middleware que faz `supabase.auth.getUser()` (chamada de rede) em toda página**. Reduzir isso é a maior alavanca, mas é **alto risco multi-tenant** (auth/sessão) — item de estudo, não de aplicação imediata.
 - **Active CPU (35%):** concentrado em **agregação financeira pesada em JS** (`ifood-imported.ts`, 2.324 linhas) e no **fan-out de ~10 RPCs/mês** de `relatorio-rede.ts` sem `React.cache`.
 - **Ociosos:** Image Optimization, Web Analytics e Observability estão zerados e o código não usa nenhum — Analytics e Observability podem ser ligados de graça; Image Optimization pode ficar desligada.
@@ -36,9 +38,9 @@ Telemetria de referência (só Delivery OS, último ciclo fechado): Build CPU **
 
 | ID | Achado | Métrica | Impacto estimado | Esforço | Risco regressão | Prio |
 |---|---|---|---|---|---|---|
-| **DO-1** | `buildMachineType` ausente → provável Turbo | Build CPU | **Até −87%** se estiver em Turbo e um Standard aguentar (ver validação) | Baixo (1 linha + painel) | Baixo | **P0** |
-| **DO-2** | Sem `ignoreCommand` → todo push builda | Build CPU | −10 a −40% (proporcional a commits sem código-fonte) | Baixo | Baixo | **P0** |
-| **DO-3** | Lint+typecheck dentro do `next build` (CI já faz) | Build CPU | −15 a −30% do wall-clock de build | Baixo | Médio (manter gate no CI) | **P1** |
+| **DO-1** | ~~`buildMachineType` → Turbo~~ **DESCARTADO: já está em Standard** | Build CPU | — (sem ação) | — | — | **N/A** |
+| **DO-3** | Lint+typecheck dentro do `next build` (CI já faz) — **maior alavanca de build agora** | Build CPU | −15 a −30% do wall-clock de cada build | Baixo | Médio (manter gate no CI) | **P0** |
+| **DO-2** | Sem `ignoreCommand` → todo push builda (inclusive docs) | Build CPU | Baixo (poucos commits são só-docs) | Baixo | Baixo | **P1** |
 | **DO-4** | Middleware faz `getUser()` de rede em toda navegação | Invocations + CPU | Alta (é a fonte dominante), mas não quantificável sem breakdown por rota | Médio | **Alto (multi-tenant/auth)** | **P1 ⚠️** |
 | **DO-5** | Leituras reusadas sem `React.cache` (relatorio-rede, ifood-imported) | Active CPU + Invocations | Corta re-queries por render; ganho médio | Baixo | Baixo-médio | **P1** |
 | **DO-6** | Agregação financeira pesada em JS (`ifood-imported.ts`) | Active CPU | Alta (driver principal de CPU), mas exige medir por-função | Alto | Médio | **P2** |
@@ -200,7 +202,7 @@ Matcher do `proxy.ts` (exclui estáticos, manifest, robots, sitemap, imagens); g
 
 ## Verificações manuais pendentes (painel Vercel — não visíveis no repo)
 
-1. **[DO-1]** Tier da máquina de build (Settings → Build & Deployment) — **a causa mais provável das 27h**.
+1. **[DO-1] ✅ RESOLVIDO** — os dois projetos já estão em **Standard** (confirmado no painel 2026-07-23). Sem ação.
 2. **[DO-2]** Estado do "Ignored Build Step" (Automatic/vazio → todo commit builda).
 3. **[DO-3]** Confirmar que o workflow de CI é **required check** no GitHub antes de tirar TS/lint do build.
 4. **[DO-8]** Se Image Optimization / Analytics / Observability estão ligados no projeto (código não usa nenhum).
