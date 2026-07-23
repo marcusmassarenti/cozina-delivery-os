@@ -131,8 +131,14 @@ function CostSection({
   const [busy, setBusy] = React.useState(false)
   const focusId = React.useRef<string | null>(null)
 
+  // Ao remover a ÚLTIMA categoria o servidor zera o campo legado do mês
+  // (força no recálculo) — mas a prop `legacy` desta render ainda tem o valor
+  // antigo. Sem este estado, o total "voltava" pro número velho na tela.
+  const [legadoZerado, setLegadoZerado] = React.useState(false)
+  const legadoEfetivo = legadoZerado ? 0 : legacy
+
   const hasRows = rows.length > 0
-  const total = hasRows ? rows.reduce((s, r) => s + r.valor, 0) : legacy
+  const total = hasRows ? rows.reduce((s, r) => s + r.valor, 0) : legadoEfetivo
 
   async function add() {
     const nome = newName.trim()
@@ -140,7 +146,7 @@ function CostSection({
     setBusy(true)
     // 1ª categoria do tipo com valor legado → o servidor move o valor pra ela;
     // refletimos isso na hora pra não "sumir" o total.
-    const seed = rows.length === 0 && legacy > 0 ? legacy : 0
+    const seed = rows.length === 0 && legadoEfetivo > 0 ? legadoEfetivo : 0
     const res = await addCostCategory({ unitId, nome, tipo, year, month })
     setBusy(false)
     if (res.ok && res.id) {
@@ -160,8 +166,14 @@ function CostSection({
     setRows((r) => r.map((x) => (x.id === id ? { ...x, nome } : x)))
   }
   function onRemove(id: string) {
-    setRows((r) => r.filter((x) => x.id !== id))
-    scheduleRefresh()
+    const next = rows.filter((x) => x.id !== id)
+    setRows(next)
+    if (next.length === 0) setLegadoZerado(true)
+    // Grava no servidor e SÓ ENTÃO agenda o refresh — antes o refresh (700ms)
+    // disparava no meio da gravação e trazia de volta o total antigo.
+    void deleteCostCategory({ unitId, categoryId: id, year, month }).then(() =>
+      scheduleRefresh(),
+    )
   }
 
   return (
@@ -206,10 +218,11 @@ function CostSection({
               ))}
             </div>
           ) : (
-            legacy > 0 && (
+            legadoEfetivo > 0 && (
               <p className="mb-2 rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
-                Custo atual: <b>{fmtBRL(legacy)}</b>. Adicione uma categoria pra
-                detalhar — esse valor é movido pra ela (você divide depois).
+                Custo atual: <b>{fmtBRL(legadoEfetivo)}</b>. Adicione uma
+                categoria pra detalhar — esse valor é movido pra ela (você
+                divide depois).
               </p>
             )
           )}
@@ -316,8 +329,9 @@ function CategoryRow({
   }
 
   function remove() {
-    onRemove(row.id) // otimista
-    void deleteCostCategory({ unitId, categoryId: row.id, year, month })
+    // Otimista; o PAI grava no servidor e agenda o refresh depois (evita a
+    // corrida refresh-antes-de-gravar que segurava o total antigo na tela).
+    onRemove(row.id)
   }
 
   return (
