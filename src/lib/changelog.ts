@@ -37,6 +37,44 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.4",
+    date: "2026-07-23",
+    tag: "Melhorias",
+    title: "Bruto igual ao portal em todo o painel",
+    summary:
+      "O Bruto da unidade e do dashboard agora é o total COM os pedidos cancelados — o mesmo número do portal do iFood. As margens e taxas continuam calculadas sobre a venda válida, como no DRE.",
+    areas: [
+      {
+        area: "Unidade e Dashboard",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Bruto total, com os cancelados ao lado dos pedidos",
+            antes: "Bruto R$ 214.575 (sem cancelados) ≠ portal",
+            depois:
+              "Bruto R$ 216.280 · “3.334 pedidos · 30 cancelados” — igual ao “Valor das vendas” do portal",
+            desc: "O número principal agora bate com a tela do iFood. O DRE mostra a subtração dos cancelados e todos os percentuais (margem, repasse, ticket) seguem na base válida.",
+          },
+          {
+            kind: "correcao",
+            title: "Perda de cancelamento agora é a venda real",
+            desc: "Os cards de cancelamento (Perda no mês, por motivo) usavam o lançamento de estorno da Conciliação, que é menor que o valor da venda cancelada. Agora usam o valor de venda real de cada pedido cancelado.",
+          },
+        ],
+      },
+      {
+        area: "Custos da loja",
+        items: [
+          {
+            kind: "correcao",
+            title: "Total zerava no banco mas ficava na tela",
+            desc: "Ao remover a última categoria de custo, o total antigo continuava aparecendo no card (só sumia recarregando). Agora limpa na hora.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.3",
     date: "2026-07-22",
     tag: "Melhorias",

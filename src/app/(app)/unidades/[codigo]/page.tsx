@@ -19,6 +19,7 @@ import {
 import {
   getAvailablePeriods,
   getAvaliacoesResumoForMonth,
+  getCancelamentoCestaForMonth,
   getFinanceiroResumoForMonth,
 } from "@/lib/data/ifood-imported"
 import {
@@ -167,6 +168,7 @@ export default async function UnidadeDetalhePage({
     availablePeriods,
     monthlyByUnit,
     coverage,
+    cancelCesta,
   ] = await Promise.all([
     getUnitPlatforms(unit.id),
     getFinanceiroResumoForMonth(unit.id, year, month, queryRange),
@@ -184,6 +186,10 @@ export default async function UnidadeDetalhePage({
       : getRealMonthlyForUnitsForRange([unit.id], periodRange),
     // Cobertura de importação DESTA loja no mês (até que dia cada plataforma).
     getImportCoverageForMonth(year, month, [unit.id]),
+    // Cesta dos cancelados iFood — o Bruto do hero mostra o total COM
+    // cancelados ("Valor das vendas" do portal); os cálculos seguem na base
+    // válida.
+    getCancelamentoCestaForMonth(unit.id, year, month, queryRange),
   ])
 
   // Nota média da loja = média ponderada (por nº de avaliações) das 3
@@ -328,6 +334,7 @@ export default async function UnidadeDetalhePage({
             notaMedia={notaMediaMerged}
             notasCount={notasTotal}
             notaFonte={notaFonte}
+            cancelCesta={cancelCesta}
           />
           <DetailTabs
             unit={unit}
@@ -370,11 +377,15 @@ function HeroKpis({
   notaMedia,
   notasCount,
   notaFonte,
+  cancelCesta,
 }: {
   monthly: UnitMonthly
   notaMedia: number
   notasCount: number
   notaFonte: string
+  /** Cesta dos pedidos cancelados no iFood (pro Bruto "total" bater com o
+   *  "Valor das vendas" do portal). */
+  cancelCesta?: { qtd: number; valor: number }
 }) {
   const cancelPct =
     m.pedidos > 0 ? (m.pedidosCancelados / m.pedidos) * 100 : 0
@@ -400,11 +411,20 @@ function HeroKpis({
     title?: string
   }[] = [
     {
+      // Bruto TOTAL (com cancelados) = "Valor das vendas" do portal iFood.
+      // Marcus: o hero mostra o n\u00FAmero do portal; margem/taxas/percentuais
+      // continuam calculados na base v\u00E1lida (ap\u00F3s cancelamentos), como o DRE.
       label: "Bruto",
-      value: fmtBRL(m.faturamentoBruto),
+      value: fmtBRL(m.faturamentoBruto + (cancelCesta?.valor ?? 0)),
       title:
-        "Vendas menos cancelamentos. O \u201CValor das vendas\u201D do portal iFood mostra ANTES de descontar os pedidos cancelados \u2014 por isso l\u00E1 aparece um valor um pouco maior.",
-      sub: `${fmtNum(m.pedidos)} pedidos`,
+        cancelCesta && cancelCesta.valor > 0
+          ? "Vendas totais, igual ao \u201CValor das vendas\u201D do portal iFood (inclui os pedidos cancelados). O DRE desconta os cancelados antes de calcular taxas e margem."
+          : "Vendas menos cancelamentos.",
+      sub: `${fmtNum(m.pedidos)} pedidos${
+        cancelCesta && cancelCesta.qtd > 0
+          ? ` \u00B7 ${fmtNum(cancelCesta.qtd)} cancelados`
+          : ""
+      }`,
     },
     {
       label: "Líquido",

@@ -9,6 +9,8 @@
 
 import "server-only"
 
+import { cache as reactCache } from "react"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import { currentPeriod } from "@/lib/period"
 import { fetchAllRows } from "@/lib/data/paginate"
@@ -1256,52 +1258,32 @@ export async function getAntecipacaoFeeByUnits(
 
 // ─── Cesta dos pedidos cancelados (pro DRE bater com o portal) ───────
 
+export type CancelamentoCesta = { qtd: number; valor: number }
+
 /**
- * Valor de venda (cesta) dos pedidos com Cancelamento Total no mês — o que o
- * portal do iFood soma no "Valor das vendas" e o nosso bruto exclui. A linha
- * "Vendas totais" do DRE = bruto + este valor. O `perda_cancelamento` da RPC
- * NÃO serve pra isso: é o lançamento de estorno (menor que a venda cancelada).
- * Mesma regra da RPC do bruto: max(valor_cesta_final) por pedido.
+ * Cesta (max de valor_cesta_final, igual à RPC do bruto) POR PEDIDO cancelado.
+ * `porUnidade` = Map<unitId, Set<pedido>>; retorna Map<"unit|pedido", cesta>.
+ * Um pedido tem várias linhas de Venda (comissão, taxa) todas repetindo a
+ * cesta — daí o max. Chunks pequenos pra não estourar o limite por resposta.
  */
-export async function getCancelamentoCestaForMonth(
-  unitId: string,
+async function cestaPorPedidoCancelado(
+  porUnidade: Map<string, Set<string>>,
   year: number,
   month: number,
-): Promise<{ qtd: number; valor: number }> {
+): Promise<Map<string, number>> {
   const admin = createAdminClient()
-  const canc = await fetchAllRows<{ pedido_associado_ifood: string | null }>(
-    (from, to) =>
-      admin
-        .from("ifood_financeiro_lancamentos")
-        .select("pedido_associado_ifood")
-        .eq("unit_id", unitId)
-        .eq("ref_year", year)
-        .eq("ref_month", month)
-        .eq("fato_gerador", "Cancelamento Total")
-        .not("pedido_associado_ifood", "is", null)
-        .order("id")
-        .range(from, to),
-    "ifood_financeiro_lancamentos cancelados cesta",
-  )
-  const ids = [
-    ...new Set(
-      canc
-        .map((r) => r.pedido_associado_ifood)
-        .filter((id): id is string => !!id),
-    ),
+  const unitIds = [...porUnidade.keys()]
+  const todosIds = [
+    ...new Set([...porUnidade.values()].flatMap((s) => [...s])),
   ]
-  if (ids.length === 0) return { qtd: 0, valor: 0 }
-
-  // Cesta por pedido (um pedido tem várias linhas de Venda — comissão, taxa —
-  // todas repetindo a cesta; a RPC usa max(), igual aqui). Chunks pequenos pra
-  // não estourar o limite de linhas por resposta.
   const porPedido = new Map<string, number>()
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50)
+  if (todosIds.length === 0) return porPedido
+  for (let i = 0; i < todosIds.length; i += 50) {
+    const chunk = todosIds.slice(i, i + 50)
     const { data, error } = await admin
       .from("ifood_financeiro_lancamentos")
-      .select("pedido_associado_ifood, valor_cesta_final")
-      .eq("unit_id", unitId)
+      .select("unit_id, pedido_associado_ifood, valor_cesta_final")
+      .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
       .eq("fato_gerador", "Venda")
@@ -1311,17 +1293,100 @@ export async function getCancelamentoCestaForMonth(
     if (error)
       throw new Error(`Falha ao buscar cesta dos cancelados: ${error.message}`)
     for (const r of data ?? []) {
-      const id = r.pedido_associado_ifood as string
+      const pedido = r.pedido_associado_ifood as string
+      if (!porUnidade.get(r.unit_id as string)?.has(pedido)) continue
+      const key = `${r.unit_id}|${pedido}`
       const v = Number(r.valor_cesta_final) || 0
-      porPedido.set(id, Math.max(porPedido.get(id) ?? 0, v))
+      porPedido.set(key, Math.max(porPedido.get(key) ?? 0, v))
     }
   }
-  const valor =
-    Math.round(
-      [...porPedido.values()].reduce((a, b) => a + b, 0) * 100,
-    ) / 100
-  return { qtd: ids.length, valor }
+  return porPedido
 }
+
+/**
+ * Valor de venda (cesta) dos pedidos com Cancelamento Total no mês, POR
+ * UNIDADE — o que o portal do iFood soma no "Valor das vendas" e o nosso
+ * bruto exclui. "Vendas totais" (DRE/heros) = bruto + este valor. O
+ * `perda_cancelamento` da RPC NÃO serve pra isso: é o lançamento de estorno
+ * (menor que a venda cancelada). Mesma regra da RPC do bruto:
+ * max(valor_cesta_final) por pedido. Unidade sem dado fica fora do Map.
+ */
+export async function getCancelamentoCestaByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<Map<string, CancelamentoCesta>> {
+  const out = new Map<string, CancelamentoCesta>()
+  if (unitIds.length === 0) return out
+  const admin = createAdminClient()
+
+  const aplicaRange = <T extends { gte: any; lte: any }>(q: T): T => {
+    if (!dateRange) return q
+    return q
+      .gte("data_criacao_pedido", dateRange.start)
+      .lte("data_criacao_pedido", `${dateRange.end}T23:59:59`) as T
+  }
+
+  const canc = await fetchAllRows<{
+    unit_id: string
+    pedido_associado_ifood: string | null
+  }>(
+    (from, to) =>
+      aplicaRange(
+        admin
+          .from("ifood_financeiro_lancamentos")
+          .select("unit_id, pedido_associado_ifood")
+          .in("unit_id", unitIds)
+          .eq("ref_year", year)
+          .eq("ref_month", month)
+          .eq("fato_gerador", "Cancelamento Total")
+          .not("pedido_associado_ifood", "is", null),
+      )
+        .order("id")
+        .range(from, to),
+    "ifood_financeiro_lancamentos cancelados cesta",
+  )
+  // chave composta unidade|pedido (o mesmo nº de pedido não repete entre
+  // lojas na prática, mas custa nada blindar)
+  const cancelados = new Map<string, Set<string>>()
+  for (const r of canc) {
+    if (!r.pedido_associado_ifood) continue
+    const set = cancelados.get(r.unit_id) ?? new Set<string>()
+    set.add(r.pedido_associado_ifood)
+    cancelados.set(r.unit_id, set)
+  }
+  const porPedido = await cestaPorPedidoCancelado(cancelados, year, month)
+
+  for (const [unitId, pedidos] of cancelados) {
+    let valor = 0
+    for (const p of pedidos) valor += porPedido.get(`${unitId}|${p}`) ?? 0
+    out.set(unitId, {
+      qtd: pedidos.size,
+      valor: Math.round(valor * 100) / 100,
+    })
+  }
+  return out
+}
+
+/** Versão 1-unidade (com React cache — página e aba Financeiro pedem o mesmo
+ * dado na mesma request). */
+export const getCancelamentoCestaForMonth = reactCache(
+  async (
+    unitId: string,
+    year: number,
+    month: number,
+    dateRange?: { start: string; end: string },
+  ): Promise<CancelamentoCesta> => {
+    const map = await getCancelamentoCestaByUnits(
+      [unitId],
+      year,
+      month,
+      dateRange,
+    )
+    return map.get(unitId) ?? { qtd: 0, valor: 0 }
+  },
+)
 
 // ─── Cancelamentos por motivo ────────────────────────────────────────
 
@@ -1353,20 +1418,35 @@ export async function getCancelamentosPorMotivo(
     "ifood_financeiro_lancamentos cancelamentos unidade",
   )
 
+  // Perda REAL: cancelamento total vale a CESTA do pedido (o que a venda
+  // valia — mesma régua do DRE/heros), não o lançamento de estorno (menor).
+  // Parcial continua no valor do estorno (o pedido não foi perdido inteiro).
   const acc = new Map<
     string,
-    { pedidos: Set<string>; perdaFinanceira: number }
+    { pedidos: Set<string>; perdaFinanceira: number; totais: Set<string> }
   >()
+  const totalPorUnidade = new Map<string, Set<string>>([[unitId, new Set()]])
   for (const r of data) {
     const motivo = (r.motivo_cancelamento ?? "Sem motivo informado").toString()
     const cur = acc.get(motivo) ?? {
       pedidos: new Set<string>(),
       perdaFinanceira: 0,
+      totais: new Set<string>(),
     }
-    if (r.pedido_associado_ifood) cur.pedidos.add(r.pedido_associado_ifood)
-    if (r.impacto_no_repasse) cur.perdaFinanceira += Number(r.valor) || 0
+    if (r.pedido_associado_ifood) {
+      cur.pedidos.add(r.pedido_associado_ifood)
+      if (r.fato_gerador === "Cancelamento Total") {
+        cur.totais.add(`${unitId}|${r.pedido_associado_ifood}`)
+        totalPorUnidade.get(unitId)!.add(r.pedido_associado_ifood)
+      }
+    }
+    if (r.fato_gerador === "Cancelamento Parcial" && r.impacto_no_repasse)
+      cur.perdaFinanceira += Math.abs(Number(r.valor) || 0)
     acc.set(motivo, cur)
   }
+  const cesta = await cestaPorPedidoCancelado(totalPorUnidade, year, month)
+  for (const v of acc.values())
+    for (const key of v.totais) v.perdaFinanceira += cesta.get(key) ?? 0
   return Array.from(acc.entries())
     .map(([motivo, v]) => ({
       motivo,
@@ -1911,6 +1991,7 @@ export async function getNetworkCancelamentosPorMotivo(
 ): Promise<CancelamentoMotivo[]> {
   const admin = createAdminClient()
   const data = await fetchAllRows<{
+    unit_id: string
     motivo_cancelamento: string | null
     valor: number | string | null
     pedido_associado_ifood: string | null
@@ -1920,7 +2001,7 @@ export async function getNetworkCancelamentosPorMotivo(
     let q = admin
       .from("ifood_financeiro_lancamentos")
       .select(
-        "motivo_cancelamento, valor, pedido_associado_ifood, fato_gerador, impacto_no_repasse",
+        "unit_id, motivo_cancelamento, valor, pedido_associado_ifood, fato_gerador, impacto_no_repasse",
       )
       .eq("ref_year", year)
       .eq("ref_month", month)
@@ -1932,20 +2013,36 @@ export async function getNetworkCancelamentosPorMotivo(
     return q
   }, "ifood_financeiro_lancamentos cancelamentos rede")
 
+  // Perda REAL: total = cesta do pedido; parcial = estorno (ver a versão
+  // por unidade acima — mesma régua do DRE/heros).
   const acc = new Map<
     string,
-    { pedidos: Set<string>; perdaFinanceira: number }
+    { pedidos: Set<string>; perdaFinanceira: number; totais: Set<string> }
   >()
+  const totalPorUnidade = new Map<string, Set<string>>()
   for (const r of data) {
     const motivo = (r.motivo_cancelamento ?? "Sem motivo informado").toString()
     const cur = acc.get(motivo) ?? {
       pedidos: new Set<string>(),
       perdaFinanceira: 0,
+      totais: new Set<string>(),
     }
-    if (r.pedido_associado_ifood) cur.pedidos.add(r.pedido_associado_ifood)
-    if (r.impacto_no_repasse) cur.perdaFinanceira += Number(r.valor) || 0
+    if (r.pedido_associado_ifood) {
+      cur.pedidos.add(r.pedido_associado_ifood)
+      if (r.fato_gerador === "Cancelamento Total") {
+        cur.totais.add(`${r.unit_id}|${r.pedido_associado_ifood}`)
+        const set = totalPorUnidade.get(r.unit_id) ?? new Set<string>()
+        set.add(r.pedido_associado_ifood)
+        totalPorUnidade.set(r.unit_id, set)
+      }
+    }
+    if (r.fato_gerador === "Cancelamento Parcial" && r.impacto_no_repasse)
+      cur.perdaFinanceira += Math.abs(Number(r.valor) || 0)
     acc.set(motivo, cur)
   }
+  const cesta = await cestaPorPedidoCancelado(totalPorUnidade, year, month)
+  for (const v of acc.values())
+    for (const key of v.totais) v.perdaFinanceira += cesta.get(key) ?? 0
   return Array.from(acc.entries())
     .map(([motivo, v]) => ({
       motivo,

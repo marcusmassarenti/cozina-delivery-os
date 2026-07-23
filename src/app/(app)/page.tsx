@@ -46,6 +46,7 @@ import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklis
 import { DashboardTour } from "@/components/dashboard/dashboard-tour"
 import {
   getAvailablePeriods,
+  getCancelamentoCestaByUnits,
   getFinanceiroResumoByUnits,
   getNetworkAvaliacoesForMonth,
   getNetworkCancelamentosPorMotivo,
@@ -314,6 +315,22 @@ export default async function Home({
     networkAvaliacoesKeeta,
   ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
 
+  // Cesta dos pedidos cancelados no iFood (escopo visível) — o card
+  // "Faturamento Bruto" mostra o total COM cancelados ("Valor das vendas" do
+  // portal); ticket médio e taxa de repasse seguem na base válida. Não soma
+  // quando o filtro de plataforma exclui o iFood.
+  let cancelCestaTotal = 0
+  if (!plataformaFilter || plataformaFilter === "ifood") {
+    const cestaByUnit = await getCancelamentoCestaByUnits(
+      unitsToShow.map((u) => u.id),
+      year,
+      month,
+      isFullMonth ? undefined : periodRange,
+    )
+    for (const u of unitsToShow)
+      cancelCestaTotal += cestaByUnit.get(u.id)?.valor ?? 0
+  }
+
   // Network = totais da rede MESCLADOS (do array filtrado)
   const network = networkTotalsMerged(
     unitsToShow,
@@ -420,8 +437,10 @@ export default async function Home({
       href: `/financeiro${periodQ}`,
     },
     {
+      // Bruto TOTAL (com os cancelados do iFood) = "Valor das vendas" do
+      // portal. Ticket/repasse continuam na base válida.
       label: "Faturamento Bruto",
-      value: fmtBRLShort(network.faturamentoBruto),
+      value: fmtBRLShort(network.faturamentoBruto + cancelCestaTotal),
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
