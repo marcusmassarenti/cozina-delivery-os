@@ -37,6 +37,7 @@ import { HeroFaixa, type HeroMetric } from "@/components/dashboard/hero-faixa"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import {
   getVisibleUnits,
+  getApiSyncVinculos,
   getTenantPlatforms,
   isApiSyncEnabled,
 } from "@/lib/data/units"
@@ -170,9 +171,11 @@ export default async function Home({
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
   // Plataformas habilitadas do tenant (só essas na cobertura) + se o sync via
   // API está ligado (SaaS: só importação manual → sem botões de Sincronizar).
-  const [tenantPlatforms, apiSync] = await Promise.all([
+  const [tenantPlatforms, apiSync, apiVinculos] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
+    // Botão de sync por plataforma só com ≥1 loja vinculada de verdade.
+    getApiSyncVinculos(),
   ])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
@@ -744,6 +747,7 @@ export default async function Home({
           periodLabel={formatPeriodLabel({ year, month })}
           platformsEnabled={tenantPlatforms}
           apiSync={apiSync}
+          vinculos={apiVinculos}
         />
       ) : (
         <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">

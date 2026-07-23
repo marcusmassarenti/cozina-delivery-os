@@ -302,6 +302,38 @@ export async function getDefaultBrand(): Promise<{ id: string; name: string }> {
  * Liga o "Sincronizar" via API (iFood/99) pro tenant atual. False = só
  * importação manual de relatório (padrão do SaaS até habilitarmos a API).
  */
+/**
+ * Quais plataformas têm pelo menos 1 loja VINCULADA à API no escopo do
+ * usuário (iFood = unit_platforms.api_store_id; 99 = ninefood_store_links).
+ * Decide quais botões "Sincronizar" aparecem no dashboard — regra do Marcus:
+ * o botão só aparece quando existe vínculo de verdade.
+ */
+export async function getApiSyncVinculos(): Promise<{
+  ifood: boolean
+  ninefood: boolean
+}> {
+  const allowed = await getAccessibleUnitIds()
+  if (allowed !== null && allowed.length === 0)
+    return { ifood: false, ninefood: false }
+  const admin = createAdminClient()
+  let qIf = admin
+    .from("unit_platforms")
+    .select("unit_id", { count: "exact", head: true })
+    .eq("platform", "ifood")
+    .eq("active", true)
+    .not("api_store_id", "is", null)
+  let q99 = admin
+    .from("ninefood_store_links")
+    .select("unit_id", { count: "exact", head: true })
+    .eq("active", true)
+  if (allowed !== null) {
+    qIf = qIf.in("unit_id", allowed)
+    q99 = q99.in("unit_id", allowed)
+  }
+  const [rIf, r99] = await Promise.all([qIf, q99])
+  return { ifood: (rIf.count ?? 0) > 0, ninefood: (r99.count ?? 0) > 0 }
+}
+
 export async function isApiSyncEnabled(): Promise<boolean> {
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return false

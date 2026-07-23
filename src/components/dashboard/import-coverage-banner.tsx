@@ -52,6 +52,7 @@ export function ImportCoverageBanner({
   periodLabel,
   platformsEnabled,
   apiSync = false,
+  vinculos,
 }: {
   coverage: ImportCoverage
   year: number
@@ -62,6 +63,11 @@ export function ImportCoverageBanner({
   platformsEnabled?: PlatformId[]
   /** Liga os botões de sync via API (só pra quem tem a integração habilitada). */
   apiSync?: boolean
+  /** Quais plataformas têm ≥1 loja VINCULADA à API no escopo do usuário —
+   *  o botão de cada plataforma só aparece com vínculo de verdade (Marcus:
+   *  "o botão só deve aparecer quando pelo menos 1 loja tem vínculo").
+   *  Omitido = compat (mostra pelos critérios antigos). */
+  vinculos?: { ifood: boolean; ninefood: boolean }
 }) {
   // Alvo: menor entre fim do mês e ontem (D-1). "Ontem" é calculado em horário
   // de Brasília — senão, na Vercel (UTC), depois das 21h o D-1 pula um dia.
@@ -172,16 +178,17 @@ export function ImportCoverageBanner({
           </Link>
         ) : null}
 
-        {/* Sync via API — só aparece se o tenant tem a integração habilitada
-            (e por plataforma habilitada). SaaS que só importa manual não vê. */}
+        {/* Sync via API — cada botão só aparece se o tenant tem a integração
+            habilitada E pelo menos 1 loja VINCULADA àquela plataforma. SaaS
+            que só importa manual (ou ainda sem vínculo) não vê. */}
         {apiSync && (
           <div className="ml-auto flex items-center gap-1.5">
-            {(!platformsEnabled || platformsEnabled.includes("ifood")) && (
-              <SyncIfoodButton />
-            )}
-            {(!platformsEnabled || platformsEnabled.includes("99food")) && (
-              <Ninefood99QuickSync year={year} month={month} />
-            )}
+            {(!platformsEnabled || platformsEnabled.includes("ifood")) &&
+              (vinculos?.ifood ?? true) && <SyncIfoodButton />}
+            {(!platformsEnabled || platformsEnabled.includes("99food")) &&
+              (vinculos?.ninefood ?? true) && (
+                <Ninefood99QuickSync year={year} month={month} />
+              )}
           </div>
         )}
       </div>
