@@ -22,7 +22,11 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
-import { fetchAllFinancialEvents, type IfoodFinancialEvent } from "./events"
+import {
+  fetchAllFinancialEvents,
+  MAX_PAGE_SIZE,
+  type IfoodFinancialEvent,
+} from "./events"
 
 /** Evento que carrega o pagamento do pedido. */
 const EVENTO_PAGAMENTO = "ORDER_PAYMENT"
@@ -212,7 +216,10 @@ export async function syncPedidosDaLoja(
   let eventos: IfoodFinancialEvent[] = []
 
   for (const [de, ate] of janelas(inicio, fim)) {
+    // Página no teto da API (300) — uma loja grande faz ~22 mil eventos/mês,
+    // então de 100 em 100 seriam 3× mais chamadas.
     const r = await fetchAllFinancialEvents(merchantId, de, ate, {
+      size: MAX_PAGE_SIZE,
       maxPages: 400,
     })
     if (!r.ok) {

@@ -66,6 +66,14 @@ export type IfoodFinancialEventsPage = {
 
 const MAX_RANGE_DAYS = 33
 
+/**
+ * Máximo de itens por página aceito pelo endpoint. Medido ao vivo (24/jul/26):
+ * 300 passa, 400 devolve 400 BAD_REQUEST do payout-platform-api. Usar o teto
+ * corta 3× o número de chamadas — o que importa no backfill (um mês da JK são
+ * ~22 mil eventos).
+ */
+export const MAX_PAGE_SIZE = 300
+
 /** Diferença em dias (calendário) entre 2 datas YYYY-MM-DD, inclusive. */
 function daysBetween(begin: string, end: string): number {
   const b = new Date(begin + "T00:00:00Z").getTime()
