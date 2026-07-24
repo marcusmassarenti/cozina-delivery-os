@@ -18,7 +18,10 @@ import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
-import { getCancelamentosPorMotivo } from "@/lib/data/ifood-imported"
+import {
+  getCancelamentosPorMotivo,
+  getCancelamentoCestaByUnits,
+} from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import type { PlatformId } from "@/components/platform-logo"
@@ -615,13 +618,22 @@ function montarContexto(
 function numerosDaLoja(
   m: import("@/lib/mock-monthly").UnitMonthly,
   nome: string,
+  /** Cesta dos pedidos cancelados — entra no bruto EXIBIDO, igual às telas. */
+  cestaCancelados = 0,
 ) {
   const cmvCozina = m.custoProdutosCozina || 0
   const cmvLoja = m.custoProdutosLoja || 0
   const cmvTotal = cmvCozina + cmvLoja
   return {
     loja: nome,
-    faturamento_bruto: round(m.faturamentoBruto),
+    // Régua do portal: o BRUTO é o total COM os cancelados — o mesmo número
+    // que o dashboard, a unidade, o DRE e o relatório do mês mostram. O Nino
+    // tinha ficado de fora dessa padronização e respondia a base válida, então
+    // divergia do painel na casa de ~1%.
+    faturamento_bruto: round(m.faturamentoBruto + cestaCancelados),
+    // Base VÁLIDA (sem cancelados): é sobre ela que margem, CMV% e ticket são
+    // calculados — igual ao DRE. Fica explícita pra IA não recalcular errado.
+    faturamento_valido: round(m.faturamentoBruto),
     recebido_liquido: round(m.totalLiquido),
     pedidos: m.pedidos,
     cancelados: m.pedidosCancelados,
@@ -705,19 +717,26 @@ async function historicoMensalDoAno(
   ateMes: number,
 ): Promise<Map<string, MesLoja[]>> {
   const meses = Array.from({ length: ateMes }, (_, i) => i + 1)
-  const mapsPorMes = await Promise.all(
-    meses.map((m) => getUnitMetricsForMonth(unitIds, TODAS_PLATAFORMAS, year, m)),
-  )
+  // Métrica e cesta de cancelados de cada mês, tudo em paralelo — o bruto da
+  // série tem que seguir a MESMA régua do mês corrente (total com cancelados),
+  // senão o histórico não fecha com o número que a tela mostra.
+  const [mapsPorMes, cestasPorMes] = await Promise.all([
+    Promise.all(
+      meses.map((m) => getUnitMetricsForMonth(unitIds, TODAS_PLATAFORMAS, year, m)),
+    ),
+    Promise.all(meses.map((m) => getCancelamentoCestaByUnits(unitIds, year, m))),
+  ])
   const hist = new Map<string, MesLoja[]>()
   for (const id of unitIds) hist.set(id, [])
   meses.forEach((m, i) => {
     const map = mapsPorMes[i]
+    const cestas = cestasPorMes[i]
     for (const id of unitIds) {
       const mt = map.get(id)
       if (!mt || !mt.hasData) continue
       hist.get(id)!.push({
         mes: `${String(m).padStart(2, "0")}/${year}`,
-        bruto: round(mt.bruto),
+        bruto: round(mt.bruto + (cestas.get(id)?.valor ?? 0)),
         liquido: round(mt.liquido),
         pedidos: mt.pedidos,
         cancelados: mt.cancelados,
@@ -759,24 +778,25 @@ async function resumoDePeriodo(
   start: string,
   end: string,
 ): Promise<ResumoPeriodo> {
-  const map = await getRealMonthlyForUnits(
-    units.map((u) => u.id),
-    year,
-    month,
-    { start, end },
-  )
+  const ids = units.map((u) => u.id)
+  const [map, cestas] = await Promise.all([
+    getRealMonthlyForUnits(ids, year, month, { start, end }),
+    // Mesma régua do resto: o bruto do recorte também é COM os cancelados.
+    getCancelamentoCestaByUnits(ids, year, month, { start, end }),
+  ])
   const rede = { bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 }
   const lojas: { nome: string; bruto: number; pedidos: number; cancelados: number }[] = []
   for (const u of units) {
     const m = map.get(u.id)
     if (!m) continue
-    rede.bruto += m.faturamentoBruto
+    const bruto = m.faturamentoBruto + (cestas.get(u.id)?.valor ?? 0)
+    rede.bruto += bruto
     rede.liquido += m.totalLiquido
     rede.pedidos += m.pedidos
     rede.cancelados += m.pedidosCancelados
     lojas.push({
       nome: u.name,
-      bruto: round(m.faturamentoBruto),
+      bruto: round(bruto),
       pedidos: m.pedidos,
       cancelados: m.pedidosCancelados,
     })
@@ -888,6 +908,7 @@ ORDEM DAS LISTAS: as listas de LOJA ("por_loja", tanto o do mês quanto o dentro
 O contexto tem:
 - "contexto_temporal": a data de hoje, o dia do mês, dias decorridos, dias no mês e dias restantes. Use pra PROJETAR o fechamento do mês (regra de três: faturamento_do_mes ÷ dias_decorridos × dias_no_mes) e dizer "no ritmo atual você fecha em ~R$ X" ou "faltam N dias". Deixe claro que é projeção, não certeza.
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
+- RÉGUA DO BRUTO (importante): "faturamento_bruto" é o total COM os pedidos cancelados — o mesmo número que o portal do iFood e todas as telas do sistema mostram. É esse que você usa ao falar de faturamento. Já "faturamento_valido" é a venda que não foi cancelada, e é sobre ELA que margem, CMV% e ticket médio são calculados (igual ao DRE). Por isso não estranhe se bruto ÷ pedidos não der exatamente o ticket médio: o ticket usa a base válida. Nunca recalcule margem ou CMV% dividindo pelo bruto.
 - "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena".
 - Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
 - "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução".
@@ -1018,18 +1039,20 @@ export async function perguntarConsultor(
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
     // Mês corrente + histórico do ano + recortes de quinzena (tudo em paralelo).
-    const [monthlyMap, histMap, recortes, cancelMap, reputacao] =
+    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap] =
       await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
         historicoMensalDoAno(unitIds, year, month),
         recortesDePeriodo(units, year, month),
         cancelamentosPorLoja(units, year, month),
         montarReputacao(units, year, month),
+        // Cesta dos cancelados: entra no BRUTO exibido (régua do portal).
+        getCancelamentoCestaByUnits(unitIds, year, month),
       ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
       const m = monthlyMap.get(u.id)
-      if (m) numeros.set(u.id, numerosDaLoja(m, u.name))
+      if (m) numeros.set(u.id, numerosDaLoja(m, u.name, cestaMap.get(u.id)?.valor ?? 0))
     }
     const periodo = `${String(month).padStart(2, "0")}/${year}`
     const hoje = hojeISO()
@@ -1171,18 +1194,20 @@ export async function* perguntarConsultorStream(
   try {
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
-    const [monthlyMap, histMap, recortes, cancelMap, reputacao] =
+    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap] =
       await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
         historicoMensalDoAno(unitIds, year, month),
         recortesDePeriodo(units, year, month),
         cancelamentosPorLoja(units, year, month),
         montarReputacao(units, year, month),
+        // Cesta dos cancelados: entra no BRUTO exibido (régua do portal).
+        getCancelamentoCestaByUnits(unitIds, year, month),
       ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
       const m = monthlyMap.get(u.id)
-      if (m) numeros.set(u.id, numerosDaLoja(m, u.name))
+      if (m) numeros.set(u.id, numerosDaLoja(m, u.name, cestaMap.get(u.id)?.valor ?? 0))
     }
     const periodo = `${String(month).padStart(2, "0")}/${year}`
     const hoje = hojeISO()
