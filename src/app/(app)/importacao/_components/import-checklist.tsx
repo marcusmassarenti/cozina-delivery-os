@@ -151,7 +151,13 @@ function ReportRow({ r }: { r: ReportStatus }) {
 
   // Texto da direita por tipo
   let right: string
-  if (r.perStore) {
+  if (r.autoApi) {
+    // Entra sozinho pela API — mostra a cobertura em vez de cobrar arquivo.
+    right =
+      (r.autoUnits ?? 0) >= (r.autoTotal ?? 0)
+        ? "sincronizado"
+        : `${r.autoUnits}/${r.autoTotal} lojas`
+  } else if (r.perStore) {
     right =
       r.totalLinked > 0 ? `${r.unitsWithData}/${r.totalLinked} lojas` : "—"
   } else if (r.lastDate) {
@@ -170,8 +176,15 @@ function ReportRow({ r }: { r: ReportStatus }) {
         <span className="min-w-0 flex-1 truncate text-xs font-medium">
           {r.label}
         </span>
-        <span className="rounded bg-muted px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-          {CADENCIA_LABEL[r.cadencia]}
+        {/* Selo "API" substitui a cadência: não se cobra arquivo deste. */}
+        <span
+          className={`rounded px-1 py-px text-[9px] font-medium uppercase tracking-wide ${
+            r.autoApi
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {r.autoApi ? "↻ API" : CADENCIA_LABEL[r.cadencia]}
         </span>
         <span
           className={`shrink-0 text-[10px] font-semibold tabular-nums ${tone.text}`}
@@ -179,7 +192,14 @@ function ReportRow({ r }: { r: ReportStatus }) {
           {right}
         </span>
       </div>
-      {r.perStore && r.missingCodes.length > 0 && (
+      {r.autoApi && (
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {(r.autoUnits ?? 0) >= (r.autoTotal ?? 0)
+            ? "entra sozinho pela API todo dia — não precisa subir planilha"
+            : `${r.autoUnits} de ${r.autoTotal} lojas entram pela API; as outras ainda dependem da planilha`}
+        </p>
+      )}
+      {!r.autoApi && r.perStore && r.missingCodes.length > 0 && (
         <p className="mt-1 truncate text-[10px] text-muted-foreground">
           faltam: {r.missingCodes.map((c) => `#${c}`).join(", ")}
         </p>

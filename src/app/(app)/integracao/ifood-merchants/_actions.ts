@@ -217,3 +217,50 @@ export async function atualizarSolicitacaoIfood(
   revalidatePath("/importacao")
   return { ok: true, message: "Status atualizado." }
 }
+
+// ─── Habilitação POR APP (financeiro vs avaliações) ─────────────────────
+
+export type AppHabilitadoState = {
+  ok: boolean
+  message?: string
+  error?: string
+}
+
+/**
+ * Marca/desmarca o "OK do admin" de um dos apps do iFood para uma loja.
+ *
+ * Por que existe: o vínculo (`api_store_id`) é único, mas cada app é
+ * autorizado SEPARADAMENTE pelo lojista no Portal do Parceiro — dá pra ter o
+ * financeiro funcionando e as avaliações voltando 403 (caso DG Foods). Este é
+ * o passo final do processo: cliente manda o CNPJ → admin cadastra/vincula →
+ * cliente autoriza os 2 apps no portal → admin confirma AQUI, um por um.
+ */
+export async function setAppHabilitado(
+  _prev: AppHabilitadoState,
+  formData: FormData,
+): Promise<AppHabilitadoState> {
+  await requireSuperadmin()
+  const unitId = String(formData.get("unitId") ?? "").trim()
+  const app = String(formData.get("app") ?? "").trim()
+  const ligar = String(formData.get("ligar") ?? "") === "1"
+  if (!unitId) return { ok: false, error: "unitId ausente" }
+  if (app !== "financeiro" && app !== "avaliacoes") {
+    return { ok: false, error: "app inválido" }
+  }
+
+  const coluna = app === "financeiro" ? "fin_enabled_at" : "review_enabled_at"
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("unit_platforms")
+    .update({ [coluna]: ligar ? new Date().toISOString() : null })
+    .eq("unit_id", unitId)
+    .eq("platform", "ifood")
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/integracao/ifood-merchants")
+  revalidatePath("/importacao")
+  return {
+    ok: true,
+    message: ligar ? "Habilitado!" : "Desabilitado.",
+  }
+}

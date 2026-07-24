@@ -42,6 +42,47 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.5.1",
+    date: "2026-07-24",
+    tag: "Melhorias",
+    title: "Avaliações pela API param de cobrar planilha — e a sincronização mostra loja a loja",
+    summary:
+      "Quando a loja tem o app de Avaliações habilitado, a Importação passa a marcar “↻ API” em vez de pedir o arquivo. E o resumo da sincronização ganhou uma visão por loja, com financeiro e avaliações lado a lado.",
+    areas: [
+      {
+        area: "Importação",
+        items: [
+          {
+            kind: "novo",
+            title: "Avaliações do iFood marcadas como “↻ API”",
+            antes:
+              "A Saúde da importação cobrava o relatório de Avaliações mesmo nas lojas em que ele já entrava sozinho pela API.",
+            depois:
+              "Nessas lojas a linha aparece como “↻ API · sincronizado” — não precisa subir planilha. Se só parte das lojas está na API, mostra a proporção (ex.: 11/16 lojas).",
+          },
+        ],
+      },
+      {
+        area: "iFood",
+        items: [
+          {
+            kind: "novo",
+            title: "Resumo da sincronização por loja",
+            desc: "No popup do “Sincronizar iFood”, um botão alterna entre ver por situação (como era) e ver por loja — nessa, cada loja mostra numa linha só o que puxou de Financeiro e de Avaliações.",
+          },
+          {
+            kind: "melhoria",
+            title: "Extrato que o iFood não fechou não é mais “erro”",
+            antes:
+              "Quando o iFood não conseguia gerar o extrato da loja (comum no mês em aberto), a loja caía no vermelho “Com erro”, como se algo estivesse quebrado.",
+            depois:
+              "Vai para um aviso azul “o iFood ainda não fechou o extrato desta loja — tenta de novo mais tarde”, separado dos erros de verdade.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-07-24",
     tag: "Grande novidade",

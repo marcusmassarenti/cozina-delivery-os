@@ -23,6 +23,8 @@ type MerchantRow = {
 type LinkedRow = {
   unit_id: string
   api_store_id: string | null
+  fin_enabled_at: string | null
+  review_enabled_at: string | null
   units: { id: string; code: string; name: string } | null
 }
 
@@ -44,7 +46,9 @@ async function getData() {
       .order("name"),
     admin
       .from("unit_platforms")
-      .select("unit_id, api_store_id, units!inner(id, code, name)")
+      .select(
+        "unit_id, api_store_id, fin_enabled_at, review_enabled_at, units!inner(id, code, name)",
+      )
       .eq("platform", "ifood")
       .not("api_store_id", "is", null),
     admin
@@ -92,14 +96,25 @@ async function getData() {
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
 
-  // mapa merchant_id → unit
-  const byMerchant: Record<string, { unitId: string; code: string; name: string }> = {}
+  // mapa merchant_id → unit (+ quais apps o admin já marcou como habilitados)
+  const byMerchant: Record<
+    string,
+    {
+      unitId: string
+      code: string
+      name: string
+      finOn: boolean
+      reviewOn: boolean
+    }
+  > = {}
   for (const l of linkedRaw) {
     if (l.api_store_id && l.units) {
       byMerchant[l.api_store_id] = {
         unitId: l.units.id,
         code: l.units.code,
         name: l.units.name,
+        finOn: !!l.fin_enabled_at,
+        reviewOn: !!l.review_enabled_at,
       }
     }
   }

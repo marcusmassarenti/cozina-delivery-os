@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Filter } from "lucide-react"
 
+import { AppToggles } from "./app-toggles"
 import { LinkRow } from "./link-row"
 
 type MerchantRow = {
@@ -20,7 +21,14 @@ type UnitOption = {
   holdingId: string
   holdingName: string
 }
-type Linked = { unitId: string; code: string; name: string }
+type Linked = {
+  unitId: string
+  code: string
+  name: string
+  /** "OK do admin" por app — cada um é autorizado à parte no portal iFood. */
+  finOn: boolean
+  reviewOn: boolean
+}
 
 /**
  * Tabela de merchants + vínculo à unidade, com FILTRO POR CLIENTE.
@@ -129,15 +137,24 @@ export function MerchantsTable({
                     </td>
                     <td className="px-3 py-2">
                       {linked ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{linked.code}</span>
-                          <span className="text-muted-foreground">
-                            — {linked.name}
-                          </span>
-                          <LinkRow
-                            merchantId={m.id}
-                            currentUnitId={linked.unitId}
-                            units={unitsFiltradas}
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{linked.code}</span>
+                            <span className="text-muted-foreground">
+                              — {linked.name}
+                            </span>
+                            <LinkRow
+                              merchantId={m.id}
+                              currentUnitId={linked.unitId}
+                              units={unitsFiltradas}
+                            />
+                          </div>
+                          {/* Passo final do onboarding: confirmar que o lojista
+                              autorizou CADA app no Portal do Parceiro. */}
+                          <AppToggles
+                            unitId={linked.unitId}
+                            finOn={linked.finOn}
+                            reviewOn={linked.reviewOn}
                           />
                         </div>
                       ) : (

@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Check,
   CheckCircle2,
+  Clock,
   FileWarning,
   RefreshCw,
   ShieldAlert,
@@ -101,7 +102,7 @@ type ReviewRunResult = {
 }
 
 /** Categoria derivada do resultado de cada loja. */
-type Bucket = "online" | "manual" | "erro"
+type Bucket = "online" | "manual" | "pendente" | "erro"
 
 type StoreVerdict = {
   code: string
@@ -112,6 +113,19 @@ type StoreVerdict = {
   detail: string
   /** Estreia da loja na integração — destaca "nova loja conectada". */
   nova?: boolean
+}
+
+/** Uma loja com os DOIS syncs lado a lado (visão "por loja" do popup). */
+type LojaLinha = {
+  code: string
+  name: string
+  fin: { bucket: Bucket; detail: string; persisted: number } | null
+  rev: {
+    ok: boolean
+    gravadas: number
+    status?: number
+    motivo?: string
+  } | null
 }
 
 /** Decide se a loja puxou online, é só manual (sem arquivo) ou deu erro. */
@@ -161,6 +175,34 @@ function classify(u: UnitResult): StoreVerdict {
       detail: "iFood não gera conciliação via API — segue por planilha",
     }
   }
+  // Falha na GERAÇÃO do extrato no lado do iFood (status "error"/"failed"/
+  // "expired" ou tempo esgotado). Não é erro nosso: o iFood não fechou o
+  // extrato daquela loja/competência agora (comum no mês em aberto). Fica num
+  // balde ameno "tenta mais tarde", separado de erro real (rede/parse).
+  const pendenteIfood =
+    errs.length > 0 &&
+    errs.every((r) => {
+      const e = (r.error ?? "").toLowerCase()
+      return (
+        e.includes("geração do extrato") ||
+        e.includes("geracao do extrato") ||
+        e.includes("esperando a geração") ||
+        e.includes("esperando a geracao") ||
+        e.includes('status "error"') ||
+        e.includes('status "failed"') ||
+        e.includes('status "expired"')
+      )
+    })
+  if (pendenteIfood) {
+    return {
+      code: u.unitCode,
+      name,
+      bucket: "pendente",
+      persisted: 0,
+      months: [],
+      detail: "o iFood ainda não fechou o extrato desta loja — tenta de novo mais tarde",
+    }
+  }
   // Erro real (rede, parse, etc.) ou nada gravado.
   const firstErr = errs[0]?.error
   return {
@@ -178,6 +220,8 @@ export function SyncIfoodButton() {
   const [open, setOpen] = React.useState(false)
   const [result, setResult] = React.useState<SyncRunResult | null>(null)
   const [review, setReview] = React.useState<ReviewRunResult | null>(null)
+  /** "status" = agrupado por situação (default) · "loja" = os 2 syncs por loja. */
+  const [modo, setModo] = React.useState<"status" | "loja">("status")
 
   async function runFinanceiro(): Promise<SyncRunResult> {
     try {
@@ -244,6 +288,7 @@ export function SyncIfoodButton() {
   const verdicts = (result?.results ?? []).map(classify)
   const online = verdicts.filter((v) => v.bucket === "online")
   const manual = verdicts.filter((v) => v.bucket === "manual")
+  const pendente = verdicts.filter((v) => v.bucket === "pendente")
   const erro = verdicts.filter((v) => v.bucket === "erro")
 
   // Avaliações (segundo app) — mesmos baldes do botão antigo de /avaliacoes.
@@ -257,6 +302,44 @@ export function SyncIfoodButton() {
 
   const done =
     !!result?.ok && !result?.error && !!review?.ok && !review?.error && !open
+
+  // Visão consolidada POR LOJA: cruza os dois syncs pelo código da unidade,
+  // pra ver numa linha só o que a loja puxou de financeiro E de avaliações.
+  const porLoja = React.useMemo(() => {
+    const m = new Map<string, LojaLinha>()
+    for (const v of verdicts) {
+      m.set(v.code, {
+        code: v.code,
+        name: v.name,
+        fin: { bucket: v.bucket, detail: v.detail, persisted: v.persisted },
+        rev: null,
+      })
+    }
+    for (const r of rev) {
+      const cur = m.get(r.unitCode)
+      const linha: LojaLinha["rev"] = {
+        ok: r.ok,
+        gravadas: r.gravadas,
+        status: r.status,
+        motivo: r.motivo,
+      }
+      if (cur) cur.rev = linha
+      else
+        m.set(r.unitCode, {
+          code: r.unitCode,
+          name: r.unitName,
+          fin: null,
+          rev: linha,
+        })
+    }
+    // Quem trouxe mais dado primeiro; depois por código.
+    return [...m.values()].sort(
+      (a, b) =>
+        (b.fin?.persisted ?? 0) + (b.rev?.gravadas ?? 0) -
+          ((a.fin?.persisted ?? 0) + (a.rev?.gravadas ?? 0)) ||
+        a.code.localeCompare(b.code, "pt-BR"),
+    )
+  }, [verdicts, rev])
 
   // Resumo de período: quais competências foram sincronizadas e onde entrou
   // dado novo (período inédito OU linhas a mais vs a última sync).
@@ -318,7 +401,29 @@ export function SyncIfoodButton() {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Alterna entre agrupar por situação e ver os 2 syncs loja a loja. */}
+          <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-0.5 text-[11px] font-medium">
+            {(["status", "loja"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModo(m)}
+                className={`flex-1 rounded-md px-2 py-1 transition ${
+                  modo === m
+                    ? "bg-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "status" ? "Por situação" : "Por loja"}
+              </button>
+            ))}
+          </div>
+
           <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
+            {modo === "loja" ? (
+              <PorLojaView linhas={porLoja} />
+            ) : (
+              <>
             {/* ===== Financeiro ===== */}
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <PlatformLogo platform="ifood" className="size-4" /> Financeiro
@@ -400,6 +505,15 @@ export function SyncIfoodButton() {
                 empty="Nenhuma"
                 items={manual}
               />
+              {pendente.length > 0 && (
+                <Group
+                  tone="sky"
+                  icon={<Clock className="size-4" />}
+                  title="iFood ainda não fechou o extrato"
+                  empty=""
+                  items={pendente}
+                />
+              )}
               {erro.length > 0 && (
                 <Group
                   tone="rose"
@@ -534,10 +648,92 @@ export function SyncIfoodButton() {
                 </div>
               )}
             </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+/**
+ * Visão "por loja": cada loja numa linha, com os DOIS syncs lado a lado.
+ * É a leitura que responde "e a loja X, puxou tudo?" sem caçar em 6 grupos.
+ */
+function PorLojaView({ linhas }: { linhas: LojaLinha[] }) {
+  if (linhas.length === 0) {
+    return (
+      <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        Nenhuma loja com iFood conectado no seu acesso.
+      </p>
+    )
+  }
+  return (
+    <ul className="space-y-1.5">
+      {linhas.map((l) => (
+        <li key={l.code} className="rounded-md border bg-card px-3 py-2">
+          <span className="text-sm font-medium">
+            <span className="tabular-nums text-muted-foreground">{l.code}</span>{" "}
+            {l.name}
+          </span>
+          <div className="mt-1.5 grid gap-1 sm:grid-cols-2">
+            <Selo titulo="Financeiro" {...selosFin(l.fin)} />
+            <Selo titulo="Avaliações" {...selosRev(l.rev)} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+type SeloTom = "ok" | "aviso" | "espera" | "erro" | "off"
+
+/** Traduz o resultado financeiro da loja em selo (tom + texto). */
+function selosFin(fin: LojaLinha["fin"]): { tom: SeloTom; texto: string } {
+  if (!fin) return { tom: "off", texto: "não entrou nesta rodada" }
+  if (fin.bucket === "online")
+    return { tom: "ok", texto: `${fin.persisted.toLocaleString("pt-BR")} lançamentos` }
+  if (fin.bucket === "manual") return { tom: "aviso", texto: "segue por planilha" }
+  if (fin.bucket === "pendente")
+    return { tom: "espera", texto: "iFood não fechou o extrato" }
+  return { tom: "erro", texto: fin.detail }
+}
+
+/** Traduz o resultado de avaliações da loja em selo (tom + texto). */
+function selosRev(rev: LojaLinha["rev"]): { tom: SeloTom; texto: string } {
+  if (!rev) return { tom: "off", texto: "não entrou nesta rodada" }
+  if (rev.ok && rev.gravadas > 0)
+    return { tom: "ok", texto: `${rev.gravadas.toLocaleString("pt-BR")} avaliações` }
+  if (rev.ok) return { tom: "ok", texto: "já estava em dia" }
+  if (rev.status === 403)
+    return { tom: "aviso", texto: "falta autorizar no portal" }
+  return { tom: "erro", texto: rev.motivo ?? "erro" }
+}
+
+function Selo({
+  titulo,
+  tom,
+  texto,
+}: {
+  titulo: string
+  tom: SeloTom
+  texto: string
+}) {
+  const cls: Record<SeloTom, string> = {
+    ok: "border-emerald-300/60 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-400",
+    aviso:
+      "border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-400",
+    espera:
+      "border-sky-300/60 bg-sky-50/60 text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/25 dark:text-sky-400",
+    erro: "border-rose-300/60 bg-rose-50/60 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/25 dark:text-rose-400",
+    off: "bg-muted/40 text-muted-foreground",
+  }
+  return (
+    <div className={`rounded border px-2 py-1 text-[11px] ${cls[tom]}`}>
+      <span className="font-semibold">{titulo}</span>
+      <span className="ml-1 opacity-90">· {texto}</span>
+    </div>
   )
 }
 
@@ -548,7 +744,7 @@ function Group({
   empty,
   items,
 }: {
-  tone: "emerald" | "amber" | "rose"
+  tone: "emerald" | "amber" | "sky" | "rose"
   icon: React.ReactNode
   title: string
   empty: string
@@ -559,7 +755,9 @@ function Group({
       ? "text-emerald-700 dark:text-emerald-400"
       : tone === "amber"
         ? "text-amber-700 dark:text-amber-400"
-        : "text-rose-700 dark:text-rose-400"
+        : tone === "sky"
+          ? "text-sky-700 dark:text-sky-400"
+          : "text-rose-700 dark:text-rose-400"
 
   return (
     <div>

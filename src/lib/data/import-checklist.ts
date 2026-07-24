@@ -75,6 +75,14 @@ export type ReportStatus = {
   // Frescor (rede):
   lastDate: string | null // "YYYY-MM-DD"
   lagDays: number | null // dias atrás do alvo (0 = em dia); null = sem dado
+  /**
+   * Relatório que entra sozinho pela API (não se cobra planilha dele).
+   * Hoje: Avaliações do iFood nas lojas com o app habilitado — o cron diário
+   * puxa. `autoUnits`/`autoTotal` dizem em quantas lojas isso já vale.
+   */
+  autoApi?: boolean
+  autoUnits?: number
+  autoTotal?: number
 }
 
 export type ImportChecklist = {
@@ -126,7 +134,7 @@ export async function getImportChecklistForMonth(
   const coverage = await loadCoverageContext()
   const { data: platRows } = await admin
     .from("unit_platforms")
-    .select("unit_id, platform")
+    .select("unit_id, platform, review_enabled_at")
     .eq("active", true)
   const linkedByPlatform = new Map<PlatformId, Set<string>>()
   for (const r of platRows ?? []) {
@@ -145,6 +153,17 @@ export async function getImportChecklistForMonth(
   for (const r of platRows ?? []) {
     if (allowSet && !allowSet.has(r.unit_id)) continue
     enabledPlatforms.add(r.platform as PlatformId)
+  }
+
+  // Avaliações do iFood que entram SOZINHAS pela API: lojas com o app de
+  // avaliações marcado como habilitado. Nelas o cron diário puxa e o sistema
+  // para de cobrar a planilha.
+  const ifoodLojas = linkedByPlatform.get("ifood") ?? new Set<string>()
+  let reviewAuto = 0
+  for (const r of platRows ?? []) {
+    if (r.platform !== "ifood") continue
+    if (!ifoodLojas.has(r.unit_id)) continue
+    if (r.review_enabled_at) reviewAuto++
   }
 
   // Log de importação do mês (só perStore iFood — pequeno e rápido).
@@ -227,6 +246,31 @@ export async function getImportChecklistForMonth(
         const tol = rep.cadencia === "semanal" ? 7 : DIARIO_TOLERANCIA_DIAS
         status = lagDays <= tol ? "ok" : "atrasado"
       }
+      // Avaliações do iFood: nas lojas com o app habilitado o dado entra pela
+      // API (cron diário) — não se cobra planilha. Se TODAS as lojas iFood do
+      // escopo estão habilitadas, a linha é sempre "ok": está sincronizado.
+      const autoApi =
+        rep.platform === "ifood" && rep.key === "avaliacoes" && reviewAuto > 0
+      if (autoApi) {
+        const tudoAuto = reviewAuto >= ifoodLojas.size
+        return {
+          platform: rep.platform,
+          key: rep.key,
+          label: rep.label,
+          cadencia: rep.cadencia,
+          perStore: false,
+          status: tudoAuto ? "ok" : status,
+          unitsWithData: 0,
+          totalLinked: 0,
+          missingCodes: [],
+          lastDate,
+          lagDays,
+          autoApi: true,
+          autoUnits: reviewAuto,
+          autoTotal: ifoodLojas.size,
+        }
+      }
+
       return {
         platform: rep.platform,
         key: rep.key,
