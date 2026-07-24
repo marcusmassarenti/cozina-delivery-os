@@ -32,11 +32,17 @@ const SAFETY_MS = 5 * 60 * 1000
  *     (o app de produção do Review só funciona depois de aprovado + lojas
  *     vinculadas; antes disso, sempre cai no app de teste).
  */
+/** Normaliza o valor de um flag de env: tira espaço/enter e caixa. Um "false\n"
+ *  colado na Vercel não pode continuar valendo como "modo homologação". */
+function flag(v: string | undefined): string {
+  return (v ?? "").trim().toLowerCase()
+}
+
 export function isAppHomologation(app: IfoodApp): boolean {
   if (app === "review") {
-    return process.env.IFOOD_REVIEW_HOMOLOGATION !== "false"
+    return flag(process.env.IFOOD_REVIEW_HOMOLOGATION) !== "false"
   }
-  return process.env.IFOOD_HOMOLOGATION === "true"
+  return flag(process.env.IFOOD_HOMOLOGATION) === "true"
 }
 
 type ResolvedCreds = {
