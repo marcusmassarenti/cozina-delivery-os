@@ -42,6 +42,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.7",
+    date: "2026-07-24",
+    tag: "Melhorias",
+    title: "“% que fica na loja” agora mostra o que você realmente embolsa",
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "melhoria",
+            title: "O % da loja soma o dinheiro recebido fora do repasse",
+            antes: "63,7% — só o repasse das plataformas",
+            depois: "63,7% incluindo os R$ recebidos direto (dinheiro/PIX na entrega + VR)",
+            desc: "No detalhamento por unidade, o “% que fica na loja” mostrava só o líquido do repasse — como se o dinheiro que o cliente paga na entrega (PIX/maquininha) e o VR fossem taxa. Mas esse valor já está no seu bolso. Agora o número é o mesmo “Resultado total da loja” do DRE, com uma linha explicando o quanto veio fora do repasse. As barras por plataforma continuam mostrando o repasse de cada canal.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.6",
     date: "2026-07-23",
     tag: "Correções",

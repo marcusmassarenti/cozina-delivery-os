@@ -119,11 +119,19 @@ export function DetalheLoja({
 }) {
   const m = unit.monthly
   const hasData = m.pedidos > 0
-  const taxas = m.faturamentoBruto - m.faturamentoLiquido
+  // O que FICA COM A LOJA não é só o repasse da plataforma: o recebido direto
+  // (PIX/dinheiro/maquininha na entrega) já está no bolso do dono e o VR é pago
+  // à parte — ambos fora do repasse. Somar os três dá o "Resultado total da
+  // loja" do DRE (a mesma régua). Só o líquido subestima quanto o dono embolsa.
+  const recebidoDireto = m.platforms.reduce(
+    (a, p) => a + (p.recebidoDireto ?? 0),
+    0,
+  )
+  const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
+  const extraForaRepasse = recebidoDireto + vrLiquido
+  const resultadoLoja = m.faturamentoLiquido + extraForaRepasse
   const pctLoja =
-    m.faturamentoBruto > 0
-      ? (m.faturamentoLiquido / m.faturamentoBruto) * 100
-      : 0
+    m.faturamentoBruto > 0 ? (resultadoLoja / m.faturamentoBruto) * 100 : 0
   const pctTone =
     pctLoja >= 60
       ? "text-emerald-700 dark:text-emerald-400"
@@ -162,17 +170,27 @@ export function DetalheLoja({
             <Kpi label="Líquido" value={fmtBRLShort(m.faturamentoLiquido)} />
           </div>
 
-          {/* % Loja */}
-          <div className="mt-2 flex items-baseline justify-between rounded-md bg-muted/50 px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              % que fica na loja
-            </span>
-            <span className={`text-base font-bold ${pctTone}`}>
-              {fmtPct(pctLoja)}
-              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                (− {fmtBRLShort(taxas)} em taxas)
+          {/* % que fica na loja — RESULTADO TOTAL (repasse + recebido direto +
+              VR), a mesma régua do "Resultado total da loja" no DRE. */}
+          <div className="mt-2 rounded-md bg-muted/50 px-3 py-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                % que fica na loja
               </span>
-            </span>
+              <span className={`text-base font-bold ${pctTone}`}>
+                {fmtPct(pctLoja)}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                  {fmtBRLShort(resultadoLoja)}
+                </span>
+              </span>
+            </div>
+            {extraForaRepasse > 0.005 && (
+              <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+                Inclui {fmtBRLShort(extraForaRepasse)} recebido fora do repasse
+                (dinheiro/PIX na entrega + VR) — por isso fica acima do repasse
+                de cada plataforma abaixo.
+              </p>
+            )}
           </div>
 
           {/* Margem por plataforma */}
