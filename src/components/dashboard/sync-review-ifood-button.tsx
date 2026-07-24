@@ -29,6 +29,8 @@ type RunResult = {
   lojasProcessadas?: number
   totalGravadas?: number
   homologacao?: boolean
+  flagRaw?: string
+  temCredenciais?: boolean
   resultados?: UnitResult[]
   error?: string
 }
@@ -140,6 +142,17 @@ export function SyncReviewIfoodButton() {
                     app de <b>teste</b> (que só vê a loja sandbox). Defina{" "}
                     <b>IFOOD_REVIEW_HOMOLOGATION=false</b> na Vercel, faça{" "}
                     <b>Redeploy</b> e sincronize de novo.
+                  </p>
+                  <p className="mt-1.5 font-mono text-[11px] text-amber-800 dark:text-amber-300">
+                    valor que o servidor está lendo:{" "}
+                    <b>{result?.flagRaw ?? "?"}</b>
+                    {result?.temCredenciais === false &&
+                      " · credenciais do app AUSENTES"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Precisa ser exatamente <b>&quot;false&quot;</b>. Se aparecer{" "}
+                    <b>null</b> ou outro valor, a var não chegou neste deploy —
+                    Redeploy depois de salvar.
                   </p>
                 </div>
               )}

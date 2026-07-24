@@ -35,6 +35,13 @@ export type ReviewSyncResult = {
   /** App ainda em modo homologação (usa app de teste → real dá 403). Se true
    *  com todas as lojas falhando, o problema é IFOOD_REVIEW_HOMOLOGATION. */
   homologacao: boolean
+  /** DIAGNÓSTICO: valor CRU da env var IFOOD_REVIEW_HOMOLOGATION que o servidor
+   *  está lendo (com aspas via JSON, pra ver espaço/enter/ausência). Não é
+   *  segredo — é só o flag true/false. Ajuda a achar var que não propagou. */
+  flagRaw: string
+  /** Credenciais do app de Avaliações presentes no ambiente? (sem revelar o
+   *  valor — só se existem, pra separar "faltou env var" de "credencial errada"). */
+  temCredenciais: boolean
   resultados: ReviewSyncUnitResult[]
 }
 
@@ -84,6 +91,17 @@ export async function syncIfoodReviews(
 ): Promise<ReviewSyncResult> {
   const admin = createAdminClient()
 
+  // Diagnóstico do ambiente (calculado 1x): o valor CRU do flag (com aspas via
+  // JSON, pra ver espaço/enter/ausência) e se as credenciais existem.
+  const flagRaw = JSON.stringify(
+    process.env.IFOOD_REVIEW_HOMOLOGATION ?? null,
+  )
+  const temCredenciais = !!(
+    process.env.IFOOD_REVIEW_CLIENT_ID?.trim() &&
+    process.env.IFOOD_REVIEW_CLIENT_SECRET?.trim()
+  )
+  const homologacao = isAppHomologation("review")
+
   let q = admin
     .from("unit_platforms")
     .select("unit_id, api_store_id, units!inner(code, name)")
@@ -95,7 +113,9 @@ export async function syncIfoodReviews(
       return {
         lojasProcessadas: 0,
         totalGravadas: 0,
-        homologacao: isAppHomologation("review"),
+        homologacao,
+        flagRaw,
+        temCredenciais,
         resultados: [],
       }
     q = q.in("unit_id", unitIds)
@@ -178,7 +198,9 @@ export async function syncIfoodReviews(
   return {
     lojasProcessadas: resultados.length,
     totalGravadas: resultados.reduce((s, x) => s + x.gravadas, 0),
-    homologacao: isAppHomologation("review"),
+    homologacao,
+    flagRaw,
+    temCredenciais,
     resultados,
   }
 }
