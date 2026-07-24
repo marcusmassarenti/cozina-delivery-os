@@ -32,6 +32,11 @@ export type Release = {
   tag?: string // ex.: "Grande novidade", "Melhorias", "Correções"
   title: string
   summary?: string
+  /**
+   * Força o pop-up numa versão que só tem correção. Use quando o conserto
+   * mudou um número que a pessoa já tinha visto e ela PRECISA saber.
+   */
+  destaque?: boolean
   areas: ChangeArea[]
 }
 
@@ -494,3 +499,36 @@ export const CHANGELOG: Release[] = [
     ],
   },
 ]
+
+/**
+ * Uma versão só INTERROMPE o usuário com o pop-up quando traz mudança
+ * estrutural — recurso novo ou melhoria. Versão só de correção entra na tela
+ * de Novidades normalmente, mas não abre pop-up: conserto é manutenção, não
+ * novidade, e avisar de tudo faz a pessoa parar de ler os avisos.
+ *
+ * `destaque: true` força o pop-up mesmo assim.
+ */
+function ehEstrutural(r: Release): boolean {
+  if (r.destaque) return true
+  return r.areas.some((a) => a.items.some((i) => i.kind !== "correcao"))
+}
+
+/**
+ * Qual versão o pop-up deve anunciar pra quem já viu `lastSeenVersion`.
+ * Null = não anuncia nada.
+ *
+ * A comparação é por POSIÇÃO na lista (que é da mais nova pra mais antiga),
+ * não por igualdade: quem já dispensou uma versão mais NOVA que a anunciável
+ * não pode ver o pop-up de novo. Isso acontece de verdade — basta a última
+ * versão ser só de correção.
+ */
+export function anuncioPendente(lastSeenVersion: string | null): Release | null {
+  const alvo = CHANGELOG.findIndex(ehEstrutural)
+  if (alvo === -1) return null
+  const visto = lastSeenVersion
+    ? CHANGELOG.findIndex((r) => r.version === lastSeenVersion)
+    : -1
+  // Índice menor = mais recente. Versão desconhecida (-1) = nunca viu.
+  if (visto !== -1 && visto <= alvo) return null
+  return CHANGELOG[alvo]
+}

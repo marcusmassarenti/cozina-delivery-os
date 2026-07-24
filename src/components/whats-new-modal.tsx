@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Bug, Sparkles, Wrench, X, type LucideIcon } from "lucide-react"
 
-import { CHANGELOG, type ChangeKind } from "@/lib/changelog"
+import { CHANGELOG, anuncioPendente, type ChangeKind } from "@/lib/changelog"
 import { markVersionSeen } from "@/components/whats-new-actions"
 
 const KIND_ICON: Record<ChangeKind, LucideIcon> = {
@@ -38,14 +38,17 @@ export function WhatsNewModal({
   lastSeenVersion: string | null
 }) {
   const [dismissed, setDismissed] = useState(false)
-  const latest = CHANGELOG[0]
+  // Só a versão que traz mudança ESTRUTURAL interrompe (ver anuncioPendente).
+  // Versão só de correção entra na tela de Novidades, mas não abre pop-up.
+  const latest = anuncioPendente(lastSeenVersion)
 
-  if (!latest || !onboarded) return null
-  if (dismissed || lastSeenVersion === latest.version) return null
+  if (!latest || !onboarded || dismissed) return null
 
   function dismiss() {
     setDismissed(true) // some na hora
-    void markVersionSeen(latest!.version) // e persiste no usuário
+    // Marca a versão MAIS NOVA como vista, não a anunciada: as correções que
+    // vieram depois dela também já estão dadas por lidas.
+    void markVersionSeen(CHANGELOG[0]!.version)
   }
 
   const items = latest.areas.flatMap((a) => a.items).slice(0, 5)
