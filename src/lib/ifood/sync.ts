@@ -24,7 +24,7 @@ import { parseFinanceiroRows } from "@/lib/import/ifood/parse-financeiro"
 import { persistFinanceiro } from "@/lib/import/ifood/persist-financeiro"
 
 import { getAnticipations, summarizeAnticipations } from "./anticipations"
-import { fetchAllFinancialEvents } from "./events"
+import { logPedidosSync, syncPedidosDaLoja } from "./pedidos-sync"
 import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
 
@@ -52,15 +52,21 @@ export type UnitSyncResult = {
     novas?: number
     error?: string
   }[]
-  events?: {
+  /**
+   * Pedidos/pagamento via Financial Events (substitui o "Relatório de pedidos").
+   * Uma entrada por competência sincronizada.
+   */
+  pedidos?: {
+    competencia: string
     skipped?: string
     ok?: boolean
-    status?: number
-    totalEvents?: number
-    pagesFetched?: number
-    netTransfer?: number
+    eventos?: number
+    /** Pedidos distintos encontrados na competência. */
+    pedidos?: number
+    /** Linhas gravadas em ifood_pedidos. */
+    gravados?: number
     error?: string
-  }
+  }[]
 }
 
 /** YYYY-MM-DD em horário local. */
@@ -273,35 +279,56 @@ async function syncOneUnit(
     competencias.map((c) => syncAntecipacaoCompetencia(u, c, force, admin)),
   )
 
-  // ---- Financial Events: últimos 7 dias (D-7 a D-1) ----
-  const end = new Date()
-  end.setDate(end.getDate() - 1)
-  const begin = new Date(end)
-  begin.setDate(begin.getDate() - 6)
-  const epEv = "financial-events:weekly"
-  const gateEv = force
-    ? ({ ok: true } as const)
-    : await checkThrottle(u.merchantId, epEv, 6)
-  if (!gateEv.ok) {
-    r.events = { skipped: gateEv.reason }
-  } else {
-    try {
-      const ev = await fetchAllFinancialEvents(u.merchantId, ymd(begin), ymd(end))
-      await recordCall(u.merchantId, epEv, ev.firstStatus)
-      r.events = {
-        ok: ev.ok,
-        status: ev.firstStatus,
-        totalEvents: ev.totalEvents,
-        pagesFetched: ev.pagesFetched,
-        netTransfer: ev.netTransfer,
-        error: ev.error,
-      }
-    } catch (e) {
-      await recordCall(u.merchantId, epEv)
-      r.events = { ok: false, error: e instanceof Error ? e.message : String(e) }
+  // ---- Pedidos/pagamento via Financial Events, por competência ----
+  // Antes isto puxava só D-7..D-1 e DESCARTAVA o resultado. Agora roda o mês
+  // inteiro (mesmas competências da conciliação) e grava em ifood_pedidos —
+  // aposentando o "Relatório de pedidos (VR)" que era subido à mão.
+  r.pedidos = await Promise.all(
+    competencias.map((c) => syncPedidosCompetencia(u, c, force)),
+  )
+
+  return r
+}
+
+/**
+ * Pedidos/pagamento de UMA competência. Throttle de 6h por competência, com a
+ * mesma regra da conciliação: o mês corrente sempre re-roda (dado ainda muda).
+ */
+async function syncPedidosCompetencia(
+  u: UnitLite,
+  competencia: string,
+  force: boolean,
+): Promise<NonNullable<UnitSyncResult["pedidos"]>[number]> {
+  const ep = `pedidos:${competencia}`
+  const mesCorrente = competencia === ym(new Date())
+  const gate =
+    force || mesCorrente
+      ? ({ ok: true } as const)
+      : await checkThrottle(u.merchantId, ep, 6)
+  if (!gate.ok) return { competencia, skipped: gate.reason }
+
+  try {
+    const res = await syncPedidosDaLoja(u.unitId, u.merchantId, competencia)
+    await recordCall(u.merchantId, ep, res.ok ? 200 : undefined)
+    if (res.ok && res.gravados > 0) {
+      await logPedidosSync(u.unitId, competencia, res.gravados)
+    }
+    return {
+      competencia,
+      ok: res.ok,
+      eventos: res.eventos,
+      pedidos: res.pedidos,
+      gravados: res.gravados,
+      error: res.erro,
+    }
+  } catch (e) {
+    await recordCall(u.merchantId, ep)
+    return {
+      competencia,
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
     }
   }
-  return r
 }
 
 /**

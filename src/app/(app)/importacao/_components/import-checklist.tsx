@@ -195,7 +195,7 @@ function ReportRow({ r }: { r: ReportStatus }) {
       {r.autoApi && (
         <p className="mt-1 text-[10px] text-muted-foreground">
           {(r.autoUnits ?? 0) >= (r.autoTotal ?? 0)
-            ? "entra sozinho pela API todo dia — não precisa subir planilha"
+            ? "entra sozinho pela API — não precisa subir planilha"
             : `${r.autoUnits} de ${r.autoTotal} lojas entram pela API; as outras ainda dependem da planilha`}
         </p>
       )}

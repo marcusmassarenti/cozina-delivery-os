@@ -134,7 +134,7 @@ export async function getImportChecklistForMonth(
   const coverage = await loadCoverageContext()
   const { data: platRows } = await admin
     .from("unit_platforms")
-    .select("unit_id, platform, review_enabled_at")
+    .select("unit_id, platform, review_enabled_at, fin_enabled_at")
     .eq("active", true)
   const linkedByPlatform = new Map<PlatformId, Set<string>>()
   for (const r of platRows ?? []) {
@@ -160,10 +160,13 @@ export async function getImportChecklistForMonth(
   // para de cobrar a planilha.
   const ifoodLojas = linkedByPlatform.get("ifood") ?? new Set<string>()
   let reviewAuto = 0
+  let finAuto = 0
   for (const r of platRows ?? []) {
     if (r.platform !== "ifood") continue
     if (!ifoodLojas.has(r.unit_id)) continue
     if (r.review_enabled_at) reviewAuto++
+    // O app financeiro cobre Conciliação E Pedidos (pagamento/VR).
+    if (r.fin_enabled_at) finAuto++
   }
 
   // Log de importação do mês (só perStore iFood — pequeno e rápido).
@@ -203,6 +206,35 @@ export async function getImportChecklistForMonth(
               : presentLinked.length > 0
                 ? "parcial"
                 : "falta"
+
+        // Conciliação e Pedidos do iFood entram pela API nas lojas com o app
+        // FINANCEIRO habilitado (o mesmo app serve os dois) — nessas não se
+        // cobra planilha. Se todas as lojas ligadas estão nessa situação, a
+        // linha fica verde: está sincronizada.
+        const autoFin =
+          rep.platform === "ifood" &&
+          (rep.key === "conciliacao" || rep.key === "pedidos") &&
+          finAuto > 0
+        if (autoFin) {
+          const tudoAuto = finAuto >= linked.size
+          return {
+            platform: rep.platform,
+            key: rep.key,
+            label: rep.label,
+            cadencia: rep.cadencia,
+            perStore: true,
+            status: tudoAuto ? "ok" : status,
+            unitsWithData: presentLinked.length,
+            totalLinked: linked.size,
+            missingCodes: tudoAuto ? [] : missingCodes,
+            lastDate: null,
+            lagDays: null,
+            autoApi: true,
+            autoUnits: finAuto,
+            autoTotal: linked.size,
+          }
+        }
+
         return {
           platform: rep.platform,
           key: rep.key,

@@ -27,10 +27,11 @@ async function main() {
         `  ${c.competencia}: ${c.skipped ? `skip(${c.skipped})` : c.ok ? `✅ ${c.rowCount} linhas · ${c.persisted} gravadas${c.substituido ? " (substituiu)" : ""}` : `❌ ${c.error ?? c.status}`}`,
       )
     }
-    if (u.events)
+    for (const p of u.pedidos ?? []) {
       console.log(
-        `  events: ${u.events.skipped ?? (u.events.ok ? `✅ ${u.events.totalEvents} eventos` : `❌ ${u.events.error}`)}`,
+        `  pedidos ${p.competencia}: ${p.skipped ? `skip(${p.skipped})` : p.ok ? `✅ ${p.pedidos} pedidos · ${p.gravados} gravados` : `❌ ${p.error}`}`,
       )
+    }
   }
 }
 

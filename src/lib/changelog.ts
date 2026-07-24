@@ -42,6 +42,44 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.6.0",
+    date: "2026-07-24",
+    tag: "Grande novidade",
+    title: "O último relatório do iFood também entra sozinho — acabou a importação manual do iFood",
+    summary:
+      "O “Relatório de pedidos (VR)”, que precisava ser baixado loja por loja todo mês, agora vem pela API. Com ele, os três relatórios do iFood (Conciliação, Pedidos e Avaliações) entram automaticamente.",
+    areas: [
+      {
+        area: "iFood",
+        items: [
+          {
+            kind: "novo",
+            title: "Forma de pagamento e VR pela API",
+            antes:
+              "Todo mês alguém baixava o Relatório de pedidos no portal, um arquivo por loja, pra o sistema saber a forma de pagamento e o vale-refeição.",
+            depois:
+              "Isso entra sozinho na sincronização. Conferimos contra o arquivo manual de junho: o mix de pagamento bateu 99,8% e o VR por bandeira (Alelo, Sodexo, Ticket, VR) bateu exato.",
+          },
+          {
+            kind: "melhoria",
+            title: "Mais completo que a planilha",
+            desc: "Na conferência de junho, a API trouxe 253 pedidos que faltavam no arquivo que tinha sido subido — dois dias do mês não tinham sido exportados. Além disso ela separa os vales do iFood por tipo, coisa que o relatório juntava tudo em “Outros”.",
+          },
+        ],
+      },
+      {
+        area: "Importação",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Conciliação e Pedidos marcados como “↻ API”",
+            desc: "Na Saúde da importação, os relatórios cobertos pela API deixam de ser cobrados e aparecem como sincronizados. Do iFood, só o Cardápio ainda depende de planilha.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.5.1",
     date: "2026-07-24",
     tag: "Melhorias",
