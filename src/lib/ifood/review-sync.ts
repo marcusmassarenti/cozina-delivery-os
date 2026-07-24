@@ -92,7 +92,12 @@ export async function syncIfoodReviews(
     .not("api_store_id", "is", null)
   if (unitIds !== null) {
     if (unitIds.length === 0)
-      return { lojasProcessadas: 0, totalGravadas: 0, resultados: [] }
+      return {
+        lojasProcessadas: 0,
+        totalGravadas: 0,
+        homologacao: isAppHomologation("review"),
+        resultados: [],
+      }
     q = q.in("unit_id", unitIds)
   }
   const { data: vinculos, error } = await q
