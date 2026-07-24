@@ -21,12 +21,14 @@ type UnitResult = {
   ok: boolean
   gravadas: number
   puladas: number
+  status?: number
   motivo?: string
 }
 type RunResult = {
   ok: boolean
   lojasProcessadas?: number
   totalGravadas?: number
+  homologacao?: boolean
   resultados?: UnitResult[]
   error?: string
 }
@@ -77,12 +79,12 @@ export function SyncReviewIfoodButton() {
   const res = result?.resultados ?? []
   const puxaram = res.filter((r) => r.ok && r.gravadas > 0)
   const semNovas = res.filter((r) => r.ok && r.gravadas === 0)
-  const faltaAutorizar = res.filter(
-    (r) => !r.ok && (r.motivo ?? "").includes("autorizado"),
-  )
-  const comErro = res.filter(
-    (r) => !r.ok && !(r.motivo ?? "").includes("autorizado"),
-  )
+  const faltaAutorizar = res.filter((r) => !r.ok && r.status === 403)
+  const comErro = res.filter((r) => !r.ok && r.status !== 403)
+  // Modo homologação + tudo falhando = o flag IFOOD_REVIEW_HOMOLOGATION não
+  // está "false", então o app de teste bate nas lojas reais e volta 403.
+  const alertaHomolog =
+    !!result?.homologacao && puxaram.length === 0 && res.length > 0
   const done = !!result?.ok && !result?.error && !open
 
   return (
@@ -128,6 +130,19 @@ export function SyncReviewIfoodButton() {
             </div>
           ) : (
             <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+              {alertaHomolog && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-800/50 dark:bg-amber-950/30">
+                  <p className="font-semibold text-amber-800 dark:text-amber-300">
+                    App ainda em modo homologação
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Todas as lojas voltaram 403 porque o sistema está usando o
+                    app de <b>teste</b> (que só vê a loja sandbox). Defina{" "}
+                    <b>IFOOD_REVIEW_HOMOLOGATION=false</b> na Vercel, faça{" "}
+                    <b>Redeploy</b> e sincronize de novo.
+                  </p>
+                </div>
+              )}
               <Group
                 tone="emerald"
                 icon={<CheckCircle2 className="size-4" />}

@@ -13,6 +13,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { isAppHomologation } from "./auth"
 import { fetchAllReviews, type IfoodReview } from "./review"
 
 export type ReviewSyncUnitResult = {
@@ -23,12 +24,17 @@ export type ReviewSyncUnitResult = {
   ok: boolean
   gravadas: number
   puladas: number
+  /** HTTP status da 1ª chamada (pra distinguir 401 credencial de 403 loja). */
+  status?: number
   motivo?: string
 }
 
 export type ReviewSyncResult = {
   lojasProcessadas: number
   totalGravadas: number
+  /** App ainda em modo homologação (usa app de teste → real dá 403). Se true
+   *  com todas as lojas falhando, o problema é IFOOD_REVIEW_HOMOLOGATION. */
+  homologacao: boolean
   resultados: ReviewSyncUnitResult[]
 }
 
@@ -104,9 +110,17 @@ export async function syncIfoodReviews(
     const r = await fetchAllReviews(merchantId, { size: 50, maxPages: 40 })
 
     if (!r.ok) {
-      // 403 = app ainda não autorizado no portal pra essa loja. Não é erro
-      // nosso — pula com o motivo pra tela mostrar "falta autorizar".
-      const naoAutorizado = r.firstStatus === 403 || r.firstStatus === 401
+      // 403 = merchant não autorizou o app no portal (por loja).
+      // 401 = credencial do app recusada (id/secret) — problema global.
+      // 0   = token não obtido (faltam env vars).
+      let motivo: string
+      if (r.firstStatus === 403)
+        motivo = "Loja não autorizada no portal do iFood (403) — autorize o app e sincronize de novo."
+      else if (r.firstStatus === 401)
+        motivo = "Credencial do app recusada (401) — confira o ID/secret na Vercel."
+      else if (!r.firstStatus)
+        motivo = r.error ?? "Falha ao autenticar (faltam credenciais na Vercel?)."
+      else motivo = r.error ?? `HTTP ${r.firstStatus}`
       resultados.push({
         unitId: v.unit_id,
         unitCode,
@@ -115,9 +129,8 @@ export async function syncIfoodReviews(
         ok: false,
         gravadas: 0,
         puladas: 0,
-        motivo: naoAutorizado
-          ? "App de Avaliações ainda não autorizado no portal pra esta loja."
-          : r.error ?? `HTTP ${r.firstStatus ?? "?"}`,
+        status: r.firstStatus,
+        motivo,
       })
       continue
     }
@@ -160,6 +173,7 @@ export async function syncIfoodReviews(
   return {
     lojasProcessadas: resultados.length,
     totalGravadas: resultados.reduce((s, x) => s + x.gravadas, 0),
+    homologacao: isAppHomologation("review"),
     resultados,
   }
 }
