@@ -58,7 +58,13 @@ export function PlatformTabbedCard({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {icon}
-          <h3 className="truncate text-sm font-semibold">{title}</h3>
+          {/* title HTML: mostra o nome inteiro no hover quando o truncate corta. */}
+          <h3
+            className="truncate text-sm font-semibold"
+            title={typeof title === "string" ? title : undefined}
+          >
+            {title}
+          </h3>
         </div>
         {slots.length === 1 ? (
           // Plataforma única — só mostra a logo (sem switcher)

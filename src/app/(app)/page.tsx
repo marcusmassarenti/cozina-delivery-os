@@ -1951,7 +1951,10 @@ function CancelList({
             <span className="w-3.5 shrink-0 text-right text-[10px] font-bold tabular-nums text-muted-foreground">
               {idx + 1}
             </span>
-            <p className="min-w-0 flex-1 line-clamp-1 text-xs font-medium">
+            <p
+              className="min-w-0 flex-1 line-clamp-1 text-xs font-medium"
+              title={c.motivo}
+            >
               {c.motivo}
             </p>
             <span className="shrink-0 text-[11px] font-bold tabular-nums text-rose-700 dark:text-rose-400">
@@ -2106,7 +2109,10 @@ function TopItemsList({
             >
               {idx + 1}
             </span>
-            <p className="min-w-0 flex-1 line-clamp-1 text-xs font-medium">
+            <p
+              className="min-w-0 flex-1 line-clamp-1 text-xs font-medium"
+              title={it.nomeItem}
+            >
               {it.nomeItem}
             </p>
             <div className="shrink-0 text-right leading-tight">
