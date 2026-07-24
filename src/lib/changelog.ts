@@ -57,6 +57,11 @@ export const CHANGELOG: Release[] = [
             depois: "63,7% incluindo os R$ recebidos direto (dinheiro/PIX na entrega + VR)",
             desc: "No detalhamento por unidade, o “% que fica na loja” mostrava só o líquido do repasse — como se o dinheiro que o cliente paga na entrega (PIX/maquininha) e o VR fossem taxa. Mas esse valor já está no seu bolso. Agora o número é o mesmo “Resultado total da loja” do DRE, com uma linha explicando o quanto veio fora do repasse. As barras por plataforma continuam mostrando o repasse de cada canal.",
           },
+          {
+            kind: "melhoria",
+            title: "“Líquido pra Você” da rede também conta o recebido direto",
+            desc: "O card de topo do dashboard (“Líquido pra Você · o que de fato entra”) seguia a mesma régua e agora soma o repasse + o recebido direto + o VR de toda a rede — igual à soma do que fica em cada loja.",
+          },
         ],
       },
     ],

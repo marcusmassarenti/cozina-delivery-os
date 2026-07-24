@@ -485,7 +485,9 @@ export default async function Home({
     },
     {
       label: "Líquido pra Você",
-      value: fmtBRLShort(network.faturamentoLiquido),
+      // Resultado total: repasse + recebido fora do repasse (dinheiro/PIX na
+      // entrega + VR). Bate com a soma do "% que fica na loja" de cada unidade.
+      value: fmtBRLShort(network.liquidoPraVoce),
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
@@ -1535,6 +1537,17 @@ function networkTotalsMerged(
   let bruto = 0
   let liquido = 0
   let cancelados = 0
+  // Recebido fora do repasse (dinheiro/PIX na entrega + VR) — só iFood tem.
+  // Somado sempre que o iFood entra no escopo, pra que o "Líquido pra Você" da
+  // rede seja o RESULTADO TOTAL (repasse + esses extras), igual ao detalhe por
+  // loja e ao DRE. Sem isso, o número da rede subestimava o que o dono embolsa.
+  let recebidoForaRepasse = 0
+  const extrasIfoodDaLoja = (u: (typeof active)[number]) => {
+    const rec =
+      u.monthly.platforms.find((p) => p.id === "ifood")?.recebidoDireto ?? 0
+    const vr = Math.max(0, u.monthly.vrRecebido - u.monthly.vrTaxaMedia8)
+    return rec + vr
+  }
   for (const u of active) {
     if (platformFilter) {
       // iFood: prefere importado se houver
@@ -1552,6 +1565,7 @@ function networkTotalsMerged(
             liquido += p.liquido
           }
         }
+        recebidoForaRepasse += extrasIfoodDaLoja(u)
         continue
       }
       // 99 Food: prefere importado se houver
@@ -1619,18 +1633,25 @@ function networkTotalsMerged(
       liquido += u.monthly.faturamentoLiquido
       cancelados += u.monthly.pedidosCancelados ?? 0
     }
+    // Sem filtro: o iFood está no escopo, então soma o recebido fora do repasse.
+    recebidoForaRepasse += extrasIfoodDaLoja(u)
   }
   const mediaTicket = pedidos > 0 ? bruto / pedidos : 0
   // Denominador = dias do mês selecionado (mês corrente = dias decorridos),
   // não 30 fixo — senão fev e o mês corrente parcial saem errados.
   const mediaDia = Math.round(pedidos / daysElapsedInMonth({ year, month }))
   const taxaRepasse = bruto > 0 ? (liquido / bruto) * 100 : 0
+  // "Líquido pra Você" = resultado total: o repasse MAIS o que a loja recebeu
+  // fora dele. É o número que de fato entra no caixa do dono.
+  const liquidoPraVoce = liquido + recebidoForaRepasse
   return {
     pedidos,
     mediaDia,
     faturamentoBruto: bruto,
     faturamentoLiquido: liquido,
     totalLiquido: liquido,
+    recebidoForaRepasse,
+    liquidoPraVoce,
     mediaTicket,
     taxaRepasse,
     cancelados,
