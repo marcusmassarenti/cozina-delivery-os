@@ -1,7 +1,7 @@
 "use client"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
-import { fmtBRL, fmtBRLShort } from "@/lib/format"
+import { fmtBRL, fmtBRLShort, fmtPct } from "@/lib/format"
 
 export type Segmento = {
   nome: string
@@ -27,7 +27,9 @@ export function ComposicaoBruto({
 }) {
   const taxas = segmentos.filter((s) => s.plat && s.valor > 0)
   const taxasTotal = taxas.reduce((s, x) => s + x.valor, 0)
-  const pctDoBruto = bruto > 0 ? Math.round((taxasTotal / bruto) * 100) : 0
+  // 1 casa decimal pra fechar 100% com o "% que fica na loja" (que também usa
+  // 1 casa) — com inteiro, 41,5% arredondava pra 42% e a soma dava 100,5%.
+  const pctDoBruto = bruto > 0 ? (taxasTotal / bruto) * 100 : 0
   const share = (v: number) =>
     taxasTotal > 0 ? Math.round((v / taxasTotal) * 100) : 0
 
@@ -54,7 +56,7 @@ export function ComposicaoBruto({
               {fmtBRL(taxasTotal)}
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {pctDoBruto}% do faturamento bruto
+              {fmtPct(pctDoBruto)} do total (o que fica + taxa)
             </span>
           </div>
 

@@ -130,8 +130,16 @@ export function DetalheLoja({
   const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
   const extraForaRepasse = recebidoDireto + vrLiquido
   const resultadoLoja = m.faturamentoLiquido + extraForaRepasse
+  // "% que fica" + "% de taxa" fecham 100%: a base é TODO o dinheiro que
+  // circulou (o que a loja recebeu + a taxa da plataforma). O VR entra do lado
+  // da loja; a taxa NÃO conta o recebido direto (não é taxa).
+  const taxaLoja = m.platforms.reduce(
+    (a, p) => a + Math.max(0, p.bruto - p.liquido - (p.recebidoDireto ?? 0)),
+    0,
+  )
+  const totalDinheiro = resultadoLoja + taxaLoja
   const pctLoja =
-    m.faturamentoBruto > 0 ? (resultadoLoja / m.faturamentoBruto) * 100 : 0
+    totalDinheiro > 0 ? (resultadoLoja / totalDinheiro) * 100 : 0
   const pctTone =
     pctLoja >= 60
       ? "text-emerald-700 dark:text-emerald-400"

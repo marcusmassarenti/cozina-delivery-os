@@ -64,6 +64,13 @@ export const CHANGELOG: Release[] = [
             title: "Tabela de lojas e visão por plataforma na régua certa",
             desc: "A coluna “% Loja”, a barra por plataforma e o “Líquido pra loja” agora somam o recebido na entrega e não contam ele como taxa — igual ao detalhe de cada loja.",
           },
+          {
+            kind: "correcao",
+            title: "“% que fica na loja” + “taxa” agora fecham 100%",
+            antes: "60,8% que fica + 43% de taxa = 103,8% (passava de 100%)",
+            depois: "58,5% que fica + 41,5% de taxa = 100%",
+            desc: "O “% que fica na loja” dividia tudo (incluindo o VR, que é pago à parte) pelo faturamento bruto, e a taxa usava outra base — por isso a soma passava de 100%. Agora a base é todo o dinheiro que circulou (o que você recebeu + a taxa da plataforma): o que fica com a loja + a taxa dá 100% certinho.",
+          },
         ],
       },
       {

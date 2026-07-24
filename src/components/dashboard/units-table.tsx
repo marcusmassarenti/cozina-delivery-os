@@ -69,10 +69,11 @@ export function UnitsTable({
           0,
           m.faturamentoBruto - m.faturamentoLiquido - recebidoDireto,
         )
+        // "% que fica" sobre TODO o dinheiro (o que a loja recebeu + a taxa),
+        // pra fechar 100% com a taxa. Mesma régua do dashboard.
+        const totalDinheiro = ficaNaLoja + taxas
         const pctLoja =
-          m.faturamentoBruto > 0
-            ? (ficaNaLoja / m.faturamentoBruto) * 100
-            : 0
+          totalDinheiro > 0 ? (ficaNaLoja / totalDinheiro) * 100 : 0
         // Tom: verde >= 60%, amarelo 50-60%, vermelho < 50%
         const pctTone =
           pctLoja >= 60

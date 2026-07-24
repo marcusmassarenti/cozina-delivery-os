@@ -500,10 +500,8 @@ export default async function Home({
       // cancelados (mesma do card Faturamento Bruto e do detalhe por loja).
       label: "% que fica na loja",
       value: fmtPct(
-        network.faturamentoBruto + cancelCestaTotal > 0
-          ? (network.liquidoPraVoce /
-              (network.faturamentoBruto + cancelCestaTotal)) *
-              100
+        network.totalDinheiro > 0
+          ? (network.liquidoPraVoce / network.totalDinheiro) * 100
           : 0,
       ),
       trend: "repasse + dinheiro na entrega + VR",
@@ -721,8 +719,6 @@ export default async function Home({
         plat: p.id,
       })),
   ]
-  const brutoComposicao =
-    liquidoRede + recebidoRede + platforms.reduce((s, p) => s + taxaReal(p), 0)
 
   return (
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -881,7 +877,7 @@ export default async function Home({
             />
           </Suspense>
           <ComposicaoBruto
-            bruto={brutoComposicao}
+            bruto={network.totalDinheiro}
             segmentos={composicaoSegmentos}
           />
         </div>
@@ -1565,13 +1561,16 @@ function networkTotalsMerged(
   // Somado sempre que o iFood entra no escopo, pra que o "Líquido pra Você" da
   // rede seja o RESULTADO TOTAL (repasse + esses extras), igual ao detalhe por
   // loja e ao DRE. Sem isso, o número da rede subestimava o que o dono embolsa.
-  let recebidoForaRepasse = 0
-  const extrasIfoodDaLoja = (u: (typeof active)[number]) => {
-    const rec =
-      u.monthly.platforms.find((p) => p.id === "ifood")?.recebidoDireto ?? 0
-    const vr = Math.max(0, u.monthly.vrRecebido - u.monthly.vrTaxaMedia8)
-    return rec + vr
-  }
+  // Recebido direto e VR ficam SEPARADOS: o recebido direto sai do bruto (não
+  // é taxa); o VR é renda À PARTE (fora do bruto). Pra "% que fica na loja" +
+  // "% de taxa" fecharem 100%, a base é TODO o dinheiro (bruto + VR), e a taxa
+  // = bruto − repasse − recebido direto.
+  let recebidoDiretoRede = 0
+  let vrRede = 0
+  const recebidoIfood = (u: (typeof active)[number]) =>
+    u.monthly.platforms.find((p) => p.id === "ifood")?.recebidoDireto ?? 0
+  const vrIfood = (u: (typeof active)[number]) =>
+    Math.max(0, u.monthly.vrRecebido - u.monthly.vrTaxaMedia8)
   for (const u of active) {
     if (platformFilter) {
       // iFood: prefere importado se houver
@@ -1589,7 +1588,8 @@ function networkTotalsMerged(
             liquido += p.liquido
           }
         }
-        recebidoForaRepasse += extrasIfoodDaLoja(u)
+        recebidoDiretoRede += recebidoIfood(u)
+        vrRede += vrIfood(u)
         continue
       }
       // 99 Food: prefere importado se houver
@@ -1657,17 +1657,23 @@ function networkTotalsMerged(
       liquido += u.monthly.faturamentoLiquido
       cancelados += u.monthly.pedidosCancelados ?? 0
     }
-    // Sem filtro: o iFood está no escopo, então soma o recebido fora do repasse.
-    recebidoForaRepasse += extrasIfoodDaLoja(u)
+    // Sem filtro: o iFood está no escopo, então soma o recebido direto e o VR.
+    recebidoDiretoRede += recebidoIfood(u)
+    vrRede += vrIfood(u)
   }
   const mediaTicket = pedidos > 0 ? bruto / pedidos : 0
   // Denominador = dias do mês selecionado (mês corrente = dias decorridos),
   // não 30 fixo — senão fev e o mês corrente parcial saem errados.
   const mediaDia = Math.round(pedidos / daysElapsedInMonth({ year, month }))
   const taxaRepasse = bruto > 0 ? (liquido / bruto) * 100 : 0
-  // "Líquido pra Você" = resultado total: o repasse MAIS o que a loja recebeu
-  // fora dele. É o número que de fato entra no caixa do dono.
+  // "Líquido pra Você" = tudo que a loja recebeu: repasse + recebido direto +
+  // VR. A TAXA real = bruto − repasse − recebido direto (o recebido direto não
+  // é taxa). A base pra fechar 100% é TODO o dinheiro (repasse + recebido + VR
+  // + taxa = bruto + VR), então "% que fica" + "% taxa" = 100%.
+  const recebidoForaRepasse = recebidoDiretoRede + vrRede
   const liquidoPraVoce = liquido + recebidoForaRepasse
+  const taxasPlataforma = Math.max(0, bruto - liquido - recebidoDiretoRede)
+  const totalDinheiro = liquidoPraVoce + taxasPlataforma
   return {
     pedidos,
     mediaDia,
@@ -1675,7 +1681,11 @@ function networkTotalsMerged(
     faturamentoLiquido: liquido,
     totalLiquido: liquido,
     recebidoForaRepasse,
+    recebidoDiretoRede,
+    vrRede,
     liquidoPraVoce,
+    taxasPlataforma,
+    totalDinheiro,
     mediaTicket,
     taxaRepasse,
     cancelados,
