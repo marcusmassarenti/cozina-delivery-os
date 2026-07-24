@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { TruncateTip } from "@/components/ui/truncate-tip"
 
 const LABELS: Record<PlatformId, string> = {
   ifood: "iFood",
@@ -58,13 +59,15 @@ export function PlatformTabbedCard({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {icon}
-          {/* title HTML: mostra o nome inteiro no hover quando o truncate corta. */}
-          <h3
-            className="truncate text-sm font-semibold"
-            title={typeof title === "string" ? title : undefined}
-          >
-            {title}
-          </h3>
+          {typeof title === "string" ? (
+            <TruncateTip
+              as="h3"
+              text={title}
+              className="truncate text-sm font-semibold"
+            />
+          ) : (
+            <h3 className="truncate text-sm font-semibold">{title}</h3>
+          )}
         </div>
         {slots.length === 1 ? (
           // Plataforma única — só mostra a logo (sem switcher)

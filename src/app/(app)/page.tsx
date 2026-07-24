@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
+import { TruncateTip } from "@/components/ui/truncate-tip"
 import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
@@ -1951,12 +1952,11 @@ function CancelList({
             <span className="w-3.5 shrink-0 text-right text-[10px] font-bold tabular-nums text-muted-foreground">
               {idx + 1}
             </span>
-            <p
+            <TruncateTip
+              as="p"
+              text={c.motivo}
               className="min-w-0 flex-1 line-clamp-1 text-xs font-medium"
-              title={c.motivo}
-            >
-              {c.motivo}
-            </p>
+            />
             <span className="shrink-0 text-[11px] font-bold tabular-nums text-rose-700 dark:text-rose-400">
               −{fmtBRL(Math.abs(c.perda))}
             </span>
@@ -2109,12 +2109,11 @@ function TopItemsList({
             >
               {idx + 1}
             </span>
-            <p
+            <TruncateTip
+              as="p"
+              text={it.nomeItem}
               className="min-w-0 flex-1 line-clamp-1 text-xs font-medium"
-              title={it.nomeItem}
-            >
-              {it.nomeItem}
-            </p>
+            />
             <div className="shrink-0 text-right leading-tight">
               <span className="flex items-baseline justify-end gap-1">
                 <span className="text-[11px] font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
