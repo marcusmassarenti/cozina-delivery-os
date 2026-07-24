@@ -42,6 +42,9 @@ export type ReviewSyncResult = {
   /** Credenciais do app de Avaliações presentes no ambiente? (sem revelar o
    *  valor — só se existem, pra separar "faltou env var" de "credencial errada"). */
   temCredenciais: boolean
+  /** Client id do app de Avaliações em uso (identificador, não segredo). Prova
+   *  qual app o deploy amarrou — o certo é o e5002ff2… (não o d730a9cc…). */
+  appClientId: string
   resultados: ReviewSyncUnitResult[]
 }
 
@@ -99,6 +102,10 @@ export async function syncIfoodReviews(
     process.env.IFOOD_REVIEW_CLIENT_SECRET?.trim()
   )
   const homologacao = isAppHomologation("review")
+  // Client id do app de Avaliações que o servidor ESTÁ usando (não é segredo —
+  // é o identificador do app, e já aparece nos erros do iFood). Deixa provar
+  // qual app o deploy amarrou, sem depender do eco do erro.
+  const appClientId = process.env.IFOOD_REVIEW_CLIENT_ID?.trim() || "(ausente)"
 
   let q = admin
     .from("unit_platforms")
@@ -114,6 +121,7 @@ export async function syncIfoodReviews(
         homologacao,
         flagRaw,
         temCredenciais,
+        appClientId,
         resultados: [],
       }
     q = q.in("unit_id", unitIds)
@@ -199,6 +207,7 @@ export async function syncIfoodReviews(
     homologacao,
     flagRaw,
     temCredenciais,
+    appClientId,
     resultados,
   }
 }
