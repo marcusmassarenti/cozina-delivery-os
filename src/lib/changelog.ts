@@ -37,6 +37,45 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.6",
+    date: "2026-07-23",
+    tag: "Correções",
+    title: "Relatório Diário e Nino agora batem com o resto do painel",
+    summary:
+      "Investigando uma diferença entre o Nino e o Relatório Diário, apareceram três causas — duas delas escondendo ou inventando faturamento no Relatório Diário. Todas corrigidas: as telas agora mostram o mesmo número.",
+    areas: [
+      {
+        area: "Relatório Diário",
+        items: [
+          {
+            kind: "correcao",
+            title: "99 Food sumia da loja que ainda não subiu o relatório diário",
+            antes: "Santana: R$ 0 de 99 Food (R$ 16.242 invisíveis)",
+            depois: "Santana: R$ 62,7 mil no total, igual ao dashboard",
+            desc: "A tela lia só o relatório diário do 99 em XLSX. Quem já tem o financeiro vindo direto da API da 99, mas ainda não importou a planilha, aparecia com zero — enquanto o dashboard e o DRE mostravam a receita certa. Agora a tela usa o mesmo caminho do resto do sistema.",
+          },
+          {
+            kind: "correcao",
+            title: "Pedido do iFood contado em dobro",
+            antes: "JK: R$ 131.268 de iFood",
+            depois: "JK: R$ 130.581 — o mesmo da página da unidade",
+            desc: "Quando um pedido tinha mais de uma linha financeira na Conciliação (ajuste, reprocessamento), a tela somava as duas e criava faturamento que não existiu. Na JK eram R$ 686,82 em julho. Agora conta uma venda por pedido, como as demais telas já faziam.",
+          },
+        ],
+      },
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "correcao",
+            title: "Nino responde o mesmo Bruto que a tela mostra",
+            desc: "Quando o Bruto passou a ser o total COM os cancelados (o número do portal), o Nino ficou de fora e continuava respondendo cerca de 1% a menos. Agora ele segue a mesma régua no mês, no histórico do ano, nas quinzenas e em qualquer período que você pedir.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.5",
     date: "2026-07-23",
     tag: "Melhorias",

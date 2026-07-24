@@ -1325,6 +1325,82 @@ export async function getNetworkNinefoodAvaliacoesForMonth(
   }
 }
 
+/**
+ * Mesmo fallback do `deriveNinefoodFromApiBill`, mas quebrado POR DIA — pro
+ * Relatório Diário, que precisa do valor de cada dia e não do total do mês.
+ *
+ * Existe porque a tela lia só `ninefood_daily_loja` (o XLSX). Loja que ainda
+ * não subiu o relatório diário mas já tem o financeiro da API aparecia com
+ * ZERO de 99Food ali, enquanto o resto do sistema (dashboard, DRE, Nino)
+ * mostrava a receita certa. Na Santana isso escondia R$ 16 mil em julho/26.
+ *
+ * Dedup por order_id: o api_bill às vezes traz mais de uma linha por pedido
+ * (ajustes), e somar sem dedup infla o bruto.
+ */
+export async function getNinefoodApiBillDiarioByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<Map<string, Map<number, { bruto: number; pedidos: number }>>> {
+  const out = new Map<string, Map<number, { bruto: number; pedidos: number }>>()
+  if (unitIds.length === 0) return out
+  const admin = createAdminClient()
+
+  const { data: links } = await admin
+    .from("ninefood_store_links")
+    .select("unit_id, app_shop_id")
+    .in("unit_id", unitIds)
+  const shopToUnit = new Map<string, string>()
+  for (const l of (links ?? []) as { unit_id: string; app_shop_id: string }[]) {
+    if (l.app_shop_id && l.unit_id) shopToUnit.set(l.app_shop_id, l.unit_id)
+  }
+  if (shopToUnit.size === 0) return out
+
+  const mm = String(month).padStart(2, "0")
+  const startIso = dateRange?.start ?? `${year}-${mm}-01`
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const endExclIso = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+
+  const rows = await pageAll<{
+    app_shop_id: string
+    order_id: string
+    meal_original_amount: number | null
+    business_date: string
+  }>((from, to) => {
+    let q = admin
+      .from("ninefood_api_bill")
+      .select("app_shop_id, order_id, meal_original_amount, business_date")
+      .in("app_shop_id", [...shopToUnit.keys()])
+      .gte("business_date", startIso)
+    q = dateRange?.end
+      ? q.lte("business_date", dateRange.end)
+      : q.lt("business_date", endExclIso)
+    return q.order("order_id").range(from, to)
+  })
+
+  const vistos = new Set<string>()
+  for (const r of rows) {
+    if (r.order_id && vistos.has(r.order_id)) continue
+    if (r.order_id) vistos.add(r.order_id)
+    const unitId = shopToUnit.get(r.app_shop_id)
+    if (!unitId) continue
+    const dia = Number(String(r.business_date).slice(8, 10))
+    if (!dia) continue
+    let porDia = out.get(unitId)
+    if (!porDia) {
+      porDia = new Map()
+      out.set(unitId, porDia)
+    }
+    const atual = porDia.get(dia) ?? { bruto: 0, pedidos: 0 }
+    atual.bruto += Number(r.meal_original_amount ?? 0)
+    atual.pedidos += 1
+    porDia.set(dia, atual)
+  }
+  return out
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 function mean(values: number[]): number | null {

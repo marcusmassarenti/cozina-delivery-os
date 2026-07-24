@@ -20,6 +20,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getNinefoodApiBillDiarioByUnits } from "@/lib/data/ninefood-imported"
 import type { ReportPlatform } from "@/lib/data/relatorio-diario-types"
 
 // ─── Cobertura de importação (pro banner do Dashboard) ───────────────
@@ -426,12 +427,34 @@ async function loadNinefood(
     return q.order("id").range(from, to)
   })
 
+  const comXlsx = new Set<string>()
   for (const r of data) {
     const day = dateStrDay(String(r.data))
     if (!day) continue
+    comXlsx.add(r.unit_id)
     add(b.faturamento, r.unit_id, day, Number(r.bruto) || 0)
     add(b.pedidos, r.unit_id, day, r.pedidos || 0)
     add(b.cancelamentos, r.unit_id, day, r.cancelamentos_qtd || 0)
+  }
+
+  // Fallback: loja SEM o XLSX diário mas COM o financeiro da API da 99. Sem
+  // isto a tela mostrava zero de 99Food nessas lojas, enquanto o dashboard, o
+  // DRE e o Nino mostravam a receita real — na Santana, R$ 16 mil escondidos
+  // em julho/26. O XLSX, quando existe, continua com prioridade (é mais rico).
+  const semXlsx = unitIds.filter((id) => !comXlsx.has(id))
+  if (semXlsx.length > 0) {
+    const viaApi = await getNinefoodApiBillDiarioByUnits(
+      semXlsx,
+      year,
+      month,
+      dateRange,
+    )
+    for (const [unitId, porDia] of viaApi) {
+      for (const [dia, v] of porDia) {
+        add(b.faturamento, unitId, dia, v.bruto)
+        add(b.pedidos, unitId, dia, v.pedidos)
+      }
+    }
   }
   return b
 }
@@ -609,6 +632,9 @@ async function getDailyReportMatrixUncached(
  */
 export const getDailyReportMatrix = unstable_cache(
   getDailyReportMatrixUncached,
-  ["daily-report-matrix-v2"],
+  // v3: o bruto do iFood passou a deduplicar por pedido (migration 0112) e o
+  // 99Food ganhou o fallback da API. Subir a versão descarta o cache antigo,
+  // senão a tela serviria os números velhos por até 60s depois do deploy.
+  ["daily-report-matrix-v3"],
   { revalidate: 60, tags: ["reports"] },
 )
