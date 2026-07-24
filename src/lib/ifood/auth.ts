@@ -40,7 +40,13 @@ function flag(v: string | undefined): string {
 
 export function isAppHomologation(app: IfoodApp): boolean {
   if (app === "review") {
-    return flag(process.env.IFOOD_REVIEW_HOMOLOGATION) !== "false"
+    // App de Avaliações APROVADO (24/jul/26) → PRODUÇÃO por padrão. Só volta
+    // pro app de teste se IFOOD_REVIEW_SANDBOX=true for setado de propósito.
+    //
+    // Abandonamos a IFOOD_REVIEW_HOMOLOGATION: uma cópia dela ficou "presa" em
+    // "true" no ambiente da Vercel (mesmo com o painel mostrando "false" e um
+    // deploy novo em folha), e não dava pra sobrescrever. Var nova, limpa.
+    return flag(process.env.IFOOD_REVIEW_SANDBOX) === "true"
   }
   return flag(process.env.IFOOD_HOMOLOGATION) === "true"
 }

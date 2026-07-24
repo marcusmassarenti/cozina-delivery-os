@@ -139,20 +139,15 @@ export function SyncReviewIfoodButton() {
                   </p>
                   <p className="mt-0.5 text-muted-foreground">
                     Todas as lojas voltaram 403 porque o sistema está usando o
-                    app de <b>teste</b> (que só vê a loja sandbox). Defina{" "}
-                    <b>IFOOD_REVIEW_HOMOLOGATION=false</b> na Vercel, faça{" "}
-                    <b>Redeploy</b> e sincronize de novo.
+                    app de <b>teste</b> (que só vê a loja sandbox). Isso só
+                    acontece se <b>IFOOD_REVIEW_SANDBOX=true</b> estiver setado
+                    na Vercel — apague essa var (ou ponha <b>false</b>) e faça{" "}
+                    <b>Redeploy</b>.
                   </p>
                   <p className="mt-1.5 font-mono text-[11px] text-amber-800 dark:text-amber-300">
-                    valor que o servidor está lendo:{" "}
-                    <b>{result?.flagRaw ?? "?"}</b>
+                    IFOOD_REVIEW_SANDBOX = <b>{result?.flagRaw ?? "?"}</b>
                     {result?.temCredenciais === false &&
                       " · credenciais do app AUSENTES"}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Precisa ser exatamente <b>&quot;false&quot;</b>. Se aparecer{" "}
-                    <b>null</b> ou outro valor, a var não chegou neste deploy —
-                    Redeploy depois de salvar.
                   </p>
                 </div>
               )}

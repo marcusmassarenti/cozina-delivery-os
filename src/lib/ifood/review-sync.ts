@@ -93,9 +93,7 @@ export async function syncIfoodReviews(
 
   // Diagnóstico do ambiente (calculado 1x): o valor CRU do flag (com aspas via
   // JSON, pra ver espaço/enter/ausência) e se as credenciais existem.
-  const flagRaw = JSON.stringify(
-    process.env.IFOOD_REVIEW_HOMOLOGATION ?? null,
-  )
+  const flagRaw = JSON.stringify(process.env.IFOOD_REVIEW_SANDBOX ?? null)
   const temCredenciais = !!(
     process.env.IFOOD_REVIEW_CLIENT_ID?.trim() &&
     process.env.IFOOD_REVIEW_CLIENT_SECRET?.trim()
