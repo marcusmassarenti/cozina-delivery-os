@@ -72,15 +72,17 @@ function paraLinha(unitId: string, r: IfoodReview) {
     pedido_id_curto: r.order?.shortId ?? null,
     pedido_id_longo: pedidoLongo,
     data_pedido: r.order?.createdAt ?? null,
-    status_pedido: null,
     data_avaliacao: dataAval,
     nota,
     comentario: r.comment ?? null,
     status_avaliacao: r.status ?? null,
-    // A API não traz as tags do relatório importado — ficam vazias (default).
-    tags_positivas: [],
-    tags_negativas: [],
-    import_id: null,
+    // NÃO enviamos tags_positivas/tags_negativas/status_pedido/servico_logistico
+    // /import_id de propósito: a API de Review NÃO traz esses campos. Se a gente
+    // mandasse (ex.: tags vazias), o upsert ZERAVA os dados ricos do import nas
+    // avaliações que existem nas DUAS fontes. Omitindo, o upsert só atualiza os
+    // campos que a API conhece (nota/comentário/status/datas) e PRESERVA o que o
+    // import gravou (as tags de elogio/reclamação, status do pedido). Em row
+    // nova, esses campos entram no default ('{}' / null).
   }
 }
 
