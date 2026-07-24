@@ -531,7 +531,12 @@ function montarContexto(
         reputacao: reputacao.porLoja.get(u.id) ?? null,
       }
     })
-    .filter(Boolean)
+    .filter((l) => l !== null)
+    // ORDENADO do maior pro menor faturamento. Pedir "ordene antes de listar"
+    // no prompt não é garantia — o modelo já escorregou num "top 5". Vindo
+    // ordenado da origem, o primeiro da lista É o maior, sem depender dele.
+    .sort((a, b) => ("faturamento_bruto" in b ? b.faturamento_bruto : 0) -
+      ("faturamento_bruto" in a ? a.faturamento_bruto : 0))
 
   // Cancelamentos da REDE: junta os motivos de todas as lojas (top 6).
   const redeCancel = new Map<string, { pedidos: number; perda: number }>()
@@ -741,7 +746,7 @@ function mesAnterior(year: number, month: number): { year: number; month: number
 
 type ResumoPeriodo = {
   rede: { bruto: number; liquido: number; pedidos: number; cancelados: number }
-  /** Tabela — colunas em `legenda_das_tabelas.periodos_por_loja`. */
+  /** Tabela ORDENADA por bruto — colunas em `legenda_das_tabelas.periodos_por_loja`. */
   por_loja: string[]
 }
 
@@ -760,7 +765,7 @@ async function resumoDePeriodo(
     { start, end },
   )
   const rede = { bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 }
-  const por_loja: ResumoPeriodo["por_loja"] = []
+  const lojas: { nome: string; bruto: number; pedidos: number; cancelados: number }[] = []
   for (const u of units) {
     const m = map.get(u.id)
     if (!m) continue
@@ -768,9 +773,12 @@ async function resumoDePeriodo(
     rede.liquido += m.totalLiquido
     rede.pedidos += m.pedidos
     rede.cancelados += m.pedidosCancelados
-    por_loja.push(
-      linha(u.name, round(m.faturamentoBruto), m.pedidos, m.pedidosCancelados),
-    )
+    lojas.push({
+      nome: u.name,
+      bruto: round(m.faturamentoBruto),
+      pedidos: m.pedidos,
+      cancelados: m.pedidosCancelados,
+    })
   }
   return {
     rede: {
@@ -779,7 +787,10 @@ async function resumoDePeriodo(
       pedidos: rede.pedidos,
       cancelados: rede.cancelados,
     },
-    por_loja,
+    // Do maior pro menor: o primeiro da lista é o líder do período.
+    por_loja: lojas
+      .sort((a, b) => b.bruto - a.bruto)
+      .map((l) => linha(l.nome, l.bruto, l.pedidos, l.cancelados)),
   }
 }
 
@@ -808,7 +819,9 @@ const SYSTEM_BASE = `Você é o Nino, a IA consultora do Delivery OS: um consult
 
 Você recebe os NÚMEROS REAIS da conta e responde as perguntas do dono sobre a operação: faturamento, CMV, ticket, cancelamento, taxas por plataforma, comparação entre lojas, resumo da rede, evolução ao longo do ano.
 
-FORMATO DAS TABELAS: pra economizar espaço, as listas grandes ("historico_mensal", "historico_rede_mensal", "por_plataforma" e o "por_loja" dentro de "periodos") NÃO são objetos — cada item é uma LINHA de valores separados por "|", na ordem descrita em "legenda_das_tabelas". Ex.: com a legenda "mes|bruto|liquido|pedidos|cancelados", a linha "03/2026|150000|120000|2400|30" quer dizer março/2026 com bruto R$ 150.000, líquido R$ 120.000, 2.400 pedidos e 30 cancelados. Campo vazio entre dois "|" significa que o dado não existe (null). Leia SEMPRE a legenda antes de interpretar uma linha — não chute a ordem das colunas. E atenção: a ordem em que as linhas aparecem NÃO é ranking — quando for montar um "top 5" ou "quem vende mais", ORDENE você mesmo pelo valor antes de listar.
+FORMATO DAS TABELAS: pra economizar espaço, as listas grandes ("historico_mensal", "historico_rede_mensal", "por_plataforma" e o "por_loja" dentro de "periodos") NÃO são objetos — cada item é uma LINHA de valores separados por "|", na ordem descrita em "legenda_das_tabelas". Ex.: com a legenda "mes|bruto|liquido|pedidos|cancelados", a linha "03/2026|150000|120000|2400|30" quer dizer março/2026 com bruto R$ 150.000, líquido R$ 120.000, 2.400 pedidos e 30 cancelados. Campo vazio entre dois "|" significa que o dado não existe (null). Leia SEMPRE a legenda antes de interpretar uma linha — não chute a ordem das colunas.
+
+ORDEM DAS LISTAS: as listas de LOJA ("por_loja", tanto o do mês quanto o dentro de "periodos") já vêm ordenadas do MAIOR pro MENOR faturamento — a primeira linha é a líder. Ao montar um ranking ou "top N", mantenha essa ordem; nunca reordene nem embaralhe. Já as séries de tempo ("historico_mensal", "historico_rede_mensal") vêm em ordem CRONOLÓGICA, do mês mais antigo pro mais novo — não são ranking.
 
 O contexto tem:
 - "contexto_temporal": a data de hoje, o dia do mês, dias decorridos, dias no mês e dias restantes. Use pra PROJETAR o fechamento do mês (regra de três: faturamento_do_mes ÷ dias_decorridos × dias_no_mes) e dizer "no ritmo atual você fecha em ~R$ X" ou "faltam N dias". Deixe claro que é projeção, não certeza.
