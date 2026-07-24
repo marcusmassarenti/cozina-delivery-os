@@ -14,7 +14,44 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isAppHomologation } from "./auth"
-import { fetchAllReviews, type IfoodReview } from "./review"
+import { fetchAllReviews, getReview, type IfoodReview } from "./review"
+
+/** Tags de ELOGIO padrão do iFood (mesmas que o import gravava). Chave =
+ *  minúsculo pra casar sem se importar com a caixa da API ("Comida Saborosa"
+ *  vs "Comida saborosa"); valor = forma canônica que o painel exibe (bate com
+ *  o histórico do import). Qualquer tag FORA dessa lista é reclamação. */
+const ELOGIO_CANONICO = new Map<string, string>([
+  ["comida saborosa", "Comida saborosa"],
+  ["bem temperada", "Bem temperada"],
+  ["boa quantidade", "Boa quantidade"],
+  ["boa aparência", "Boa aparência"],
+  ["boa embalagem", "Boa embalagem"],
+  ["temperatura certa", "Temperatura certa"],
+  ["bons ingredientes", "Bons ingredientes"],
+  ["no ponto certo", "No ponto certo"],
+  ["embalagem sustentável", "Embalagem sustentável"],
+])
+
+/** Extrai as tags do DETALHE (questions[CHOICE_MULTIPLE].answers) e separa em
+ *  elogio (na lista padrão) x reclamação (o resto). */
+function classificarTags(r: IfoodReview): {
+  positivas: string[]
+  negativas: string[]
+} {
+  const pos = new Set<string>()
+  const neg = new Set<string>()
+  for (const q of r.questions ?? []) {
+    if (q.type !== "CHOICE_MULTIPLE") continue
+    for (const a of q.answers ?? []) {
+      const t = (a.title ?? "").trim()
+      if (!t) continue
+      const canon = ELOGIO_CANONICO.get(t.toLowerCase())
+      if (canon) pos.add(canon)
+      else neg.add(t)
+    }
+  }
+  return { positivas: [...pos], negativas: [...neg] }
+}
 
 export type ReviewSyncUnitResult = {
   unitId: string
@@ -168,28 +205,106 @@ export async function syncIfoodReviews(
       continue
     }
 
-    const linhas = r.reviews
-      .map((rev) => paraLinha(v.unit_id, rev))
-      .filter((l): l is NonNullable<typeof l> => l !== null)
-    const puladas = r.reviews.length - linhas.length
+    const base = r.reviews
+      .map((rev) => ({ rev, row: paraLinha(v.unit_id, rev) }))
+      .filter((x): x is { rev: IfoodReview; row: NonNullable<typeof x.row> } =>
+        x.row !== null,
+      )
+    const puladas = r.reviews.length - base.length
 
-    if (linhas.length > 0) {
+    // Quais avaliações JÁ têm tag no banco (import ou sync anterior) — não
+    // precisam do detalhe de novo. Só busca detalhe das novas.
+    const jaTag = new Set<string>()
+    const pedidos = base.map((x) => x.row.pedido_id_longo)
+    if (pedidos.length > 0) {
+      const { data: ex } = await admin
+        .from("ifood_avaliacoes")
+        .select("pedido_id_longo, tags_positivas, tags_negativas")
+        .eq("unit_id", v.unit_id)
+        .in("pedido_id_longo", pedidos)
+      for (const e of (ex ?? []) as {
+        pedido_id_longo: string
+        tags_positivas: string[] | null
+        tags_negativas: string[] | null
+      }[]) {
+        if ((e.tags_positivas?.length ?? 0) > 0 || (e.tags_negativas?.length ?? 0) > 0)
+          jaTag.add(e.pedido_id_longo)
+      }
+    }
+
+    // Busca o DETALHE (pra pegar as tags) só das que ainda não têm — com teto
+    // por sync pra não estourar tempo/rate limit numa loja com muito histórico.
+    const MAX_DETALHES = 300
+    let detalhes = 0
+    const comTag: Array<
+      NonNullable<ReturnType<typeof paraLinha>> & {
+        tags_positivas: string[]
+        tags_negativas: string[]
+      }
+    > = []
+    const semTag: Array<NonNullable<ReturnType<typeof paraLinha>>> = []
+    for (const { rev, row } of base) {
+      if (!jaTag.has(row.pedido_id_longo) && rev.id && detalhes < MAX_DETALHES) {
+        detalhes++
+        const d = await getReview(merchantId, rev.id)
+        if (d.ok && d.data) {
+          const { positivas, negativas } = classificarTags(d.data)
+          if (positivas.length > 0 || negativas.length > 0) {
+            comTag.push({ ...row, tags_positivas: positivas, tags_negativas: negativas })
+            continue
+          }
+        }
+      }
+      semTag.push(row)
+    }
+
+    // DOIS upserts: quem tem tag manda as colunas de tag; quem não tem OMITE
+    // (senão o upsert zeraria a tag existente). Misturar num só faria o
+    // Supabase incluir a coluna e null-ar quem não mandou.
+    let erroUp: string | null = null
+    for (const lote of [semTag, comTag]) {
+      if (lote.length === 0) continue
       const { error: upErr } = await admin
         .from("ifood_avaliacoes")
-        .upsert(linhas, { onConflict: "unit_id,pedido_id_longo" })
+        .upsert(lote, { onConflict: "unit_id,pedido_id_longo" })
       if (upErr) {
-        resultados.push({
-          unitId: v.unit_id,
-          unitCode,
-          unitName,
-          merchantId,
-          ok: false,
-          gravadas: 0,
-          puladas,
-          motivo: `Erro ao gravar: ${upErr.message}`,
-        })
-        continue
+        erroUp = upErr.message
+        break
       }
+    }
+    if (erroUp) {
+      resultados.push({
+        unitId: v.unit_id,
+        unitCode,
+        unitName,
+        merchantId,
+        ok: false,
+        gravadas: 0,
+        puladas,
+        motivo: `Erro ao gravar: ${erroUp}`,
+      })
+      continue
+    }
+
+    // Log no Histórico de Importações (source='api' distingue da planilha) —
+    // só quando a loja trouxe avaliação, pra não poluir com linhas de 0. Falha
+    // aqui é só telemetria: não derruba o sync.
+    if (base.length > 0) {
+      const hoje = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo",
+      }).format(new Date())
+      const { error: logErr } = await admin.from("platform_imports").insert({
+        unit_id: v.unit_id,
+        platform: "ifood",
+        report_type: "avaliacoes",
+        cadencia: "diario",
+        source: "api",
+        source_filename: "API — avaliações (sync automático)",
+        rows_imported: base.length,
+        ref_date: hoje,
+        status: "success",
+      })
+      if (logErr) console.error("review-sync log:", logErr.message)
     }
 
     resultados.push({
@@ -198,7 +313,7 @@ export async function syncIfoodReviews(
       unitName,
       merchantId,
       ok: true,
-      gravadas: linhas.length,
+      gravadas: base.length,
       puladas,
     })
   }

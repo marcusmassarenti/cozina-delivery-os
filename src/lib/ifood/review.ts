@@ -46,6 +46,16 @@ export type IfoodReview = {
   customer?: { id?: string; name?: string }
   order?: { id?: string; shortId?: string; createdAt?: string }
   moderation?: unknown
+  /** Só no DETALHE (GET /reviews/{id}): nome do cliente. */
+  customerName?: string
+  /** Só no DETALHE: as "perguntas" da avaliação. A do tipo CHOICE_MULTIPLE traz
+   *  as TAGS que o cliente marcou (elogio/reclamação) em answers[].title. */
+  questions?: {
+    id?: string
+    type?: string
+    title?: string
+    answers?: { id?: string; title?: string }[]
+  }[]
 }
 
 export type IfoodReviewsPage = {
