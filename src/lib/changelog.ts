@@ -42,6 +42,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.9",
+    date: "2026-07-24",
+    tag: "Grande novidade",
+    title: "Avaliações do iFood entram sozinhas, pela API",
+    summary:
+      "O módulo de Avaliações do iFood foi aprovado. Agora, para a loja que autorizar o app no portal, as avaliações são puxadas direto pela API — nota, comentário e status — sem depender de importar planilha.",
+    areas: [
+      {
+        area: "Avaliações",
+        items: [
+          {
+            kind: "novo",
+            title: "Botão “Sincronizar avaliações iFood”",
+            desc: "Na tela de Avaliações, um clique puxa as avaliações via API das lojas com iFood conectado. O resumo mostra loja a loja: quantas trouxe, quais ainda precisam autorizar o app no portal, e eventuais erros. As avaliações caem na mesma base do import (sem duplicar) — a API vira a fonte da verdade dali pra frente.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.8",
     date: "2026-07-24",
     tag: "Melhorias",
