@@ -85,6 +85,8 @@ export function ConsultorChat({
   // na web…" pela realidade). `streamingText` = a resposta chegando palavra a
   // palavra (null quando não está respondendo).
   const [buscando, setBuscando] = React.useState(false)
+  // O Nino pediu um cálculo de período ao servidor — sinal real, não palpite.
+  const [calculando, setCalculando] = React.useState(false)
   const [streamingText, setStreamingText] = React.useState<string | null>(null)
   const [carregando, setCarregando] = React.useState(false)
   const [erro, setErro] = React.useState<string | null>(null)
@@ -182,6 +184,7 @@ export function ConsultorChat({
     setMessages(novo)
     setPending(true)
     setBuscando(false)
+    setCalculando(false)
     setStreamingText("")
 
     let acc = ""
@@ -224,6 +227,8 @@ export function ConsultorChat({
           }
           if (evt.type === "searching") {
             setBuscando(true)
+          } else if (evt.type === "consultando") {
+            setCalculando(true)
           } else if (evt.type === "text") {
             acc += evt.text ?? ""
             setStreamingText(acc)
@@ -240,6 +245,7 @@ export function ConsultorChat({
 
     setPending(false)
     setBuscando(false)
+    setCalculando(false)
     setStreamingText(null)
 
     if (feito) {
@@ -535,9 +541,12 @@ export function ConsultorChat({
                         palavra numa bolha, igual o Claude. */}
                     {pending && !streamingText && (
                       <PensandoBolha
-                        key={buscando ? "web" : "pensando"}
+                        key={
+                          calculando ? "calculo" : buscando ? "web" : "pensando"
+                        }
                         pergunta={messages[messages.length - 1]?.content ?? ""}
                         buscando={buscando}
+                        calculando={calculando}
                       />
                     )}
                     {pending && streamingText && (
@@ -642,6 +651,13 @@ const FASES_MERCADO = [
   "Cruzando com os seus números…",
   "Montando a resposta…",
 ]
+/** Roteiro quando o Nino pediu ao servidor o total de um período (sinal real).
+ *  Ele não está "pensando": está esperando a soma exata voltar do banco. */
+const FASES_CALCULANDO = [
+  "Somando o período pedido…",
+  "Conferindo loja por loja…",
+  "Montando a resposta…",
+]
 /** Roteiro quando a busca web JÁ disparou de verdade (sinal do servidor). */
 const FASES_BUSCANDO = [
   "Pesquisando na web…",
@@ -664,15 +680,19 @@ const RE_MERCADO =
 function PensandoBolha({
   pergunta,
   buscando,
+  calculando,
 }: {
   pergunta: string
   buscando: boolean
+  calculando: boolean
 }) {
-  const fases = buscando
-    ? FASES_BUSCANDO
-    : RE_MERCADO.test(pergunta)
-      ? FASES_MERCADO
-      : FASES_INTERNO
+  const fases = calculando
+    ? FASES_CALCULANDO
+    : buscando
+      ? FASES_BUSCANDO
+      : RE_MERCADO.test(pergunta)
+        ? FASES_MERCADO
+        : FASES_INTERNO
   const [i, setI] = React.useState(0)
   React.useEffect(() => {
     const id = setInterval(

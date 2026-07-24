@@ -37,6 +37,35 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.5",
+    date: "2026-07-23",
+    tag: "Melhorias",
+    title: "Nino AI responde qualquer período",
+    summary:
+      "Antes o Nino só sabia mês e quinzena — perguntar “a semana do dia 13 a 20” recebia um “não tenho esse recorte”. Agora ele pede o cálculo ao sistema e responde qualquer intervalo de datas, com o número exato.",
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "novo",
+            title: "Pergunte por semana, fim de semana ou um dia só",
+            antes:
+              "“Não tenho o recorte por semana isolada — só por quinzena.”",
+            depois:
+              "“Na semana de 13 a 20 de julho, JK foi a campeã com R$ 92.334,34, seguida por Brooklin e Jardins.”",
+            desc: "Vale pra qualquer intervalo dentro de um mês: “de 13 a 20”, “semana passada”, “últimos 7 dias”, “no dia 15”, um fim de semana. O total sai do sistema, não de conta feita pela IA — então o número é o mesmo do painel. Enquanto ele consulta, a tela mostra “Somando o período pedido…”.",
+          },
+          {
+            kind: "correcao",
+            title: "Ranking sempre do maior pro menor",
+            desc: "Num “top 5” de lojas o Nino chegou a listar uma loja de R$ 196 mil acima de uma de R$ 202 mil. Os valores estavam certos, a ordem não. Agora a lista já chega ordenada pelo faturamento, então o primeiro colocado é sempre o maior.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.4",
     date: "2026-07-23",
     tag: "Melhorias",

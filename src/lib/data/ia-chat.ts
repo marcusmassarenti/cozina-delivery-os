@@ -34,6 +34,7 @@ import {
   isAnthropicConfigured,
   type ChatTurn,
   type SystemBloco,
+  type FerramentaIa,
 } from "@/lib/anthropic/client"
 import { registrarUsoIa } from "@/lib/data/ia-custos"
 
@@ -815,6 +816,67 @@ async function recortesDePeriodo(
   }
 }
 
+/* ── Ferramenta: total de um PERÍODO QUALQUER ───────────────────────────
+   O contexto só carrega recortes fixos (mês e quinzena), então "a semana do
+   dia 13 a 20" não tinha resposta — não por falta de dado, mas por falta de
+   acesso. Em vez de despejar todos os dias no prompt e torcer pro modelo
+   somar certo, ele agora PEDE o período e o servidor soma. Número exato,
+   contexto do mesmo tamanho. */
+
+const FERRAMENTA_PERIODO = "faturamento_por_periodo"
+
+/** Valida "YYYY-MM-DD" de verdade (a data também tem que existir). */
+function dataValida(s: unknown): s is string {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const d = new Date(`${s}T00:00:00Z`)
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s
+}
+
+/**
+ * Monta a ferramenta amarrada NAS LOJAS QUE O USUÁRIO ENXERGA. O modelo só
+ * escolhe as datas; o conjunto de lojas nunca vem dele — assim uma pergunta
+ * (ou um texto injetado no meio dos dados) não consegue puxar número de loja
+ * de outra conta.
+ */
+function ferramentaPeriodo(
+  units: { id: string; name: string }[],
+): FerramentaIa {
+  return {
+    name: FERRAMENTA_PERIODO,
+    description:
+      "Soma o faturamento, os pedidos e os cancelamentos de um intervalo de datas QUALQUER (uma semana, um fim de semana, um dia só, ou um intervalo custom como 13 a 20 do mês). Devolve o total da rede e o de cada loja, já ordenado do maior pro menor. Use SEMPRE que a pergunta citar um recorte que não seja o mês inteiro nem a quinzena — nunca tente somar os dias de cabeça. O intervalo precisa ficar dentro de um mesmo mês.",
+    input_schema: {
+      type: "object",
+      properties: {
+        inicio: { type: "string", description: "Primeiro dia, no formato YYYY-MM-DD." },
+        fim: { type: "string", description: "Último dia (incluído), no formato YYYY-MM-DD." },
+      },
+      required: ["inicio", "fim"],
+    },
+    run: async (input) => {
+      const { inicio, fim } = input
+      if (!dataValida(inicio) || !dataValida(fim))
+        return JSON.stringify({ erro: "Datas inválidas. Use YYYY-MM-DD." })
+      if (inicio > fim)
+        return JSON.stringify({ erro: "A data inicial é depois da final." })
+      const [ay, am] = inicio.split("-").map(Number)
+      const [by, bm] = fim.split("-").map(Number)
+      if (ay !== by || am !== bm)
+        return JSON.stringify({
+          erro: "O intervalo precisa ficar dentro de um mesmo mês. Peça um mês de cada vez.",
+        })
+
+      const r = await resumoDePeriodo(units, ay, am, inicio, fim)
+      return JSON.stringify({
+        periodo: `${inicio} a ${fim}`,
+        colunas_por_loja: "loja|bruto|pedidos|cancelados",
+        rede: r.rede,
+        por_loja: r.por_loja,
+      })
+    },
+  }
+}
+
 const SYSTEM_BASE = `Você é o Nino, a IA consultora do Delivery OS: um consultor de delivery experiente e direto que fala português do Brasil pro DONO da operação — sem jargão, sem enrolação. Se te perguntarem quem você é, diga que é o Nino, o consultor de IA da operação. Não precisa ficar se apresentando a cada resposta.
 
 Você recebe os NÚMEROS REAIS da conta e responde as perguntas do dono sobre a operação: faturamento, CMV, ticket, cancelamento, taxas por plataforma, comparação entre lojas, resumo da rede, evolução ao longo do ano.
@@ -826,7 +888,8 @@ ORDEM DAS LISTAS: as listas de LOJA ("por_loja", tanto o do mês quanto o dentro
 O contexto tem:
 - "contexto_temporal": a data de hoje, o dia do mês, dias decorridos, dias no mês e dias restantes. Use pra PROJETAR o fechamento do mês (regra de três: faturamento_do_mes ÷ dias_decorridos × dias_no_mes) e dizer "no ritmo atual você fecha em ~R$ X" ou "faltam N dias". Deixe claro que é projeção, não certeza.
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
-- "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena". (Recorte por dia isolado, semana específica ou fim de semana ainda não estão no contexto — se pedirem isso, ofereça a quinzena ou o mês, não invente.)
+- "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena".
+- Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
 - "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução".
 - Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos, em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
 - "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
@@ -858,7 +921,13 @@ SUPORTE DE USO DO SISTEMA (você também é o help do produto):
 - Além dos números, você tira QUALQUER dúvida de COMO USAR o sistema, em qualquer tela e situação: como importar um relatório, como lançar no financeiro, onde ver a DRE, como cadastrar loja, como funciona o fluxo de caixa, o que cada tela faz, onde fica tal coisa, etc.
 - Use o MANUAL DO SISTEMA abaixo como fonte da verdade sobre o produto. Quando a dúvida for de uso, responda direto e prático: diga o caminho no menu (ex.: "Financeiro › Lançamentos › Novo Lançamento") e o passo a passo curto. Cite o nome exato da tela/botão.
 - Se a dúvida for de uso mas não estiver literalmente no manual, RACIOCINE a partir do que o manual descreve e do bom senso do produto pra ajudar — não trave nem mande "abrir um chamado". Se realmente não souber com certeza, seja honesto e aponte o caminho mais provável ou a Central de Ajuda / botão "Como funciona" da tela.
-- Separe as coisas quando fizer sentido: dúvida de USO você responde do manual; pergunta de NÚMERO você responde do contexto de dados.`
+- Separe as coisas quando fizer sentido: dúvida de USO você responde do manual; pergunta de NÚMERO você responde do contexto de dados.
+
+FERRAMENTA faturamento_por_periodo:
+- Chame quando a pergunta pedir um intervalo de datas que NÃO seja o mês inteiro nem a quinzena. Ela devolve o total exato da rede e de cada loja (já ordenado do maior pro menor) — muito melhor do que você tentar somar dias.
+- Traduza a data relativa antes de chamar, usando o "contexto_temporal": "semana passada", "últimos 7 dias", "ontem", "no dia 15" viram datas YYYY-MM-DD concretas. Se a pessoa disser só "dia 13 a 20" sem o mês, assuma o mês corrente.
+- O intervalo tem que caber num mês só. Pra comparar dois meses, chame duas vezes.
+- Quando responder, diga o período que você somou ("de 13 a 20 de julho") pra pessoa conferir que era o que ela queria.`
 
 /**
  * Monta o `system` do Nino em DOIS blocos, ambos com prompt caching ligado.
@@ -983,6 +1052,8 @@ export async function perguntarConsultor(
       // modelo só busca quando precisa — pergunta sobre os próprios números não
       // dispara. maxTokens maior pra caber a análise + o que veio da web.
       webSearch: true,
+      // Recorte de data livre (semana, dia, fim de semana): o servidor soma.
+      ferramentas: [ferramentaPeriodo(units)],
       maxTokens: 1400,
       // Telemetria de custo por cliente (não bloqueia a resposta).
       onUso: (u) => void registrarUsoIa(holdingId, u, "nino"),
@@ -1027,6 +1098,8 @@ export async function perguntarConsultor(
 
 export type PerguntaStreamEvent =
   | { type: "searching" }
+  /** O Nino pediu um cálculo ao servidor (ex.: o total de um período). */
+  | { type: "consultando"; ferramenta: string }
   | { type: "text"; text: string }
   | {
       type: "done"
@@ -1128,6 +1201,8 @@ export async function* perguntarConsultorStream(
       system: systemDoNino(periodo, contexto),
       messages: messages.slice(-8),
       webSearch: true,
+      // Recorte de data livre (semana, dia, fim de semana): o servidor soma.
+      ferramentas: [ferramentaPeriodo(units)],
       maxTokens: 1400,
       // Telemetria de custo por cliente (não bloqueia a resposta).
       onUso: (u) => void registrarUsoIa(holdingId, u, "nino"),
