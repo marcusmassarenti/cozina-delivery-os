@@ -12,6 +12,8 @@ type Plat = {
   liquido: number
   /** Promoção/cupom que a loja bancou (decisão da loja, não taxa). */
   promocoesLoja: number
+  /** Recebido direto (dinheiro/PIX na entrega, só iFood): é da loja, não taxa. */
+  recebidoDireto?: number
 }
 
 /**
@@ -48,27 +50,35 @@ export function BrutoBreakdown({
   let cmvScope: number
   let opScope: number
   let promoLoja: number
+  let recebidoDireto: number
   if (sel === "todas") {
     bruto = totalBruto
     liquido = totalLiquido
     cmvScope = cmv
     opScope = operacao
     promoLoja = platforms.reduce((s, p) => s + (p.promocoesLoja || 0), 0)
+    recebidoDireto = platforms.reduce((s, p) => s + (p.recebidoDireto || 0), 0)
   } else {
     const p = platforms.find((x) => x.id === sel)
     bruto = p?.bruto ?? 0
     liquido = p?.liquido ?? 0
     promoLoja = p?.promocoesLoja ?? 0
+    recebidoDireto = p?.recebidoDireto ?? 0
     const share = totalBruto > 0 ? bruto / totalBruto : 0
     cmvScope = cmv * share
     opScope = operacao * share
   }
-  const descontadoTotal = Math.max(0, bruto - liquido)
+  // O recebido direto (dinheiro/PIX na entrega) é dinheiro da LOJA, não taxa:
+  // entra no "Líquido pra loja" e sai do "descontado". Sem isto, a taxa do
+  // iFood inflava e o líquido subestimava. VR fica de fora (não é parte do
+  // bruto). Mesma régua do DRE.
+  const liquidoLoja = liquido + recebidoDireto
+  const descontadoTotal = Math.max(0, bruto - liquido - recebidoDireto)
   // Cap em descontadoTotal: caso o relatório some promo > diferença bruto-liq
   // (ex.: estornos), evita "Taxa real" negativa.
   const promoCap = Math.min(promoLoja, descontadoTotal)
   const taxaReal = descontadoTotal - promoCap
-  const margem = liquido - cmvScope
+  const margem = liquidoLoja - cmvScope
   const resultado = margem - opScope
 
   return (
@@ -115,7 +125,7 @@ export function BrutoBreakdown({
 
       <CompBar
         label="Líquido pra loja"
-        value={liquido}
+        value={liquidoLoja}
         base={bruto}
         color="bg-emerald-500"
       />

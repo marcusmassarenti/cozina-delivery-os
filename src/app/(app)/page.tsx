@@ -494,9 +494,19 @@ export default async function Home({
       href: `/financeiro${periodQ}`,
     },
     {
-      label: "Taxa de Repasse",
-      value: fmtPct(network.taxaRepasse),
-      trend: "Acima da média do setor (~62%)",
+      // Antes "Taxa de Repasse" (só o repasse, líquido/bruto). Virou a versão
+      // em % do "Líquido pra Você": inclui o recebido direto (dinheiro/PIX na
+      // entrega) e o VR — o que a loja de fato embolsa. Base = bruto com
+      // cancelados (mesma do card Faturamento Bruto e do detalhe por loja).
+      label: "% que fica na loja",
+      value: fmtPct(
+        network.faturamentoBruto + cancelCestaTotal > 0
+          ? (network.liquidoPraVoce /
+              (network.faturamentoBruto + cancelCestaTotal)) *
+              100
+          : 0,
+      ),
+      trend: "repasse + dinheiro na entrega + VR",
       tone: "positive",
       icon: Percent,
       platforms: finPlatforms,
@@ -654,7 +664,7 @@ export default async function Home({
     "Pedidos Cancelados",
     "Média Pedidos/Dia",
     "Ticket Médio",
-    "Taxa de Repasse",
+    "% que fica na loja",
     "Custo de Entrega",
   ]
   const kpisOrdenados = ORDEM_KPI.map((l) =>
@@ -668,7 +678,7 @@ export default async function Home({
     "Líquido pra Você": heroDeltas.liquido,
     Pedidos: heroDeltas.pedidos,
     "Ticket Médio": heroDeltas.ticket,
-    "Taxa de Repasse": heroDeltas.repasse,
+    "% que fica na loja": heroDeltas.repasse,
     "Média Pedidos/Dia": heroDeltas.mediaDia,
   }
   const SUB_MANCHETE: Record<string, string> = {
@@ -910,8 +920,13 @@ export default async function Home({
             {platforms
               .filter((p) => tenantPlatforms.includes(p.id))
               .map((p) => {
-              const taxa = Math.max(0, p.bruto - p.liquido)
-              const pctTaxa = Math.max(0, 100 - p.pctLoja)
+              // Recebido direto (iFood) é da loja, não taxa: entra no líquido
+              // pra loja e sai da taxa. Mesma régua do resto do painel.
+              const recDir = p.recebidoDireto ?? 0
+              const liquidoLoja = p.liquido + recDir
+              const taxa = Math.max(0, p.bruto - p.liquido - recDir)
+              const pctLojaP = p.bruto > 0 ? (liquidoLoja / p.bruto) * 100 : 0
+              const pctTaxa = Math.max(0, 100 - pctLojaP)
               // Vitrine: bruto TOTAL (com cancelados) só no iFood; taxa e %s
               // seguem na base válida.
               const brutoShow =
@@ -940,8 +955,8 @@ export default async function Home({
                       <div className="mt-2.5 flex h-2 overflow-hidden rounded-full bg-muted">
                         <div
                           className="bg-emerald-500"
-                          style={{ width: `${p.pctLoja}%` }}
-                          title={`Líquido pra loja: ${fmtPct(p.pctLoja)} · ${fmtBRLShort(p.liquido)}`}
+                          style={{ width: `${pctLojaP}%` }}
+                          title={`Líquido pra loja: ${fmtPct(pctLojaP)} · ${fmtBRLShort(liquidoLoja)}`}
                         />
                         <div
                           className="bg-slate-500 dark:bg-slate-600"
@@ -951,10 +966,10 @@ export default async function Home({
                       </div>
                       <div className="mt-1.5 flex items-baseline justify-between text-[11px] tabular-nums leading-tight">
                         <span className="text-emerald-700 dark:text-emerald-400">
-                          <span className="font-bold">{fmtPct(p.pctLoja)}</span>{" "}
+                          <span className="font-bold">{fmtPct(pctLojaP)}</span>{" "}
                           líquido{" "}
                           <span className="text-muted-foreground">
-                            {fmtBRLShort(p.liquido)}
+                            {fmtBRLShort(liquidoLoja)}
                           </span>
                         </span>
                         <span className="text-slate-700 dark:text-slate-400">

@@ -56,10 +56,22 @@ export function UnitsTable({
         const isOpen = expanded.has(unit.code)
         const m = unit.monthly
         const hasData = m.pedidos > 0
-        const taxas = m.faturamentoBruto - m.faturamentoLiquido
+        // Régua: o que FICA na loja = repasse + recebido direto (dinheiro/PIX
+        // na entrega) + VR; a taxa NÃO conta o recebido direto (não é taxa).
+        // Mesma régua do "% que fica na loja" no ranking e no DRE.
+        const recebidoDireto = m.platforms.reduce(
+          (a, p) => a + (p.recebidoDireto ?? 0),
+          0,
+        )
+        const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
+        const ficaNaLoja = m.faturamentoLiquido + recebidoDireto + vrLiquido
+        const taxas = Math.max(
+          0,
+          m.faturamentoBruto - m.faturamentoLiquido - recebidoDireto,
+        )
         const pctLoja =
           m.faturamentoBruto > 0
-            ? (m.faturamentoLiquido / m.faturamentoBruto) * 100
+            ? (ficaNaLoja / m.faturamentoBruto) * 100
             : 0
         // Tom: verde >= 60%, amarelo 50-60%, vermelho < 50%
         const pctTone =
@@ -229,8 +241,15 @@ export function UnitsTable({
                     </p>
                     <div className="grid gap-2 sm:grid-cols-3">
                       {m.platforms.map((p) => {
-                        const taxas = p.bruto - p.liquido
-                        const pctTaxas = Math.max(0, 100 - p.pctLoja)
+                        // Recebido direto (iFood) pertence à LOJA, não é taxa.
+                        // Entra na fatia da loja e sai da taxa; assim a barra
+                        // fecha 100% e a taxa do iFood não infla.
+                        const recDir = p.recebidoDireto ?? 0
+                        const lojaValor = p.liquido + recDir
+                        const taxas = Math.max(0, p.bruto - p.liquido - recDir)
+                        const pctLojaP =
+                          p.bruto > 0 ? (lojaValor / p.bruto) * 100 : 0
+                        const pctTaxas = Math.max(0, 100 - pctLojaP)
                         const hasPlatformData = p.bruto > 0
                         return (
                           <div
@@ -255,8 +274,8 @@ export function UnitsTable({
                                 <div className="flex h-2 overflow-hidden rounded-full bg-muted">
                                   <div
                                     className="bg-emerald-500"
-                                    style={{ width: `${p.pctLoja}%` }}
-                                    title={`Loja: ${fmtPct(p.pctLoja)} · ${fmtBRLShort(p.liquido)}`}
+                                    style={{ width: `${pctLojaP}%` }}
+                                    title={`Loja: ${fmtPct(pctLojaP)} · ${fmtBRLShort(lojaValor)}`}
                                   />
                                   <div
                                     className="bg-slate-500 dark:bg-slate-600"
@@ -267,10 +286,10 @@ export function UnitsTable({
                                 <div className="flex items-baseline justify-between text-[10px] tabular-nums leading-tight">
                                   <span className="text-emerald-700 dark:text-emerald-400">
                                     <span className="font-bold">
-                                      {fmtPct(p.pctLoja)}
+                                      {fmtPct(pctLojaP)}
                                     </span>{" "}
                                     <span className="text-muted-foreground">
-                                      {fmtBRLShort(p.liquido)}
+                                      {fmtBRLShort(lojaValor)}
                                     </span>
                                   </span>
                                   <span className="text-slate-700 dark:text-slate-400">

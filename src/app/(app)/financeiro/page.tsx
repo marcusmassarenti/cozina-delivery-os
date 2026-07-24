@@ -227,14 +227,22 @@ export default async function ResultadoPage({
               icon={<PiggyBank className="size-4" />}
               label="Líquido (entra na conta)"
               value={fmtBRLShort(totals.totalLiquido)}
-              hint={`${fmtPct(totals.repassePct)} de repasse`}
+              hint={`${fmtPct(
+                totals.bruto > 0
+                  ? (totals.totalLiquido / totals.bruto) * 100
+                  : 0,
+              )} do bruto · com recebido na entrega + VR`}
               tone="positive"
             />
             <Kpi
               icon={<Percent className="size-4" />}
               label="Taxas das plataformas"
               value={fmtBRLShort(totals.taxasPlataforma)}
-              hint={`${fmtPct(100 - totals.repassePct)} do bruto`}
+              hint={`${fmtPct(
+                totals.bruto > 0
+                  ? (totals.taxasPlataforma / totals.bruto) * 100
+                  : 0,
+              )} do bruto`}
               tone="warn"
             />
             <Kpi
@@ -282,6 +290,7 @@ export default async function ResultadoPage({
                 bruto: p.bruto,
                 liquido: p.liquido,
                 promocoesLoja: p.promocoesLoja ?? 0,
+                recebidoDireto: p.recebidoDireto ?? 0,
               }))}
               totalBruto={totals.bruto}
               totalLiquido={totals.liquidoPlataformas}

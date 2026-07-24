@@ -201,8 +201,13 @@ export function DetalheLoja({
             {m.platforms
               .filter((p) => unit.platforms.includes(p.id))
               .map((p) => {
-              const pTaxas = p.bruto - p.liquido
-              const pctTaxas = Math.max(0, 100 - p.pctLoja)
+              // Recebido direto (iFood) é da loja, não taxa: entra na fatia da
+              // loja e sai da taxa — a barra fecha 100% e a taxa não infla.
+              const recDir = p.recebidoDireto ?? 0
+              const lojaValorP = p.liquido + recDir
+              const pctLojaP = p.bruto > 0 ? (lojaValorP / p.bruto) * 100 : 0
+              const pTaxas = Math.max(0, p.bruto - p.liquido - recDir)
+              const pctTaxas = Math.max(0, 100 - pctLojaP)
               const hasP = p.bruto > 0
               return (
                 <div key={p.id} className="rounded-md border bg-card p-2">
@@ -220,7 +225,7 @@ export function DetalheLoja({
                       <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-muted">
                         <div
                           className="bg-emerald-500"
-                          style={{ width: `${p.pctLoja}%` }}
+                          style={{ width: `${pctLojaP}%` }}
                         />
                         <div
                           className="bg-slate-500 dark:bg-slate-600"
@@ -229,9 +234,9 @@ export function DetalheLoja({
                       </div>
                       <div className="mt-1 flex items-baseline justify-between text-[10px] tabular-nums leading-tight">
                         <span className="text-emerald-700 dark:text-emerald-400">
-                          <span className="font-bold">{fmtPct(p.pctLoja)}</span>{" "}
+                          <span className="font-bold">{fmtPct(pctLojaP)}</span>{" "}
                           <span className="text-muted-foreground">
-                            {fmtBRLShort(p.liquido)}
+                            {fmtBRLShort(lojaValorP)}
                           </span>
                         </span>
                         <span className="text-slate-700 dark:text-slate-400">

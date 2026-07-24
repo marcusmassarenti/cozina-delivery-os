@@ -42,6 +42,50 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.8",
+    date: "2026-07-24",
+    tag: "Melhorias",
+    title: "“O que fica com a loja” consistente no sistema inteiro",
+    summary:
+      "Varredura em todo o painel pra que o dinheiro recebido na entrega (dinheiro/PIX/VR) apareça como da loja em TODA tela — e nunca mais como taxa da plataforma. Os números agora batem entre dashboard, tabela de lojas, unidade, Financeiro e DRE.",
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "melhoria",
+            title: "“Taxa de repasse” virou “% que fica na loja”",
+            antes: "Taxa de repasse 51,2% (só o repasse das plataformas)",
+            depois: "% que fica na loja 60,8% (repasse + dinheiro na entrega + VR)",
+            desc: "O card mostrava só quanto a plataforma repassa, deixando de fora o dinheiro que o cliente paga na entrega (que já é seu). Agora é a versão em % do “Líquido pra Você”, com a mesma régua do resto do painel.",
+          },
+          {
+            kind: "correcao",
+            title: "Tabela de lojas e visão por plataforma na régua certa",
+            desc: "A coluna “% Loja”, a barra por plataforma e o “Líquido pra loja” agora somam o recebido na entrega e não contam ele como taxa — igual ao detalhe de cada loja.",
+          },
+        ],
+      },
+      {
+        area: "Financeiro, DRE e Unidade",
+        items: [
+          {
+            kind: "correcao",
+            title: "KPIs do Financeiro batem com o DRE",
+            antes: "Líquido (entra na conta) e taxas com o recebido na entrega no lado errado",
+            depois: "Líquido inclui o recebido na entrega; taxa mostra só a taxa real",
+            desc: "Os cards do Financeiro e do relatório de Resultado vinham de um cálculo que ignorava o recebido na entrega. Agora o “Líquido (entra na conta)”, as “Taxas das plataformas” e o “Resultado” batem no valor com o DRE da mesma tela.",
+          },
+          {
+            kind: "correcao",
+            title: "Card “Resultado” da unidade não fica menor que o DRE",
+            desc: "No topo da unidade, o “Resultado” não somava o recebido na entrega e ficava abaixo do “Resultado total da loja” logo no DRE abaixo. Agora os dois batem.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.7",
     date: "2026-07-24",
     tag: "Melhorias",

@@ -402,7 +402,16 @@ function HeroKpis({
   // soma de novo (evita double-count). Senão, soma o VR líquido por cima.
   const vrLiquido =
     m.totalRecebidoReal > 0 ? 0 : Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
-  const resultadoComVr = m.margemLiquida + vrLiquido
+  // Recebido direto (dinheiro/PIX na entrega, iFood): dinheiro que a loja já
+  // embolsou fora do repasse. Entra no resultado igual ao VR e igual ao
+  // "Resultado total da loja" do DRE abaixo — sem isto, o hero ficava MENOR
+  // que o DRE da própria página. Se há "recebido real" manual, ele já inclui
+  // esse valor (não soma de novo).
+  const recebidoDireto =
+    m.totalRecebidoReal > 0
+      ? 0
+      : m.platforms.reduce((a, p) => a + (p.recebidoDireto ?? 0), 0)
+  const resultadoComVr = m.margemLiquida + vrLiquido + recebidoDireto
   const resultadoPct =
     m.faturamentoBruto > 0 ? (resultadoComVr / m.faturamentoBruto) * 100 : 0
 

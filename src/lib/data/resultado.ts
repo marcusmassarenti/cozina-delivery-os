@@ -150,6 +150,12 @@ export async function getNetworkResultadoForMonth(
 
     const bruto = ifoodBruto + nineBruto + keetaBruto
     const liquidoPlataformas = ifoodLiq + nineLiq + keetaLiq
+    // Recebido direto (dinheiro/PIX na entrega, só iFood): dinheiro que a loja
+    // pegou fora do repasse. Não é taxa e conta como receita — mesma régua do
+    // DRE detalhado. Sem isto, as taxas inflavam e o resultado subestimava.
+    const recebidoDireto = hasIfood
+      ? fin!.recebidoDireto
+      : monthlyM.platforms.find((p) => p.id === "ifood")?.recebidoDireto ?? 0
 
     let pedidos = 0
     if (hasIfood) pedidos += fin!.pedidosUnicos
@@ -166,14 +172,14 @@ export async function getNetworkResultadoForMonth(
       ? Math.max(0, manual.vrRecebido - manual.vrTaxaMedia8)
       : 0
 
-    const taxasPlataforma = Math.max(0, bruto - liquidoPlataformas)
+    const taxasPlataforma = Math.max(0, bruto - liquidoPlataformas - recebidoDireto)
     // Promoções/descontos que a loja bancou (já dentro das taxas, itemizado)
     // — iFood + 99 Food + Keeta ("Promoção financiada pela loja").
     const promocoesLoja =
       (hasIfood ? Math.abs(fin!.promocaoLoja) : 0) +
       (has99 ? Math.abs(nine!.promocoesRs) : 0) +
       (keetaPromoLojaByUnit.get(u.id) ?? 0)
-    const totalLiquido = liquidoPlataformas + vrLiquido
+    const totalLiquido = liquidoPlataformas + vrLiquido + recebidoDireto
     const margemLiquida = totalLiquido - cmvTotal
     const margemPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
     const resultadoOperacional = margemLiquida - custoOperacao

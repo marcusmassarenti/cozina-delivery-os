@@ -127,6 +127,7 @@ export async function FinanceiroLojaTab({
       bruto: p.bruto,
       liquido: p.liquido,
       promocoesLoja: p.promocoesLoja ?? 0,
+      recebidoDireto: p.recebidoDireto ?? 0,
     }))
   // 99 Food / Keeta com faturamento: a abertura detalhada abaixo é só do iFood,
   // então avisamos que essas plataformas não trazem esse nível de detalhe.

@@ -172,7 +172,9 @@ export default async function RelatoriosPage({
     {
       label: "Total líquido",
       value: fmtBRL(t.totalLiquido),
-      trend: `${fmtPct(t.repassePct)} de repasse`,
+      trend: `${fmtPct(
+        t.bruto > 0 ? (t.totalLiquido / t.bruto) * 100 : 0,
+      )} do bruto · com recebido na entrega + VR`,
       tone: "positive",
       icon: Wallet,
     },
@@ -334,6 +336,7 @@ export default async function RelatoriosPage({
               bruto: p.bruto,
               liquido: p.liquido,
               promocoesLoja: p.promocoesLoja ?? 0,
+              recebidoDireto: p.recebidoDireto ?? 0,
             }))}
             totalBruto={t.bruto}
             totalLiquido={t.liquidoPlataformas}
