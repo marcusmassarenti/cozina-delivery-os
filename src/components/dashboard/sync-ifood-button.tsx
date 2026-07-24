@@ -1,7 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { Check, CheckCircle2, FileWarning, RefreshCw, XCircle } from "lucide-react"
+import {
+  Check,
+  CheckCircle2,
+  FileWarning,
+  RefreshCw,
+  ShieldAlert,
+  Star,
+  XCircle,
+} from "lucide-react"
 
 import {
   Dialog,
@@ -65,6 +73,30 @@ type SyncRunResult = {
     vinculadas?: { unitCode: string; unitName: string }[]
     backfill?: { unitCode: string; unitName: string; linhas: number; meses: number }[]
   } | null
+  error?: string
+}
+
+/** Espelha o retorno de /api/integracao/ifood-review-sync-run. */
+type ReviewUnitResult = {
+  unitId: string
+  unitCode: string
+  unitName: string
+  merchantId: string
+  ok: boolean
+  gravadas: number
+  puladas: number
+  status?: number
+  motivo?: string
+}
+type ReviewRunResult = {
+  ok: boolean
+  lojasProcessadas?: number
+  totalGravadas?: number
+  homologacao?: boolean
+  flagRaw?: string
+  temCredenciais?: boolean
+  appClientId?: string
+  resultados?: ReviewUnitResult[]
   error?: string
 }
 
@@ -145,21 +177,19 @@ export function SyncIfoodButton() {
   const [pending, setPending] = React.useState(false)
   const [open, setOpen] = React.useState(false)
   const [result, setResult] = React.useState<SyncRunResult | null>(null)
+  const [review, setReview] = React.useState<ReviewRunResult | null>(null)
 
-  async function run() {
-    setPending(true)
-    setResult(null)
+  async function runFinanceiro(): Promise<SyncRunResult> {
     try {
       const r = await fetch("/api/integracao/ifood-sync-run", { method: "POST" })
       // Timeout/erro de servidor vem como texto (ex.: "A server error has
       // occurred"), não JSON — então nunca chamamos r.json() cru (dava
       // "Unexpected token 'A'..." na cara do usuário).
       const txt = await r.text()
-      let j: SyncRunResult
       try {
-        j = JSON.parse(txt) as SyncRunResult
+        return JSON.parse(txt) as SyncRunResult
       } catch {
-        j = {
+        return {
           ok: false,
           error:
             r.status === 504 || r.status === 500 || /server error|timeout/i.test(txt)
@@ -167,24 +197,66 @@ export function SyncIfoodButton() {
               : `Não foi possível concluir a sincronização (erro ${r.status}). Tente de novo.`,
         }
       }
-      setResult(j)
     } catch {
-      setResult({
+      return {
         ok: false,
         error:
           "Não foi possível concluir a sincronização. Verifique a conexão e tente de novo.",
-      })
-    } finally {
-      setPending(false)
-      setOpen(true)
+      }
     }
+  }
+
+  async function runAvaliacoes(): Promise<ReviewRunResult> {
+    try {
+      const r = await fetch("/api/integracao/ifood-review-sync-run", {
+        method: "POST",
+      })
+      const txt = await r.text()
+      try {
+        return JSON.parse(txt) as ReviewRunResult
+      } catch {
+        return {
+          ok: false,
+          error:
+            r.status === 504 || r.status === 500
+              ? "As avaliações demoraram mais que o previsto e foram interrompidas. O que sincronizou está salvo — tente de novo."
+              : `Não foi possível sincronizar as avaliações (erro ${r.status}). Tente de novo.`,
+        }
+      }
+    } catch {
+      return { ok: false, error: "Falha de conexão nas avaliações. Tente de novo." }
+    }
+  }
+
+  async function run() {
+    setPending(true)
+    setResult(null)
+    setReview(null)
+    // Financeiro e avaliações são dois apps/pipelines independentes — rodam em
+    // paralelo, cada um cai na sua seção do popup. Um falhar não derruba o outro.
+    const [fin, rev] = await Promise.all([runFinanceiro(), runAvaliacoes()])
+    setResult(fin)
+    setReview(rev)
+    setPending(false)
+    setOpen(true)
   }
 
   const verdicts = (result?.results ?? []).map(classify)
   const online = verdicts.filter((v) => v.bucket === "online")
   const manual = verdicts.filter((v) => v.bucket === "manual")
   const erro = verdicts.filter((v) => v.bucket === "erro")
-  const done = !!result?.ok && !result?.error && !open
+
+  // Avaliações (segundo app) — mesmos baldes do botão antigo de /avaliacoes.
+  const rev = review?.resultados ?? []
+  const revPuxaram = rev.filter((r) => r.ok && r.gravadas > 0)
+  const revSemNovas = rev.filter((r) => r.ok && r.gravadas === 0)
+  const revFaltaAutorizar = rev.filter((r) => !r.ok && r.status === 403)
+  const revComErro = rev.filter((r) => !r.ok && r.status !== 403)
+  const revAlertaHomolog =
+    !!review?.homologacao && revPuxaram.length === 0 && rev.length > 0
+
+  const done =
+    !!result?.ok && !result?.error && !!review?.ok && !review?.error && !open
 
   // Resumo de período: quais competências foram sincronizadas e onde entrou
   // dado novo (período inédito OU linhas a mais vs a última sync).
@@ -241,18 +313,27 @@ export function SyncIfoodButton() {
               Sincronização iFood
             </DialogTitle>
             <DialogDescription>
-              {result?.error
-                ? "A sincronização falhou."
-                : `Conciliação financeira de ${result?.unitsProcessed ?? 0} loja(s) — mês atual e anterior.`}
+              Conciliação financeira + avaliações das suas lojas iFood, numa
+              rodada só.
             </DialogDescription>
           </DialogHeader>
 
-          {result?.error ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
-              {result.error}
+          <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
+            {/* ===== Financeiro ===== */}
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <PlatformLogo platform="ifood" className="size-4" /> Financeiro
+              {!result?.error && (
+                <span className="font-normal">
+                  · {result?.unitsProcessed ?? 0} loja(s), mês atual e anterior
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+            {result?.error ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+                {result.error}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
               {/* Loja(s) que se conectaram sozinhas nesta rodada (auto-vínculo
                   por CNPJ) — o histórico já foi puxado. */}
               {(result?.autoLink?.vinculadas?.length ?? 0) > 0 && (
@@ -364,8 +445,96 @@ export function SyncIfoodButton() {
                   </p>
                 </div>
               )}
+              </div>
+            )}
+
+            {/* ===== Avaliações ===== */}
+            <div className="border-t pt-3">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Star className="size-4" /> Avaliações
+                {!review?.error && (
+                  <span className="font-normal">
+                    ·{" "}
+                    {review?.totalGravadas?.toLocaleString("pt-BR") ?? 0}{" "}
+                    atualizada(s) em {review?.lojasProcessadas ?? 0} loja(s)
+                  </span>
+                )}
+              </div>
+              {review?.error ? (
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+                  {review.error}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {/* Qual app de Avaliações o servidor amarrou — deve ser e5002ff2… */}
+                  {review?.appClientId && (
+                    <p className="font-mono text-[11px] text-muted-foreground">
+                      app de Avaliações em uso: <b>{review.appClientId}</b>
+                    </p>
+                  )}
+                  {revAlertaHomolog && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-800/50 dark:bg-amber-950/30">
+                      <p className="font-semibold text-amber-800 dark:text-amber-300">
+                        App ainda em modo homologação
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        Todas as lojas voltaram 403 porque o sistema está usando
+                        o app de <b>teste</b> (que só vê a loja sandbox). Isso só
+                        acontece se <b>IFOOD_REVIEW_SANDBOX=true</b> estiver
+                        setado na Vercel — apague essa var (ou ponha{" "}
+                        <b>false</b>) e faça <b>Redeploy</b>.
+                      </p>
+                      <p className="mt-1.5 font-mono text-[11px] text-amber-800 dark:text-amber-300">
+                        IFOOD_REVIEW_SANDBOX = <b>{review?.flagRaw ?? "?"}</b>
+                        {review?.temCredenciais === false &&
+                          " · credenciais do app AUSENTES"}
+                      </p>
+                    </div>
+                  )}
+                  <ReviewGroup
+                    tone="emerald"
+                    icon={<CheckCircle2 className="size-4" />}
+                    title="Trouxeram avaliações"
+                    items={revPuxaram}
+                    render={(r) => `${r.gravadas.toLocaleString("pt-BR")} avaliações`}
+                  />
+                  {/* Etapa manual: loja que ainda não autorizou o app no portal. */}
+                  {revFaltaAutorizar.length > 0 && (
+                    <ReviewGroup
+                      tone="amber"
+                      icon={<ShieldAlert className="size-4" />}
+                      title="Falta autorizar o app no portal iFood"
+                      items={revFaltaAutorizar}
+                      render={() => "autorize esta loja no portal e sincronize de novo"}
+                    />
+                  )}
+                  {revSemNovas.length > 0 && (
+                    <ReviewGroup
+                      tone="muted"
+                      icon={<Check className="size-4" />}
+                      title="Sem avaliações novas"
+                      items={revSemNovas}
+                      render={() => "já estava em dia"}
+                    />
+                  )}
+                  {revComErro.length > 0 && (
+                    <ReviewGroup
+                      tone="rose"
+                      icon={<XCircle className="size-4" />}
+                      title="Com erro"
+                      items={revComErro}
+                      render={(r) => r.motivo ?? "erro"}
+                    />
+                  )}
+                  {rev.length === 0 && (
+                    <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                      Nenhuma loja com merchant iFood vinculado no seu acesso.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
@@ -430,6 +599,54 @@ function Group({
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+/** Grupo de lojas na seção de Avaliações (mesmo layout do financeiro). */
+function ReviewGroup({
+  tone,
+  icon,
+  title,
+  items,
+  render,
+}: {
+  tone: "emerald" | "amber" | "rose" | "muted"
+  icon: React.ReactNode
+  title: string
+  items: ReviewUnitResult[]
+  render: (r: ReviewUnitResult) => string
+}) {
+  if (items.length === 0) return null
+  const toneCls =
+    tone === "emerald"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : tone === "amber"
+        ? "text-amber-700 dark:text-amber-400"
+        : tone === "rose"
+          ? "text-rose-700 dark:text-rose-400"
+          : "text-muted-foreground"
+
+  return (
+    <div>
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${toneCls}`}>
+        {icon}
+        {title}
+        <span className="text-muted-foreground">({items.length})</span>
+      </div>
+      <ul className="mt-1.5 space-y-1">
+        {items.map((r) => (
+          <li key={r.unitId} className="rounded-md border bg-card px-3 py-2">
+            <span className="text-sm font-medium">
+              <span className="tabular-nums text-muted-foreground">
+                {r.unitCode}
+              </span>{" "}
+              {r.unitName}
+            </span>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{render(r)}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

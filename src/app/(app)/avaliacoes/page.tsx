@@ -6,8 +6,7 @@ import { AvaliacoesTab } from "@/app/(app)/unidades/[codigo]/_components/avaliac
 import { Avaliacoes99Tab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-keeta-tab"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getVisibleUnits, getApiSyncVinculos } from "@/lib/data/units"
-import { SyncReviewIfoodButton } from "@/components/dashboard/sync-review-ifood-button"
+import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import {
@@ -66,11 +65,10 @@ export default async function AvaliacoesPage({
     .map((s) => Number(s))
     .filter((n) => n >= 1 && n <= 5)
 
-  const [units, availablePeriods, accessibleIds, vinculos] = await Promise.all([
+  const [units, availablePeriods, accessibleIds] = await Promise.all([
     getVisibleUnits(),
     getAvailablePeriods(),
     getAccessibleUnitIds(),
-    getApiSyncVinculos(),
   ])
 
   const activeUnits = units.filter((u) => u.active)
@@ -124,7 +122,6 @@ export default async function AvaliacoesPage({
             options={availablePeriods}
             enableRange
           />
-          {vinculos.ifood && <SyncReviewIfoodButton />}
           <ExportPdfButton />
         </div>
       </div>

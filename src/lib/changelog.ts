@@ -42,6 +42,39 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.5.0",
+    date: "2026-07-24",
+    tag: "Grande novidade",
+    title: "Um botão só sincroniza o iFood inteiro — financeiro e avaliações",
+    summary:
+      "O “Sincronizar iFood” do painel agora traz, na mesma rodada, a conciliação financeira E as avaliações (com as etiquetas de elogio/reclamação). E, todo dia, isso acontece sozinho.",
+    areas: [
+      {
+        area: "iFood",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Sincronização financeiro + avaliações num clique só",
+            antes:
+              "Eram dois botões: “Sincronizar iFood” (financeiro) no painel e “Sincronizar avaliações” dentro da tela de Avaliações.",
+            depois:
+              "Um único botão “Sincronizar iFood” no painel puxa as duas coisas de uma vez e mostra o resultado em duas seções (Financeiro e Avaliações), loja a loja.",
+          },
+          {
+            kind: "novo",
+            title: "Avaliações trazem as etiquetas (elogios e reclamações)",
+            desc: "Além de nota e comentário, a sincronização agora puxa as etiquetas que o cliente marcou — “Comida saborosa”, “Boa embalagem” e afins — separando elogios de reclamações, igual ao que vinha da planilha. A importação de avaliações por arquivo deixa de ser necessária.",
+          },
+          {
+            kind: "novo",
+            title: "Sincronização automática diária",
+            desc: "Todo dia o sistema puxa sozinho as avaliações novas das lojas conectadas. Cada rodada fica registrada no Histórico de Importações, com a loja que atualizou.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.4.9",
     date: "2026-07-24",
     tag: "Grande novidade",
