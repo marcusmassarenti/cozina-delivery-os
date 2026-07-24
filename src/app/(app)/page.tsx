@@ -690,20 +690,29 @@ export default async function Home({
     keeta: "#0E9E96",
   }
   const liquidoRede = platforms.reduce((s, p) => s + p.liquido, 0)
+  // Taxa REAL da plataforma = bruto − líquido − recebido direto. Sem descontar
+  // o recebido direto (dinheiro/PIX na entrega), o iFood aparecia com taxa
+  // inflada (contava como taxa um valor que a loja embolsou). Mesma régua do
+  // DRE.
+  const taxaReal = (p: (typeof platforms)[number]) =>
+    Math.max(0, p.bruto - p.liquido - (p.recebidoDireto ?? 0))
+  const recebidoRede = platforms.reduce(
+    (s, p) => s + (p.recebidoDireto ?? 0),
+    0,
+  )
   const composicaoSegmentos = [
-    { nome: "Líquido pra você", valor: liquidoRede, cor: "#16A34A" },
+    { nome: "Líquido pra você", valor: liquidoRede + recebidoRede, cor: "#16A34A" },
     ...platforms
-      .filter((p) => p.bruto - p.liquido > 0)
+      .filter((p) => taxaReal(p) > 0)
       .map((p) => ({
         nome: `Taxas ${p.name}`,
-        valor: p.bruto - p.liquido,
+        valor: taxaReal(p),
         cor: CORES_PLAT[p.id] ?? "#94A3B8",
         plat: p.id,
       })),
   ]
   const brutoComposicao =
-    liquidoRede +
-    platforms.reduce((s, p) => s + Math.max(0, p.bruto - p.liquido), 0)
+    liquidoRede + recebidoRede + platforms.reduce((s, p) => s + taxaReal(p), 0)
 
   return (
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -1789,16 +1798,22 @@ function platformTotalsMerged(
     const name = id === "ifood" ? "iFood" : id === "99food" ? "99 Food" : "Keeta"
     let bruto = 0
     let liquido = 0
+    // Recebido direto (só iFood): dinheiro/PIX na entrega. NÃO é taxa — quem
+    // consome (card "Taxas das plataformas") desconta isso da taxa pra não
+    // contar como se o iFood tivesse ficado com esse valor.
+    let recebidoDireto = 0
     for (const u of units.filter((x) => x.active)) {
       if (id === "ifood") {
         const imp = finByUnit.get(u.id)
         if (imp?.hasData) {
           bruto += imp.bruto
           liquido += imp.liquido
+          recebidoDireto += imp.recebidoDireto
         } else {
           const p = u.monthly.platforms.find((p) => p.id === id)
           bruto += p?.bruto ?? 0
           liquido += p?.liquido ?? 0
+          recebidoDireto += p?.recebidoDireto ?? 0
         }
         continue
       }
@@ -1826,7 +1841,7 @@ function platformTotalsMerged(
       }
     }
     const pctLoja = bruto > 0 ? (liquido / bruto) * 100 : 0
-    return { id, name, bruto, liquido, pctLoja }
+    return { id, name, bruto, liquido, pctLoja, recebidoDireto }
   })
 }
 

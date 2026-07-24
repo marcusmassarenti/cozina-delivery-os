@@ -69,6 +69,13 @@ export const CHANGELOG: Release[] = [
             depois: "Resultado total da rede R$ 480,9 mil",
             desc: "No DRE Grupo e no Financeiro, o consolidado da rede não somava o “recebido direto” (dinheiro/PIX na entrega) que o DRE de cada loja já contava — subestimava o resultado em ~R$ 47,7 mil. De quebra, a taxa por plataforma ficou correta: o recebido direto não é mais contado como se fosse taxa do iFood.",
           },
+          {
+            kind: "correcao",
+            title: "Card “Taxas das plataformas” não infla mais a taxa do iFood",
+            antes: "iFood R$ 209,2 mil · total R$ 427,6 mil (49% do bruto)",
+            depois: "iFood R$ 161,5 mil · total R$ 379,9 mil (43% do bruto)",
+            desc: "O card de taxas do dashboard contava o recebido direto (dinheiro/PIX na entrega) como se fosse taxa do iFood. Agora mostra só a taxa real de cada plataforma, batendo com o DRE.",
+          },
         ],
       },
     ],
