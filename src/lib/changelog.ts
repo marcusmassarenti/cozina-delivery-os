@@ -62,6 +62,13 @@ export const CHANGELOG: Release[] = [
             title: "“Líquido pra Você” da rede também conta o recebido direto",
             desc: "O card de topo do dashboard (“Líquido pra Você · o que de fato entra”) seguia a mesma régua e agora soma o repasse + o recebido direto + o VR de toda a rede — igual à soma do que fica em cada loja.",
           },
+          {
+            kind: "correcao",
+            title: "DRE da rede esquecia o dinheiro recebido na entrega",
+            antes: "Resultado total da rede R$ 433,2 mil",
+            depois: "Resultado total da rede R$ 480,9 mil",
+            desc: "No DRE Grupo e no Financeiro, o consolidado da rede não somava o “recebido direto” (dinheiro/PIX na entrega) que o DRE de cada loja já contava — subestimava o resultado em ~R$ 47,7 mil. De quebra, a taxa por plataforma ficou correta: o recebido direto não é mais contado como se fosse taxa do iFood.",
+          },
         ],
       },
     ],

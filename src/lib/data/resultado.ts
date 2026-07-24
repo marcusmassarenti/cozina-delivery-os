@@ -272,6 +272,9 @@ export type NetworkDrePlat = {
   cancelQtd?: number
   /** VR líquido à parte (só iFood). */
   vrLiquido: number
+  /** Só iFood: dinheiro recebido direto na entrega (fora do repasse). Volta no
+   * "Resultado total", igual ao DRE por unidade. */
+  recebidoDireto?: number
   /** Promoção/cupom que a LOJA bancou — separa "taxa real da plataforma" das
    * decisões de campanha da loja no card "Para onde vai o bruto". */
   promocoesLoja: number
@@ -322,6 +325,11 @@ export async function getNetworkDrePlatforms(
       promo: 0,
       cancelValor: 0,
       cancelQtd: 0,
+      // Recebido direto (dinheiro/PIX na entrega, impacto_no_repasse=false):
+      // dinheiro que a loja embolsou fora do repasse. O DRE por unidade já
+      // devolve isso no "Resultado total"; a rede esquecia, subestimando o
+      // consolidado. Só iFood tem.
+      recDireto: 0,
     },
     ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
     ke: { bruto: 0, liq: 0, promo: 0 },
@@ -369,6 +377,7 @@ export async function getNetworkDrePlatforms(
       a.if.entrega += Math.abs(fin!.taxaEntrega)
       a.if.comissao += Math.abs(fin!.comissaoIfood)
       a.if.promo += Math.abs(fin!.promocaoLoja)
+      a.if.recDireto += fin!.recebidoDireto
     }
     a.ni.bruto += niBruto
     a.ni.liq += niLiq
@@ -392,9 +401,14 @@ export async function getNetworkDrePlatforms(
     vr: number,
     promoLoja: number,
     cancel?: { valor: number; qtd: number },
+    recebidoDireto = 0,
   ): NetworkDrePlat | null => {
     if (bruto <= 0) return null
-    const taxaTotal = Math.max(0, bruto - liq)
+    // Taxa REAL = bruto − repasse − recebido direto. O recebido direto não é
+    // taxa (é dinheiro que a loja pegou na entrega); sem descontá-lo aqui, a
+    // linha por plataforma inflaria e não somaria o header. Mesma conta do DRE
+    // por unidade (financeiro-loja-tab).
+    const taxaTotal = Math.max(0, bruto - liq - recebidoDireto)
     const lista: { label: string; value: number; credit?: boolean }[] =
       itens.filter((i) => i.value > 0)
     const resto = taxaTotal - lista.reduce((s, i) => s + i.value, 0)
@@ -419,6 +433,7 @@ export async function getNetworkDrePlatforms(
       perdaCancelamento: cancel?.valor ?? 0,
       cancelQtd: cancel?.qtd ?? 0,
       vrLiquido: vr,
+      recebidoDireto,
       promocoesLoja: Math.min(Math.abs(promoLoja), taxaTotal),
       itens: lista,
     }
@@ -437,6 +452,7 @@ export async function getNetworkDrePlatforms(
       a.vr,
       a.if.promo,
       { valor: a.if.cancelValor, qtd: a.if.cancelQtd },
+      a.if.recDireto,
     ),
     make(
       "99food",
@@ -507,6 +523,7 @@ export async function getNetworkDrePlatformsForRange(
       perdaCancelamento: number
       cancelQtd: number
       vrLiquido: number
+      recebidoDireto: number
       promocoesLoja: number
       itens: Map<string, { value: number; credit?: boolean }>
     }
@@ -521,6 +538,7 @@ export async function getNetworkDrePlatformsForRange(
         perdaCancelamento: 0,
         cancelQtd: 0,
         vrLiquido: 0,
+        recebidoDireto: 0,
         promocoesLoja: 0,
         itens: new Map<string, { value: number; credit?: boolean }>(),
       }
@@ -530,6 +548,7 @@ export async function getNetworkDrePlatformsForRange(
       cur.perdaCancelamento += p.perdaCancelamento ?? 0
       cur.cancelQtd += p.cancelQtd ?? 0
       cur.vrLiquido += p.vrLiquido
+      cur.recebidoDireto += p.recebidoDireto ?? 0
       cur.promocoesLoja += p.promocoesLoja
       for (const it of p.itens) {
         const e = cur.itens.get(it.label) ?? { value: 0, credit: it.credit }
@@ -550,6 +569,7 @@ export async function getNetworkDrePlatformsForRange(
       perdaCancelamento: c.perdaCancelamento,
       cancelQtd: c.cancelQtd,
       vrLiquido: c.vrLiquido,
+      recebidoDireto: c.recebidoDireto,
       promocoesLoja: c.promocoesLoja,
       itens: [...c.itens].map(([label, e]) => ({
         label,
