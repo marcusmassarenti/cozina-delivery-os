@@ -23,7 +23,7 @@ import {
 } from "@/lib/data/coverage-helper"
 import { getUnits } from "@/lib/data/units"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
-import type { PlatformId } from "@/components/platform-logo"
+import type { MarketplaceId } from "@/components/platform-logo"
 
 export type Cadencia = "diario" | "semanal" | "mensal"
 export type ChecklistStatus = "ok" | "parcial" | "atrasado" | "falta"
@@ -32,7 +32,7 @@ export type ChecklistStatus = "ok" | "parcial" | "atrasado" | "falta"
 const DIARIO_TOLERANCIA_DIAS = 4
 
 type ReportDef = {
-  platform: PlatformId
+  platform: MarketplaceId
   key: string
   label: string
   cadencia: Cadencia
@@ -62,7 +62,7 @@ const REPORTS: ReportDef[] = [
 ]
 
 export type ReportStatus = {
-  platform: PlatformId
+  platform: MarketplaceId
   key: string
   label: string
   cadencia: Cadencia
@@ -136,9 +136,9 @@ export async function getImportChecklistForMonth(
     .from("unit_platforms")
     .select("unit_id, platform, review_enabled_at, fin_enabled_at")
     .eq("active", true)
-  const linkedByPlatform = new Map<PlatformId, Set<string>>()
+  const linkedByPlatform = new Map<MarketplaceId, Set<string>>()
   for (const r of platRows ?? []) {
-    const p = r.platform as PlatformId
+    const p = r.platform as MarketplaceId
     if (allowSet && !allowSet.has(r.unit_id)) continue
     if (!shouldExpectDataForMonth(coverage, r.unit_id, p, year, month)) {
       continue
@@ -149,10 +149,10 @@ export async function getImportChecklistForMonth(
 
   // Plataformas realmente HABILITADAS no escopo (unit_platforms.active) — só
   // essas entram no checklist. Loja só-iFood não mostra linhas de 99/Keeta.
-  const enabledPlatforms = new Set<PlatformId>()
+  const enabledPlatforms = new Set<MarketplaceId>()
   for (const r of platRows ?? []) {
     if (allowSet && !allowSet.has(r.unit_id)) continue
-    enabledPlatforms.add(r.platform as PlatformId)
+    enabledPlatforms.add(r.platform as MarketplaceId)
   }
 
   // Avaliações do iFood que entram SOZINHAS pela API: lojas com o app de

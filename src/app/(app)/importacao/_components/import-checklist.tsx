@@ -1,6 +1,6 @@
 import { AlertCircle, Check, ClipboardCheck, Clock } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type MarketplaceId } from "@/components/platform-logo"
 import {
   getImportChecklistForMonth,
   type Cadencia,
@@ -11,7 +11,7 @@ import type { ReportKey } from "@/lib/reports-catalog"
 import { currentPeriod, formatPeriodLabel } from "@/lib/period"
 
 /** Mapeia (plataforma, key do checklist) → key do catálogo de relatórios. */
-function toCatalogKey(platform: PlatformId, key: string): ReportKey | null {
+function toCatalogKey(platform: MarketplaceId, key: string): ReportKey | null {
   const m: Record<string, ReportKey> = {
     "ifood:conciliacao": "ifood_financeiro",
     "ifood:pedidos": "ifood_pedidos",
@@ -30,7 +30,7 @@ function toCatalogKey(platform: PlatformId, key: string): ReportKey | null {
   return m[`${platform}:${key}`] ?? null
 }
 
-const PLAT_LABEL: Record<PlatformId, string> = {
+const PLAT_LABEL: Record<MarketplaceId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
@@ -73,7 +73,7 @@ export async function ImportChecklist() {
   const atrasadoCount = reports.filter((r) => r.status === "atrasado").length
   const faltaCount = reports.filter((r) => r.status === "falta").length
   const pendentes = reports.length - okCount
-  const platforms: PlatformId[] = (["ifood", "99food", "keeta"] as PlatformId[])
+  const platforms: MarketplaceId[] = (["ifood", "99food", "keeta"] as MarketplaceId[])
     .filter((p) => reports.some((r) => r.platform === p))
 
   return (

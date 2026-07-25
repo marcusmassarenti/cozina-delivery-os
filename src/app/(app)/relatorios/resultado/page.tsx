@@ -20,6 +20,7 @@ import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { SectionDivider } from "@/components/shared/section-divider"
+import { ehMarketplace } from "@/components/platform-logo"
 import { getAvailablePeriods, getAntecipacaoFeeByUnits } from "@/lib/data/ifood-imported"
 import {
   getVisibleUnits,
@@ -301,7 +302,7 @@ export default async function RelatoriosPage({
           year={refMonth.year}
           month={refMonth.month}
           periodLabel={periodLabel}
-          platformsEnabled={tenantPlatforms}
+          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
           apiSync={apiSync}
         />
       )}

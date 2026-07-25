@@ -117,11 +117,13 @@ export async function DiagnosticoTab({
     ifood: "#EF4444",
     keeta: "#16A34A",
     "99food": "#EAB308",
+    cardapioweb: "#5B2A86",
   }
   const EVO_LABEL: Record<PlatformId, string> = {
     ifood: "iFood",
     keeta: "Keeta",
     "99food": "99 Food",
+    cardapioweb: "Cardápio Web",
   }
   const rawEvo: { id: PlatformId; raw: typeof evoIf }[] = [
     { id: "ifood", raw: evoIf },

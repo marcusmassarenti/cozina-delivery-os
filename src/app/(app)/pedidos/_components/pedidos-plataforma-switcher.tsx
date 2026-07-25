@@ -3,7 +3,11 @@
 import { useSearchParams } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  type MarketplaceId,
+  type PlatformId,
+} from "@/components/platform-logo"
 
 /**
  * Seletor de plataforma da tela de Pedidos. iFood mostra VR/mix de pagamento;
@@ -29,12 +33,15 @@ export function PedidosPlataformaSwitcher({
     navigate(qs ? `/pedidos?${qs}` : "/pedidos")
   }
 
-  const opts: { id: PlatformId; label: string }[] = (
+  // Só marketplace: a listagem de pedidos desta tela lê as tabelas de
+  // cada marketplace. O Cardápio Web tem pedidos importados, mas ainda
+  // sem tela de listagem — abrir a aba aqui mostraria vazio.
+  const opts: { id: MarketplaceId; label: string }[] = (
     [
       { id: "ifood", label: "iFood" },
       { id: "99food", label: "99 Food" },
       { id: "keeta", label: "Keeta" },
-    ] as { id: PlatformId; label: string }[]
+    ] as { id: MarketplaceId; label: string }[]
   ).filter((o) => platforms.includes(o.id))
 
   return (

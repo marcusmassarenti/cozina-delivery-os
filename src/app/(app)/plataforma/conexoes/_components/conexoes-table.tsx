@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { Check, Minus, Plug, Search } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type MarketplaceId } from "@/components/platform-logo"
 
 export type ConexaoRow = {
   unitId: string
@@ -14,12 +14,12 @@ export type ConexaoRow = {
   ativa: boolean
   cliente: string
   clienteId: string
-  platforms: PlatformId[]
+  platforms: MarketplaceId[]
   ifoodApi: boolean
   ninefoodApi: boolean
 }
 
-const PLATS: { id: PlatformId; label: string }[] = [
+const PLATS: { id: MarketplaceId; label: string }[] = [
   { id: "ifood", label: "iFood" },
   { id: "99food", label: "99 Food" },
   { id: "keeta", label: "Keeta" },
@@ -28,10 +28,10 @@ const PLATS: { id: PlatformId; label: string }[] = [
 export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
   const [query, setQuery] = React.useState("")
   // Plataformas habilitadas exigidas (AND) + conexões de API exigidas (AND).
-  const [platSel, setPlatSel] = React.useState<Set<PlatformId>>(new Set())
+  const [platSel, setPlatSel] = React.useState<Set<MarketplaceId>>(new Set())
   const [apiSel, setApiSel] = React.useState<Set<"ifood" | "99food">>(new Set())
 
-  const togglePlat = (p: PlatformId) =>
+  const togglePlat = (p: MarketplaceId) =>
     setPlatSel((s) => {
       const n = new Set(s)
       n.has(p) ? n.delete(p) : n.add(p)

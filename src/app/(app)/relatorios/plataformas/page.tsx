@@ -20,6 +20,7 @@ const BAR_COLOR: Record<PlatformId, string> = {
   ifood: "bg-red-500",
   "99food": "bg-amber-400",
   keeta: "bg-violet-500",
+  cardapioweb: "bg-purple-800",
 }
 
 export default async function PlataformasPage({

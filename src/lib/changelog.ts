@@ -42,6 +42,34 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.0",
+    date: "2026-07-25",
+    tag: "Grande novidade",
+    title: "Cardápio Web entra no faturamento como plataforma",
+    summary:
+      "O que você vende pelo seu próprio site e cardápio digital agora soma no Dashboard, no faturamento da loja e no DRE — do lado do iFood, 99 Food e Keeta.",
+    areas: [
+      {
+        area: "Faturamento",
+        items: [
+          {
+            kind: "novo",
+            title: "Venda direta aparece junto com os marketplaces",
+            desc: "Bruto, pedidos, ticket médio e cancelamento da sua loja passam a incluir o Cardápio Web. Na Visão por plataforma ele aparece como um quarto card, e no filtro do Dashboard vira mais uma opção.",
+          },
+          {
+            kind: "novo",
+            title: "Dá pra ver quanto a margem melhora sem comissão",
+            antes:
+              "O faturamento do canal próprio ficava só na tela da integração, separado do resto. Não dava pra comparar com o que o marketplace deixa na loja.",
+            depois:
+              "O Cardápio Web mostra 100% de repasse e taxa zerada, ao lado dos marketplaces com a comissão deles. A diferença de margem entre vender direto e vender por aplicativo fica na mesma tela.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.8.2",
     date: "2026-07-25",
     tag: "Correções",

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { AlertTriangle, CircleCheck, Download, Info } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type MarketplaceId } from "@/components/platform-logo"
 import type {
   ImportCoverage,
   PlatformCoverage,
@@ -11,7 +11,7 @@ const MES_ABREV = [
   "jan", "fev", "mar", "abr", "mai", "jun",
   "jul", "ago", "set", "out", "nov", "dez",
 ]
-const PLAT_LABEL: Record<PlatformId, string> = {
+const PLAT_LABEL: Record<MarketplaceId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
@@ -34,17 +34,17 @@ export function UnitCoverageStrip({
   month: number
   periodLabel: string
   /** Plataformas ativas da loja — só essas entram na cobertura. */
-  platforms: PlatformId[]
+  platforms: MarketplaceId[]
   /** Período exibido = mês corrente → chip "mês em aberto" explicando por
    *  que o portal (ao vivo) pode mostrar um pouco mais que o sistema. */
   mesEmAberto?: boolean
 }) {
-  const covOf: Record<PlatformId, PlatformCoverage> = {
+  const covOf: Record<MarketplaceId, PlatformCoverage> = {
     ifood: coverage.ifood,
     "99food": coverage.ninefood,
     keeta: coverage.keeta,
   }
-  const ativos = (["ifood", "99food", "keeta"] as PlatformId[]).filter((id) =>
+  const ativos = (["ifood", "99food", "keeta"] as MarketplaceId[]).filter((id) =>
     platforms.includes(id),
   )
   if (ativos.length === 0) return null

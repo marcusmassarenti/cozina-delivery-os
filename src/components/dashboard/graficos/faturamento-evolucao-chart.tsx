@@ -37,6 +37,7 @@ const COR: Record<PlatformId, string> = {
   ifood: "#EA1D2C",
   "99food": "#E0A400",
   keeta: "#0E9E96",
+  cardapioweb: "#5B2A86",
 }
 
 type Linha = { nome: string; cor: string; plat: PlatformId; valores: (number | null)[] }

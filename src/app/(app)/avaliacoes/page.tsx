@@ -24,6 +24,7 @@ const PLATAFORMA_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 /**
@@ -151,7 +152,13 @@ export default async function AvaliacoesPage({
         <AvaliacoesNetworkDashboard
           year={year}
           month={month}
-          plataforma={plataformaParam}
+          // Cardápio Web ainda não expõe avaliações (escopo `reviews`
+          // não liberado), então nunca vira filtro desta tela.
+          plataforma={
+            plataformaParam && plataformaParam !== "cardapioweb"
+              ? plataformaParam
+              : null
+          }
           notasFiltro={notasFiltro}
           unitIds={networkUnitIds}
         />

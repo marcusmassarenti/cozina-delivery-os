@@ -22,6 +22,7 @@ const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 const MES_ABREV = [
   "jan", "fev", "mar", "abr", "mai", "jun",

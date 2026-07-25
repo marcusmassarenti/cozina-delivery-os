@@ -25,6 +25,7 @@ const PLATFORM_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 /**

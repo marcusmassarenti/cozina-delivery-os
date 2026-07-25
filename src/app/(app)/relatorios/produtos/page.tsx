@@ -16,11 +16,12 @@ import {
 } from "@/lib/period"
 import { ProdutosFilters } from "../_components/produtos-filters"
 
-const ALL_PLAT: PlatformId[] = ["ifood", "99food", "keeta"]
+const ALL_PLAT: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
 const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 const TOP_N = 30
 const MOVERS_N = 15

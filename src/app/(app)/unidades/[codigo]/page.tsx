@@ -4,7 +4,9 @@ import { notFound } from "next/navigation"
 import { ArrowLeft, FileText } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  ehMarketplace,
+} from "@/components/platform-logo"
 import {
   Tabs,
   TabsContent,
@@ -327,7 +329,7 @@ export default async function UnidadeDetalhePage({
             coverage={coverage}
             month={month}
             periodLabel={formatPeriodLabel({ year, month })}
-            platforms={platforms}
+            platforms={platforms.filter(ehMarketplace)}
             mesEmAberto={
               year === new Date().getFullYear() &&
               month === new Date().getMonth() + 1

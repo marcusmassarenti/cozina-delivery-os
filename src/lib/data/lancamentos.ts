@@ -1,11 +1,14 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { PlatformId } from "@/components/platform-logo"
+import type {
+  MarketplaceId,
+  PlatformId,
+} from "@/components/platform-logo"
 
 export type DailyEntry = {
   date: string // YYYY-MM-DD
-  platform: PlatformId
+  platform: MarketplaceId
   pedidos: number
   cancelados: number
   faturamento: number
@@ -80,7 +83,7 @@ export async function getDailyEntries(
   if (error) throw new Error(error.message)
   return (data ?? []).map((d) => ({
     date: d.date,
-    platform: d.platform as PlatformId,
+    platform: d.platform as MarketplaceId,
     pedidos: d.pedidos,
     cancelados: d.cancelados,
     faturamento: Number(d.faturamento),
@@ -119,7 +122,7 @@ export async function getPlatformEntries(
   unitId: string,
   year: number,
   month: number,
-): Promise<Record<PlatformId, PlatformEntry>> {
+): Promise<Record<MarketplaceId, PlatformEntry>> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("monthly_platform_entries")
@@ -129,13 +132,13 @@ export async function getPlatformEntries(
     .eq("month", month)
   if (error) throw new Error(error.message)
 
-  const result: Record<PlatformId, PlatformEntry> = {
+  const result: Record<MarketplaceId, PlatformEntry> = {
     ifood: { ...emptyPlatformEntry },
     "99food": { ...emptyPlatformEntry },
     keeta: { ...emptyPlatformEntry },
   }
   for (const row of data ?? []) {
-    const platform = row.platform as PlatformId
+    const platform = row.platform as MarketplaceId
     result[platform] = {
       taxaEntrega: Number(row.taxa_entrega),
       promocoes: Number(row.promocoes),
@@ -199,14 +202,14 @@ export type PlatformSummary = {
 
 export function summarizeByPlatform(
   entries: DailyEntry[],
-): Record<PlatformId, PlatformSummary> {
-  const platforms: PlatformId[] = ["ifood", "99food", "keeta"]
+): Record<MarketplaceId, PlatformSummary> {
+  const platforms: MarketplaceId[] = ["ifood", "99food", "keeta"]
   const result = Object.fromEntries(
     platforms.map((p) => [
       p,
       { pedidos: 0, cancelados: 0, faturamento: 0, ticketMedio: 0, pctCancelamento: 0 },
     ]),
-  ) as Record<PlatformId, PlatformSummary>
+  ) as Record<MarketplaceId, PlatformSummary>
 
   for (const e of entries) {
     const s = result[e.platform]
@@ -240,6 +243,7 @@ import type { UnitMonthly } from "@/lib/mock-monthly"
 import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
 import { getVrByUnits } from "@/lib/data/ifood-pedidos"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
 
@@ -291,10 +295,11 @@ export async function getRealMonthlyForUnits(
 
   const supabase = createAdminClient()
 
-  const [finMap, nineMap, keetaMap, monthlyRes] = await Promise.all([
+  const [finMap, nineMap, keetaMap, cwMap, monthlyRes] = await Promise.all([
     getFinanceiroResumoByUnits(unitIds, year, month, dateRange),
     getNinefoodResumoByUnits(unitIds, year, month, dateRange),
     getKeetaResumoByUnits(unitIds, year, month, dateRange),
+    getCardapioWebResumoByUnits(unitIds, year, month, dateRange),
     supabase
       .from("monthly_entries")
       .select(
@@ -390,6 +395,15 @@ export async function getRealMonthlyForUnits(
     const ifoodPromoLoja = ifoodHas ? Math.abs(fin!.promocaoLoja) : 0
     const ninePromoLoja = Math.abs(nine?.promocoesRs ?? 0)
     const keetaPromoLoja = keeta?.promocoesLoja ?? 0
+
+    // Cardápio Web: canal próprio. Vem da API, sem planilha e sem fallback —
+    // ou o pedido foi importado, ou não existe.
+    const cw = cwMap.get(unitId)
+    const cwBruto = cw?.bruto ?? 0
+    const cwLiquido = cw?.liquido ?? 0
+    const cwPedidos = cw?.pedidos ?? 0
+    const cwCancel = cw?.cancelamentosQtd ?? 0
+
     const platforms = [
       platformBreakdown(
         "ifood",
@@ -401,12 +415,17 @@ export async function getRealMonthlyForUnits(
       ),
       platformBreakdown("99food", "99 Food", nineBruto, nineLiquido, 0, ninePromoLoja),
       platformBreakdown("keeta", "Keeta", keetaBruto, keetaLiquido, 0, keetaPromoLoja),
+      // recebidoDireto FICA ZERO de propósito. No iFood esse campo é o
+      // dinheiro/PIX pago na entrega, que NÃO está no líquido da Conciliação
+      // e por isso o DRE soma por cima. No canal próprio o líquido já é tudo
+      // que entrou — repetir ali dobrava o resultado da loja.
+      platformBreakdown("cardapioweb", "Cardápio Web", cwBruto, cwLiquido, 0, 0),
     ]
 
-    const totalBruto = ifoodBruto + nineBruto + keetaBruto
-    const totalLiquido = ifoodLiquido + nineLiquido + keetaLiquido
-    const totalPedidos = ifoodPedidos + ninePedidos + keetaPedidos
-    const totalCancelados = ifoodCancel + nineCancel + keetaCancel
+    const totalBruto = ifoodBruto + nineBruto + keetaBruto + cwBruto
+    const totalLiquido = ifoodLiquido + nineLiquido + keetaLiquido + cwLiquido
+    const totalPedidos = ifoodPedidos + ninePedidos + keetaPedidos + cwPedidos
+    const totalCancelados = ifoodCancel + nineCancel + keetaCancel + cwCancel
     const ticketMedio = totalPedidos > 0 ? totalBruto / totalPedidos : 0
 
     // VR é pago à parte pelo iFood (fora do líquido da Conciliação), então

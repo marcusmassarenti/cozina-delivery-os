@@ -5,15 +5,15 @@
  */
 import "server-only"
 
-import type { PlatformId } from "@/components/platform-logo"
+import type { MarketplaceId } from "@/components/platform-logo"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 
-const PLATS: PlatformId[] = ["ifood", "99food", "keeta"]
+const PLATS: MarketplaceId[] = ["ifood", "99food", "keeta"]
 
 export type AcompPlatform = {
-  platform: PlatformId
+  platform: MarketplaceId
   diaria: number
   /** Mesma faixa de dias no mês anterior (pra o Δ% por plataforma). */
   prevDiaria: number

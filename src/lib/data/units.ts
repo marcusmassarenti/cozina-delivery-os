@@ -11,7 +11,12 @@ import {
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { currentPeriod } from "@/lib/period"
-import type { CanalId, PlatformId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  rotuloPlataforma,
+  type CanalId,
+  type PlatformId,
+} from "@/components/platform-logo"
 
 export type Unit = {
   id: string
@@ -402,9 +407,7 @@ export async function getTenantPlatforms(
   const { data } = await q
   const set = new Set<string>()
   for (const r of data ?? []) set.add((r as { platform: string }).platform)
-  return (["ifood", "99food", "keeta"] as PlatformId[]).filter((p) =>
-    set.has(p),
-  )
+  return PLATAFORMAS.filter((p) => set.has(p))
 }
 
 //-------- Agregados ---------------------------------------------
@@ -435,9 +438,8 @@ export function networkTotalsFromUnits(units: Unit[]) {
 }
 
 export function platformTotalsFromUnits(units: Unit[]) {
-  const ids: PlatformId[] = ["ifood", "99food", "keeta"]
-  return ids.map((id) => {
-    const name = id === "ifood" ? "iFood" : id === "99food" ? "99 Food" : "Keeta"
+  return PLATAFORMAS.map((id) => {
+    const name = rotuloPlataforma(id)
     const bruto = units
       .filter((u) => u.active)
       .reduce((acc, u) => {

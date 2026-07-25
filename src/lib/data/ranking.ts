@@ -25,7 +25,7 @@ import {
   type DateRange,
 } from "@/lib/period"
 
-const PLATS: PlatformId[] = ["ifood", "99food", "keeta"]
+const PLATS: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
 
 export type RankingPlatformBreak = Record<PlatformId, number>
 
@@ -109,6 +109,7 @@ const emptyBreak = (): RankingPlatformBreak => ({
   ifood: 0,
   "99food": 0,
   keeta: 0,
+  cardapioweb: 0,
 })
 
 export async function getRankingData(
@@ -212,7 +213,7 @@ export async function getRankingData(
   for (const [unitId, pb] of perPlat) {
     const u = meta.get(unitId)
     if (!u) continue
-    const bruto = pb.ifood + pb["99food"] + pb.keeta
+    const bruto = pb.ifood + pb["99food"] + pb.keeta + pb.cardapioweb
     const ped = pedidos.get(unitId) ?? 0
     const tc = temCustoSet.has(unitId)
     const mb = margBruto.get(unitId) ?? 0

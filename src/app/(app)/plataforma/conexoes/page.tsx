@@ -5,7 +5,10 @@ import { ArrowLeft, ArrowUpRight, Plug, Store } from "lucide-react"
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
 import { getSolicitacoesIfoodPendentes } from "@/lib/data/units"
-import type { PlatformId } from "@/components/platform-logo"
+import {
+  ehMarketplace,
+  type MarketplaceId,
+} from "@/components/platform-logo"
 
 import { ConexoesTable, type ConexaoRow } from "./_components/conexoes-table"
 
@@ -28,7 +31,9 @@ export default async function ConexoesPage() {
         ativa: u.active,
         cliente: c.name,
         clienteId: c.id,
-        platforms: u.platforms as PlatformId[],
+        // Painel de conexões cobre só marketplace (é sobre credencial
+        // de API/planilha); o Cardápio Web tem tela própria.
+        platforms: u.platforms.filter(ehMarketplace) as MarketplaceId[],
         ifoodApi: u.ifoodApi,
         ninefoodApi: u.ninefoodApi,
       })

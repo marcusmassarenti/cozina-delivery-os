@@ -9,13 +9,15 @@ export const PLATFORM_COLOR: Record<PlatformId, string> = {
   ifood: "#EA1D2C",
   "99food": "#FF7A00",
   keeta: "#7C3AED",
+  cardapioweb: "#5B2A86",
 }
 const PLATFORM_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
-const PLATS: PlatformId[] = ["ifood", "99food", "keeta"]
+const PLATS: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
 
 function ChartCard({
   title,

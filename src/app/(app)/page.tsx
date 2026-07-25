@@ -25,8 +25,15 @@ import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoe
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
+import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  rotuloPlataforma,
+  type PlatformId,
+  ehMarketplace,
+  PLATAFORMAS,
+} from "@/components/platform-logo"
 import { type Kpi } from "@/components/shared/kpi-card"
 import { SectionDivider } from "@/components/shared/section-divider"
 import {
@@ -139,10 +146,10 @@ export default async function Home({
   const unidadesFilter = sp.unidades
     ? new Set(sp.unidades.split(",").filter(Boolean))
     : null
-  const plataformaFilter = ["ifood", "99food", "keeta"].includes(
+  const plataformaFilter = (PLATAFORMAS as string[]).includes(
     sp.plataforma ?? "",
   )
-    ? (sp.plataforma as "ifood" | "99food" | "keeta")
+    ? (sp.plataforma as PlatformId)
     : null
   const onlyComFaturamento = sp.ativo === "1"
   const userCtx = await getCurrentUserContext()
@@ -286,6 +293,15 @@ export default async function Home({
     isFullMonth
       ? getNetworkDeliveryFee(activeUnitIds, year, month)
       : getNetworkDeliveryFeeForRange(activeUnitIds, periodRange),
+    // Cardápio Web precisa vir do PERÍODO escolhido. `unit.monthly` é sempre
+    // do mês corrente (getUnits usa currentYearMonth), então usá-lo aqui
+    // mostrava julho num dashboard filtrado em junho.
+    getCardapioWebResumoByUnits(
+      activeUnitIds,
+      year,
+      month,
+      isFullMonth ? undefined : periodRange,
+    ),
   ])
 
   // No caso comum (sem filtro "Com faturamento") o escopo da rede já é conhecido
@@ -293,8 +309,14 @@ export default async function Home({
   // faturamento" precisa dos resumos antes (pra saber qual loja tem pedido).
   const earlyNetworkP = onlyComFaturamento ? null : runNetwork(filterUnitIds)
 
-  const [finByUnit, ninefoodByUnit, keetaByUnit, importCoverage, deliveryFee] =
-    await fase2aP
+  const [
+    finByUnit,
+    ninefoodByUnit,
+    keetaByUnit,
+    importCoverage,
+    deliveryFee,
+    cwByUnit,
+  ] = await fase2aP
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
   // a UnitsTable mostra dados reais sem precisar de prop nova.
@@ -304,6 +326,7 @@ export default async function Home({
       finByUnit.get(u.id),
       ninefoodByUnit.get(u.id),
       keetaByUnit.get(u.id),
+      cwByUnit.get(u.id),
       plataformaFilter,
     ),
   )
@@ -375,6 +398,7 @@ export default async function Home({
     finByUnit,
     ninefoodByUnit,
     keetaByUnit,
+    cwByUnit,
     year,
     month,
     plataformaFilter,
@@ -384,6 +408,7 @@ export default async function Home({
     finByUnit,
     ninefoodByUnit,
     keetaByUnit,
+    cwByUnit,
     plataformaFilter,
   )
   const unitsWithImported = Array.from(finByUnit.values()).filter(
@@ -818,7 +843,7 @@ export default async function Home({
           year={year}
           month={month}
           periodLabel={formatPeriodLabel({ year, month })}
-          platformsEnabled={tenantPlatforms}
+          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
           apiSync={apiSync}
           vinculos={apiVinculos}
         />
@@ -1532,6 +1557,8 @@ type FinResumo = ReturnType<
   ? T
   : never
 
+type CwResumo = Awaited<ReturnType<typeof getCardapioWebResumoByUnits>> extends Map<string, infer T> ? T : never
+
 type NinefoodResumoT = ReturnType<
   typeof getNinefoodResumoByUnits
 > extends Promise<Map<string, infer T>>
@@ -1549,9 +1576,10 @@ function networkTotalsMerged(
   finByUnit: Map<string, FinResumo>,
   ninefoodByUnit: Map<string, NinefoodResumoT>,
   keetaByUnit: Map<string, KeetaResumoT>,
+  cwByUnit: Map<string, CwResumo>,
   year: number,
   month: number,
-  platformFilter?: "ifood" | "99food" | "keeta" | null,
+  platformFilter?: PlatformId | null,
 ) {
   const active = units.filter((u) => u.active)
   let pedidos = 0
@@ -1626,9 +1654,18 @@ function networkTotalsMerged(
           }
         }
       }
+      if (platformFilter === "cardapioweb") {
+        const c = cwByUnit.get(u.id)
+        if (c) {
+          pedidos += c.pedidos
+          bruto += c.bruto
+          liquido += c.liquido
+          cancelados += c.cancelamentosQtd
+        }
+      }
       continue
     }
-    // Sem filtro de plataforma → soma iFood + 99 Food + Keeta
+    // Sem filtro de plataforma → soma iFood + 99 Food + Keeta + Cardápio Web
     const ifoodImp = finByUnit.get(u.id)
     const nineImp = ninefoodByUnit.get(u.id)
     const keetaImp = keetaByUnit.get(u.id)
@@ -1652,11 +1689,28 @@ function networkTotalsMerged(
       cancelados += keetaImp.cancelamentosQtd
     }
     // Fallback pro monthly manual SE nenhuma plataforma trouxe dados
+    const cwMonthly =
+      u.monthly.platforms.find((p) => p.id === "cardapioweb")?.bruto ?? 0
     if (!ifoodImp?.hasData && !nineImp?.hasData && !keetaImp?.hasData) {
+      // `monthly` já embute o Cardápio Web do MÊS CORRENTE. Como o canal
+      // próprio é somado à parte logo abaixo (com o período certo), desconta
+      // aqui pra ele não entrar duas vezes.
       pedidos += u.monthly.pedidos
-      bruto += u.monthly.faturamentoBruto
-      liquido += u.monthly.faturamentoLiquido
+      bruto += u.monthly.faturamentoBruto - cwMonthly
+      liquido +=
+        u.monthly.faturamentoLiquido -
+        (u.monthly.platforms.find((p) => p.id === "cardapioweb")?.liquido ?? 0)
       cancelados += u.monthly.pedidosCancelados ?? 0
+    }
+    // Canal próprio entra SEMPRE por fora: o fallback do monthly acima só
+    // dispara quando nenhum marketplace tem dado, e ali o monthly é do mês
+    // corrente — não do período escolhido.
+    const cwU = cwByUnit.get(u.id)
+    if (cwU?.hasData) {
+      pedidos += cwU.pedidos
+      bruto += cwU.bruto
+      liquido += cwU.liquido
+      cancelados += cwU.cancelamentosQtd
     }
     // Sem filtro: o iFood está no escopo, então soma o recebido direto e o VR.
     recebidoDiretoRede += recebidoIfood(u)
@@ -1703,7 +1757,8 @@ function mergeUnitMonthlyForDashboard(
   fin: FinResumo | undefined,
   nine: NinefoodResumoT | undefined,
   keeta: KeetaResumoT | undefined,
-  platformFilter?: "ifood" | "99food" | "keeta" | null,
+  cw: CwResumo | undefined,
+  platformFilter?: PlatformId | null,
 ): Awaited<ReturnType<typeof getVisibleUnits>>[number] {
   const hasIfood = fin?.hasData ?? false
   const has99 = nine?.hasData ?? false
@@ -1711,7 +1766,7 @@ function mergeUnitMonthlyForDashboard(
   // Com filtro de plataforma, os TOTAIS da unidade (tabela) somam só a
   // plataforma escolhida — pra bater com os KPIs do topo. A barra de
   // plataformas (platforms[]) continua mostrando todas com valores reais.
-  const want = (id: "ifood" | "99food" | "keeta") =>
+  const want = (id: PlatformId) =>
     !platformFilter || platformFilter === id
   if (!hasIfood && !has99 && !hasKeeta && !platformFilter) return u
 
@@ -1778,6 +1833,12 @@ function mergeUnitMonthlyForDashboard(
       }
     }
   }
+  if (want("cardapioweb") && cw?.hasData) {
+    totalPedidos += cw.pedidos
+    totalBruto += cw.bruto
+    totalLiquido += cw.liquido
+    totalCancelados += cw.cancelamentosQtd
+  }
   if (want("keeta")) {
     if (hasKeeta) {
       totalPedidos += keeta!.pedidos
@@ -1814,14 +1875,15 @@ function platformTotalsMerged(
   finByUnit: Map<string, FinResumo>,
   ninefoodByUnit: Map<string, NinefoodResumoT>,
   keetaByUnit: Map<string, KeetaResumoT>,
-  platformFilter?: "ifood" | "99food" | "keeta" | null,
+  cwByUnit: Map<string, CwResumo>,
+  platformFilter?: PlatformId | null,
 ) {
-  const all = ["ifood", "99food", "keeta"] as const
+  const all = PLATAFORMAS
   // Com filtro de plataforma, a seção 2 mostra só a plataforma escolhida —
   // coerente com os KPIs do topo.
   const ids = platformFilter ? all.filter((x) => x === platformFilter) : all
   return ids.map((id) => {
-    const name = id === "ifood" ? "iFood" : id === "99food" ? "99 Food" : "Keeta"
+    const name = rotuloPlataforma(id)
     let bruto = 0
     let liquido = 0
     // Recebido direto (só iFood): dinheiro/PIX na entrega. NÃO é taxa — quem
@@ -1853,6 +1915,14 @@ function platformTotalsMerged(
           bruto += p?.bruto ?? 0
           liquido += p?.liquido ?? 0
         }
+        continue
+      }
+      if (id === "cardapioweb") {
+        // Canal próprio: vem do resumo do PERÍODO, não do monthly (que é
+        // sempre do mês corrente).
+        const c = cwByUnit.get(u.id)
+        bruto += c?.bruto ?? 0
+        liquido += c?.liquido ?? 0
         continue
       }
       // Keeta: prefere importado se houver

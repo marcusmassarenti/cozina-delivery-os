@@ -1,27 +1,53 @@
 import { cn } from "@/lib/utils"
 
 /**
- * Marketplaces: cobram comissão, repassam com desconto, têm VR e
- * cancelamento próprio. É a família que alimenta DRE, ranking e cobertura.
+ * Plataformas de venda da loja. O Cardápio Web entra com o mesmo peso dos
+ * marketplaces: soma no bruto, nos pedidos e no ticket.
  */
-export type PlatformId = "ifood" | "99food" | "keeta"
+export type PlatformId = "ifood" | "99food" | "keeta" | "cardapioweb"
+
+/** Alias histórico. Hoje é o mesmo conjunto — prefira PlatformId. */
+export type CanalId = PlatformId
 
 /**
- * Todo canal de venda, incluindo os PRÓPRIOS (Cardápio Web).
+ * Só os marketplaces. Use onde a estrutura é de REPASSE — comissão, VR,
+ * conciliação, upload de planilha, cobertura de relatório, ficha técnica.
  *
- * De propósito é um tipo separado de PlatformId: canal próprio não tem
- * comissão nem repasse, então não cabe nas contas de marketplace. Use CanalId
- * onde a pergunta é "por onde essa loja vende?", e PlatformId onde a pergunta
- * envolve dinheiro de marketplace.
+ * O Cardápio Web fica de fora desses porque a loja recebe direto: não existe
+ * comissão pra somar nem planilha pra subir. Deixá-lo entrar ali criaria uma
+ * coluna de taxa que sempre valeria zero, e um relatório que nunca chega.
  */
-export type CanalId = PlatformId | "cardapioweb"
+export type MarketplaceId = Exclude<PlatformId, "cardapioweb">
+
+export const MARKETPLACES: MarketplaceId[] = ["ifood", "99food", "keeta"]
+
+/** Toda plataforma, na ordem canônica de exibição. */
+export const PLATAFORMAS: PlatformId[] = [
+  "ifood",
+  "99food",
+  "keeta",
+  "cardapioweb",
+]
 
 /**
- * Separa marketplace de canal próprio. Usado onde a tela só faz sentido pra
- * marketplace — importação de planilha, DRE, cobertura — pra o Cardápio Web
- * não aparecer pedindo um relatório que não existe.
+ * Nome de exibição da plataforma.
+ *
+ * Existe porque o código repetia `id === "ifood" ? "iFood" : id === "99food" ?
+ * "99 Food" : "Keeta"` — um ternário em que QUALQUER id novo cai no último
+ * ramo e é rotulado como Keeta, sem erro de compilação. Centralizar aqui faz
+ * o compilador cobrar o rótulo quando uma plataforma nova entra.
  */
-export function ehMarketplace(canal: CanalId): canal is PlatformId {
+export function rotuloPlataforma(id: PlatformId): string {
+  return config[id].label
+}
+
+/**
+ * Marketplace cobra comissão e repassa com desconto; canal próprio recebe
+ * direto. Só use onde a diferença importa de verdade — upload de planilha de
+ * repasse, conciliação, cobertura de relatório —, não pra decidir se o
+ * faturamento entra na conta (entra sempre).
+ */
+export function ehMarketplace(canal: PlatformId): canal is MarketplaceId {
   return canal !== "cardapioweb"
 }
 

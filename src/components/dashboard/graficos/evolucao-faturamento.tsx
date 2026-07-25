@@ -132,11 +132,21 @@ export async function EvolucaoFaturamento({
     ifood: periods.map(() => ({ bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 })),
     "99food": periods.map(() => ({ bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 })),
     keeta: periods.map(() => ({ bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 })),
+    cardapioweb: periods.map(() => ({
+      bruto: 0,
+      liquido: 0,
+      pedidos: 0,
+      cancelados: 0,
+    })),
   }
   for (const r of flat) byPlat[r.plat][r.i] = r.agg
 
   const brutoMes = periods.map(
-    (_, i) => byPlat.ifood[i].bruto + byPlat["99food"][i].bruto + byPlat.keeta[i].bruto,
+    (_, i) =>
+      byPlat.ifood[i].bruto +
+      byPlat["99food"][i].bruto +
+      byPlat.keeta[i].bruto +
+      byPlat.cardapioweb[i].bruto,
   )
   const primeiro = brutoMes.findIndex((v) => v > 0)
   const idxs =
