@@ -112,6 +112,11 @@ export function montarUrlAutorizacao(p: {
   codeChallenge: string
 }): string {
   const url = new URL(PORTAL_URL[p.ambiente])
+  // response_type=code é OBRIGATÓRIO no Authorization Code (RFC 6749 §4.1.1).
+  // Faltava aqui: o portal montava a tela de consentimento só com o client_id,
+  // mas ao clicar em Autorizar não sabia QUE tipo de resposta emitir e
+  // devolvia "Não foi possível autorizar o aplicativo".
+  url.searchParams.set("response_type", "code")
   url.searchParams.set("client_id", cwClientId(p.ambiente))
   url.searchParams.set("redirect_uri", cwRedirectUri())
   url.searchParams.set("state", p.state)
