@@ -57,6 +57,12 @@ export function LegalShell({
           >
             Política de Privacidade
           </Link>
+          <Link
+            href="/tratamento-de-dados"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Tratamento de Dados
+          </Link>
         </div>
       </main>
     </div>

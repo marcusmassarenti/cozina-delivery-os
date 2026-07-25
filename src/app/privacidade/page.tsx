@@ -93,6 +93,14 @@ export default function PrivacidadePage() {
           (ou a plataforma de delivery que usou). Podemos encaminhar sua
           solicitação, mas quem decide é o Controlador.
         </p>
+        <p>
+          As regras desse tratamento — instruções, segurança, suboperadores,
+          incidentes e eliminação — estão no{" "}
+          <a href="/tratamento-de-dados" className="underline">
+            Anexo de Tratamento de Dados Pessoais
+          </a>
+          .
+        </p>
       </LegalSection>
 
       <LegalSection n={3} title="A quem esta Política se aplica">

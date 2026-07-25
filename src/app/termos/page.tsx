@@ -9,8 +9,9 @@ export default function TermosPage() {
         Estes Termos de Uso (&quot;Termos&quot;) regem o acesso e a utilização
         da plataforma <strong>Delivery OS</strong> (&quot;Plataforma&quot;),
         operada por <strong>LAB OF CHANGE LTDA</strong>, inscrita no CNPJ sob o
-        nº <strong>38.613.971/0001-80</strong> (&quot;nós&quot; ou
-        &quot;Delivery OS&quot;). Ao criar uma conta, contratar um plano ou
+        nº <strong>38.613.971/0001-80</strong>{" "}
+        (&quot;nós&quot; ou &quot;Delivery OS&quot;). Ao criar uma conta,
+        contratar um plano ou
         utilizar a Plataforma, o Cliente declara que leu, entendeu e concorda
         integralmente com estes Termos. Se não concordar, não utilize a
         Plataforma.
@@ -420,6 +421,14 @@ export default function TermosPage() {
           <strong>Operador</strong>, tratando tais dados conforme as instruções
           do Cliente e as finalidades da Plataforma. Cabe ao Cliente assegurar
           base legal adequada e informar seus titulares.
+        </p>
+        <p>
+          As condições desse tratamento estão detalhadas no{" "}
+          <a href="/tratamento-de-dados" className="underline">
+            Anexo de Tratamento de Dados Pessoais
+          </a>
+          , que integra estes Termos e prevalece sobre eles em matéria de
+          proteção de dados.
         </p>
       </LegalSection>
 
