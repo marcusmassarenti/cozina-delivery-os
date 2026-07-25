@@ -42,6 +42,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.8.1",
+    date: "2026-07-25",
+    tag: "Correções",
+    title: "Número da loja não repete mais entre marcas",
+    areas: [
+      {
+        area: "Unidades",
+        items: [
+          {
+            kind: "correcao",
+            title: "Cada loja nova ganha um número único na empresa inteira",
+            antes:
+              "A numeração era contada por marca. Se você tem mais de uma marca, duas lojas podiam receber o mesmo número — e abrir o card de uma levava para a outra, porque o endereço da tela usa esse número.",
+            depois:
+              "A contagem passou a considerar todas as marcas da empresa. Cada loja tem um número só dela, e o card sempre abre a loja certa.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.8.0",
     date: "2026-07-25",
     tag: "Grande novidade",

@@ -247,7 +247,11 @@ export function UnitsListView({
         >
           {filtered.map((unit) => (
             <div
-              key={unit.code}
+              // `id`, não `code`: código é único só por marca, então duas
+              // lojas de marcas diferentes na mesma holding podem repetir o
+              // número. Com key repetida o React funde os dois cards — e o
+              // EditUnitDialog de um abre com os dados do outro.
+              key={unit.id}
               onClick={() => navigate(`/unidades/${unit.code}`)}
               role="button"
               tabIndex={0}

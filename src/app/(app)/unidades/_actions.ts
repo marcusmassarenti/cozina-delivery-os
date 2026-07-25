@@ -54,12 +54,29 @@ async function generateNextCode(
   supabase: ReturnType<typeof createAdminClient>,
   brandId: string,
 ): Promise<string> {
-  // Escopado à marca (código é unique por brand) → cada empresa começa no #01,
-  // não herda o maior da plataforma inteira.
+  // Escopado à HOLDING, não à marca. O banco só exige unique(brand_id, code),
+  // mas quem usa o sistema vê a holding inteira numa lista só — e a rota é
+  // /unidades/<code>, resolvida por código. Duas lojas de marcas diferentes
+  // com o mesmo número deixavam uma delas inalcançável pela navegação.
+  // Numerar por holding faz o número ser único no escopo em que ele é usado.
+  const { data: marca } = await supabase
+    .from("brands")
+    .select("holding_id")
+    .eq("id", brandId)
+    .single()
+
+  const { data: irmas } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("holding_id", marca?.holding_id ?? "")
+
+  // Se a marca não resolveu a holding, cai de volta pro escopo da marca —
+  // pior gerar um número repetido do que travar o cadastro.
+  const brandIds = (irmas ?? []).map((b) => b.id as string)
   const { data } = await supabase
     .from("units")
     .select("code")
-    .eq("brand_id", brandId)
+    .in("brand_id", brandIds.length > 0 ? brandIds : [brandId])
   let max = 0
   for (const row of data ?? []) {
     const n = parseInt(row.code, 10)
