@@ -10,6 +10,7 @@ import { NinoCortesiaModal } from "@/components/nino-cortesia-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
+import { getMfaStatus } from "@/lib/auth/mfa"
 import { MODULES, userCan, isSuperadmin } from "@/lib/auth/permissions"
 import { daysUntil, getCurrentHoldingBilling } from "@/lib/data/billing"
 import { createClient } from "@/lib/supabase/server"
@@ -23,6 +24,14 @@ export default async function AppLayout({
   const { data, error } = await supabase.auth.getUser()
   if (error || !data.user) {
     redirect("/login")
+  }
+
+  // 2FA: quem ativou passou pela senha mas ainda deve o código. Sem esta trava
+  // aqui — no layout que envolve TODAS as telas autenticadas — o segundo fator
+  // seria decorativo: bastaria digitar a URL de qualquer página pra entrar.
+  const mfa = await getMfaStatus()
+  if (mfa.precisaVerificar) {
+    redirect("/login/verificacao")
   }
 
   // "Último acesso" real: marca atividade (throttle de 5 min no RPC). Não

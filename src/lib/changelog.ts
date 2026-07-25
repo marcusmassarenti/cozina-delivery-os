@@ -42,6 +42,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.8.0",
+    date: "2026-07-25",
+    tag: "Grande novidade",
+    title: "Verificação em duas etapas (2FA) para proteger sua conta",
+    summary:
+      "Agora dá para exigir um código do celular além da senha. Sua conta acessa faturamento e repasses — com o 2FA ligado, saber a senha não basta para entrar.",
+    areas: [
+      {
+        area: "Segurança",
+        items: [
+          {
+            kind: "novo",
+            title: "Ative em Minha conta → Segurança",
+            desc: "Você escaneia um QR Code com um aplicativo autenticador (Google Authenticator, Microsoft Authenticator, 1Password, Authy) e digita o código de 6 dígitos para confirmar. A partir daí, todo login pede esse código.",
+          },
+          {
+            kind: "novo",
+            title: "Opcional e por pessoa",
+            desc: "Cada usuário decide se quer ativar — quem não ativar continua entrando só com a senha. Desativar também exige um código válido, para que ninguém desligue a proteção usando uma tela que você deixou aberta.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-07-25",
     tag: "Grande novidade",

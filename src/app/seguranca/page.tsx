@@ -79,6 +79,12 @@ export default function SegurancaPage() {
         <p>Para dificultar invasão de contas:</p>
         <ul className="list-disc pl-5">
           <li>
+            <strong>verificação em duas etapas (2FA)</strong> disponível para
+            qualquer usuário, com aplicativo autenticador — ative em{" "}
+            <em>Minha conta → Segurança</em>. Com ela, saber sua senha não basta
+            para entrar;
+          </li>
+          <li>
             a tela de login é protegida contra robôs por verificação do
             Cloudflare, quase sempre invisível para você;
           </li>
@@ -226,9 +232,10 @@ export default function SegurancaPage() {
         </p>
         <ul className="list-disc pl-5">
           <li>
-            <strong>Não oferecemos ainda autenticação em dois fatores (2FA).</strong>{" "}
-            Até que exista, a proteção da sua conta depende de uma senha forte e
-            não reutilizada. Não compartilhe seu acesso.
+            <strong>O 2FA é opcional, não obrigatório.</strong> Cada usuário
+            decide ativar. Não forçamos a rede inteira porque quem perde o
+            celular sem ter transferido o autenticador ficaria sem acesso ao
+            próprio faturamento — a recuperação depende de um administrador.
           </li>
           <li>
             <strong>Não temos certificação formal</strong> (ISO 27001, SOC 2).

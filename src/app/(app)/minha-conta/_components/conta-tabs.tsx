@@ -6,6 +6,7 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  Lock,
   Palette,
   ShieldCheck,
   Users,
@@ -21,6 +22,7 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
   },
   { href: "/minha-conta/relatorios", label: "Relatórios", icon: ClipboardList },
   { href: "/minha-conta/assinatura", label: "Assinatura", icon: CreditCard },
+  { href: "/minha-conta/seguranca", label: "Segurança", icon: Lock },
   { href: "/minha-conta/permissoes", label: "Permissões", icon: ShieldCheck },
   { href: "/minha-conta/usuarios", label: "Usuários", icon: Users },
 ]

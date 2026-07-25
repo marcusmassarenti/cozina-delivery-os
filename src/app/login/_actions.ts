@@ -57,6 +57,15 @@ export async function signIn(
   }
 
   revalidatePath("/", "layout")
+
+  // Se a conta tem 2FA, a senha só entrega metade do login: manda direto pra
+  // segunda etapa em vez de passar pelo dashboard e ser rebatido de volta.
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2") {
+    redirect("/login/verificacao")
+  }
+
   redirect("/")
 }
 
