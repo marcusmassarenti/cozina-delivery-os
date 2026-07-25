@@ -20,9 +20,13 @@ export function TurnstileWidget() {
 
   return (
     <>
+      {/* afterInteractive, não lazyOnload: com lazyOnload o script só carrega
+          depois de todos os recursos da página, e quem digita rápido clica em
+          Entrar antes de existir token — levando um "confirme que não é um
+          robô" sem ter feito nada errado. */}
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
       />
       <div
         className="cf-turnstile"
