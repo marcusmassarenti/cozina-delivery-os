@@ -42,6 +42,66 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.2",
+    date: "2026-07-25",
+    tag: "Correções",
+    title: "Ajustes finos na entrada do Cardápio Web",
+    areas: [
+      {
+        area: "Faturamento",
+        items: [
+          {
+            kind: "correcao",
+            title: "Loja de teste não soma mais no faturamento da rede",
+            antes:
+              "Uma loja conectada em ambiente de teste entrava no DRE e no Dashboard junto com as lojas de verdade — o consolidado mostrava um faturamento que não existia.",
+            depois:
+              "Só loja em produção entra no número da rede. A tela da própria integração continua mostrando tudo, inclusive o teste, que é onde você confere se a conexão está trazendo os pedidos.",
+          },
+          {
+            kind: "correcao",
+            title: "Cancelamentos do Cardápio Web agora chegam",
+            antes:
+              "A integração só buscava pedidos concluídos, então o cancelamento do canal próprio aparecia sempre zerado — parecia uma operação sem nenhum cancelamento.",
+            depois:
+              "Pedido cancelado entra junto com o concluído. Vale para o histórico novo; o que já tinha sido importado antes não volta sozinho.",
+          },
+        ],
+      },
+      {
+        area: "Relatórios",
+        items: [
+          {
+            kind: "correcao",
+            title: "Meta do dia contava a venda direta a menos",
+            antes:
+              "O relatório de acompanhamento somava só os marketplaces. A loja podia ter batido a meta e a tela mostrava em vermelho uma falta que não existia.",
+            depois:
+              "A venda pelo canal próprio entra na conta da meta.",
+          },
+          {
+            kind: "correcao",
+            title: "Diagnóstico da loja distribuía errado a participação",
+            desc: "A fatia de cada plataforma era calculada sobre um total que ignorava a venda direta, então o iFood aparecia com participação maior do que tem. Isso também alimentava a análise da IA.",
+          },
+          {
+            kind: "correcao",
+            title: "Gráfico de evolução do Dashboard não desenhava o canal próprio",
+            desc: "A linha do Cardápio Web não aparecia na legenda nem no gráfico. Plataforma sem nenhum movimento no período agora some do gráfico em vez de virar uma linha reta no zero.",
+          },
+          {
+            kind: "correcao",
+            title: "'Todas plataformas' aparecia sobre um total parcial",
+            antes:
+              "Em Evolução e Comparativo, selecionar 3 das 4 plataformas ainda escrevia 'todas plataformas' embaixo dos números.",
+            depois:
+              "O texto só diz 'todas' quando são todas mesmo; caso contrário lista quais entraram na conta.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.1",
     date: "2026-07-25",
     tag: "Correções",
