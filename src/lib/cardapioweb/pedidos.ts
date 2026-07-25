@@ -123,6 +123,28 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** Teto das colunas de dinheiro do schema — numeric(12,2). */
+const TETO_VALOR = 9_999_999_999.99
+
+/**
+ * Valor que não cabe na coluna NÃO pode virar null: isso apagaria dinheiro do
+ * faturamento sem ninguém perceber. Falha com mensagem legível — o pedido fica
+ * marcado com erro na tela (visível) e o total do mês segue confiável.
+ *
+ * Visto de verdade no sandbox: um pedido com delivery_fee = 8e19. O Postgres
+ * respondia "numeric field overflow", que não diz nada a quem opera a loja.
+ */
+function conferirFaixa(campos: Record<string, number | null>): void {
+  for (const [nome, v] of Object.entries(campos)) {
+    if (v !== null && Math.abs(v) > TETO_VALOR) {
+      throw new Error(
+        `valor impossível no campo "${nome}" (${v.toExponential(2)}) — ` +
+          `o Cardápio Web devolveu um número fora de qualquer faixa real`,
+      )
+    }
+  }
+}
+
 function str(v: unknown): string | null {
   if (v === null || v === undefined) return null
   const s = String(v).trim()
@@ -256,6 +278,13 @@ export async function gravarDetalhe(
 
   const pag = pagamentoPrincipal(o.payments)
   const criado = o.created_at ? new Date(o.created_at) : null
+
+  conferirFaixa({
+    "taxa de entrega": num(o.delivery_fee),
+    "taxa de serviço": num(o.service_fee),
+    "taxa adicional": num(o.additional_fee),
+    total: num(o.total),
+  })
 
   const { error: errPedido } = await admin
     .from("cardapioweb_pedidos")
