@@ -2,7 +2,9 @@ import Link from "next/link"
 import { ArrowLeft, Minus, TrendingDown, TrendingUp } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  PLATAFORMAS,
+} from "@/components/platform-logo"
 import { ComparativoFilters } from "../_components/comparativo-filters"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
@@ -21,7 +23,10 @@ import {
   formatPeriodLabel,
 } from "@/lib/period"
 
-const ALL_PLAT: PlatformId[] = ["ifood", "99food", "keeta"]
+// PLATAFORMAS em vez de lista fixa: o tipo é de 4 e o valor era de 3, o
+// que o TypeScript aceita calado — a plataforma nova simplesmente
+// sumia do filtro e da série.
+const ALL_PLAT: PlatformId[] = PLATAFORMAS
 
 function keyToYM(key: string): { year: number; month: number } {
   const [y, m] = key.split("-").map(Number)

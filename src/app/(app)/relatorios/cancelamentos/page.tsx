@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtNum, fmtPct } from "@/lib/format"
@@ -35,12 +36,14 @@ export default async function CancelamentosPage({
       : allUnits
   const ids = scoped.map((u) => u.id)
 
-  const [ifoodMap, nineMap, keetaMap, availablePeriods] = await Promise.all([
-    getFinanceiroResumoByUnits(ids, year, month, queryRange),
-    getNinefoodResumoByUnits(ids, year, month, queryRange),
-    getKeetaResumoByUnits(ids, year, month, queryRange),
-    getAvailablePeriods(),
-  ])
+  const [ifoodMap, nineMap, keetaMap, cwMap, availablePeriods] =
+    await Promise.all([
+      getFinanceiroResumoByUnits(ids, year, month, queryRange),
+      getNinefoodResumoByUnits(ids, year, month, queryRange),
+      getKeetaResumoByUnits(ids, year, month, queryRange),
+      getCardapioWebResumoByUnits(ids, year, month, queryRange),
+      getAvailablePeriods(),
+    ])
 
   const rows = scoped
     .map((u) => {
@@ -51,9 +54,14 @@ export default async function CancelamentosPage({
         (f?.cancelamentoTotalQtd ?? 0) + (f?.cancelamentoParcialQtd ?? 0)
       const cancel99 = n?.cancelamentosQtd ?? 0
       const cancelKeeta = k?.cancelamentosQtd ?? 0
-      const cancelados = cancelIfood + cancel99 + cancelKeeta
+      const c = cwMap.get(u.id)
+      const cancelCw = c?.cancelamentosQtd ?? 0
+      const cancelados = cancelIfood + cancel99 + cancelKeeta + cancelCw
       const pedidos =
-        (f?.pedidosUnicos ?? 0) + (n?.pedidos ?? 0) + (k?.pedidos ?? 0)
+        (f?.pedidosUnicos ?? 0) +
+        (n?.pedidos ?? 0) +
+        (k?.pedidos ?? 0) +
+        (c?.pedidos ?? 0)
       return {
         ...u,
         pedidos,
@@ -61,6 +69,7 @@ export default async function CancelamentosPage({
         cancelIfood,
         cancel99,
         cancelKeeta,
+        cancelCw,
         taxa: pedidos > 0 ? (cancelados / pedidos) * 100 : 0,
       }
     })
@@ -189,6 +198,12 @@ export default async function CancelamentosPage({
                       <PlatformLogo platform="keeta" size="sm" /> Keeta
                     </span>
                   </th>
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <PlatformLogo platform="cardapioweb" size="sm" /> Cardápio
+                      Web
+                    </span>
+                  </th>
                   <th className="px-3 py-2.5 text-right font-medium">Pedidos</th>
                 </tr>
               </thead>
@@ -226,6 +241,9 @@ export default async function CancelamentosPage({
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
                       {r.cancelKeeta || "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                      {r.cancelCw || "—"}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
                       {fmtNum(r.pedidos)}

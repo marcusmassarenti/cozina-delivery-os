@@ -178,3 +178,64 @@ export async function getCardapioWebResumoForMonth(
   )
   return mapa.get(unitId) ?? emptyCardapioWeb()
 }
+
+export type CardapioWebTopItem = {
+  nomeItem: string
+  qtdVendida: number
+  valorTotal: number
+}
+
+/**
+ * Itens mais vendidos no canal próprio, no formato dos outros rankings de
+ * produto da rede.
+ *
+ * Sub-item de combo conta separado, igual à tela da integração: é o que amarra
+ * na ficha técnica (o combo consome os componentes).
+ */
+export async function getNetworkCardapioWebTopItemsForMonth(
+  year: number,
+  month: number,
+  limit: number,
+  unitIds: string[],
+): Promise<CardapioWebTopItem[]> {
+  if (unitIds.length === 0) return []
+  const admin = createAdminClient()
+
+  const { data, error } = await admin
+    .from("cardapioweb_pedido_itens")
+    .select(
+      "nome, quantidade, preco_total, cardapioweb_pedidos!inner(unit_id, ref_year, ref_month, sales_channel, status)",
+    )
+    .in("cardapioweb_pedidos.unit_id", unitIds)
+    .eq("cardapioweb_pedidos.ref_year", year)
+    .eq("cardapioweb_pedidos.ref_month", month)
+    .in("cardapioweb_pedidos.sales_channel", CANAIS_PROPRIOS)
+    .limit(10000)
+
+  if (error) {
+    console.error("cardapioweb top itens error:", error.message)
+    return []
+  }
+
+  type Row = {
+    nome: string | null
+    quantidade: number | string | null
+    preco_total: number | string | null
+    cardapioweb_pedidos: { status: string | null } | null
+  }
+
+  const acc = new Map<string, CardapioWebTopItem>()
+  for (const r of (data ?? []) as unknown as Row[]) {
+    // Pedido cancelado não é venda — fora do ranking.
+    if (ehCancelado(r.cardapioweb_pedidos?.status ?? null)) continue
+    const nomeItem = r.nome ?? "(sem nome)"
+    const cur = acc.get(nomeItem) ?? { nomeItem, qtdVendida: 0, valorTotal: 0 }
+    cur.qtdVendida += Number(r.quantidade) || 0
+    cur.valorTotal += Number(r.preco_total) || 0
+    acc.set(nomeItem, cur)
+  }
+
+  return [...acc.values()]
+    .sort((a, b) => b.valorTotal - a.valorTotal)
+    .slice(0, limit)
+}

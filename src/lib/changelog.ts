@@ -77,6 +77,21 @@ export const CHANGELOG: Release[] = [
         ],
       },
       {
+        area: "Relatórios (cont.)",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Cancelamentos, Ticket médio, Evolução e Comparativo",
+            desc: "Os quatro passaram a contar a venda direta. Em Cancelamentos e Ticket médio o Cardápio Web virou coluna; em Evolução e Comparativo virou opção do filtro de plataforma. Loja que vende só pelo canal próprio deixou de sumir dessas telas.",
+          },
+          {
+            kind: "novo",
+            title: "Produtos mais vendidos do Cardápio Web",
+            desc: "O relatório de Produtos agora abre o ranking do canal próprio. Sub-item de combo conta separado, igual à tela da integração — é o que amarra na ficha técnica.",
+          },
+        ],
+      },
+      {
         area: "DRE",
         items: [
           {

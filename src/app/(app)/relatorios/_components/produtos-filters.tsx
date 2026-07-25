@@ -5,14 +5,19 @@ import { usePathname } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Store, X } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  PLATAFORMAS as TODAS_PLATAFORMAS,
+  rotuloPlataforma,
+  type PlatformId,
+} from "@/components/platform-logo"
 import type { PeriodOption, UnitOption } from "./comparativo-filters"
 
-const PLATAFORMAS: { id: PlatformId; label: string }[] = [
-  { id: "ifood", label: "iFood" },
-  { id: "99food", label: "99 Food" },
-  { id: "keeta", label: "Keeta" },
-]
+// Sombreava a constante global de mesmo nome com uma lista de 3 — o
+// Cardápio Web sumia do filtro sem erro de compilação.
+const PLATAFORMAS: { id: PlatformId; label: string }[] = TODAS_PLATAFORMAS.map(
+  (id) => ({ id, label: rotuloPlataforma(id) }),
+)
 
 const INDICADORES = [
   { key: "qtd", label: "Qtd vendida" },

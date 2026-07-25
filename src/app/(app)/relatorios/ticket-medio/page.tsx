@@ -39,11 +39,14 @@ export default async function TicketMedioPage({
       ? allUnits.filter((u) => lojaCodes.includes(u.code))
       : allUnits
 
-  const [todas, ifood, nine, keeta, availablePeriods] = await Promise.all([
+  // "todas" já soma o Cardápio Web — a coluna dele precisa existir, senão o
+  // Geral não bateria com nenhuma das colunas exibidas.
+  const [todas, ifood, nine, keeta, cw, availablePeriods] = await Promise.all([
     getDailyReportMatrix(year, month, "todas", scoped, queryRange),
     getDailyReportMatrix(year, month, "ifood", scoped, queryRange),
     getDailyReportMatrix(year, month, "99food", scoped, queryRange),
     getDailyReportMatrix(year, month, "keeta", scoped, queryRange),
+    getDailyReportMatrix(year, month, "cardapioweb", scoped, queryRange),
     getAvailablePeriods(),
   ])
 
@@ -62,6 +65,7 @@ export default async function TicketMedioPage({
       ifood: tk(ifood, u.id),
       nine: tk(nine, u.id),
       keeta: tk(keeta, u.id),
+      cw: tk(cw, u.id),
       pedidos: pedidosDe(u.id),
     }))
     .filter((r) => r.pedidos > 0)
@@ -152,6 +156,12 @@ export default async function TicketMedioPage({
                     <PlatformLogo platform="keeta" size="sm" /> Keeta
                   </span>
                 </th>
+                <th className="px-3 py-2.5 text-right font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    <PlatformLogo platform="cardapioweb" size="sm" /> Cardápio
+                    Web
+                  </span>
+                </th>
                 <th className="px-4 py-2.5 text-right font-medium">Geral</th>
                 <th className="px-3 py-2.5 text-right font-medium">Pedidos</th>
               </tr>
@@ -163,6 +173,7 @@ export default async function TicketMedioPage({
                   <td className="px-3 py-2.5 text-right">{cell(r.ifood)}</td>
                   <td className="px-3 py-2.5 text-right">{cell(r.nine)}</td>
                   <td className="px-3 py-2.5 text-right">{cell(r.keeta)}</td>
+                  <td className="px-3 py-2.5 text-right">{cell(r.cw)}</td>
                   <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
                     {fmtBRL(r.geral)}
                   </td>
@@ -175,7 +186,7 @@ export default async function TicketMedioPage({
             <tfoot>
               <tr className="border-t-2 bg-muted/30">
                 <td className="px-4 py-2.5 font-semibold">Rede</td>
-                <td colSpan={3}></td>
+                <td colSpan={4}></td>
                 <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
                   {fmtBRL(redeGeral)}
                 </td>

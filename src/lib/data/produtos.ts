@@ -9,6 +9,7 @@ import type { PlatformId } from "@/components/platform-logo"
 import { getNetworkTopItemsForMonth } from "@/lib/data/ifood-imported"
 import { getNetworkNinefoodTopItemsForMonth } from "@/lib/data/ninefood-imported"
 import { getNetworkKeetaTopItemsForMonth } from "@/lib/data/keeta-imported"
+import { getNetworkCardapioWebTopItemsForMonth } from "@/lib/data/cardapioweb-imported"
 
 export type ProdutoRanking = {
   nomeItem: string
@@ -58,11 +59,7 @@ export async function getTopProdutos(
     }))
   }
   if (platform === "cardapioweb") {
-    // Ainda não há agregador de itens do Cardápio Web (os dados existem em
-    // cardapioweb_pedido_itens). Devolve vazio de propósito: antes esta
-    // chamada caía no ramo da Keeta e exibia os produtos DELA sob o título
-    // "Cardápio Web" — número errado com rótulo convincente.
-    return []
+    return getNetworkCardapioWebTopItemsForMonth(year, month, limit, filter)
   }
   const rows = await getNetworkKeetaTopItemsForMonth(year, month, limit, filter)
   return rows.map((r) => ({

@@ -1,7 +1,10 @@
 import Link from "next/link"
 import { ArrowLeft, AlertTriangle, GitCompareArrows } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  PLATAFORMAS,
+  rotuloPlataforma,
+} from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
@@ -12,11 +15,10 @@ import { fmtBRL, fmtNum } from "@/lib/format"
 import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 
-const PLATS: { id: PlatformId; label: string }[] = [
-  { id: "ifood", label: "iFood" },
-  { id: "99food", label: "99 Food" },
-  { id: "keeta", label: "Keeta" },
-]
+const PLATS: { id: PlatformId; label: string }[] = PLATAFORMAS.map((id) => ({
+  id,
+  label: rotuloPlataforma(id),
+}))
 const TOP_N = 25
 
 type SP = { periodo?: string; inicio?: string; fim?: string; lojas?: string; plat?: string; metrica?: string }
