@@ -42,6 +42,44 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.7.0",
+    date: "2026-07-25",
+    tag: "Grande novidade",
+    title: "Termos de Uso e Política de Privacidade reescritos",
+    summary:
+      "Os dois documentos foram refeitos do zero, bem mais completos e claros — incluindo quem responde pelos dados dos seus clientes finais, o que a inteligência artificial faz (e não faz) e as regras de cobrança, cancelamento e suporte.",
+    areas: [
+      {
+        area: "Documentos legais",
+        items: [
+          {
+            kind: "novo",
+            title: "Ficou claro quem responde pelos dados dos seus clientes",
+            antes:
+              "A política dizia que o Delivery OS era o controlador de todos os dados, inclusive dos consumidores que compram na sua loja.",
+            depois:
+              "Agora está correto: sobre os dados dos seus clientes finais, quem decide é você (Controlador) e o Delivery OS apenas processa (Operador). Isso protege os dois lados e é o que a LGPD exige.",
+          },
+          {
+            kind: "novo",
+            title: "Tabela de dados, finalidade e base legal",
+            desc: "A Política agora mostra numa tabela cada tipo de dado que tratamos, para que serve e qual a base legal da LGPD. Também detalha prazos de guarda, incidentes de segurança, cookies e como exercer seus direitos.",
+          },
+          {
+            kind: "novo",
+            title: "Regras de cobrança e cancelamento explícitas",
+            desc: "Reajuste anual pelo IPCA, direito de arrependimento em 7 dias com devolução integral, 30 dias para exportar seus dados após o cancelamento e horário de suporte definido (e-mail e WhatsApp, dias úteis das 9h às 18h).",
+          },
+          {
+            kind: "novo",
+            title: "Limites da inteligência artificial declarados",
+            desc: "Está escrito que a IA apoia a decisão e pode errar, que não substitui contador ou advogado, e que seus dados não são usados para treinar modelos.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-07-24",
     tag: "Grande novidade",
