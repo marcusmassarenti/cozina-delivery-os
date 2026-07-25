@@ -62,6 +62,11 @@ export const CHANGELOG: Release[] = [
             title: "Opcional e por pessoa",
             desc: "Cada usuário decide se quer ativar — quem não ativar continua entrando só com a senha. Desativar também exige um código válido, para que ninguém desligue a proteção usando uma tela que você deixou aberta.",
           },
+          {
+            kind: "novo",
+            title: "Perdeu o celular? O administrador resolve",
+            desc: "Em Minha conta → Usuários, quem tem a verificação ativa aparece com um escudo verde, e o administrador pode desativá-la para essa pessoa. Ela volta a entrar só com e-mail e senha e cadastra um aparelho novo depois. Atenção: confirme por telefone ou pessoalmente quem está pedindo — esse é justamente o caminho que um golpista tentaria usar.",
+          },
         ],
       },
     ],
