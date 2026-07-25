@@ -47,12 +47,16 @@ export default async function VerificacaoPage() {
 
         <VerificacaoForm />
 
-        <p className="mt-8 text-center text-[11px] leading-relaxed text-muted-foreground">
-          Perdeu o acesso ao aplicativo? Peça a um administrador da sua empresa
-          para desativar a verificação em duas etapas da sua conta.
-          <br />
+        {/* <div>, não <p>: o SairLink é um <form>, e form dentro de parágrafo
+            é HTML inválido — o navegador fecha o <p> na marra e desalinha. */}
+        <div className="mt-8 flex flex-col items-center gap-1 text-center text-[11px] leading-relaxed text-muted-foreground">
+          <p>
+            Sem o celular e sem os códigos de recuperação? Peça a um
+            administrador da sua empresa para desativar a verificação em duas
+            etapas da sua conta.
+          </p>
           <SairLink />
-        </p>
+        </div>
       </div>
     </div>
   )
