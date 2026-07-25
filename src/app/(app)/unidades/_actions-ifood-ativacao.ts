@@ -144,6 +144,52 @@ export async function confirmarAprovacaoIfood(
   return { ok: true, message: "Avisamos a equipe — falta pouco!" }
 }
 
+/**
+ * Mesma confirmação, mas para TODAS as lojas pendentes de uma vez.
+ *
+ * O Proprietário aprova as lojas em sequência no Portal do Parceiro, então
+ * confirmar uma a uma virava 7 cliques repetindo a mesma informação.
+ */
+export async function confirmarTodasAprovacoesIfood(
+  _prev: SolicitacaoIfoodState,
+  _formData: FormData,
+): Promise<SolicitacaoIfoodState> {
+  let admin: Awaited<ReturnType<typeof requireAdmin>>["admin"]
+  try {
+    admin = (await requireAdmin()).admin
+  } catch {
+    return { ok: false, message: "Só administradores podem confirmar." }
+  }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não identificada." }
+
+  // Escopado à holding E às unidades que a pessoa enxerga — confirmar em lote
+  // não pode virar atalho pra tocar em loja fora do alcance dela.
+  const acessiveis = await getAccessibleUnitIds()
+
+  let q = admin
+    .from("ifood_activation_requests")
+    .update({ cliente_confirmou_at: new Date().toISOString() })
+    .eq("holding_id", holdingId)
+    .eq("status", "solicitada")
+    .is("cliente_confirmou_at", null)
+  if (acessiveis !== null) q = q.in("unit_id", acessiveis)
+
+  const { data, error } = await q.select("id")
+  if (error) return { ok: false, message: `Falha: ${error.message}` }
+
+  const n = (data ?? []).length
+  revalidatePath("/")
+  revalidatePath("/unidades")
+  return {
+    ok: true,
+    message:
+      n > 0
+        ? `Avisamos a equipe sobre ${n} loja${n > 1 ? "s" : ""} — falta pouco!`
+        : "Nada pendente de confirmação.",
+  }
+}
+
 /** Situação da conexão iFood de UMA loja do cliente, pro aviso na home. */
 export type MinhaSolicitacao = {
   id: string

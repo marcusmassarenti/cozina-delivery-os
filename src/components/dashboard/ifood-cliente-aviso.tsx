@@ -8,6 +8,7 @@ import { CheckCircle2, Clock, ExternalLink, PartyPopper, X } from "lucide-react"
 
 import {
   confirmarAprovacaoIfood,
+  confirmarTodasAprovacoesIfood,
   type MinhaSolicitacao,
   type SolicitacaoIfoodState,
 } from "@/app/(app)/unidades/_actions-ifood-ativacao"
@@ -38,9 +39,13 @@ export function IfoodClienteAviso({
       {ativas.map((s) => (
         <AtivaCard key={s.id} s={s} />
       ))}
-      {pendentesAprovacao.map((s) => (
-        <SolicitadaCard key={s.id} s={s} />
-      ))}
+      {/* Com mais de uma loja esperando, um card só: eram 7 avisos idênticos
+          na home, cada um pedindo a mesma ação e cobrando um clique. */}
+      {pendentesAprovacao.length > 1 ? (
+        <VariasSolicitadasCard lojas={pendentesAprovacao} />
+      ) : (
+        pendentesAprovacao.map((s) => <SolicitadaCard key={s.id} s={s} />)
+      )}
     </div>
   )
 }
@@ -105,6 +110,78 @@ function BotaoConfirmar() {
       <CheckCircle2 className="size-3.5" />
       {pending ? "Enviando…" : "Já aprovei no iFood"}
     </button>
+  )
+}
+
+function BotaoConfirmarTodas({ n }: { n: number }) {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-sky-700 disabled:opacity-60"
+    >
+      <CheckCircle2 className="size-3.5" />
+      {pending ? "Enviando…" : `Já aprovei as ${n}`}
+    </button>
+  )
+}
+
+/** Várias lojas esperando aprovação: um aviso, uma ação. */
+function VariasSolicitadasCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
+  const router = useRouter()
+  const [state, action] = useActionState<SolicitacaoIfoodState, FormData>(
+    confirmarTodasAprovacoesIfood,
+    { ok: false },
+  )
+  React.useEffect(() => {
+    if (state.ok) router.refresh()
+  }, [state.ok, router])
+
+  const faltam = lojas.filter((s) => !s.clienteConfirmou)
+  if (faltam.length === 0 || state.ok) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/50 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/20">
+        <CheckCircle2 className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+        <p className="text-muted-foreground">
+          Recebemos que você aprovou no iFood — estamos finalizando a conexão
+          de <b className="text-foreground">{lojas.length} lojas</b>. Você é
+          avisado aqui quando ficarem prontas.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-sky-200/70 bg-sky-50/50 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/20">
+      <div className="flex flex-wrap items-center gap-2">
+        <Clock className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+        <p className="min-w-0 flex-1 text-muted-foreground">
+          <b className="text-foreground">
+            {faltam.length} lojas esperando sua aprovação no iFood
+          </b>{" "}
+          — o Proprietário aceita o app Delivery OS no Portal do Parceiro, uma
+          por uma.
+        </p>
+        <a
+          href={PORTAL_PARCEIRO}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-800 dark:bg-transparent dark:text-sky-300 dark:hover:bg-sky-950/40"
+        >
+          Abrir Portal
+          <ExternalLink className="size-3" />
+        </a>
+        <form action={action}>
+          <BotaoConfirmarTodas n={faltam.length} />
+        </form>
+      </div>
+      <p className="mt-1.5 pl-6 text-[11px] text-muted-foreground">
+        {faltam
+          .map((s) => `${s.unitCode ? `${s.unitCode} · ` : ""}${s.unitName}`)
+          .join(" · ")}
+      </p>
+    </div>
   )
 }
 

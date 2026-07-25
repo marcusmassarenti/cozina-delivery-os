@@ -2,13 +2,14 @@
 
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { Copy, Check } from "lucide-react"
+import { Copy, Check, Undo2 } from "lucide-react"
 import * as React from "react"
 
 import { Button } from "@/components/ui/button"
 
 import {
   atualizarSolicitacaoIfood,
+  desfazerStatusIfood,
   type SolicitacaoUpdateState,
 } from "../_actions"
 
@@ -22,6 +23,8 @@ export type SolicitacaoAdmin = {
   createdAt: string
   /** Quando o cliente apertou "Já aprovei no iFood" (sinal pra vincular). */
   clienteConfirmouAt: string | null
+  /** Passo anterior da fila — habilita o Desfazer. */
+  statusAnterior: string | null
 }
 
 function fmtCnpj(d: string): string {
@@ -65,6 +68,10 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
     { ok: false },
   )
 
+  // Recusada não tem "próximo status", mas precisa do Desfazer — senão o
+  // bloco de ações inteiro some e o clique errado fica sem volta.
+  const podeDesfazer = Boolean(s.statusAnterior) || s.status === "recusada"
+
   const proximas: Array<{ status: string; rotulo: string }> =
     s.status === "pendente"
       ? [
@@ -99,7 +106,7 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
         </span>
       </div>
 
-      {proximas.length > 0 && (
+      {(proximas.length > 0 || podeDesfazer) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {proximas.map((p) => (
             <form key={p.status} action={action}>
@@ -115,6 +122,10 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
               <BotaoStatus rotulo={p.rotulo} />
             </form>
           ))}
+          {/* Recusada sempre pode voltar; sem histórico, volta pro início. */}
+          {podeDesfazer && (
+            <BotaoDesfazer id={s.id} para={s.statusAnterior ?? "pendente"} />
+          )}
           {s.status === "pendente" && (
             <span className="text-[11px] text-muted-foreground">
               → Portal do Desenvolvedor · Meus Apps · Permissões · buscar pelo
@@ -137,6 +148,36 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
         <p className="mt-1 text-[11px] text-rose-600">{state.error}</p>
       )}
     </div>
+  )
+}
+
+/**
+ * Volta a solicitação pro passo anterior da fila.
+ *
+ * "Recusar" fica colado em "Loja vinculada — ativar", e o clique errado não é
+ * cosmético: recusada some do aviso da home do cliente, então ele deixa de ser
+ * lembrado de aprovar no Portal do Parceiro e a conexão morre calada.
+ */
+function BotaoDesfazer({ id, para }: { id: string; para: string }) {
+  const [state, action] = useActionState<SolicitacaoUpdateState, FormData>(
+    desfazerStatusIfood,
+    { ok: false },
+  )
+  return (
+    <form action={action} className="inline-flex items-center gap-1.5">
+      <input type="hidden" name="id" value={id} />
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        title={`Volta para "${para}"`}
+      >
+        <Undo2 className="size-3" />
+        Desfazer
+      </button>
+      {state.error && (
+        <span className="text-[11px] text-rose-600">{state.error}</span>
+      )}
+    </form>
   )
 }
 

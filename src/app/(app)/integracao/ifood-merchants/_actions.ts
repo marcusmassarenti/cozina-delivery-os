@@ -207,15 +207,90 @@ export async function atualizarSolicitacaoIfood(
     }
   }
 
+  // Guarda de onde veio, pro Desfazer restaurar o passo certo da fila.
+  const { data: atual } = await admin
+    .from("ifood_activation_requests")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle()
+
   const { error } = await admin
     .from("ifood_activation_requests")
-    .update({ status, nota, updated_at: new Date().toISOString() })
+    .update({
+      status,
+      nota,
+      status_anterior: (atual?.status as string | null) ?? null,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
   if (error) return { ok: false, error: error.message }
 
   revalidatePath("/integracao/ifood-merchants")
   revalidatePath("/importacao")
   return { ok: true, message: "Status atualizado." }
+}
+
+/**
+ * Desfaz a última mudança de status, voltando ao passo anterior da fila.
+ *
+ * Existe porque "Recusar" fica colado em "Loja vinculada — ativar" e um
+ * clique errado matava a conexão em silêncio: recusada some do aviso da home
+ * do cliente, então ele para de ser lembrado de aprovar no Portal do Parceiro.
+ *
+ * Restaura `status_anterior` em vez de assumir um valor — a recusa pode ter
+ * vindo de 'pendente' (antes de eu abrir o portal) ou de 'solicitada' (já
+ * pedi, faltava ele aprovar), e voltar pro passo errado confunde os dois lados.
+ */
+export async function desfazerStatusIfood(
+  _prev: SolicitacaoUpdateState,
+  formData: FormData,
+): Promise<SolicitacaoUpdateState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Apenas o admin da plataforma." }
+  }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, error: "id ausente" }
+
+  const admin = createAdminClient()
+  const { data: req } = await admin
+    .from("ifood_activation_requests")
+    .select("status, status_anterior")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (!req) return { ok: false, error: "Solicitação não encontrada." }
+
+  // Sem histórico (recusa anterior a esta funcionalidade) volta pro INÍCIO da
+  // fila, não pro passo que eu acharia provável. 'pendente' custa um clique a
+  // mais se a solicitação no portal já tinha sido feita, mas não inventa um
+  // estado — e enganar sobre "já pedi no portal" trava os dois lados esperando
+  // um do outro.
+  const anterior = (req.status_anterior as string | null) ?? "pendente"
+
+  const { error } = await admin
+    .from("ifood_activation_requests")
+    .update({
+      status: anterior,
+      // A nota do passo desfeito vai junto: ela é o texto que o CLIENTE lê
+      // ("não foi possível localizar a loja..."). Deixar para trás uma
+      // explicação de recusa numa solicitação que voltou pra fila diria a ele
+      // o oposto do que está acontecendo.
+      nota: null,
+      // Sem encadear desfazer: o passo anterior do passo anterior não é
+      // guardado, e restaurar um valor velho daria a impressão de histórico
+      // completo que não existe.
+      status_anterior: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/integracao/ifood-merchants")
+  revalidatePath("/importacao")
+  return { ok: true, message: `Voltou para "${anterior}".` }
 }
 
 // ─── Habilitação POR APP (financeiro vs avaliações) ─────────────────────

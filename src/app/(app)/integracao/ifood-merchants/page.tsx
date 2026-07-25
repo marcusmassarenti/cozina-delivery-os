@@ -127,7 +127,7 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
   const { data } = await admin
     .from("ifood_activation_requests")
     .select(
-      "id, cnpj, status, nota, created_at, cliente_confirmou_at, holdings(name), units(code, name)",
+      "id, cnpj, status, status_anterior, nota, created_at, cliente_confirmou_at, holdings(name), units(code, name)",
     )
     .order("created_at", { ascending: false })
     .limit(30)
@@ -144,6 +144,7 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
       createdAt: s.created_at as string,
       clienteConfirmouAt:
         (s.cliente_confirmou_at as string | null) ?? null,
+      statusAnterior: (s.status_anterior as string | null) ?? null,
     }
   })
 }
