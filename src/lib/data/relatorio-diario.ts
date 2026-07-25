@@ -20,7 +20,10 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { CANAIS_PROPRIOS } from "@/lib/data/cardapioweb-imported"
+import {
+  CANAIS_PROPRIOS,
+  installIdsDeProducao,
+} from "@/lib/data/cardapioweb-imported"
 import { getNinefoodApiBillDiarioByUnits } from "@/lib/data/ninefood-imported"
 import type { ReportPlatform } from "@/lib/data/relatorio-diario-types"
 
@@ -525,6 +528,10 @@ async function loadCardapioWeb(
   if (unitIds.length === 0) return b
   const admin = createAdminClient()
 
+  // Só produção — sandbox não entra em número consolidado.
+  const installs = await installIdsDeProducao()
+  if (installs.length === 0) return b
+
   type PedRow = {
     unit_id: string | null
     criado_em: string | null
@@ -537,6 +544,7 @@ async function loadCardapioWeb(
       .select("unit_id, criado_em, status, total")
       .in("unit_id", unitIds)
       .in("sales_channel", CANAIS_PROPRIOS)
+      .in("install_id", installs)
       .eq("ref_year", year)
       .eq("ref_month", month)
     if (dateRange) {

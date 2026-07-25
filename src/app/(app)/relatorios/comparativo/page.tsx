@@ -156,7 +156,7 @@ export default async function ComparativoPage({
             {mesA ? formatPeriodLabel(keyToYM(mesA)) : "—"}
             {mesB && ` vs ${formatPeriodLabel(keyToYM(mesB))}`} ·{" "}
             {selectedUnits.length} loja{selectedUnits.length === 1 ? "" : "s"} ·{" "}
-            {plataformas.length === 3
+            {plataformas.length === PLATAFORMAS.length
               ? "todas plataformas"
               : plataformas.join(" + ")}
           </p>

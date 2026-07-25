@@ -3,8 +3,13 @@ import "server-only"
 import { getFinanceiroResumoForMonth } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoForMonth } from "@/lib/data/keeta-imported"
+import { getCardapioWebResumoForMonth } from "@/lib/data/cardapioweb-imported"
+import type { PlatformId } from "@/components/platform-logo"
 
-export type PlatId = "ifood" | "99food" | "keeta"
+// Alias do tipo global. Era uma união local de 3, e o share por plataforma
+// saía calculado sobre um total sem o canal próprio — inflando a fatia dos
+// marketplaces na aba Diagnóstico E no contexto da IA.
+export type PlatId = PlatformId
 
 export type PlatBreak = {
   id: PlatId
@@ -32,6 +37,7 @@ const LABEL: Record<PlatId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 /**
@@ -43,10 +49,11 @@ export async function getOperacaoConsolidada(
   year: number,
   month: number,
 ): Promise<Consolidado> {
-  const [ifood, nine, keeta] = await Promise.all([
+  const [ifood, nine, keeta, cw] = await Promise.all([
     getFinanceiroResumoForMonth(unitId, year, month),
     getNinefoodResumoForMonth(unitId, year, month),
     getKeetaResumoForMonth(unitId, year, month),
+    getCardapioWebResumoForMonth(unitId, year, month),
   ])
 
   const raw: Omit<PlatBreak, "sharePct">[] = [
@@ -81,6 +88,15 @@ export async function getOperacaoConsolidada(
       ticket: keeta.ticketMedio,
       temDados: keeta.hasData,
       cancelamentosQtd: keeta.cancelamentosQtd,
+    },
+    {
+      id: "cardapioweb",
+      label: LABEL.cardapioweb,
+      bruto: cw.bruto,
+      pedidos: cw.pedidos,
+      ticket: cw.ticketMedio,
+      temDados: cw.hasData,
+      cancelamentosQtd: cw.cancelamentosQtd,
     },
   ]
 

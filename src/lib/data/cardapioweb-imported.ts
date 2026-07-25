@@ -68,10 +68,23 @@ export const CANAIS_PROPRIOS = [
 ]
 
 /**
- * `criado_em` é timestamptz e o filtro de período vem como "YYYY-MM-DD".
- * Sem fuso explícito o Postgres lê como UTC — que é 21h do dia ANTERIOR em
- * Brasília, jogando o movimento da noite para o dia errado.
+ * Instalações que valem para número consolidado: só PRODUÇÃO.
+ *
+ * Sandbox existe para testar a integração, e o dado dele é fictício — lote de
+ * teste, valor digitado à toa. Enquanto isso entrava no DRE e no Dashboard, a
+ * rede aparecia faturando dinheiro que não existe. A tela da própria
+ * integração (/integracao/cardapioweb) segue mostrando tudo: lá o objetivo é
+ * justamente conferir o que veio, inclusive do sandbox.
  */
+export async function installIdsDeProducao(): Promise<string[]> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("cardapioweb_installs")
+    .select("id")
+    .eq("ambiente", "producao")
+  return (data ?? []).map((r) => r.id as string)
+}
+
 function inicioDoDiaBRT(data: string): string {
   return `${data}T00:00:00-03:00`
 }
@@ -97,10 +110,14 @@ async function buscarLinhas(
   if (unitIds.length === 0) return []
   const admin = createAdminClient()
 
+  const installs = await installIdsDeProducao()
+  if (installs.length === 0) return []
+
   let q = admin
     .from("cardapioweb_pedidos")
     .select("unit_id, status, total")
     .in("unit_id", unitIds)
+    .in("install_id", installs)
     // Só venda direta: pedido de marketplace que passou por aqui já é contado
     // pela integração daquele marketplace.
     .in("sales_channel", CANAIS_PROPRIOS)
@@ -201,6 +218,9 @@ export async function getNetworkCardapioWebTopItemsForMonth(
   if (unitIds.length === 0) return []
   const admin = createAdminClient()
 
+  const installs = await installIdsDeProducao()
+  if (installs.length === 0) return []
+
   const { data, error } = await admin
     .from("cardapioweb_pedido_itens")
     .select(
@@ -210,6 +230,7 @@ export async function getNetworkCardapioWebTopItemsForMonth(
     .eq("cardapioweb_pedidos.ref_year", year)
     .eq("cardapioweb_pedidos.ref_month", month)
     .in("cardapioweb_pedidos.sales_channel", CANAIS_PROPRIOS)
+    .in("cardapioweb_pedidos.install_id", installs)
     .limit(10000)
 
   if (error) {

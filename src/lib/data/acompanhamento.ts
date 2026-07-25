@@ -5,15 +5,21 @@
  */
 import "server-only"
 
-import type { MarketplaceId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 
-const PLATS: MarketplaceId[] = ["ifood", "99food", "keeta"]
+// PLATAFORMAS, não marketplaces: este relatório é VENDA contra META. Sem o
+// canal próprio, o "falta" saía inflado — a loja podia ter batido a meta e a
+// tela pintava de vermelho um valor que não existe.
+const PLATS: PlatformId[] = PLATAFORMAS
 
 export type AcompPlatform = {
-  platform: MarketplaceId
+  platform: PlatformId
   diaria: number
   /** Mesma faixa de dias no mês anterior (pra o Δ% por plataforma). */
   prevDiaria: number

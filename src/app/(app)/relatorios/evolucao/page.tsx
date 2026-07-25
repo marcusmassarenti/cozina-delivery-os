@@ -146,7 +146,7 @@ export default async function EvolucaoPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {meta.label} · {lojasLabel} ·{" "}
-            {plataformas.length === 3
+            {plataformas.length === PLATAFORMAS.length
               ? "todas plataformas"
               : plataformas.join(" + ")}
           </p>
