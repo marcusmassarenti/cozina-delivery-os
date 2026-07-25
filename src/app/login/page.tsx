@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { BarChart3 } from "lucide-react"
+import { BarChart3, ShieldAlert } from "lucide-react"
 
 import { DeliveryOsMark } from "@/components/delivery-os-logo"
 import { PlatformLogo } from "@/components/platform-logo"
@@ -9,7 +9,12 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { createClient } from "@/lib/supabase/server"
 import { LoginForm } from "./_components/login-form"
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ recuperado?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
   if (data.user) {
@@ -90,6 +95,19 @@ export default async function LoginPage() {
                 Delivery OS
               </span>
             </div>
+
+            {/* Veio de um código de recuperação: sem este aviso, a pessoa
+                não entende por que voltou pra tela de login. */}
+            {sp.recuperado === "1" && (
+              <div className="mb-6 flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  <b>Código de recuperação aceito.</b> A verificação em duas
+                  etapas foi desativada. Entre com e-mail e senha e cadastre seu
+                  novo aparelho em Minha conta → Segurança.
+                </span>
+              </div>
+            )}
 
             <div className="mb-8 flex items-center gap-2.5">
               <div className="flex size-9 items-center justify-center rounded-md bg-accent text-accent-foreground">

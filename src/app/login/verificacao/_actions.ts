@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
-import { apagarCodigos, consumirCodigo } from "@/lib/auth/backup-codes"
+import { consumirCodigo } from "@/lib/auth/backup-codes"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
@@ -113,8 +113,19 @@ export async function usarCodigoDeRecuperacao(
   for (const f of alvo?.user?.factors ?? []) {
     await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId: u.user.id })
   }
-  await apagarCodigos(u.user.id)
+
+  // Os códigos restantes ficam. Já valeu a pena: na 1ª versão apagávamos todos
+  // aqui, então qualquer tropeço depois deste ponto deixava a pessoa sem
+  // nenhuma segunda chance. Com o 2FA desligado eles são inofensivos (a tela
+  // de recuperação só existe quando há fator), e o próximo cadastro os
+  // substitui.
+
+  // Encerra a sessão e manda entrar de novo, em vez de tentar seguir com a
+  // sessão atual. Ela nasceu exigindo aal2 e o fator acabou de sumir — foi
+  // exatamente essa ambiguidade que devolveu o usuário pra tela de código no
+  // primeiro teste. Login limpo não tem essa dúvida.
+  await supabase.auth.signOut()
 
   revalidatePath("/", "layout")
-  redirect("/minha-conta/seguranca?recuperado=1")
+  redirect("/login?recuperado=1")
 }

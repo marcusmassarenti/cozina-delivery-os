@@ -31,6 +31,10 @@ export function VerificacaoForm() {
   if (modoRecuperacao) {
     return (
       <form action={recAction} className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Digite um dos <b className="text-foreground">códigos de recuperação</b>{" "}
+          que você guardou quando ativou a verificação em duas etapas.
+        </p>
         <div className="flex flex-col gap-2">
           <label
             htmlFor="rec"
@@ -82,6 +86,10 @@ export function VerificacaoForm() {
 
   return (
     <form action={action} className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Abra seu aplicativo autenticador e digite o código de 6 dígitos que
+        aparece para o <b className="text-foreground">Delivery OS</b>.
+      </p>
       <div className="flex flex-col gap-2">
         <label
           htmlFor="code"

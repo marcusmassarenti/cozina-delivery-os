@@ -40,11 +40,10 @@ export default async function VerificacaoPage() {
           <h1 className="text-xl font-semibold">Confirme que é você</h1>
         </div>
 
-        <p className="mb-6 text-sm text-muted-foreground">
-          Abra seu aplicativo autenticador e digite o código de 6 dígitos que
-          aparece para o <b className="text-foreground">Delivery OS</b>.
-        </p>
-
+        {/* A instrução vive DENTRO do formulário: ela muda conforme o modo
+            (app autenticador × código de recuperação). Quando morava aqui
+            fora, pedia "código de 6 dígitos" com o campo de recuperação
+            aberto logo abaixo. */}
         <VerificacaoForm />
 
         {/* <div>, não <p>: o SairLink é um <form>, e form dentro de parágrafo
