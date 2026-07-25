@@ -138,7 +138,10 @@ export default async function CardapioWebPage() {
         </p>
       </div>
 
-      <ConectarLoja unidades={opcoesUnidade} />
+      <ConectarLoja
+        unidades={opcoesUnidade}
+        redirectUri={process.env.CARDAPIOWEB_REDIRECT_URI ?? null}
+      />
 
       {installs.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-8 text-center">

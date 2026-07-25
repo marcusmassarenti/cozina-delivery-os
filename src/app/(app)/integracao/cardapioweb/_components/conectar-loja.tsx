@@ -21,7 +21,14 @@ export type UnidadeOpcao = { id: string; code: string; name: string }
  * Navegação por `window.location` de propósito — é um redirect de página
  * inteira pra um domínio externo, não uma rota interna do app.
  */
-export function ConectarLoja({ unidades }: { unidades: UnidadeOpcao[] }) {
+export function ConectarLoja({
+  unidades,
+  redirectUri,
+}: {
+  unidades: UnidadeOpcao[]
+  /** URL de retorno em uso. Visível de propósito — ver comentário no rodapé. */
+  redirectUri: string | null
+}) {
   const [ambiente, setAmbiente] = React.useState<"sandbox" | "producao">(
     "sandbox",
   )
@@ -95,6 +102,20 @@ export function ConectarLoja({ unidades }: { unidades: UnidadeOpcao[] }) {
           {indo ? "Redirecionando..." : "Conectar no Cardápio Web"}
         </Button>
       </div>
+
+      {/* A URL de retorno precisa bater LETRA POR LETRA com a cadastrada no
+          app. Mostrar aqui evita depender do DevTools pra saber o que estamos
+          mandando — e serve de conferência na hora de falar com o suporte. */}
+      <p className="mt-3 break-all text-[11px] text-muted-foreground">
+        URL de retorno em uso:{" "}
+        {redirectUri ? (
+          <code className="font-mono">{redirectUri}</code>
+        ) : (
+          <b className="text-amber-700 dark:text-amber-400">
+            não configurada (CARDAPIOWEB_REDIRECT_URI)
+          </b>
+        )}
+      </p>
 
       {ambiente === "producao" && (
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
