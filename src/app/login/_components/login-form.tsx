@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { signIn, type SignInState } from "../_actions"
+import { TurnstileWidget } from "./turnstile-widget"
 
 const initial: SignInState = { ok: false }
 
@@ -86,6 +87,9 @@ export function LoginForm() {
           Esqueci minha senha
         </Link>
       </div>
+
+      {/* Só aparece se o Turnstile estiver configurado. */}
+      <TurnstileWidget />
 
       {state.message && !state.ok && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">

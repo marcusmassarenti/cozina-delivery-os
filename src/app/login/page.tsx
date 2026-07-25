@@ -3,6 +3,7 @@ import Link from "next/link"
 import { BarChart3 } from "lucide-react"
 
 import { DeliveryOsMark } from "@/components/delivery-os-logo"
+import { PlatformLogo } from "@/components/platform-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { createClient } from "@/lib/supabase/server"
@@ -44,7 +45,8 @@ export default async function LoginPage() {
               </span>
             </div>
 
-            <div className="mt-auto max-w-xl">
+            {/* Chamada centralizada verticalmente entre o logo e o rodapé. */}
+            <div className="my-auto max-w-xl">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/70">
                 <BarChart3 className="size-3 text-[#ff4d1c]" />
                 Gestão de Delivery
@@ -58,6 +60,18 @@ export default async function LoginPage() {
                 iFood, 99 Food e Keeta — pedidos, financeiro, avaliações e DRE
                 consolidados, em tempo real.
               </p>
+            </div>
+
+            {/* Rodapé: faixa discreta com as plataformas que o sistema lê. */}
+            <div className="flex items-center gap-3 border-t border-white/10 pt-5">
+              <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">
+                Integrado com
+              </span>
+              <div className="flex items-center gap-2">
+                <PlatformLogo platform="ifood" size="sm" />
+                <PlatformLogo platform="99food" size="sm" />
+                <PlatformLogo platform="keeta" size="sm" />
+              </div>
             </div>
           </div>
         </div>

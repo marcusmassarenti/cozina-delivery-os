@@ -5,15 +5,20 @@ import type { NextConfig } from "next";
 // estilos inline sem nonce; mesmo assim o CSP fecha buracos reais: limita pra
 // onde o app pode conectar (só Supabase + APIs de CEP/CNPJ), bloqueia embed em
 // iframe de terceiros, <object>/<embed>, injeção de <base> e destino de forms.
+// challenges.cloudflare.com = Turnstile (anti-bot do login): precisa carregar
+// o script, abrir o iframe do desafio e conversar com o Cloudflare. Sem estas
+// 3 liberações o widget falha CALADO em produção e ninguém entra.
+const TURNSTILE = "https://challenges.cloudflare.com"
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline' ${TURNSTILE}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "media-src 'self' https://*.supabase.co", // vídeos tutoriais (Storage)
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://viacep.com.br https://brasilapi.com.br",
-  "frame-src 'self'",
+  `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://viacep.com.br https://brasilapi.com.br ${TURNSTILE}`,
+  `frame-src 'self' ${TURNSTILE}`,
   "frame-ancestors 'self'",
   "form-action 'self'",
   "base-uri 'self'",

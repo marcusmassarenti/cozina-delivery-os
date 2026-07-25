@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
+import { verificarTurnstile } from "@/lib/security/turnstile"
 
 export type SignInState = {
   ok: boolean
@@ -31,6 +32,16 @@ export async function signIn(
       ok: false,
       message: "Muitas tentativas. Espere alguns minutos e tente de novo.",
     }
+  }
+
+  // Turnstile: prova que há um navegador real. Cobre o que o rate-limit por IP
+  // não cobre (botnet distribuída). Sem as chaves configuradas, passa direto.
+  const captcha = await verificarTurnstile(
+    String(formData.get("cf-turnstile-response") ?? "") || null,
+    ip,
+  )
+  if (!captcha.ok) {
+    return { ok: false, message: captcha.message }
   }
 
   const supabase = await createClient()
