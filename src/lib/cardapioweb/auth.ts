@@ -34,7 +34,10 @@ const BASE_URL: Record<CwAmbiente, string> = {
 /** Portal onde o LOJISTA autoriza (tela de consentimento). */
 const PORTAL_URL: Record<CwAmbiente, string> = {
   sandbox: "https://portal.sandbox.cardapioweb.com/cw-apps",
-  producao: "https://www.portal.cardapioweb.com/cw-apps",
+  // A doc oficial escreve "www.portal.cardapioweb.com", mas esse host é
+  // NXDOMAIN — não existe. O real é sem o www (verificado no DNS: responde
+  // 200 em /cw-apps). Erro na doc deles; não copiar de volta.
+  producao: "https://portal.cardapioweb.com/cw-apps",
 }
 
 /** Renova o token 5 min antes de expirar, pra não estourar no meio de um sync. */
@@ -112,11 +115,14 @@ export function montarUrlAutorizacao(p: {
   codeChallenge: string
 }): string {
   const url = new URL(PORTAL_URL[p.ambiente])
-  // response_type=code é OBRIGATÓRIO no Authorization Code (RFC 6749 §4.1.1).
-  // Faltava aqui: o portal montava a tela de consentimento só com o client_id,
-  // mas ao clicar em Autorizar não sabia QUE tipo de resposta emitir e
-  // devolvia "Não foi possível autorizar o aplicativo".
-  url.searchParams.set("response_type", "code")
+  // O contrato do Cardápio Web tem EXATAMENTE estes 5 parâmetros. Não mandar
+  // `response_type`, `scope` nem `company_id`:
+  //  - response_type: cheguei a adicionar por ser padrão da RFC 6749, mas a
+  //    doc deles não prevê — e o 400 acontecia igual sem ele. Removido pra
+  //    bater com o contrato publicado.
+  //  - scope: "a integradora NÃO escolhe nem envia escopos" — o portal concede
+  //    o que estiver no cadastro do app.
+  //  - company_id: sai do seletor de loja da própria tela de consentimento.
   url.searchParams.set("client_id", cwClientId(p.ambiente))
   url.searchParams.set("redirect_uri", cwRedirectUri())
   url.searchParams.set("state", p.state)

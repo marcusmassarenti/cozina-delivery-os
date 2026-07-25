@@ -50,10 +50,13 @@ export function CardapiowebResultado({
   cw,
   loja,
   motivo,
+  detalhe,
 }: {
   cw?: string
   loja?: string
   motivo?: string
+  /** Código/descrição vinda do Cardápio Web — ajuda a diagnosticar. */
+  detalhe?: string
 }) {
   if (cw !== "ok" && cw !== "erro") return null
 
@@ -90,9 +93,11 @@ export function CardapiowebResultado({
           {m?.acao ??
             "Tente conectar de novo pela tela de integração do Cardápio Web."}
         </p>
-        {motivo && !m && (
+        {(detalhe || (motivo && !m)) && (
           <p className="mt-1 font-mono text-[11px] text-rose-800/70 dark:text-rose-400/70">
-            código: {motivo}
+            {[motivo && !m ? `código: ${motivo}` : null, detalhe]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         )}
       </div>

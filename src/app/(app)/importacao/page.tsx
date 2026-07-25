@@ -98,6 +98,7 @@ export default async function ImportacaoPage({
     cw?: string
     loja?: string
     motivo?: string
+    detalhe?: string
   }>
 }) {
   const sp = await searchParams
@@ -151,7 +152,12 @@ export default async function ImportacaoPage({
       </div>
 
       {/* Desfecho da autorização OAuth do Cardápio Web (o callback volta pra cá). */}
-      <CardapiowebResultado cw={sp.cw} loja={sp.loja} motivo={sp.motivo} />
+      <CardapiowebResultado
+        cw={sp.cw}
+        loja={sp.loja}
+        motivo={sp.motivo}
+        detalhe={sp.detalhe}
+      />
 
       <div data-tour="download">
         <DownloadGuide enabled={enabledReports} />

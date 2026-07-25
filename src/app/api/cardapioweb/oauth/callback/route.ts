@@ -43,7 +43,17 @@ export async function GET(req: Request) {
 
   if (erroPortal) {
     // access_denied = quem autorizou não é Proprietário da loja, ou recusou.
-    return voltar(req, { cw: "erro", motivo: erroPortal })
+    // O error_description costuma trazer a razão em texto — jogá-lo fora
+    // (como fazíamos) apaga justamente a parte útil.
+    const desc = url.searchParams.get("error_description")
+    if (desc) {
+      console.error("[cardapioweb] portal recusou:", erroPortal, "-", desc)
+    }
+    return voltar(req, {
+      cw: "erro",
+      motivo: erroPortal,
+      ...(desc ? { detalhe: desc.slice(0, 120) } : {}),
+    })
   }
   if (!code || !state) {
     return voltar(req, { cw: "erro", motivo: "callback_incompleto" })
@@ -81,12 +91,24 @@ export async function GET(req: Request) {
       code,
       codeVerifier: pendente.code_verifier,
     })
-  } catch {
-    // De propósito sem detalhe na URL: a resposta do endpoint de token pode
-    // conter material sensível, e query string vaza pra histórico do
-    // navegador e log de servidor. A doc do Cardápio Web pede explicitamente
-    // pra não registrar code/verifier/token em lugar nenhum.
-    return voltar(req, { cw: "erro", motivo: "troca_token" })
+  } catch (e) {
+    // A URL segue SEM material sensível: query string vaza pra histórico do
+    // navegador e pra log de servidor, e a doc do Cardápio Web pede pra não
+    // registrar code/verifier/token em lugar nenhum.
+    //
+    // Mas ficar 100% cego custou caro: uma falha aqui virava um "troca_token"
+    // seco, sem nada pra investigar. Então o texto completo vai pro log do
+    // servidor (Vercel), e pra URL sobe só o CÓDIGO padrão do OAuth
+    // (invalid_grant, invalid_client…), que é vocabulário público da RFC 6749
+    // e não identifica ninguém.
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("[cardapioweb] troca de código por token falhou:", msg)
+    const codigo = msg.match(/"error"\s*:\s*"([a-z_]+)"/)?.[1]
+    return voltar(req, {
+      cw: "erro",
+      motivo: "troca_token",
+      ...(codigo ? { detalhe: codigo } : {}),
+    })
   }
 
   // 2) Cria a instalação (ainda sem merchant_id — só o token sabe qual loja é)
