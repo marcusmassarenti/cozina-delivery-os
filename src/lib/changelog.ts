@@ -42,6 +42,32 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.3",
+    date: "2026-07-25",
+    tag: "Correções",
+    title: "Cardápio Web nas telas que ainda faltavam",
+    areas: [
+      {
+        area: "Relatórios",
+        items: [
+          {
+            kind: "correcao",
+            title: "Filtros e colunas que ignoravam a venda direta",
+            desc: "Evolução e Comparativo ganharam a quarta opção no filtro de plataforma; Infos Diária Venda ganhou a coluna; e os gráficos do Financeiro e da aba Diagnóstico passaram a desenhar a linha do canal próprio.",
+          },
+          {
+            kind: "correcao",
+            title: "Lugares que mostravam o nome de outra plataforma",
+            antes:
+              "Em alguns pontos — card de avaliações, histórico de importações, aviso de sincronização — uma plataforma sem tratamento específico aparecia com o nome ou o logo de outra.",
+            depois:
+              "Todos passaram a usar o mesmo nome oficial da plataforma. Onde a informação não existe (como a data de sincronização do canal próprio, que entra continuamente), aparece um traço em vez de um dado emprestado.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.2",
     date: "2026-07-25",
     tag: "Correções",
