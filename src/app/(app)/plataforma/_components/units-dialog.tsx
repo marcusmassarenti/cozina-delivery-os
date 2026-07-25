@@ -11,7 +11,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo,
+  rotuloPlataforma,
+} from "@/components/platform-logo"
 import type { HoldingUnit } from "@/lib/data/plataforma"
 
 export function UnitsDialog({ name, units }: { name: string; units: HoldingUnit[] }) {
@@ -80,8 +82,8 @@ export function UnitsDialog({ name, units }: { name: string; units: HoldingUnit[
                           key={p}
                           title={
                             api
-                              ? `${p === "ifood" ? "iFood" : "99 Food"} conectado via API`
-                              : `${p === "ifood" ? "iFood" : p === "99food" ? "99 Food" : "Keeta"} — só importação`
+                              ? `${rotuloPlataforma(p)} conectado via API`
+                              : `${rotuloPlataforma(p)} — só importação`
                           }
                           className={`inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 ${
                             api

@@ -1,4 +1,6 @@
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  MARKETPLACES,
+} from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import {
@@ -82,7 +84,9 @@ export default async function PedidosPage({
       : activeUnits
   const ids = filteredUnits.map((u) => u.id)
   const tenantPlats: PlatformId[] = (
-    ["ifood", "99food", "keeta"] as PlatformId[]
+    // MarketplaceId, não PlatformId: esta tela abre VR, subsídio e comissão —
+    // tudo inexistente em canal próprio. O tipo agora documenta a intenção.
+    MARKETPLACES
   ).filter((p) => filteredUnits.some((u) => u.platforms.includes(p)))
 
   // Dados específicos da plataforma selecionada (sempre consolidado das lojas

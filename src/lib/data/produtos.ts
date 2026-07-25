@@ -61,6 +61,9 @@ export async function getTopProdutos(
   if (platform === "cardapioweb") {
     return getNetworkCardapioWebTopItemsForMonth(year, month, limit, filter)
   }
+  // Ramo explícito, não "o resto": o fall-through era o que fazia uma
+  // plataforma nova devolver o ranking da Keeta com o rótulo dela.
+  if (platform !== "keeta") return []
   const rows = await getNetworkKeetaTopItemsForMonth(year, month, limit, filter)
   return rows.map((r) => ({
     nomeItem: r.nomeItem,

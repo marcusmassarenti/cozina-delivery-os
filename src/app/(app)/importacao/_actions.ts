@@ -3589,10 +3589,12 @@ export async function createUnitAndImport(
         ? "keeta"
         : "ifood"
   const active = formData.get("active") === "on"
+  // Nome próprio: chamar de PlatformId SOMBREAVA o tipo global de 4 valores,
+  // e dentro desta função "PlatformId" passava a significar 3.
   const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
-  type PlatformId = (typeof ALL_PLATFORMS)[number]
+  type PlanilhaPlatform = (typeof ALL_PLATFORMS)[number]
   const platformsRaw = formData.getAll("platforms").map(String)
-  const platforms: PlatformId[] = ALL_PLATFORMS.filter((p) =>
+  const platforms: PlanilhaPlatform[] = ALL_PLATFORMS.filter((p) =>
     platformsRaw.includes(p),
   )
   // Garante a plataforma de origem na lista (foi como descobrimos essa loja)

@@ -5,18 +5,20 @@ import { usePathname } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Store } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  PLATAFORMAS as TODAS_PLATAFORMAS,
+  rotuloPlataforma,
+} from "@/components/platform-logo"
 import {
   COMPARATIVO_METRICS,
   type ComparativoMetric,
 } from "@/lib/data/comparativo-metrics"
 import type { PeriodOption, UnitOption } from "./comparativo-filters"
 
-const PLATAFORMAS: { id: PlatformId; label: string }[] = [
-  { id: "ifood", label: "iFood" },
-  { id: "99food", label: "99 Food" },
-  { id: "keeta", label: "Keeta" },
-]
+const PLATAFORMAS: { id: PlatformId; label: string }[] = TODAS_PLATAFORMAS.map((id) => ({
+  id,
+  label: rotuloPlataforma(id),
+}))
 
 export function EvolucaoFilters({
   units,

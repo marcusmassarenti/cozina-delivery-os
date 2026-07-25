@@ -5,7 +5,9 @@ import { useSearchParams, usePathname } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 import { Star } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  MARKETPLACES,
+} from "@/components/platform-logo"
 import {
   Select,
   SelectContent,
@@ -75,7 +77,7 @@ export function AvaliacoesFilters({
 
   // Plataformas da visão de rede = só as habilitadas em ALGUMA loja do tenant.
   const NETWORK_PLATFORMS: PlatformId[] = (
-    ["ifood", "99food", "keeta"] as PlatformId[]
+    MARKETPLACES
   ).filter((p) => unitOptions.some((u) => u.platforms.includes(p)))
 
   // Filtro de estrelas (notas) — filtra a lista de comentários

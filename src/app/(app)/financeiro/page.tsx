@@ -76,7 +76,16 @@ export default async function ResultadoPage({
     ? allUnits.filter((u) => filterIds.includes(u.id))
     : allUnits
 
-  const [resultado, drePlats, dTodas, dIfood, d99, dKeeta, availablePeriods] =
+  const [
+    resultado,
+    drePlats,
+    dTodas,
+    dIfood,
+    d99,
+    dKeeta,
+    dCw,
+    availablePeriods,
+  ] =
     await Promise.all([
       getNetworkResultadoForMonth(year, month, filterIds),
       getNetworkDrePlatforms(year, month, filterIds),
@@ -84,6 +93,7 @@ export default async function ResultadoPage({
       getDailyReportMatrix(year, month, "ifood", matrixUnits),
       getDailyReportMatrix(year, month, "99food", matrixUnits),
       getDailyReportMatrix(year, month, "keeta", matrixUnits),
+      getDailyReportMatrix(year, month, "cardapioweb", matrixUnits),
       getAvailablePeriods(),
     ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
@@ -107,12 +117,14 @@ export default async function ResultadoPage({
     ifood: toSeries(dIfood),
     "99food": toSeries(d99),
     keeta: toSeries(dKeeta),
+    cardapioweb: toSeries(dCw),
   }
   const dailyPlatforms = (
     [
       ["ifood", dIfood],
       ["99food", d99],
       ["keeta", dKeeta],
+      ["cardapioweb", dCw],
     ] as const
   )
     .filter(([, m]) => m.hasData)

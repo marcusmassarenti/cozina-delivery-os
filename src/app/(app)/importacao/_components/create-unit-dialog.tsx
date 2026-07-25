@@ -5,7 +5,10 @@ import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { CheckCircle2, Link2, Plus, Store } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  PLATAFORMAS,
+  rotuloPlataforma,
+} from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -40,11 +43,10 @@ const UFs = [
   "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 
-const PLATFORMS: { id: PlatformId; label: string }[] = [
-  { id: "ifood", label: "iFood" },
-  { id: "99food", label: "99 Food" },
-  { id: "keeta", label: "Keeta" },
-]
+const PLATFORMS: { id: PlatformId; label: string }[] = PLATAFORMAS.map((id) => ({
+  id,
+  label: rotuloPlataforma(id),
+}))
 
 export type AvailableUnit = {
   id: string

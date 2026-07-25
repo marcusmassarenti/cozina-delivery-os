@@ -101,13 +101,15 @@ export async function DiagnosticoTab({
     const d = new Date(year, month - 1 - (5 - i), 1)
     return { year: d.getFullYear(), month: d.getMonth() + 1 }
   })
-  const [planoIA, iaStatus, consol, evoIf, evo99, evoKe] = await Promise.all([
+  const [planoIA, iaStatus, consol, evoIf, evo99, evoKe, evoCw] =
+    await Promise.all([
     getDiagnosticoIA(unitId, year, month),
     getIaStatus(),
     getOperacaoConsolidada(unitId, year, month),
     getEvolucaoSeries([unitId], ["ifood"], periodos6),
     getEvolucaoSeries([unitId], ["99food"], periodos6),
     getEvolucaoSeries([unitId], ["keeta"], periodos6),
+    getEvolucaoSeries([unitId], ["cardapioweb"], periodos6),
   ])
   // Uma série por plataforma (mesmas cores da consolidada).
   const evoLabels = periodos6.map(
@@ -129,6 +131,7 @@ export async function DiagnosticoTab({
     { id: "ifood", raw: evoIf },
     { id: "keeta", raw: evoKe },
     { id: "99food", raw: evo99 },
+    { id: "cardapioweb", raw: evoCw },
   ]
   const evoSeries: EvoSerie[] = rawEvo
     .map(({ id, raw }) => ({

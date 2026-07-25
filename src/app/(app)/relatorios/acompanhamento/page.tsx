@@ -3,7 +3,9 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  PLATAFORMAS,
+} from "@/components/platform-logo"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAcompanhamentoVendas } from "@/lib/data/acompanhamento"
 import { getLastSyncedDates } from "@/lib/data/sync-status"
@@ -90,11 +92,17 @@ export default async function AcompanhamentoPage({
     iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—"
 
   // Só as plataformas habilitadas em alguma loja do tenant.
-  const tenantPlats = (["ifood", "99food", "keeta"] as const).filter((p) =>
+  const tenantPlats = PLATAFORMAS.filter((p) =>
     acomp.brands.some((b) =>
       b.units.some((u) => u.platforms.some((up) => String(up) === p)),
     ),
   )
+  // O Cardápio Web entra pela API contínua, sem "sincronizado até" próprio.
+  const ultimaSync: Partial<Record<PlatformId, string | null>> = {
+    ifood: syncStatus.ifood,
+    "99food": syncStatus.ninefood,
+    keeta: syncStatus.keeta,
+  }
   const num = (n: number) => (n === 0 ? "—" : fmtBRL(n))
   // Falta = quanto ainda falta pra bater a meta. Vermelho quando falta;
   // quando bate/passa, mostra "✓ bateu" (sem número verde confuso na coluna).
@@ -172,13 +180,10 @@ export default async function AcompanhamentoPage({
           <span key={plat} className="inline-flex items-center gap-1.5">
             <PlatformLogo platform={plat} size="sm" />
             <span className="tabular-nums">
-              {ddmm(
-                plat === "ifood"
-                  ? syncStatus.ifood
-                  : plat === "99food"
-                    ? syncStatus.ninefood
-                    : syncStatus.keeta,
-              )}
+              {/* Mapa, não ternário: o último ramo era `syncStatus.keeta`,
+                  então uma plataforma nova exibiria a data da Keeta com o
+                  rótulo dela. Sem data conhecida, mostra "—". */}
+              {ddmm(ultimaSync[plat] ?? null)}
             </span>
           </span>
         ))}

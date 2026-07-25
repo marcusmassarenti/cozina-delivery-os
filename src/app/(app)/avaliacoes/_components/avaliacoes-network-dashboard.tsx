@@ -7,7 +7,9 @@ import {
   ThumbsUp,
 } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  rotuloPlataforma,
+} from "@/components/platform-logo"
 import {
   getNetworkAvaliacoesForMonth,
 } from "@/lib/data/ifood-imported"
@@ -563,11 +565,7 @@ function PlatformStat({
       <PlatformLogo platform={platform} size="md" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold">
-          {platform === "ifood"
-            ? "iFood"
-            : platform === "keeta"
-              ? "Keeta"
-              : "99 Food"}
+          {rotuloPlataforma(platform)}
         </p>
         <p className="text-[10px] text-muted-foreground tabular-nums">
           {fmtNum(total)} avaliações

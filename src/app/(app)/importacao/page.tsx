@@ -6,6 +6,7 @@ import {
   PlatformLogo,
   ehMarketplace,
   type PlatformId,
+  PLATAFORMAS,
 } from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -293,9 +294,13 @@ export default async function ImportacaoPage({
   )
 }
 
+/**
+ * Valida contra PLATAFORMAS em vez de listar os 3 à mão: a lista fixa fazia
+ * qualquer plataforma nova cair no fallback e aparecer com o LOGO DO IFOOD no
+ * histórico de importações.
+ */
 function asPlatformId(p: string): PlatformId {
-  if (p === "ifood" || p === "99food" || p === "keeta") return p
-  return "ifood"
+  return (PLATAFORMAS as string[]).includes(p) ? (p as PlatformId) : "ifood"
 }
 
 function HistoricoPaginacao({

@@ -7,7 +7,10 @@ import {
   asaasListInvoices,
   type AsaasInvoice,
 } from "@/lib/asaas/client"
-import type { PlatformId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
   computeBillingStatus,
@@ -443,7 +446,9 @@ export type ClientDetail = ClientOverview & {
   consumoIa: { mensagens: number; custoUsd: number; respostasMedidas: number }
 }
 
-const PLAT_ORDER: PlatformId[] = ["ifood", "99food", "keeta"]
+// Lista fixa deixava loja de canal próprio aparecer SEM plataforma nenhuma
+// no painel de clientes.
+const PLAT_ORDER: PlatformId[] = PLATAFORMAS
 
 export async function getClientDetail(
   holdingId: string,

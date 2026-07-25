@@ -5,17 +5,19 @@ import { usePathname } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Store, X } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId,
+  PLATAFORMAS as TODAS_PLATAFORMAS,
+  rotuloPlataforma,
+} from "@/components/platform-logo"
 import {
   COMPARATIVO_METRICS,
   type ComparativoMetric,
 } from "@/lib/data/comparativo-metrics"
 
-const PLATAFORMAS: { id: PlatformId; label: string }[] = [
-  { id: "ifood", label: "iFood" },
-  { id: "99food", label: "99 Food" },
-  { id: "keeta", label: "Keeta" },
-]
+const PLATAFORMAS: { id: PlatformId; label: string }[] = TODAS_PLATAFORMAS.map((id) => ({
+  id,
+  label: rotuloPlataforma(id),
+}))
 
 export type PeriodOption = { key: string; label: string }
 export type UnitOption = { code: string; name: string }
