@@ -1,6 +1,9 @@
 import "server-only"
 
-import type { PlatformId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
 import {
   getAvaliacoesByUnitForMonth,
@@ -22,7 +25,10 @@ const MESES = [
   "nov",
   "dez",
 ]
-const PLATS: PlatformId[] = ["ifood", "99food", "keeta"]
+// PLATAFORMAS, não lista fixa: o mapa `byPlat` já tinha a chave do canal
+// próprio, mas sem a série sendo BUSCADA ela ficava zerada e a plataforma
+// sumia da legenda do gráfico.
+const PLATS: PlatformId[] = PLATAFORMAS
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 
@@ -156,6 +162,7 @@ export async function EvolucaoFaturamento({
     ifood: idxs.map((i) => fn(byPlat.ifood[i])),
     ninefood: idxs.map((i) => fn(byPlat["99food"][i])),
     keeta: idxs.map((i) => fn(byPlat.keeta[i])),
+    cardapioweb: idxs.map((i) => fn(byPlat.cardapioweb[i])),
   })
 
   const serie: SerieEvolucao = {
@@ -170,6 +177,9 @@ export async function EvolucaoFaturamento({
       ifood: idxs.map((i) => notaMes(avals[i], "ifood")),
       ninefood: idxs.map((i) => notaMes(avals[i], "99food")),
       keeta: idxs.map((i) => notaMes(avals[i], "keeta")),
+      // Cardápio Web não expõe avaliação — série sempre nula, e o filtro de
+      // série vazia no gráfico a esconde da legenda de Nota.
+      cardapioweb: idxs.map(() => null),
     },
   }
 

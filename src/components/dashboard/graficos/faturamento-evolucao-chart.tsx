@@ -9,6 +9,7 @@ type SeriePlat = {
   ifood: (number | null)[]
   ninefood: (number | null)[]
   keeta: (number | null)[]
+  cardapioweb: (number | null)[]
 }
 export type SerieEvolucao = {
   meses: string[]
@@ -64,11 +65,22 @@ export function GraficoPrincipal({
 
   const n = serie.meses.length
   const dados = serie[metrica]
-  const linhas: Linha[] = [
+  const linhas: Linha[] = (
+    [
     { nome: "iFood", plat: "ifood", cor: COR.ifood, valores: dados.ifood },
     { nome: "99 Food", plat: "99food", cor: COR["99food"], valores: dados.ninefood },
     { nome: "Keeta", plat: "keeta", cor: COR.keeta, valores: dados.keeta },
-  ]
+    {
+      nome: "Cardápio Web",
+      plat: "cardapioweb",
+      cor: COR.cardapioweb,
+      valores: dados.cardapioweb,
+    },
+    ] as Linha[]
+  )
+    // Série toda vazia não vira linha nem legenda — canal que a loja não usa
+    // não deve poluir o gráfico com uma reta no zero.
+    .filter((l) => l.valores.some((v) => v !== null && v !== 0))
   const mostraPct = ADITIVAS.has(metrica)
 
   const fmt = (v: number) =>
@@ -138,7 +150,7 @@ export function GraficoPrincipal({
       return { label: "Total do mês", texto: fmt(totalMesAtivo) }
     if (metrica === "ticket") {
       const soma = (sp: SeriePlat) =>
-        (["ifood", "ninefood", "keeta"] as const).reduce(
+        (["ifood", "ninefood", "keeta", "cardapioweb"] as const).reduce(
           (s, k) => s + (sp[k][ativoIdx] ?? 0),
           0,
         )
