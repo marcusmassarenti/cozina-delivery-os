@@ -13,6 +13,7 @@ import {
   isSuperadmin,
 } from "@/lib/auth/permissions"
 
+import { CardapiowebResultado } from "./_components/cardapioweb-resultado"
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
@@ -91,7 +92,13 @@ async function getRecentImports(page: number): Promise<{
 export default async function ImportacaoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; historico?: string }>
+  searchParams: Promise<{
+    periodo?: string
+    historico?: string
+    cw?: string
+    loja?: string
+    motivo?: string
+  }>
 }) {
   const sp = await searchParams
   await assertCanView("importacao")
@@ -142,6 +149,9 @@ export default async function ImportacaoPage({
           </Link>
         </div>
       </div>
+
+      {/* Desfecho da autorização OAuth do Cardápio Web (o callback volta pra cá). */}
+      <CardapiowebResultado cw={sp.cw} loja={sp.loja} motivo={sp.motivo} />
 
       <div data-tour="download">
         <DownloadGuide enabled={enabledReports} />
