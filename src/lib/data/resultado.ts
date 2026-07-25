@@ -22,6 +22,12 @@ import {
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
+import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
+import {
+  PLATAFORMAS,
+  type MarketplaceId,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { getKeetaFaturaTaxasByUnits } from "@/lib/data/keeta-repasses"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
@@ -105,11 +111,12 @@ export async function getNetworkResultadoForMonth(
   }
   const unitIds = active.map((u) => u.id)
 
-  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit, keetaPorLoja] =
+  const [finByUnit, nineByUnit, keetaByUnit, cwByUnit, manualByUnit, keetaPorLoja] =
     await Promise.all([
       getFinanceiroResumoByUnits(unitIds, year, month),
       getNinefoodResumoByUnits(unitIds, year, month),
       getKeetaResumoByUnits(unitIds, year, month),
+      getCardapioWebResumoByUnits(unitIds, year, month),
       getRealMonthlyForUnits(unitIds, year, month),
       getKeetaPedidoPorLoja(unitIds, year, month),
     ])
@@ -121,9 +128,9 @@ export async function getNetworkResultadoForMonth(
   // Fallback de plataforma SEM import no mês: usa o monthly do MÊS CONSULTADO
   // (manualByUnit = getRealMonthlyForUnits(year,month)), NÃO u.monthly — que é
   // montado sempre com o mês corrente e contaminaria meses passados.
-  const platBruto = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+  const platBruto = (m: UnitMonthly, id: MarketplaceId) =>
     m.platforms.find((p) => p.id === id)?.bruto ?? 0
-  const platLiquido = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+  const platLiquido = (m: UnitMonthly, id: MarketplaceId) =>
     m.platforms.find((p) => p.id === id)?.liquido ?? 0
 
   const rows: ResultadoUnitRow[] = []
@@ -138,7 +145,9 @@ export async function getNetworkResultadoForMonth(
     const hasIfood = fin?.hasData ?? false
     const has99 = nine?.hasData ?? false
     const hasKeeta = keeta?.hasData ?? false
-    const temImport = hasIfood || has99 || hasKeeta
+    const cw = cwByUnit.get(u.id)
+    const hasCw = cw?.hasData ?? false
+    const temImport = hasIfood || has99 || hasKeeta || hasCw
 
     // Bruto / líquido por plataforma (importado preferido, fallback manual)
     const ifoodBruto = hasIfood ? fin!.bruto : platBruto(monthlyM, "ifood")
@@ -148,8 +157,14 @@ export async function getNetworkResultadoForMonth(
     const keetaBruto = hasKeeta ? keeta!.bruto : platBruto(monthlyM, "keeta")
     const keetaLiq = hasKeeta ? keeta!.liquido : platLiquido(monthlyM, "keeta")
 
-    const bruto = ifoodBruto + nineBruto + keetaBruto
-    const liquidoPlataformas = ifoodLiq + nineLiq + keetaLiq
+    // Canal próprio: só existe via API, então não há fallback manual — ou o
+    // pedido foi importado, ou ele não existe. Bruto e líquido entram JUNTOS:
+    // somar só o bruto inventaria uma taxa que o canal não cobra.
+    const cwBruto = hasCw ? cw!.bruto : 0
+    const cwLiq = hasCw ? cw!.liquido : 0
+
+    const bruto = ifoodBruto + nineBruto + keetaBruto + cwBruto
+    const liquidoPlataformas = ifoodLiq + nineLiq + keetaLiq + cwLiq
     // Recebido direto (dinheiro/PIX na entrega, só iFood): dinheiro que a loja
     // pegou fora do repasse. Não é taxa e conta como receita — mesma régua do
     // DRE detalhado. Sem isto, as taxas inflavam e o resultado subestimava.
@@ -161,6 +176,7 @@ export async function getNetworkResultadoForMonth(
     if (hasIfood) pedidos += fin!.pedidosUnicos
     if (has99) pedidos += nine!.pedidos
     if (hasKeeta) pedidos += keeta!.pedidos
+    if (hasCw) pedidos += cw!.pedidos
     if (!temImport) pedidos = monthlyM.pedidos
 
     // Custos + VR vêm do manual
@@ -266,7 +282,7 @@ export async function getNetworkResultadoForMonth(
 // ─── DRE detalhado da rede (taxas itemizadas por plataforma) ──────────
 
 export type NetworkDrePlat = {
-  id: "ifood" | "99food" | "keeta"
+  id: PlatformId
   name: string
   bruto: number
   liquido: number
@@ -306,20 +322,28 @@ export async function getNetworkDrePlatforms(
   const unitIds = active.map((u) => u.id)
   if (unitIds.length === 0) return []
 
-  const [finByUnit, nineByUnit, keetaByUnit, manualByUnit, keFat, cestaByUnit] =
-    await Promise.all([
+  const [
+    finByUnit,
+    nineByUnit,
+    keetaByUnit,
+    cwByUnit,
+    manualByUnit,
+    keFat,
+    cestaByUnit,
+  ] = await Promise.all([
       getFinanceiroResumoByUnits(unitIds, year, month),
       getNinefoodResumoByUnits(unitIds, year, month),
       getKeetaResumoByUnits(unitIds, year, month),
+      getCardapioWebResumoByUnits(unitIds, year, month),
       getRealMonthlyForUnits(unitIds, year, month),
       getKeetaFaturaTaxasByUnits(unitIds, year, month),
       // Cesta dos cancelados iFood — o DRE da rede abre em "Vendas totais −
       // cancelados", igual ao portal e ao DRE da loja.
       getCancelamentoCestaByUnits(unitIds, year, month),
     ])
-  const pBruto = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+  const pBruto = (m: UnitMonthly, id: MarketplaceId) =>
     m.platforms.find((p) => p.id === id)?.bruto ?? 0
-  const pLiq = (m: UnitMonthly, id: "ifood" | "99food" | "keeta") =>
+  const pLiq = (m: UnitMonthly, id: MarketplaceId) =>
     m.platforms.find((p) => p.id === id)?.liquido ?? 0
 
   const a = {
@@ -339,6 +363,9 @@ export async function getNetworkDrePlatforms(
     },
     ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
     ke: { bruto: 0, liq: 0, promo: 0 },
+    // Canal próprio: sem comissão, sem promoção de plataforma. O que separa
+    // bruto de líquido aqui é só cancelamento.
+    cw: { bruto: 0, liq: 0, cancelQtd: 0 },
     vr: 0,
   }
   for (const u of active) {
@@ -358,6 +385,10 @@ export async function getNetworkDrePlatforms(
     const niLiq = has99 ? nine!.liquido : pLiq(mm, "99food")
     const keBruto = hasKeeta ? keeta!.bruto : pBruto(mm, "keeta")
     const keLiq = hasKeeta ? keeta!.liquido : pLiq(mm, "keeta")
+    const cwU = cwByUnit.get(u.id)
+    const hasCw = cwU?.hasData ?? false
+    const cwBruto = hasCw ? cwU!.bruto : 0
+    const cwLiq = hasCw ? cwU!.liquido : 0
 
     // Pula quem não tem faturamento (mesmo critério do DRE): assim o bruto,
     // líquido e VR somam EXATAMENTE igual ao totals do resultado.
@@ -365,8 +396,9 @@ export async function getNetworkDrePlatforms(
     if (hasIfood) pedidos += fin!.pedidosUnicos
     if (has99) pedidos += nine!.pedidos
     if (hasKeeta) pedidos += keeta!.pedidos
-    if (!hasIfood && !has99 && !hasKeeta) pedidos = mm.pedidos
-    const unitBruto = ifBruto + niBruto + keBruto
+    if (hasCw) pedidos += cwU!.pedidos
+    if (!hasIfood && !has99 && !hasKeeta && !hasCw) pedidos = mm.pedidos
+    const unitBruto = ifBruto + niBruto + keBruto + cwBruto
     if (unitBruto <= 0 && pedidos <= 0) continue
 
     a.if.bruto += ifBruto
@@ -395,11 +427,14 @@ export async function getNetworkDrePlatforms(
     a.ke.bruto += keBruto
     a.ke.liq += keLiq
     if (hasKeeta) a.ke.promo += keeta!.promocoesLoja
+    a.cw.bruto += cwBruto
+    a.cw.liq += cwLiq
+    if (hasCw) a.cw.cancelQtd += cwU!.cancelamentosQtd
     a.vr += Math.max(0, mm.vrRecebido - mm.vrTaxaMedia8)
   }
 
   const make = (
-    id: "ifood" | "99food" | "keeta",
+    id: PlatformId,
     name: string,
     bruto: number,
     liq: number,
@@ -496,6 +531,20 @@ export async function getNetworkDrePlatforms(
       0,
       keFat.hasData ? keFat.promoLoja : a.ke.promo,
     ),
+    // Canal próprio. `itens` vai vazio de propósito: não há comissão, taxa de
+    // entrega nem promoção de plataforma pra abrir. A diferença entre bruto e
+    // líquido é só cancelamento, e o `make` já a rotula como
+    // "Cancelamentos / outros" — que aqui é literalmente o que ela é.
+    make(
+      "cardapioweb",
+      "Cardápio Web",
+      a.cw.bruto,
+      a.cw.liq,
+      [],
+      0,
+      0,
+      { valor: Math.max(0, a.cw.bruto - a.cw.liq), qtd: a.cw.cancelQtd },
+    ),
   ].filter((p): p is NetworkDrePlat => p !== null)
 }
 
@@ -518,7 +567,7 @@ export async function getNetworkDrePlatformsForRange(
     )
     parts.push(...res)
   }
-  const ORDER: NetworkDrePlat["id"][] = ["ifood", "99food", "keeta"]
+  const ORDER: NetworkDrePlat["id"][] = PLATAFORMAS
   const byId = new Map<
     NetworkDrePlat["id"],
     {

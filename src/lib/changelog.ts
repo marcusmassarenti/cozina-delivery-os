@@ -42,6 +42,48 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.1",
+    date: "2026-07-25",
+    tag: "Correções",
+    title: "Ranking mostrava o dobro; DRE agora inclui o canal próprio",
+    destaque: true,
+    summary:
+      "Se você olhou o Ranking de lojas hoje, confira de novo: os valores estavam dobrados por algumas horas. Já corrigido.",
+    areas: [
+      {
+        area: "Relatórios",
+        items: [
+          {
+            kind: "correcao",
+            title: "Ranking de lojas estava com faturamento e pedidos em dobro",
+            antes:
+              "Depois da entrada do Cardápio Web, cada loja aparecia no Ranking com o dobro do faturamento e o dobro dos pedidos. Só o Ranking foi afetado — Dashboard, DRE e a tela da loja seguiram certos.",
+            depois:
+              "Os valores voltaram ao real. A soma do rodapé também passou a fechar com as linhas da tabela.",
+          },
+          {
+            kind: "correcao",
+            title: "Produtos mais vendidos do Cardápio Web mostrava itens da Keeta",
+            desc: "Ao filtrar produtos por Cardápio Web, a lista trazia os produtos da Keeta com o título trocado. Agora fica vazia até existir o relatório próprio.",
+          },
+        ],
+      },
+      {
+        area: "DRE",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Venda direta entra no DRE da rede",
+            antes:
+              "O DRE somava só os marketplaces. Uma loja que vendesse apenas pelo canal próprio não aparecia no relatório.",
+            depois:
+              "O Cardápio Web entra no faturamento e ganha uma linha em 'Taxas das plataformas' com R$ 0,00 — dá pra ver de imediato quanto da sua margem some em comissão e quanto fica quando a venda é direta.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-07-25",
     tag: "Grande novidade",
