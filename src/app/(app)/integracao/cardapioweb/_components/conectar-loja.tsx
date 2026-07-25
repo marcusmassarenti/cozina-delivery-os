@@ -24,13 +24,20 @@ export type UnidadeOpcao = { id: string; code: string; name: string }
 export function ConectarLoja({
   unidades,
   redirectUri,
+  mostrarAmbiente = false,
 }: {
   unidades: UnidadeOpcao[]
   /** URL de retorno em uso. Visível de propósito — ver comentário no rodapé. */
   redirectUri: string | null
+  /**
+   * Sandbox é ferramenta de quem constrói a integração. Pro lojista o seletor
+   * some e a conexão vai direto pra produção — deixá-lo à mostra convida a
+   * conectar uma loja real no ambiente errado, onde o faturamento não conta.
+   */
+  mostrarAmbiente?: boolean
 }) {
   const [ambiente, setAmbiente] = React.useState<"sandbox" | "producao">(
-    "sandbox",
+    mostrarAmbiente ? "sandbox" : "producao",
   )
   const [unitId, setUnitId] = React.useState<string>("")
   const [indo, setIndo] = React.useState(false)
@@ -59,6 +66,7 @@ export function ConectarLoja({
       </div>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
+        {mostrarAmbiente && (
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Ambiente
@@ -78,6 +86,7 @@ export function ConectarLoja({
             </SelectContent>
           </Select>
         </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -112,6 +121,7 @@ export function ConectarLoja({
       {/* A URL de retorno precisa bater LETRA POR LETRA com a cadastrada no
           app. Mostrar aqui evita depender do DevTools pra saber o que estamos
           mandando — e serve de conferência na hora de falar com o suporte. */}
+      {mostrarAmbiente && (
       <p className="mt-3 break-all text-[11px] text-muted-foreground">
         URL de retorno em uso:{" "}
         {redirectUri ? (
@@ -122,8 +132,9 @@ export function ConectarLoja({
           </b>
         )}
       </p>
+      )}
 
-      {ambiente === "producao" && (
+      {mostrarAmbiente && ambiente === "producao" && (
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
           O app ainda está cadastrado apenas no <b>sandbox</b>. Produção exige
           liberação separada junto ao Cardápio Web.

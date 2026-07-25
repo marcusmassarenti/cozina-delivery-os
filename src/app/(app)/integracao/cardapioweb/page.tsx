@@ -1,5 +1,6 @@
 import Link from "next/link"
 import {
+  ChevronRight,
   ArrowLeft,
   Cake,
   Store,
@@ -19,6 +20,7 @@ import { getResumoClientes, type ResumoClientes } from "@/lib/cardapioweb/client
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 import { getVisibleUnits } from "@/lib/data/units"
+import { isSuperadmin } from "@/lib/auth/roles"
 
 import { CatalogoButton } from "./_components/catalogo-button"
 import { ClientesButton } from "./_components/clientes-button"
@@ -57,11 +59,19 @@ type Stats = {
   pedidos: number
   detalhados: number
   faturamento: FaturamentoAnalytics
-  clientes: ResumoClientes
+  /** null quando a loja está fechada na lista — não foi buscado. */
+  clientes: ResumoClientes | null
   produtos: ProdutoRank[]
 }
 
-async function carregar() {
+/**
+ * `lojaAberta` = id da instalação expandida na tela.
+ *
+ * A análise pesada (top produtos, base de clientes) só é buscada pra ELA. Com
+ * uma dezena de lojas conectadas, buscar tudo de todas fazia a página abrir
+ * lenta pra mostrar um monte de painel que ninguém ia ler.
+ */
+async function carregar(lojaAberta: string | null) {
   const admin = createAdminClient()
 
   const [instRes, stRes] = await Promise.all([
@@ -86,6 +96,7 @@ async function carregar() {
 
   const stats: Stats[] = await Promise.all(
     installs.map(async (i) => {
+      const aberta = i.id === lojaAberta
       const [tot, det, faturamento, clientes, produtos] = await Promise.all([
         admin
           .from("cardapioweb_pedidos")
@@ -97,8 +108,8 @@ async function carregar() {
           .eq("install_id", i.id)
           .eq("detalhe_ok", true),
         getFaturamentoCardapioWeb(i.id),
-        getResumoClientes(i.id),
-        getTopProdutos(i.id),
+        aberta ? getResumoClientes(i.id) : Promise.resolve(null),
+        aberta ? getTopProdutos(i.id) : Promise.resolve([]),
       ])
       return {
         installId: i.id,
@@ -115,14 +126,25 @@ async function carregar() {
   return { installs, porInstall, porStats }
 }
 
-export default async function CardapioWebPage() {
-  const [{ installs, porInstall, porStats }, unidades] = await Promise.all([
-    carregar(),
-    getVisibleUnits(),
-  ])
+export default async function CardapioWebPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ loja?: string; sandbox?: string }>
+}) {
+  const sp = await searchParams
+  const [{ installs, porInstall, porStats }, unidades, superadmin] =
+    await Promise.all([
+      carregar(sp.loja ?? null),
+      getVisibleUnits(),
+      isSuperadmin(),
+    ])
   const opcoesUnidade = unidades
     .filter((u) => u.active)
     .map((u) => ({ id: u.id, code: u.code, name: u.name }))
+  const lojaAberta = sp.loja ?? null
+  // Sandbox é ferramenta de quem constrói a integração, não de quem usa o
+  // sistema. Some pro cliente; pra mim aparece com ?sandbox=1.
+  const mostrarAmbiente = superadmin && sp.sandbox === "1"
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -146,6 +168,7 @@ export default async function CardapioWebPage() {
       <ConectarLoja
         unidades={opcoesUnidade}
         redirectUri={process.env.CARDAPIOWEB_REDIRECT_URI ?? null}
+        mostrarAmbiente={mostrarAmbiente}
       />
 
       {installs.length === 0 ? (
@@ -166,6 +189,7 @@ export default async function CardapioWebPage() {
                 ? Math.round((s.detalhados / s.pedidos) * 100)
                 : 0
             const fat = s?.faturamento
+            const aberta = i.id === lojaAberta
             return (
               <div key={i.id} className="rounded-xl border bg-card p-5">
                 {/* Cabeçalho + sync */}
@@ -175,7 +199,17 @@ export default async function CardapioWebPage() {
                       <h2 className="text-sm font-semibold">
                         {i.merchant_name ?? "(sem nome)"}
                       </h2>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {/* Sandbox em âmbar, não cinza: desde que o consolidado
+                          passou a ignorar teste, "qual ambiente" deixou de ser
+                          detalhe técnico e virou a diferença entre contar e
+                          não contar no faturamento. */}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                          i.ambiente === "sandbox"
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
                         {i.ambiente}
                       </span>
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -190,6 +224,12 @@ export default async function CardapioWebPage() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       Loja no Cardápio Web: {i.merchant_id ?? "—"}
                     </p>
+                    {i.ambiente === "sandbox" && (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                        Ambiente de teste — o faturamento desta loja NÃO entra
+                        no Dashboard, no DRE nem nos relatórios da rede.
+                      </p>
+                    )}
                     <VinculoUnidade
                       installId={i.id}
                       unidades={opcoesUnidade}
@@ -201,10 +241,20 @@ export default async function CardapioWebPage() {
                       </p>
                     )}
                   </div>
-                  <SyncButton
-                    installId={i.id}
-                    concluido={st?.backfill_concluido ?? false}
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    {aberta && (
+                      <Link
+                        href="/integracao/cardapioweb"
+                        className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        Fechar análise
+                      </Link>
+                    )}
+                    <SyncButton
+                      installId={i.id}
+                      concluido={st?.backfill_concluido ?? false}
+                    />
+                  </div>
                 </div>
 
                 {/* Métricas de sync */}
@@ -243,6 +293,11 @@ export default async function CardapioWebPage() {
                     />
                   </div>
                 )}
+
+                {/* Análise detalhada: só da loja aberta. O resto da lista
+                    fica leve, e nada pesado é sequer buscado no servidor. */}
+                {aberta ? (
+                  <>
 
                 {/* Canal de origem — o trunfo que nenhuma outra tela tem */}
                 {fat && fat.faturamento > 0 && (
@@ -305,7 +360,7 @@ export default async function CardapioWebPage() {
                     <CatalogoButton installId={i.id} />
                   </div>
 
-                  {s && s.clientes.total > 0 && (
+                  {s?.clientes && s.clientes.total > 0 && (
                     <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                       <Mini label="Cadastrados" valor={fmtNum(s.clientes.total)} />
                       <Mini
@@ -331,6 +386,20 @@ export default async function CardapioWebPage() {
                     </div>
                   )}
                 </div>
+                  </>
+                ) : (
+                  s &&
+                  s.pedidos > 0 && (
+                    <Link
+                      href={`/integracao/cardapioweb?loja=${i.id}`}
+                      className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      Ver análise da loja
+                      <ChevronRight className="size-3.5" />
+                    </Link>
+                  )
+                )}
+
 
                 {st?.ultimo_erro && (
                   <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
