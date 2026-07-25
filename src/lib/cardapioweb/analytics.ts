@@ -46,6 +46,25 @@ const ROTULO_PAGAMENTO: Record<string, string> = {
   ifood_voucher: "iFood (voucher)",
   food99: "99Food",
   food99_voucher: "99Food (voucher)",
+  // "debt book" = caderneta de fiado. Apareceu no dado real da loja 275 e
+  // vazava cru na tela como "debt_book".
+  debt_book: "Fiado (caderneta)",
+}
+
+/**
+ * Rótulo de uma forma de pagamento.
+ *
+ * A doc do Cardápio Web NÃO publica o enum completo, então a lista acima nunca
+ * estará garantidamente fechada — eles podem adicionar uma forma nova a
+ * qualquer momento. Quando isso acontece, o desconhecido vira algo legível
+ * ("meal_ticket" → "Meal ticket") em vez de parecer código de programador na
+ * cara do lojista.
+ */
+function rotuloPagamento(forma: string): string {
+  const conhecido = ROTULO_PAGAMENTO[forma]
+  if (conhecido) return conhecido
+  const limpo = forma.replace(/_/g, " ").trim()
+  return limpo ? limpo.charAt(0).toUpperCase() + limpo.slice(1) : "Outros"
 }
 
 export type FaturamentoAnalytics = {
@@ -157,7 +176,7 @@ export async function getFaturamentoCardapioWeb(
     porPagamento: Array.from(pagamentos.entries())
       .map(([forma, v]) => ({
         forma,
-        rotulo: ROTULO_PAGAMENTO[forma] ?? forma,
+        rotulo: rotuloPagamento(forma),
         pedidos: v.pedidos,
         valor: v.valor,
       }))
