@@ -162,9 +162,9 @@ export function isoComFuso(d: Date, fimDoDia = false): string {
 /**
  * Varre `/orders/history` no período e grava os cabeçalhos.
  *
- * Só traz `closed` e `canceled` — são os únicos status que o endpoint
- * aceita, e são justamente os que interessam pra leitura de dados
- * (pedido fechado é pedido que virou dinheiro; cancelado é a perda).
+ * Traz `closed` e `canceled` — os dois status finais da API, e justamente
+ * os que interessam pra leitura de dados: pedido fechado é o que virou
+ * dinheiro, cancelado é a perda.
  *
  * Devolve quantos cabeçalhos novos entraram.
  */
@@ -190,7 +190,10 @@ export async function importarHistorico(
       query: {
         start_date: isoComFuso(inicio),
         end_date: isoComFuso(fim, true),
-        "status[]": "closed",
+        // Os dois status finais. O endpoint devolve ambos por padrão, mas
+        // o filtro estava fixo em "closed" — então pedido cancelado nunca
+        // entrava, e o cancelamento do canal próprio era sempre zero na tela.
+        "status[]": ["closed", "canceled"],
         per_page: PER_PAGE,
         page: pagina,
       },

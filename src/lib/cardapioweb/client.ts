@@ -90,7 +90,15 @@ export type CwFetchOptions = {
   /** Path SEM base — ex.: "/api/partner/v1/orders/123" */
   path: string
   method?: "GET" | "POST" | "PUT" | "DELETE"
-  query?: Record<string, string | number | boolean | undefined>
+  /**
+   * Valor em array vira parâmetro REPETIDO (`status[]=a&status[]=b`), que é
+   * como a API do Cardápio Web espera lista. Com `set` só o último valor
+   * sobrevivia — foi assim que o histórico ficou trazendo só `closed`.
+   */
+  query?: Record<
+    string,
+    string | number | boolean | undefined | readonly string[]
+  >
   body?: unknown
   /** Teto de rate limit que se aplica a esse endpoint (default: normal). */
   tier?: CwTier
@@ -118,7 +126,12 @@ function montarUrl(
   )
   if (query) {
     for (const [k, v] of Object.entries(query)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v))
+      if (v === undefined || v === null) continue
+      if (Array.isArray(v)) {
+        for (const item of v) url.searchParams.append(k, String(item))
+      } else {
+        url.searchParams.set(k, String(v))
+      }
     }
   }
   return url.toString()
