@@ -67,7 +67,9 @@ async function carregar() {
       .select(
         "id, ambiente, auth_mode, merchant_id, merchant_name, active, inactive_reason, scopes, units(code, name)",
       )
-      .order("created_at"),
+      // Mais recente primeiro: quem acabou de conectar uma loja precisa vê-la
+      // no topo, não embaixo do card antigo cheio de análise.
+      .order("created_at", { ascending: false }),
     admin
       .from("cardapioweb_sync_state")
       .select(
