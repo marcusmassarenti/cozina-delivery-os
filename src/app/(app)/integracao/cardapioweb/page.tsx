@@ -18,7 +18,10 @@ import {
 import { getResumoClientes, type ResumoClientes } from "@/lib/cardapioweb/clientes"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
+import { getVisibleUnits } from "@/lib/data/units"
+
 import { ClientesButton } from "./_components/clientes-button"
+import { ConectarLoja } from "./_components/conectar-loja"
 import { SyncButton } from "./_components/sync-button"
 
 export const dynamic = "force-dynamic"
@@ -108,7 +111,13 @@ async function carregar() {
 }
 
 export default async function CardapioWebPage() {
-  const { installs, porInstall, porStats } = await carregar()
+  const [{ installs, porInstall, porStats }, unidades] = await Promise.all([
+    carregar(),
+    getVisibleUnits(),
+  ])
+  const opcoesUnidade = unidades
+    .filter((u) => u.active)
+    .map((u) => ({ id: u.id, code: u.code, name: u.name }))
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -128,6 +137,8 @@ export default async function CardapioWebPage() {
           sync é retomável, então pode rodar quantas vezes precisar.
         </p>
       </div>
+
+      <ConectarLoja unidades={opcoesUnidade} />
 
       {installs.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-8 text-center">
