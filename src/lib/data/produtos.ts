@@ -57,6 +57,13 @@ export async function getTopProdutos(
       valorTotal: r.valorTotal,
     }))
   }
+  if (platform === "cardapioweb") {
+    // Ainda não há agregador de itens do Cardápio Web (os dados existem em
+    // cardapioweb_pedido_itens). Devolve vazio de propósito: antes esta
+    // chamada caía no ramo da Keeta e exibia os produtos DELA sob o título
+    // "Cardápio Web" — número errado com rótulo convincente.
+    return []
+  }
   const rows = await getNetworkKeetaTopItemsForMonth(year, month, limit, filter)
   return rows.map((r) => ({
     nomeItem: r.nomeItem,

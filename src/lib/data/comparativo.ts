@@ -12,6 +12,7 @@ import type { PlatformId } from "@/components/platform-logo"
 import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
 import type { UnitMetrics } from "@/lib/data/comparativo-metrics"
 
 export type EvolucaoPonto = {
@@ -31,7 +32,7 @@ export async function getUnitMetricsForMonth(
   month: number,
 ): Promise<Map<string, UnitMetrics>> {
   const want = new Set(platforms)
-  const [ifood, nine, keeta] = await Promise.all([
+  const [ifood, nine, keeta, cw] = await Promise.all([
     want.has("ifood")
       ? getFinanceiroResumoByUnits(unitIds, year, month)
       : null,
@@ -39,6 +40,9 @@ export async function getUnitMetricsForMonth(
       ? getNinefoodResumoByUnits(unitIds, year, month)
       : null,
     want.has("keeta") ? getKeetaResumoByUnits(unitIds, year, month) : null,
+    want.has("cardapioweb")
+      ? getCardapioWebResumoByUnits(unitIds, year, month)
+      : null,
   ])
 
   const out = new Map<string, UnitMetrics>()
@@ -74,8 +78,23 @@ export async function getUnitMetricsForMonth(
       if (ke.hasData) hasData = true
     }
 
+    // Canal próprio entra em bruto/pedidos/cancelados, mas NÃO no repasse:
+    // ele não tem repasse (a loja recebe direto), e somá-lo puxaria o "% que
+    // fica na loja" da rede pra cima como se o marketplace tivesse melhorado.
+    const brutoMarketplace = bruto
+    const liquidoMarketplace = liquido
+    const c = cw?.get(id)
+    if (c?.hasData) {
+      bruto += c.bruto
+      liquido += c.liquido
+      pedidos += c.pedidos
+      cancelados += c.cancelamentosQtd
+      hasData = true
+    }
+
     const ticket = pedidos > 0 ? bruto / pedidos : 0
-    const repasse = bruto > 0 ? (liquido / bruto) * 100 : 0
+    const repasse =
+      brutoMarketplace > 0 ? (liquidoMarketplace / brutoMarketplace) * 100 : 0
 
     out.set(id, {
       bruto,

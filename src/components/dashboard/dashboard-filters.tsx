@@ -5,21 +5,25 @@ import { usePathname, useSearchParams } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
 import { Check, ChevronDown, Filter, Store, TrendingUp, X } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  PLATAFORMAS,
+  rotuloPlataforma,
+  type PlatformId,
+} from "@/components/platform-logo"
 
 type UnitOption = { code: string; name: string }
 
-const PLATFORMS: { id: PlatformId; label: string }[] = [
-  { id: "ifood", label: "iFood" },
-  { id: "99food", label: "99 Food" },
-  { id: "keeta", label: "Keeta" },
-]
+const PLATFORMS: { id: PlatformId; label: string }[] = PLATAFORMAS.map((id) => ({
+  id,
+  label: rotuloPlataforma(id),
+}))
 
 /**
  * Filtros do Dashboard. Persistem via query params:
  *   ?ativo=1
  *   ?unidades=01,02
- *   ?plataforma=ifood
+ *   ?plataformas=ifood,keeta   (lista vazia/ausente = todas)
  *
  * Mantém o `?periodo=` intacto.
  */
@@ -27,12 +31,13 @@ export function DashboardFilters({
   unitOptions,
   ativo,
   unidadesSelected,
-  plataformaSelected,
+  plataformasSelected,
 }: {
   unitOptions: UnitOption[]
   ativo: boolean
   unidadesSelected: string[]
-  plataformaSelected: PlatformId | null
+  /** Vazio = todas. Marcar/desmarcar liga e desliga cada plataforma. */
+  plataformasSelected: PlatformId[]
 }) {
   const navigate = useNavigate()
   const pathname = usePathname()
@@ -58,10 +63,32 @@ export function DashboardFilters({
     pushWith("unidades", codes.length === 0 ? null : codes.join(","))
   }
 
-  function togglePlataforma(p: PlatformId | null) {
-    pushWith("plataforma", p)
-    setPlatOpen(false)
+  function setPlataformas(ids: PlatformId[]) {
+    // Marcar TODAS equivale a não filtrar — some da URL pra o link ficar
+    // limpo e pra "Limpar filtros" não precisar de caso especial.
+    const todas = ids.length === 0 || ids.length === PLATFORMS.length
+    pushWith("plataformas", todas ? null : ids.join(","))
   }
+
+  function togglePlataforma(id: PlatformId) {
+    const base =
+      plataformasSelected.length === 0
+        ? PLATFORMS.map((p) => p.id) // "todas" implícito vira explícito
+        : plataformasSelected
+    const proxima = base.includes(id)
+      ? base.filter((x) => x !== id)
+      : [...base, id]
+    // Desmarcar tudo não faz sentido (a tela ficaria vazia) — volta pra todas.
+    setPlataformas(proxima.length === 0 ? [] : proxima)
+  }
+
+  // Vazio = todas. `platsAtivas` é a lista efetiva pra marcar os checkboxes.
+  const platsFiltrando =
+    plataformasSelected.length > 0 &&
+    plataformasSelected.length < PLATFORMS.length
+  const platsAtivas = platsFiltrando
+    ? plataformasSelected
+    : PLATFORMS.map((p) => p.id)
 
   const unitsCount = unidadesSelected.length
   const allSelected = unitsCount === 0 || unitsCount === unitOptions.length
@@ -165,64 +192,77 @@ export function DashboardFilters({
             setUnitsOpen(false)
           }}
           className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ${
-            plataformaSelected
+            platsFiltrando
               ? "border-primary bg-primary/10 text-primary"
               : "bg-card hover:bg-muted"
           }`}
         >
-          {plataformaSelected ? (
-            <PlatformLogo platform={plataformaSelected} size="sm" />
+          {platsAtivas.length === 1 ? (
+            <PlatformLogo platform={platsAtivas[0]} size="sm" />
           ) : (
             <Store className="size-3.5" />
           )}
-          {plataformaSelected
-            ? PLATFORMS.find((p) => p.id === plataformaSelected)?.label
-            : "Todas plataformas"}
+          {!platsFiltrando
+            ? "Todas plataformas"
+            : platsAtivas.length === 1
+              ? rotuloPlataforma(platsAtivas[0])
+              : `${platsAtivas.length} plataformas`}
           <ChevronDown
             className={`size-3 transition-transform ${platOpen ? "rotate-180" : ""}`}
           />
         </button>
         {platOpen && (
           <div className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-md border bg-card shadow-lg">
-            <button
-              type="button"
-              onClick={() => togglePlataforma(null)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
-            >
-              <Store className="size-3.5 text-muted-foreground" />
-              Todas plataformas
-              {plataformaSelected === null && (
-                <Check className="ml-auto size-3 text-primary" />
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Plataformas no cálculo
+              </span>
+              {platsFiltrando && (
+                <button
+                  type="button"
+                  onClick={() => setPlataformas([])}
+                  className="text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Todas
+                </button>
               )}
-            </button>
-            <div className="border-t" />
-            {PLATFORMS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => togglePlataforma(p.id)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
-              >
-                <PlatformLogo platform={p.id} size="sm" />
-                {p.label}
-                {plataformaSelected === p.id && (
-                  <Check className="ml-auto size-3 text-primary" />
-                )}
-              </button>
-            ))}
+            </div>
+            {PLATFORMS.map((p) => {
+              const checked = platsAtivas.includes(p.id)
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => togglePlataforma(p.id)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+                >
+                  <div
+                    className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                      checked
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background"
+                    }`}
+                  >
+                    {checked && <Check className="size-3" />}
+                  </div>
+                  <PlatformLogo platform={p.id} size="sm" />
+                  {p.label}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
 
       {/* Limpar tudo */}
-      {(ativo || unitsCount > 0 || plataformaSelected) && (
+      {(ativo || unitsCount > 0 || platsFiltrando) && (
         <button
           type="button"
           onClick={() => {
             const params = new URLSearchParams(searchParams.toString())
             params.delete("ativo")
             params.delete("unidades")
-            params.delete("plataforma")
+            params.delete("plataformas")
             navigate(`${pathname}?${params.toString()}`)
           }}
           className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-foreground"

@@ -20,6 +20,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { CANAIS_PROPRIOS } from "@/lib/data/cardapioweb-imported"
 import { getNinefoodApiBillDiarioByUnits } from "@/lib/data/ninefood-imported"
 import type { ReportPlatform } from "@/lib/data/relatorio-diario-types"
 
@@ -500,6 +501,76 @@ async function loadKeeta(
   return b
 }
 
+/**
+ * Cardápio Web: agrega os pedidos crus (não há tabela diária consolidada).
+ *
+ * Duas diferenças em relação aos outros loaders, ambas deliberadas:
+ *
+ * 1. FUSO. `criado_em` é o instante real da venda, não a meia-noite-UTC que o
+ *    iFood usa pra representar um dia-calendário. Um pedido das 22h em
+ *    Brasília é T01:00Z do dia SEGUINTE — usar `dateStrDay` aqui jogaria todo
+ *    o pico da noite pro dia errado. Por isso converte pra America/Sao_Paulo.
+ *
+ * 2. CANAL. Só venda direta. O Cardápio Web também recebe pedido de
+ *    marketplace (sales_channel = "ifood"), e esse pedido já é contado pela
+ *    integração do próprio marketplace.
+ */
+async function loadCardapioWeb(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<Buckets> {
+  const b = emptyBuckets()
+  if (unitIds.length === 0) return b
+  const admin = createAdminClient()
+
+  type PedRow = {
+    unit_id: string | null
+    criado_em: string | null
+    status: string | null
+    total: number | string | null
+  }
+  const data = await fetchAllPages<PedRow>((from, to) => {
+    let q = admin
+      .from("cardapioweb_pedidos")
+      .select("unit_id, criado_em, status, total")
+      .in("unit_id", unitIds)
+      .in("sales_channel", CANAIS_PROPRIOS)
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+    if (dateRange) {
+      q = q
+        .gte("criado_em", `${dateRange.start}T00:00:00-03:00`)
+        .lte("criado_em", `${dateRange.end}T23:59:59.999-03:00`)
+    }
+    return q.order("id").range(from, to)
+  })
+
+  for (const r of data) {
+    if (!r.unit_id || !r.criado_em) continue
+    const day = diaEmBrasilia(r.criado_em)
+    if (!day) continue
+    const cancelado = (r.status ?? "").toLowerCase().startsWith("cancel")
+    add(b.faturamento, r.unit_id, day, Number(r.total) || 0)
+    add(b.pedidos, r.unit_id, day, 1)
+    if (cancelado) add(b.cancelamentos, r.unit_id, day, 1)
+  }
+  return b
+}
+
+/** Dia do mês em America/Sao_Paulo a partir de um timestamp com fuso. */
+function diaEmBrasilia(ts: string): number | null {
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return null
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+  }).format(d)
+  const n = parseInt(partes, 10)
+  return Number.isNaN(n) ? null : n
+}
+
 function mergeBuckets(...all: Buckets[]): Buckets {
   const out = emptyBuckets()
   for (const metric of ["faturamento", "pedidos", "cancelamentos"] as const) {
@@ -554,13 +625,19 @@ async function getDailyReportMatrixUncached(
     buckets = await loadNinefood(unitIds, year, month, dateRange)
   } else if (platform === "keeta") {
     buckets = await loadKeeta(unitIds, year, month, dateRange)
+  } else if (platform === "cardapioweb") {
+    buckets = await loadCardapioWeb(unitIds, year, month, dateRange)
   } else {
-    const [a, b, c] = await Promise.all([
+    // "todas" — o ramo final é EXPLÍCITO de propósito. Quando era só `else`,
+    // uma plataforma nova caía aqui em silêncio e recebia a soma de todas as
+    // outras: foi assim que o Ranking passou a mostrar o dobro do faturamento.
+    const [a, b, c, d] = await Promise.all([
       loadIfood(unitIds, year, month, dateRange),
       loadNinefood(unitIds, year, month, dateRange),
       loadKeeta(unitIds, year, month, dateRange),
+      loadCardapioWeb(unitIds, year, month, dateRange),
     ])
-    buckets = mergeBuckets(a, b, c)
+    buckets = mergeBuckets(a, b, c, d)
   }
 
   const networkByDay = {
@@ -635,6 +712,6 @@ export const getDailyReportMatrix = unstable_cache(
   // v3: o bruto do iFood passou a deduplicar por pedido (migration 0112) e o
   // 99Food ganhou o fallback da API. Subir a versão descarta o cache antigo,
   // senão a tela serviria os números velhos por até 60s depois do deploy.
-  ["daily-report-matrix-v3"],
+  ["daily-report-matrix-v4"],
   { revalidate: 60, tags: ["reports"] },
 )

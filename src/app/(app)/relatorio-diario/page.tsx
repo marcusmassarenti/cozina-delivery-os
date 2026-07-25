@@ -1,7 +1,10 @@
 import Link from "next/link"
 import { CalendarRange, Target } from "lucide-react"
 
-import type { PlatformId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import {
@@ -40,10 +43,14 @@ const PLATFORM_LABEL: Record<ReportPlatform, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 const VALID_METRICS: DailyMetric[] = ["faturamento", "pedidos", "cancelamentos"]
-const VALID_PLATFORMS: ReportPlatform[] = ["todas", "ifood", "99food", "keeta"]
+const VALID_PLATFORMS: ReportPlatform[] = [
+  "todas",
+  ...PLATAFORMAS,
+]
 
 export default async function RelatorioDiarioPage({
   searchParams,
@@ -93,27 +100,30 @@ export default async function RelatorioDiarioPage({
   const scopedUnits = allUnits.filter(
     (u) => u.active && (lojaCodes.length === 0 || lojaCodes.includes(u.code)),
   )
-  const tenantPlats: PlatformId[] = (
-    ["ifood", "99food", "keeta"] as PlatformId[]
-  ).filter((p) => scopedUnits.some((u) => u.platforms.includes(p)))
+  const tenantPlats: PlatformId[] = PLATAFORMAS.filter((p) =>
+    scopedUnits.some((u) => u.platforms.includes(p)),
+  )
 
   // Busca as 4 séries (todas + 3 plataformas) pro mesmo escopo de lojas — o
   // `matrix` da métrica/plataforma selecionada é derivado de uma delas, e as 4
   // alimentam o gráfico diário interativo (faturamento + pedidos).
-  const [dTodas, dIfood, d99, dKeeta] = await Promise.all([
+  const [dTodas, dIfood, d99, dKeeta, dCw] = await Promise.all([
     getDailyReportMatrix(year, month, "todas", unitsForMatrix, queryRange),
     getDailyReportMatrix(year, month, "ifood", unitsForMatrix, queryRange),
     getDailyReportMatrix(year, month, "99food", unitsForMatrix, queryRange),
     getDailyReportMatrix(year, month, "keeta", unitsForMatrix, queryRange),
+    getDailyReportMatrix(year, month, "cardapioweb", unitsForMatrix, queryRange),
   ])
-  const matrix =
-    platform === "ifood"
-      ? dIfood
-      : platform === "99food"
-        ? d99
-        : platform === "keeta"
-          ? dKeeta
-          : dTodas
+  // Mapa em vez de ternário encadeado: o ternário terminava em `: dTodas`, e
+  // uma plataforma nova exibia os números de TODAS com o chip dela marcado.
+  const porPlataforma = {
+    todas: dTodas,
+    ifood: dIfood,
+    "99food": d99,
+    keeta: dKeeta,
+    cardapioweb: dCw,
+  } satisfies Record<ReportPlatform, typeof dTodas>
+  const matrix = porPlataforma[platform]
 
   const toSeries = (m: typeof dTodas) => ({
     days: m.days,
@@ -125,12 +135,14 @@ export default async function RelatorioDiarioPage({
     ifood: toSeries(dIfood),
     "99food": toSeries(d99),
     keeta: toSeries(dKeeta),
+    cardapioweb: toSeries(dCw),
   }
   const dailyPlatforms = (
     [
       ["ifood", dIfood],
       ["99food", d99],
       ["keeta", dKeeta],
+      ["cardapioweb", dCw],
     ] as const
   )
     .filter(([, m]) => m.hasData)

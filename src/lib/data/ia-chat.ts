@@ -24,7 +24,10 @@ import {
 } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
-import type { PlatformId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  type PlatformId,
+} from "@/components/platform-logo"
 import {
   getNinoDegustacao,
   isAiPlan,
@@ -695,7 +698,11 @@ function linha(...vals: (string | number | null)[]): string {
   return vals.map((v) => (v === null ? "" : String(v))).join("|")
 }
 
-const TODAS_PLATAFORMAS: PlatformId[] = ["ifood", "99food", "keeta"]
+// Precisa ser TODAS mesmo. O histórico do ano usa esta lista e o mês corrente
+// vem do getRealMonthlyForUnits (que já inclui o canal próprio) — com listas
+// diferentes, a IA compararia base de 4 plataformas contra base de 3 e
+// afirmaria um crescimento que não existe.
+const TODAS_PLATAFORMAS: PlatformId[] = PLATAFORMAS
 
 type MesLoja = {
   mes: string

@@ -48,6 +48,38 @@ function ehCancelado(status: string | null): boolean {
   return (status ?? "").toLowerCase().startsWith("cancel")
 }
 
+/**
+ * Canais em que a venda é DA LOJA (sem marketplace no meio).
+ *
+ * O Cardápio Web também funciona como HUB: um pedido feito no iFood pode
+ * chegar aqui com `sales_channel = "ifood"`. Esse pedido já está sendo contado
+ * pela integração do próprio iFood — somar de novo pelo Cardápio Web
+ * inflaria o faturamento da loja com dinheiro que não existe.
+ *
+ * Por isso o filtro é uma LISTA DE PERMISSÃO, não uma exclusão de "ifood":
+ * quando eles adicionarem um marketplace novo, ele fica de fora por padrão em
+ * vez de entrar silenciosamente no bruto.
+ */
+export const CANAIS_PROPRIOS = [
+  "catalog",
+  "store_front_catalog",
+  "portal",
+  "whatsapp_extension",
+]
+
+/**
+ * `criado_em` é timestamptz e o filtro de período vem como "YYYY-MM-DD".
+ * Sem fuso explícito o Postgres lê como UTC — que é 21h do dia ANTERIOR em
+ * Brasília, jogando o movimento da noite para o dia errado.
+ */
+function inicioDoDiaBRT(data: string): string {
+  return `${data}T00:00:00-03:00`
+}
+
+function fimDoDiaBRT(data: string): string {
+  return `${data}T23:59:59.999-03:00`
+}
+
 type Linha = {
   unit_id: string | null
   status: string | null
@@ -69,13 +101,18 @@ async function buscarLinhas(
     .from("cardapioweb_pedidos")
     .select("unit_id, status, total")
     .in("unit_id", unitIds)
+    // Só venda direta: pedido de marketplace que passou por aqui já é contado
+    // pela integração daquele marketplace.
+    .in("sales_channel", CANAIS_PROPRIOS)
     .eq("ref_year", year)
     .eq("ref_month", month)
 
   // Range custom (filtro de período) restringe DENTRO do mês — ref_year/mes
   // ficam pra pegar o índice.
   if (dateRange) {
-    q = q.gte("criado_em", dateRange.start).lte("criado_em", dateRange.end)
+    q = q
+      .gte("criado_em", inicioDoDiaBRT(dateRange.start))
+      .lte("criado_em", fimDoDiaBRT(dateRange.end))
   }
 
   const { data, error } = await q

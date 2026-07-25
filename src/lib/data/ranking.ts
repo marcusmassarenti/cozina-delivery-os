@@ -141,7 +141,7 @@ export async function getRankingData(
         promise: getDailyReportMatrix(
           seg.year,
           seg.month,
-          plat as ReportPlatform,
+          plat,
           units,
           seg.dayRange,
         ),
@@ -228,13 +228,13 @@ export async function getRankingData(
       temCusto: tc,
       perPlatform: pb,
     })
-    totalsBreak.ifood += pb.ifood
-    totalsBreak["99food"] += pb["99food"]
-    totalsBreak.keeta += pb.keeta
+    for (const plat of PLATS) totalsBreak[plat] += pb[plat]
     totalPedidos += ped
   }
 
-  const totalBruto = totalsBreak.ifood + totalsBreak["99food"] + totalsBreak.keeta
+  // Soma as MESMAS plataformas das linhas — antes o rodapé somava só 3 e não
+  // fechava com a tabela.
+  const totalBruto = PLATS.reduce((s, plat) => s + totalsBreak[plat], 0)
 
   const evolutionFull: RankingEvolutionPoint[] = evoResults.map((m, i) => ({
     year: startYear,
