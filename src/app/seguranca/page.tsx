@@ -82,7 +82,8 @@ export default function SegurancaPage() {
             <strong>verificação em duas etapas (2FA)</strong> disponível para
             qualquer usuário, com aplicativo autenticador — ative em{" "}
             <em>Minha conta → Segurança</em>. Com ela, saber sua senha não basta
-            para entrar;
+            para entrar. Você recebe <strong>8 códigos de recuperação</strong>{" "}
+            de uso único para o caso de perder o celular;
           </li>
           <li>
             a tela de login é protegida contra robôs por verificação do
@@ -233,9 +234,9 @@ export default function SegurancaPage() {
         <ul className="list-disc pl-5">
           <li>
             <strong>O 2FA é opcional, não obrigatório.</strong> Cada usuário
-            decide ativar. Não forçamos a rede inteira porque quem perde o
-            celular sem ter transferido o autenticador ficaria sem acesso ao
-            próprio faturamento — a recuperação depende de um administrador.
+            decide ativar. Não forçamos a rede inteira porque o segundo fator
+            depende de um aparelho, e aparelho se perde — preferimos que a
+            adoção seja consciente a criar bloqueios em massa.
           </li>
           <li>
             <strong>Não temos certificação formal</strong> (ISO 27001, SOC 2).

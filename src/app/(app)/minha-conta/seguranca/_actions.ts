@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import { apagarCodigos, gerarCodigos } from "@/lib/auth/backup-codes"
 import { createClient } from "@/lib/supabase/server"
 
 export type EnrollState = {
@@ -53,6 +54,8 @@ export type VerifyState = {
   ok: boolean
   message?: string
   error?: string
+  /** Códigos de recuperação — só vêm preenchidos na hora em que são gerados. */
+  codigos?: string[]
 }
 
 /**
@@ -82,8 +85,54 @@ export async function confirmarFator2FA(
   })
   if (error) return { ok: false, error: traduzir(error.message) }
 
+  // Gera os códigos de recuperação JUNTO com a ativação: é o único momento em
+  // que a pessoa ainda tem o aparelho em mãos e está com o assunto na cabeça.
+  const { data: u } = await supabase.auth.getUser()
+  const codigos = u.user ? await gerarCodigos(u.user.id) : []
+
   revalidatePath("/minha-conta/seguranca")
-  return { ok: true, message: "Verificação em duas etapas ativada." }
+  return { ok: true, message: "Verificação em duas etapas ativada.", codigos }
+}
+
+/**
+ * Gera um conjunto novo de códigos, invalidando os anteriores.
+ *
+ * Exige um código do app pelo mesmo motivo que desativar exige: sem isso,
+ * quem encontrasse uma sessão aberta imprimiria 8 chaves permanentes da conta.
+ */
+export async function regerarCodigos(
+  _prev: VerifyState,
+  formData: FormData,
+): Promise<VerifyState> {
+  const factorId = String(formData.get("factorId") ?? "").trim()
+  const code = somenteDigitos(String(formData.get("code") ?? ""))
+  if (!factorId) return { ok: false, error: "Fator não encontrado." }
+  if (code.length !== 6) {
+    return { ok: false, error: "Digite os 6 dígitos do aplicativo." }
+  }
+
+  const supabase = await createClient()
+  const { data: desafio, error: errDesafio } =
+    await supabase.auth.mfa.challenge({ factorId })
+  if (errDesafio) return { ok: false, error: traduzir(errDesafio.message) }
+
+  const { error } = await supabase.auth.mfa.verify({
+    factorId,
+    challengeId: desafio.id,
+    code,
+  })
+  if (error) return { ok: false, error: traduzir(error.message) }
+
+  const { data: u } = await supabase.auth.getUser()
+  if (!u.user) return { ok: false, error: "Sessão expirada." }
+  const codigos = await gerarCodigos(u.user.id)
+
+  revalidatePath("/minha-conta/seguranca")
+  return {
+    ok: true,
+    message: "Códigos novos gerados. Os anteriores não valem mais.",
+    codigos,
+  }
 }
 
 /**
@@ -117,6 +166,11 @@ export async function desativar2FA(
 
   const { error } = await supabase.auth.mfa.unenroll({ factorId })
   if (error) return { ok: false, error: traduzir(error.message) }
+
+  // Sem 2FA, código de recuperação não recupera nada — deixá-los vivos só
+  // manteria segredos válidos circulando por aí.
+  const { data: u } = await supabase.auth.getUser()
+  if (u.user) await apagarCodigos(u.user.id)
 
   revalidatePath("/minha-conta/seguranca")
   return { ok: true, message: "Verificação em duas etapas desativada." }

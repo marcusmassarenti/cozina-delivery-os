@@ -13,9 +13,11 @@ import {
   confirmarFator2FA,
   desativar2FA,
   iniciarCadastro2FA,
+  regerarCodigos,
   type EnrollState,
   type VerifyState,
 } from "../_actions"
+import { CodigosRecuperacao } from "./codigos-recuperacao"
 
 const enrollInicial: EnrollState = { ok: false }
 const verifyInicial: VerifyState = { ok: false }
@@ -30,10 +32,12 @@ export function MfaCard({
   ativo,
   factorId,
   email,
+  codigosDisponiveis,
 }: {
   ativo: boolean
   factorId: string | null
   email: string
+  codigosDisponiveis: number
 }) {
   return (
     <div className="rounded-xl border bg-card">
@@ -68,7 +72,11 @@ export function MfaCard({
 
       <div className="p-5">
         {ativo ? (
-          <Desativar factorId={factorId} />
+          <Desativar
+            factorId={factorId}
+            email={email}
+            codigosDisponiveis={codigosDisponiveis}
+          />
         ) : (
           <Ativar email={email} />
         )}
@@ -82,9 +90,31 @@ function Ativar({ email }: { email: string }) {
   const [enroll, iniciar] = useActionState(iniciarCadastro2FA, enrollInicial)
   const [verify, confirmar] = useActionState(confirmarFator2FA, verifyInicial)
 
+  // Só atualiza a página DEPOIS que a pessoa guardar os códigos — um refresh
+  // aqui apagaria da tela a única exibição deles.
   React.useEffect(() => {
-    if (verify.ok) router.refresh()
-  }, [verify.ok, router])
+    if (verify.ok && !verify.codigos?.length) router.refresh()
+  }, [verify.ok, verify.codigos, router])
+
+  // Etapa 3 — ativado: mostra os códigos de recuperação e só então segue.
+  if (verify.ok && verify.codigos?.length) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+          <Check className="size-4" />
+          Verificação em duas etapas ativada.
+        </p>
+        <CodigosRecuperacao codigos={verify.codigos} email={email} />
+        <Button
+          type="button"
+          onClick={() => router.refresh()}
+          className="w-fit"
+        >
+          Guardei meus códigos
+        </Button>
+      </div>
+    )
+  }
 
   // Etapa 1 — ainda não gerou o QR.
   if (!enroll.ok) {
@@ -167,23 +197,95 @@ function Ativar({ email }: { email: string }) {
   )
 }
 
-function Desativar({ factorId }: { factorId: string | null }) {
+function Desativar({
+  factorId,
+  email,
+  codigosDisponiveis,
+}: {
+  factorId: string | null
+  email: string
+  codigosDisponiveis: number
+}) {
   const router = useRouter()
   const [state, action] = useActionState(desativar2FA, verifyInicial)
+  const [novos, regerar] = useActionState(regerarCodigos, verifyInicial)
   const [aberto, setAberto] = React.useState(false)
+  const [regerando, setRegerando] = React.useState(false)
 
   React.useEffect(() => {
     if (state.ok) router.refresh()
   }, [state.ok, router])
 
+  const poucos = codigosDisponiveis > 0 && codigosDisponiveis <= 2
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Códigos de recuperação: quantos sobraram e como trocar. */}
+      {novos.ok && novos.codigos?.length ? (
+        <CodigosRecuperacao codigos={novos.codigos} email={email} />
+      ) : (
+        <div
+          className={`flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-xs ${
+            codigosDisponiveis === 0 || poucos
+              ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400"
+              : "bg-muted/40 text-muted-foreground"
+          }`}
+        >
+          <KeyRound className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            {codigosDisponiveis === 0
+              ? "Você não tem códigos de recuperação. Sem eles, perder o celular exige um administrador."
+              : `${codigosDisponiveis} ${codigosDisponiveis === 1 ? "código de recuperação disponível" : "códigos de recuperação disponíveis"}${poucos ? " — considere gerar novos." : "."}`}
+          </span>
+          {!regerando && (
+            <button
+              type="button"
+              onClick={() => setRegerando(true)}
+              className="shrink-0 font-medium underline transition-colors hover:text-foreground"
+            >
+              Gerar novos
+            </button>
+          )}
+        </div>
+      )}
+
+      {regerando && !novos.ok && (
+        <form action={regerar} className="flex flex-col gap-2">
+          <input type="hidden" name="factorId" value={factorId ?? ""} />
+          <p className="text-xs text-muted-foreground">
+            Gerar novos <b>invalida os anteriores</b>. Digite um código do app
+            para confirmar:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              maxLength={6}
+              required
+              className="h-10 w-32 text-center font-mono text-base tracking-[0.3em]"
+            />
+            <BotaoRegerar />
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10"
+              onClick={() => setRegerando(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+          {novos.error && <Erro>{novos.error}</Erro>}
+        </form>
+      )}
+
       <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
         <Smartphone className="mt-0.5 size-3.5 shrink-0" />
         <span>
-          <b>Guarde bem o acesso ao app.</b> Se trocar de celular sem transferir
-          a conta do autenticador, você não conseguirá entrar — será preciso
-          pedir a um administrador que desative o 2FA da sua conta.
+          <b>Guarde os códigos fora do celular.</b> Se você perder o aparelho e
+          os códigos estiverem só nele, a recuperação passa a depender de um
+          administrador.
         </span>
       </div>
 
@@ -244,6 +346,15 @@ function BotaoConfirmar() {
     <Button type="submit" disabled={pending} className="h-10">
       <Check className="size-4" />
       {pending ? "Verificando..." : "Confirmar e ativar"}
+    </Button>
+  )
+}
+
+function BotaoRegerar() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending} className="h-10">
+      {pending ? "Gerando..." : "Gerar novos códigos"}
     </Button>
   )
 }

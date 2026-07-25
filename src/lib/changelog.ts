@@ -64,7 +64,12 @@ export const CHANGELOG: Release[] = [
           },
           {
             kind: "novo",
-            title: "Perdeu o celular? O administrador resolve",
+            title: "8 códigos de recuperação para não depender de ninguém",
+            desc: "Ao ativar a verificação, você recebe 8 códigos de uso único. Guarde-os fora do celular (num gerenciador de senhas ou impressos). Se perder o aparelho, entra com um deles — a verificação é desativada e você cadastra o celular novo. Dá para gerar códigos novos quando quiser, o que invalida os antigos.",
+          },
+          {
+            kind: "novo",
+            title: "Perdeu o celular e os códigos? O administrador resolve",
             desc: "Em Minha conta → Usuários, quem tem a verificação ativa aparece com um escudo verde, e o administrador pode desativá-la para essa pessoa. Ela volta a entrar só com e-mail e senha e cadastra um aparelho novo depois. Atenção: confirme por telefone ou pessoalmente quem está pedindo — esse é justamente o caminho que um golpista tentaria usar.",
           },
         ],

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 
+import { contarDisponiveis } from "@/lib/auth/backup-codes"
 import { getMfaStatus } from "@/lib/auth/mfa"
 import { createClient } from "@/lib/supabase/server"
 
@@ -13,6 +14,9 @@ export default async function SegurancaContaPage() {
   if (!data.user) redirect("/login")
 
   const mfa = await getMfaStatus()
+  const codigosDisponiveis = mfa.ativo
+    ? await contarDisponiveis(data.user.id)
+    : 0
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-6">
@@ -28,6 +32,7 @@ export default async function SegurancaContaPage() {
         ativo={mfa.ativo}
         factorId={mfa.factorId}
         email={data.user.email ?? ""}
+        codigosDisponiveis={codigosDisponiveis}
       />
 
       <div className="rounded-xl border bg-card p-5">

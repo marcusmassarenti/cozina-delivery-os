@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
+import { apagarCodigos, consumirCodigo } from "@/lib/auth/backup-codes"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 export type DesafioState = {
@@ -68,4 +70,51 @@ export async function verificarCodigo2FA(
 
   revalidatePath("/", "layout")
   redirect("/")
+}
+
+/**
+ * Entrada de emergência: consome um código de recuperação.
+ *
+ * Ao acertar, o 2FA é DESATIVADO e a pessoa entra. É deliberado — ela está
+ * nesta tela porque perdeu o aparelho, então manter o fator ativo apenas a
+ * travaria de novo no próximo login. Em seguida ela cadastra o aparelho novo.
+ */
+export async function usarCodigoDeRecuperacao(
+  _prev: DesafioState,
+  formData: FormData,
+): Promise<DesafioState> {
+  const code = String(formData.get("code") ?? "").trim()
+  if (code.replace(/[^a-zA-Z0-9]/g, "").length !== 8) {
+    return { ok: false, error: "O código de recuperação tem 8 caracteres." }
+  }
+
+  // Mesmo teto do código do app — sem limite, 8 caracteres dariam pra varrer.
+  const ip = await clientIp()
+  if (!(await rateLimit(`recuperacao:${ip}`, 10, 5 * 60))) {
+    return {
+      ok: false,
+      error: "Muitas tentativas. Espere alguns minutos e tente de novo.",
+    }
+  }
+
+  const supabase = await createClient()
+  const { data: u } = await supabase.auth.getUser()
+  if (!u.user) return { ok: false, error: "Sessão expirada. Entre de novo." }
+
+  const valeu = await consumirCodigo(u.user.id, code)
+  if (!valeu) {
+    return { ok: false, error: "Código de recuperação inválido ou já utilizado." }
+  }
+
+  // Remove os fatores pelo cliente admin: a sessão está em aal1 e não teria
+  // permissão pra se desfazer do próprio 2FA.
+  const admin = createAdminClient()
+  const { data: alvo } = await admin.auth.admin.getUserById(u.user.id)
+  for (const f of alvo?.user?.factors ?? []) {
+    await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId: u.user.id })
+  }
+  await apagarCodigos(u.user.id)
+
+  revalidatePath("/", "layout")
+  redirect("/minha-conta/seguranca?recuperado=1")
 }
