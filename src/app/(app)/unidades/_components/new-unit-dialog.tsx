@@ -6,7 +6,11 @@ import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  type CanalId,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -35,10 +39,11 @@ const UFs = [
   "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 
-const PLATFORMS: { id: PlatformId; label: string }[] = [
+const PLATFORMS: { id: CanalId; label: string }[] = [
   { id: "ifood", label: "iFood" },
   { id: "99food", label: "99 Food" },
   { id: "keeta", label: "Keeta" },
+  { id: "cardapioweb", label: "Cardápio Web" },
 ]
 
 const initial: CreateUnitState = { ok: false }
@@ -225,7 +230,7 @@ export function NewUnitDialog({
 function PlatformCheckbox({
   platform,
 }: {
-  platform: { id: PlatformId; label: string }
+  platform: { id: CanalId; label: string }
 }) {
   const [checked, setChecked] = React.useState(true)
   return (

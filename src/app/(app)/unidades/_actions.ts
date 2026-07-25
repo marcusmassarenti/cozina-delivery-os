@@ -14,7 +14,10 @@ export type CreateUnitState = {
   fieldErrors?: Record<string, string>
 }
 
-const ALL_PLATFORMS = ["ifood", "99food", "keeta"] as const
+// Inclui o canal próprio: o form de unidade pergunta "por onde essa loja
+// vende?", e a resposta pode ser Cardápio Web. Quem cuida de dinheiro de
+// marketplace (DRE, importação) filtra com ehMarketplace().
+const ALL_PLATFORMS = ["ifood", "99food", "keeta", "cardapioweb"] as const
 type PlatformId = (typeof ALL_PLATFORMS)[number]
 
 function cleanCnpj(cnpj: string) {

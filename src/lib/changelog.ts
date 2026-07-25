@@ -42,6 +42,32 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.8.2",
+    date: "2026-07-25",
+    tag: "Correções",
+    title: "Cardápio Web: dá pra escolher a unidade depois de conectar",
+    areas: [
+      {
+        area: "Cardápio Web",
+        items: [
+          {
+            kind: "correcao",
+            title: "Vínculo da loja com a unidade agora é editável",
+            antes:
+              "A unidade só podia ser escolhida no momento de conectar. Quem deixasse em 'escolher depois' não tinha como voltar atrás, e todo o histórico já importado ficava sem loja dona — invisível em qualquer visão por unidade.",
+            depois:
+              "O card da loja conectada tem um seletor de unidade. Ao salvar, os pedidos, o cardápio e os clientes já importados passam junto para a unidade escolhida.",
+          },
+          {
+            kind: "correcao",
+            title: "Cardápio Web aparece como canal da loja",
+            desc: "Na tela de Unidades, o Cardápio Web entra ao lado de iFood, 99 Food e Keeta. Vincular a loja já marca o canal sozinho — não precisa lembrar de ir lá marcar na mão.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.8.1",
     date: "2026-07-25",
     tag: "Correções",

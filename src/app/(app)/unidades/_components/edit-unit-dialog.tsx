@@ -17,7 +17,11 @@ import {
 } from "lucide-react"
 
 import { CoachTour, type CoachStep } from "@/components/onboarding/coach-tour"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  type CanalId,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -48,10 +52,11 @@ const UFs = [
   "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 
-const PLATFORMS: { id: PlatformId; label: string }[] = [
+const PLATFORMS: { id: CanalId; label: string }[] = [
   { id: "ifood", label: "iFood" },
   { id: "99food", label: "99 Food" },
   { id: "keeta", label: "Keeta" },
+  { id: "cardapioweb", label: "Cardápio Web" },
 ]
 
 const initial: CreateUnitState = { ok: false }
@@ -103,7 +108,7 @@ export type EditUnitInitial = {
   active: boolean
   dataInauguracao: string | null
   dataEncerramento: string | null
-  platforms: PlatformId[]
+  platforms: CanalId[]
   /** Mapeamento PlatformId → ID da loja na plataforma (iFood: 260777, etc.) */
   externalStoreIds?: Partial<Record<PlatformId, string | null>>
   /** Inauguração por plataforma (override da data da unidade). */
@@ -565,7 +570,7 @@ function PlatformCheckbox({
   platform,
   defaultChecked,
 }: {
-  platform: { id: PlatformId; label: string }
+  platform: { id: CanalId; label: string }
   defaultChecked: boolean
 }) {
   const [checked, setChecked] = React.useState(defaultChecked)

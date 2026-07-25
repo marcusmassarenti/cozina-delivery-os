@@ -2,7 +2,11 @@ import { Suspense } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, LayoutGrid, Store, Upload } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  ehMarketplace,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { SectionDivider } from "@/components/shared/section-divider"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -111,7 +115,9 @@ export default async function ImportacaoPage({
     id: u.id,
     code: u.code,
     name: u.name,
-    platforms: u.platforms,
+    // Só marketplace: esta tela é o upload dos relatórios de plataforma, e o
+    // Cardápio Web não gera planilha — ele entra sozinho pela API.
+    platforms: u.platforms.filter(ehMarketplace),
     externalStoreIds: u.externalStoreIds,
   }))
   const recentResult = await getRecentImports(histPage)

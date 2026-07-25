@@ -146,3 +146,100 @@ export async function rodarCatalogoAction(
     }
   }
 }
+
+export type VinculoState = {
+  ok: boolean
+  message?: string
+  /** Quantos registros antigos passaram a pertencer à unidade. */
+  reassociados?: { pedidos: number; catalogo: number; clientes: number }
+}
+
+/**
+ * Aponta a loja do Cardápio Web para uma unidade — ou desvincula (unitId
+ * vazio).
+ *
+ * Não basta gravar unit_id na instalação: pedido, cardápio e cliente já
+ * importados guardam o próprio unit_id, copiado da instalação NA HORA em que
+ * entraram. Quem conectou sem escolher a unidade tem esse histórico com o
+ * campo em branco — e ele ficaria fora de qualquer visão por loja, sem
+ * qualquer aviso. Por isso a troca reescreve o passado junto.
+ */
+export async function vincularUnidadeAction(
+  _prev: VinculoState,
+  formData: FormData,
+): Promise<VinculoState> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, message: "Só administradores podem vincular a loja." }
+  }
+
+  const installId = String(formData.get("install_id") ?? "")
+  const unitIdBruto = String(formData.get("unit_id") ?? "").trim()
+  const unitId = unitIdBruto === "" ? null : unitIdBruto
+  if (!installId) return { ok: false, message: "Instalação não informada." }
+
+  const admin = createAdminClient()
+
+  const { data: install } = await admin
+    .from("cardapioweb_installs")
+    .select("id, holding_id")
+    .eq("id", installId)
+    .maybeSingle()
+  if (!install) return { ok: false, message: "Instalação não encontrada." }
+
+  // A unidade precisa ser da MESMA holding da instalação. Sem esta checagem,
+  // um id de outra empresa colado no form apontaria os pedidos para lá.
+  if (unitId) {
+    const { data: unidade } = await admin
+      .from("units")
+      .select("id, brands!inner(holding_id)")
+      .eq("id", unitId)
+      .maybeSingle()
+
+    const holdingDaUnidade = (
+      unidade as { brands?: { holding_id?: string } } | null
+    )?.brands?.holding_id
+
+    if (!unidade || holdingDaUnidade !== install.holding_id) {
+      return { ok: false, message: "Essa unidade não é da sua empresa." }
+    }
+  }
+
+  const { error } = await admin
+    .from("cardapioweb_installs")
+    .update({ unit_id: unitId, updated_at: new Date().toISOString() })
+    .eq("id", installId)
+  if (error) return { ok: false, message: error.message }
+
+  // Alinha o histórico com o vínculo novo.
+  const reassociados = { pedidos: 0, catalogo: 0, clientes: 0 }
+  const tabelas: [string, keyof typeof reassociados][] = [
+    ["cardapioweb_pedidos", "pedidos"],
+    ["cardapioweb_catalogo_itens", "catalogo"],
+    ["cardapioweb_clientes", "clientes"],
+  ]
+  for (const [tabela, chave] of tabelas) {
+    const { data } = await admin
+      .from(tabela)
+      .update({ unit_id: unitId })
+      .eq("install_id", installId)
+      .select("id")
+    reassociados[chave] = (data ?? []).length
+  }
+
+  // Marca o canal na unidade, pra ela aparecer com o selo do Cardápio Web na
+  // listagem sem ninguém precisar lembrar de ir lá marcar na mão.
+  if (unitId) {
+    await admin
+      .from("unit_platforms")
+      .upsert(
+        { unit_id: unitId, platform: "cardapioweb", active: true },
+        { onConflict: "unit_id,platform" },
+      )
+  }
+
+  revalidatePath("/integracao/cardapioweb")
+  revalidatePath("/unidades")
+  return { ok: true, reassociados }
+}

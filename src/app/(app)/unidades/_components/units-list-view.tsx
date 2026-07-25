@@ -6,7 +6,7 @@ import { useNavigate } from "@/components/shared/navigation-progress"
 import { ChevronRight, Filter, LayoutGrid, Plus, Search, X } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PlatformLogo, type CanalId } from "@/components/platform-logo"
 import { type CoachStep } from "@/components/onboarding/coach-tour"
 import { TourButton } from "@/components/onboarding/tour-button"
 import type { Unit } from "@/lib/data/units"
@@ -14,10 +14,11 @@ import { DeleteUnitButton } from "./delete-unit-button"
 import { EditUnitDialog } from "./edit-unit-dialog"
 import { NewUnitDialog } from "./new-unit-dialog"
 
-const ALL_PLATFORMS: { id: PlatformId; label: string }[] = [
+const ALL_PLATFORMS: { id: CanalId; label: string }[] = [
   { id: "ifood", label: "iFood" },
   { id: "99food", label: "99 Food" },
   { id: "keeta", label: "Keeta" },
+  { id: "cardapioweb", label: "Cardápio Web" },
 ]
 
 const TOUR_STEPS: CoachStep[] = [
@@ -65,7 +66,7 @@ export function UnitsListView({
   const navigate = useNavigate()
   const [search, setSearch] = React.useState("")
   const [cityFilter, setCityFilter] = React.useState<string>("")
-  const [platformFilter, setPlatformFilter] = React.useState<PlatformId[]>([])
+  const [platformFilter, setPlatformFilter] = React.useState<CanalId[]>([])
   const [onlyActive, setOnlyActive] = React.useState(false)
 
   const cities = React.useMemo(() => {
@@ -96,7 +97,7 @@ export function UnitsListView({
     })
   }, [units, search, cityFilter, platformFilter, onlyActive])
 
-  const togglePlatform = (id: PlatformId) =>
+  const togglePlatform = (id: CanalId) =>
     setPlatformFilter((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
     )

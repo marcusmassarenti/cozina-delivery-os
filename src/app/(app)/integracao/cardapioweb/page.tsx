@@ -24,6 +24,7 @@ import { CatalogoButton } from "./_components/catalogo-button"
 import { ClientesButton } from "./_components/clientes-button"
 import { ConectarLoja } from "./_components/conectar-loja"
 import { SyncButton } from "./_components/sync-button"
+import { VinculoUnidade } from "./_components/vinculo-unidade"
 
 export const dynamic = "force-dynamic"
 
@@ -36,6 +37,7 @@ type InstallRow = {
   active: boolean
   inactive_reason: string | null
   scopes: string[] | null
+  unit_id: string | null
   units: { code: string; name: string } | null
 }
 
@@ -66,7 +68,7 @@ async function carregar() {
     admin
       .from("cardapioweb_installs")
       .select(
-        "id, ambiente, auth_mode, merchant_id, merchant_name, active, inactive_reason, scopes, units(code, name)",
+        "id, ambiente, auth_mode, merchant_id, merchant_name, active, inactive_reason, scopes, unit_id, units(code, name)",
       )
       // Mais recente primeiro: quem acabou de conectar uma loja precisa vê-la
       // no topo, não embaixo do card antigo cheio de análise.
@@ -187,10 +189,12 @@ export default async function CardapioWebPage() {
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Loja no Cardápio Web: {i.merchant_id ?? "—"}
-                      {i.units
-                        ? ` · vinculada a ${i.units.code} ${i.units.name}`
-                        : " · ainda sem unidade vinculada"}
                     </p>
+                    <VinculoUnidade
+                      installId={i.id}
+                      unidades={opcoesUnidade}
+                      unitIdAtual={i.unit_id}
+                    />
                     {i.inactive_reason && (
                       <p className="mt-1 text-xs text-rose-600">
                         {i.inactive_reason}

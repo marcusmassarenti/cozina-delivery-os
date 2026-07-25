@@ -85,7 +85,13 @@ export function ConectarLoja({
           </label>
           <Select value={unitId} onValueChange={(v) => setUnitId(v ?? "")}>
             <SelectTrigger className="h-9 w-64">
-              <SelectValue placeholder="Escolher depois" />
+              {/* Sem a função, o Base UI mostraria o uuid da unidade. */}
+              <SelectValue placeholder="Escolher depois">
+                {(v) => {
+                  const u = unidades.find((x) => x.id === v)
+                  return u ? `#${u.code} · ${u.name}` : "Escolher depois"
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {unidades.map((u) => (

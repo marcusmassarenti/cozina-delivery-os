@@ -11,7 +11,7 @@ import {
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { currentPeriod } from "@/lib/period"
-import type { PlatformId } from "@/components/platform-logo"
+import type { CanalId, PlatformId } from "@/components/platform-logo"
 
 export type Unit = {
   id: string
@@ -26,7 +26,7 @@ export type Unit = {
   data_encerramento: string | null
   /** Logo da loja (white-label por unidade). null = usa o logo da empresa. */
   logoUrl: string | null
-  platforms: PlatformId[]
+  platforms: CanalId[]
   /** Por plataforma, o ID da loja no sistema externo (ex.: iFood 260777). */
   externalStoreIds: Partial<Record<PlatformId, string | null>>
   /** Por plataforma, a data de inauguração na plataforma (override da unidade). */
@@ -49,7 +49,7 @@ type DbUnit = {
 
 function attach(
   u: DbUnit,
-  platforms: PlatformId[],
+  platforms: CanalId[],
   externalStoreIds: Partial<Record<PlatformId, string | null>>,
   platformInauguracoes: Partial<Record<PlatformId, string | null>>,
   monthly: UnitMonthly,
@@ -86,7 +86,7 @@ async function getUnitsUncached(): Promise<Unit[]> {
   ])
   if (unitsRes.error)
     throw new Error(`Falha ao buscar unidades: ${unitsRes.error.message}`)
-  const platformsByUnit = new Map<string, PlatformId[]>()
+  const platformsByUnit = new Map<string, CanalId[]>()
   const externalIdsByUnit = new Map<
     string,
     Partial<Record<PlatformId, string | null>>
