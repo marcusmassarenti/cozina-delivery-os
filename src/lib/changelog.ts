@@ -66,6 +66,14 @@ export const CHANGELOG: Release[] = [
             title: "Produtos mais vendidos do Cardápio Web mostrava itens da Keeta",
             desc: "Ao filtrar produtos por Cardápio Web, a lista trazia os produtos da Keeta com o título trocado. Agora fica vazia até existir o relatório próprio.",
           },
+          {
+            kind: "correcao",
+            title: "Faturamento por plataforma tinha percentuais errados",
+            antes:
+              "O relatório dividia tudo por um total que não contava a venda direta, então a fatia do iFood e das outras aparecia maior do que realmente é.",
+            depois:
+              "O Cardápio Web virou o quarto card e entrou no total. Nele, o valor aparece como 'sem comissão' em vez de 'líquido' — não é um repasse que você negociou, é venda que não passou por marketplace.",
+          },
         ],
       },
       {

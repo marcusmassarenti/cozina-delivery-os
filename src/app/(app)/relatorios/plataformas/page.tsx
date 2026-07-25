@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
+import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
@@ -43,12 +44,14 @@ export default async function PlataformasPage({
       : allUnits
   const ids = scoped.map((u) => u.id)
 
-  const [ifoodMap, nineMap, keetaMap, availablePeriods] = await Promise.all([
-    getFinanceiroResumoByUnits(ids, year, month, queryRange),
-    getNinefoodResumoByUnits(ids, year, month, queryRange),
-    getKeetaResumoByUnits(ids, year, month, queryRange),
-    getAvailablePeriods(),
-  ])
+  const [ifoodMap, nineMap, keetaMap, cwMap, availablePeriods] =
+    await Promise.all([
+      getFinanceiroResumoByUnits(ids, year, month, queryRange),
+      getNinefoodResumoByUnits(ids, year, month, queryRange),
+      getKeetaResumoByUnits(ids, year, month, queryRange),
+      getCardapioWebResumoByUnits(ids, year, month, queryRange),
+      getAvailablePeriods(),
+    ])
 
   const sumBy = <T,>(map: Map<string, T>, pick: (v: T) => number) =>
     [...map.values()].reduce((acc, v) => acc + (pick(v) || 0), 0)
@@ -59,6 +62,8 @@ export default async function PlataformasPage({
     bruto: number
     pedidos: number
     liquido: number
+    /** Marketplace desconta comissão do repasse; canal próprio, não. */
+    temRepasse: boolean
   }[] = [
     {
       id: "ifood",
@@ -66,6 +71,7 @@ export default async function PlataformasPage({
       bruto: sumBy(ifoodMap, (v) => v.bruto),
       pedidos: sumBy(ifoodMap, (v) => v.pedidosUnicos),
       liquido: sumBy(ifoodMap, (v) => v.liquido),
+      temRepasse: true,
     },
     {
       id: "99food",
@@ -73,6 +79,7 @@ export default async function PlataformasPage({
       bruto: sumBy(nineMap, (v) => v.bruto),
       pedidos: sumBy(nineMap, (v) => v.pedidos),
       liquido: sumBy(nineMap, (v) => v.liquido),
+      temRepasse: true,
     },
     {
       id: "keeta",
@@ -80,6 +87,15 @@ export default async function PlataformasPage({
       bruto: sumBy(keetaMap, (v) => v.bruto),
       pedidos: sumBy(keetaMap, (v) => v.pedidos),
       liquido: sumBy(keetaMap, (v) => v.liquido),
+      temRepasse: true,
+    },
+    {
+      id: "cardapioweb",
+      label: "Cardápio Web",
+      bruto: sumBy(cwMap, (v) => v.bruto),
+      pedidos: sumBy(cwMap, (v) => v.pedidos),
+      liquido: sumBy(cwMap, (v) => v.liquido),
+      temRepasse: false,
     },
   ]
 
@@ -181,7 +197,7 @@ export default async function PlataformasPage({
           </div>
 
           {/* Cards por plataforma */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {ordered.map((p) => (
               <div
                 key={p.id}
@@ -196,12 +212,21 @@ export default async function PlataformasPage({
                     {fmtPct(pct(p.bruto))}
                   </span>
                 </div>
-                <div className="mt-3 text-2xl font-semibold tabular-nums">
+                {/* Quatro plataformas apertam o card: em tela estreita o
+                    valor precisa encolher, senão corta no meio do número. */}
+                <div className="mt-3 text-xl font-semibold tabular-nums sm:text-2xl">
                   {fmtBRL(p.bruto)}
                 </div>
                 <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
                   <span>{fmtNum(p.pedidos)} pedidos</span>
-                  <span>{fmtBRL(p.liquido)} líquido</span>
+                  <span>
+                    {fmtBRL(p.liquido)}{" "}
+                    {/* No canal próprio "líquido" não é bruto menos comissão
+                        (não existe comissão) — é o que sobrou fora dos
+                        cancelamentos. Chamar de "líquido" ali daria a
+                        impressão de um repasse de 100% negociado. */}
+                    {p.temRepasse ? "líquido" : "sem comissão"}
+                  </span>
                 </div>
               </div>
             ))}
