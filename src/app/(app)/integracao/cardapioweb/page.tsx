@@ -20,6 +20,7 @@ import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 import { getVisibleUnits } from "@/lib/data/units"
 
+import { CatalogoButton } from "./_components/catalogo-button"
 import { ClientesButton } from "./_components/clientes-button"
 import { ConectarLoja } from "./_components/conectar-loja"
 import { SyncButton } from "./_components/sync-button"
@@ -297,6 +298,7 @@ export default async function CardapioWebPage() {
                       </p>
                     </div>
                     <ClientesButton installId={i.id} />
+                    <CatalogoButton installId={i.id} />
                   </div>
 
                   {s && s.clientes.total > 0 && (

@@ -5,6 +5,10 @@ import { revalidatePath } from "next/cache"
 import { requireAdmin } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
+  sincronizarCatalogo,
+  type ResultadoCatalogo,
+} from "@/lib/cardapioweb/catalogo"
+import {
   sincronizarClientes,
   type ResultadoClientes,
 } from "@/lib/cardapioweb/clientes"
@@ -103,6 +107,42 @@ export async function sincronizarClientesAction(
     return {
       ok: false,
       message: e instanceof Error ? e.message : "Falha ao buscar clientes.",
+    }
+  }
+}
+
+export type CatalogoState = {
+  ok: boolean
+  message?: string
+  resultado?: ResultadoCatalogo
+}
+
+/**
+ * Puxa o cardápio inteiro da loja numa chamada só (a API não pagina) e grava
+ * o snapshot. Rodar de novo é seguro: é upsert, e item que saiu do cardápio
+ * é removido do snapshot.
+ */
+export async function rodarCatalogoAction(
+  _prev: CatalogoState,
+  formData: FormData,
+): Promise<CatalogoState> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, message: "Só administradores podem sincronizar." }
+  }
+
+  const installId = String(formData.get("install_id") ?? "")
+  if (!installId) return { ok: false, message: "Instalação não informada." }
+
+  try {
+    const resultado = await sincronizarCatalogo(installId)
+    revalidatePath("/integracao/cardapioweb")
+    return { ok: resultado.ok, message: resultado.erro, resultado }
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Erro inesperado.",
     }
   }
 }
