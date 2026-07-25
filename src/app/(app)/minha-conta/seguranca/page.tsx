@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { ShieldAlert } from "lucide-react"
 
 import { contarDisponiveis } from "@/lib/auth/backup-codes"
 import { getMfaStatus } from "@/lib/auth/mfa"
@@ -8,7 +9,12 @@ import { MfaCard } from "./_components/mfa-card"
 
 export const metadata = { title: "Segurança — Minha conta" }
 
-export default async function SegurancaContaPage() {
+export default async function SegurancaContaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ recuperado?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
   if (!data.user) redirect("/login")
@@ -27,6 +33,19 @@ export default async function SegurancaContaPage() {
           proteger.
         </p>
       </div>
+
+      {/* Chegou aqui usando um código de recuperação: sem esta faixa, a pessoa
+          veria o 2FA desligado e não entenderia o que aconteceu. */}
+      {sp.recuperado === "1" && (
+        <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+          <span>
+            <b>Você entrou com um código de recuperação.</b> A verificação em
+            duas etapas foi desativada e aquele código não vale mais. Cadastre
+            seu novo aparelho abaixo para voltar a proteger a conta.
+          </span>
+        </div>
+      )}
 
       <MfaCard
         ativo={mfa.ativo}
