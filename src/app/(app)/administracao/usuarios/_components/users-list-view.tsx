@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { Building2, UserCog, UsersRound } from "lucide-react"
+import { Building2, ShieldCheck, UserCog, UsersRound } from "lucide-react"
 
 import type { AppUser } from "../_actions"
 import { DeleteUserButton } from "./delete-user-button"
 import { EditUserDialog } from "./edit-user-dialog"
+import { ResetMfaButton } from "./reset-mfa-button"
 import {
   NewUserDialog,
   type UnitOption,
@@ -103,7 +104,7 @@ export function UsersListView({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_108px] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_140px] items-center gap-4 border-b px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <div>Nome</div>
             <div>Email</div>
             <div className="text-center">Perfil</div>
@@ -117,7 +118,7 @@ export function UsersListView({
             return (
               <div
                 key={u.id}
-                className={`grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_108px] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
+                className={`grid grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_140px] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-muted/30 ${
                   idx < filtered.length - 1 ? "border-b" : ""
                 }`}
               >
@@ -129,6 +130,12 @@ export function UsersListView({
                     <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
                       Você
                     </span>
+                  )}
+                  {u.mfaAtivo && (
+                    <ShieldCheck
+                      className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                      aria-label="Verificação em duas etapas ativa"
+                    />
                   )}
                 </div>
                 <div className="truncate text-xs text-muted-foreground">
@@ -161,6 +168,14 @@ export function UsersListView({
                 </div>
                 <div className="flex items-center gap-0.5">
                   <EditUserDialog user={u} units={units} roles={roles} />
+                  {/* Só faz sentido para quem tem 2FA — evita botão morto. */}
+                  {u.mfaAtivo && (
+                    <ResetMfaButton
+                      userId={u.id}
+                      userName={u.fullName}
+                      userEmail={u.email}
+                    />
+                  )}
                   <DeleteUserButton
                     userId={u.id}
                     userName={u.fullName}

@@ -82,6 +82,8 @@ export type AppUser = {
   units: UserUnitRef[]
   createdAt: string
   lastSignInAt: string | null
+  /** Tem app autenticador confirmado (verificação em duas etapas ligada). */
+  mfaAtivo: boolean
 }
 
 export type UserActionState = {
@@ -112,14 +114,21 @@ export async function listUsers(): Promise<AppUser[]> {
   const holdingUnitIds = new Set((unitRows ?? []).map((u) => u.id))
   const brandIdSet = new Set(brandIds)
 
-  const [authRes, profilesRes, accessRes] = await Promise.all([
+  const [authRes, profilesRes, accessRes, mfaRes] = await Promise.all([
     supabase.auth.admin.listUsers(),
     supabase.from("profiles").select("user_id, full_name, perfil"),
     supabase
       .from("user_unit_access")
       .select("user_id, scope_type, scope_id"),
+    // `listUsers` NÃO traz os fatores de MFA (só o getUserById traz, um a um).
+    // Esta função resolve todos numa consulta — ver migration 0115.
+    supabase.rpc("usuarios_com_mfa"),
   ])
   if (authRes.error) throw new Error(authRes.error.message)
+
+  const comMfa = new Set(
+    ((mfaRes.data ?? []) as { user_id: string }[]).map((r) => r.user_id),
+  )
 
   // Quem pertence à holding (qualquer escopo apontando pra ela) + as lojas
   // (unit) vinculadas a cada um DENTRO da holding.
@@ -164,6 +173,7 @@ export async function listUsers(): Promise<AppUser[]> {
         units,
         createdAt: u.created_at,
         lastSignInAt: u.last_sign_in_at ?? null,
+        mfaAtivo: comMfa.has(u.id),
       }
     })
 }
@@ -462,6 +472,62 @@ export async function updateUser(
     await syncAccess(supabase, userId, perfil, unitIds)
 
     revalidatePath("/administracao/usuarios")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}
+
+/**
+ * Remove a verificação em duas etapas de um usuário — a saída para quem perdeu
+ * o celular.
+ *
+ * NÃO existem códigos de backup no TOTP do Supabase: sem esta porta, quem
+ * troca de aparelho sem migrar o autenticador fica permanentemente fora, e a
+ * única alternativa seria mexer no banco à mão no meio de um chamado.
+ *
+ * Guardas (as mesmas do deleteUser, e pelo mesmo motivo): só admin, e só sobre
+ * usuário da PRÓPRIA empresa. O client é service_role e ignora RLS — sem o
+ * assertTargetInCurrentHolding, um admin do cliente A derrubaria o 2FA de
+ * alguém do cliente B, que é justamente o ataque que o 2FA deveria impedir.
+ */
+export async function resetUserMfa(userId: string): Promise<UserActionState> {
+  if (!userId) return { ok: false, message: "ID do usuário ausente." }
+  try {
+    const { admin: supabase } = await requireAdmin()
+
+    const targetErr = await assertTargetInCurrentHolding(supabase, userId)
+    if (targetErr) return { ok: false, message: targetErr }
+
+    const { data: alvo, error: errGet } =
+      await supabase.auth.admin.getUserById(userId)
+    if (errGet || !alvo?.user) {
+      return { ok: false, message: "Usuário não encontrado." }
+    }
+
+    const fatores = alvo.user.factors ?? []
+    if (fatores.length === 0) {
+      return {
+        ok: false,
+        message: "Este usuário não tem verificação em duas etapas ativa.",
+      }
+    }
+
+    // Remove todos (inclui tentativas não confirmadas, que também travariam
+    // um novo cadastro por nome duplicado).
+    for (const f of fatores) {
+      const { error } = await supabase.auth.admin.mfa.deleteFactor({
+        id: f.id,
+        userId,
+      })
+      if (error) return { ok: false, message: error.message }
+    }
+
+    revalidatePath("/administracao/usuarios")
+    revalidatePath("/minha-conta/usuarios")
     return { ok: true }
   } catch (err) {
     return {
