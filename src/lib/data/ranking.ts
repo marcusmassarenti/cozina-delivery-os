@@ -25,6 +25,30 @@ import {
   type DateRange,
 } from "@/lib/period"
 
+/**
+ * Roda as tarefas com concorrência limitada. Sem isso, as consultas de
+ * evolução (12 meses × plataforma) saem todas juntas e o banco corta por
+ * timeout — cada uma varre um mês inteiro.
+ */
+async function mapLimit<T, R>(
+  itens: T[],
+  limite: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const saida = new Array<R>(itens.length)
+  let proximo = 0
+  const trabalhador = async () => {
+    while (proximo < itens.length) {
+      const i = proximo++
+      saida[i] = await fn(itens[i])
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limite, itens.length) }, trabalhador),
+  )
+  return saida
+}
+
 const PLATS: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
 
 export type RankingPlatformBreak = Record<PlatformId, number>
@@ -45,7 +69,9 @@ export type RankingRow = {
 export type RankingEvolutionPoint = {
   year: number
   month: number
+  /** Soma das plataformas — é o que a linha "Rede" desenha. */
   bruto: number
+  porPlataforma: Record<PlatformId, number>
 }
 
 export type RankingData = {
@@ -149,10 +175,20 @@ export async function getRankingData(
     }
   }
 
-  // --- Evolução: rede mês a mês no ano do início (12 pontos, mesma fonte) ---
+  // --- Evolução: rede mês a mês no ano do início, AGORA POR PLATAFORMA ---
+  // O total sai da soma das plataformas, não de uma chamada "todas" extra —
+  // 12 consultas a menos e o total sempre bate com as linhas do gráfico.
   const evoMonths = Array.from({ length: 12 }, (_, i) => i + 1)
-  const evoPromises = evoMonths.map((m) =>
-    getDailyReportMatrix(startYear, m, "todas" as ReportPlatform, units),
+  const evoCells: { month: number; plat: PlatformId }[] = []
+  for (const m of evoMonths) {
+    for (const plat of PLATS) evoCells.push({ month: m, plat })
+  }
+  // THUNKS, não promises: disparar as 48 de uma vez derrubava o Postgres
+  // com "canceling statement due to statement timeout". Cada uma varre um
+  // mês inteiro de pedidos — em paralelo total elas competem entre si e
+  // todas estouram o tempo limite.
+  const evoTarefas = evoCells.map(
+    (c) => () => getDailyReportMatrix(startYear, c.month, c.plat, units),
   )
 
   // --- Margem: só quando todos os meses são cheios (DRE é mensal) ---
@@ -168,7 +204,7 @@ export async function getRankingData(
 
   const [cellResults, evoResults, resultadoResults] = await Promise.all([
     Promise.all(cells.map((c) => c.promise)),
-    Promise.all(evoPromises),
+    mapLimit(evoTarefas, 6, (fn) => fn()),
     Promise.all(resultadoPromises),
   ])
 
@@ -236,11 +272,18 @@ export async function getRankingData(
   // fechava com a tabela.
   const totalBruto = PLATS.reduce((s, plat) => s + totalsBreak[plat], 0)
 
-  const evolutionFull: RankingEvolutionPoint[] = evoResults.map((m, i) => ({
-    year: startYear,
-    month: evoMonths[i],
-    bruto: m.totalFaturamento,
-  }))
+  const evolutionFull: RankingEvolutionPoint[] = evoMonths.map((mes) => {
+    const porPlat = {} as Record<PlatformId, number>
+    for (const plat of PLATS) porPlat[plat] = 0
+    let bruto = 0
+    evoCells.forEach((c, i) => {
+      if (c.month !== mes) return
+      const v = evoResults[i].totalFaturamento
+      porPlat[c.plat] += v
+      bruto += v
+    })
+    return { year: startYear, month: mes, bruto, porPlataforma: porPlat }
+  })
   // Corta os meses VAZIOS do FIM (ex.: jul–dez ainda sem dado) pra a linha não
   // despencar a zero. Mantém zeros do meio (queda real é informação).
   let lastWithData = -1

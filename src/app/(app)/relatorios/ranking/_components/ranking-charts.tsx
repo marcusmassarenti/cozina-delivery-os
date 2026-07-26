@@ -2,7 +2,10 @@
  * Gráficos do Ranking — SVG/divs leves, sem dependência externa.
  * Server components (estáticos). Cores das plataformas fixas pra reconhecimento.
  */
-import type { PlatformId } from "@/components/platform-logo"
+import {
+  rotuloPlataforma,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { fmtBRL, fmtBRLShort, fmtPct } from "@/lib/format"
 
 export const PLATFORM_COLOR: Record<PlatformId, string> = {
@@ -62,7 +65,7 @@ export function BarFaturamentoPorLoja({
                 style={{ width: `${(d.value / max) * 100}%` }}
               />
             </div>
-            <div className="w-24 shrink-0 text-right text-[11px] font-medium tabular-nums">
+            <div className="w-28 shrink-0 whitespace-nowrap text-right text-[11px] font-medium tabular-nums">
               {fmtBRLShort(d.value)}
             </div>
           </div>
@@ -127,7 +130,7 @@ export function BarEmpilhadaPlataforma({
                 )
               })}
             </div>
-            <div className="w-24 shrink-0 text-right text-[11px] font-medium tabular-nums">
+            <div className="w-28 shrink-0 whitespace-nowrap text-right text-[11px] font-medium tabular-nums">
               {fmtBRLShort(d.total)}
             </div>
           </div>
@@ -143,39 +146,48 @@ const MES_ABREV = [
   "jul", "ago", "set", "out", "nov", "dez",
 ]
 
+type EvoPoint = {
+  month: number
+  bruto: number
+  porPlataforma?: Partial<Record<PlatformId, number>>
+}
+
 export function LinhaEvolucaoRede({
   data,
   year,
 }: {
-  data: { month: number; bruto: number }[]
+  data: EvoPoint[]
   year: number
 }) {
   const W = 720
-  // Mais alto que os 220 originais: o card divide a linha com a lista de
-  // lojas, e a proporção antiga deixava um vazio grande embaixo.
   const H = 300
-  const padX = 44
-  const padTop = 28
+  const padX = 48
+  const padTop = 30
   const padBottom = 34
   const comDado = data.filter((d) => d.bruto > 0)
-  const max = Math.max(1, ...data.map((d) => d.bruto))
   const innerW = W - padX * 2
   const innerH = H - padTop - padBottom
   const x = (i: number) => padX + (innerW * i) / Math.max(1, data.length - 1)
-  const y = (v: number) => padTop + innerH - (innerH * v) / max
-  const pts = data.map((d, i) => `${x(i)},${y(d.bruto)}`).join(" ")
-  const dotIdx = data
-    .map((d, i) => ({ d, i }))
-    .filter(({ d }) => d.bruto > 0)
 
-  // Área sob a linha: dá volume ao gráfico e ocupa o espaço que sobrava.
-  const areaPts =
-    dotIdx.length > 0
-      ? `${x(0)},${padTop + innerH} ${pts} ${x(data.length - 1)},${padTop + innerH}`
+  // Plataformas que realmente venderam no ano — desenhar uma reta no zero
+  // pra canal que a rede não usa só suja o gráfico.
+  const platsAtivas = PLATS.filter((p) =>
+    data.some((d) => (d.porPlataforma?.[p] ?? 0) > 0),
+  )
+  // Escala pela REDE, não pela maior plataforma: as linhas por plataforma
+  // precisam ficar visualmente abaixo da linha do total pra leitura fazer
+  // sentido.
+  const max = Math.max(1, ...data.map((d) => d.bruto))
+  const y = (v: number) => padTop + innerH - (innerH * v) / max
+  const pontos = (get: (d: EvoPoint) => number) =>
+    data.map((d, i) => `${x(i)},${y(get(d))}`).join(" ")
+
+  const ptsRede = pontos((d) => d.bruto)
+  const areaRede =
+    comDado.length > 0
+      ? `${x(0)},${padTop + innerH} ${ptsRede} ${x(data.length - 1)},${padTop + innerH}`
       : ""
 
-  // Leitura rápida do período — era o que faltava: o gráfico mostrava a
-  // forma da curva, mas nenhum número além do topo do eixo.
   const total = comDado.reduce((s, d) => s + d.bruto, 0)
   const media = comDado.length > 0 ? total / comDado.length : 0
   const melhor = comDado.reduce(
@@ -199,7 +211,6 @@ export function LinhaEvolucaoRede({
         className="w-full"
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* grid: 3 linhas horizontais, agora com o valor de cada uma */}
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line
@@ -224,12 +235,25 @@ export function LinhaEvolucaoRede({
           </g>
         ))}
 
-        {areaPts && (
-          <polygon points={areaPts} className="fill-primary/10" />
-        )}
+        {areaRede && <polygon points={areaRede} className="fill-primary/10" />}
+
+        {/* Plataformas primeiro, finas; a rede por cima, grossa — assim a
+            linha do total nunca fica escondida atrás de uma plataforma. */}
+        {platsAtivas.map((plat) => (
+          <polyline
+            key={plat}
+            points={pontos((d) => d.porPlataforma?.[plat] ?? 0)}
+            fill="none"
+            stroke={PLATFORM_COLOR[plat]}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={0.85}
+          />
+        ))}
 
         <polyline
-          points={pts}
+          points={ptsRede}
           fill="none"
           className="stroke-primary"
           strokeWidth={2.5}
@@ -237,35 +261,34 @@ export function LinhaEvolucaoRede({
           strokeLinecap="round"
         />
 
-        {dotIdx.map(({ d, i }) => {
-          const ehUltimo = i === dotIdx[dotIdx.length - 1].i
-          const ehMelhor = d.month === melhor.month && comDado.length > 1
-          return (
-            <g key={i}>
-              <circle
-                cx={x(i)}
-                cy={y(d.bruto)}
-                r={ehUltimo || ehMelhor ? 5 : 3.5}
-                className={
-                  ehMelhor ? "fill-emerald-500" : "fill-primary"
-                }
-              />
-              {/* Valor só nos pontos que importam (melhor mês e mês atual):
-                  rotular todos vira uma parede de números sobrepostos. */}
-              {(ehUltimo || ehMelhor) && (
-                <text
-                  x={x(i)}
-                  y={y(d.bruto) - 11}
-                  textAnchor={i === data.length - 1 ? "end" : "middle"}
-                  className="fill-foreground text-[10px] font-semibold"
-                >
-                  {fmtBRLShort(d.bruto)}
-                </text>
-              )}
-              <title>{`${MES_ABREV[d.month - 1]}: ${fmtBRL(d.bruto)}`}</title>
-            </g>
-          )
-        })}
+        {data
+          .map((d, i) => ({ d, i }))
+          .filter(({ d }) => d.bruto > 0)
+          .map(({ d, i }, idx, arr) => {
+            const ehUltimo = idx === arr.length - 1
+            const ehMelhor = d.month === melhor.month && comDado.length > 1
+            return (
+              <g key={i}>
+                <circle
+                  cx={x(i)}
+                  cy={y(d.bruto)}
+                  r={ehUltimo || ehMelhor ? 5 : 3.5}
+                  className={ehMelhor ? "fill-emerald-500" : "fill-primary"}
+                />
+                {(ehUltimo || ehMelhor) && (
+                  <text
+                    x={x(i)}
+                    y={y(d.bruto) - 11}
+                    textAnchor={i === data.length - 1 ? "end" : "middle"}
+                    className="fill-foreground text-[10px] font-semibold"
+                  >
+                    {fmtBRLShort(d.bruto)}
+                  </text>
+                )}
+                <title>{`${MES_ABREV[d.month - 1]}: ${fmtBRL(d.bruto)}`}</title>
+              </g>
+            )
+          })}
 
         {data.map((d, i) => (
           <text
@@ -282,37 +305,65 @@ export function LinhaEvolucaoRede({
         ))}
       </svg>
 
-      {/* Resumo do período: o gráfico mostrava a forma da curva, mas o
-          número só aparecia passando o mouse — inútil no PDF e no celular. */}
-      {/* 2 colunas fixas: o card divide a linha com outro, e em 4 colunas os
-          valores saíam truncados no meio ("R$ 5.709..."). Valor curto pelo
-          mesmo motivo — número cortado não informa nada. */}
       {comDado.length > 0 && (
-        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3">
-          <ResumoItem rotulo="Total no ano" valor={fmtBRLShort(total)} />
-          <ResumoItem rotulo="Média mensal" valor={fmtBRLShort(media)} />
-          <ResumoItem
-            rotulo="Melhor mês"
-            valor={`${MES_ABREV[melhor.month - 1]} · ${fmtBRLShort(melhor.bruto)}`}
-          />
-          <ResumoItem
-            rotulo="Último vs anterior"
-            valor={
-              variacao === null
-                ? "—"
-                : `${variacao >= 0 ? "+" : ""}${fmtPct(variacao)}`
-            }
-            tom={
-              variacao === null
-                ? undefined
-                : variacao >= 0
-                  ? "positivo"
-                  : "negativo"
-            }
-          />
-        </div>
+        <>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <LegendaLinha cor="var(--primary)" rotulo="Rede (total)" grossa />
+            {platsAtivas.map((plat) => (
+              <LegendaLinha
+                key={plat}
+                cor={PLATFORM_COLOR[plat]}
+                rotulo={rotuloPlataforma(plat)}
+              />
+            ))}
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3">
+            <ResumoItem rotulo="Total no ano" valor={fmtBRLShort(total)} />
+            <ResumoItem rotulo="Média mensal" valor={fmtBRLShort(media)} />
+            <ResumoItem
+              rotulo="Melhor mês"
+              valor={`${MES_ABREV[melhor.month - 1]} · ${fmtBRLShort(melhor.bruto)}`}
+            />
+            <ResumoItem
+              rotulo="Último vs anterior"
+              valor={
+                variacao === null
+                  ? "—"
+                  : `${variacao >= 0 ? "+" : ""}${fmtPct(variacao)}`
+              }
+              tom={
+                variacao === null
+                  ? undefined
+                  : variacao >= 0
+                    ? "positivo"
+                    : "negativo"
+              }
+            />
+          </div>
+        </>
       )}
     </ChartCard>
+  )
+}
+
+function LegendaLinha({
+  cor,
+  rotulo,
+  grossa = false,
+}: {
+  cor: string
+  rotulo: string
+  grossa?: boolean
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span
+        className="inline-block w-4 rounded-full"
+        style={{ backgroundColor: cor, height: grossa ? 3 : 2 }}
+      />
+      {rotulo}
+    </span>
   )
 }
 
@@ -401,13 +452,13 @@ export function PizzaPlataforma({
                   className="size-2.5 rounded-sm"
                   style={{ background: PLATFORM_COLOR[p] }}
                 />
-                <span className="w-16 text-muted-foreground">
+                <span className="w-14 shrink-0 text-muted-foreground">
                   {PLATFORM_LABEL[p]}
                 </span>
-                <span className="font-medium tabular-nums">
+                <span className="whitespace-nowrap font-medium tabular-nums">
                   {fmtPct(frac * 100)}
                 </span>
-                <span className="text-muted-foreground tabular-nums">
+                <span className="whitespace-nowrap text-muted-foreground tabular-nums">
                   {fmtBRLShort(perPlatform[p])}
                 </span>
               </div>
