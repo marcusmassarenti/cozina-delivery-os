@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, Trophy } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
+import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -168,6 +169,11 @@ export default async function RankingPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2" data-print="hide">
+          {/* Imprime como está na tela: as linhas por plataforma abrem por
+              estado do React, não <details>, então o usuário escolhe o que
+              detalhar antes de exportar. Forçar as 13 abertas geraria um PDF
+              longo demais pra servir de ranking. */}
+          <ExportPdfButton />
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={range}
@@ -189,7 +195,11 @@ export default async function RankingPage({
         </div>
       )}
 
-      <RankingSwitcher current={metrica} />
+      {/* Navegação, não informação: qual métrica ordena já está no subtítulo
+          ("Lojas ordenadas por..."), então no PDF as abas viram só ruído. */}
+      <div data-print="hide">
+        <RankingSwitcher current={metrica} />
+      </div>
 
       {ranked.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
