@@ -55,7 +55,7 @@ export const CHANGELOG: Release[] = [
           {
             kind: "novo",
             title: "Botão Exportar PDF no topo da tela",
-            desc: "Gera um PDF A4 com o Dashboard inteiro — cada seção numerada começa numa página. Sai o que interessa: filtros, avisos de importação e a saudação ficam de fora.",
+            desc: "Gera um PDF A4 com o Dashboard inteiro, no mesmo layout que você vê na tela, em cerca de 3 páginas. Sai o que interessa: filtros, avisos de importação e a saudação ficam de fora.",
           },
           {
             kind: "novo",

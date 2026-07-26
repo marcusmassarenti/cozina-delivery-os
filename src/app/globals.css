@@ -562,36 +562,39 @@
 }
 
 /* ── Dashboard em PDF A4 retrato (botão "Exportar PDF") ──────────────
-   Ligado por body.printing-dashboard. O dashboard é tela de trabalho, não
-   relatório: impresso cru sairia com filtro e aviso no meio e só com a
-   plataforma que estava selecionada em cada card de abas. Aqui ele vira
-   documento — retrato, uma seção por página, tudo dentro dos 210mm. */
+   Ligado por body.printing-dashboard.
+
+   A régua aqui é "o dashboard fotografado e colado na folha", não um
+   relatório remontado. A primeira tentativa reflowava tudo pra 190mm (grid
+   de 3 colunas virava 2, uma seção por página) e o resultado tinha capa
+   vazia e meia folha em branco no fim de cada seção. Agora o conteúdo
+   nasce com a largura de tela e é ENCOLHIDO pra caber — o layout que a
+   pessoa conhece chega igual no papel, e as páginas enchem. */
 @page dashboardA4 {
   size: A4 portrait;
-  margin: 12mm 10mm;
+  margin: 10mm;
 }
 
 @media print {
   body.printing-dashboard [data-dashboard-root] {
     page: dashboardA4;
     background: #fff !important;
-    /* 190mm = 210 menos as margens. Travar a largura é o que impede o grid
-       de 3 colunas de nascer com a largura da TELA e sair cortado na folha
-       — o navegador não reflowa sozinho o que já tem largura definida. */
-    width: 190mm;
-    max-width: 190mm;
+    /* Largura de referência 900px, encolhida pros 190mm da folha (fator
+       0.7979). Não precisa ser 1024 (o breakpoint `lg`) porque as colunas
+       do desktop são reaplicadas na mão logo abaixo — e quanto menor a
+       referência, MAIOR o texto no papel. Em 1024 o corpo saía perto de
+       5pt; em 900 dá pra ler.
+
+       `zoom` e não `transform: scale`: só ele encolhe o LAYOUT. Com
+       transform o conteúdo continua ocupando a altura original e o PDF sai
+       com páginas em branco no meio. */
+    width: 900px;
+    max-width: 900px;
+    zoom: 0.7979;
     padding: 0 !important;
     gap: 0.75rem;
   }
 
-  /* Nada pode ultrapassar a folha: gráfico SVG, imagem ou tabela larga
-     viram corte silencioso na direita, que é o pior tipo de erro num PDF
-     (o número existe, só não está lá). */
-  body.printing-dashboard [data-dashboard-root] svg,
-  body.printing-dashboard [data-dashboard-root] img,
-  body.printing-dashboard [data-dashboard-root] table {
-    max-width: 100%;
-  }
   /* Só os containers que rolam na tela: em papel não há rolagem, então o
      que estiver fora da área visível simplesmente sumiria. Não vale pra
      `overflow-hidden` de truncagem — soltar aquele faz o texto sair por
@@ -616,45 +619,57 @@
     display: none !important;
   }
 
-  /* O cabeçalho (primeiro filho) fica: vira a capa, com nome da empresa,
-     escopo de lojas e período — sem ele o PDF não diz de quando é. */
+  /* O cabeçalho fica no alto da primeira página, junto do conteúdo — como
+     capa sozinha ele desperdiçava uma folha inteira. */
   body.printing-dashboard [data-dashboard-root] > *:first-child {
     margin-bottom: 0.5rem;
   }
 
-  /* Cada seção numerada começa numa página. O divisor vira o título, então
-     não pode ficar órfão no rodapé da página anterior. */
+  /* Sem quebra forçada por seção: o que gera buraco é justamente empurrar
+     cada divisor pra uma folha nova. O divisor só não pode ficar órfão no
+     rodapé, separado do bloco que ele nomeia. */
   body.printing-dashboard [data-slide-break] {
-    break-before: page;
+    break-before: auto;
   }
   body.printing-dashboard [data-slide-break] + * {
-    break-before: avoid;
+    break-after: avoid;
   }
 
-  /* Em 190mm o grid pode quebrar entre linhas; o que não pode quebrar é o
-     card no meio. Quantas colunas depende de quantos cards tem — por isso
-     o `:has`, e não um número fixo. */
+  /* Media query olha a VIEWPORT (a folha, ~718px), não a largura que demos
+     ao root — então `md:`/`lg:`/`xl:` nunca disparam no papel e os grids
+     caem pro layout de celular mesmo com 1024px de espaço. Aqui as mesmas
+     colunas do desktop são reaplicadas na mão. `[class~=]` casa a classe
+     como palavra e evita escapar os dois-pontos e os colchetes.
+
+     ⚠️ Ao criar um grid responsivo novo no dashboard, some a classe aqui —
+     senão ele imprime empilhado, sem erro nenhum aparecer. */
+  body.printing-dashboard [data-dashboard-root] [class~="md:grid-cols-3"],
+  body.printing-dashboard [data-dashboard-root] [class~="lg:grid-cols-3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  body.printing-dashboard [data-dashboard-root] [class~="xl:grid-cols-4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+  body.printing-dashboard [data-dashboard-root] [class~="lg:grid-cols-5"] {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+  body.printing-dashboard
+    [data-dashboard-root]
+    [class~="lg:grid-cols-[1.6fr_1fr]"] {
+    grid-template-columns: 1.6fr 1fr !important;
+  }
+  body.printing-dashboard
+    [data-dashboard-root]
+    [class~="md:grid-cols-[24px_minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto]"] {
+    grid-template-columns:
+      24px minmax(0, 2fr) repeat(5, minmax(0, 1fr))
+      auto !important;
+  }
+
+  /* O grid inteiro pode quebrar entre linhas; o card é que não pode ser
+     partido ao meio. */
   body.printing-dashboard [data-dashboard-root] .grid {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     break-inside: auto;
-  }
-  /* Ímpar deixa uma célula vazia com o fundo do container aparecendo —
-     parece card faltando. O último ocupa a linha inteira. Vale também pros
-     grids de 3 cards: em 190mm, três colunas de 60mm sobrepõem os textos
-     de lista (top produtos, top cancelamentos). */
-  body.printing-dashboard
-    [data-dashboard-root]
-    .grid:has(> :nth-child(3)):has(> :nth-child(odd):last-child)
-    > :last-child {
-    grid-column: 1 / -1;
-  }
-  /* Até 2 filhos vira coluna única: é onde mora o gráfico de evolução, e
-     em meia folha os rótulos dos eixos ficam ilegíveis. */
-  body.printing-dashboard
-    [data-dashboard-root]
-    .grid:not(:has(> :nth-child(3))) {
-    grid-template-columns: minmax(0, 1fr) !important;
   }
   body.printing-dashboard [data-dashboard-root] .grid > * {
     break-inside: avoid;
