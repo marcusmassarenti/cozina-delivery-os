@@ -2,6 +2,8 @@ import Link from "next/link"
 import { ArrowLeft, Receipt } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
+import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
@@ -82,9 +84,13 @@ export default async function TicketMedioPage({
     )
 
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div
+      data-print="page"
+      className="flex flex-1 flex-col gap-6 bg-muted/30 p-6"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
+          <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
           <Link
             href="/relatorios"
             className="mb-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -103,6 +109,7 @@ export default async function TicketMedioPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ExportPdfButton />
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={periodRange}

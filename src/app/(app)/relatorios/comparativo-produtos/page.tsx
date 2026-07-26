@@ -6,6 +6,8 @@ import { PlatformLogo, type PlatformId,
   rotuloPlataforma,
 } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
+import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getTopProdutos } from "@/lib/data/produtos"
@@ -98,9 +100,13 @@ export default async function ComparativoProdutosPage({
     }`
 
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div
+      data-print="page"
+      className="flex flex-1 flex-col gap-6 bg-muted/30 p-6"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
+          <ReportBrandLogo imgClassName="h-10 w-auto print:h-12" />
           <Link
             href="/relatorios"
             className="mb-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -121,6 +127,7 @@ export default async function ComparativoProdutosPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ExportPdfButton />
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={periodRange}

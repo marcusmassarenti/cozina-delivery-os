@@ -181,9 +181,37 @@
     gap: 0.75rem !important;
   }
 
-  /* Não quebra cada bloco (KPIs, gráfico, ranking, tabela) no meio da folha */
-  [data-print="page"] > * {
+  /* Blocos curtos (KPIs, gráfico, card) não quebram no meio da folha.
+     Blocos ALTOS precisam quebrar — proibir causava dois estragos numa
+     tabela que não cabe numa página: o Chrome empurrava tudo pra folha
+     seguinte (1ª página em branco) e o cabeçalho parava de repetir.
+     Já tinha sido contornado com override local em dois lugares
+     (.acomp-print e o <style> inline do relatório da unidade); agora a
+     regra certa é global e esses overrides viram redundância inofensiva. */
+  [data-print="page"] > *:not(:has(table)) {
     break-inside: avoid;
+  }
+
+  /* Tabela longa flui entre páginas, repetindo o cabeçalho, sem partir
+     uma linha ao meio nem deixar título órfão no rodapé. */
+  [data-print="page"] table {
+    break-inside: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+  tr,
+  img,
+  svg {
+    break-inside: avoid;
+  }
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
   }
 
   /* Abre os <details> recolhidos pra a tabela entrar no PDF */
