@@ -42,6 +42,52 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.4",
+    date: "2026-07-25",
+    tag: "Grande novidade",
+    title: "Exportar em PDF — agora também o Dashboard",
+    summary:
+      "Todo relatório do Hub já sai em PDF, e o Dashboard inteiro virou um documento A4 pronto pra mandar por e-mail ou levar pra reunião.",
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "novo",
+            title: "Botão Exportar PDF no topo da tela",
+            desc: "Gera um PDF A4 com o Dashboard inteiro — cada seção numerada começa numa página. Sai o que interessa: filtros, avisos de importação e a saudação ficam de fora.",
+          },
+          {
+            kind: "novo",
+            title: "No PDF as três plataformas aparecem juntas",
+            antes:
+              "Os cards com abas (funil, cancelamentos, produtos, avaliações) imprimiam só a plataforma que estava selecionada na tela — o resto do número sumia do documento.",
+            depois:
+              "No PDF cada card mostra iFood, 99 Food e Keeta empilhados e identificados, sem precisar imprimir três vezes.",
+          },
+        ],
+      },
+      {
+        area: "Relatórios",
+        items: [
+          {
+            kind: "novo",
+            title: "PDF nos relatórios que ainda não tinham",
+            desc: "Ranking de lojas e mais quatro relatórios do Hub ganharam o botão de exportar.",
+          },
+          {
+            kind: "melhoria",
+            title: "PDF em tema claro mesmo pra quem usa o escuro",
+            antes:
+              "Quem trabalha no tema escuro exportava selos e destaques com texto claro sobre papel branco — praticamente ilegíveis.",
+            depois:
+              "A exportação força o tema claro e volta ao escuro sozinha quando termina.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.3",
     date: "2026-07-25",
     tag: "Correções",

@@ -2,6 +2,8 @@
 
 import { FileDown } from "lucide-react"
 
+import { forcarTemaClaroNoPrint } from "@/lib/print-tema-claro"
+
 /**
  * Exporta a página como PDF via impressão nativa do navegador. Antes de
  * imprimir, abre todos os <details> recolhidos pra entrarem no PDF. O usuário
@@ -13,7 +15,22 @@ export function ExportPdfButton({ label = "Exportar PDF" }: { label?: string }) 
     document
       .querySelectorAll("details")
       .forEach((d) => d.setAttribute("open", ""))
-    requestAnimationFrame(() => window.print())
+
+    const restaurarTema = forcarTemaClaroNoPrint()
+    let limpo = false
+    const limpar = () => {
+      if (limpo) return
+      limpo = true
+      restaurarTema()
+      window.removeEventListener("afterprint", limpar)
+    }
+    window.addEventListener("afterprint", limpar)
+
+    requestAnimationFrame(() => {
+      window.print()
+      // Safari não dispara afterprint de forma confiável.
+      setTimeout(limpar, 1500)
+    })
   }
 
   return (

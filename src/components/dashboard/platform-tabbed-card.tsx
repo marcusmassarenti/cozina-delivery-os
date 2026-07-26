@@ -2,7 +2,11 @@
 
 import * as React from "react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PlatformLogo,
+  rotuloPlataforma,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { TruncateTip } from "@/components/ui/truncate-tip"
 
 const LABELS: Record<PlatformId, string> = {
@@ -74,7 +78,7 @@ export function PlatformTabbedCard({
           // Plataforma única — só mostra a logo (sem switcher)
           <PlatformLogo platform={slots[0].platform} size="sm" />
         ) : (
-          <div className="flex shrink-0 items-center gap-0.5">
+          <div data-plat-tabs className="flex shrink-0 items-center gap-0.5">
             {slots.map((s) => {
               const isActive = s.platform === active
               return (
@@ -98,10 +102,20 @@ export function PlatformTabbedCard({
         )}
       </div>
 
+      {/* data-plat-slot: no PDF do dashboard as abas escondidas voltam a
+          aparecer, empilhadas e rotuladas. Sem isso o relatório sairia só
+          com a plataforma que estava selecionada na tela. */}
       {slots.map((s) => (
         <div
           key={s.platform}
-          hidden={s.platform !== active}
+          data-plat-slot={s.platform}
+          data-plat-label={rotuloPlataforma(s.platform)}
+          // `data-plat-inativo` em vez do atributo `hidden`: o Tailwind v4
+          // aplica `[hidden]{display:none !important}` em @layer base, e entre
+          // dois !important o layer declarado ANTES vence — então nem o print
+          // conseguia reexibir a aba. Com atributo próprio, as duas regras
+          // (esconder na tela, mostrar no PDF) ficam do nosso lado.
+          data-plat-inativo={s.platform !== active ? "" : undefined}
           aria-hidden={s.platform !== active}
         >
           {s.content}

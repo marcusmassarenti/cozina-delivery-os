@@ -27,6 +27,7 @@ import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
 import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
+import { DashboardPdfButton } from "@/components/dashboard/dashboard-pdf-button"
 import {
   PlatformLogo,
   rotuloPlataforma,
@@ -763,12 +764,19 @@ export default async function Home({
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">
+          {/* Saudação sai do PDF: "Boa noite, Marcus 👋" no topo de um
+              relatório que vai circular por e-mail não faz sentido. */}
+          <p
+            data-dashboard-chrome
+            className="text-sm font-medium text-muted-foreground"
+          >
             {saudacao}, {primeiroNome} 👋
           </p>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <DashboardTour />
+            <span data-dashboard-chrome>
+              <DashboardTour />
+            </span>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {unidadesFilter
@@ -781,7 +789,12 @@ export default async function Home({
             · {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <div data-tour="db-filtros" className="flex flex-wrap items-center gap-2">
+        <div
+          data-tour="db-filtros"
+          data-dashboard-chrome
+          className="flex flex-wrap items-center gap-2"
+        >
+          <DashboardPdfButton />
           <PeriodSelector
             current={periodRange}
             options={availablePeriods}
@@ -807,7 +820,8 @@ export default async function Home({
       />
 
       {/* Cliente: falta aprovar no iFood / loja conectada. */}
-      <IfoodClienteAviso solicitacoes={minhasSolicitacoesIfood} />
+      <IfoodClienteAviso
+          solicitacoes={minhasSolicitacoesIfood} />
 
       {/* Dono: quanto a IA custou na plataforma neste mês. */}
       {consumoIaPlataforma.totalMensagens > 0 && (
@@ -838,7 +852,8 @@ export default async function Home({
       )}
 
       {onboarding && onboarding.done < onboarding.total && (
-        <OnboardingChecklist progress={onboarding} />
+        <OnboardingChecklist
+          progress={onboarding} />
       )}
 
       {!isFullMonth && (
@@ -871,6 +886,10 @@ export default async function Home({
           logos das 3 plataformas (apagadas as sem dado). */}
       {status.ok && allUnits.length > 0 && (
         <DashboardSection id="kpis">
+          {/* Fora do flex de propósito: a quebra de slide precisa ser IRMÃ
+              das seções no root — aninhada aqui dentro ela não era vista
+              pela regra de posição e a seção 1 inteira sumia do PDF. */}
+          <div data-slide-break />
           <div className="flex items-center justify-between gap-3">
             <SectionDivider number={1} label="Performance da Operação" />
             {hasAnyImported && (
@@ -947,6 +966,7 @@ export default async function Home({
       ) : (
         <>
           <DashboardSection id="plataformas">
+          <div data-slide-break />
           <SectionDivider
             number={2}
             label={`Visão Geral por Plataforma (${scopeLabel})`}
@@ -1032,6 +1052,7 @@ export default async function Home({
             hasCancelKeetaData ||
             hasTopItemsKeetaData) && (
             <DashboardSection id="cardapio">
+              <div data-slide-break />
               <SectionDivider
                 number={3}
                 label={`Cardápio & Cancelamentos (${scopeLabel})`}
@@ -1252,6 +1273,7 @@ export default async function Home({
             hasAvaliacoes99Data ||
             hasAvaliacoesKeetaData) && (
             <DashboardSection id="satisfacao">
+              <div data-slide-break />
               <SectionDivider
                 number={4}
                 label={`Satisfação dos clientes (${scopeLabel})`}
@@ -1536,6 +1558,7 @@ export default async function Home({
           )}
 
           <DashboardSection id="unidades">
+            <div data-slide-break />
             <SectionDivider
               number={hasAvaliacoesData ? 5 : 4}
               label={tituloDetalhe}

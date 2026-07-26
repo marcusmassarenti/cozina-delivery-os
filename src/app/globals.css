@@ -560,3 +560,134 @@
     animation: ninoWobble 1.3s ease-in-out infinite;
   }
 }
+
+/* ── Dashboard em PDF A4 retrato (botão "Exportar PDF") ──────────────
+   Ligado por body.printing-dashboard. O dashboard é tela de trabalho, não
+   relatório: impresso cru sairia com filtro e aviso no meio e só com a
+   plataforma que estava selecionada em cada card de abas. Aqui ele vira
+   documento — retrato, uma seção por página, tudo dentro dos 210mm. */
+@page dashboardA4 {
+  size: A4 portrait;
+  margin: 12mm 10mm;
+}
+
+@media print {
+  body.printing-dashboard [data-dashboard-root] {
+    page: dashboardA4;
+    background: #fff !important;
+    /* 190mm = 210 menos as margens. Travar a largura é o que impede o grid
+       de 3 colunas de nascer com a largura da TELA e sair cortado na folha
+       — o navegador não reflowa sozinho o que já tem largura definida. */
+    width: 190mm;
+    max-width: 190mm;
+    padding: 0 !important;
+    gap: 0.75rem;
+  }
+
+  /* Nada pode ultrapassar a folha: gráfico SVG, imagem ou tabela larga
+     viram corte silencioso na direita, que é o pior tipo de erro num PDF
+     (o número existe, só não está lá). */
+  body.printing-dashboard [data-dashboard-root] svg,
+  body.printing-dashboard [data-dashboard-root] img,
+  body.printing-dashboard [data-dashboard-root] table {
+    max-width: 100%;
+  }
+  /* Só os containers que rolam na tela: em papel não há rolagem, então o
+     que estiver fora da área visível simplesmente sumiria. Não vale pra
+     `overflow-hidden` de truncagem — soltar aquele faz o texto sair por
+     cima do card vizinho. */
+  body.printing-dashboard [data-dashboard-root] .overflow-x-auto,
+  body.printing-dashboard [data-dashboard-root] .overflow-y-auto,
+  body.printing-dashboard [data-dashboard-root] .overflow-auto {
+    overflow: visible !important;
+  }
+
+  body.printing-dashboard [data-dashboard-chrome] {
+    display: none !important;
+  }
+
+  /* Avisos operacionais (solicitação iFood pendente, onboarding, cobertura
+     de importação, custo de IA) são chamada pra ação — não têm lugar num
+     relatório de resultado. Todos vivem ANTES da 1ª seção numerada, e
+     alcançá-los por posição evita marcar um por um e esquecer o próximo. */
+  body.printing-dashboard
+    [data-dashboard-root]
+    > *:not(:first-child):not([data-slide-break]):not([data-slide-break] ~ *) {
+    display: none !important;
+  }
+
+  /* O cabeçalho (primeiro filho) fica: vira a capa, com nome da empresa,
+     escopo de lojas e período — sem ele o PDF não diz de quando é. */
+  body.printing-dashboard [data-dashboard-root] > *:first-child {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Cada seção numerada começa numa página. O divisor vira o título, então
+     não pode ficar órfão no rodapé da página anterior. */
+  body.printing-dashboard [data-slide-break] {
+    break-before: page;
+  }
+  body.printing-dashboard [data-slide-break] + * {
+    break-before: avoid;
+  }
+
+  /* Em 190mm o grid pode quebrar entre linhas; o que não pode quebrar é o
+     card no meio. Quantas colunas depende de quantos cards tem — por isso
+     o `:has`, e não um número fixo. */
+  body.printing-dashboard [data-dashboard-root] .grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    break-inside: auto;
+  }
+  /* Ímpar deixa uma célula vazia com o fundo do container aparecendo —
+     parece card faltando. O último ocupa a linha inteira. Vale também pros
+     grids de 3 cards: em 190mm, três colunas de 60mm sobrepõem os textos
+     de lista (top produtos, top cancelamentos). */
+  body.printing-dashboard
+    [data-dashboard-root]
+    .grid:has(> :nth-child(3)):has(> :nth-child(odd):last-child)
+    > :last-child {
+    grid-column: 1 / -1;
+  }
+  /* Até 2 filhos vira coluna única: é onde mora o gráfico de evolução, e
+     em meia folha os rótulos dos eixos ficam ilegíveis. */
+  body.printing-dashboard
+    [data-dashboard-root]
+    .grid:not(:has(> :nth-child(3))) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.printing-dashboard [data-dashboard-root] .grid > * {
+    break-inside: avoid;
+  }
+
+  /* Abas: no PDF todas as plataformas aparecem, empilhadas e rotuladas.
+     Era o que fazia o relatório sair só com o iFood. */
+  body.printing-dashboard [data-plat-slot][data-plat-inativo] {
+    display: block;
+  }
+  body.printing-dashboard [data-plat-slot]::before {
+    content: attr(data-plat-label);
+    display: block;
+    margin: 0.5rem 0 0.25rem;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #666;
+  }
+  /* Os botões de aba não servem em papel — quem lê vê todas de uma vez. */
+  body.printing-dashboard [data-plat-tabs] {
+    display: none !important;
+  }
+
+  body.printing-dashboard [data-slot="sidebar-inset"] {
+    padding: 0 !important;
+  }
+}
+
+/* Aba não selecionada do PlatformTabbedCard. Não usa o atributo `hidden`
+   porque o !important do preflight do Tailwind venceria até no print — ver
+   comentário no componente. */
+[data-plat-slot][data-plat-inativo] {
+  display: none;
+}
