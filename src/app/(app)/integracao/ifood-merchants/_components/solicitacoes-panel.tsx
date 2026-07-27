@@ -200,7 +200,8 @@ function BotaoConferir() {
   const nada =
     state.ok &&
     (state.vinculadas?.length ?? 0) === 0 &&
-    (state.pendentes?.length ?? 0) === 0
+    (state.pendentes?.length ?? 0) === 0 &&
+    (state.restantes ?? 0) === 0
 
   return (
     <div className="mt-3 rounded-lg border border-dashed p-3">
@@ -253,6 +254,13 @@ function BotaoConferir() {
             ))}
           </ul>
         </div>
+      )}
+
+      {state.ok && (state.restantes ?? 0) > 0 && (
+        <p className="mt-2 text-[11px] font-medium text-sky-700 dark:text-sky-400">
+          Faltaram {state.restantes} — clique de novo pra continuar. Cada rodada
+          descobre o CNPJ de mais lojas e a próxima fica mais rápida.
+        </p>
       )}
 
       {nada && (

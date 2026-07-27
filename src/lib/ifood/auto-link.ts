@@ -139,6 +139,8 @@ export type AutoLinkResult = {
     motivo: string
   }[]
   merchantsVistos: number
+  /** Solicitações que sobraram por falta de tempo — clicar de novo continua. */
+  restantes: number
 }
 
 /**
@@ -148,7 +150,24 @@ export type AutoLinkResult = {
  */
 export async function autoLinkIfoodMerchants(
   restrictUnitIds?: string[] | null,
+  opts?: {
+    /**
+     * Teto de tempo em ms. Ao estourar, para e devolve o que já casou com
+     * `restantes` > 0 — quem chamou decide se roda de novo.
+     *
+     * Existe porque descobrir o CNPJ de um merchant custa o DOWNLOAD de uma
+     * conciliação, e um clique com o cache frio (20 merchants sem CNPJ) passa
+     * dos 300s da server action e morre sem gravar o resultado. Cada rodada
+     * esquenta o cache, então a seguinte anda muito mais.
+     *
+     * Sem o parâmetro, roda até o fim — é o que o cron da madrugada quer.
+     */
+    deadlineMs?: number
+  },
 ): Promise<AutoLinkResult> {
+  const iniciou = Date.now()
+  const semTempo = () =>
+    opts?.deadlineMs !== undefined && Date.now() - iniciou > opts.deadlineMs
   const admin = createAdminClient()
 
   // 1) Merchants autorizados no app, ao vivo.
@@ -160,6 +179,7 @@ export async function autoLinkIfoodMerchants(
       vinculadas: [],
       ambiguas: [],
       merchantsVistos: 0,
+      restantes: 0,
     }
   }
   const merchants = r.data as IfoodMerchant[]
@@ -192,6 +212,24 @@ export async function autoLinkIfoodMerchants(
   )
   const candidatos = merchants.filter((m) => !jaVinculados.has(m.id))
 
+  // CNPJ já descoberto de cada merchant, numa consulta só. Alimenta a passada
+  // rápida abaixo — cada rodada anterior deixou aqui o que aprendeu baixando
+  // conciliação, então a segunda passada num mesmo dia costuma casar sozinha.
+  const cnpjPorMerchantCache = new Map<string, string>()
+  if (candidatos.length > 0) {
+    const { data: cach } = await admin
+      .from("ifood_merchants")
+      .select("id, cnpj")
+      .in(
+        "id",
+        candidatos.map((m) => m.id),
+      )
+    for (const c of (cach ?? []) as { id: string; cnpj: string | null }[]) {
+      const d = soDigitos(c.cnpj)
+      if (d.length === 14) cnpjPorMerchantCache.set(c.id, d)
+    }
+  }
+
   // 2) Unidades COM solicitação aberta (pendente/solicitada) e iFood ativo
   //    sem vínculo — só essas entram no casamento (o cliente pediu).
   //    O `cnpj` do pedido é a chave de VERIFICAÇÃO (ver validação abaixo).
@@ -208,6 +246,7 @@ export async function autoLinkIfoodMerchants(
       vinculadas: [],
       ambiguas: [],
       merchantsVistos: merchants.length,
+      restantes: 0,
     }
   }
 
@@ -221,7 +260,71 @@ export async function autoLinkIfoodMerchants(
   const ambiguas: AutoLinkResult["ambiguas"] = []
   const usados = new Set<string>()
 
+  /** Vincula e marca a solicitação como ativa. Devolve false se o banco negou. */
+  async function fechar(
+    row: { unit_id: string; units: { code: string; name: string } },
+    merchantId: string,
+    score: number,
+    cnpj: string,
+  ): Promise<boolean> {
+    const { error } = await admin.from("unit_platforms").upsert(
+      {
+        unit_id: row.unit_id,
+        platform: "ifood",
+        active: true,
+        api_store_id: merchantId,
+      },
+      { onConflict: "unit_id,platform", ignoreDuplicates: false },
+    )
+    if (error) return false
+    usados.add(merchantId)
+    vinculadas.push({
+      unitId: row.unit_id,
+      unitCode: row.units.code,
+      unitName: row.units.name,
+      merchantId,
+      score,
+      cnpj,
+    })
+    await admin
+      .from("ifood_activation_requests")
+      .update({ status: "ativa", updated_at: new Date().toISOString() })
+      .eq("unit_id", row.unit_id)
+      .in("status", ["pendente", "solicitada"])
+    return true
+  }
+
+  // PASSADA RÁPIDA (custo zero de rede): casa o que dá só com o CNPJ que já
+  // está no cache de merchants. Antes, um merchant com CNPJ conhecido ainda
+  // esperava a vez no loop caro e podia nem ser alcançado dentro do tempo.
+  const pendentes: typeof abertas = []
   for (const row of abertas) {
+    const cnpjPedido = soDigitos(row.cnpj)
+    if (cnpjPedido.length !== 14) {
+      pendentes.push(row)
+      continue
+    }
+    const direto = candidatos.find(
+      (m) =>
+        !usados.has(m.id) &&
+        soDigitos(cnpjPorMerchantCache.get(m.id)) === cnpjPedido,
+    )
+    if (direto) {
+      const ok = await fechar(
+        row,
+        direto.id,
+        coberturaNome(row.units.name, direto),
+        cnpjPedido,
+      )
+      if (ok) continue
+    }
+    pendentes.push(row)
+  }
+
+  let processadas = 0
+  for (const row of pendentes) {
+    if (semTempo()) break
+    processadas++
     const cnpjPedido = soDigitos(row.cnpj)
     if (cnpjPedido.length !== 14) {
       ambiguas.push({
@@ -262,32 +365,13 @@ export async function autoLinkIfoodMerchants(
     }
 
     if (escolhido) {
-      const { error: eUp } = await admin.from("unit_platforms").upsert(
-        {
-          unit_id: row.unit_id,
-          platform: "ifood",
-          active: true,
-          api_store_id: escolhido.m.id,
-        },
-        { onConflict: "unit_id,platform", ignoreDuplicates: false },
+      const ok = await fechar(
+        row,
+        escolhido.m.id,
+        escolhido.score,
+        cnpjPedido,
       )
-      if (!eUp) {
-        usados.add(escolhido.m.id)
-        vinculadas.push({
-          unitId: row.unit_id,
-          unitCode: row.units.code,
-          unitName: row.units.name,
-          merchantId: escolhido.m.id,
-          score: escolhido.score,
-          cnpj: cnpjPedido,
-        })
-        await admin
-          .from("ifood_activation_requests")
-          .update({ status: "ativa", updated_at: new Date().toISOString() })
-          .eq("unit_id", row.unit_id)
-          .in("status", ["pendente", "solicitada"])
-        continue
-      }
+      if (ok) continue
     }
 
     // Não confirmou por CNPJ → NÃO vincula (o admin resolve na tela).
@@ -315,6 +399,7 @@ export async function autoLinkIfoodMerchants(
     vinculadas,
     ambiguas,
     merchantsVistos: merchants.length,
+    restantes: pendentes.length - processadas,
   }
 }
 

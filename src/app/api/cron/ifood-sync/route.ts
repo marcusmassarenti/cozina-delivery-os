@@ -48,6 +48,7 @@ export async function GET(req: Request) {
         vinculadas: [],
         ambiguas: [],
         merchantsVistos: 0,
+        restantes: 0,
         backfill: [],
         backfillAdiado: [],
       }

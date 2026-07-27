@@ -75,6 +75,8 @@ export type ConferirAutorizadasState = {
   /** Ficaram de fora e por quê — o admin resolve na tabela. */
   pendentes?: { name: string; motivo: string }[]
   merchantsVistos?: number
+  /** Sobraram por falta de tempo — clicar de novo continua de onde parou. */
+  restantes?: number
   error?: string
 }
 
@@ -94,6 +96,12 @@ export type ConferirAutorizadasState = {
  * Não dispara o backfill do histórico (~2min/loja, estoura o timeout de 300s).
  * As lojas recém-vinculadas pegam mês corrente + anterior no próximo sync, e o
  * histórico completo no cron diário.
+ *
+ * ⏱️ Roda com teto de 45s. Descobrir o CNPJ de um merchant custa o DOWNLOAD de
+ * uma conciliação, e com o cache frio isso passa dos 300s da server action e
+ * morre sem gravar nada. Com o teto, cada clique grava o que conseguiu e diz
+ * quantas faltam — e como o CNPJ descoberto fica em cache, o clique seguinte
+ * anda muito mais.
  */
 export async function conferirLojasAutorizadas(
   _prev: ConferirAutorizadasState,
@@ -101,7 +109,7 @@ export async function conferirLojasAutorizadas(
 ): Promise<ConferirAutorizadasState> {
   await requireSuperadmin()
   try {
-    const r = await autoLinkIfoodMerchants(null)
+    const r = await autoLinkIfoodMerchants(null, { deadlineMs: 45_000 })
     revalidatePath("/integracao/ifood-merchants")
     revalidatePath("/importacao")
     if (!r.ok) {
@@ -110,6 +118,7 @@ export async function conferirLojasAutorizadas(
     return {
       ok: true,
       merchantsVistos: r.merchantsVistos,
+      restantes: r.restantes,
       vinculadas: r.vinculadas.map((v) => ({
         code: v.unitCode,
         name: v.unitName,
