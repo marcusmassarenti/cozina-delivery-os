@@ -42,6 +42,37 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.5",
+    date: "2026-07-27",
+    tag: "Grande novidade",
+    title: "Sua loja conecta ao iFood sozinha",
+    summary:
+      "Depois que você aprova no Portal do Parceiro e avisa aqui, a conexão se fecha sozinha — e já traz financeiro e avaliações juntos.",
+    areas: [
+      {
+        area: "Conexão iFood",
+        items: [
+          {
+            kind: "novo",
+            title: "Conexão automática depois do seu aviso",
+            antes:
+              "Você aprovava no Portal do Parceiro, clicava em \"Já aprovei no iFood\" e a conexão ficava esperando alguém da equipe abrir o painel e vincular a loja na mão.",
+            depois:
+              "O sistema procura sua loja no iFood sozinho e conclui a conexão. O aviso na tela inicial muda para \"sua loja foi conectada\" quando terminar.",
+          },
+          {
+            kind: "correcao",
+            title: "Loja conectada continuava pedindo planilha",
+            antes:
+              "A loja conectava e passava a puxar tudo pela API, mas a tela de importação seguia cobrando a Conciliação e as Avaliações como se nada tivesse sido conectado.",
+            depois:
+              "A conexão liga os dois de uma vez — financeiro e avaliações — e o que entra pela API sai da lista de pendências. Já corrigido em todas as lojas conectadas.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.4",
     date: "2026-07-25",
     tag: "Grande novidade",
