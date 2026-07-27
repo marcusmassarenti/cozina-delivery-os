@@ -204,9 +204,16 @@ export type LinkMerchantState = {
 
 /**
  * Vincula um merchant do iFood a uma unidade da rede.
+ *
  * UPSERT em unit_platforms (unit_id, platform='ifood'):
  *   - Se a row não existe, cria com active=true e api_store_id setado.
- *   - Se existe, só atualiza api_store_id.
+ *   - Se existe, atualiza api_store_id.
+ *
+ * Carimba os DOIS apps junto, igual ao auto-vínculo: a conexão entrega
+ * financeiro e avaliações de uma vez, e são esses carimbos que fazem a
+ * cobertura parar de cobrar a planilha. Vincular por aqui sem marcá-los
+ * deixava a loja puxando tudo pela API enquanto o cliente continuava vendo
+ * "falta importar" — aconteceu com a Nosso Brownie em 27/jul.
  */
 export async function linkMerchantToUnit(
   _prev: LinkMerchantState,
@@ -219,18 +226,22 @@ export async function linkMerchantToUnit(
 
   try {
     const admin = createAdminClient()
+    const agora = new Date().toISOString()
     const { error } = await admin.from("unit_platforms").upsert(
       {
         unit_id: unitId,
         platform: "ifood",
         active: true,
         api_store_id: merchantId,
+        fin_enabled_at: agora,
+        review_enabled_at: agora,
       },
       { onConflict: "unit_id,platform", ignoreDuplicates: false },
     )
     if (error) return { ok: false, error: error.message }
     revalidatePath("/integracao/ifood-merchants")
-    return { ok: true, message: "Vinculado!" }
+    revalidatePath("/importacao")
+    return { ok: true, message: "Vinculado — financeiro e avaliações ligados." }
   } catch (e) {
     return {
       ok: false,
