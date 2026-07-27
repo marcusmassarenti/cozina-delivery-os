@@ -9,6 +9,10 @@ import { Pencil } from "lucide-react"
 import { fmtBRL } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import {
+  TIPOS_CLIENTE,
+  normalizaTipoCliente,
+} from "@/lib/tipos-cliente"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -36,7 +40,6 @@ export type BillingClient = {
 }
 
 const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outro"]
-const ESTAB = ["Restaurante", "Delivery próprio", "Franquia", "Outro"]
 const initial: BillingActionState = { ok: false }
 
 const fmtMoney = (v: string): string => {
@@ -118,11 +121,11 @@ export function EditBillingDialog({
             <Field label="Tipo de estabelecimento">
               <select
                 name="establishmentType"
-                defaultValue={client.establishmentType ?? ""}
+                defaultValue={normalizaTipoCliente(client.establishmentType) ?? ""}
                 className="h-9 rounded-md border bg-background px-2 text-sm"
               >
                 <option value="">—</option>
-                {ESTAB.map((t) => (
+                {TIPOS_CLIENTE.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
@@ -146,26 +149,42 @@ export function EditBillingDialog({
                 ))}
               </select>
             </Field>
-            <Field label="Valor base (R$)">
-              <Input
-                name="monthlyFee"
-                inputMode="decimal"
-                placeholder="ex.: 199,90"
-                value={fee}
-                onChange={(e) => setFee(e.target.value)}
-                onBlur={(e) => setFee(fmtMoney(e.target.value))}
-              />
+            <Field label="Vencimento">
+              <Input type="date" name="dueDate" defaultValue={client.dueDate ?? ""} />
             </Field>
           </div>
 
-          {/* Cobrança por loja */}
-          <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="grid grid-cols-2 gap-3">
+          {/* PREÇO NEGOCIADO — exceção, não regra.
+              O normal é o cliente pagar a tabela do plano (Preços dos planos,
+              no topo da tela), recalculada sozinha conforme ele abre e fecha
+              loja. Estes campos SOBRESCREVEM isso e param de acompanhar o
+              plano — foi assim que a DG Foods ficou com 23 lojas e R$ 0/mês,
+              porque estavam vazios e mesmo assim mandavam no cálculo. */}
+          <details className="rounded-lg border border-dashed p-3">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+              Preço negociado (fora da tabela)
+            </summary>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Deixe em branco pra cobrar pelo plano. Preenchendo, este cliente
+              passa a ter valor fixo e não acompanha mais a tabela nem a
+              quantidade de lojas.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <Field label="Valor base (R$)">
+                <Input
+                  name="monthlyFee"
+                  inputMode="decimal"
+                  placeholder="usar o plano"
+                  value={fee}
+                  onChange={(e) => setFee(e.target.value)}
+                  onBlur={(e) => setFee(fmtMoney(e.target.value))}
+                />
+              </Field>
               <Field label="Valor por loja extra (R$)">
                 <Input
                   name="pricePerUnit"
                   inputMode="decimal"
-                  placeholder="ex.: 30,00"
+                  placeholder="usar o plano"
                   value={ppu}
                   onChange={(e) => setPpu(e.target.value)}
                   onBlur={(e) => setPpu(fmtMoney(e.target.value))}
@@ -181,19 +200,19 @@ export function EditBillingDialog({
                 />
               </Field>
             </div>
-            <div className="mt-2.5 flex items-center justify-between border-t pt-2.5 text-sm">
-              <span className="text-muted-foreground">
-                {client.billableUnits} loja{client.billableUnits !== 1 ? "s" : ""} ativa
-                {client.billableUnits !== 1 ? "s" : ""}
-                {extras > 0 ? ` · ${extras} extra${extras !== 1 ? "s" : ""}` : ""}
-              </span>
-              <span className="font-semibold tabular-nums">Total: {fmtBRL(total)}/mês</span>
-            </div>
-          </div>
-
-          <Field label="Vencimento">
-            <Input type="date" name="dueDate" defaultValue={client.dueDate ?? ""} />
-          </Field>
+            {fee.trim() !== "" && (
+              <div className="mt-2.5 flex items-center justify-between border-t pt-2.5 text-sm">
+                <span className="text-muted-foreground">
+                  {client.billableUnits} loja{client.billableUnits !== 1 ? "s" : ""} ativa
+                  {client.billableUnits !== 1 ? "s" : ""}
+                  {extras > 0 ? ` · ${extras} extra${extras !== 1 ? "s" : ""}` : ""}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  Total: {fmtBRL(total)}/mês
+                </span>
+              </div>
+            )}
+          </details>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input

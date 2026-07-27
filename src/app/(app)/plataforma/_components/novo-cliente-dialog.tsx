@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { Building2, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { TIPOS_CLIENTE } from "@/lib/tipos-cliente"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { criarCliente, type CriarClienteState } from "../_actions"
 
-const ESTAB = ["Restaurante", "Delivery próprio", "Franquia", "Outro"]
 const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outro"]
 const initial: CriarClienteState = { ok: false }
 
@@ -73,7 +73,7 @@ export function NovoClienteDialog() {
               className="h-9 rounded-md border bg-background px-2 text-sm"
             >
               <option value="">—</option>
-              {ESTAB.map((t) => (
+              {TIPOS_CLIENTE.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>

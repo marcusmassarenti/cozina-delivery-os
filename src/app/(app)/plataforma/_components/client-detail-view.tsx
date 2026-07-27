@@ -18,6 +18,7 @@ import type { ClientDetail } from "@/lib/data/plataforma"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
+import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
 
 /** Dias de hoje até uma data ISO (fuso SP). Inline pra não puxar server-only. */
@@ -249,14 +250,44 @@ export function ClientDetailView({
             <Field label="Lojas cobradas">
               {c.billableUnits}
               {c.includedUnits > 0 ? ` (${c.includedUnits} inclusa${c.includedUnits !== 1 ? "s" : ""})` : ""}
-              {c.extraUnits > 0 && c.pricePerUnit
-                ? ` · +${c.extraUnits}×${fmtBRL(c.pricePerUnit)}`
-                : ""}
             </Field>
             <Field label="Assinatura Asaas">
               {c.asaasActive ? "Ativa (recorrente)" : "Manual / sem Asaas"}
             </Field>
             {c.suspendOn && <Field label="Suspende em">{fmtDateISO(c.suspendOn)}</Field>}
+          </div>
+
+          {/* Memória de cálculo. Fatura que ninguém sabe explicar vira
+              discussão com o cliente — aqui a conta fica à vista. */}
+          <div className="mt-3 rounded-lg border border-dashed p-3 text-xs">
+            {c.precoNegociado ? (
+              <p className="text-amber-700 dark:text-amber-400">
+                <b>Preço negociado</b> — este cliente está fora da tabela. O
+                valor foi digitado à mão e não acompanha o plano.
+              </p>
+            ) : c.planTier && c.planoFirst != null && c.planoAdd != null ? (
+              <p className="text-muted-foreground">
+                <b>{PLAN_LABEL[c.planTier] ?? c.planTier}</b> ·{" "}
+                {fmtBRL(c.planoFirst)} (1ª loja)
+                {c.billableUnits > 1 ? (
+                  <>
+                    {" "}
+                    + {c.billableUnits - 1} × {fmtBRL(c.planoAdd)}
+                  </>
+                ) : null}{" "}
+                = <b className="text-foreground">{fmtBRL(c.computedMonthly)}/mês</b>
+                <span className="ml-1 opacity-70">
+                  · recalcula sozinho quando ele abre ou fecha loja
+                </span>
+              </p>
+            ) : (
+              <p className="text-amber-700 dark:text-amber-400">
+                Sem plano definido — nada é cobrado. Escolha o plano abaixo.
+              </p>
+            )}
+            <div className="mt-2">
+              <EditBillingDialog client={c} />
+            </div>
           </div>
         </Card>
       </div>

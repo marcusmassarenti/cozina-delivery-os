@@ -67,7 +67,7 @@ export function PlanSettingsDialog({
             className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors hover:bg-muted"
           >
             <Tag className="size-4" />
-            Plano padrão
+            Preços dos planos
           </button>
         }
       />

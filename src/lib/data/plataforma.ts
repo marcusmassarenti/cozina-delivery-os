@@ -77,6 +77,15 @@ export type ClientOverview = {
   billableUnits: number // lojas cobradas (ativas)
   extraUnits: number // lojas além das inclusas
   computedMonthly: number // base + extras × valor/loja
+  /**
+   * true = preço NEGOCIADO (monthly_fee preenchido à mão), fora da tabela.
+   * false = veio do plano. A tela mostra isso porque um valor fora da tabela
+   * que ninguém sabe explicar é a origem de discussão de fatura.
+   */
+  precoNegociado: boolean
+  /** Preço da 1ª loja e de cada adicional no plano vigente do cliente. */
+  planoFirst: number | null
+  planoAdd: number | null
   dueDate: string | null
   paid: boolean
   suspendOn: string | null
@@ -384,6 +393,9 @@ export async function getClientsOverview(): Promise<{
       billableUnits,
       extraUnits,
       computedMonthly,
+      precoNegociado,
+      planoFirst: planoDoCliente ? precos[planoDoCliente].first : null,
+      planoAdd: planoDoCliente ? precos[planoDoCliente].add : null,
       billingStatus: computeBillingStatus(billing),
       planTier:
         hh.plan_tier === "essencial" ||
