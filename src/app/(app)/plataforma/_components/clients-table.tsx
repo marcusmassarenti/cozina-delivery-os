@@ -383,6 +383,18 @@ export function ClientsTable({
                       </div>
                       <div className="text-[11px] text-muted-foreground">
                         {c.computedMonthly > 0 ? `${fmtBRL(c.computedMonthly)}/mês` : "—"}
+                        {/* Pagante sem vencimento nunca entra na régua de
+                            cobrança: o cron diário só rebaixa quem TEM data.
+                            Sem isso o cliente fica "em dia" pra sempre e a
+                            mensalidade nunca é cobrada. */}
+                        {c.paid && !c.dueDate && (
+                          <div
+                            title="Marcado como pago mas sem data de vencimento — o sistema nunca vai cobrar nem suspender este cliente."
+                            className="mt-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+                          >
+                            sem vencimento
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-xs tabular-nums">{fmtDate(c.dueDate)}</td>

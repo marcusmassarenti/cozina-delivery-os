@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/ifood-review-sync",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/billing-vencimentos",
+      "schedule": "30 8 * * *"
     }
   ]
 }
