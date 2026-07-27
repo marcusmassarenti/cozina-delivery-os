@@ -83,17 +83,42 @@ function competenciasParaSondar(): string[] {
  * próximas rodadas saírem de graça do cache.
  * Devolve null quando a loja ainda não tem extrato (sem movimento).
  */
+/** Quanto tempo esperar antes de sondar de novo um merchant sem extrato. */
+const REPESCAGEM_MS = 6 * 60 * 60 * 1000
+
 async function cnpjDoMerchant(
   merchantId: string,
   admin: ReturnType<typeof createAdminClient>,
+  /** Memória DESTA execução: o mesmo merchant é candidato de várias lojas. */
+  sondadosAgora?: Set<string>,
 ): Promise<string | null> {
   const { data } = await admin
     .from("ifood_merchants")
-    .select("cnpj")
+    .select("cnpj, cnpj_sondado_em")
     .eq("id", merchantId)
     .maybeSingle()
-  const cache = soDigitos((data as { cnpj?: string | null } | null)?.cnpj)
+  const row = data as {
+    cnpj?: string | null
+    cnpj_sondado_em?: string | null
+  } | null
+  const cache = soDigitos(row?.cnpj)
   if (cache.length === 14) return cache
+
+  // Sem CNPJ: baixar a conciliação é caro, então não repetir à toa.
+  // (1) na mesma execução, um merchant é candidato de VÁRIAS solicitações —
+  //     sem isso, a mesma conciliação era baixada uma vez por loja testada.
+  if (sondadosAgora?.has(merchantId)) return null
+  // (2) entre execuções: loja recém-aberta não tem extrato e nunca vai ter
+  //     dentro dos próximos minutos — o cron de 15 min tentava toda vez.
+  const ultima = row?.cnpj_sondado_em
+    ? Date.parse(row.cnpj_sondado_em)
+    : 0
+  if (ultima && Date.now() - ultima < REPESCAGEM_MS) return null
+  sondadosAgora?.add(merchantId)
+  await admin
+    .from("ifood_merchants")
+    .update({ cnpj_sondado_em: new Date().toISOString() })
+    .eq("id", merchantId)
 
   for (const comp of competenciasParaSondar()) {
     try {
@@ -329,6 +354,8 @@ export async function autoLinkIfoodMerchants(
     pendentes.push(row)
   }
 
+  // Compartilhado por todas as solicitações desta rodada.
+  const sondadosAgora = new Set<string>()
   let processadas = 0
   for (const row of pendentes) {
     if (semTempo()) break
@@ -359,7 +386,7 @@ export async function autoLinkIfoodMerchants(
     let conflito: string | null = null
     for (const cand of ordenados) {
       if (testados >= MAX_TESTES_CNPJ) break
-      const cnpjMerchant = await cnpjDoMerchant(cand.m.id, admin)
+      const cnpjMerchant = await cnpjDoMerchant(cand.m.id, admin, sondadosAgora)
       if (!cnpjMerchant) continue // sem extrato pra verificar; tenta o próximo
       testados++
       if (cnpjMerchant === cnpjPedido) {
