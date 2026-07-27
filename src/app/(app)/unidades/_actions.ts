@@ -361,15 +361,39 @@ export async function updateUnit(
       keeta: keetaStoreId,
     }
 
-    // Pega os atuais (pra preservar external_store_id se o form não veio)
+    // Pega os atuais pra PRESERVAR o que o formulário não conhece.
+    //
+    // ⚠️ Este bloco é delete+insert, então tudo que não for copiado aqui é
+    // perdido em silêncio a cada edição da unidade. Foi assim que 5 lojas da
+    // DG Foods perderam o vínculo com o iFood em 27/jul: conectaram de manhã,
+    // alguém editou o cadastro à noite, e o api_store_id sumiu sem aviso — a
+    // loja continuava "ativa" na fila e parava de sincronizar.
+    //
+    // Ao acrescentar coluna nova em unit_platforms, ou ela entra aqui, ou
+    // vira o próximo dado que evapora numa edição de cadastro.
     const { data: existingRows } = await supabase
       .from("unit_platforms")
-      .select("platform, external_store_id")
+      .select(
+        "platform, external_store_id, api_store_id, fin_enabled_at, review_enabled_at, data_encerramento",
+      )
       .eq("unit_id", unitId)
-    const existingMap = new Map(
+    type LinhaExistente = {
+      external_store_id: string | null
+      api_store_id: string | null
+      fin_enabled_at: string | null
+      review_enabled_at: string | null
+      data_encerramento: string | null
+    }
+    const existingMap = new Map<PlatformId, LinhaExistente>(
       (existingRows ?? []).map((r) => [
         r.platform as PlatformId,
-        r.external_store_id as string | null,
+        {
+          external_store_id: r.external_store_id as string | null,
+          api_store_id: r.api_store_id as string | null,
+          fin_enabled_at: r.fin_enabled_at as string | null,
+          review_enabled_at: r.review_enabled_at as string | null,
+          data_encerramento: r.data_encerramento as string | null,
+        },
       ]),
     )
 
@@ -385,9 +409,15 @@ export async function updateUnit(
             externalIdByPlatform[p] !== undefined &&
             externalIdByPlatform[p] !== null
               ? externalIdByPlatform[p]
-              : existingMap.get(p) ?? null,
+              : (existingMap.get(p)?.external_store_id ?? null),
           // Inauguração por plataforma (o form vem pré-preenchido).
           data_inauguracao: inaugByPlatform[p] ?? null,
+          // Campos de INTEGRAÇÃO: o formulário não os edita, então só podem
+          // ser copiados do que já existia.
+          api_store_id: existingMap.get(p)?.api_store_id ?? null,
+          fin_enabled_at: existingMap.get(p)?.fin_enabled_at ?? null,
+          review_enabled_at: existingMap.get(p)?.review_enabled_at ?? null,
+          data_encerramento: existingMap.get(p)?.data_encerramento ?? null,
         })),
       )
     }
