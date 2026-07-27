@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { requireSuperadmin } from "@/lib/auth/guards"
+import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import {
   listIfoodMerchants,
   type IfoodMerchant,
@@ -64,6 +65,62 @@ export async function refreshMerchants(
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     }
+  }
+}
+
+export type ConferirAutorizadasState = {
+  ok: boolean
+  /** Lojas vinculadas E ativadas nesta rodada. */
+  vinculadas?: { code: string; name: string }[]
+  /** Ficaram de fora e por quê — o admin resolve na tabela. */
+  pendentes?: { name: string; motivo: string }[]
+  merchantsVistos?: number
+  error?: string
+}
+
+/**
+ * "Já autorizei no iFood — conferir e vincular."
+ *
+ * Faz de uma vez o que antes exigia descer na tabela e vincular loja por loja:
+ * re-puxa os merchants autorizados, casa com as unidades que têm solicitação
+ * aberta e marca como ativa quem casou.
+ *
+ * Por que existe: depois que o cliente aprova no Portal do Parceiro, a loja só
+ * aparece no nosso GET /merchants alguns minutos depois. Até o cron da
+ * madrugada rodar, a fila mostrava "Loja vinculada — ativar" e o clique
+ * respondia "esta loja ainda NÃO está vinculada" — o operador não tinha como
+ * saber que faltava só ir buscar. Agora tem o botão que vai buscar.
+ *
+ * Não dispara o backfill do histórico (~2min/loja, estoura o timeout de 300s).
+ * As lojas recém-vinculadas pegam mês corrente + anterior no próximo sync, e o
+ * histórico completo no cron diário.
+ */
+export async function conferirLojasAutorizadas(
+  _prev: ConferirAutorizadasState,
+  _formData: FormData,
+): Promise<ConferirAutorizadasState> {
+  await requireSuperadmin()
+  try {
+    const r = await autoLinkIfoodMerchants(null)
+    revalidatePath("/integracao/ifood-merchants")
+    revalidatePath("/importacao")
+    if (!r.ok) {
+      return { ok: false, error: r.error ?? "Falha ao consultar o iFood." }
+    }
+    return {
+      ok: true,
+      merchantsVistos: r.merchantsVistos,
+      vinculadas: r.vinculadas.map((v) => ({
+        code: v.unitCode,
+        name: v.unitName,
+      })),
+      pendentes: r.ambiguas.map((a) => ({
+        name: a.unitName,
+        motivo: a.motivo,
+      })),
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
 
@@ -202,7 +259,7 @@ export async function atualizarSolicitacaoIfood(
       return {
         ok: false,
         error:
-          "Esta loja ainda NÃO está vinculada a um merchant. Vincule na tabela abaixo (escolher unidade → Vincular) e depois ative.",
+          'Esta loja ainda não apareceu no nosso app. Clique em "Já autorizei — conferir e vincular" no topo: ele busca no iFood e vincula sozinho. Se mesmo assim não achar, vincule na tabela abaixo (escolher unidade → Vincular).',
       }
     }
   }

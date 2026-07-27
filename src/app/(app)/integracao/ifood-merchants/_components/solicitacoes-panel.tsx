@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button"
 
 import {
   atualizarSolicitacaoIfood,
+  conferirLojasAutorizadas,
   desfazerStatusIfood,
+  type ConferirAutorizadasState,
   type SolicitacaoUpdateState,
 } from "../_actions"
 
@@ -137,7 +139,7 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
               className={`text-[11px] ${s.clienteConfirmouAt ? "font-medium text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}
             >
               {s.clienteConfirmouAt
-                ? "O cliente avisou que já aprovou no Portal do Parceiro — confira se a loja apareceu na lista abaixo e vincule."
+                ? 'O cliente avisou que já aprovou — use "Já autorizei — conferir e vincular" no topo.'
                 : "Aguardando o Proprietário aprovar no Portal do Parceiro (propaga em ~10 min; a loja aparece na lista abaixo)"}
             </span>
           )}
@@ -181,6 +183,100 @@ function BotaoDesfazer({ id, para }: { id: string; para: string }) {
   )
 }
 
+/**
+ * "Já autorizei — conferir e vincular": vai buscar os merchants no iFood e
+ * casa com as solicitações abertas, de uma vez.
+ *
+ * Substitui o vai-e-vem de descer na tabela e vincular loja por loja. Depois
+ * que o cliente aprova no Portal do Parceiro a loja demora alguns minutos pra
+ * aparecer no nosso GET /merchants — até aqui, a única forma de fechar o ciclo
+ * antes do cron da madrugada era manual.
+ */
+function BotaoConferir() {
+  const [state, action] = useActionState<ConferirAutorizadasState, FormData>(
+    conferirLojasAutorizadas,
+    { ok: false },
+  )
+  const nada =
+    state.ok &&
+    (state.vinculadas?.length ?? 0) === 0 &&
+    (state.pendentes?.length ?? 0) === 0
+
+  return (
+    <div className="mt-3 rounded-lg border border-dashed p-3">
+      <form action={action} className="flex flex-wrap items-center gap-2">
+        <BotaoConferirSubmit />
+        <span className="text-[11px] text-muted-foreground">
+          Depois que o cliente aprova no Portal do Parceiro, a loja leva alguns
+          minutos pra aparecer aqui. Este botão vai buscar e vincula sozinho.
+        </span>
+      </form>
+
+      {state.error && (
+        <p className="mt-2 text-[11px] text-rose-600">{state.error}</p>
+      )}
+
+      {state.ok && (state.vinculadas?.length ?? 0) > 0 && (
+        <div className="mt-2 rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
+          <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400">
+            {state.vinculadas!.length} loja
+            {state.vinculadas!.length > 1 ? "s" : ""} vinculada
+            {state.vinculadas!.length > 1 ? "s" : ""} e ativada
+            {state.vinculadas!.length > 1 ? "s" : ""}:
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {state.vinculadas!.map((v) => (
+              <li
+                key={v.code}
+                className="text-[11px] text-emerald-700 dark:text-emerald-400"
+              >
+                #{v.code} {v.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {state.ok && (state.pendentes?.length ?? 0) > 0 && (
+        <div className="mt-2 rounded-md bg-amber-50 p-2 dark:bg-amber-950/30">
+          <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-400">
+            Estas ficaram de fora — resolva na tabela abaixo:
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {state.pendentes!.map((a) => (
+              <li
+                key={a.name}
+                className="text-[11px] text-amber-700 dark:text-amber-400"
+              >
+                {a.name} — {a.motivo}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {nada && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Nenhuma loja nova apareceu ainda
+          {typeof state.merchantsVistos === "number"
+            ? ` (${state.merchantsVistos} autorizadas no app)`
+            : ""}
+          . Se o cliente acabou de aprovar, espere uns minutos e clique de novo.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function BotaoConferirSubmit() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" size="sm" disabled={pending}>
+      {pending ? "Conferindo no iFood..." : "Já autorizei — conferir e vincular"}
+    </Button>
+  )
+}
+
 export function SolicitacoesPanel({
   solicitacoes,
 }: {
@@ -211,6 +307,7 @@ export function SolicitacoesPanel({
         ativar. Loja conectada sai desta lista (fica como <b>Vinculado</b> na
         tabela abaixo).
       </p>
+      {abertas.length > 0 && <BotaoConferir />}
       <div className="mt-3 space-y-2">
         {naFila.map((s) => (
           <Linha key={s.id} s={s} />
