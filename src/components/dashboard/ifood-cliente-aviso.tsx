@@ -83,8 +83,8 @@ function AtivaCard({ s }: { s: MinhaSolicitacao }) {
           foi conectada ao iFood! 🎉
         </p>
         <p className="text-xs text-muted-foreground">
-          O financeiro agora puxa sozinho pela API — histórico e dados novos
-          entram automático.
+          <b>Financeiro</b> e <b>avaliações</b> agora entram sozinhos pela API —
+          histórico e dados novos, sem planilha.
         </p>
       </div>
       <button

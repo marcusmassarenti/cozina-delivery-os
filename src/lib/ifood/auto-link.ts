@@ -267,12 +267,20 @@ export async function autoLinkIfoodMerchants(
     score: number,
     cnpj: string,
   ): Promise<boolean> {
+    // Liga os DOIS apps junto com o vínculo. Não é cosmético: são esses
+    // carimbos que fazem a cobertura de importação parar de cobrar a planilha
+    // de Conciliação e a de Avaliações. Sem eles a loja puxava tudo pela API
+    // e o cliente continuava vendo "falta importar" das duas — a conexão
+    // entrega os dois escopos de uma vez, então o estado tem que refletir isso.
+    const agora = new Date().toISOString()
     const { error } = await admin.from("unit_platforms").upsert(
       {
         unit_id: row.unit_id,
         platform: "ifood",
         active: true,
         api_store_id: merchantId,
+        fin_enabled_at: agora,
+        review_enabled_at: agora,
       },
       { onConflict: "unit_id,platform", ignoreDuplicates: false },
     )
