@@ -57,6 +57,12 @@ export type ClientOverview = {
   users: number
   /** Último acesso (max last_sign_in_at dos usuários da empresa). */
   lastLogin: string | null
+  /**
+   * Nenhum usuário da empresa confirmou o e-mail — o cadastro está travado
+   * ANTES da primeira tela. Vale mais que qualquer aviso dentro do sistema,
+   * porque essa pessoa nunca chega a vê-lo.
+   */
+  emailNaoConfirmado: boolean
   establishmentType: string | null
   // Cobrança
   paymentMethod: string | null
@@ -195,6 +201,8 @@ export async function getClientsOverview(): Promise<{
   // digitar a senha) com profiles.last_seen_at (atividade real, throttled) e
   // pega o mais recente. Sem o last_seen_at, quem fica logado aparecia sumido.
   const lastLoginByUser = new Map<string, string | null>()
+  /** userId → confirmou o e-mail? Só quem entrou pelo auto-cadastro precisa. */
+  const emailConfirmadoByUser = new Map<string, boolean>()
   const keepMax = (uid: string, ts: string | null) => {
     if (!ts) return
     const prev = lastLoginByUser.get(uid)
@@ -205,7 +213,10 @@ export async function getClientsOverview(): Promise<{
       page: 1,
       perPage: 1000,
     })
-    for (const u of authList?.users ?? []) keepMax(u.id, u.last_sign_in_at ?? null)
+    for (const u of authList?.users ?? []) {
+      keepMax(u.id, u.last_sign_in_at ?? null)
+      emailConfirmadoByUser.set(u.id, Boolean(u.email_confirmed_at))
+    }
   } catch {
     // sem auth admin → cai só no last_seen_at
   }
@@ -321,15 +332,25 @@ export async function getClientsOverview(): Promise<{
     const computedMonthly = (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
     // Último acesso = max last_sign_in_at dos usuários da empresa.
     let lastLogin: string | null = null
+    // Só marca como travado quando SABEMOS de algum usuário e NENHUM confirmou
+    // — sem isso, empresa sem usuário mapeado apareceria como travada à toa.
+    let temUsuarioConhecido = false
+    let algumConfirmou = false
     for (const uid of usersByHolding.get(h.id) ?? []) {
       const ll = lastLoginByUser.get(uid)
       if (ll && (!lastLogin || ll > lastLogin)) lastLogin = ll
+      const conf = emailConfirmadoByUser.get(uid)
+      if (conf !== undefined) {
+        temUsuarioConhecido = true
+        if (conf) algumConfirmou = true
+      }
     }
     return {
       id: h.id,
       name: h.name,
       slug: h.slug,
       createdAt: h.created_at,
+      emailNaoConfirmado: temUsuarioConhecido && !algumConfirmou,
       establishmentType: hh.establishment_type ?? null,
       brands: brandsByHolding.get(h.id)?.size ?? 0,
       units: unitCount.get(h.id) ?? 0,

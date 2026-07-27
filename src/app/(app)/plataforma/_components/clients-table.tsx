@@ -354,6 +354,18 @@ export function ClientsTable({
                         >
                           {PLAN_LABEL[c.planTier] ?? c.planTier}
                         </span>
+                      ) : c.billingStatus === "trial" ? (
+                        // No teste grátis o gate libera TUDO (billing.ts:
+                        // `if (status === "trial") return true`), Nino
+                        // incluso. Escrever "sem plano" aqui dava a impressão
+                        // oposta — de conta capada — justo em quem ainda está
+                        // decidindo se fica.
+                        <span
+                          title="Durante o teste grátis todas as funções estão liberadas, inclusive o Nino AI"
+                          className="text-[11px] font-medium text-violet-600 dark:text-violet-400"
+                        >
+                          teste · tudo liberado
+                        </span>
                       ) : (
                         <span className="text-[11px] text-amber-600 dark:text-amber-400">
                           sem plano
@@ -390,6 +402,25 @@ export function ClientsTable({
                           há {dias} dias
                         </div>
                       )}
+                      {/* Onboarding travado. A ordem importa: e-mail não
+                          confirmado vem primeiro porque essa pessoa NÃO
+                          consegue entrar — nenhum aviso dentro do sistema a
+                          alcança, só um contato seu. */}
+                      {c.emailNaoConfirmado ? (
+                        <div
+                          title="Cadastrou mas nunca confirmou o e-mail — não consegue entrar. Chame no WhatsApp ou confirme pelo Supabase."
+                          className="mt-1 inline-block rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
+                        >
+                          e-mail não confirmado
+                        </div>
+                      ) : c.billingStatus === "trial" && c.units === 0 ? (
+                        <div
+                          title="Em teste grátis e ainda sem nenhuma loja cadastrada — sem loja o sistema não mostra nada, e a pessoa não tem motivo pra voltar."
+                          className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                        >
+                          teste sem loja
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2.5" onClick={stop}>
                       <div className="flex items-center justify-end gap-1.5">

@@ -12,6 +12,7 @@ import {
   Receipt,
   Sparkles,
   Star,
+  Store,
   ThumbsDown,
   ThumbsUp,
   XCircle,
@@ -956,11 +957,29 @@ export default async function Home({
       )}
 
       {allUnits.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card p-10 text-center">
-          <p className="text-sm font-medium">Nenhuma unidade cadastrada ainda</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Vai em Unidades no menu lateral e clica em &quot;+ Nova Unidade&quot;
-            pra cadastrar suas lojas.
+        /* Primeiro passo. Sem loja cadastrada TODO o resto do sistema fica
+           vazio — não há número, gráfico nem relatório pra ver — e a pessoa
+           em teste grátis simplesmente não volta. Por isso aqui é um convite
+           com botão, e não um aviso de estado vazio. */
+        <div className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.03] p-8 text-center">
+          <h2 className="text-lg font-semibold">
+            Comece cadastrando sua primeira loja
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            É o que destrava o sistema: com a loja cadastrada você importa os
+            relatórios (ou conecta a API do iFood) e o faturamento, as taxas,
+            as avaliações e o DRE aparecem aqui sozinhos.
+          </p>
+          <Link
+            href="/unidades"
+            className="mt-4 inline-flex h-10 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Store className="size-4" />
+            Cadastrar minha primeira loja
+          </Link>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Leva menos de um minuto — nome, cidade e em quais plataformas ela
+            vende.
           </p>
         </div>
       ) : (
