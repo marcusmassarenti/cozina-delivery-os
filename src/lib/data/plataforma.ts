@@ -11,6 +11,11 @@ import {
   PLATAFORMAS,
   type PlatformId,
 } from "@/components/platform-logo"
+import {
+  getDefaultPlan,
+  precoDoPlano,
+  type PlanId,
+} from "@/lib/data/assinatura"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
   computeBillingStatus,
@@ -193,6 +198,10 @@ export async function getClientsOverview(): Promise<{
       }))
     : (hFull.data ?? [])
 
+  // Tabela de preços vigente (editável em /plataforma). Uma vez só, fora do
+  // laço — é a régua de TODOS os clientes sem preço negociado.
+  const precos = await getDefaultPlan()
+
   const brands = brandsRes.data ?? []
   const units = unitsRes.data ?? []
   const accesses = accessRes.data ?? []
@@ -323,13 +332,25 @@ export async function getClientsOverview(): Promise<{
       // Trial ANCORADO no cadastro (não renova ao cancelar).
       trialEndsAt: effectiveTrialEnd(hh.trial_ends_at ?? null, h.created_at),
     }
-    // Mensalidade = base + (lojas ativas além das inclusas × valor por loja)
+    // Mensalidade. A REGRA é o plano (primeira loja + adicionais × lojas
+    // ativas); o valor manual é EXCEÇÃO, pra cliente com preço negociado.
+    //
+    // Antes isso olhava só os campos manuais, e como ninguém os preenchia
+    // todo cliente valia R$ 0 — o MRR da plataforma inteira aparecia zerado
+    // com quatro contratos ativos. O plano já estava no banco e nos preços
+    // de `assinatura.ts`; faltava a conta usar.
     const activeUnits = activeUnitCount.get(h.id) ?? 0
     const includedUnits = hh.included_units ?? 1
     const pricePerUnit = hh.price_per_unit != null ? Number(hh.price_per_unit) : null
     const billableUnits = activeUnits
     const extraUnits = Math.max(0, billableUnits - includedUnits)
-    const computedMonthly = (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
+    const planoDoCliente = (hh.plan_tier ?? null) as PlanId | null
+    const precoNegociado = billing.monthlyFee != null
+    const computedMonthly = precoNegociado
+      ? (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
+      : planoDoCliente
+        ? precoDoPlano(precos, planoDoCliente, activeUnits)
+        : 0
     // Último acesso = max last_sign_in_at dos usuários da empresa.
     let lastLogin: string | null = null
     // Só marca como travado quando SABEMOS de algum usuário e NENHUM confirmou
