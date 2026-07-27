@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { requireSuperadmin } from "@/lib/auth/guards"
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import {
+  getIfoodMerchant,
   listIfoodMerchants,
   type IfoodMerchant,
 } from "@/lib/ifood/merchants"
@@ -13,8 +14,34 @@ import { createAdminClient } from "@/lib/supabase/admin"
 export type RefreshMerchantsState = {
   ok: boolean
   count?: number
+  /** Quantos tiveram cidade/UF/status preenchidos pelo detalhe. */
+  enriquecidos?: number
   status?: number
   error?: string
+}
+
+/** Roda `fn` sobre a lista com no máximo `limite` chamadas simultâneas. */
+async function mapComLimite<T, R>(
+  itens: T[],
+  limite: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(itens.length)
+  let cursor = 0
+  await Promise.all(
+    Array.from({ length: Math.min(limite, itens.length) }, async () => {
+      for (;;) {
+        const i = cursor++
+        if (i >= itens.length) return
+        try {
+          out[i] = await fn(itens[i])
+        } catch {
+          out[i] = null as R
+        }
+      }
+    }),
+  )
+  return out
 }
 
 /**
@@ -57,8 +84,44 @@ export async function refreshMerchants(
         .from("ifood_merchants")
         .upsert(rows, { onConflict: "id", ignoreDuplicates: false })
     }
+
+    // A LISTA só devolve id/name/corporateName — cidade, UF e status da loja
+    // vêm apenas no DETALHE de cada merchant. Por isso a coluna Cidade vivia
+    // vazia: não era dado faltando no iFood, era endpoint errado.
+    // 4 por vez pra não maltratar a API; falha de um não derruba o resto.
+    const detalhes = await mapComLimite(r.data as IfoodMerchant[], 4, async (m) => {
+      const d = await getIfoodMerchant(m.id)
+      if (!d.ok || !d.data) return null
+      const det = d.data
+      return {
+        id: m.id,
+        city: det.address?.city ?? null,
+        state: det.address?.state ?? null,
+        // O detalhe chama de `status`; `merchantState` é o nome antigo. Ler os
+        // dois evita a coluna vazia se o iFood alternar entre eles.
+        merchant_state: det.status ?? det.merchantState ?? null,
+        // CNPJ raramente vem aqui (a fonte confiável é a Conciliação, via
+        // auto-link). Só grava se vier — nunca sobrescreve com null.
+        ...(det.documents?.CNPJ?.value
+          ? { cnpj: det.documents.CNPJ.value }
+          : {}),
+      }
+    })
+    const comDetalhe = detalhes.filter(
+      (d): d is NonNullable<typeof d> => d !== null,
+    )
+    for (const d of comDetalhe) {
+      const { id, ...campos } = d
+      await admin.from("ifood_merchants").update(campos).eq("id", id)
+    }
+
     revalidatePath("/integracao/ifood-merchants")
-    return { ok: true, status: r.status, count: r.data.length }
+    return {
+      ok: true,
+      status: r.status,
+      count: r.data.length,
+      enriquecidos: comDetalhe.length,
+    }
   } catch (e) {
     revalidatePath("/integracao/ifood-merchants")
     return {
@@ -173,6 +236,53 @@ export async function linkMerchantToUnit(
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     }
+  }
+}
+
+export type IgnorarMerchantState = {
+  ok: boolean
+  message?: string
+  error?: string
+}
+
+/**
+ * Arquiva (ou desarquiva) um merchant que não vai virar unidade da rede.
+ *
+ * Nem toda loja autorizada no app vira loja nossa: tem a de teste do próprio
+ * integrador e a que o cliente desativou. Sem isso elas moravam pra sempre no
+ * bloco "Sem unidade vinculada", que é justamente a lista do que exige ação.
+ *
+ * É carimbo e não DELETE porque apagar não resolve — no próximo "Re-puxar da
+ * Merchant API" a loja volta, já que continua autorizada no iFood.
+ */
+export async function ignorarMerchant(
+  _prev: IgnorarMerchantState,
+  formData: FormData,
+): Promise<IgnorarMerchantState> {
+  await requireSuperadmin()
+  const merchantId = String(formData.get("merchantId") ?? "").trim()
+  const desfazer = String(formData.get("desfazer") ?? "") === "1"
+  const motivo = String(formData.get("motivo") ?? "").trim() || null
+  if (!merchantId) return { ok: false, error: "merchantId ausente" }
+
+  try {
+    const admin = createAdminClient()
+    const { error } = await admin
+      .from("ifood_merchants")
+      .update(
+        desfazer
+          ? { ignorado_em: null, ignorado_motivo: null }
+          : { ignorado_em: new Date().toISOString(), ignorado_motivo: motivo },
+      )
+      .eq("id", merchantId)
+    if (error) return { ok: false, error: error.message }
+    revalidatePath("/integracao/ifood-merchants")
+    return {
+      ok: true,
+      message: desfazer ? "De volta à lista." : "Arquivada.",
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
 

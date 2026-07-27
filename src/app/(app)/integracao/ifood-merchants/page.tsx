@@ -17,6 +17,10 @@ type MerchantRow = {
   cnpj: string | null
   city: string | null
   state: string | null
+  /** Status da loja no iFood (AVAILABLE / UNAVAILABLE / DISABLED). */
+  merchant_state: string | null
+  ignorado_em: string | null
+  ignorado_motivo: string | null
   last_seen_at: string
 }
 
@@ -25,7 +29,13 @@ type LinkedRow = {
   api_store_id: string | null
   fin_enabled_at: string | null
   review_enabled_at: string | null
-  units: { id: string; code: string; name: string } | null
+  units: {
+    id: string
+    code: string
+    name: string
+    active: boolean
+    brand_id: string | null
+  } | null
 }
 
 type UnitRow = {
@@ -42,12 +52,14 @@ async function getData() {
     await Promise.all([
     admin
       .from("ifood_merchants")
-      .select("id, name, corporate_name, cnpj, city, state, last_seen_at")
+      .select(
+        "id, name, corporate_name, cnpj, city, state, merchant_state, ignorado_em, ignorado_motivo, last_seen_at",
+      )
       .order("name"),
     admin
       .from("unit_platforms")
       .select(
-        "unit_id, api_store_id, fin_enabled_at, review_enabled_at, units!inner(id, code, name)",
+        "unit_id, api_store_id, fin_enabled_at, review_enabled_at, units!inner(id, code, name, active, brand_id)",
       )
       .eq("platform", "ifood")
       .not("api_store_id", "is", null),
@@ -105,8 +117,21 @@ async function getData() {
       name: string
       finOn: boolean
       reviewOn: boolean
+      /** De qual cliente é a loja — o merchant sozinho não diz. */
+      holdingName: string
+      /** Unidade desativada na rede, mas ainda vinculada ao merchant. */
+      unidadeInativa: boolean
     }
   > = {}
+  // Resolve o cliente pelo brand da PRÓPRIA linha vinculada, não pela lista
+  // de unidades ativas: loja desativada continua vinculada (Niterói é o caso)
+  // e caía num grupo sem nome, como se fosse de cliente nenhum.
+  const holdingPorUnidade = new Map<string, string>()
+  for (const l of linkedRaw) {
+    if (!l.units) continue
+    const hId = brandHolding.get(l.units.brand_id ?? "") ?? ""
+    holdingPorUnidade.set(l.units.id, holdingName.get(hId) ?? "—")
+  }
   for (const l of linkedRaw) {
     if (l.api_store_id && l.units) {
       byMerchant[l.api_store_id] = {
@@ -115,6 +140,8 @@ async function getData() {
         name: l.units.name,
         finOn: !!l.fin_enabled_at,
         reviewOn: !!l.review_enabled_at,
+        holdingName: holdingPorUnidade.get(l.units.id) ?? "—",
+        unidadeInativa: l.units.active === false,
       }
     }
   }

@@ -26,6 +26,8 @@ export type IfoodMerchant = {
   deliveryTime?: number
   minimumOrderValue?: number
   merchantState?: string
+  /** Detalhe usa `status` (AVAILABLE/UNAVAILABLE/DISABLED); a lista não traz. */
+  status?: string
   documents?: {
     CNPJ?: { value?: string; type?: string }
     CPF?: { value?: string; type?: string }
