@@ -74,6 +74,11 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
   // bloco de ações inteiro some e o clique errado fica sem volta.
   const podeDesfazer = Boolean(s.statusAnterior) || s.status === "recusada"
 
+  // "Loja vinculada — ativar" saiu daqui de propósito. Era do tempo em que o
+  // vínculo era manual; hoje quem conecta é o cron de 15 min (ou o botão do
+  // topo), e manter o botão fazia parecer que faltava uma ação do operador —
+  // que ao clicar só recebia "esta loja ainda não apareceu no nosso app".
+  // Em "solicitada" a bola está com o CLIENTE: a única saída manual é recusar.
   const proximas: Array<{ status: string; rotulo: string }> =
     s.status === "pendente"
       ? [
@@ -81,10 +86,7 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
           { status: "recusada", rotulo: "Recusar" },
         ]
       : s.status === "solicitada"
-        ? [
-            { status: "ativa", rotulo: "Loja vinculada — ativar" },
-            { status: "recusada", rotulo: "Recusar" },
-          ]
+        ? [{ status: "recusada", rotulo: "Recusar" }]
         : []
 
   return (
@@ -99,6 +101,17 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
         {s.status === "solicitada" && s.clienteConfirmouAt && (
           <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
             ✋ cliente confirmou
+          </span>
+        )}
+        {/* De quem é a vez — a dúvida mais comum ao olhar esta fila. */}
+        {s.status === "pendente" && (
+          <span className="ml-auto rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:bg-sky-950/40 dark:text-sky-400">
+            sua vez
+          </span>
+        )}
+        {s.status === "solicitada" && !s.clienteConfirmouAt && (
+          <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            com o cliente
           </span>
         )}
         <span
@@ -140,7 +153,7 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
             >
               {s.clienteConfirmouAt
                 ? 'O cliente avisou que já aprovou — use "Já autorizei — conferir e vincular" no topo.'
-                : "Aguardando o Proprietário aprovar no Portal do Parceiro (propaga em ~10 min; a loja aparece na lista abaixo)"}
+                : "Nada a fazer daqui: o Proprietário precisa aprovar no Portal do Parceiro dele. Assim que aprovar, a conexão se fecha sozinha (checamos a cada 15 min)."}
             </span>
           )}
         </div>
