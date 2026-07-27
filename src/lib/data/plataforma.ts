@@ -16,6 +16,7 @@ import {
   precoDoPlano,
   type PlanId,
 } from "@/lib/data/assinatura"
+import { getFaturasDoCliente, type Fatura } from "@/lib/data/faturas"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
   computeBillingStatus,
@@ -495,7 +496,10 @@ export type ClientDetail = ClientOverview & {
   unitsFull: ClientUnitFull[]
   asaasCustomerId: string | null
   asaasSubscriptionId: string | null
+  /** NOTAS FISCAIS emitidas no Asaas (não confundir com `faturas`). */
   invoices: ClientInvoice[]
+  /** COBRANÇAS que este cliente deve/pagou (holding_invoices). */
+  faturas: Fatura[]
   /** Consumo do Nino AI no mês corrente (mensagens + custo de API). */
   consumoIa: { mensagens: number; custoUsd: number; respostasMedidas: number }
 }
@@ -777,6 +781,7 @@ export async function getClientDetail(
     asaasCustomerId,
     asaasSubscriptionId,
     invoices,
+    faturas: await getFaturasDoCliente(holdingId),
     consumoIa: await getConsumoIaDoCliente(holdingId),
   }
 }

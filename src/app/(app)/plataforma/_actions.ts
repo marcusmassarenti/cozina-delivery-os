@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 
 import { guard, requireSuperadmin } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { quitarFaturaComPagamento } from "@/lib/data/faturas"
 import {
   asaasIsMock,
   asaasSetSubscriptionInvoiceSettings,
@@ -318,15 +319,26 @@ export async function recordPayment(
     if (Number.isNaN(amount) || amount <= 0) return { ok: false, message: "Informe um valor válido." }
 
     const method = String(formData.get("method") ?? "").trim() || null
-    const { error } = await admin.from("holding_payments").insert({
-      holding_id: holdingId,
-      paid_on: paidOn,
-      amount,
-      method,
-      ref_month: String(formData.get("refMonth") ?? "").trim() || null,
-      note: String(formData.get("note") ?? "").trim() || null,
-    })
+    const { data: pagamento, error } = await admin
+      .from("holding_payments")
+      .insert({
+        holding_id: holdingId,
+        paid_on: paidOn,
+        amount,
+        method,
+        ref_month: String(formData.get("refMonth") ?? "").trim() || null,
+        note: String(formData.get("note") ?? "").trim() || null,
+      })
+      .select("id")
+      .single()
     if (error) return { ok: false, message: error.message }
+
+    // Amarra o recebimento à dívida: quita a fatura aberta mais antiga. Sem
+    // isso o dinheiro entrava no caixa e a fatura seguia aberta, inflando a
+    // inadimplência com valor que já foi pago.
+    if (pagamento?.id) {
+      await quitarFaturaComPagamento(holdingId, pagamento.id, paidOn, amount)
+    }
 
     // Registrar pagamento TAMBÉM marca o cliente como pago (tira do teste, limpa
     // suspensão, define o próximo vencimento) — a não ser que desmarcado. Antes

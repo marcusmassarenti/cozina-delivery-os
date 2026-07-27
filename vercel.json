@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/billing-vencimentos",
       "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/emitir-faturas",
+      "schedule": "0 7 * * *"
     }
   ]
 }

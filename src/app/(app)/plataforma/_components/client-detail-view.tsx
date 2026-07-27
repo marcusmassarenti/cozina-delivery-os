@@ -292,6 +292,68 @@ export function ClientDetailView({
         </Card>
       </div>
 
+      {/* Histórico de faturas. É a metade que faltava: holding_payments só
+          guardava o que ENTROU, então o que o cliente deixou de pagar não
+          existia em lugar nenhum — e sem isso não há inadimplência nem
+          histórico de atraso. */}
+      <Card title="Faturas" icon={CreditCard}>
+        {c.faturas.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma fatura emitida. Elas são geradas automaticamente todo mês
+            para clientes com plano e fora do teste grátis.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Competência</th>
+                  <th className="px-3 py-2 text-left font-medium">Vencimento</th>
+                  <th className="px-3 py-2 text-right font-medium">Valor</th>
+                  <th className="px-3 py-2 text-left font-medium">Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.faturas.map((f) => (
+                  <tr key={f.id} className="border-t">
+                    <td className="px-3 py-2 font-medium tabular-nums">
+                      {f.competencia}
+                      {f.lojasCobradas != null && (
+                        <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                          · {f.lojasCobradas} loja
+                          {f.lojasCobradas !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                      {fmtDateISO(f.vencimento)}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium tabular-nums">
+                      {fmtBRL(f.valor)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {f.status === "paga" ? (
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          paga {f.pagoEm ? `em ${fmtDateISO(f.pagoEm)}` : ""}
+                        </span>
+                      ) : f.status === "cancelada" ? (
+                        <span className="text-muted-foreground">cancelada</span>
+                      ) : f.vencida ? (
+                        <span className="font-semibold text-rose-600 dark:text-rose-400">
+                          em atraso
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">em aberto</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
       <Card title="Plano & Nino AI" icon={Sparkles}>
         <PlanControls
           holdingId={c.id}
