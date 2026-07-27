@@ -13,6 +13,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/ifood-auto-vincular",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/ifood-review-sync",
       "schedule": "0 11 * * *"
     }
