@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { after } from "next/server"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { NavigationProgress } from "@/components/shared/navigation-progress"
@@ -11,8 +12,9 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { getMfaStatus } from "@/lib/auth/mfa"
-import { MODULES, userCan, isSuperadmin } from "@/lib/auth/permissions"
+import { MODULES, userCan, isSuperadmin, getCurrentHoldingId } from "@/lib/auth/permissions"
 import { daysUntil, getCurrentHoldingBilling } from "@/lib/data/billing"
+import { enviarBoasVindasSePreciso } from "@/lib/email/boas-vindas"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({
@@ -39,6 +41,20 @@ export default async function AppLayout({
   void supabase.rpc("touch_last_seen")
 
   const userContext = await getCurrentUserContext()
+
+  // Boas-vindas no primeiro acesso. `after` = roda depois da resposta ir
+  // embora, então não custa nada no tempo de carregar a tela. A própria função
+  // sai fora em duas linhas quando o e-mail já foi enviado (que é o caso em
+  // 99,9% dos carregamentos).
+  after(async () => {
+    await enviarBoasVindasSePreciso({
+      userId: data.user.id,
+      email: data.user.email,
+      emailConfirmado: Boolean(data.user.email_confirmed_at),
+      nome: userContext.fullName,
+      holdingId: await getCurrentHoldingId(),
+    })
+  })
 
   // Módulos que o perfil do usuário pode "Ver" — alimenta o filtro do menu.
   const moduleChecks = await Promise.all(
