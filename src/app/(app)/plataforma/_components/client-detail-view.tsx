@@ -18,6 +18,7 @@ import type { ClientDetail } from "@/lib/data/plataforma"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
+import { ConviteAsaasButton } from "./convite-asaas-button"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
 
@@ -285,9 +286,19 @@ export function ClientDetailView({
                 Sem plano definido — nada é cobrado. Escolha o plano abaixo.
               </p>
             )}
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <EditBillingDialog client={c} />
             </div>
+            {!c.contaInterna && (
+              <div className="mt-2 border-t pt-2">
+                <ConviteAsaasButton
+                  holdingId={c.id}
+                  clienteNome={c.name}
+                  convidadoEm={c.conviteAsaasEm}
+                  jaTemAssinatura={c.asaasActive}
+                />
+              </div>
+            )}
           </div>
         </Card>
       </div>

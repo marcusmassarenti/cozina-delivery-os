@@ -190,3 +190,22 @@ export async function isAiPlan(): Promise<boolean> {
   if (b.ninoTrialEndsAt && new Date(b.ninoTrialEndsAt) > new Date()) return true
   return planRank(b.planTier) >= PLAN_RANK.ai
 }
+
+
+/**
+ * Este cliente foi convidado a migrar a cobrança manual pro Asaas?
+ *
+ * Serve pra soltar o redirect de /assinatura: quem está "paid" por um Pix
+ * marcado à mão não tem, sem isto, nenhum caminho até o cartão recorrente.
+ */
+export async function temConviteAsaas(): Promise<boolean> {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return false
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("holdings")
+    .select("convite_asaas_em")
+    .eq("id", holdingId)
+    .maybeSingle()
+  return Boolean((data as { convite_asaas_em?: string | null } | null)?.convite_asaas_em)
+}

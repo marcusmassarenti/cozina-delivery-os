@@ -18,7 +18,7 @@ import {
   type PlanoAtual,
   type UpgradeAiInfo,
 } from "@/lib/data/assinatura"
-import { daysUntil } from "@/lib/data/billing"
+import { daysUntil, temConviteAsaas } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
 import { SubscribeForm } from "./_components/subscribe-form"
@@ -74,7 +74,12 @@ export default async function AssinaturaPage({
   const { plano: planoQuery } = await searchParams
 
   // Assinatura ATIVA:
-  if (plano?.status === "paid") {
+  // Exceção: cliente convidado a MIGRAR a cobrança manual pro Asaas. Ele está
+  // "paid" porque alguém marcou o Pix à mão, então o redirect abaixo o
+  // prenderia na gestão e não haveria caminho pro cartão recorrente — que é
+  // justamente quem a gente mais quer migrar.
+  const convidadoAMigrar = await temConviteAsaas()
+  if (plano?.status === "paid" && !convidadoAMigrar) {
     // Pediu upgrade pro AI e dá pra fazer (tem assinatura, plano menor) →
     // tela de upgrade com a proração. Senão, vai pra gestão (Minha conta).
     if (planoQuery === "ai") {

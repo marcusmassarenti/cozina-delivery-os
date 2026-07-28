@@ -84,6 +84,11 @@ export type ClientOverview = {
    * que ninguém sabe explicar é a origem de discussão de fatura.
    */
   precoNegociado: boolean
+  /** Conta da própria casa: fora do MRR/ARPA e da emissão de faturas. */
+  contaInterna: boolean
+  contaInternaNota: string | null
+  /** Convidado a migrar a cobrança manual pro Asaas (destrava /assinatura). */
+  conviteAsaasEm: string | null
   /** Preço da 1ª loja e de cada adicional no plano vigente do cliente. */
   planoFirst: number | null
   planoAdd: number | null
@@ -179,7 +184,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -193,6 +198,9 @@ export async function getClientsOverview(): Promise<{
       ).map((h) => ({
         ...h,
         establishment_type: null,
+        conta_interna: false,
+        conta_interna_nota: null,
+        convite_asaas_em: null,
         payment_method: null,
         monthly_fee: null,
         price_per_unit: null,
@@ -395,6 +403,9 @@ export async function getClientsOverview(): Promise<{
       extraUnits,
       computedMonthly,
       precoNegociado,
+      contaInterna: Boolean(hh.conta_interna),
+      contaInternaNota: (hh.conta_interna_nota as string | null) ?? null,
+      conviteAsaasEm: (hh.convite_asaas_em as string | null) ?? null,
       planoFirst: planoDoCliente ? precos[planoDoCliente].first : null,
       planoAdd: planoDoCliente ? precos[planoDoCliente].add : null,
       billingStatus: computeBillingStatus(billing),
@@ -413,8 +424,11 @@ export async function getClientsOverview(): Promise<{
     }
   })
 
-  // MRR/recebido/etc usam a mensalidade calculada (base + lojas extras)
-  const fee = (c: ClientOverview) => c.computedMonthly
+  // MRR/recebido/etc usam a mensalidade calculada (base + lojas extras).
+  // Conta interna vale ZERO aqui: é dinheiro que sai e volta pro mesmo bolso,
+  // e o MRR é justamente o número que se olha pra decidir se o negócio anda.
+  // Ela continua na LISTA (uso real da plataforma), só não soma receita.
+  const fee = (c: ClientOverview) => (c.contaInterna ? 0 : c.computedMonthly)
   const totals: PlatformTotals = {
     clients: clients.length,
     units: clients.reduce((s, c) => s + c.units, 0),

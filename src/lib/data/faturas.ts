@@ -153,7 +153,7 @@ export async function emitirFaturasDoMes(
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at",
+      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna",
     )
 
   // Lojas ATIVAS por cliente — é a base do preço por loja.
@@ -174,6 +174,12 @@ export async function emitirFaturasDoMes(
 
   for (const h of (holdings ?? []) as Record<string, unknown>[]) {
     const nome = String(h.name)
+    // Conta da própria casa não gera cobrança — emitir fatura pra si mesmo
+    // criaria inadimplência fantasma todo mês.
+    if (h.conta_interna) {
+      out.puladas.push({ cliente: nome, motivo: "conta interna" })
+      continue
+    }
     const emTeste =
       h.trial_ends_at != null && String(h.trial_ends_at) >= hoje
     if (emTeste) {

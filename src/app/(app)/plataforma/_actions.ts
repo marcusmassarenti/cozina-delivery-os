@@ -304,6 +304,59 @@ export async function setClientBilling(
 }
 
 /** Registra um pagamento recebido de um cliente (super-admin). */
+export type ConviteAsaasState = {
+  ok: boolean
+  message?: string
+  error?: string
+  /** Link pra mandar pro cliente (WhatsApp). */
+  link?: string
+  /** Convite retirado. */
+  removido?: boolean
+}
+
+/**
+ * Convida (ou desconvida) um cliente a migrar a cobrança manual pro Asaas.
+ *
+ * Por que precisa de convite: /assinatura manda quem está "paid" pra tela de
+ * gestão. O cliente marcado como pago à mão fica preso ali — não existe
+ * caminho até o cartão recorrente, e é justamente quem mais interessa migrar,
+ * porque hoje a cobrança dele depende de alguém lembrar do Pix todo mês.
+ *
+ * Não criamos a cobrança no Asaas por aqui de propósito: o Asaas exige
+ * CPF/CNPJ e nenhum cliente tem esse campo preenchido. Quem informa é o
+ * próprio cliente no checkout — documento fiscal digitado por terceiro vira
+ * nota fiscal errada depois.
+ */
+export async function convidarParaAsaas(
+  _prev: ConviteAsaasState,
+  formData: FormData,
+): Promise<ConviteAsaasState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, error: "Cliente não identificado." }
+    const remover = String(formData.get("remover") ?? "") === "1"
+
+    const { error } = await admin
+      .from("holdings")
+      .update({ convite_asaas_em: remover ? null : new Date().toISOString() })
+      .eq("id", holdingId)
+    if (error) return { ok: false, error: error.message }
+
+    revalidatePath("/plataforma")
+    if (remover)
+      return { ok: true, removido: true, message: "Convite retirado." }
+
+    const base =
+      process.env.NEXT_PUBLIC_SITE_URL ?? "https://delivery.cozinafoods.com"
+    return {
+      ok: true,
+      link: `${base}/assinatura`,
+      message: "Convite liberado — mande o link pro cliente.",
+    }
+  })
+}
+
 export async function recordPayment(
   _prev: BillingActionState,
   formData: FormData,
