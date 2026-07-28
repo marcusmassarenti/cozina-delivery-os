@@ -1,40 +1,118 @@
 /**
- * Textos da régua de e-mails.
+ * Textos e visual da régua de e-mails.
  *
  * Voz: direta, sem corporativês, escrita como o Marcus fala com o cliente —
  * "seu delivery", "sua loja", não "sua operação de food service". Cada e-mail
  * tem UM pedido só; e-mail com três botões não é lido, é fechado.
  *
- * HTML inline e sem imagem externa: Gmail e Outlook derrubam <style> no head e
- * bloqueiam imagem por padrão. O que precisa ser lido tem que estar no texto.
+ * Visual: mesmo padrão do e-mail de confirmação de cadastro (ícone laranja +
+ * "DELIVERY OS", título grande, botão pílula, rodapé fora do cartão). Cliente
+ * que recebe dois e-mails da mesma marca com caras diferentes desconfia do
+ * segundo — parece phishing.
+ *
+ * HTML inline e tudo em tabela: Gmail e Outlook derrubam <style> no head e o
+ * Outlook desktop ignora boa parte de flex/grid.
  */
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://delivery.cozinafoods.com"
+/**
+ * Domínio dos links E das imagens. Precisa ser o mesmo da marca do e-mail:
+ * botão do DeliveryOS que aponta pra delivery.cozinafoods.com faz o cliente
+ * achar que errou de e-mail — ou que é golpe.
+ */
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 
-/** Moldura comum. `cta` é opcional — nem todo e-mail pede clique. */
+const LARANJA = "#ff4d1c"
+const TINTA = "#18181b"
+const TEXTO = "#52525b"
+const SUAVE = "#a1a1aa"
+const LINHA = "#e4e4e7"
+
+/** Print do sistema. Fica em /public/email (versão leve dos prints da landing). */
+type Imagem = { arquivo: string; alt: string; legenda?: string }
+
+function figura(img: Imagem): string {
+  return `
+  <div style="margin:26px 0;">
+    <img src="${SITE}/email/${img.arquivo}" alt="${img.alt}" width="520"
+         style="display:block;width:100%;max-width:100%;height:auto;border:1px solid ${LINHA};border-radius:10px;" />
+    ${
+      img.legenda
+        ? `<p style="margin:10px 0 0;font-size:13px;line-height:1.5;color:${SUAVE};text-align:center;">${img.legenda}</p>`
+        : ""
+    }
+  </div>`
+}
+
+/** Caixa de número forte — o "olha o tamanho disso" dos e-mails de retomada. */
+export function destaque(numero: string, texto: string): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;">
+    <tr>
+      <td style="background:#fff7ed;border-left:4px solid ${LARANJA};border-radius:0 10px 10px 0;padding:20px 22px;">
+        <p style="margin:0 0 6px;font-size:30px;line-height:1.1;font-weight:700;color:${LARANJA};">${numero}</p>
+        <p style="margin:0;font-size:15px;line-height:1.5;color:#7c2d12;">${texto}</p>
+      </td>
+    </tr>
+  </table>`
+}
+
+/**
+ * Moldura comum. `cta` é opcional — nem todo e-mail pede clique.
+ * A ordem dos blocos é fixa: texto → imagens → botão. Botão antes da imagem
+ * faz a pessoa clicar sem ver o argumento.
+ */
 function layout(opts: {
   titulo: string
   corpo: string
+  imagens?: readonly Imagem[]
   cta?: { texto: string; url: string }
   ps?: string
 }): string {
   return `
-<div style="margin:0;padding:24px 12px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px 28px;">
-    <p style="margin:0 0 24px;font-size:13px;font-weight:600;letter-spacing:.5px;color:#ea580c;text-transform:uppercase;">DeliveryOS</p>
-    <h1 style="margin:0 0 16px;font-size:20px;line-height:1.35;color:#18181b;font-weight:600;">${opts.titulo}</h1>
-    <div style="font-size:15px;line-height:1.6;color:#3f3f46;">${opts.corpo}</div>
-    ${
-      opts.cta
-        ? `<div style="margin:28px 0 8px;"><a href="${opts.cta.url}" style="display:inline-block;background:#ea580c;color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:8px;font-size:15px;font-weight:600;">${opts.cta.texto}</a></div>`
-        : ""
-    }
-    ${opts.ps ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#71717a;">${opts.ps}</p>` : ""}
-    <hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0 16px;" />
-    <p style="margin:0;font-size:12px;line-height:1.6;color:#a1a1aa;">
-      É só responder este e-mail que eu leio — <a href="mailto:suporte@deliveryos.food" style="color:#71717a;">suporte@deliveryos.food</a>
-    </p>
-  </div>
+<div style="margin:0;padding:32px 12px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;margin:0 auto;">
+    <tr>
+      <td style="background:#ffffff;border-radius:16px;padding:40px 36px;">
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">
+          <tr>
+            <td style="padding-right:12px;">
+              <img src="${SITE}/deliveryos-icon.png" width="40" height="40" alt="D"
+                   style="display:block;width:40px;height:40px;border-radius:10px;background:${LARANJA};" />
+            </td>
+            <td style="font-size:13px;font-weight:700;letter-spacing:1.6px;color:#71717a;text-transform:uppercase;">Delivery OS</td>
+          </tr>
+        </table>
+
+        <h1 style="margin:0 0 20px;font-size:27px;line-height:1.25;color:${TINTA};font-weight:700;">${opts.titulo}</h1>
+
+        <div style="font-size:16px;line-height:1.62;color:${TEXTO};">${opts.corpo}</div>
+
+        ${(opts.imagens ?? []).map(figura).join("")}
+
+        ${
+          opts.cta
+            ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0 4px;">
+                 <tr><td align="center">
+                   <a href="${opts.cta.url}" style="display:inline-block;background:${LARANJA};color:#ffffff;text-decoration:none;padding:16px 40px;border-radius:999px;font-size:16px;font-weight:700;">${opts.cta.texto}</a>
+                 </td></tr>
+               </table>`
+            : ""
+        }
+
+        ${opts.ps ? `<p style="margin:26px 0 0;font-size:14px;line-height:1.6;color:#71717a;">${opts.ps}</p>` : ""}
+
+        <hr style="border:none;border-top:1px solid ${LINHA};margin:30px 0 18px;" />
+        <p style="margin:0;font-size:13px;line-height:1.6;color:${SUAVE};">
+          É só responder este e-mail que eu leio — <a href="mailto:suporte@deliveryos.food" style="color:#71717a;">suporte@deliveryos.food</a>
+        </p>
+
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding:18px 0 0;font-size:13px;color:${SUAVE};">Delivery OS · deliveryos.food</td>
+    </tr>
+  </table>
 </div>`.trim()
 }
 
@@ -65,6 +143,13 @@ export function boasVindas(d: DadosEmail) {
             ? "O próximo passo é importar seus relatórios do iFood, 99 Food ou Keeta — ou conectar a API do iFood, que puxa tudo sozinha."
             : "O primeiro passo leva menos de um minuto: <strong>cadastrar sua loja</strong>. Sem ela o sistema fica vazio, porque tudo aqui é sobre os números dela."
         }</p>`,
+      imagens: [
+        {
+          arquivo: "dashboard.png",
+          alt: "Painel do DeliveryOS com faturamento, pedidos e ticket médio",
+          legenda: "É isto que te espera assim que os primeiros números entrarem.",
+        },
+      ],
       cta: {
         texto: d.temLoja ? "Importar meus relatórios" : "Cadastrar minha loja",
         url: d.temLoja ? `${SITE}/importacao` : `${SITE}/unidades`,
@@ -74,7 +159,11 @@ export function boasVindas(d: DadosEmail) {
   }
 }
 
-/** 2. Faltando 3 dias. Pergunta de verdade + relembra o que ele talvez não viu. */
+/**
+ * 2. Faltando 3 dias. Pergunta de verdade + mostra o que ele talvez não viu.
+ * Aqui entra print: nos primeiros dias a pessoa mal saiu do painel inicial, e
+ * descrever o Diagnóstico em texto não chega nem perto de mostrar a tela.
+ */
 export function trial3Dias(d: DadosEmail) {
   return {
     assunto: `Faltam ${d.diasRestantes ?? 3} dias do seu teste — o que você achou?`,
@@ -82,22 +171,41 @@ export function trial3Dias(d: DadosEmail) {
       titulo: `Faltam ${d.diasRestantes ?? 3} dias do seu teste`,
       corpo: `
         <p style="margin:0 0 14px;">${oi(d.nome)} Queria saber, honestamente: <strong>o que você está achando?</strong></p>
-        <p style="margin:0 0 14px;">Pergunto porque tem coisa aqui que passa batido nos primeiros dias, e seria uma pena você decidir sem ter visto:</p>
-        <ul style="margin:0 0 14px;padding-left:20px;">
-          <li style="margin-bottom:8px;"><strong>Quanto sobra de verdade</strong> — o líquido depois de comissão, entrega e taxas, por loja e por plataforma</li>
-          <li style="margin-bottom:8px;"><strong>Quanto some em cancelamento</strong> — com o motivo e de quem foi a culpa</li>
-          <li style="margin-bottom:8px;"><strong>Nino AI</strong> — pergunte "por que caiu meu faturamento?" e ele responde com os seus números</li>
-          <li style="margin-bottom:8px;"><strong>Conexão com o iFood</strong> — depois de ligada, o financeiro e as avaliações entram sozinhos, sem planilha</li>
-        </ul>
-        <p style="margin:0 0 14px;">Se faltou alguma coisa, me responde dizendo o quê. Isso me ajuda mais do que você imagina.</p>`,
+        <p style="margin:0 0 20px;">Pergunto porque tem coisa aqui que passa batido nos primeiros dias, e seria uma pena você decidir sem ter visto:</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr><td style="padding:0 0 14px;vertical-align:top;width:26px;color:${LARANJA};font-size:17px;font-weight:700;">✓</td>
+              <td style="padding:0 0 14px;"><strong>Quanto sobra de verdade</strong> — o líquido depois de comissão, entrega, promoção e taxa, por loja e por plataforma</td></tr>
+          <tr><td style="padding:0 0 14px;vertical-align:top;color:${LARANJA};font-size:17px;font-weight:700;">✓</td>
+              <td style="padding:0 0 14px;"><strong>Quanto some em cancelamento</strong> — com o motivo e de quem foi a culpa</td></tr>
+          <tr><td style="padding:0 0 14px;vertical-align:top;color:${LARANJA};font-size:17px;font-weight:700;">✓</td>
+              <td style="padding:0 0 14px;"><strong>Nino AI</strong> — pergunte "por que caiu meu faturamento?" e ele responde com os <em>seus</em> números</td></tr>
+          <tr><td style="padding:0 0 14px;vertical-align:top;color:${LARANJA};font-size:17px;font-weight:700;">✓</td>
+              <td style="padding:0 0 14px;"><strong>Conexão com o iFood</strong> — depois de ligada, financeiro e avaliações entram sozinhos, sem planilha</td></tr>
+        </table>`,
+      imagens: [
+        {
+          arquivo: "diagnostico.png",
+          alt: "Diagnóstico da loja com plano de ação gerado por IA",
+          legenda: "O Diagnóstico aponta o que está travando a loja e o que fazer primeiro.",
+        },
+        {
+          arquivo: "dre.png",
+          alt: "DRE com faturamento, custos e margem",
+          legenda: "E o resultado fechado, do bruto até o que sobra no bolso.",
+        },
+      ],
       cta: { texto: "Voltar pro sistema", url: SITE },
+      ps: "Se faltou alguma coisa, me responde dizendo o quê. Isso me ajuda mais do que você imagina.",
     }),
   }
 }
 
 /** 3. Terminou o teste. Aqui sim o pedido é pagar. */
 export function trialTerminou(d: DadosEmail) {
-  const valor = d.valorMensal ? ` Pelo seu tamanho hoje, fica em <strong>${brl(d.valorMensal)}/mês</strong>.` : ""
+  const valor = d.valorMensal
+    ? ` Pelo seu tamanho hoje, fica em <strong>${brl(d.valorMensal)}/mês</strong>.`
+    : ""
   return {
     assunto: `Seu teste do DeliveryOS terminou`,
     html: layout({
@@ -115,9 +223,15 @@ export function trialTerminou(d: DadosEmail) {
 /**
  * 4-7. Recuperação, de 15 em 15 dias. Cada um tenta um ângulo DIFERENTE —
  * repetir "volte pra gente" quatro vezes só ensina a pessoa a ignorar.
+ *
+ * Os três últimos são de venda mesmo: número forte, print da tela e um botão
+ * só. O primeiro é a exceção proposital — ver explicação nele.
  */
 export function recuperacao(n: 1 | 2 | 3 | 4, d: DadosEmail) {
   const variantes = {
+    // Este é o único sem enfeite de venda: a força dele é parecer o que é —
+    // uma pergunta de gente, não campanha. Com print e número gigante em cima,
+    // "queria entender por quê" vira só mais um anúncio e ninguém responde.
     1: {
       assunto: "Uma pergunta rápida sobre o DeliveryOS",
       titulo: "Posso te fazer uma pergunta?",
@@ -125,36 +239,61 @@ export function recuperacao(n: 1 | 2 | 3 | 4, d: DadosEmail) {
         <p style="margin:0 0 14px;">${oi(d.nome)} Você testou o DeliveryOS e não seguiu — e eu queria entender por quê.</p>
         <p style="margin:0 0 14px;">Não é e-mail automático pedindo pra voltar. É pergunta mesmo: <strong>faltou alguma coisa? ficou confuso? o preço não fechou?</strong></p>
         <p style="margin:0 0 14px;">Uma linha de resposta já me ajuda a melhorar o produto.</p>`,
+      imagens: undefined,
       cta: undefined,
+      ps: undefined,
     },
     2: {
-      assunto: "O número que quase todo delivery erra",
-      titulo: "O número que quase todo delivery erra",
+      assunto: "Você fatura bem. Mas quanto sobra?",
+      titulo: "Você fatura bem. Mas quanto sobra?",
       corpo: `
-        <p style="margin:0 0 14px;">${oi(d.nome)} Uma coisa que a gente vê em quase toda loja que entra:</p>
-        <p style="margin:0 0 14px;">O dono sabe quanto <em>faturou</em>. Poucos sabem quanto <strong>sobrou</strong> — depois da comissão, da entrega, das promoções e dos cancelamentos.</p>
-        <p style="margin:0 0 14px;">Nas redes que acompanhamos, a diferença entre os dois costuma passar de <strong>40%</strong>. É dinheiro que sai todo mês sem aparecer em lugar nenhum.</p>
-        <p style="margin:0 0 14px;">Sua conta continua aqui, com o que você já tinha importado.</p>`,
-      cta: { texto: "Ver meus números", url: SITE },
+        <p style="margin:0 0 14px;">${oi(d.nome)} Tem uma coisa que a gente vê em quase toda loja que entra:</p>
+        <p style="margin:0 0 14px;">O dono sabe de cor quanto <em>faturou</em>. Poucos sabem quanto <strong>sobrou</strong> — depois da comissão, da entrega, das promoções e dos cancelamentos.</p>
+        ${destaque("+40%", "é a diferença que costumamos achar entre o que a loja fatura e o que ela realmente recebe. Todo mês, sem aparecer em lugar nenhum.")}
+        <p style="margin:0 0 14px;">No DeliveryOS esse caminho fica na tela inteiro: do bruto ao que entra na conta, linha por linha.</p>`,
+      imagens: [
+        {
+          arquivo: "dre.png",
+          alt: "DRE do DeliveryOS mostrando do faturamento bruto até a margem",
+          legenda: "Do bruto até a margem — sem planilha, sem achismo.",
+        },
+      ],
+      cta: { texto: "Ver quanto sobra na minha loja", url: SITE },
+      ps: "Sua conta continua aqui, com o que você já tinha importado.",
     },
     3: {
       assunto: "Agora o iFood entra sozinho",
-      titulo: "Novidade: o iFood entra sozinho",
+      titulo: "Acabou a planilha do iFood",
       corpo: `
-        <p style="margin:0 0 14px;">${oi(d.nome)} Desde que você testou, mudou uma coisa que talvez resolva o que te travou:</p>
-        <p style="margin:0 0 14px;">Agora dá pra <strong>conectar o iFood direto</strong>. Depois de autorizado, o financeiro e as avaliações entram automaticamente todo dia — <strong>sem baixar planilha nenhuma</strong>.</p>
-        <p style="margin:0 0 14px;">Se o trabalho de importar arquivo foi o motivo de você parar, esse motivo não existe mais.</p>`,
-      cta: { texto: "Ver como funciona", url: SITE },
+        <p style="margin:0 0 14px;">${oi(d.nome)} Desde que você testou, mudou uma coisa que talvez resolva justamente o que te travou:</p>
+        <p style="margin:0 0 14px;">Agora dá pra <strong>conectar o iFood direto</strong>. Você autoriza uma vez no Portal do Parceiro e pronto — todo dia o financeiro e as avaliações entram sozinhos.</p>
+        ${destaque("0", "relatórios pra baixar, abrir e importar na mão. A conexão faz isso de madrugada, todo dia, em todas as suas lojas.")}
+        <p style="margin:0 0 14px;">Se o trabalho de ficar importando arquivo foi o motivo de você parar, esse motivo não existe mais.</p>`,
+      imagens: [
+        {
+          arquivo: "avaliacoes.png",
+          alt: "Tela de avaliações com notas e comentários vindos do iFood",
+          legenda: "Nota, comentário e motivo da reclamação — puxados direto do iFood.",
+        },
+      ],
+      cta: { texto: "Conectar meu iFood", url: SITE },
+      ps: undefined,
     },
     4: {
       assunto: "Último e-mail meu",
       titulo: "Este é o último e-mail que te mando",
       corpo: `
         <p style="margin:0 0 14px;">${oi(d.nome)} Não quero virar aquele e-mail que a pessoa arrasta pro lixo sem abrir, então este é o último.</p>
-        <p style="margin:0 0 14px;">Sua conta do ${d.empresa} continua aqui, com os dados que você importou. Se um dia fizer sentido, é só entrar.</p>
-        <p style="margin:0 0 14px;">E se quiser conversar — sobre o produto, sobre preço, ou só pra dizer o que não funcionou — a porta fica aberta.</p>
-        <p style="margin:0 0 14px;">Boas vendas.</p>`,
-      cta: undefined,
+        <p style="margin:0 0 14px;">Antes de sumir, queria te mostrar a coisa que mais surpreende quem entra: o sistema olha os números da sua loja e <strong>escreve o plano de ação</strong> — o que está travando, quanto custa e o que fazer primeiro.</p>`,
+      imagens: [
+        {
+          arquivo: "diagnostico.png",
+          alt: "Diagnóstico da loja com plano de ação priorizado",
+          legenda: "Não é gráfico bonito: é o que fazer na segunda de manhã.",
+        },
+      ],
+      cta: { texto: "Ver o diagnóstico da minha loja", url: SITE },
+      ps: `Sua conta do ${d.empresa} continua aqui, com os dados que você importou — sem prazo pra sumir. Se um dia fizer sentido, é só entrar. Boas vendas.`,
     },
   } as const
 
@@ -164,12 +303,14 @@ export function recuperacao(n: 1 | 2 | 3 | 4, d: DadosEmail) {
     html: layout({
       titulo: v.titulo,
       corpo: v.corpo,
+      imagens: v.imagens,
       cta: v.cta,
+      ps: v.ps,
     }),
   }
 }
 
-/** Aviso de fatura chegando (3 dias antes). */
+/** Aviso de fatura chegando (3 dias antes). Transacional: sem print, sem venda. */
 export function faturaVencendo(d: DadosEmail & { vencimento: string }) {
   return {
     assunto: `Sua mensalidade do DeliveryOS vence em ${d.vencimento}`,
@@ -186,7 +327,9 @@ export function faturaVencendo(d: DadosEmail & { vencimento: string }) {
 }
 
 /** Fatura venceu e não foi paga. Avisa antes de cortar. */
-export function faturaVencida(d: DadosEmail & { vencimento: string; suspendeEm?: string }) {
+export function faturaVencida(
+  d: DadosEmail & { vencimento: string; suspendeEm?: string },
+) {
   return {
     assunto: `Mensalidade em atraso — ${d.empresa}`,
     html: layout({
