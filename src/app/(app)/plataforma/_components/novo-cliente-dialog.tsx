@@ -21,7 +21,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { criarCliente, type CriarClienteState } from "../_actions"
 
-const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outro"]
 const initial: CriarClienteState = { ok: false }
 
 export function NovoClienteDialog() {
@@ -134,20 +133,6 @@ export function NovoClienteDialog() {
             </p>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Forma de pagamento">
-                  <select
-                    name="paymentMethod"
-                    defaultValue=""
-                    className="h-9 rounded-md border bg-background px-2 text-sm"
-                  >
-                    <option value="">—</option>
-                    {METHODS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
                 <Field label="Valor mensal (R$)">
                   <Input
                     name="monthlyFee"

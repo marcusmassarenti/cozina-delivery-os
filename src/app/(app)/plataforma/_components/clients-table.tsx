@@ -133,8 +133,7 @@ export function ClientsTable({
       if (!q) return true
       return (
         c.name.toLowerCase().includes(q) ||
-        (c.establishmentType ?? "").toLowerCase().includes(q) ||
-        (c.paymentMethod ?? "").toLowerCase().includes(q)
+        (c.establishmentType ?? "").toLowerCase().includes(q)
       )
     })
     list = [...list].sort((a, b) => {
@@ -373,10 +372,24 @@ export function ClientsTable({
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs">{c.paymentMethod ?? "—"}</span>
-                        {c.asaasActive && (
-                          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                        {/* O que vale é a assinatura, não texto digitado.
+                            Quem ainda não migrou aparece em âmbar de propósito:
+                            é dinheiro entrando por fora, e some do radar se
+                            ficar com a mesma cara de quem já está no Asaas. */}
+                        {c.asaasActive ? (
+                          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
                             Asaas ✓
+                          </span>
+                        ) : c.contaInterna ||
+                          c.billingStatus === "trial" ||
+                          c.billingStatus === "none" ? (
+                          // Em teste ou sem cobrança não há o que migrar —
+                          // marcar de âmbar aqui seria alarme falso e tiraria
+                          // o peso do aviso de quem realmente paga por fora.
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                            fora do Asaas
                           </span>
                         )}
                       </div>

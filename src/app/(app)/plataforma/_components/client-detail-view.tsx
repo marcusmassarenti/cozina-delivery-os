@@ -248,7 +248,15 @@ export function ClientDetailView({
             <Field label="Mensalidade">
               {c.computedMonthly > 0 ? `${fmtBRL(c.computedMonthly)}/mês` : "—"}
             </Field>
-            <Field label="Forma de pagamento">{c.paymentMethod}</Field>
+            {/* Antes havia dois campos pra mesma pergunta ("Forma de
+                pagamento" e "Assinatura Asaas"), e eles podiam discordar. */}
+            <Field label="Pagamento">
+              {c.asaasActive
+                ? "Assinatura no Asaas (recorrente)"
+                : c.contaInterna
+                  ? "—"
+                  : "Fora do Asaas — cobrança manual"}
+            </Field>
             <Field label="Plano">
               {c.planTier ? (PLAN_LABEL[c.planTier] ?? c.planTier) : "—"}
             </Field>
@@ -257,8 +265,8 @@ export function ClientDetailView({
               {c.billableUnits}
               {c.includedUnits > 0 ? ` (${c.includedUnits} inclusa${c.includedUnits !== 1 ? "s" : ""})` : ""}
             </Field>
-            <Field label="Assinatura Asaas">
-              {c.asaasActive ? "Ativa (recorrente)" : "Manual / sem Asaas"}
+            <Field label="Cliente no Asaas">
+              {c.asaasCustomerId ? "Cadastrado" : "Ainda não cadastrado"}
             </Field>
             {c.suspendOn && <Field label="Suspende em">{fmtDateISO(c.suspendOn)}</Field>}
           </div>

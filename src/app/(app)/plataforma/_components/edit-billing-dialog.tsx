@@ -39,7 +39,6 @@ export type BillingClient = {
   suspendOn: string | null
 }
 
-const METHODS = ["Pix", "Boleto", "Cartão", "Transferência", "Dinheiro", "Outro"]
 const initial: BillingActionState = { ok: false }
 
 const fmtMoney = (v: string): string => {
@@ -134,21 +133,11 @@ export function EditBillingDialog({
             </Field>
           </div>
 
+          {/* Sem seletor de forma de pagamento: quem responde isso é a
+              assinatura do Asaas, não alguém digitando. O campo escrito à mão
+              mentia — esta conta chegou a exibir "Boleto" sem nunca ter tido
+              boleto nenhum. */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Forma de pagamento">
-              <select
-                name="paymentMethod"
-                defaultValue={client.paymentMethod ?? ""}
-                className="h-9 rounded-md border bg-background px-2 text-sm"
-              >
-                <option value="">—</option>
-                {METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Vencimento">
               <Input type="date" name="dueDate" defaultValue={client.dueDate ?? ""} />
             </Field>
