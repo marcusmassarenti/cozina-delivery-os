@@ -582,24 +582,6 @@ export default async function Home({
       href: `/financeiro${periodQ}`,
     },
     {
-      label: "Investido em Promoção",
-      value: fmtBRLShort(promoTotal),
-      trend:
-        promoTotal > 0
-          ? `${fmtPct(promoPctBruto)} do bruto${
-              promoTopPlataforma
-                ? ` · maior parte ${promoTopPlataforma[0] === "99food" ? "na 99 Food" : promoTopPlataforma[0] === "ifood" ? "no iFood" : "na Keeta"}`
-                : ""
-            }`
-          : "nenhuma promoção bancada pela loja no mês",
-      // Neutro, não negativo: promoção é investimento, e o julgamento de se
-      // valeu a pena depende do retorno — não do tamanho do gasto.
-      tone: "neutral",
-      icon: Percent,
-      platforms: finPlatforms,
-      href: `/financeiro${periodQ}`,
-    },
-    {
       label: "Custo de Entrega",
       value: fmtBRLShort(taxaEntregaValor),
       trend:
@@ -750,9 +732,8 @@ export default async function Home({
     "Média Pedidos/Dia",
     "Ticket Médio",
     "% que fica na loja",
-    "Custo de Entrega",
     // ⚠️ KPI que não estiver NESTA lista é criado e descartado logo abaixo.
-    "Investido em Promoção",
+    "Custo de Entrega",
   ]
   const kpisOrdenados = ORDEM_KPI.map((l) =>
     kpis.find((k) => k.label === l),
@@ -1099,6 +1080,32 @@ export default async function Home({
                           <span className="font-bold">{fmtBRLShort(taxa)}</span>
                         </span>
                       </div>
+                      {/* Promoção bancada pela LOJA. Fica aqui, e não num KPI
+                          solto, porque o que importa é comparar plataforma
+                          com plataforma: a mesma rede investe 3% no iFood e
+                          um terço do bruto na 99, e isso só salta aos olhos
+                          lado a lado. Não é taxa — é decisão de marketing,
+                          por isso vem separado da barra. */}
+                      {(promoPorPlataforma[p.id] ?? 0) > 0 && (
+                        <div className="mt-1 flex items-baseline justify-between text-[11px] tabular-nums leading-tight">
+                          <span className="text-muted-foreground">promoção da loja</span>
+                          <span
+                            className={
+                              p.bruto > 0 &&
+                              (promoPorPlataforma[p.id] ?? 0) / p.bruto > 0.15
+                                ? "font-bold text-amber-700 dark:text-amber-400"
+                                : "font-medium text-muted-foreground"
+                            }
+                          >
+                            {fmtBRLShort(promoPorPlataforma[p.id] ?? 0)}
+                            {p.bruto > 0 && (
+                              <span className="ml-1 font-normal">
+                                ({fmtPct(((promoPorPlataforma[p.id] ?? 0) / p.bruto) * 100)})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <p className="mt-2 text-[10px] text-muted-foreground">
