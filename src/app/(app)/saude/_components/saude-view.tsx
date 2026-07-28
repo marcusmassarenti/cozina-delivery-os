@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import type { SaudeIntegracoes, Gravidade } from "@/lib/data/saude-integracoes"
+import { rotulo } from "@/lib/cron-labels"
 
 const SELO: Record<Gravidade, { label: string; cls: string }> = {
   alerta: {
@@ -136,7 +137,17 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
             <tbody>
               {s.crons.map((c) => (
                 <tr key={c.nome} className="border-b last:border-0">
-                  <td className="px-5 py-2.5 font-medium">{c.nome}</td>
+                  <td className="px-5 py-2.5">
+                    <div className="font-medium">{rotulo(c.nome).titulo}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {rotulo(c.nome).descricao}
+                    </div>
+                    {/* Nome técnico continua à vista: é ele que aparece na
+                        Vercel e nos logs quando algo precisa ser investigado. */}
+                    <div className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">
+                      {c.nome}
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SELO[c.gravidade].cls}`}

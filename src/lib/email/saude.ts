@@ -11,6 +11,7 @@
 import "server-only"
 
 import type { SaudeIntegracoes } from "@/lib/data/saude-integracoes"
+import { rotulo } from "@/lib/cron-labels"
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 const LARANJA = "#ff4d1c"
@@ -106,7 +107,9 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
           ...problemas.map(
             (l) => `<strong>${l.cliente} · ${l.loja}</strong><br/>${l.motivo}`,
           ),
-          ...cronsRuins.map((c) => `<strong>Rotina ${c.nome}</strong><br/>${c.motivo}`),
+          ...cronsRuins.map(
+            (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
+          ),
         ],
       )}
 
@@ -115,7 +118,9 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
         "De olho",
         [
           ...atencoes.map((l) => `<strong>${l.cliente} · ${l.loja}</strong><br/>${l.motivo}`),
-          ...cronsAviso.map((c) => `<strong>Rotina ${c.nome}</strong><br/>${c.motivo}`),
+          ...cronsAviso.map(
+            (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
+          ),
         ],
       )}
 
