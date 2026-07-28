@@ -25,6 +25,7 @@ export type AcaoAuditada =
   | "convite_asaas.alterado"
   | "assinatura.valor_sincronizado"
   | "nino.degustacao_alterada"
+  | "trial.iniciado"
 
 /**
  * Grava uma entrada no log. Nunca lança: auditoria que quebra a operação é

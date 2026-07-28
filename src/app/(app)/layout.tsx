@@ -15,6 +15,7 @@ import { getMfaStatus } from "@/lib/auth/mfa"
 import { MODULES, userCan, isSuperadmin, getCurrentHoldingId } from "@/lib/auth/permissions"
 import { daysUntil, getCurrentHoldingBilling } from "@/lib/data/billing"
 import { enviarBoasVindasSePreciso } from "@/lib/email/boas-vindas"
+import { iniciarTrialSePrimeiroAcesso } from "@/lib/data/trial"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({
@@ -47,12 +48,16 @@ export default async function AppLayout({
   // sai fora em duas linhas quando o e-mail já foi enviado (que é o caso em
   // 99,9% dos carregamentos).
   after(async () => {
+    const holdingId = await getCurrentHoldingId()
+    // Antes do e-mail: se este for o primeiro acesso, o teste começa a contar
+    // agora — não na data em que a pessoa se cadastrou.
+    await iniciarTrialSePrimeiroAcesso(holdingId)
     await enviarBoasVindasSePreciso({
       userId: data.user.id,
       email: data.user.email,
       emailConfirmado: Boolean(data.user.email_confirmed_at),
       nome: userContext.fullName,
-      holdingId: await getCurrentHoldingId(),
+      holdingId,
     })
   })
 
