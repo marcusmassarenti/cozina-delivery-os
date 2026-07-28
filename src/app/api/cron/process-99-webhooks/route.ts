@@ -154,12 +154,28 @@ export async function GET(req: Request) {
     })
   }
 
+  // ⚠️ Dedupe ANTES do upsert. A 99 manda mais de um `orderNew` pro mesmo
+  // pedido (reenvio, retentativa), e o Postgres recusa um INSERT ... ON
+  // CONFLICT cujo lote traga a mesma chave duas vezes: "ON CONFLICT DO UPDATE
+  // command cannot affect row a second time". O lote inteiro morre, o cron
+  // devolve 500 e — pior — os eventos não chegam a ser marcados como
+  // processados, então a fila só cresce e a próxima rodada quebra igual.
+  //
+  // Foi assim que 22 mil eventos ficaram parados por 22 dias sem ninguém ver.
+  //
+  // Fica o ÚLTIMO de cada chave: eventos vêm em ordem de chegada, e o mais
+  // recente descreve melhor o estado atual do pedido.
+  const porChave = new Map<string, Record<string, unknown>>()
+  for (const r of newRows) porChave.set(`${r.unit_id}|${r.pedido_id}`, r)
+  const newRowsUnicos = [...porChave.values()]
+  const duplicadosDescartados = newRows.length - newRowsUnicos.length
+
   let upsertedNew = 0
-  if (newRows.length > 0) {
+  if (newRowsUnicos.length > 0) {
     // upsert em chunks de 500 (limite seguro pro Postgres)
     const CHUNK = 500
-    for (let i = 0; i < newRows.length; i += CHUNK) {
-      const slice = newRows.slice(i, i + CHUNK)
+    for (let i = 0; i < newRowsUnicos.length; i += CHUNK) {
+      const slice = newRowsUnicos.slice(i, i + CHUNK)
       const { error } = await admin
         .from("ninefood_pedidos")
         .upsert(slice, { onConflict: "unit_id,pedido_id" })
@@ -230,6 +246,7 @@ export async function GET(req: Request) {
     detalhe: {
       orderNew: news.length,
       orderNew_upserted: upsertedNew,
+      orderNew_duplicados: duplicadosDescartados,
       orderNew_skipped: skippedNew.length,
       orderFinish: finished,
       orderCancel: canceled,
