@@ -350,8 +350,10 @@ export async function convidarParaAsaas(
     if (remover)
       return { ok: true, removido: true, message: "Convite retirado." }
 
-    const base =
-      process.env.NEXT_PUBLIC_SITE_URL ?? "https://delivery.cozinafoods.com"
+    // Domínio do produto, não o da Cozina Foods: quem recebe este link é
+    // cliente de SaaS e vai desconfiar de um endereço que não é a marca que
+    // ele contratou.
+    const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
     return {
       ok: true,
       link: `${base}/assinatura`,

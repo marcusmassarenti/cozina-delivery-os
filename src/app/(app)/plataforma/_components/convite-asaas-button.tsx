@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom"
 import { Check, Copy, CreditCard, X } from "lucide-react"
 
 import { convidarParaAsaas, type ConviteAsaasState } from "../_actions"
+import { fmtBRL } from "@/lib/format"
 
 /**
  * Convida um cliente que paga na mão a migrar pro cartão recorrente.
@@ -24,10 +25,15 @@ export function ConviteAsaasButton({
   clienteNome,
   convidadoEm,
   jaTemAssinatura,
+  valorMensal,
+  vencimento,
 }: {
   holdingId: string
   clienteNome: string
   convidadoEm: string | null
+  /** Pra mensagem citar o valor real em vez de mandar o cliente adivinhar. */
+  valorMensal?: number | null
+  vencimento?: string | null
   jaTemAssinatura: boolean
 }) {
   const [state, action] = useActionState<ConviteAsaasState, FormData>(
@@ -45,8 +51,25 @@ export function ConviteAsaasButton({
   }
 
   const ativo = Boolean(convidadoEm) || Boolean(state.link)
-  const link = state.link ?? "https://delivery.cozinafoods.com/assinatura"
-  const msg = `Oi! Deixei liberada a migração da sua mensalidade do ${clienteNome} para pagamento automático no cartão. É só entrar em ${link} e escolher o plano — aí não precisa mais lembrar do Pix todo mês.`
+  const link = state.link ?? "https://www.deliveryos.food/assinatura"
+
+  // A mensagem NÃO fala em "migrar" nem em substituir Pix/boleto: pra quase
+  // todo cliente daqui este é o PRIMEIRO pagamento, e dizer "não precisa mais
+  // lembrar do Pix" pra quem nunca pagou Pix nenhum entrega que o texto é
+  // padrão — logo no momento em que se está pedindo dinheiro pela 1ª vez.
+  const valor = valorMensal && valorMensal > 0 ? fmtBRL(valorMensal) : null
+  const venc = vencimento ? vencimento.split("-").reverse().join("/") : null
+  const msg = [
+    `Oi! Liberei a assinatura do ${clienteNome} no DeliveryOS.`,
+    `É só entrar em ${link}, escolher o plano e cadastrar o cartão`,
+    valor
+      ? `— a mensalidade de ${valor} passa a ser cobrada automático todo mês.`
+      : "— a mensalidade passa a ser cobrada automático todo mês.",
+    venc ? `O primeiro vencimento é ${venc}.` : "",
+    "Qualquer dúvida é só me chamar.",
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   return (
     <div className="space-y-2">

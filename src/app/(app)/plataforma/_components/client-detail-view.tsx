@@ -298,6 +298,8 @@ export function ClientDetailView({
                   clienteNome={c.name}
                   convidadoEm={c.conviteAsaasEm}
                   jaTemAssinatura={c.asaasActive}
+                  valorMensal={c.computedMonthly}
+                  vencimento={c.dueDate}
                 />
               </div>
             )}
