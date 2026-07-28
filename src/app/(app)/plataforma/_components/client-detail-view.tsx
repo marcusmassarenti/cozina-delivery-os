@@ -109,11 +109,14 @@ const NF_STATUS: Record<string, { label: string; cls: string }> = {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    // min-w-0 + break-words: item de grid tem largura mínima igual ao conteúdo,
+    // então um e-mail longo empurrava a coluna e ia parar por cima do campo
+    // vizinho (o WhatsApp). Vale pra qualquer valor comprido, não só e-mail.
+    <div className="flex min-w-0 flex-col gap-0.5">
       <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
-      <span className="text-sm">{children || "—"}</span>
+      <span className="break-words text-sm">{children || "—"}</span>
     </div>
   )
 }

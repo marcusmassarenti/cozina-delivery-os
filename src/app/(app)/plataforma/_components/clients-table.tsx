@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, Eye, Loader2, Search, Trash2, X } from "lucide-react"
+import { ChevronDown, Loader2, Pencil, Search, Trash2, X } from "lucide-react"
 
 import type { ClientOverview } from "@/lib/data/plataforma"
 import type { BillingStatus } from "@/lib/data/billing"
@@ -18,7 +18,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-import { EditBillingDialog } from "./edit-billing-dialog"
 import { UnitsDialog } from "./units-dialog"
 import { PaymentsDialog } from "./payments-dialog"
 import { DeleteClientButton } from "./delete-client-button"
@@ -450,15 +449,6 @@ export function ClientsTable({
                     </td>
                     <td className="px-4 py-2.5" onClick={stop}>
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openDrawer(c)}
-                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs font-medium hover:bg-muted"
-                          title="Ver detalhes"
-                        >
-                          <Eye className="size-3.5" />
-                          Ver
-                        </button>
                         <PaymentsDialog
                           client={{
                             id: c.id,
@@ -469,22 +459,21 @@ export function ClientsTable({
                           }}
                           compact
                         />
-                        <EditBillingDialog
-                          client={{
-                            id: c.id,
-                            name: c.name,
-                            establishmentType: c.establishmentType,
-                            paymentMethod: c.paymentMethod,
-                            monthlyFee: c.monthlyFee,
-                            pricePerUnit: c.pricePerUnit,
-                            includedUnits: c.includedUnits,
-                            billableUnits: c.billableUnits,
-                            dueDate: c.dueDate,
-                            paid: c.paid,
-                            suspendOn: c.suspendOn,
-                          }}
-                          compact
-                        />
+                        {/* Abre a ficha do cliente — a mesma que a linha abre.
+                            Antes aqui morava um formulário próprio de cobrança:
+                            editar por dois caminhos diferentes fazia a ficha e a
+                            tabela discordarem sobre o que tinha acabado de
+                            mudar. O formulário continua existindo, mas só
+                            dentro da ficha. */}
+                        <button
+                          type="button"
+                          onClick={() => openDrawer(c)}
+                          title="Abrir ficha do cliente"
+                          aria-label={`Abrir ficha de ${c.name}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
                         <DeleteClientButton
                           id={c.id}
                           name={c.name}
