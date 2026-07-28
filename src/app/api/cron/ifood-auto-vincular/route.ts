@@ -13,7 +13,16 @@
  * um clique de usuário pode esperar.
  *
  * Barato quando não há nada: a primeira query é um count; sem loja confirmada
- * esperando, sai antes de falar com o iFood. Roda a cada 15 min (vercel.json).
+ * esperando, sai antes de falar com o iFood.
+ *
+ * ⏰ Roda 1x/dia (12:00 UTC) porque a conta Vercel é HOBBY, e ali cron mais
+ * frequente que diário FALHA O DEPLOY — não é aviso, o build quebra. Foi assim
+ * que 17 commits ficaram travados em 27/jul.
+ *
+ * O custo disso é real: quem aprova no Portal do Parceiro pode esperar até o
+ * dia seguinte pra conexão fechar. Quem não quer esperar usa o botão "Já
+ * autorizei — conferir e vincular" na tela de merchants, que faz o mesmo na
+ * hora. Se a conta virar Pro, dá pra voltar pra */15.
  */
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import { createAdminClient } from "@/lib/supabase/admin"

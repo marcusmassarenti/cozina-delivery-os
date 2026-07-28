@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/ifood-auto-vincular",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/ifood-review-sync",
