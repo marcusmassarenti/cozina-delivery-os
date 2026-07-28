@@ -37,9 +37,20 @@ export default async function AppLayout({
     redirect("/login/verificacao")
   }
 
-  // "Último acesso" real: marca atividade (throttle de 5 min no RPC). Não
-  // bloqueia a renderização — se falhar, segue a vida.
-  void supabase.rpc("touch_last_seen")
+  // "Último acesso" real: marca atividade (throttle de 5 min no RPC).
+  //
+  // ⚠️ Tem que ser AGUARDADO. No supabase-js a requisição só é montada dentro
+  // do `then()` — o objeto devolvido por .rpc() é preguiçoso, não é uma
+  // Promise já em andamento. O `void supabase.rpc(...)` que estava aqui nunca
+  // chegou a fazer chamada nenhuma: eram 18 usuários e ZERO com last_seen_at,
+  // e a tela caía calada no último login. Quem já estava logado aparecia como
+  // sumido há dias.
+  //
+  // Vai dentro de `after` pra continuar não segurando o render.
+  after(async () => {
+    const { error } = await supabase.rpc("touch_last_seen")
+    if (error) console.error("touch_last_seen:", error.message)
+  })
 
   const userContext = await getCurrentUserContext()
 
