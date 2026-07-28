@@ -18,6 +18,8 @@ import type { ClientDetail } from "@/lib/data/plataforma"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 
+import { ACAO_LABEL } from "@/lib/auditoria-labels"
+
 import { ConviteAsaasButton } from "./convite-asaas-button"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
@@ -364,6 +366,39 @@ export function ClientDetailView({
           </div>
         )}
       </Card>
+
+      {c.auditoria.length > 0 && (
+        <Card title="Histórico de mudanças" icon={CreditCard}>
+          <ul className="space-y-1.5">
+            {c.auditoria.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                <span className="tabular-nums text-muted-foreground">
+                  {new Date(a.em).toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <span className="font-medium">
+                  {ACAO_LABEL[a.acao] ?? a.acao}
+                </span>
+                <span className="text-muted-foreground">por {a.autor}</span>
+                {a.detalhe && (
+                  <span className="text-[11px] text-muted-foreground">
+                    ·{" "}
+                    {Object.entries(a.detalhe)
+                      .filter(([, v]) => v !== null && v !== undefined)
+                      .map(([k, v]) => `${k}: ${String(v)}`)
+                      .join(" · ")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card title="Plano & Nino AI" icon={Sparkles}>
         <PlanControls

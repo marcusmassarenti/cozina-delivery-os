@@ -4,6 +4,8 @@ import { revalidatePath, revalidateTag } from "next/cache"
 
 import { guard, requireSuperadmin } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
+import { auditar } from "@/lib/data/auditoria"
 import { quitarFaturaComPagamento } from "@/lib/data/faturas"
 import {
   asaasIsMock,
@@ -343,6 +345,7 @@ export async function convidarParaAsaas(
       .eq("id", holdingId)
     if (error) return { ok: false, error: error.message }
 
+    await auditar("convite_asaas.alterado", holdingId, { remover })
     revalidatePath("/plataforma")
     if (remover)
       return { ok: true, removido: true, message: "Convite retirado." }
@@ -390,7 +393,13 @@ export async function recordPayment(
     // isso o dinheiro entrava no caixa e a fatura seguia aberta, inflando a
     // inadimplência com valor que já foi pago.
     if (pagamento?.id) {
-      await quitarFaturaComPagamento(holdingId, pagamento.id, paidOn, amount)
+      const q = await quitarFaturaComPagamento(holdingId, pagamento.id, paidOn, amount)
+      await auditar("pagamento.registrado", holdingId, {
+        valor: amount,
+        pagoEm: paidOn,
+        metodo: method,
+        faturaQuitada: q.competencia ?? null,
+      })
     }
 
     // Registrar pagamento TAMBÉM marca o cliente como pago (tira do teste, limpa
@@ -621,11 +630,25 @@ export async function setClientPlanTier(
     const tier = String(formData.get("tier") ?? "").trim()
     if (tier && !["essencial", "pro", "ai"].includes(tier))
       return { ok: false, message: "Plano inválido." }
+    const { data: antes } = await admin
+      .from("holdings")
+      .select("plan_tier")
+      .eq("id", holdingId)
+      .maybeSingle()
     const { error } = await admin
       .from("holdings")
       .update({ plan_tier: tier || null })
       .eq("id", holdingId)
     if (error) return { ok: false, message: error.message }
+
+    await auditar("plano.alterado", holdingId, {
+      de: (antes as { plan_tier?: string | null } | null)?.plan_tier ?? null,
+      para: tier || null,
+    })
+    // Trocar de plano muda o preço, então a assinatura recorrente precisa
+    // acompanhar — senão o cliente sobe pro AI e segue pagando o Pro.
+    await sincronizarValorAssinatura(holdingId)
+
     revalidatePath("/plataforma")
     revalidatePath("/", "layout")
     return { ok: true }

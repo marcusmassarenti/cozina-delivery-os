@@ -6,6 +6,7 @@ import { requireModulePermission, requireUnitAccess } from "@/lib/auth/guards"
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
 import { validateImageUpload } from "@/lib/upload/image"
 
 export type CreateUnitState = {
@@ -186,6 +187,8 @@ export async function createUnit(
       }
     }
 
+    if (unit?.id) await ressincronizarCobranca(unit.id)
+
     revalidateTag("units", "max")
     revalidateTag("reports", "max")
     revalidatePath("/unidades")
@@ -199,14 +202,61 @@ export async function createUnit(
   }
 }
 
+/**
+ * Loja criada, apagada ou (des)ativada muda a quantidade cobrada — e a
+ * mensalidade é "primeira loja + adicionais". Sem isto a assinatura recorrente
+ * segue no valor do dia da adesão: cliente que dobra de tamanho continua
+ * pagando pelo tamanho antigo, e não há erro em lugar nenhum pra denunciar.
+ *
+ * Best-effort de propósito: nunca impede o cadastro da loja de salvar. O cron
+ * diário reconcilia o que não passar aqui.
+ */
+async function ressincronizarCobranca(unitId: string): Promise<void> {
+  try {
+    const admin = createAdminClient()
+    const { data: u } = await admin
+      .from("units")
+      .select("brand_id")
+      .eq("id", unitId)
+      .maybeSingle()
+    const brandId = (u as { brand_id?: string | null } | null)?.brand_id
+    if (!brandId) return
+    const { data: b } = await admin
+      .from("brands")
+      .select("holding_id")
+      .eq("id", brandId)
+      .maybeSingle()
+    const holdingId = (b as { holding_id?: string | null } | null)?.holding_id
+    if (holdingId) await sincronizarValorAssinatura(holdingId)
+  } catch {
+    /* cobrança nunca derruba cadastro de loja */
+  }
+}
+
 export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
   try {
     await requireModulePermission("unidades", "delete")
     await requireUnitAccess(unitId) // anti cross-tenant: só apaga loja do próprio escopo
     const supabase = createAdminClient()
+    // Descobre a holding ANTES do delete — depois a unidade não existe mais.
+    const { data: uAntes } = await supabase
+      .from("units")
+      .select("brand_id")
+      .eq("id", unitId)
+      .maybeSingle()
     const { error } = await supabase.from("units").delete().eq("id", unitId)
     if (error) return { ok: false, message: error.message }
+    const brandId = (uAntes as { brand_id?: string | null } | null)?.brand_id
+    if (brandId) {
+      const { data: b } = await supabase
+        .from("brands")
+        .select("holding_id")
+        .eq("id", brandId)
+        .maybeSingle()
+      const hId = (b as { holding_id?: string | null } | null)?.holding_id
+      if (hId) await sincronizarValorAssinatura(hId)
+    }
     revalidateTag("units", "max")
     revalidateTag("reports", "max")
     revalidatePath("/unidades")
@@ -421,6 +471,9 @@ export async function updateUnit(
         })),
       )
     }
+
+    // Ativar/desativar loja muda a quantidade cobrada.
+    await ressincronizarCobranca(unitId)
 
     revalidateTag("units", "max")
     revalidateTag("reports", "max")

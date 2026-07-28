@@ -7,6 +7,7 @@
  * (holding_id, competencia), rodar todo dia só recupera o que faltou — nos
  * demais dias ele acha tudo "já emitida" e sai.
  */
+import { sincronizarTodasAssinaturas } from "@/lib/data/assinatura-sync"
 import { emitirFaturasDoMes } from "@/lib/data/faturas"
 
 export const runtime = "nodejs"
@@ -21,10 +22,18 @@ export async function GET(req: Request) {
   }
 
   const r = await emitirFaturasDoMes()
+
+  // Rede de segurança do valor da assinatura: os gatilhos em cadastro de loja
+  // são best-effort (não podem derrubar o salvamento), então algum pode ter
+  // falhado calado. Aqui a gente reconcilia todo mundo — e só reporta quem
+  // realmente mudou, pra o log não virar ruído.
+  const assinaturas = await sincronizarTodasAssinaturas()
+
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
     emitidas: r.emitidas,
     puladas: r.puladas,
+    assinaturasAjustadas: assinaturas,
   })
 }
