@@ -213,14 +213,27 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     if (!ultimoPorCron.has(n)) ultimoPorCron.set(n, r)
   }
 
-  // Houve QUALQUER registro nas últimas 24h? Se sim, o mecanismo está vivo —
-  // e um cron sem registro nessa janela está mesmo parado, não é falta de
-  // histórico. Sem esta âncora, um cron que nunca roda ficaria eternamente em
-  // "atenção" e jamais viraria alerta: exatamente a falha que o relatório
-  // existe pra pegar.
-  const houveRegistroRecente = ((runs ?? []) as Record<string, unknown>[]).some(
-    (r) => horasEntre(String(r.iniciado_em), agora) <= CRON_ATRASADO_H,
-  )
+  // Há quanto tempo o medidor existe?
+  //
+  // Um cron sem NENHUM registro só pode ser chamado de parado depois que a
+  // instrumentação viveu uma volta completa de 24h — antes disso, "nunca
+  // registrou" significa "o horário dele ainda não chegou desde que ligamos".
+  //
+  // A primeira versão desta regra usava outra âncora: "algum cron registrou
+  // recentemente". Ela errou feio no primeiro teste — bastou uma execução
+  // manual do ifood-sync pra sete crons que tinham rodado normalmente de
+  // manhã aparecerem como parados. Sete alertas falsos vindos justamente da
+  // regra escrita pra evitar alerta falso.
+  const { data: primeira } = await admin
+    .from("cron_runs")
+    .select("iniciado_em")
+    .order("iniciado_em", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  const horasDeMedicao = primeira?.iniciado_em
+    ? horasEntre(String(primeira.iniciado_em), agora)
+    : 0
+  const medidorMaduro = horasDeMedicao >= CRON_ATRASADO_H
 
   const crons: CronSaude[] = ESPERADOS.map((nome) => {
     const r = ultimoPorCron.get(nome)
@@ -234,10 +247,10 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
         // "Nunca rodou" só vira alerta depois que o registro existir há tempo
         // suficiente pra ter havido uma janela — senão o primeiro dia acusaria
         // os 8 de uma vez.
-        gravidade: houveRegistroRecente ? "alerta" : "atencao",
-        motivo: houveRegistroRecente
-          ? "não rodou — outros crons registraram execução na janela"
-          : "ainda sem registro de execução (instrumentação recém-ligada)",
+        gravidade: medidorMaduro ? "alerta" : "atencao",
+        motivo: medidorMaduro
+          ? "nunca registrou execução — está parado"
+          : `sem registro ainda; medição ligada há ${Math.floor(horasDeMedicao)}h (o horário dele ainda não chegou)`,
       }
     }
     const quando = String(r.iniciado_em)
