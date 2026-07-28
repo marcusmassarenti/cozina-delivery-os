@@ -29,6 +29,8 @@ export type TipoEmail =
   | "recuperacao-4"
   | "fatura-vencendo"
   | "fatura-vencida"
+  /** Relatório interno de saúde — sai todo dia, não é régua de cliente. */
+  | "saude-diaria"
 
 export type ResultadoEnvio = {
   ok: boolean

@@ -8,6 +8,7 @@
  * data — rodar duas vezes no mesmo dia não manda nada duas vezes.
  */
 import { rodarReguaEmail } from "@/lib/data/regua-email"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -20,11 +21,16 @@ export async function GET(req: Request) {
     return new Response("Unauthorized", { status: 401 })
   }
 
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("regua-email", async () => {
+
   const r = await rodarReguaEmail()
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
     temChave: Boolean(process.env.RESEND_API_KEY),
     ...r,
+  })
   })
 }

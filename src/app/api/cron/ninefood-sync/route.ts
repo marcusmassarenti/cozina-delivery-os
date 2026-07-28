@@ -11,6 +11,7 @@
  */
 import { syncNinefoodFinanceiro } from "@/lib/ninefood/sync-financeiro"
 import { syncNinefoodCardapio } from "@/lib/ninefood/sync-cardapio"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -22,6 +23,10 @@ export async function GET(req: Request) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 })
   }
+
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("ninefood-sync", async () => {
 
   // mês atual + anterior (app roda em TZ America/Sao_Paulo)
   const now = new Date()
@@ -62,5 +67,6 @@ export async function GET(req: Request) {
       lojas: card.results.length,
       erros: card.results.filter((x) => x.error).length,
     },
+  })
   })
 }

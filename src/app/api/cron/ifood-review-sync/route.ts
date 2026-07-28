@@ -7,6 +7,7 @@
  * CRON_SECRET batendo → 401.
  */
 import { syncIfoodReviews } from "@/lib/ifood/review-sync"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -19,6 +20,10 @@ export async function GET(req: Request) {
     return new Response("Unauthorized", { status: 401 })
   }
 
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("ifood-review-sync", async () => {
+
   try {
     const r = await syncIfoodReviews(null)
     return Response.json({ ok: true, ranAt: new Date().toISOString(), ...r })
@@ -29,4 +34,5 @@ export async function GET(req: Request) {
       { status: 500 },
     )
   }
+  })
 }

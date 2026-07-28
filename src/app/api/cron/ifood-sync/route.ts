@@ -13,6 +13,7 @@
  */
 import { autoLinkAndBackfill } from "@/lib/ifood/auto-link"
 import { syncIfoodAll } from "@/lib/ifood/sync"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -24,6 +25,10 @@ export async function GET(req: Request) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 })
   }
+
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("ifood-sync", async () => {
 
   try {
     // Backfill manual: ?competences=2026-01,2026-02 força meses específicos.
@@ -68,4 +73,5 @@ export async function GET(req: Request) {
       { status: 500 },
     )
   }
+  })
 }

@@ -26,6 +26,7 @@
  */
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -37,6 +38,10 @@ export async function GET(req: Request) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 })
   }
+
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("ifood-auto-vincular", async () => {
 
   const admin = createAdminClient()
 
@@ -68,5 +73,6 @@ export async function GET(req: Request) {
     naoResolvidas: r.ambiguas.map((a) => `${a.unitName}: ${a.motivo}`),
     restantes: r.restantes,
     error: r.error,
+  })
   })
 }

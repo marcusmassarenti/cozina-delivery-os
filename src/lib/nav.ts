@@ -1,4 +1,5 @@
 import {
+  Activity,
   Building2,
   Cable,
   CalendarRange,
@@ -207,6 +208,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Clientes",
         href: "/plataforma",
         icon: Building2,
+        superadminOnly: true,
+      },
+      {
+        label: "Saúde",
+        href: "/saude",
+        icon: Activity,
         superadminOnly: true,
       },
       {

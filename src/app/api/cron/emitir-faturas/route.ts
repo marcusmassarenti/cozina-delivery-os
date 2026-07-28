@@ -9,6 +9,7 @@
  */
 import { sincronizarTodasAssinaturas } from "@/lib/data/assinatura-sync"
 import { emitirFaturasDoMes } from "@/lib/data/faturas"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -20,6 +21,10 @@ export async function GET(req: Request) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 })
   }
+
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("emitir-faturas", async () => {
 
   const r = await emitirFaturasDoMes()
 
@@ -35,5 +40,6 @@ export async function GET(req: Request) {
     emitidas: r.emitidas,
     puladas: r.puladas,
     assinaturasAjustadas: assinaturas,
+  })
   })
 }

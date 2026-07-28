@@ -14,6 +14,7 @@
  */
 import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -48,6 +49,10 @@ export async function GET(req: Request) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 })
   }
+
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("process-99-webhooks", async () => {
 
   const admin = createAdminClient()
   const t0 = Date.now()
@@ -231,5 +236,6 @@ export async function GET(req: Request) {
       outros: events.length - news.length - finishes.length - cancels.length,
     },
     skipped_sample: skippedNew.slice(0, 5),
+  })
   })
 }

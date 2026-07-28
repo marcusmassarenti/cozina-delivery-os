@@ -18,6 +18,7 @@
  * pode ter caído no fim de semana é pior que esperar uma semana.
  */
 import { createAdminClient } from "@/lib/supabase/admin"
+import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -38,6 +39,10 @@ export async function GET(req: Request) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 })
   }
+
+  // Envelope de registro: deixa rastro em cron_runs pra o relatório
+  // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
+  return registrarCron("billing-vencimentos", async () => {
 
   const admin = createAdminClient()
   const hoje = new Date().toISOString().slice(0, 10)
@@ -92,5 +97,6 @@ export async function GET(req: Request) {
     ranAt: new Date().toISOString(),
     rebaixados,
     semVencimento: ((semVenc ?? []) as { name: string }[]).map((h) => h.name),
+  })
   })
 }
