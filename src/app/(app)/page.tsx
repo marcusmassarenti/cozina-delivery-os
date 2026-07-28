@@ -475,6 +475,34 @@ export default async function Home({
       ? (taxaEntregaValor / network.faturamentoBruto) * 100
       : 0
 
+  // Investimento em promoção — quanto a LOJA bancou de cupom/oferta.
+  //
+  // Não é taxa da plataforma: é decisão de marketing da operação, e o número
+  // estava invisível no painel. Na 99 Food ele saiu de 0,6% do bruto em abril
+  // para 34,6% em julho sem nunca aparecer aqui — R$ 110 mil desde maio.
+  //
+  // Soma o que já está em memória (platforms[] de cada unidade), então não
+  // custa nenhuma query nova.
+  let promoTotal = 0
+  const promoPorPlataforma: Record<string, number> = {}
+  // unitsDisplay já é a lista com os filtros de período/unidade aplicados —
+  // a mesma base dos outros KPIs, pra o número bater com o resto do painel.
+  for (const u of unitsDisplay) {
+    for (const pl of u.monthly.platforms) {
+      if (filtrandoPlataforma && !plataformaAtiva(pl.id)) continue
+      const v = pl.promocoesLoja ?? 0
+      if (v <= 0) continue
+      promoTotal += v
+      promoPorPlataforma[pl.id] = (promoPorPlataforma[pl.id] ?? 0) + v
+    }
+  }
+  promoTotal = Math.round(promoTotal * 100) / 100
+  const promoPctBruto =
+    network.faturamentoBruto > 0 ? (promoTotal / network.faturamentoBruto) * 100 : 0
+  const promoTopPlataforma = Object.entries(promoPorPlataforma).sort(
+    (a, b) => b[1] - a[1],
+  )[0]
+
   const periodQ = sp.periodo ? `?periodo=${sp.periodo}` : ""
   const cancelQ = sp.periodo
     ? `?metrica=cancelamentos&periodo=${sp.periodo}`
@@ -549,6 +577,24 @@ export default async function Home({
       ),
       trend: "repasse + dinheiro na entrega + VR",
       tone: "positive",
+      icon: Percent,
+      platforms: finPlatforms,
+      href: `/financeiro${periodQ}`,
+    },
+    {
+      label: "Investido em Promoção",
+      value: fmtBRLShort(promoTotal),
+      trend:
+        promoTotal > 0
+          ? `${fmtPct(promoPctBruto)} do bruto${
+              promoTopPlataforma
+                ? ` · maior parte ${promoTopPlataforma[0] === "99food" ? "na 99 Food" : promoTopPlataforma[0] === "ifood" ? "no iFood" : "na Keeta"}`
+                : ""
+            }`
+          : "nenhuma promoção bancada pela loja no mês",
+      // Neutro, não negativo: promoção é investimento, e o julgamento de se
+      // valeu a pena depende do retorno — não do tamanho do gasto.
+      tone: "neutral",
       icon: Percent,
       platforms: finPlatforms,
       href: `/financeiro${periodQ}`,
@@ -705,6 +751,8 @@ export default async function Home({
     "Ticket Médio",
     "% que fica na loja",
     "Custo de Entrega",
+    // ⚠️ KPI que não estiver NESTA lista é criado e descartado logo abaixo.
+    "Investido em Promoção",
   ]
   const kpisOrdenados = ORDEM_KPI.map((l) =>
     kpis.find((k) => k.label === l),
