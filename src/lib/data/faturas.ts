@@ -153,7 +153,7 @@ export async function emitirFaturasDoMes(
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna",
+      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, desconto_primeira_fatura_pct",
     )
 
   // Lojas ATIVAS por cliente — é a base do preço por loja.
@@ -200,6 +200,17 @@ export async function emitirFaturasDoMes(
       valor = precoDoPlano(precos, plano, ativas)
     }
 
+    // Cupom de indicação: desconto na PRIMEIRA fatura. Vale uma vez só, e a
+    // marca é consumida logo abaixo — se ficasse gravada, o desconto se
+    // repetiria todo mês e viraria preço, não promoção.
+    const descontoPct = Number(h.desconto_primeira_fatura_pct ?? 0)
+    let notaFatura: string | null = null
+    if (descontoPct > 0 && valor > 0) {
+      const cheio = valor
+      valor = Math.round(valor * (100 - descontoPct)) / 100
+      notaFatura = `Cupom de indicação: ${descontoPct}% na 1ª fatura (de ${cheio.toFixed(2)} por ${valor.toFixed(2)}).`
+    }
+
     if (valor <= 0) {
       out.puladas.push({
         cliente: nome,
@@ -227,6 +238,7 @@ export async function emitirFaturasDoMes(
       lojas_cobradas: ativas,
       preco_negociado: negociado,
       origem: "auto",
+      nota: notaFatura,
     })
     if (error) {
       // 23505 = índice único: a fatura do mês já existe. Não é erro.
@@ -236,6 +248,15 @@ export async function emitirFaturasDoMes(
       })
       continue
     }
+    // Consome o cupom só DEPOIS de a fatura existir de verdade. Zerar antes
+    // deixaria o cliente sem desconto se o insert falhasse.
+    if (descontoPct > 0) {
+      await admin
+        .from("holdings")
+        .update({ desconto_primeira_fatura_pct: null })
+        .eq("id", h.id)
+    }
+
     out.emitidas.push({ cliente: nome, competencia, valor })
   }
 

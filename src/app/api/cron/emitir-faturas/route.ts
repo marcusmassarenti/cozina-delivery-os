@@ -9,6 +9,7 @@
  */
 import { sincronizarTodasAssinaturas } from "@/lib/data/assinatura-sync"
 import { emitirFaturasDoMes } from "@/lib/data/faturas"
+import { apurarComissoes } from "@/lib/data/indicacoes"
 import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
@@ -34,7 +35,12 @@ export async function GET(req: Request) {
   // realmente mudou, pra o log não virar ruído.
   const assinaturas = await sincronizarTodasAssinaturas()
 
+  // Comissões das faturas que foram PAGAS. Roda junto porque é o mesmo
+  // momento do mês em que a régua financeira se fecha.
+  const comissoes = await apurarComissoes()
+
   return Response.json({
+    comissoes: comissoes.criadas,
     ok: true,
     ranAt: new Date().toISOString(),
     emitidas: r.emitidas,

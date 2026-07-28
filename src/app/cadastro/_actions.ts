@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { todayISO } from "@/lib/data/billing"
+import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
 
 export type SignUpState = {
   ok: boolean
@@ -50,6 +51,7 @@ export async function signUp(
     .toLowerCase()
   const senha = String(formData.get("senha") ?? "")
   const whatsapp = String(formData.get("whatsapp") ?? "").trim()
+  const cupom = String(formData.get("cupom") ?? "").trim()
 
   if (!nome || !empresa || !email || !senha)
     return { ok: false, message: "Preencha nome, empresa, e-mail e senha." }
@@ -118,9 +120,22 @@ export async function signUp(
   const slugBase = slugify(empresa)
   const slug = `${slugBase}-${Math.random().toString(36).slice(2, 7)}`
 
+  // Cupom de indicação. Inválido NÃO barra o cadastro: o cliente entra sem
+  // desconto e o caso se resolve depois. Perder a venda por causa de um
+  // código digitado errado seria o pior desfecho possível.
+  const indicador = cupom ? await acharIndicadorPorCodigo(cupom) : null
+
   const { data: holding, error: hErr } = await admin
     .from("holdings")
-    .insert({ name: empresa, slug, paid: false, trial_ends_at: trialEndISO(7) })
+    .insert({
+      name: empresa,
+      slug,
+      paid: false,
+      trial_ends_at: trialEndISO(7),
+      indicado_por: indicador?.id ?? null,
+      indicado_em: indicador ? new Date().toISOString() : null,
+      desconto_primeira_fatura_pct: indicador?.descontoPct ?? null,
+    })
     .select("id")
     .single()
   if (hErr || !holding)

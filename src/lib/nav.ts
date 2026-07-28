@@ -1,4 +1,5 @@
 import {
+  Share2,
   Activity,
   Building2,
   Cable,
@@ -214,6 +215,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Saúde",
         href: "/saude",
         icon: Activity,
+        superadminOnly: true,
+      },
+      {
+        label: "Indicações",
+        href: "/indicacoes",
+        icon: Share2,
         superadminOnly: true,
       },
       {

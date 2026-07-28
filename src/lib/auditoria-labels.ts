@@ -15,6 +15,8 @@ export const ACAO_LABEL: Record<string, string> = {
   "conta_interna.alterada": "Conta interna alterada",
   "convite_asaas.alterado": "Convite Asaas",
   "assinatura.valor_sincronizado": "Valor da assinatura atualizado",
+  "indicador.alterado": "Indicador de parceiro",
+  "comissao.paga": "Comissão paga",
   "trial.iniciado": "Teste grátis iniciado (1º acesso)",
   "nino.degustacao_alterada": "Degustação do Nino",
 }

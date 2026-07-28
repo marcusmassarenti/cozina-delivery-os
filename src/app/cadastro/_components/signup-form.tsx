@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useActionState } from "react"
+import { useSearchParams } from "next/navigation"
 import { useFormStatus } from "react-dom"
 import Link from "next/link"
 import {
@@ -12,6 +13,7 @@ import {
   Lock,
   Mail,
   MessageCircle,
+  Ticket,
   User,
 } from "lucide-react"
 
@@ -26,6 +28,12 @@ export function SignupForm() {
   // Sucesso do cadastro redireciona pra /cadastro/confirme — aqui só tratamos
   // o form e os erros.
   const [state, formAction] = useActionState(signUp, initial)
+
+  // Cupom vem de duas formas: link de indicação (?ref=DIEGO) ou digitado.
+  // Vindo do link o campo já nasce preenchido e aberto — quem clicou no link
+  // do parceiro não deveria precisar procurar onde colar o código.
+  const ref = useSearchParams().get("ref") ?? ""
+  const [mostrarCupom, setMostrarCupom] = React.useState(Boolean(ref))
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -77,6 +85,26 @@ export function SignupForm() {
         revealable
       />
 
+      {mostrarCupom ? (
+        <Field
+          id="cupom"
+          name="cupom"
+          label="Cupom de indicação"
+          placeholder="ex.: DIEGO10"
+          required={false}
+          defaultValue={ref}
+          icon={<Ticket className="size-4" />}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setMostrarCupom(true)}
+          className="self-start text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Tenho um cupom de indicação
+        </button>
+      )}
+
       {state.message && !state.ok && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
           {state.message}
@@ -105,20 +133,23 @@ function Field({
   icon,
   required = true,
   revealable = false,
+  defaultValue,
 }: {
   id: string
   name: string
   label: string
-  type: string
+  /** Opcional: campo de texto simples não precisa declarar. */
+  type?: string
   placeholder: string
-  autoComplete: string
+  autoComplete?: string
   icon: React.ReactNode
   required?: boolean
+  defaultValue?: string
   /** Campo de senha: mostra um botão de olho pra revelar o que foi digitado. */
   revealable?: boolean
 }) {
   const [show, setShow] = React.useState(false)
-  const inputType = revealable ? (show ? "text" : "password") : type
+  const inputType = revealable ? (show ? "text" : "password") : (type ?? "text")
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -137,7 +168,8 @@ function Field({
           name={name}
           type={inputType}
           placeholder={placeholder}
-          autoComplete={autoComplete}
+          autoComplete={autoComplete ?? "off"}
+          defaultValue={defaultValue}
           required={required}
           className={`h-11 pl-9 ${revealable ? "pr-10" : ""}`}
         />
