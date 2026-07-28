@@ -24,6 +24,14 @@ import { createAdminClient } from "@/lib/supabase/admin"
 const TOLERANCIA_HORAS = 48
 /** Horas depois de conectar antes de cobrar o primeiro dado. */
 const CARENCIA_PRIMEIRO_DADO_H = 24
+/**
+ * Dias sem pedido que uma loja de importação MANUAL pode ficar antes de virar
+ * alerta. Mais folgado que o da API de propósito: planilha depende de alguém
+ * lembrar de subir, e cobrar diariamente encheria a tela de vermelho por um
+ * atraso que é do processo, não do sistema.
+ */
+const DIAS_IMPORTACAO_MANUAL = 10
+
 /** Um cron sem execução por mais que isto está parado. */
 const CRON_ATRASADO_H = 26
 
@@ -38,6 +46,8 @@ export type LojaSaude = {
   code: string
   loja: string
   plataforma: PlataformaSaude
+  /** false = plataforma marcada no cadastro, mas sem integração ligada. */
+  conectada: boolean
   conectadaEm: string | null
   ultimoPedido: string | null
   ultimoFinanceiro: string | null
@@ -63,8 +73,8 @@ export type SaudeIntegracoes = {
   crons: CronSaude[]
   resumo: {
     lojasConectadas: number
-    ifood: { total: number; ok: number; alerta: number }
-    noveNove: { total: number; ok: number; alerta: number }
+    ifood: { total: number; ok: number; alerta: number; semConexao: number }
+    noveNove: { total: number; ok: number; alerta: number; semConexao: number }
     lojasOk: number
     lojasAtencao: number
     lojasAlerta: number
@@ -93,6 +103,7 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   type Sinal = {
     unit_id: string
     plataforma: PlataformaSaude
+    conectada: boolean
     conectada_em: string | null
     ultimo_pedido: string | null
     ultimo_financeiro: string | null
@@ -142,7 +153,27 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     let gravidade: Gravidade = "ok"
     let motivo = "dado em dia com as vendas"
 
-    if (!fin) {
+    if (!s.conectada) {
+      // Declarada no cadastro e sem API ligada. Mas SEM API NÃO É SEM DADO:
+      // metade das lojas da 99 entra por planilha importada à mão, e a
+      // primeira versão desta regra acusou 7 delas de "parou de entrar" com
+      // pedido do dia anterior. O que vale é o dado estar fresco, não o
+      // caminho por onde ele chegou.
+      const diasSemPedido = pedido
+        ? horasEntre(`${pedido}T12:00:00-03:00`, agora) / 24
+        : null
+
+      if (diasSemPedido != null && diasSemPedido <= DIAS_IMPORTACAO_MANUAL) {
+        gravidade = "ok"
+        motivo = "sem API — entra por planilha, e está em dia"
+      } else if (diasSemPedido != null) {
+        gravidade = "alerta"
+        motivo = `sem API e sem dado novo há ${Math.floor(diasSemPedido)} dias (último pedido ${fmt(pedido!)})`
+      } else {
+        gravidade = "atencao"
+        motivo = "plataforma marcada no cadastro, mas nunca recebeu dado"
+      }
+    } else if (!fin) {
       const horasLigada = s.conectada_em ? horasEntre(s.conectada_em, agora) : 999
       if (horasLigada < CARENCIA_PRIMEIRO_DADO_H) {
         gravidade = "atencao"
@@ -169,6 +200,7 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       code: info.code,
       loja: info.nome,
       plataforma: s.plataforma,
+      conectada: s.conectada,
       conectadaEm: s.conectada_em,
       ultimoPedido: pedido,
       ultimoFinanceiro: fin,
@@ -291,6 +323,9 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       total: ls.length,
       ok: ls.filter((l) => l.gravidade === "ok").length,
       alerta: ls.filter((l) => l.gravidade === "alerta").length,
+      // Declaradas e nunca ligadas: não são falha, mas são receita potencial
+      // parada — e antes não apareciam em lugar nenhum.
+      semConexao: ls.filter((l) => !l.conectada).length,
     }
   }
 

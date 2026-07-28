@@ -344,6 +344,46 @@ export async function importIfoodReports(
     revalidatePath("/")
   }
 
+  // ⚠️ FALHA TAMBÉM VIRA REGISTRO.
+  //
+  // Até aqui só o sucesso era gravado em platform_imports — o insert do log
+  // acontece depois do parse, e um arquivo que estoura antes disso simplesmente
+  // não deixava rastro. Resultado: 5.221 importações no histórico, todas
+  // "success", nenhuma falha em toda a vida do sistema. A tela parecia uma
+  // auditoria e era só uma lista de vitórias.
+  //
+  // O erro aparecia na hora pra quem estava importando e sumia no refresh.
+  // Quem revisasse o mês depois não tinha como saber que um arquivo foi
+  // recusado.
+  const falhas = results.filter((r) => !r.ok)
+  if (falhas.length) {
+    try {
+      const admin = createAdminClient()
+      const agora = new Date()
+      await admin.from("platform_imports").insert(
+        falhas.map((f) => ({
+          // A loja nem sempre é conhecida quando o arquivo falha (pode ter
+          // estourado antes de identificar a unidade). Fica nulo e o nome do
+          // arquivo carrega a pista.
+          unit_id: null,
+          platform: f.unmapped?.platform ?? "ifood",
+          report_type: "desconhecido",
+          cadencia: "mensal",
+          ref_year: agora.getFullYear(),
+          ref_month: agora.getMonth() + 1,
+          source_filename: f.originalFilename ?? f.filename,
+          imported_by: userId,
+          status: "error",
+          error_message: f.message ?? "falha não detalhada",
+          rows_imported: 0,
+        })),
+      )
+    } catch (e) {
+      // Registrar a falha não pode criar outra falha.
+      console.error("log de importação com erro:", e)
+    }
+  }
+
   return {
     ok: results.every((r) => r.ok),
     results,
