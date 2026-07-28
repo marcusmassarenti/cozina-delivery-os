@@ -29,12 +29,15 @@ const CRON_ATRASADO_H = 26
 
 export type Gravidade = "ok" | "atencao" | "alerta"
 
+/** As duas plataformas que hoje têm integração por API. */
+export type PlataformaSaude = "ifood" | "99food"
+
 export type LojaSaude = {
   cliente: string
   unitId: string
   code: string
   loja: string
-  plataforma: string
+  plataforma: PlataformaSaude
   conectadaEm: string | null
   ultimoPedido: string | null
   ultimoFinanceiro: string | null
@@ -60,6 +63,8 @@ export type SaudeIntegracoes = {
   crons: CronSaude[]
   resumo: {
     lojasConectadas: number
+    ifood: { total: number; ok: number; alerta: number }
+    noveNove: { total: number; ok: number; alerta: number }
     lojasOk: number
     lojasAtencao: number
     lojasAlerta: number
@@ -79,14 +84,26 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   const admin = createAdminClient()
   const agora = new Date().toISOString()
 
-  // ── Lojas conectadas por API ────────────────────────────────────────────
-  const { data: vinculos } = await admin
-    .from("unit_platforms")
-    .select("unit_id, platform, api_store_id, fin_enabled_at")
-    .not("api_store_id", "is", null)
+  // ── Lojas conectadas por API, nas duas plataformas ─────────────────────
+  // A fonte é a função saude_lojas(), que junta iFood (unit_platforms) e
+  // 99 Food (ninefood_store_links). Antes esta parte partia só de
+  // unit_platforms e as lojas da 99 ficavam invisíveis: o relatório dizia
+  // "41/41 ok" sem nunca ter olhado sete lojas. Silêncio parecendo saúde é
+  // pior que alerta.
+  type Sinal = {
+    unit_id: string
+    plataforma: PlataformaSaude
+    conectada_em: string | null
+    ultimo_pedido: string | null
+    ultimo_financeiro: string | null
+    ultima_avaliacao: string | null
+    pedidos_7d: number
+  }
+  const { data: sinais, error: erroSinais } = await admin.rpc("saude_lojas")
+  if (erroSinais) console.error("saude_lojas:", erroSinais.message)
+  const linhas = (sinais ?? []) as Sinal[]
 
-  const unitIds = [...new Set(((vinculos ?? []) as { unit_id: string }[]).map((v) => v.unit_id))]
-
+  const unitIds = [...new Set(linhas.map((s) => s.unit_id))]
   const { data: units } = await admin
     .from("units")
     .select("id, code, name, brand_id, active")
@@ -113,43 +130,20 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       ]),
   )
 
-  // ── Última atividade de cada loja ───────────────────────────────────────
-  // Uma função no banco agrega os quatro sinais de uma vez. Trazer linha a
-  // linha de 640 mil lançamentos pro Node só pra tirar um max() seria absurdo.
-  const { data: sinais, error: erroSinais } = await admin.rpc("saude_lojas")
-  if (erroSinais) console.error("saude_lojas:", erroSinais.message)
-
-  type Sinal = {
-    unit_id: string
-    ultimo_pedido: string | null
-    ultimo_financeiro: string | null
-    ultima_avaliacao: string | null
-    pedidos_7d: number
-  }
-  const porUnidade = new Map(
-    ((sinais ?? []) as Sinal[]).map((s) => [s.unit_id, s]),
-  )
-
   const lojas: LojaSaude[] = []
-  for (const v of (vinculos ?? []) as {
-    unit_id: string
-    platform: string
-    fin_enabled_at: string | null
-  }[]) {
-    const info = unitInfo.get(v.unit_id)
+  for (const s of linhas) {
+    const info = unitInfo.get(s.unit_id)
     if (!info || !info.ativa) continue
 
-    const s = porUnidade.get(v.unit_id)
-    const pedido = s?.ultimo_pedido ?? null
-    const fin = s?.ultimo_financeiro ?? null
-    const aval = s?.ultima_avaliacao ?? null
-    const qtd7d = Number(s?.pedidos_7d ?? 0)
+    const pedido = s.ultimo_pedido
+    const fin = s.ultimo_financeiro
+    const qtd7d = Number(s.pedidos_7d ?? 0)
 
     let gravidade: Gravidade = "ok"
     let motivo = "dado em dia com as vendas"
 
     if (!fin) {
-      const horasLigada = v.fin_enabled_at ? horasEntre(v.fin_enabled_at, agora) : 999
+      const horasLigada = s.conectada_em ? horasEntre(s.conectada_em, agora) : 999
       if (horasLigada < CARENCIA_PRIMEIRO_DADO_H) {
         gravidade = "atencao"
         motivo = "conectada há pouco — primeira carga ainda não veio"
@@ -171,14 +165,14 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
 
     lojas.push({
       cliente: info.cliente,
-      unitId: v.unit_id,
+      unitId: s.unit_id,
       code: info.code,
       loja: info.nome,
-      plataforma: v.platform,
-      conectadaEm: v.fin_enabled_at,
+      plataforma: s.plataforma,
+      conectadaEm: s.conectada_em,
       ultimoPedido: pedido,
       ultimoFinanceiro: fin,
-      ultimaAvaliacao: aval,
+      ultimaAvaliacao: s.ultima_avaliacao,
       pedidos7d: qtd7d,
       gravidade,
       motivo,
@@ -187,7 +181,12 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
 
   lojas.sort((a, b) => {
     const peso = { alerta: 0, atencao: 1, ok: 2 }
-    return peso[a.gravidade] - peso[b.gravidade] || a.cliente.localeCompare(b.cliente)
+    return (
+      peso[a.gravidade] - peso[b.gravidade] ||
+      a.cliente.localeCompare(b.cliente) ||
+      a.loja.localeCompare(b.loja) ||
+      a.plataforma.localeCompare(b.plataforma)
+    )
   })
 
   // ── Crons ───────────────────────────────────────────────────────────────
@@ -286,8 +285,19 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     }
   })
 
+  const porPlataforma = (p: string) => {
+    const ls = lojas.filter((l) => l.plataforma === p)
+    return {
+      total: ls.length,
+      ok: ls.filter((l) => l.gravidade === "ok").length,
+      alerta: ls.filter((l) => l.gravidade === "alerta").length,
+    }
+  }
+
   const resumo = {
     lojasConectadas: lojas.length,
+    ifood: porPlataforma("ifood"),
+    noveNove: porPlataforma("99food"),
     lojasOk: lojas.filter((l) => l.gravidade === "ok").length,
     lojasAtencao: lojas.filter((l) => l.gravidade === "atencao").length,
     lojasAlerta: lojas.filter((l) => l.gravidade === "alerta").length,

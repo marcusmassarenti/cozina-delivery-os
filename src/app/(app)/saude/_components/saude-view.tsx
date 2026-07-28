@@ -4,6 +4,7 @@ import * as React from "react"
 
 import type { SaudeIntegracoes, Gravidade } from "@/lib/data/saude-integracoes"
 import { rotulo } from "@/lib/cron-labels"
+import { PlatformLogo } from "@/components/platform-logo"
 
 const SELO: Record<Gravidade, { label: string; cls: string }> = {
   alerta: {
@@ -40,13 +41,29 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
   // Padrão: esconder o que está ok. Numa tela de diagnóstico, 38 linhas verdes
   // enterram as 3 que importam.
   const [mostrarOk, setMostrarOk] = React.useState(false)
-  const lojas = mostrarOk ? s.lojas : s.lojas.filter((l) => l.gravidade !== "ok")
+  const [plat, setPlat] = React.useState<"todas" | "ifood" | "99food">("todas")
+  const lojas = s.lojas
+    .filter((l) => plat === "todas" || l.plataforma === plat)
+    .filter((l) => mostrarOk || l.gravidade !== "ok")
 
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi titulo="Lojas na API" valor={String(s.resumo.lojasConectadas)} />
-        <Kpi titulo="Com dado em dia" valor={String(s.resumo.lojasOk)} bom />
+        {/* Separado por plataforma: "41 lojas na API" não dizia se o problema
+            era do iFood ou da 99, e são integrações independentes — uma pode
+            cair sem a outra sentir. */}
+        <Kpi
+          titulo="iFood"
+          valor={`${s.resumo.ifood.ok}/${s.resumo.ifood.total}`}
+          ruim={s.resumo.ifood.alerta > 0}
+          bom={s.resumo.ifood.alerta === 0}
+        />
+        <Kpi
+          titulo="99 Food"
+          valor={`${s.resumo.noveNove.ok}/${s.resumo.noveNove.total}`}
+          ruim={s.resumo.noveNove.alerta > 0}
+          bom={s.resumo.noveNove.alerta === 0}
+        />
         <Kpi
           titulo="Precisam de ação"
           valor={String(s.resumo.lojasAlerta)}
@@ -61,7 +78,34 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
 
       <section className="rounded-xl border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
-          <h2 className="text-sm font-semibold">Lojas conectadas</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold">Lojas conectadas</h2>
+            <div className="flex gap-1">
+              {(
+                [
+                  ["todas", "Todas", s.resumo.lojasConectadas],
+                  ["ifood", "iFood", s.resumo.ifood.total],
+                  ["99food", "99 Food", s.resumo.noveNove.total],
+                ] as const
+              ).map(([key, label, n]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setPlat(key)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    plat === key
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {label}
+                  <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">
+                    {n}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input
               type="checkbox"
@@ -77,6 +121,7 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-5 py-2.5 font-semibold">Cliente / Loja</th>
+                <th className="px-3 py-2.5 font-semibold">Plataforma</th>
                 <th className="px-3 py-2.5 font-semibold">Situação</th>
                 <th className="px-3 py-2.5 font-semibold">Último pedido</th>
                 <th className="px-3 py-2.5 font-semibold">Financeiro até</th>
@@ -94,6 +139,14 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <PlatformLogo platform={l.plataforma} className="size-4" />
+                      <span className="text-xs">
+                        {l.plataforma === "99food" ? "99 Food" : "iFood"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SELO[l.gravidade].cls}`}
                     >
@@ -103,13 +156,21 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
                   </td>
                   <td className="px-3 py-2.5 tabular-nums">{dataCurta(l.ultimoPedido)}</td>
                   <td className="px-3 py-2.5 tabular-nums">{dataCurta(l.ultimoFinanceiro)}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{dataCurta(l.ultimaAvaliacao)}</td>
+                  <td className="px-3 py-2.5 tabular-nums">
+                    {l.plataforma === "99food" ? (
+                      // A 99 não expõe avaliação por API. Mostrar "—" aqui
+                      // pareceria dado atrasado; "n/d" diz que não existe.
+                      <span className="text-xs text-muted-foreground">n/d</span>
+                    ) : (
+                      dataCurta(l.ultimaAvaliacao)
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{l.pedidos7d}</td>
                 </tr>
               ))}
               {lojas.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
                     Nenhuma loja precisa de atenção. As {s.resumo.lojasOk} conectadas estão com o
                     dado em dia com as próprias vendas.
                   </td>

@@ -22,6 +22,9 @@ const COR = {
   ok: { fundo: "#f0fdf4", borda: "#16a34a", texto: "#166534" },
 } as const
 
+/** Nome da plataforma como o Marcus fala, não como o banco guarda. */
+const nomePlat = (p: string) => (p === "99food" ? "99 Food" : "iFood")
+
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -56,10 +59,20 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
   const assunto = !s.tudoCerto
     ? `⚠️ ${r.lojasAlerta + cronsRuins.length} ${
         r.lojasAlerta + cronsRuins.length === 1 ? "problema" : "problemas"
-      } nas integrações`
+      }${
+        // Diz logo no assunto ONDE está o problema: iFood e 99 são integrações
+        // independentes, e saber qual delas caiu já muda o que você vai abrir.
+        r.ifood.alerta && r.noveNove.alerta
+          ? " no iFood e na 99 Food"
+          : r.ifood.alerta
+            ? " no iFood"
+            : r.noveNove.alerta
+              ? " na 99 Food"
+              : " nas rotinas"
+      }`
     : emObservacao > 0
-      ? `✅ Sem alertas — ${r.lojasOk}/${r.lojasConectadas} lojas ok, ${emObservacao} em observação`
-      : `✅ ${r.lojasOk}/${r.lojasConectadas} lojas sincronizando — tudo certo`
+      ? `✅ Sem alertas — iFood ${r.ifood.ok}/${r.ifood.total}, 99 Food ${r.noveNove.ok}/${r.noveNove.total}, ${emObservacao} em observação`
+      : `✅ Tudo certo — iFood ${r.ifood.ok}/${r.ifood.total}, 99 Food ${r.noveNove.ok}/${r.noveNove.total}`
 
   const html = `
 <div style="margin:0;padding:32px 12px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -83,14 +96,14 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
 
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px;">
         <tr>
-          <td style="width:33%;padding:14px;background:#fafafa;border-radius:10px;text-align:center;">
-            <p style="margin:0;font-size:26px;font-weight:700;color:#18181b;">${r.lojasConectadas}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">lojas na API</p>
+          <td style="width:33%;padding:14px;background:${r.ifood.alerta ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
+            <p style="margin:0;font-size:26px;font-weight:700;color:${r.ifood.alerta ? COR.alerta.texto : COR.ok.texto};">${r.ifood.ok}/${r.ifood.total}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">iFood</p>
           </td>
           <td style="width:8px;"></td>
-          <td style="width:33%;padding:14px;background:${r.lojasAlerta ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
-            <p style="margin:0;font-size:26px;font-weight:700;color:${r.lojasAlerta ? COR.alerta.texto : COR.ok.texto};">${r.lojasOk}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">com dado em dia</p>
+          <td style="width:33%;padding:14px;background:${r.noveNove.alerta ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
+            <p style="margin:0;font-size:26px;font-weight:700;color:${r.noveNove.alerta ? COR.alerta.texto : COR.ok.texto};">${r.noveNove.ok}/${r.noveNove.total}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">99 Food</p>
           </td>
           <td style="width:8px;"></td>
           <td style="width:33%;padding:14px;background:${cronsRuins.length ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
@@ -105,7 +118,8 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
         "Precisa de ação",
         [
           ...problemas.map(
-            (l) => `<strong>${l.cliente} · ${l.loja}</strong><br/>${l.motivo}`,
+            (l) =>
+              `<strong>${l.cliente} · ${l.loja}</strong> <span style="font-size:12px;color:#71717a;">(${nomePlat(l.plataforma)})</span><br/>${l.motivo}`,
           ),
           ...cronsRuins.map(
             (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
@@ -117,7 +131,10 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
         "atencao",
         "De olho",
         [
-          ...atencoes.map((l) => `<strong>${l.cliente} · ${l.loja}</strong><br/>${l.motivo}`),
+          ...atencoes.map(
+            (l) =>
+              `<strong>${l.cliente} · ${l.loja}</strong> <span style="font-size:12px;color:#71717a;">(${nomePlat(l.plataforma)})</span><br/>${l.motivo}`,
+          ),
           ...cronsAviso.map(
             (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
           ),
@@ -127,7 +144,7 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
       ${
         s.tudoCerto && !s.temObservacao
           ? bloco("ok", "Nada a fazer", [
-              `As ${r.lojasOk} lojas com movimento estão com o financeiro em dia, e as ${r.cronsOk} rotinas rodaram nas últimas 24h.`,
+              `As ${r.ifood.total} lojas no iFood e as ${r.noveNove.total} na 99 Food estão com o financeiro em dia com as próprias vendas, e as ${r.cronsOk} rotinas rodaram nas últimas 24h.`,
             ])
           : ""
       }
