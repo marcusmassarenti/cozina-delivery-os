@@ -1,0 +1,127 @@
+/**
+ * Envio de e-mail transacional pela API do Resend.
+ *
+ * `fetch` direto em vez do SDK: a API é um POST só, e uma dependência a menos
+ * é uma coisa a menos pra quebrar no build da Vercel.
+ *
+ * Sem RESEND_API_KEY o envio vira no-op registrado — o sistema continua
+ * funcionando e o log mostra que ficou pendente. Nunca lança: e-mail que
+ * derruba um cron de cobrança é pior que e-mail não enviado.
+ */
+import "server-only"
+
+import { createAdminClient } from "@/lib/supabase/admin"
+
+/** Remetente e resposta no mesmo endereço: é onde o Marcus responde. */
+const FROM = process.env.EMAIL_FROM ?? "DeliveryOS <suporte@deliveryos.food>"
+const REPLY_TO = process.env.EMAIL_REPLY_TO ?? "suporte@deliveryos.food"
+
+export type TipoEmail =
+  | "boas-vindas"
+  | "trial-3-dias"
+  | "trial-terminou"
+  | "recuperacao-1"
+  | "recuperacao-2"
+  | "recuperacao-3"
+  | "recuperacao-4"
+  | "fatura-vencendo"
+  | "fatura-vencida"
+
+export type ResultadoEnvio = {
+  ok: boolean
+  id?: string
+  erro?: string
+  /** Não enviou porque já tinha sido enviado antes. */
+  jaEnviado?: boolean
+}
+
+/**
+ * Manda um e-mail e registra. Se já existir envio bem-sucedido deste tipo pra
+ * este cliente, NÃO manda de novo — é o que impede a régua de repetir quando o
+ * cron roda todo dia.
+ */
+export async function enviarEmail(input: {
+  holdingId: string | null
+  tipo: TipoEmail
+  para: string
+  assunto: string
+  html: string
+  /** Ignora a trava de duplicidade (só pra teste manual). */
+  forcar?: boolean
+}): Promise<ResultadoEnvio> {
+  const admin = createAdminClient()
+
+  if (!input.forcar && input.holdingId) {
+    const { data: ja } = await admin
+      .from("email_enviados")
+      .select("id")
+      .eq("holding_id", input.holdingId)
+      .eq("tipo", input.tipo)
+      .is("erro", null)
+      .maybeSingle()
+    if (ja) return { ok: true, jaEnviado: true }
+  }
+
+  const chave = process.env.RESEND_API_KEY
+  if (!chave) {
+    // Sem chave o sistema segue: registra a intenção pra ficar visível que a
+    // régua está montada mas não sai do lugar.
+    await admin.from("email_enviados").insert({
+      holding_id: input.holdingId,
+      tipo: input.tipo,
+      destinatario: input.para,
+      erro: "RESEND_API_KEY ausente",
+    })
+    return { ok: false, erro: "RESEND_API_KEY ausente" }
+  }
+
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${chave}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: FROM,
+        to: [input.para],
+        reply_to: REPLY_TO,
+        subject: input.assunto,
+        html: input.html,
+      }),
+    })
+    const body = (await r.json().catch(() => ({}))) as {
+      id?: string
+      message?: string
+      name?: string
+    }
+
+    if (!r.ok) {
+      const erro = body.message ?? `HTTP ${r.status}`
+      await admin.from("email_enviados").insert({
+        holding_id: input.holdingId,
+        tipo: input.tipo,
+        destinatario: input.para,
+        erro,
+      })
+      return { ok: false, erro }
+    }
+
+    await admin.from("email_enviados").insert({
+      holding_id: input.holdingId,
+      tipo: input.tipo,
+      destinatario: input.para,
+      resend_id: body.id ?? null,
+    })
+    return { ok: true, id: body.id }
+  } catch (e) {
+    const erro = e instanceof Error ? e.message : String(e)
+    await admin.from("email_enviados").insert({
+      holding_id: input.holdingId,
+      tipo: input.tipo,
+      destinatario: input.para,
+      erro,
+    })
+    return { ok: false, erro }
+  }
+}
