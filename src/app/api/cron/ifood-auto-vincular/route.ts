@@ -22,7 +22,7 @@
  * O custo disso é real: quem aprova no Portal do Parceiro pode esperar até o
  * dia seguinte pra conexão fechar. Quem não quer esperar usa o botão "Já
  * autorizei — conferir e vincular" na tela de merchants, que faz o mesmo na
- * hora. Se a conta virar Pro, dá pra voltar pra */15.
+ * hora. Se a conta virar Pro, dá pra voltar a rodar de 15 em 15 minutos.
  */
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import { createAdminClient } from "@/lib/supabase/admin"
