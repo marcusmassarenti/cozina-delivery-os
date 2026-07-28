@@ -310,6 +310,85 @@ export function recuperacao(n: 1 | 2 | 3 | 4, d: DadosEmail) {
   }
 }
 
+/**
+ * Régua de quem se cadastrou e NUNCA confirmou o e-mail.
+ *
+ * É a única série que sai pra endereço não confirmado, e por isso ela é curta
+ * (3 e-mails e acabou) e transacional na essência: a pessoa pediu a conta, só
+ * não terminou. Insistir além disso é gastar reputação de domínio numa caixa
+ * que pode nem existir.
+ *
+ * O `link` é gerado na hora do envio e vale 24h — por isso cada lembrete traz
+ * um novo. Um clique confirma o e-mail e já entra no sistema.
+ */
+export function confirmarEmail(
+  n: 1 | 2 | 3,
+  d: DadosEmail & { link: string; diasDeTeste?: number },
+) {
+  const perdidos = d.diasDeTeste ?? 0
+  const variantes = {
+    1: {
+      assunto: "Falta um clique pra sua conta abrir",
+      titulo: "Sua conta está esperando por você",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Você criou a conta do ${d.empresa} no DeliveryOS, mas o e-mail de confirmação ficou sem clicar — e sem isso a conta não abre.</p>
+        <p style="margin:0 0 14px;">É um clique só. Depois dele você entra direto e seus <strong>7 dias de teste</strong> começam a valer de verdade.</p>`,
+      imagens: [
+        {
+          arquivo: "dashboard.png",
+          alt: "Painel do DeliveryOS",
+          legenda: "É o que abre do outro lado do botão.",
+        },
+      ] as const,
+      ps: undefined,
+    },
+    2: {
+      assunto: "Seu teste está correndo sem você",
+      titulo: "Seu teste começou — e você não entrou",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Passando de novo porque tem um detalhe chato: o prazo do seu teste começou a contar no dia do cadastro, <strong>não no dia em que você entrar</strong>.</p>
+        ${
+          perdidos > 0
+            ? destaque(
+                `${perdidos} ${perdidos === 1 ? "dia" : "dias"}`,
+                "é o que já passou do seu teste grátis sem você ver uma tela sequer. Dá pra recuperar o resto agora.",
+              )
+            : ""
+        }
+        <p style="margin:0 0 14px;">Se foi o e-mail que se perdeu no meio de outros, o botão abaixo resolve na hora.</p>`,
+      imagens: undefined,
+      ps: "Se você desistiu, tudo bem — é só ignorar que eu paro de mandar.",
+    },
+    3: {
+      assunto: "Último lembrete sobre sua conta",
+      titulo: "Último lembrete, prometo",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Este é o último e-mail que te mando sobre a confirmação.</p>
+        <p style="margin:0 0 14px;">Se o momento não for esse, sem problema. Mas se foi só esquecimento, seria uma pena você ter se cadastrado e nunca ter visto o que o sistema mostra da sua loja — <strong>quanto sobra de verdade</strong> depois de comissão, entrega e cancelamento.</p>`,
+      imagens: [
+        {
+          arquivo: "dre.png",
+          alt: "DRE do DeliveryOS, do faturamento bruto até a margem",
+          legenda: "Do bruto até o que sobra no bolso.",
+        },
+      ] as const,
+      ps: "Qualquer coisa é só responder este e-mail — chega direto em mim.",
+    },
+  } as const
+
+  const v = variantes[n]
+  return {
+    assunto: v.assunto,
+    html: layout({
+      titulo: v.titulo,
+      corpo: v.corpo,
+      imagens: v.imagens,
+      cta: { texto: "Confirmar meu e-mail e entrar", url: d.link },
+      ps: v.ps,
+    }),
+  }
+}
+
 /** Aviso de fatura chegando (3 dias antes). Transacional: sem print, sem venda. */
 export function faturaVencendo(d: DadosEmail & { vencimento: string }) {
   return {

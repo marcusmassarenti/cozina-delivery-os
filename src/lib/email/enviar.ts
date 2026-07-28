@@ -17,6 +17,9 @@ const FROM = process.env.EMAIL_FROM ?? "DeliveryOS <suporte@deliveryos.food>"
 const REPLY_TO = process.env.EMAIL_REPLY_TO ?? "suporte@deliveryos.food"
 
 export type TipoEmail =
+  | "confirme-1"
+  | "confirme-2"
+  | "confirme-3"
   | "boas-vindas"
   | "trial-3-dias"
   | "trial-terminou"

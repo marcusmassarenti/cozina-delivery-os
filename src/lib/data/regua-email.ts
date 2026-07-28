@@ -13,6 +13,7 @@ import "server-only"
 import { enviarEmail, type TipoEmail } from "@/lib/email/enviar"
 import {
   boasVindas,
+  confirmarEmail,
   faturaVencida,
   faturaVencendo,
   recuperacao,
@@ -53,22 +54,61 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
 
   if (!holdings?.length) return out
 
-  // Contato de cada cliente: o admin da conta. Uma chamada só pro auth.
-  const { data: acessos } = await admin
+  // ── Contato de cada cliente ────────────────────────────────────────────
+  // Quem recebe é o ADMINISTRADOR da holding. Isso importa porque estes
+  // e-mails cobram dinheiro: mandar "sua mensalidade venceu" pro gerente de
+  // uma loja é constranger quem não decide nada sobre pagamento.
+  //
+  // ⚠️ user_unit_access NÃO tem foreign key nenhuma (conferido no banco), então
+  // não dá pra pedir join ao PostgREST — a relação units/brands tem que ser
+  // remontada aqui na mão. A versão anterior tentava `units!inner(...)`, o
+  // PostgREST devolvia erro, o código lia só `data` e seguia com a lista
+  // vazia. Resultado: ninguém era achado por acesso, só pelo nome da empresa
+  // digitado no cadastro — que quebra calado se a holding for renomeada.
+  const { data: brandsRel } = await admin.from("brands").select("id, holding_id")
+  const holdingDaBrand = new Map(
+    ((brandsRel ?? []) as { id: string; holding_id: string }[]).map((b) => [b.id, b.holding_id]),
+  )
+  const { data: unitsRel } = await admin.from("units").select("id, brand_id")
+  const holdingDaUnit = new Map(
+    ((unitsRel ?? []) as { id: string; brand_id: string }[])
+      .map((u) => [u.id, holdingDaBrand.get(u.brand_id)])
+      .filter((p): p is [string, string] => Boolean(p[1])),
+  )
+
+  const { data: acessos, error: erroAcessos } = await admin
     .from("user_unit_access")
-    .select("user_id, units!inner(brand_id, brands!inner(holding_id))")
-  const usuariosPorHolding = new Map<string, Set<string>>()
-  for (const a of (acessos ?? []) as unknown as {
+    .select("user_id, scope_type, scope_id, role")
+  if (erroAcessos) console.error("regua-email: acessos", erroAcessos.message)
+
+  /** Menor número = melhor contato. */
+  const prioridade = (scope: string, role: string) =>
+    scope === "holding" && role === "admin" ? 1 : scope === "holding" ? 2 : 3
+
+  const candidatos = new Map<string, { userId: string; peso: number }[]>()
+  for (const a of (acessos ?? []) as {
     user_id: string
-    units: { brands: { holding_id: string } }
+    scope_type: string
+    scope_id: string
+    role: string
   }[]) {
-    const h = a.units?.brands?.holding_id
+    const h =
+      a.scope_type === "holding"
+        ? a.scope_id
+        : a.scope_type === "brand"
+          ? holdingDaBrand.get(a.scope_id)
+          : holdingDaUnit.get(a.scope_id)
     if (!h) continue
-    if (!usuariosPorHolding.has(h)) usuariosPorHolding.set(h, new Set())
-    usuariosPorHolding.get(h)!.add(a.user_id)
+    if (!candidatos.has(h)) candidatos.set(h, [])
+    candidatos.get(h)!.push({ userId: a.user_id, peso: prioridade(a.scope_type, a.role) })
   }
 
   const contato = new Map<string, { email: string; nome: string | null }>()
+  /** Quem se cadastrou e nunca confirmou — vira régua de confirmação. */
+  const pendentes = new Map<
+    string,
+    { email: string; nome: string | null; criadoEm: string }
+  >()
   try {
     const { data: lista } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     const porId = new Map(
@@ -79,31 +119,54 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
           nome: (u.user_metadata?.full_name as string | null) ?? null,
           confirmado: Boolean(u.email_confirmed_at),
           company: (u.user_metadata?.company as string | null) ?? null,
+          criadoEm: u.created_at,
         },
       ]),
     )
+
     for (const h of holdings as { id: string; name: string }[]) {
-      // Preferência: usuário com e-mail CONFIRMADO. Mandar régua pra quem nem
-      // confirmou o cadastro é queimar reputação de domínio à toa.
-      let escolhido: { email: string; nome: string | null } | null = null
-      for (const uid of usuariosPorHolding.get(h.id) ?? []) {
-        const u = porId.get(uid)
-        if (u?.email && u.confirmado) {
-          escolhido = { email: u.email, nome: u.nome }
-          break
-        }
+      // Empate de peso acontece de verdade (a Empreender tem 2 administradores).
+      // Desempata pelo mais antigo: é quem abriu a conta e quem paga a fatura.
+      // Sem isso a escolha ficaria na ordem que o banco devolveu — ou seja, um
+      // dia a cobrança sai pra um sócio e no outro dia pra outro.
+      const ordenados = (candidatos.get(h.id) ?? [])
+        .slice()
+        .sort(
+          (a, b) =>
+            a.peso - b.peso ||
+            Date.parse(porId.get(a.userId)?.criadoEm ?? "") -
+              Date.parse(porId.get(b.userId)?.criadoEm ?? ""),
+        )
+
+      const admConfirmado = ordenados
+        .map((c) => porId.get(c.userId))
+        .find((u) => u?.email && u.confirmado)
+      if (admConfirmado) {
+        contato.set(h.id, { email: admConfirmado.email, nome: admConfirmado.nome })
+        continue
       }
-      // Sem acesso mapeado (cliente que nunca cadastrou loja): casa pelo nome
-      // da empresa gravado no metadata do cadastro.
-      if (!escolhido) {
-        for (const [, u] of porId) {
-          if (u.confirmado && u.company && u.company === h.name) {
-            escolhido = { email: u.email, nome: u.nome }
-            break
-          }
-        }
+
+      // Plano B: casar pelo nome da empresa gravado no cadastro. Cobre o
+      // cliente que assinou mas ainda não teve acesso criado.
+      const porEmpresa = [...porId.values()].find(
+        (u) => u.confirmado && u.company && u.company === h.name,
+      )
+      if (porEmpresa) {
+        contato.set(h.id, { email: porEmpresa.email, nome: porEmpresa.nome })
+        continue
       }
-      if (escolhido) contato.set(h.id, escolhido)
+
+      // Ninguém confirmado: guarda o não-confirmado pra régua de confirmação.
+      const naoConfirmado =
+        ordenados.map((c) => porId.get(c.userId)).find((u) => u?.email && !u.confirmado) ??
+        [...porId.values()].find((u) => !u.confirmado && u.company && u.company === h.name)
+      if (naoConfirmado) {
+        pendentes.set(h.id, {
+          email: naoConfirmado.email,
+          nome: naoConfirmado.nome,
+          criadoEm: naoConfirmado.criadoEm,
+        })
+      }
     }
   } catch (e) {
     console.error("regua-email: listUsers falhou", e)
@@ -127,8 +190,60 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
     const id = String(h.id)
     const nome = String(h.name)
     const c = contato.get(id)
+
+    // ── Nunca confirmou o e-mail ───────────────────────────────────────────
+    // Sem confirmar, a pessoa não entra — então nenhuma outra régua faz
+    // sentido pra ela. São 3 lembretes e acabou: é o único caso em que
+    // escrevemos pra endereço não confirmado, e insistir mais que isso
+    // machuca a reputação do domínio pra todos os outros clientes.
     if (!c?.email) {
-      out.semEmail.push(nome)
+      const p = pendentes.get(id)
+      if (!p?.email) {
+        out.semEmail.push(nome)
+        continue
+      }
+
+      const dias = diasEntre(p.criadoEm.slice(0, 10), hoje)
+      const etapa = dias >= 6 ? 3 : dias >= 3 ? 2 : dias >= 1 ? 1 : 0
+      if (etapa === 0) continue
+
+      // Link novo a cada lembrete: o do Supabase expira em 24h, então mandar
+      // o mesmo de novo seria mandar um botão quebrado.
+      let link: string | null = null
+      try {
+        const { data: g } = await admin.auth.admin.generateLink({
+          type: "magiclink",
+          email: p.email,
+          options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"}/` },
+        })
+        link = g?.properties?.action_link ?? null
+      } catch (e) {
+        console.error("regua-email: generateLink", e)
+      }
+      if (!link) {
+        out.falhas.push({ cliente: nome, tipo: `confirme-${etapa}`, erro: "não gerou o link" })
+        continue
+      }
+
+      const tipo = `confirme-${etapa}` as TipoEmail
+      const msg = confirmarEmail(etapa as 1 | 2 | 3, {
+        nome: p.nome,
+        empresa: nome,
+        temLoja: false,
+        link,
+        diasDeTeste: dias,
+      })
+      const r = await enviarEmail({
+        holdingId: id,
+        tipo,
+        para: p.email,
+        assunto: msg.assunto,
+        html: msg.html,
+      })
+      if (!r.jaEnviado) {
+        if (r.ok) out.enviados.push({ cliente: nome, tipo, para: p.email })
+        else out.falhas.push({ cliente: nome, tipo, erro: r.erro ?? "?" })
+      }
       continue
     }
 
