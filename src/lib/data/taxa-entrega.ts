@@ -304,3 +304,64 @@ export async function getNetworkDeliveryFee(
   acc.total = Math.round((acc.ifood + acc.ninefood + acc.keeta) * 100) / 100
   return acc
 }
+
+// ─── Quem paga a entrega ──────────────────────────────────────────────
+
+/**
+ * Divide os pedidos entre "o cliente pagou a entrega" e "a loja bancou".
+ *
+ * ⚠️ COBERTURA É PARTE DA RESPOSTA. No iFood, o pedido que entra pela API não
+ * traz a taxa cobrada do cliente (o sync não grava esse campo de propósito,
+ * pra não apagar o que veio da planilha) — e o endpoint de detalhe do pedido
+ * responde 403, porque o módulo Order não está liberado pro nosso app.
+ *
+ * Resultado: metade de julho no iFood não tem esse dado. Contar esses pedidos
+ * como "entrega grátis" produziria a conclusão exatamente oposta à verdade —
+ * foi o erro que quase cometemos ao responder isso pela primeira vez. Então o
+ * tipo carrega `pedidosSemDado`, e a tela é obrigada a mostrar.
+ */
+export type QuemPagaEntrega = {
+  plataforma: "ifood" | "99food" | "keeta"
+  pedidos: number
+  /** Pedidos em que dá pra saber quem pagou. */
+  pedidosComDado: number
+  pedidosSemDado: number
+  clientePagou: number
+  lojaBancou: number
+  valorPagoPeloCliente: number
+  /** Custo de entrega debitado da loja (fonte: financeiro, cobertura total). */
+  custoDaLoja: number
+}
+
+export async function getQuemPagaEntrega(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<QuemPagaEntrega[]> {
+  if (!unitIds.length) return []
+  const admin = createAdminClient()
+  const ini = `${year}-${String(month).padStart(2, "0")}-01`
+  const fimDia = new Date(year, month, 0).getDate()
+  const fim = `${year}-${String(month).padStart(2, "0")}-${String(fimDia).padStart(2, "0")}`
+
+  const { data, error } = await admin.rpc("quem_paga_entrega", {
+    p_unit_ids: unitIds,
+    p_inicio: ini,
+    p_fim: fim,
+  })
+  if (error) {
+    console.error("quem_paga_entrega:", error.message)
+    return []
+  }
+
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    plataforma: String(r.plataforma) as QuemPagaEntrega["plataforma"],
+    pedidos: Number(r.pedidos ?? 0),
+    pedidosComDado: Number(r.pedidos_com_dado ?? 0),
+    pedidosSemDado: Number(r.pedidos_sem_dado ?? 0),
+    clientePagou: Number(r.cliente_pagou ?? 0),
+    lojaBancou: Number(r.loja_bancou ?? 0),
+    valorPagoPeloCliente: Number(r.valor_cliente ?? 0),
+    custoDaLoja: Number(r.custo_loja ?? 0),
+  }))
+}
