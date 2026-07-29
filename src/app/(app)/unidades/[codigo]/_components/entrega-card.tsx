@@ -52,8 +52,15 @@ export function EntregaCard({
       <div className="space-y-2.5">
         {linhas.map((q) => {
           const base = q.lojaBancou + q.clientePagou
-          const pctLoja = base > 0 ? (q.lojaBancou / base) * 100 : 0
           const custo = custoDe(q)
+          // ⚠️ A barra é por VALOR, não por número de pedidos.
+          //
+          // Antes ela mostrava a fatia de PEDIDOS que a loja tocou (69,8% no
+          // iFood) ao lado do VALOR que ela bancou (R$ 11.995) — e o valor era
+          // menor que a sobra, o que parecia conta errada. Não era: a loja
+          // subsidia PARTE da entrega em muitos pedidos. Misturar as duas
+          // unidades na mesma linha é que estava errado.
+          const pctLoja = custo > 0 ? (q.valorBancadoPelaLoja / custo) * 100 : 0
 
           return (
             <div key={q.plataforma}>
@@ -63,7 +70,7 @@ export function EntregaCard({
                   <span className="font-semibold text-amber-700 dark:text-amber-400">
                     {fmtPct(pctLoja)}
                   </span>{" "}
-                  <span className="text-muted-foreground">loja</span>
+                  <span className="text-muted-foreground">do custo, a loja bancou</span>
                 </span>
                 {custo > 0 && (
                   <span className="ml-auto font-semibold tabular-nums text-rose-700 dark:text-rose-400">
@@ -79,18 +86,21 @@ export function EntregaCard({
                   o quanto a loja está segurando. */}
               <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-3 text-[10px] tabular-nums text-muted-foreground">
                 <span>
-                  {q.lojaBancou.toLocaleString("pt-BR")} de{" "}
-                  {base.toLocaleString("pt-BR")} entregas
                   {q.valorBancadoPelaLoja > 0 && (
                     <span className="text-amber-700 dark:text-amber-400">
-                      {" "}
-                      · loja {fmtBRL(q.valorBancadoPelaLoja)}
+                      {fmtBRL(q.valorBancadoPelaLoja)} de {fmtBRL(custo)} ·{" "}
                     </span>
                   )}
+                  em {q.lojaBancou.toLocaleString("pt-BR")} de{" "}
+                  {base.toLocaleString("pt-BR")} entregas
                 </span>
-                {q.valorPagoPeloCliente > 0 && (
+                {/* Só a Keeta informa de verdade quanto o cliente pagou de
+                    frete. No iFood e na 99, o que sobra do custo não é
+                    "receita do cliente" — pode ser subsídio da própria
+                    plataforma. Não se afirma o que não dá pra provar. */}
+                {q.plataforma === "keeta" && q.valorPagoPeloCliente > 0 && (
                   <span className="text-emerald-700 dark:text-emerald-400">
-                    cliente pagou {fmtBRL(q.valorPagoPeloCliente)}
+                    cliente pagou {fmtBRL(q.valorPagoPeloCliente)} de frete
                   </span>
                 )}
               </div>
@@ -106,8 +116,9 @@ export function EntregaCard({
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
         {fmtPct(bruto > 0 ? (total / bruto) * 100 : 0)} do bruto · já está dentro
-        das taxas (no DRE acima). Em âmbar, a fatia de entregas que a{" "}
-        <strong>loja bancou</strong>; o resto o cliente pagou.
+        das taxas (no DRE acima). Em âmbar, quanto do <strong>custo</strong> da
+        entrega a loja bancou como promoção — o resto vem do frete do cliente ou
+        de subsídio da plataforma.
       </p>
     </div>
   )
