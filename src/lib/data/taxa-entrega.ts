@@ -335,6 +335,9 @@ export type QuemPagaEntrega = {
   valorPagoPeloCliente: number
   /** Custo total de entrega debitado da loja. */
   custoTotalEntrega: number
+  /** Cobrança extra que só existe em algumas plataformas (Keeta: distância). */
+  custoExtra: number
+  custoExtraLabel: string | null
 }
 
 export async function getQuemPagaEntrega(
@@ -367,5 +370,7 @@ export async function getQuemPagaEntrega(
     valorBancadoPelaLoja: Number(r.valor_bancado_pela_loja ?? 0),
     valorPagoPeloCliente: Number(r.valor_pago_pelo_cliente ?? 0),
     custoTotalEntrega: Number(r.custo_total_entrega ?? 0),
+    custoExtra: Number(r.custo_extra ?? 0),
+    custoExtraLabel: (r.custo_extra_label as string | null) ?? null,
   }))
 }

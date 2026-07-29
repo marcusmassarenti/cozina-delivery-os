@@ -1,28 +1,21 @@
 import { Bike } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
-import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
+import { fmtBRL, fmtPct } from "@/lib/format"
 import type { DeliveryFee, QuemPagaEntrega } from "@/lib/data/taxa-entrega"
 
-const NOME: Record<string, string> = {
-  ifood: "iFood",
-  "99food": "99 Food",
-  keeta: "Keeta",
-}
-
 /**
- * Entrega da loja: quanto custou E quem bancou, no mesmo lugar.
+ * Entrega da loja: quanto custou e quem bancou — em uma linha por plataforma.
  *
- * Antes eram dois cards em telas diferentes, e cada um respondia metade da
- * pergunta: o custo não dizia quem pagou, e "quem paga" não dizia quanto
- * custou. Juntos, viram a conta que interessa — quanto da entrega saiu do
- * bolso da loja.
+ * A primeira versão virou um bloco enorme com barra grossa, três linhas de
+ * texto e uma explicação por plataforma. Ficou pesado ao lado dos outros
+ * cards e o número deixou de saltar. Aqui a regra é: uma linha, uma barra
+ * fina, e o texto longo só no rodapé, uma vez.
  *
- * ⚠️ Duas armadilhas embutidas aqui, as duas já erradas antes:
- *  - Cliente pagar o frete NÃO significa que a loja não pagou. No iFood e na
- *    Keeta as duas coisas acontecem no mesmo pedido.
- *  - Na Keeta não existe lançamento dizendo que a loja bancou a entrega DE UM
- *    pedido específico. Ali mostramos os dois lados, sem dividir.
+ * ⚠️ Cliente pagar o frete NÃO significa que a loja não pagou — a plataforma
+ * cobra a entrega da loja e mostra à parte quanto dela a loja bancou. E na
+ * Keeta a loja ainda leva uma taxa de distância em todo pedido, que o iFood e
+ * a 99 não têm; ela aparece como custo extra na própria linha.
  */
 export function EntregaCard({
   deliveryFee,
@@ -33,112 +26,61 @@ export function EntregaCard({
   quemPaga: QuemPagaEntrega[]
   bruto: number
 }) {
-  const comMovimento = quemPaga.filter((q) => q.pedidos > 0)
+  const linhas = quemPaga.filter((q) => q.pedidos > 0)
+  if (!linhas.length) return null
 
-  // ⚠️ Na Keeta, deliveryFee.keeta é o frete que o CLIENTE pagou (coluna
-  // taxa_entrega de keeta_pedidos) — não custo da loja. Usar aquele número
-  // aqui diria que a loja gastou o que o cliente pagou. O custo real da loja
-  // na Keeta é a taxa de distância, que vem em valorBancadoPelaLoja.
-  const custoPorPlat: Record<string, number> = {
-    ifood: deliveryFee.ifood,
-    "99food": deliveryFee.ninefood,
-    keeta: quemPaga.find((q) => q.plataforma === "keeta")?.valorBancadoPelaLoja ?? 0,
-  }
-  const custoTotalLoja =
-    custoPorPlat.ifood + custoPorPlat["99food"] + custoPorPlat.keeta
+  // ⚠️ Na Keeta, deliveryFee.keeta é o frete que o CLIENTE pagou, não custo da
+  // loja. O custo real dela é a taxa de distância (custoExtra).
+  const custoDe = (q: QuemPagaEntrega) =>
+    q.plataforma === "keeta"
+      ? q.custoExtra
+      : q.plataforma === "ifood"
+        ? deliveryFee.ifood
+        : deliveryFee.ninefood
+  const total = linhas.reduce((s, q) => s + custoDe(q), 0)
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <Bike className="size-4 text-amber-600" />
-        <h3 className="text-sm font-semibold">Entrega — custo e quem bancou</h3>
+        <h3 className="text-sm font-semibold">Entrega — quem bancou</h3>
         <span className="ml-auto text-base font-bold tabular-nums text-rose-700 dark:text-rose-400">
-          − {fmtBRL(custoTotalLoja)}
+          − {fmtBRL(total)}
         </span>
       </div>
 
-      <div className="space-y-3">
-        {comMovimento.map((q) => {
-          const excludente = q.plataforma !== "keeta"
+      <div className="space-y-2.5">
+        {linhas.map((q) => {
           const base = q.lojaBancou + q.clientePagou
           const pctLoja = base > 0 ? (q.lojaBancou / base) * 100 : 0
-          const pctCliente = base > 0 ? (q.clientePagou / base) * 100 : 0
-          const custo = custoPorPlat[q.plataforma] ?? 0
+          const custo = custoDe(q)
 
           return (
-            <div key={q.plataforma} className="rounded-lg border bg-muted/20 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <PlatformLogo platform={q.plataforma} className="size-4" />
-                  <span className="text-sm font-medium">{NOME[q.plataforma]}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {fmtNum(q.pedidos)} entregas
-                  </span>
-                </div>
+            <div key={q.plataforma}>
+              <div className="flex items-center gap-2 text-xs">
+                <PlatformLogo platform={q.plataforma} size="sm" />
+                <span className="tabular-nums">
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">
+                    {fmtPct(pctLoja)}
+                  </span>{" "}
+                  <span className="text-muted-foreground">loja</span>
+                </span>
+                <span className="ml-auto tabular-nums text-muted-foreground">
+                  {q.lojaBancou.toLocaleString("pt-BR")} de{" "}
+                  {base.toLocaleString("pt-BR")}
+                </span>
                 {custo > 0 && (
-                  <span className="text-sm font-semibold tabular-nums text-rose-700 dark:text-rose-400">
+                  <span className="w-24 text-right font-semibold tabular-nums text-rose-700 dark:text-rose-400">
                     − {fmtBRL(custo)}
                   </span>
                 )}
               </div>
-
-              {excludente && base > 0 ? (
-                <>
-                  <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className="bg-amber-500" style={{ width: `${pctLoja}%` }} />
-                    <div className="bg-emerald-500" style={{ width: `${pctCliente}%` }} />
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-[11px] tabular-nums">
-                    <span className="font-semibold text-amber-700 dark:text-amber-400">
-                      {fmtNum(q.lojaBancou)} a loja bancou ({fmtPct(pctLoja)})
-                      {q.valorBancadoPelaLoja > 0 && (
-                        <span className="font-normal text-muted-foreground">
-                          {" "}
-                          · {fmtBRL(q.valorBancadoPelaLoja)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-emerald-700 dark:text-emerald-400">
-                      {fmtNum(q.clientePagou)} o cliente pagou ({fmtPct(pctCliente)})
-                      {q.valorPagoPeloCliente > 0 && (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {fmtBRL(q.valorPagoPeloCliente)}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="mt-2 space-y-1 text-[11px] tabular-nums">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold text-amber-700 dark:text-amber-400">
-                      A loja pagou taxa de distância em {fmtNum(q.lojaBancou)} entregas
-                      {q.pedidos > 0 && ` (${fmtPct((q.lojaBancou / q.pedidos) * 100)})`}
-                    </span>
-                    <span className="font-semibold text-amber-700 dark:text-amber-400">
-                      {fmtBRL(q.valorBancadoPelaLoja)}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-emerald-700 dark:text-emerald-400">
-                      O cliente pagou frete em {fmtNum(q.clientePagou)} entregas
-                    </span>
-                    <span className="text-emerald-700 dark:text-emerald-400">
-                      {fmtBRL(q.valorPagoPeloCliente)}
-                    </span>
-                  </div>
-                  <p className="pt-0.5 text-muted-foreground">
-                    Na Keeta os dois caem no mesmo pedido — o relatório não separa
-                    em quantos a loja bancou o frete do cliente.
-                  </p>
-                </div>
-              )}
-
-              {q.semInfo > 0 && excludente && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  {fmtNum(q.semInfo)} sem custo de entrega (retirada no balcão ou
-                  entrega própria)
+              <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-emerald-500/25">
+                <div className="bg-amber-500" style={{ width: `${pctLoja}%` }} />
+              </div>
+              {q.custoExtraLabel && q.custoExtra > 0 && (
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  inclui {q.custoExtraLabel}, cobrada da loja em todo pedido
                 </p>
               )}
             </div>
@@ -147,10 +89,9 @@ export function EntregaCard({
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        {fmtPct(bruto > 0 ? (custoTotalLoja / bruto) * 100 : 0)} do bruto · já
-        está dentro das taxas das plataformas (no DRE acima). O cliente pagar o
-        frete <strong>não</strong> significa que a loja não pagou: a plataforma
-        cobra a entrega da loja e mostra à parte quanto dela a loja bancou.
+        {fmtPct(bruto > 0 ? (total / bruto) * 100 : 0)} do bruto · já está dentro
+        das taxas (no DRE acima). Em âmbar, a fatia de entregas que a{" "}
+        <strong>loja bancou</strong>; o resto o cliente pagou.
       </p>
     </div>
   )
