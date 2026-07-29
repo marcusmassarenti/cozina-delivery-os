@@ -91,6 +91,10 @@ function emptyResumo(): NinefoodPedidoResumo {
 }
 
 type Row = {
+  /** Identifica a fonte: com import_id = planilha; sem = webhook da API. */
+  unit_id?: string
+  data?: string
+  import_id?: string | null
   receita_vendas: number | string | null
   receita_real_loja: number | string | null
   preco_original_item: number | string | null
@@ -115,7 +119,7 @@ type Row = {
 }
 
 const SELECT =
-  "receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, pay_channel, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg"
+  "unit_id, data, import_id, receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, pay_channel, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg"
 
 const num = (v: number | string | null) => Math.abs(Number(v) || 0)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -141,6 +145,33 @@ async function pageAll(
     from += pageSize
   }
   return all
+}
+
+/**
+ * PLANILHA VENCE QUANDO EXISTE.
+ *
+ * `ninefood_pedidos` guarda o MESMO pedido duas vezes quando a loja tem
+ * planilha E webhook: uma linha com `import_id` (planilha) e outra sem (API).
+ * Julho/26 da Cozina: 2.382 + 2.429 = 4.811 linhas para ~2.400 pedidos — a
+ * tela de Pedidos mostrava o dobro.
+ *
+ * Não dá pra deduplicar por `pedido_id`: o id da fonte API chega corrompido
+ * por precisão float (…950628 vira …951000). Então a régua é por DIA, que é a
+ * granularidade em que a planilha cobre: se aquele (loja, dia) tem alguma
+ * linha de planilha, as linhas de API daquele dia são descartadas; onde não
+ * houve importação, a API preenche.
+ *
+ * Decisão do Marcus, e ela preserva o melhor dos dois: a planilha é o
+ * relatório oficial e traz avaliação e cancelamento; o webhook chega sozinho
+ * todo dia e cobre o que ninguém importou.
+ */
+function preferirPlanilha(rows: Row[]): Row[] {
+  const diasComPlanilha = new Set<string>()
+  for (const r of rows) {
+    if (r.import_id) diasComPlanilha.add(`${r.unit_id}|${r.data}`)
+  }
+  if (diasComPlanilha.size === 0) return rows
+  return rows.filter((r) => r.import_id || !diasComPlanilha.has(`${r.unit_id}|${r.data}`))
 }
 
 /**
@@ -304,7 +335,7 @@ export async function getNinefoodPedidoResumoForMonth(
       .order("id")
       .range(from, to),
   )
-  return aggregate(rows)
+  return aggregate(preferirPlanilha(rows))
 }
 
 export async function getNetworkNinefoodPedidoResumo(
@@ -324,7 +355,7 @@ export async function getNetworkNinefoodPedidoResumo(
       .order("id")
       .range(from, to),
   )
-  return aggregate(rows)
+  return aggregate(preferirPlanilha(rows))
 }
 
 export type NinefoodPedidoUnitRow = {
