@@ -65,18 +65,34 @@ export function EntregaCard({
                   </span>{" "}
                   <span className="text-muted-foreground">loja</span>
                 </span>
-                <span className="ml-auto tabular-nums text-muted-foreground">
-                  {q.lojaBancou.toLocaleString("pt-BR")} de{" "}
-                  {base.toLocaleString("pt-BR")}
-                </span>
                 {custo > 0 && (
-                  <span className="w-24 text-right font-semibold tabular-nums text-rose-700 dark:text-rose-400">
+                  <span className="ml-auto font-semibold tabular-nums text-rose-700 dark:text-rose-400">
                     − {fmtBRL(custo)}
                   </span>
                 )}
               </div>
               <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-emerald-500/25">
                 <div className="bg-amber-500" style={{ width: `${pctLoja}%` }} />
+              </div>
+              {/* Os dois lados em números, não só em porcentagem: "69,8%" não
+                  diz quanto dinheiro o cliente cobriu, e é isso que dimensiona
+                  o quanto a loja está segurando. */}
+              <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-3 text-[10px] tabular-nums text-muted-foreground">
+                <span>
+                  {q.lojaBancou.toLocaleString("pt-BR")} de{" "}
+                  {base.toLocaleString("pt-BR")} entregas
+                  {q.valorBancadoPelaLoja > 0 && (
+                    <span className="text-amber-700 dark:text-amber-400">
+                      {" "}
+                      · loja {fmtBRL(q.valorBancadoPelaLoja)}
+                    </span>
+                  )}
+                </span>
+                {q.valorPagoPeloCliente > 0 && (
+                  <span className="text-emerald-700 dark:text-emerald-400">
+                    cliente pagou {fmtBRL(q.valorPagoPeloCliente)}
+                  </span>
+                )}
               </div>
               {q.custoExtraLabel && q.custoExtra > 0 && (
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
