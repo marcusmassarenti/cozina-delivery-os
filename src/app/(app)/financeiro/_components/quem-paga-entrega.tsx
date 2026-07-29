@@ -11,16 +11,15 @@ const NOME: Record<string, string> = {
 }
 
 /**
- * Quem paga a entrega, pedido a pedido.
+ * Quem bancou a entrega, pedido a pedido.
  *
- * Responde uma pergunta que o total de custo de entrega não responde: em
- * quantos pedidos o cliente pagou o frete e em quantos a loja bancou. A
- * diferença entre plataformas é grande — e é decisão de negócio, não detalhe.
+ * ⚠️ "O cliente foi cobrado" NÃO é o mesmo que "a loja não pagou". No iFood as
+ * duas coisas convivem no mesmo pedido: o cliente paga o frete e a loja ainda
+ * leva o débito da entrega no extrato. A primeira versão desta tela confundiu
+ * as duas e mostrou "11 pedidos a loja bancou" com R$ 71.868 debitados dela no
+ * mesmo mês — o número certo é 4.894.
  *
- * ⚠️ A barra é desenhada só sobre os pedidos COM dado. Pedido sem informação
- * aparece à parte, nunca somado ao "loja bancou": tratá-lo como entrega grátis
- * inverteria a conclusão, que foi o erro cometido na primeira leitura destes
- * números.
+ * Por isso a leitura aqui é do EXTRATO, não da taxa cobrada do cliente.
  */
 export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
   const comMovimento = dados.filter((d) => d.pedidos > 0)
@@ -30,16 +29,19 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
     <section className="rounded-xl border bg-card shadow-sm">
       <div className="flex items-center gap-2 border-b px-5 py-3">
         <Bike className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold">Quem paga a entrega</h2>
+        <h2 className="text-sm font-semibold">Quem banca a entrega</h2>
       </div>
 
       <div className="divide-y">
         {comMovimento.map((d) => {
-          const base = d.pedidosComDado
-          const pctCliente = base > 0 ? (d.clientePagou / base) * 100 : 0
+          // A Keeta não expõe quem bancou o frete. Mostrar "0 a loja bancou
+          // (0,0%)" ali seria AFIRMAR que a loja nunca pagou — o mesmo erro
+          // que esta tela já cometeu com o iFood, só que em outra plataforma.
+          // Onde não dá pra provar, não se afirma.
+          const medimosQuemBanca = d.plataforma !== "keeta"
+          const base = d.lojaBancou + d.clientePagou
           const pctLoja = base > 0 ? (d.lojaBancou / base) * 100 : 0
-          // A loja bancar a maioria não é erro — é a troca "frete grátis por
-          // visibilidade". Mas é dinheiro, então merece destaque.
+          const pctCliente = base > 0 ? (d.clientePagou / base) * 100 : 0
           const lojaBancaMuito = pctLoja >= 50
 
           return (
@@ -49,40 +51,45 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
                   <PlatformLogo platform={d.plataforma} className="size-4" />
                   <span className="text-sm font-medium">{NOME[d.plataforma]}</span>
                   <span className="text-xs text-muted-foreground">
-                    {fmtNum(d.pedidos)} pedidos
+                    {fmtNum(d.pedidos)} pedidos com entrega
                   </span>
                 </div>
-                {d.custoDaLoja > 0 && (
+                {d.custoTotalEntrega > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    custo debitado da loja:{" "}
-                    <strong className="text-foreground">{fmtBRL(d.custoDaLoja)}</strong>
+                    custo total de entrega:{" "}
+                    <strong className="text-foreground">
+                      {fmtBRL(d.custoTotalEntrega)}
+                    </strong>
                   </span>
                 )}
               </div>
 
-              {base > 0 ? (
+              {!medimosQuemBanca ? (
+                <p className="mt-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  O relatório da Keeta não separa quem bancou o frete. Sabemos
+                  que <strong className="text-foreground">{fmtNum(d.clientePagou)}</strong>{" "}
+                  pedidos tiveram taxa de entrega cobrada (
+                  {fmtBRL(d.valorPagoPeloCliente)}), mas não dá pra dizer quanto
+                  disso a loja subsidiou — então não afirmamos.
+                </p>
+              ) : base > 0 ? (
                 <>
+                  {/* Âmbar primeiro: o que sai do bolso da loja é o que
+                      interessa, então ele abre a barra. */}
                   <div className="mt-2.5 flex h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="bg-emerald-500"
-                      style={{ width: `${pctCliente}%` }}
-                      title={`Cliente pagou: ${fmtNum(d.clientePagou)} pedidos`}
-                    />
                     <div
                       className="bg-amber-500"
                       style={{ width: `${pctLoja}%` }}
-                      title={`Loja bancou: ${fmtNum(d.lojaBancou)} pedidos`}
+                      title={`A loja bancou: ${fmtNum(d.lojaBancou)} pedidos`}
+                    />
+                    <div
+                      className="bg-emerald-500"
+                      style={{ width: `${pctCliente}%` }}
+                      title={`O cliente pagou: ${fmtNum(d.clientePagou)} pedidos`}
                     />
                   </div>
 
                   <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-4 text-[11px] tabular-nums">
-                    <span className="text-emerald-700 dark:text-emerald-400">
-                      <strong>{fmtNum(d.clientePagou)}</strong> o cliente pagou (
-                      {fmtPct(pctCliente)}) ·{" "}
-                      <span className="text-muted-foreground">
-                        {fmtBRL(d.valorPagoPeloCliente)}
-                      </span>
-                    </span>
                     <span
                       className={
                         lojaBancaMuito
@@ -92,15 +99,21 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
                     >
                       <strong>{fmtNum(d.lojaBancou)}</strong> a loja bancou (
                       {fmtPct(pctLoja)})
+                      {d.valorBancadoPelaLoja > 0 && (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {fmtBRL(d.valorBancadoPelaLoja)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      <strong>{fmtNum(d.clientePagou)}</strong> o cliente pagou (
+                      {fmtPct(pctCliente)})
                     </span>
                   </div>
 
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    de cada 10 pedidos,{" "}
-                    <strong className="text-foreground">
-                      {(pctCliente / 10).toFixed(1)}
-                    </strong>{" "}
-                    o cliente pagou a entrega e{" "}
+                    de cada 10 entregas,{" "}
                     <strong className="text-foreground">
                       {(pctLoja / 10).toFixed(1)}
                     </strong>{" "}
@@ -109,25 +122,28 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
                 </>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Sem informação de quem pagou a entrega neste período.
+                  Sem informação de quem bancou a entrega neste período.
                 </p>
               )}
 
-              {d.pedidosSemDado > 0 && (
+              {d.semInfo > 0 && medimosQuemBanca && (
                 <p className="mt-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                  <strong className="text-foreground">
-                    {fmtNum(d.pedidosSemDado)} pedidos
-                  </strong>{" "}
-                  ficaram fora desta conta: entraram pela API, que não informa a
-                  taxa cobrada do cliente. Eles <strong>não</strong> são entrega
-                  grátis — é dado que o iFood ainda não libera pra gente. O custo
-                  debitado da loja, ao lado, cobre o mês inteiro.
+                  <strong className="text-foreground">{fmtNum(d.semInfo)} pedidos</strong>{" "}
+                  {d.plataforma === "keeta"
+                    ? "sem informação de frete no relatório da Keeta — não dá pra dizer quem bancou, então ficam fora da conta em vez de serem creditados a alguém."
+                    : "sem custo de entrega identificado (retirada no balcão ou entrega própria)."}
                 </p>
               )}
             </div>
           )
         })}
       </div>
+
+      <p className="border-t px-5 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+        Fonte: extrato financeiro da plataforma. No iFood, o cliente pagar o frete{" "}
+        <strong>não</strong> significa que a loja não pagou — o extrato cobra a
+        entrega da loja e mostra à parte quanto dela a loja bancou como promoção.
+      </p>
     </section>
   )
 }

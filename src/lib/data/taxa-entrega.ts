@@ -308,29 +308,33 @@ export async function getNetworkDeliveryFee(
 // ─── Quem paga a entrega ──────────────────────────────────────────────
 
 /**
- * Divide os pedidos entre "o cliente pagou a entrega" e "a loja bancou".
+ * Quem BANCOU a entrega de cada pedido.
  *
- * ⚠️ COBERTURA É PARTE DA RESPOSTA. No iFood, o pedido que entra pela API não
- * traz a taxa cobrada do cliente (o sync não grava esse campo de propósito,
- * pra não apagar o que veio da planilha) — e o endpoint de detalhe do pedido
- * responde 403, porque o módulo Order não está liberado pro nosso app.
+ * ⚠️ A primeira versão disto perguntava "o cliente foi cobrado?" (coluna
+ * taxa_entrega_cliente da planilha) e concluiu que a loja bancou 11 pedidos
+ * de 7.300 — com R$ 71.868 debitados dela no mesmo mês. A contradição era o
+ * próprio erro falando: no iFood, cobrar do cliente e a loja pagar convivem
+ * no MESMO pedido.
  *
- * Resultado: metade de julho no iFood não tem esse dado. Contar esses pedidos
- * como "entrega grátis" produziria a conclusão exatamente oposta à verdade —
- * foi o erro que quase cometemos ao responder isso pela primeira vez. Então o
- * tipo carrega `pedidosSemDado`, e a tela é obrigada a mostrar.
+ * A fonte correta é o extrato, que separa as duas coisas:
+ *   "Taxa entrega iFood"                      → custo da entrega
+ *   "Promoção custeada pela loja no delivery" → a loja bancou aquela entrega
+ * Com a régua certa, são 4.894 de 7.380 (66%).
+ *
+ * Na Keeta não existe campo que diga quem bancou. Ali não se afirma nada:
+ * o que não dá pra provar vai pra `semInfo`, nunca creditado à loja.
  */
 export type QuemPagaEntrega = {
   plataforma: "ifood" | "99food" | "keeta"
   pedidos: number
-  /** Pedidos em que dá pra saber quem pagou. */
-  pedidosComDado: number
-  pedidosSemDado: number
-  clientePagou: number
   lojaBancou: number
+  clientePagou: number
+  /** Pedido sem informação suficiente pra dizer quem bancou. */
+  semInfo: number
+  valorBancadoPelaLoja: number
   valorPagoPeloCliente: number
-  /** Custo de entrega debitado da loja (fonte: financeiro, cobertura total). */
-  custoDaLoja: number
+  /** Custo total de entrega debitado da loja. */
+  custoTotalEntrega: number
 }
 
 export async function getQuemPagaEntrega(
@@ -357,11 +361,11 @@ export async function getQuemPagaEntrega(
   return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
     plataforma: String(r.plataforma) as QuemPagaEntrega["plataforma"],
     pedidos: Number(r.pedidos ?? 0),
-    pedidosComDado: Number(r.pedidos_com_dado ?? 0),
-    pedidosSemDado: Number(r.pedidos_sem_dado ?? 0),
-    clientePagou: Number(r.cliente_pagou ?? 0),
     lojaBancou: Number(r.loja_bancou ?? 0),
-    valorPagoPeloCliente: Number(r.valor_cliente ?? 0),
-    custoDaLoja: Number(r.custo_loja ?? 0),
+    clientePagou: Number(r.cliente_pagou ?? 0),
+    semInfo: Number(r.sem_info ?? 0),
+    valorBancadoPelaLoja: Number(r.valor_bancado_pela_loja ?? 0),
+    valorPagoPeloCliente: Number(r.valor_pago_pelo_cliente ?? 0),
+    custoTotalEntrega: Number(r.custo_total_entrega ?? 0),
   }))
 }
