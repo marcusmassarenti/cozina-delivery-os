@@ -3207,6 +3207,7 @@ async function saveKeetaRepasses(
         taxa_saque_antecipado: grupo.taxas.taxaSaqueAntecipado,
         taxa_servico_mensal: grupo.taxas.taxaServicoMensal,
         promo_loja: grupo.taxas.promoLoja,
+        subsidio_entrega: grupo.taxas.subsidioEntrega,
         publicidade: grupo.taxas.publicidade,
         ajuste_comissao: grupo.taxas.ajusteComissao,
         deducao_ajuda: grupo.taxas.deducaoAjuda,

@@ -137,7 +137,14 @@ export async function GET(req: Request) {
       receita_vendas: cents(price.order_price),
       preco_original_item: cents(price.order_price),
       despesas_ofertas: cents(price.items_discount),
+      // Frete: os TRÊS números, não só o líquido. A 99 manda o cheio e o
+      // desconto em 100% dos payloads e nós jogávamos fora — sem eles, "quanto
+      // o cliente pagou" só tinha piso e "quanto a loja bancou" era estimativa.
+      // Identidade verificada em 2.441 de 2.441 eventos de julho:
+      //   delivery_price = store_charged_delivery_price − delivery_discount
       taxa_entrega_original: cents(price.delivery_price),
+      taxa_entrega_cheia: cents(price.store_charged_delivery_price),
+      desconto_entrega: cents(price.delivery_discount),
       taxa_canal_pagamento: cents(others.service_price),
       recompensas_plataforma: cents(price.shop_paid_money),
       contagem_item: Array.isArray(info.order_items)

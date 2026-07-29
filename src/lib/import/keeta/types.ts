@@ -196,7 +196,14 @@ export type ParsedKeetaFaturaTaxas = {
   taxaPagamentoOnline: number // "Taxa de pagamento online"
   taxaSaqueAntecipado: number // "Taxa de saque antecipado"
   taxaServicoMensal: number // "Taxa de serviço mensal"
-  promoLoja: number // promo do item + entrega bancados pela loja
+  /** Promo do item + entrega bancados pela loja (TOTAL — não somar com o de baixo). */
+  promoLoja: number
+  /**
+   * Só a coluna "Subsídios de entrega cobertos pela loja".
+   * É o número OFICIAL de quanto a loja bancou de frete — antes disso só dava
+   * pra reconstruir por Σ taxa_entrega − campanha, que fecha a ±2%.
+   */
+  subsidioEntrega: number
   publicidade: number // "Custos de publicidade" + "Gasto com marketing inteligente"
   ajusteComissao: number // "Ajuste de comissão"
   deducaoAjuda: number // "Dedução pelo serviço da Ajuda"

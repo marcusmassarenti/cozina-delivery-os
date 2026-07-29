@@ -143,6 +143,21 @@ async function pageAll(
   return all
 }
 
+/**
+ * ⚠️ CONTAGEM DUPLA CONHECIDA — `ninefood_pedidos` guarda o MESMO pedido duas
+ * vezes quando a loja tem planilha E webhook: uma linha com `import_id`
+ * (planilha) e outra sem (API). Não dá pra deduplicar por `pedido_id` porque o
+ * id da fonte API chega corrompido por precisão float (…950628 vira …951000).
+ *
+ * Julho/26, Cozina Foods: 2.382 linhas de planilha + 2.429 de API = 4.811,
+ * para ~2.400 pedidos reais. Logo `totalPedidos` aqui está DOBRADO nas lojas
+ * com as duas fontes, e qualquer média derivada dele está pela metade.
+ *
+ * Não corrigido aqui de propósito: as duas fontes trazem campos diferentes
+ * (planilha tem avaliação e cancelamento; API tem forma de pagamento e frete),
+ * então escolher uma vencedora é decisão de produto, não de código. O reparo
+ * definitivo passa por recuperar o id íntegro em `ninefood_api_bill.raw->>'orderId'`.
+ */
 function aggregate(rows: Row[]): NinefoodPedidoResumo {
   if (rows.length === 0) return emptyResumo()
   const r = emptyResumo()

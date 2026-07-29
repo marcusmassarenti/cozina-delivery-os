@@ -84,6 +84,7 @@ function parseHistoricoTaxas(
         taxaSaqueAntecipado: 0,
         taxaServicoMensal: 0,
         promoLoja: 0,
+        subsidioEntrega: 0,
         publicidade: 0,
         ajusteComissao: 0,
         deducaoAjuda: 0,
@@ -96,7 +97,11 @@ function parseHistoricoTaxas(
     t.taxaPagamentoOnline += val(row, cPagOnline)
     t.taxaSaqueAntecipado += val(row, cSaque)
     t.taxaServicoMensal += val(row, cServicoMensal)
+    // promoLoja segue sendo o total (item + entrega) pra não quebrar quem já
+    // lê; subsidioEntrega guarda o recorte que a fatura separa e o parser
+    // vinha jogando fora ao somar os dois.
     t.promoLoja += val(row, cPromoItem) + val(row, cPromoEntrega)
+    t.subsidioEntrega += val(row, cPromoEntrega)
     t.publicidade += val(row, cPublicidade) + val(row, cMarketing)
     t.ajusteComissao += val(row, cAjuste)
     t.deducaoAjuda += val(row, cAjuda)
