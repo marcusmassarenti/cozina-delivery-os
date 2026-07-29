@@ -92,10 +92,11 @@ export async function persistFinanceiro(
   // truncado — e o iFood devolve, quando a conciliação ainda está sendo
   // processada do lado dele — o mês bom é trocado por um pedaço, em silêncio.
   //
-  // Aconteceu em 29/07/26 com a JK: o cron das 06:28 recebeu 5.000 linhas em
-  // vez de 20.702 e o Faturamento Bruto da rede caiu R$ 119 mil. Reprocessar
-  // meia hora depois trouxe as 20.702 — ou seja, o dado nunca se perdeu; nós
-  // é que aceitamos a resposta ruim como verdade.
+  // (Correção: em 29/07/26 eu culpei o extrato do iFood pela perda da JK. Não
+  // era. O parser leu as 20.702 linhas nas duas vezes — quem truncou em 5.000
+  // foi o nosso próprio insert, e é isso que a ordem grava-confere-apaga lá
+  // embaixo resolve. Esta trava continua aqui pro caso legítimo de o extrato
+  // vir mesmo curto, mas ela NÃO era a defesa que faltava.)
   //
   // Regra: encolher é suspeito, crescer não. Uma queda acima de 30% não
   // substitui nada — mantém o que já existe e devolve o aviso pra quem chamou.
@@ -118,6 +119,17 @@ export async function persistFinanceiro(
     }
   }
 
+  // ⚠️ O log nasce como "partial" e só vira "success" DEPOIS que as linhas
+  // estão no banco e conferidas.
+  //
+  // Antes ele era gravado como "success" com a contagem do PARSER, e o apaga-
+  // e-regrava vinha logo em seguida. Em 29/07/26 a JK e a Jardins perderam o
+  // mês assim: o parser leu 20.702 linhas, o log jurou 20.702, o mês antigo foi
+  // apagado e o insert morreu no primeiro chunk — sobraram exatamente 5.000
+  // linhas (1 chunk) e nenhum erro em lugar nenhum. R$ 161 mil sumiram do
+  // Faturamento Bruto da rede com o histórico dizendo "sucesso".
+  //
+  // Ou seja: o extrato do iFood nunca veio truncado. Nós é que truncamos.
   const { data: importLog, error: ilErr } = await admin
     .from("platform_imports")
     .insert({
@@ -129,19 +141,34 @@ export async function persistFinanceiro(
       ref_month: parsed.refMonth,
       source_filename: source.filename,
       imported_by: source.importedBy,
-      status: "success",
-      rows_imported: parsed.lancamentos.length,
+      status: "partial",
+      rows_imported: 0,
     })
     .select("id")
     .single()
   if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
 
-  if (substituido) {
+  // Restos de uma carga que morreu no meio (log "partial") não podem contar
+  // como dado. Somem antes de qualquer coisa — inclusive antes da nova carga,
+  // pra que o mês nunca fique somado duas vezes.
+  const { data: incompletos } = await admin
+    .from("platform_imports")
+    .select("id")
+    .eq("unit_id", unit.unitId)
+    .eq("platform", "ifood")
+    .eq("report_type", "financeiro")
+    .eq("status", "partial")
+    .neq("id", importLog.id)
+    // 30 min de folga pra não matar uma carga que ainda esteja rodando em
+    // paralelo (duas abas, cron + botão manual).
+    .lt("imported_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+  const idsIncompletos = (incompletos ?? []).map((r) => r.id as string)
+  if (idsIncompletos.length > 0) {
     await admin
       .from("ifood_financeiro_lancamentos")
       .delete()
       .eq("unit_id", unit.unitId)
-      .in("competencia", competencias)
+      .in("import_id", idsIncompletos)
   }
 
   // Conciliação do iFood tem MUITOS lançamentos (7k+ por loja/mês). Chunks
@@ -180,17 +207,71 @@ export async function persistFinanceiro(
     import_id: importLog.id,
   }))
 
+  // A ORDEM É O QUE PROTEGE O MÊS: grava a carga nova inteira, confere, e só
+  // então apaga a antiga. Se qualquer chunk falhar (ou a função for morta por
+  // timeout no meio), o mês antigo ainda está lá inteiro — o pior caso vira
+  // "sobrou lixo de uma carga partial", que a própria rodada seguinte limpa,
+  // em vez de "o mês foi apagado e não voltou".
+  const abortar = async (motivo: string): Promise<never> => {
+    await admin
+      .from("ifood_financeiro_lancamentos")
+      .delete()
+      .eq("unit_id", unit.unitId)
+      .eq("import_id", importLog.id)
+    await admin
+      .from("platform_imports")
+      .update({ status: "error", error_message: motivo.slice(0, 500) })
+      .eq("id", importLog.id)
+    throw new Error(motivo)
+  }
+
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK)
     const { error } = await admin
       .from("ifood_financeiro_lancamentos")
       .insert(slice)
     if (error) {
-      throw new Error(
-        `Falha ao gravar lançamentos (chunk ${i / CHUNK + 1}): ${error.message}`,
+      await abortar(
+        `Falha ao gravar lançamentos (chunk ${i / CHUNK + 1} de ${Math.ceil(
+          rows.length / CHUNK,
+        )}): ${error.message}`,
       )
     }
   }
+
+  // Conferência de verdade: conta no banco o que deveria ter entrado. É esta
+  // linha que teria pego a JK — o insert "não deu erro", só não gravou tudo.
+  const { count: gravadas } = await admin
+    .from("ifood_financeiro_lancamentos")
+    .select("id", { count: "exact", head: true })
+    .eq("unit_id", unit.unitId)
+    .eq("import_id", importLog.id)
+  if ((gravadas ?? 0) !== rows.length) {
+    await abortar(
+      `Carga incompleta: o banco gravou ${gravadas ?? 0} de ${rows.length} linhas. O mês anterior foi preservado.`,
+    )
+  }
+
+  // Agora sim: fora a carga antiga (tudo que é da mesma competência e não
+  // veio deste import).
+  if (substituido) {
+    const { error: delErr } = await admin
+      .from("ifood_financeiro_lancamentos")
+      .delete()
+      .eq("unit_id", unit.unitId)
+      .in("competencia", competencias)
+      // `neq` sozinho não pega linha com import_id nulo (comparação com NULL
+      // é NULL, não "diferente") — e linha antiga sem import_id existe.
+      .or(`import_id.is.null,import_id.neq.${importLog.id}`)
+    if (delErr) {
+      await abortar(`Falha ao remover a carga antiga: ${delErr.message}`)
+    }
+  }
+
+  await admin
+    .from("platform_imports")
+    .update({ status: "success", rows_imported: rows.length })
+    .eq("id", importLog.id)
 
   return {
     substituido,
