@@ -1,5 +1,4 @@
 import {
-  Bike,
   CalendarDays,
   Info,
   Megaphone,
@@ -33,6 +32,8 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 import { UnitCostsEditor } from "./unit-costs-editor"
 import { BrutoBreakdown } from "./bruto-breakdown"
 import { DreDetalhado, type DrePlat } from "./dre-detalhado"
+import { getQuemPagaEntrega } from "@/lib/data/taxa-entrega"
+import { EntregaCard } from "./entrega-card"
 
 const MESES_PT = [
   "Janeiro",
@@ -98,6 +99,7 @@ export async function FinanceiroLojaTab({
     keetaPed,
     keetaFaturaTaxas,
     cancelCesta,
+    quemPaga,
   ] = await Promise.all([
     getPagamentoResumoForMonth(unitId, year, month),
     getDeliveryFeeForMonth(unitId, year, month),
@@ -112,6 +114,7 @@ export async function FinanceiroLojaTab({
     getKeetaPedidoResumoForMonth(unitId, year, month),
     getKeetaFaturaTaxasForMonth(unitId, year, month),
     getCancelamentoCestaForMonth(unitId, year, month),
+    getQuemPagaEntrega([unitId], year, month),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -313,26 +316,16 @@ export async function FinanceiroLojaTab({
         <RecebiveisPlataforma keeta={keetaRepasse} />
       )}
 
-      {/* Custo de entrega (logístico) — por plataforma */}
-      {deliveryFee.total > 0 && (
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <Bike className="size-4 text-amber-600" />
-            <h3 className="text-sm font-semibold">Custo de entrega (logístico)</h3>
-            <span className="ml-auto text-base font-bold tabular-nums text-rose-700 dark:text-rose-400">
-              − {fmtBRL(deliveryFee.total)}
-            </span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <DeliveryItem platform="ifood" value={deliveryFee.ifood} />
-            <DeliveryItem platform="99food" value={deliveryFee.ninefood} />
-            <DeliveryItem platform="keeta" value={deliveryFee.keeta} />
-          </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            {fmtPct(bruto > 0 ? (deliveryFee.total / bruto) * 100 : 0)} do bruto ·
-            já está dentro das taxas das plataformas (no DRE acima).
-          </p>
-        </div>
+      {/* Custo de entrega — quanto custou E quem bancou, no mesmo card.
+          Antes eram dois lugares: o custo aqui e "quem banca" na tela da rede.
+          Separados, cada um respondia metade da pergunta — o custo não dizia
+          quem pagou, e quem pagou não dizia quanto custou. */}
+      {(deliveryFee.total > 0 || quemPaga.some((q) => q.pedidos > 0)) && (
+        <EntregaCard
+          deliveryFee={deliveryFee}
+          quemPaga={quemPaga}
+          bruto={bruto}
+        />
       )}
 
       {/* Gráficos: composição do bruto (por plataforma) + faturamento dia-a-dia */}
@@ -549,27 +542,6 @@ function TotalRow({
       <span className="text-xs font-semibold">{label}</span>
       <span className={`shrink-0 text-sm font-bold tabular-nums ${valueClass ?? ""}`}>
         {value}
-      </span>
-    </div>
-  )
-}
-
-function DeliveryItem({
-  platform,
-  value,
-}: {
-  platform: PlatformId
-  value: number
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
-      <PlatformLogo platform={platform} size="sm" />
-      <span
-        className={`text-sm font-semibold tabular-nums ${
-          value > 0 ? "" : "text-muted-foreground/50"
-        }`}
-      >
-        {value > 0 ? fmtBRL(value) : "—"}
       </span>
     </div>
   )

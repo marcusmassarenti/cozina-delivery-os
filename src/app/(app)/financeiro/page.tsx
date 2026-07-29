@@ -27,7 +27,7 @@ import {
   getNetworkDrePlatforms,
   getNetworkResultadoForMonth,
 } from "@/lib/data/resultado"
-import { getNetworkDeliveryFee, getQuemPagaEntrega } from "@/lib/data/taxa-entrega"
+import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import { getNetworkPagamentoResumo } from "@/lib/data/ifood-pedidos"
 import { getCaixaCustosPorGrupo } from "@/lib/data/dre-gerencial"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
@@ -39,7 +39,6 @@ import {
 import { BrutoBreakdown } from "@/app/(app)/unidades/[codigo]/_components/bruto-breakdown"
 
 import { ResultadoTable } from "./_components/resultado-table"
-import { QuemPagaEntregaCard } from "./_components/quem-paga-entrega"
 
 /**
  * Tela /financeiro ("DRE Grupo") — DRE consolidado da rede no mês.
@@ -152,11 +151,6 @@ export default async function ResultadoPage({
   const entregaPctBruto =
     totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
 
-  // Quem pagou a entrega, pedido a pedido. Fica ao lado do custo total porque
-  // uma pergunta puxa a outra: "R$ X de entrega" leva direto a "e quem pagou?".
-  const quemPaga = hasData
-    ? await getQuemPagaEntrega(rows.map((r) => r.unitId), year, month)
-    : []
 
   // Taxa de antecipação iFood somada na rede — alimenta o "Recebido real no
   // caixa" do DRE detalhado (não altera margem/KPIs).
@@ -287,8 +281,6 @@ export default async function ResultadoPage({
               tone={semCusto ? "neutral" : margemSemVr >= 0 ? "positive" : "negative"}
             />
           </div>
-
-          <QuemPagaEntregaCard dados={quemPaga} />
 
           {/* DRE da rede (detalhado, por plataforma) + composição do bruto */}
           <div className="grid gap-4 lg:grid-cols-3">
