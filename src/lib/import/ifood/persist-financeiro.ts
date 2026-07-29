@@ -34,6 +34,11 @@ export type PersistFinanceiroSource = {
 export type PersistFinanceiroResult = {
   /** true se já havia lançamentos da competência (foram substituídos). */
   substituido: boolean
+  /**
+   * Preenchido quando a carga foi RECUSADA por trazer muito menos lançamentos
+   * que a anterior. Nada foi apagado; o mês antigo continua de pé.
+   */
+  regressaoBloqueada?: { anterior: number; recebido: number; queda: number }
   /** Quantidade de linhas gravadas. */
   rowsImported: number
   /** Quantas linhas da(s) competência(s) JÁ existiam antes desta gravação.
@@ -80,6 +85,38 @@ export async function persistFinanceiro(
     .eq("unit_id", unit.unitId)
     .in("competencia", competencias.length > 0 ? competencias : ["__none__"])
   const substituido = (existingCount ?? 0) > 0
+
+  // ⚠️ TRAVA DE REGRESSÃO.
+  //
+  // Este bloco apaga o mês inteiro e regrava. Se a fonte devolver um extrato
+  // truncado — e o iFood devolve, quando a conciliação ainda está sendo
+  // processada do lado dele — o mês bom é trocado por um pedaço, em silêncio.
+  //
+  // Aconteceu em 29/07/26 com a JK: o cron das 06:28 recebeu 5.000 linhas em
+  // vez de 20.702 e o Faturamento Bruto da rede caiu R$ 119 mil. Reprocessar
+  // meia hora depois trouxe as 20.702 — ou seja, o dado nunca se perdeu; nós
+  // é que aceitamos a resposta ruim como verdade.
+  //
+  // Regra: encolher é suspeito, crescer não. Uma queda acima de 30% não
+  // substitui nada — mantém o que já existe e devolve o aviso pra quem chamou.
+  // O limite é folgado de propósito: cancelamento e estorno mudam a contagem
+  // legitimamente, e travar carga boa é tão ruim quanto aceitar carga ruim.
+  const anterior = existingCount ?? 0
+  const novas = parsed.lancamentos.length
+  const encolheuDemais = anterior > 0 && novas < anterior * 0.7
+  if (encolheuDemais) {
+    return {
+      substituido: false,
+      rowsImported: 0,
+      jaExistia: anterior,
+      importId: "",
+      regressaoBloqueada: {
+        anterior,
+        recebido: novas,
+        queda: Math.round((1 - novas / anterior) * 100),
+      },
+    }
+  }
 
   const { data: importLog, error: ilErr } = await admin
     .from("platform_imports")

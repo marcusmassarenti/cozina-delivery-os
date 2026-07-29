@@ -165,6 +165,24 @@ async function syncReconciliationCompetencia(
       { filename: `API Reconciliation ${competencia}`, importedBy: null, cadencia: "mensal" },
       admin,
     )
+    // Carga recusada por encolher demais: o mês antigo continua de pé. Vai
+    // como ok:false pra aparecer no `naoResolvidas` do cron e no e-mail de
+    // saúde — trava silenciosa seria só outro jeito de perder dado sem saber.
+    if (saved.regressaoBloqueada) {
+      const r = saved.regressaoBloqueada
+      return {
+        competencia,
+        ok: false,
+        status: recon.linkStatus,
+        rowCount: recon.rows.length,
+        persisted: 0,
+        error:
+          `carga recusada: o iFood devolveu ${r.recebido} lançamentos contra ` +
+          `${r.anterior} já gravados (queda de ${r.queda}%). O mês anterior foi ` +
+          `mantido — reprocessar mais tarde.`,
+      }
+    }
+
     return {
       competencia,
       ok: true,
