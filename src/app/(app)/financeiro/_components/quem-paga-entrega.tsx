@@ -34,11 +34,13 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
 
       <div className="divide-y">
         {comMovimento.map((d) => {
-          // A Keeta não expõe quem bancou o frete. Mostrar "0 a loja bancou
-          // (0,0%)" ali seria AFIRMAR que a loja nunca pagou — o mesmo erro
-          // que esta tela já cometeu com o iFood, só que em outra plataforma.
-          // Onde não dá pra provar, não se afirma.
-          const medimosQuemBanca = d.plataforma !== "keeta"
+          // Na Keeta as duas coisas convivem em TODO pedido: o cliente paga a
+          // taxa de entrega e a loja paga a "Taxa adicional de distância".
+          // Não é um ou outro — então ali não se desenha barra de disputa, se
+          // mostram os dois lados. (No iFood e na 99 existe lançamento que diz
+          // explicitamente que a loja bancou AQUELA entrega, e aí a divisão
+          // faz sentido.)
+          const divisaoExcludente = d.plataforma !== "keeta"
           const base = d.lojaBancou + d.clientePagou
           const pctLoja = base > 0 ? (d.lojaBancou / base) * 100 : 0
           const pctCliente = base > 0 ? (d.clientePagou / base) * 100 : 0
@@ -64,14 +66,33 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
                 )}
               </div>
 
-              {!medimosQuemBanca ? (
-                <p className="mt-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                  O relatório da Keeta não separa quem bancou o frete. Sabemos
-                  que <strong className="text-foreground">{fmtNum(d.clientePagou)}</strong>{" "}
-                  pedidos tiveram taxa de entrega cobrada (
-                  {fmtBRL(d.valorPagoPeloCliente)}), mas não dá pra dizer quanto
-                  disso a loja subsidiou — então não afirmamos.
-                </p>
+              {!divisaoExcludente ? (
+                <div className="mt-2 space-y-1.5 text-[11px] tabular-nums">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                    <span className="font-semibold text-amber-700 dark:text-amber-400">
+                      A loja paga taxa de distância em{" "}
+                      <strong>{fmtNum(d.lojaBancou)}</strong> pedidos
+                      {d.pedidos > 0 && ` (${fmtPct((d.lojaBancou / d.pedidos) * 100)})`}
+                    </span>
+                    <span className="font-semibold text-amber-700 dark:text-amber-400">
+                      {fmtBRL(d.valorBancadoPelaLoja)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      O cliente pagou taxa de entrega em{" "}
+                      <strong>{fmtNum(d.clientePagou)}</strong> pedidos
+                    </span>
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      {fmtBRL(d.valorPagoPeloCliente)}
+                    </span>
+                  </div>
+                  <p className="pt-0.5 text-muted-foreground">
+                    Na Keeta os dois acontecem no mesmo pedido: o cliente paga o
+                    frete e a loja ainda leva a taxa de distância. O relatório
+                    não diz em quantos pedidos a loja bancou o frete do cliente.
+                  </p>
+                </div>
               ) : base > 0 ? (
                 <>
                   {/* Âmbar primeiro: o que sai do bolso da loja é o que
@@ -126,7 +147,7 @@ export function QuemPagaEntregaCard({ dados }: { dados: QuemPagaEntrega[] }) {
                 </p>
               )}
 
-              {d.semInfo > 0 && medimosQuemBanca && (
+              {d.semInfo > 0 && divisaoExcludente && (
                 <p className="mt-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
                   <strong className="text-foreground">{fmtNum(d.semInfo)} pedidos</strong>{" "}
                   {d.plataforma === "keeta"
