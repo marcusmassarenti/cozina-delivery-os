@@ -280,3 +280,79 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     nota: s.nota ?? null,
   }))
 }
+
+/**
+ * "Essa loja não apareceu" — o cliente devolve a solicitação pra fila.
+ *
+ * Existe por causa de um buraco real: a solicitação de verdade é feita à mão no
+ * Portal do Desenvolvedor, um CNPJ por vez. Num lote de 14 lojas é questão de
+ * tempo até uma passar batido — e aí ela fica em 'solicitada' pra sempre. O
+ * cliente aprova o que aparece no portal dele, as que faltam ninguém cobra, e
+ * nenhum dos dois lados descobre: pro cliente é "ainda não conectou", pra fila
+ * interna é "com o cliente".
+ *
+ * Voltar pra 'pendente' recoloca a linha como SUA VEZ no painel — que é o
+ * único jeito de a loja esquecida reaparecer no radar de quem pode agir.
+ */
+export async function reportarLojaNaoApareceu(
+  _prev: SolicitacaoIfoodState,
+  formData: FormData,
+): Promise<SolicitacaoIfoodState> {
+  let admin: Awaited<ReturnType<typeof requireAdmin>>["admin"]
+  try {
+    admin = (await requireAdmin()).admin
+  } catch {
+    return { ok: false, message: "Só administradores podem reportar." }
+  }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não identificada." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, message: "Solicitação não informada." }
+
+  // Escopo duplo: a solicitação é da holding dela E de uma unidade que ela
+  // enxerga. Sem isso, um id chutado mexeria na fila de outro cliente.
+  const { data: alvo } = await admin
+    .from("ifood_activation_requests")
+    .select("id, unit_id, status")
+    .eq("id", id)
+    .eq("holding_id", holdingId)
+    .maybeSingle()
+  if (!alvo) return { ok: false, message: "Solicitação não encontrada." }
+  if (alvo.status !== "solicitada") {
+    return {
+      ok: false,
+      message: "Essa loja não está aguardando aprovação no iFood.",
+    }
+  }
+  const acessiveis = await getAccessibleUnitIds()
+  if (
+    acessiveis !== null &&
+    alvo.unit_id &&
+    !acessiveis.includes(alvo.unit_id as string)
+  ) {
+    return { ok: false, message: "Unidade inválida." }
+  }
+
+  const { error } = await admin
+    .from("ifood_activation_requests")
+    .update({
+      status: "pendente",
+      status_anterior: "solicitada",
+      // Zera a confirmação: ele confirmou aprovação de um lote em que ESTA
+      // loja não estava. Manter o carimbo faria a fila jurar que ela já foi
+      // aprovada, que é justamente a mentira que trouxe a gente até aqui.
+      cliente_confirmou_at: null,
+      nota: "O cliente reportou que esta loja não apareceu no Portal do Parceiro dele — refazer a solicitação no Portal do Desenvolvedor.",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+  if (error) return { ok: false, message: `Falha: ${error.message}` }
+
+  revalidatePath("/")
+  revalidatePath("/unidades")
+  return {
+    ok: true,
+    message: "Avisamos a equipe — vamos refazer a solicitação dessa loja.",
+  }
+}

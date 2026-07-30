@@ -10,6 +10,7 @@ import { CheckCircle2, Clock, ExternalLink, PartyPopper, X, XCircle } from "luci
 import {
   confirmarAprovacaoIfood,
   confirmarTodasAprovacoesIfood,
+  reportarLojaNaoApareceu,
   type MinhaSolicitacao,
   type SolicitacaoIfoodState,
 } from "@/app/(app)/unidades/_actions-ifood-ativacao"
@@ -252,7 +253,56 @@ function SolicitadaCard({ s }: { s: MinhaSolicitacao }) {
         <input type="hidden" name="unit_id" value={s.unitId} />
         <BotaoConfirmar />
       </form>
+      {/* A saída pro caso "essa loja nem apareceu pra eu aprovar". Sem ela a
+          linha ficava presa em 'solicitada' pra sempre: o cliente aprovava o
+          que via, e a que faltou não voltava pro radar de ninguém. */}
+      <BotaoNaoApareceu id={s.id} />
     </div>
+  )
+}
+
+/** Devolve a solicitação pra fila interna como "sua vez". */
+function BotaoNaoApareceu({ id }: { id: string }) {
+  const router = useRouter()
+  const [state, action] = useActionState<SolicitacaoIfoodState, FormData>(
+    reportarLojaNaoApareceu,
+    { ok: false },
+  )
+  React.useEffect(() => {
+    if (state.ok) router.refresh()
+  }, [state.ok, router])
+
+  if (state.ok) {
+    return (
+      <span className="basis-full text-[11px] text-emerald-700 dark:text-emerald-400">
+        {state.message}
+      </span>
+    )
+  }
+  return (
+    <form action={action} className="shrink-0">
+      <input type="hidden" name="id" value={id} />
+      <BotaoNaoApareceuSubmit />
+      {state.message && !state.ok && (
+        <span className="ml-2 text-[11px] text-rose-700 dark:text-rose-400">
+          {state.message}
+        </span>
+      )}
+    </form>
+  )
+}
+
+function BotaoNaoApareceuSubmit() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-50"
+      title="Use quando a loja não aparecer pra aprovar no seu Portal do Parceiro"
+    >
+      {pending ? "avisando..." : "não apareceu pra aprovar"}
+    </button>
   )
 }
 
