@@ -39,6 +39,19 @@ export async function GET(req: Request) {
       .map((c) => c.trim())
       .filter((c) => /^\d{4}-\d{2}$/.test(c))
     const force = url.searchParams.get("force") === "1"
+    // ?units=<uuid,uuid> restringe a lojas específicas.
+    //
+    // Existe por causa de 29/07: reprocessar junho e julho da rede inteira ao
+    // mesmo tempo estourou o statement timeout do Postgres nas duas maiores
+    // lojas da DG Foods. A trava nova preservou o mês, mas sem um jeito de
+    // repetir SÓ aquelas duas a única saída era rodar tudo de novo — e
+    // rodar tudo de novo era exatamente a causa.
+    const units = (url.searchParams.get("units") ?? "")
+      .split(",")
+      .map((u) => u.trim())
+      .filter((u) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u),
+      )
 
     // Antes do sync: casa lojas recém-autorizadas (por CNPJ) e puxa o
     // histórico delas. Assim uma loja nova se integra sozinha — sem mexer no
@@ -62,6 +75,7 @@ export async function GET(req: Request) {
     const out = await syncIfoodAll({
       force,
       competences: competences.length > 0 ? competences : undefined,
+      unitIds: units.length > 0 ? units : undefined,
     })
     return Response.json({ ok: true, autoLink, ...out })
   } catch (e) {
