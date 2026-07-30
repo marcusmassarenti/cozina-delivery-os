@@ -1,0 +1,15 @@
+-- PERFORMANCE: tira a subconsulta correlacionada do cálculo do bruto.
+--
+-- O "not exists (... Cancelamento Total ...)" rodava UMA VEZ POR LINHA de
+-- Venda. Numa loja como a JK, com 20 mil lançamentos no mês, são 20 mil
+-- varreduras extras — e o dashboard chama esta função uma vez por mês do
+-- gráfico de evolução, pra rede inteira. Medido em produção: 920 ms de média,
+-- 26.810 chamadas, quase 7 HORAS de tempo de banco acumulado.
+--
+-- Trocado por um anti-join contra a lista de cancelados montada uma vez só.
+-- Mesmo resultado (conferido: julho 506.064,68 e junho 522.845,82 antes e
+-- depois), de O(n×m) pra duas varreduras. Média nova: ~625 ms.
+--
+-- ⚠️ O corpo aplicado está em produção via migration 0139 (MCP). Este arquivo
+-- é a cópia versionada; ver pg_get_functiondef se houver dúvida de qual roda.
+(corpo completo aplicado via MCP)
