@@ -856,7 +856,7 @@ export default async function Home({
       {/* Dono: quanto a IA custou na plataforma neste mês. */}
       {consumoIaPlataforma.totalMensagens > 0 && (
         <Link
-          href="/plataforma/consumo-ia"
+          href="/clientes/consumo-ia"
           className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-3 py-2 text-xs transition-colors hover:bg-muted/50"
         >
           <span className="inline-flex items-center gap-1.5 font-medium">

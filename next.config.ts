@@ -70,10 +70,16 @@ const nextConfig: NextConfig = {
    */
   async redirects() {
     return [
+      // ⚠️ Antes da regra genérica de /caixa/:path*: o aging trocou de nome
+      // junto com a pasta, então a genérica mandaria pra um endereço morto.
+      { source: "/caixa/aging", destination: "/financeiro/a-pagar-receber", permanent: true },
       { source: "/caixa", destination: "/financeiro", permanent: true },
       { source: "/caixa/:path*", destination: "/financeiro/:path*", permanent: true },
       { source: "/consultor-ia", destination: "/nino", permanent: true },
       { source: "/consultor-ia/:path*", destination: "/nino/:path*", permanent: true },
+      { source: "/plataforma", destination: "/clientes", permanent: true },
+      { source: "/plataforma/:path*", destination: "/clientes/:path*", permanent: true },
+      { source: "/financeiro/aging", destination: "/financeiro/a-pagar-receber", permanent: true },
     ]
   },
 

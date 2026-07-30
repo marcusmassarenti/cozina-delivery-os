@@ -50,7 +50,7 @@ Saldo corrido PROJETADO (30/60/90 dias) juntando contas a pagar/receber + os rep
 ### Lançamentos ("/financeiro/lancamentos")
 Onde você registra entradas e saídas. Botão "Novo Lançamento": escolha tipo (despesa/receita/transferência), loja, valor, vencimento, conta ou cartão, categoria, cliente/fornecedor, descrição, data de pagamento e tags. Dá pra recorrência mensal e parcelar no cartão. Edição em massa (marcar pago, categorizar, excluir). Uma seção "Em aberto de meses anteriores" mostra contas vencidas de qualquer mês.
 - **Importar extrato (OFX):** botão no topo — escolha a conta e suba o arquivo .ofx do banco; vira lançamento (entrada/saída pelo sinal), já conciliado, sem duplicar o que já foi importado.
-### A pagar & receber ("/financeiro/aging")
+### A pagar & receber ("/financeiro/a-pagar-receber")
 Tudo em aberto por faixa de vencimento: a vencer / vencido 1-30 / 31-60 / 61-90 / +90 dias, dos dois lados, com o vencido em destaque.
 ### Contas ("/financeiro/contas")
 Suas contas bancárias/caixa: saldo inicial, saldo atual (inicial + efetivados), banco, cor. Transferência entre contas é um lançamento tipo "transferência".
@@ -70,7 +70,7 @@ Onde ficam as integrações automáticas (APIs das plataformas e do ERP) e o bot
 Converte os itens vendidos em demanda de insumos do ERP no período — liga a venda ao consumo de matéria-prima.
 
 ## ADMINISTRAÇÃO
-### Clientes ("/plataforma") — só dono da plataforma
+### Clientes ("/clientes") — só dono da plataforma
 Visão de dono do SaaS: todos os clientes (empresas), MRR, recebido, a receber, em atraso, status de cobrança, assinaturas Asaas. Clicando no cliente abre o detalhe (dados, cobrança, fiscais, lojas, usuários, pagamentos, NFs). Tem busca, filtro por status, seleção em massa e a aba Analytics.
 ### Minha conta
 - Informações ("/minha-conta/informacoes"): dados do titular (PF/PJ, CPF/CNPJ) e endereço da cobrança/NF; preencha o CEP que busca o endereço.

@@ -133,7 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         label: "A pagar & receber",
-        href: "/financeiro/aging",
+        href: "/financeiro/a-pagar-receber",
         icon: Scale,
         module: "financeiro",
         proOnly: true,
@@ -207,7 +207,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         label: "Clientes",
-        href: "/plataforma",
+        href: "/clientes",
         icon: Building2,
         superadminOnly: true,
       },

@@ -71,7 +71,7 @@ export function ClientDetailDrawer({
             </SheetTitle>
             {openId && (
               <Link
-                href={`/plataforma/${openId}`}
+                href={`/clientes/${openId}`}
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
                 title="Abrir em página cheia"
               >

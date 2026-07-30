@@ -189,7 +189,7 @@ export async function criarCliente(
 
     revalidateTag("units", "max")
     revalidateTag("reports", "max")
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     return { ok: true }
   })
 }
@@ -241,7 +241,7 @@ export async function setPlatformPlan(
     )
     if (error) return { ok: false, message: error.message }
 
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     return { ok: true }
   })
 }
@@ -299,7 +299,7 @@ export async function setClientBilling(
       .eq("id", holdingId)
     if (error) return { ok: false, message: error.message }
 
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     revalidatePath("/", "layout")
     return { ok: true }
   })
@@ -346,7 +346,7 @@ export async function convidarParaAsaas(
     if (error) return { ok: false, error: error.message }
 
     await auditar("convite_asaas.alterado", holdingId, { remover })
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     if (remover)
       return { ok: true, removido: true, message: "Convite retirado." }
 
@@ -422,7 +422,7 @@ export async function recordPayment(
       if (upErr) return { ok: false, message: upErr.message }
     }
 
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     return { ok: true }
   })
 }
@@ -442,7 +442,7 @@ export async function deletePayment(paymentId: string): Promise<BillingActionSta
     if (!paymentId) return { ok: false, message: "Pagamento não identificado." }
     const { error } = await admin.from("holding_payments").delete().eq("id", paymentId)
     if (error) return { ok: false, message: error.message }
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     return { ok: true }
   })
 }
@@ -504,7 +504,7 @@ export async function deleteClient(
       .eq("id", holdingId)
     if (hErr) return { ok: false, message: hErr.message }
 
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     revalidatePath("/", "layout")
     return { ok: true }
   } catch (err) {
@@ -605,7 +605,7 @@ export async function deleteClients(
       if (res.message) erros.push(res.message)
     }
   }
-  revalidatePath("/plataforma")
+  revalidatePath("/clientes")
   revalidatePath("/", "layout")
   return {
     ok: failed === 0,
@@ -651,7 +651,7 @@ export async function setClientPlanTier(
     // acompanhar — senão o cliente sobe pro AI e segue pagando o Pro.
     await sincronizarValorAssinatura(holdingId)
 
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     revalidatePath("/", "layout")
     return { ok: true }
   })
@@ -685,7 +685,7 @@ export async function toggleNinoDegustacao(
       .update({ nino_trial_ends_at: ends })
       .eq("id", holdingId)
     if (error) return { ok: false, message: error.message }
-    revalidatePath("/plataforma")
+    revalidatePath("/clientes")
     revalidatePath("/", "layout")
     return { ok: true }
   })

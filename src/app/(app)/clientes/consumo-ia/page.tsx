@@ -49,7 +49,7 @@ export default async function ConsumoIaPage({
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-2">
         <Link
-          href="/plataforma"
+          href="/clientes"
           className="inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
@@ -66,7 +66,7 @@ export default async function ConsumoIaPage({
             {meses.map((m) => (
               <Link
                 key={m}
-                href={`/plataforma/consumo-ia?mes=${m}`}
+                href={`/clientes/consumo-ia?mes=${m}`}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                   m === mes
                     ? "bg-primary text-primary-foreground"
@@ -135,7 +135,7 @@ export default async function ConsumoIaPage({
                 <tr key={c.holdingId} className="hover:bg-muted/40">
                   <td className="px-4 py-2.5">
                     <Link
-                      href={`/plataforma/${c.holdingId}`}
+                      href={`/clientes/${c.holdingId}`}
                       className="font-medium text-primary hover:underline"
                     >
                       {c.cliente}

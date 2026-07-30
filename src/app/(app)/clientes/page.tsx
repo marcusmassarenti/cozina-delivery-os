@@ -126,21 +126,21 @@ export default async function PlataformaPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/plataforma/conexoes"
+            href="/clientes/conexoes"
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
           >
             <Plug className="size-4" />
             Conexões
           </Link>
           <Link
-            href="/plataforma/consumo-ia"
+            href="/clientes/consumo-ia"
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
           >
             <Sparkles className="size-4" />
             Consumo IA
           </Link>
           <Link
-            href="/plataforma/analytics"
+            href="/clientes/analytics"
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
           >
             <TrendingUp className="size-4" />

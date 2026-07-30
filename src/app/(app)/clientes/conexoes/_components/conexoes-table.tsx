@@ -210,7 +210,7 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
                   </td>
                   <td className="px-4 py-2.5">
                     <Link
-                      href={`/plataforma/${r.clienteId}`}
+                      href={`/clientes/${r.clienteId}`}
                       className="font-medium text-primary hover:underline"
                     >
                       {r.cliente}
