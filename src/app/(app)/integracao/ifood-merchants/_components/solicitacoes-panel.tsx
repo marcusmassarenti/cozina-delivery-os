@@ -81,18 +81,19 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
   // Em "solicitada" a bola está com o CLIENTE: a única saída manual é recusar.
   const proximas: Array<{ status: string; rotulo: string }> =
     s.status === "pendente"
-      ? [
-          { status: "solicitada", rotulo: "Marquei como solicitada" },
-          { status: "recusada", rotulo: "Recusar" },
-        ]
-      : s.status === "solicitada"
-        ? [{ status: "recusada", rotulo: "Recusar" }]
-        : // Já recusada: o aviso continua editável. Recusa feita antes deste
-          // campo existir ficou sem explicação nenhuma na tela do cliente —
-          // isto deixa escrever o motivo sem ter que desfazer e recusar de novo.
-          s.status === "recusada"
-          ? [{ status: "recusada", rotulo: "Salvar aviso" }]
-          : []
+      ? [{ status: "solicitada", rotulo: "Marquei como solicitada" }]
+      : []
+
+  /** Recusar é uma ação à parte: ela pede o aviso que o cliente vai ler. */
+  const podeRecusar = s.status === "pendente" || s.status === "solicitada"
+  const jaRecusada = s.status === "recusada"
+
+  // Fecha o campo assim que a gravação passa: depois de salvar, o aviso vira
+  // texto de novo. Deixar a caixa aberta dava a impressão de que não salvou.
+  const [editando, setEditando] = React.useState(false)
+  React.useEffect(() => {
+    if (state.ok) setEditando(false)
+  }, [state.ok])
 
   return (
     <div className="rounded-lg border bg-muted/20 p-3">
@@ -126,25 +127,37 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
         </span>
       </div>
 
-      {(proximas.length > 0 || podeDesfazer) && (
+      {/* O aviso salvo, em texto — é literalmente o que o cliente lê. */}
+      {jaRecusada && !editando && (
+        <p className="mt-2 rounded-md border-l-2 border-rose-400 bg-rose-50 px-2.5 py-1.5 text-[11px] leading-relaxed text-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
+          {s.nota ?? "Sem aviso escrito — o cliente vê só o texto padrão."}
+        </p>
+      )}
+
+      {(proximas.length > 0 || podeRecusar || jaRecusada || podeDesfazer) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {proximas.map((p) => (
-            <form
-              key={p.status}
-              action={action}
-              className={p.status === "recusada" ? "flex flex-1 basis-full items-center gap-2" : undefined}
-            >
+            <form key={p.status} action={action}>
               <input type="hidden" name="id" value={s.id} />
               <input type="hidden" name="status" value={p.status} />
-              {/* A nota é O QUE O CLIENTE LÊ na faixa vermelha da loja dele.
-                  Era um hidden com texto fixo: toda recusa chegava igual,
-                  dissesse respeito a CNPJ errado, loja fechada ou app não
-                  autorizado. Agora é editável — já vem preenchida com o motivo
-                  mais comum, então recusar continua sendo um clique. */}
-              {p.status === "recusada" && (
+              <BotaoStatus rotulo={p.rotulo} />
+            </form>
+          ))}
+
+          {/* O campo do aviso fica GUARDADO até você decidir recusar.
+              Aberto o tempo todo, ele aparecia em toda linha da fila — inclusive
+              nas que estão só esperando o cliente aprovar — e a tela virava um
+              mural de caixas de texto vermelhas em lojas que não têm problema
+              nenhum. Aqui ele só existe quando é a hora dele. */}
+          {(podeRecusar || jaRecusada) &&
+            (editando ? (
+              <form action={action} className="flex flex-1 basis-full items-center gap-2">
+                <input type="hidden" name="id" value={s.id} />
+                <input type="hidden" name="status" value="recusada" />
                 <input
                   type="text"
                   name="nota"
+                  autoFocus
                   defaultValue={
                     s.nota ??
                     "Não foi possível localizar a loja com esse CNPJ — confira o CNPJ cadastrado no iFood e solicite de novo."
@@ -152,10 +165,26 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
                   placeholder="O que o cliente vai ler"
                   className="min-w-0 flex-1 rounded-md border bg-background px-2.5 py-1 text-[11px]"
                 />
-              )}
-              <BotaoStatus rotulo={p.rotulo} />
-            </form>
-          ))}
+                <BotaoStatus rotulo={jaRecusada ? "Salvar aviso" : "Confirmar recusa"} />
+                <button
+                  type="button"
+                  onClick={() => setEditando(false)}
+                  className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  cancelar
+                </button>
+              </form>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px]"
+                onClick={() => setEditando(true)}
+              >
+                {jaRecusada ? "Editar aviso" : "Recusar"}
+              </Button>
+            ))}
           {/* Recusada sempre pode voltar; sem histórico, volta pro início. */}
           {podeDesfazer && (
             <BotaoDesfazer id={s.id} para={s.statusAnterior ?? "pendente"} />

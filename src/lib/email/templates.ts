@@ -427,3 +427,42 @@ export function faturaVencida(
     }),
   }
 }
+
+/**
+ * Conexão iFood recusada.
+ *
+ * A recusa acontece na fila interna, e o cliente só descobria se entrasse na
+ * página daquela loja específica. Este e-mail existe pra ele não ficar
+ * esperando por uma conexão que não vem.
+ *
+ * `motivo` é a nota escrita na hora de recusar — é o conteúdo do e-mail, não um
+ * detalhe. Sem ela sobra "não deu certo", que não ajuda ninguém a agir.
+ */
+export function conexaoRecusada(d: {
+  nome: string | null
+  loja: string | null
+  cnpj: string
+  motivo: string | null
+}) {
+  const cnpjFmt =
+    d.cnpj.length === 14
+      ? `${d.cnpj.slice(0, 2)}.${d.cnpj.slice(2, 5)}.${d.cnpj.slice(5, 8)}/${d.cnpj.slice(8, 12)}-${d.cnpj.slice(12)}`
+      : d.cnpj
+  const ondeFica = d.loja ? ` da <strong>${d.loja}</strong>` : ""
+  return {
+    assunto: `Não consegui conectar o iFood${d.loja ? ` — ${d.loja}` : ""}`,
+    html: layout({
+      titulo: "A conexão com o iFood não deu certo",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Tentei conectar o iFood${ondeFica} com o CNPJ <strong style="white-space:nowrap;">${cnpjFmt}</strong> e não foi possível.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+          <tr><td style="background:#fff1f2;border-left:4px solid #e11d48;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+            ${d.motivo ?? "Confira o CNPJ cadastrado no iFood e solicite a conexão de novo."}
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;">É só corrigir e pedir de novo: abra a loja no painel e clique em <strong>Solicitar de novo</strong>. Nada do que você já cadastrou se perdeu.</p>`,
+      cta: { texto: "Abrir o painel", url: `${SITE}/unidades` },
+      ps: "Se o CNPJ estiver certo e mesmo assim não conectar, me responde aqui que eu vejo caso a caso.",
+    }),
+  }
+}

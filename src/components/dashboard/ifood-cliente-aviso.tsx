@@ -4,7 +4,8 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Clock, ExternalLink, PartyPopper, X } from "lucide-react"
+import Link from "next/link"
+import { CheckCircle2, Clock, ExternalLink, PartyPopper, X, XCircle } from "lucide-react"
 
 import {
   confirmarAprovacaoIfood,
@@ -32,10 +33,23 @@ export function IfoodClienteAviso({
   const pendentesAprovacao = solicitacoes.filter(
     (s) => s.status === "solicitada",
   )
-  if (ativas.length === 0 && pendentesAprovacao.length === 0) return null
+  // Recusada precisa aparecer AQUI. Antes ela sumia da home: o cliente
+  // continuava esperando uma conexão que não vinha, e a explicação só existia
+  // na página daquela loja específica — onde ele não tinha motivo pra entrar.
+  const recusadas = solicitacoes.filter((s) => s.status === "recusada")
+  if (
+    ativas.length === 0 &&
+    pendentesAprovacao.length === 0 &&
+    recusadas.length === 0
+  ) {
+    return null
+  }
 
   return (
     <div className="flex flex-col gap-2">
+      {recusadas.map((s) => (
+        <RecusadaCard key={s.id} s={s} />
+      ))}
       {ativas.map((s) => (
         <AtivaCard key={s.id} s={s} />
       ))}
@@ -238,6 +252,29 @@ function SolicitadaCard({ s }: { s: MinhaSolicitacao }) {
         <input type="hidden" name="unit_id" value={s.unitId} />
         <BotaoConfirmar />
       </form>
+    </div>
+  )
+}
+
+/**
+ * "Não deu certo, e é por isso." O motivo é o conteúdo do card — sem ele o
+ * aviso só transfere a angústia. O link leva pra loja, que é onde fica o
+ * botão de solicitar de novo.
+ */
+function RecusadaCard({ s }: { s: MinhaSolicitacao }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 px-3.5 py-2.5 text-xs dark:border-rose-900 dark:bg-rose-950/30">
+      <XCircle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" />
+      <span className="text-rose-900 dark:text-rose-200">
+        <b>Não foi possível conectar o iFood da {s.unitName}.</b>{" "}
+        {s.nota ?? "Confira o CNPJ e solicite de novo."}
+      </span>
+      <Link
+        href={`/unidades/${s.unitCode ?? ""}`}
+        className="ml-auto shrink-0 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-800 dark:bg-transparent dark:text-rose-300 dark:hover:bg-rose-950/40"
+      >
+        Corrigir e pedir de novo
+      </Link>
     </div>
   )
 }

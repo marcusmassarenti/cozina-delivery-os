@@ -31,6 +31,12 @@ export type TipoEmail =
   | "fatura-vencida"
   /** Relatório interno de saúde — sai todo dia, não é régua de cliente. */
   | "saude-diaria"
+  /**
+   * Conexão iFood recusada. NÃO é régua: pode acontecer várias vezes pro mesmo
+   * cliente (uma por CNPJ errado), então quem dispara manda `forcar: true` —
+   * senão a trava de duplicidade engoliria da segunda recusa em diante.
+   */
+  | "conexao-recusada"
 
 export type ResultadoEnvio = {
   ok: boolean

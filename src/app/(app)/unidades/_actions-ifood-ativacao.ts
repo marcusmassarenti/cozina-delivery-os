@@ -227,12 +227,19 @@ export type MinhaSolicitacao = {
   status: "pendente" | "solicitada" | "ativa" | "recusada"
   clienteConfirmou: boolean
   atualizadaEm: string
+  /** O motivo escrito na recusa — é o que a pessoa precisa ler pra agir. */
+  nota: string | null
 }
 
 /**
  * Solicitações de conexão iFood do PRÓPRIO cliente (escopo dele), pro aviso
- * na tela inicial: "falta você aprovar" / "sua loja foi conectada". Só as
- * relevantes (solicitada ou ativa). Superadmin não usa (tem o painel).
+ * na tela inicial: "falta você aprovar" / "sua loja foi conectada" / "não deu
+ * certo, e por quê". Superadmin não usa (tem o painel).
+ *
+ * ⚠️ 'recusada' entra AQUI. Ela ficava de fora e o resultado era o pior
+ * possível: o pedido simplesmente sumia da home e o cliente continuava
+ * esperando por uma conexão que não vinha, sem nunca saber que foi recusada —
+ * a explicação existia, mas só aparecia se ele entrasse na página daquela loja.
  */
 export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> {
   const { isSuperadmin } = await import("@/lib/auth/permissions")
@@ -247,10 +254,10 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
   let q = db
     .from("ifood_activation_requests")
     .select(
-      "id, unit_id, status, cliente_confirmou_at, updated_at, units(code, name)",
+      "id, unit_id, status, nota, cliente_confirmou_at, updated_at, units(code, name)",
     )
     .eq("holding_id", holdingId)
-    .in("status", ["solicitada", "ativa"])
+    .in("status", ["solicitada", "ativa", "recusada"])
     .order("updated_at", { ascending: false })
   if (acessiveis !== null) q = q.in("unit_id", acessiveis)
   const { data } = await q
@@ -258,6 +265,7 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     id: string
     unit_id: string
     status: MinhaSolicitacao["status"]
+    nota: string | null
     cliente_confirmou_at: string | null
     updated_at: string
     units: { code: string; name: string } | null
@@ -269,5 +277,6 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     status: s.status,
     clienteConfirmou: !!s.cliente_confirmou_at,
     atualizadaEm: s.updated_at,
+    nota: s.nota ?? null,
   }))
 }

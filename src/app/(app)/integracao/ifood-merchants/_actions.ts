@@ -397,7 +397,7 @@ export async function atualizarSolicitacaoIfood(
   // Guarda de onde veio, pro Desfazer restaurar o passo certo da fila.
   const { data: atual } = await admin
     .from("ifood_activation_requests")
-    .select("status")
+    .select("status, holding_id, cnpj, units(name)")
     .eq("id", id)
     .maybeSingle()
 
@@ -412,9 +412,76 @@ export async function atualizarSolicitacaoIfood(
     .eq("id", id)
   if (error) return { ok: false, error: error.message }
 
+  // Avisa por e-mail SÓ quando a recusa é nova. Reescrever o aviso de uma
+  // recusa que já existe (botão "Salvar aviso") não dispara nada — senão
+  // corrigir uma vírgula manda outro e-mail pro cliente.
+  let avisoEmail: string | null = null
+  if (status === "recusada" && atual?.status !== "recusada") {
+    avisoEmail = await avisarRecusaPorEmail({
+      holdingId: (atual?.holding_id as string | null) ?? null,
+      cnpj: (atual?.cnpj as string | null) ?? "",
+      loja:
+        ((atual?.units as { name?: string } | null)?.name as string | null) ??
+        null,
+      motivo: nota,
+    })
+  }
+
   revalidatePath("/integracao/ifood-merchants")
   revalidatePath("/importacao")
-  return { ok: true, message: "Status atualizado." }
+  return {
+    ok: true,
+    message: avisoEmail ? `Status atualizado. ${avisoEmail}` : "Status atualizado.",
+  }
+}
+
+/**
+ * Manda a recusa pro administrador da holding e devolve o que contar na tela.
+ *
+ * Nunca lança: o status já foi gravado quando isto roda, e falhar o e-mail não
+ * pode desfazer a recusa nem parecer que a recusa falhou. O retorno é texto pra
+ * quem recusou saber se o cliente foi mesmo avisado — sem isso o operador fica
+ * achando que avisou quando não avisou.
+ */
+async function avisarRecusaPorEmail(d: {
+  holdingId: string | null
+  cnpj: string
+  loja: string | null
+  motivo: string | null
+}): Promise<string> {
+  if (!d.holdingId) return "Não avisei por e-mail: solicitação sem empresa."
+  try {
+    const { contatoDaHolding } = await import("@/lib/email/contato-holding")
+    const { enviarEmail } = await import("@/lib/email/enviar")
+    const { conexaoRecusada } = await import("@/lib/email/templates")
+
+    const contato = await contatoDaHolding(d.holdingId)
+    if (!contato) {
+      return "Não avisei por e-mail: a empresa não tem administrador com e-mail confirmado."
+    }
+
+    const { assunto, html } = conexaoRecusada({
+      nome: contato.nome,
+      loja: d.loja,
+      cnpj: d.cnpj,
+      motivo: d.motivo,
+    })
+    const r = await enviarEmail({
+      holdingId: d.holdingId,
+      tipo: "conexao-recusada",
+      para: contato.email,
+      assunto,
+      html,
+      // Pode recusar mais de uma vez o mesmo cliente (outro CNPJ errado).
+      forcar: true,
+    })
+    return r.ok
+      ? `Avisei ${contato.email} por e-mail.`
+      : `Não consegui avisar por e-mail: ${r.erro ?? "falha no envio"}.`
+  } catch (e) {
+    console.error("avisarRecusaPorEmail", e)
+    return "Não consegui avisar por e-mail (erro interno)."
+  }
 }
 
 /**
