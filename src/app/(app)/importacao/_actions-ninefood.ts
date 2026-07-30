@@ -1,5 +1,7 @@
 "use server"
 
+import { limparCacheAgregados } from "@/lib/cache-tags"
+
 import { revalidatePath } from "next/cache"
 
 import { assertCanView, getAccessibleUnitIds } from "@/lib/auth/permissions"
@@ -89,7 +91,8 @@ export async function runNinefood99Sync(
     })
     revalidatePath("/importacao")
     revalidatePath("/financeiro")
-    revalidatePath("/")
+    await limparCacheAgregados()
+  revalidatePath("/")
 
     const comErro = results.filter((r) => r.error)
     return {
@@ -212,7 +215,8 @@ export async function runNinefood99SyncAll(
 
     revalidatePath("/importacao")
     revalidatePath("/financeiro")
-    revalidatePath("/")
+    await limparCacheAgregados()
+  revalidatePath("/")
     const erros = [
       ...fin.results.filter((r) => r.error),
       ...card.results.filter((r) => r.error),

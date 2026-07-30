@@ -1,5 +1,7 @@
 "use server"
 
+import { limparCacheAgregados } from "@/lib/cache-tags"
+
 import { revalidatePath, revalidateTag } from "next/cache"
 
 import * as XLSX from "xlsx"
@@ -341,7 +343,8 @@ export async function importIfoodReports(
     revalidateTag("reports", "max")
     revalidateTag("units", "max")
     revalidatePath("/importacao")
-    revalidatePath("/")
+    await limparCacheAgregados()
+  revalidatePath("/")
   }
 
   // ⚠️ FALHA TAMBÉM VIRA REGISTRO.
@@ -3759,6 +3762,7 @@ export async function createUnitAndImport(
   revalidateTag("units", "max")
   revalidatePath("/importacao")
   revalidatePath("/unidades")
+  await limparCacheAgregados()
   revalidatePath("/")
 
   const result: ImportFileResult = {
@@ -3849,7 +3853,8 @@ export async function recheckAndImport(
     revalidateTag("units", "max")
     revalidatePath("/importacao")
     revalidatePath("/unidades")
-    revalidatePath("/")
+    await limparCacheAgregados()
+  revalidatePath("/")
   }
 
   return {
@@ -3966,6 +3971,7 @@ export async function linkUnitAndImport(
   revalidateTag("units", "max")
   revalidatePath("/importacao")
   revalidatePath("/unidades")
+  await limparCacheAgregados()
   revalidatePath("/")
 
   const result: ImportFileResult = {

@@ -13,6 +13,13 @@
 
 import "server-only"
 
+import {
+  rpcMensalComCache,
+  TAG_99FOOD,
+  TAG_FINANCEIRO_IFOOD,
+  TAG_KEETA,
+} from "@/lib/cache-tags"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type DeliveryFee = {
@@ -80,28 +87,26 @@ export async function getDeliveryFeeByUnits(
     return f
   }
 
+  // Mês fechado responde do cache; mês corrente vai ao banco. Cada plataforma
+  // com a SUA tag: reimportar a fatura da Keeta não pode invalidar o iFood
+  // junto sem necessidade (e, mais importante, não pode DEIXAR de invalidar a
+  // Keeta).
   const [ifoodRes, nineRes, keetaRes] = await Promise.all([
-    admin.rpc("ifood_taxa_entrega_by_units", {
-      p_unit_ids: unitIds,
-      p_year: year,
-      p_month: month,
-    }),
-    admin.rpc("ninefood_custo_entrega_by_units", {
-      p_unit_ids: unitIds,
-      p_year: year,
-      p_month: month,
-    }),
-    admin.rpc("keeta_taxa_entrega_by_units", {
-      p_unit_ids: unitIds,
-      p_year: year,
-      p_month: month,
-    }),
+    rpcMensalComCache<Record<string, unknown>>(
+      "ifood_taxa_entrega_by_units", unitIds, year, month, TAG_FINANCEIRO_IFOOD,
+    ),
+    rpcMensalComCache<Record<string, unknown>>(
+      "ninefood_custo_entrega_by_units", unitIds, year, month, TAG_99FOOD,
+    ),
+    rpcMensalComCache<Record<string, unknown>>(
+      "keeta_taxa_entrega_by_units", unitIds, year, month, TAG_KEETA,
+    ),
   ])
 
   if (ifoodRes.error || nineRes.error || keetaRes.error) {
     console.error(
       "getDeliveryFeeByUnits rpc, usando fallback:",
-      ifoodRes.error?.message ?? nineRes.error?.message ?? keetaRes.error?.message,
+      ifoodRes.error ?? nineRes.error ?? keetaRes.error,
     )
     return getDeliveryFeeByUnitsPaginated(unitIds, year, month)
   }

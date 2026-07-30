@@ -17,6 +17,8 @@
 
 import "server-only"
 
+import { rpcMensalComCache, TAG_FINANCEIRO_IFOOD } from "@/lib/cache-tags"
+
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -263,17 +265,17 @@ async function loadIfood(
   // Range custom: RPC só agrega por mês inteiro, então sempre cai no
   // paginated quando há filtro de dia.
   if (dateRange) return loadIfoodPaginated(unitIds, year, month, dateRange)
-  const admin = createAdminClient()
-
-  const { data, error } = await admin.rpc("ifood_financeiro_diario_by_units", {
-    p_unit_ids: unitIds,
-    p_year: year,
-    p_month: month,
-  })
+  const { data, error } = await rpcMensalComCache<Record<string, unknown>>(
+    "ifood_financeiro_diario_by_units",
+    unitIds,
+    year,
+    month,
+    TAG_FINANCEIRO_IFOOD,
+  )
 
   if (error) {
     // Função ainda não existe → usa o caminho antigo (lento, mas correto)
-    console.error("loadIfood rpc, usando fallback:", error.message)
+    console.error("loadIfood rpc, usando fallback:", error)
     return loadIfoodPaginated(unitIds, year, month)
   }
 

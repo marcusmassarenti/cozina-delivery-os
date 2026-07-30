@@ -245,6 +245,10 @@ export async function GET(req: Request) {
       .in("id", slice)
   }
 
+  // Entrou pedido novo → o agregado mensal em cache ficou velho.
+  const { limparCacheAgregados } = await import("@/lib/cache-tags")
+  await limparCacheAgregados()
+
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
