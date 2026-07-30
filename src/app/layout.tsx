@@ -22,7 +22,14 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Delivery OS",
-    statusBarStyle: "black-translucent",
+    // "default", NÃO "black-translucent".
+    //
+    // Translúcido faz o iOS desenhar o app POR BAIXO da barra de status — o
+    // relógio e a bateria ficam por cima do conteúdo, e o botão do menu, que
+    // mora no topo, vira inclicável. Foi exatamente o que aconteceu no
+    // primeiro teste do PWA no iPhone. Com "default" o sistema reserva a
+    // faixa: perde-se a tela de ponta a ponta, ganha-se um app usável.
+    statusBarStyle: "default",
   },
   icons: {
     icon: "/deliveryos-icon.png",
@@ -32,8 +39,6 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#ff4d1c",
-  // A barra do iOS encosta no conteúdo sem isto quando roda em tela cheia.
-  viewportFit: "cover",
 };
 
 export default function RootLayout({
