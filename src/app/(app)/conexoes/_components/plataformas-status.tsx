@@ -3,13 +3,16 @@ import Link from "next/link"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 
+import { contarLojasConectadas } from "@/lib/data/conexoes-contagem"
+
 /**
  * Painel de status das integrações de plataforma (entrada).
- * Reflete o estado REAL de cada conexão — não é mockup:
- *  - iFood: app criado + auth pronta, em homologação (ticket aberto) → import manual por ora.
- *  - 99 Food: CONECTADO via API (financeiro + cardápio sincronizando).
- *  - Keeta: importação manual de relatórios.
- * Cada card mostra ONDE sincronizar.
+ *
+ * ⚠️ As contagens de loja vêm do BANCO, não de texto fixo. A versão anterior
+ * dizia "4 de 18 vinculadas" na 99 — número escrito à mão que envelheceu e
+ * passou meses mentindo (o real eram 7 de 59). Painel de status que mente é
+ * pior que painel que não existe: você para de conferir porque acha que já
+ * conferiu.
  */
 type Status = "conectado" | "homologacao" | "verificacao" | "manual"
 
@@ -56,26 +59,33 @@ type PlatformStatus = {
   sync: { label: string; href: string }
 }
 
-const PLATFORMS: PlatformStatus[] = [
+type Contagens = {
+  ifoodVinculadas: number
+  ifoodTotal: number
+  noveVinculadas: number
+  noveTotal: number
+}
+
+const montarPlataformas = (n: Contagens): PlatformStatus[] => [
   {
     id: "ifood",
     name: "iFood",
-    status: "homologacao",
-    headline: "Conciliação On Demand (D-1) pela API oficial",
+    status: "conectado",
+    headline: "API oficial — conciliação (D-1) + avaliações, todo dia",
     meta: [
-      { label: "App", value: "Delivery OS · centralizado" },
-      { label: "Módulos", value: "Financeiro · Merchant" },
-      { label: "Ticket", value: "#28413618 · em análise" },
+      { label: "Dados", value: "Financeiro (conciliação) + Avaliações" },
+      { label: "Lojas", value: `${n.ifoodVinculadas} de ${n.ifoodTotal} vinculadas` },
+      { label: "Empresa", value: "Lab of Change Ltda" },
     ],
     steps: [
-      { label: "App criado", state: "done" },
+      { label: "App de produção criado", state: "done" },
       { label: "Autenticação implementada", state: "done" },
-      { label: "Homologação iFood", state: "active" },
-      { label: "Produção (todas as lojas)", state: "pending" },
+      { label: "Financeiro + Avaliações via API", state: "done" },
+      { label: "Vincular as demais lojas", state: "active" },
     ],
     sync: {
-      label: "Abrir painel de homologação",
-      href: "/integracao/ifood-homolog",
+      label: "Ver a fila de conexão",
+      href: "/integracao/ifood-merchants",
     },
   },
   {
@@ -85,7 +95,7 @@ const PLATFORMS: PlatformStatus[] = [
     headline: "API oficial — financeiro + cardápio sincronizando",
     meta: [
       { label: "Dados", value: "Financeiro (repasse) + Cardápio" },
-      { label: "Lojas", value: "4 de 18 vinculadas" },
+      { label: "Lojas", value: `${n.noveVinculadas} de ${n.noveTotal} vinculadas` },
       { label: "Empresa", value: "Lab of Change Ltda" },
     ],
     steps: [
@@ -104,6 +114,22 @@ const PLATFORMS: PlatformStatus[] = [
     meta: [{ label: "API", value: "Só operacional — financeiro manual" }],
     sync: { label: "Importe os relatórios", href: "/importacao" },
   },
+  {
+    id: "cardapioweb",
+    name: "Cardápio Web",
+    status: "verificacao",
+    headline: "Canal próprio do restaurante — pedidos e clientes pela API",
+    meta: [
+      { label: "Dados", value: "Pedidos + Clientes + Catálogo" },
+      { label: "Acesso", value: "OAuth do lojista (PKCE)" },
+    ],
+    steps: [
+      { label: "Homologado em sandbox", state: "done" },
+      { label: "App de produção aprovado", state: "done" },
+      { label: "Conectar a primeira loja real", state: "active" },
+    ],
+    sync: { label: "Conectar uma loja", href: "/integracao/cardapioweb" },
+  },
 ]
 
 function StepIcon({ state }: { state: StepState }) {
@@ -112,10 +138,11 @@ function StepIcon({ state }: { state: StepState }) {
   return <Circle className="size-3 text-muted-foreground/40" />
 }
 
-export function PlataformasStatus() {
+export async function PlataformasStatus() {
+  const n = await contarLojasConectadas()
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
-      {PLATFORMS.map((p) => {
+    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+      {montarPlataformas(n).map((p) => {
         const st = STATUS_STYLE[p.status]
         return (
           <div

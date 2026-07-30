@@ -1,7 +1,7 @@
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, Cable, Plug, Star, Webhook } from "lucide-react"
+import { ArrowRight, Cable, Plug, Webhook, Wrench } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 
@@ -14,7 +14,8 @@ import { PlataformasStatus } from "./_components/plataformas-status"
 /**
  * Conexões — hub de integrações.
  *  1) API do Delivery OS (saída): sistemas externos (ERP) puxam dados.
- *  2) Plataformas de delivery (entrada): iFood / 99 / Keeta — em breve.
+ *  2) Plataformas de delivery (entrada): iFood, 99 Food, Keeta e Cardápio Web
+ *     — cada uma com seu estado real e o atalho pra onde se mexe nela.
  */
 export default async function ConexoesPage() {
   // Interno da plataforma (chaves de API + integrações) — só super-admin.
@@ -128,31 +129,34 @@ export default async function ConexoesPage() {
           <h2 className="text-sm font-semibold">Plataformas de delivery</h2>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          Ingestão dos dados de cada plataforma. O iFood está caminhando pra
-          conexão direta por API; 99 Food e Keeta seguem pela importação de
-          relatórios.
+          Ingestão dos dados de cada plataforma, e onde mexer em cada uma.
+          iFood e 99 Food entram por API; a Keeta só por relatório importado.
         </p>
         <PlataformasStatus />
       </section>
 
-      {/* Ferramentas de homologação (interno) */}
+      {/* Ferramenta de diagnóstico (interno) */}
       <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Star className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">Homologação</h2>
+        <div className="mb-2 flex items-center gap-2">
+          <Wrench className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Diagnóstico</h2>
         </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          O painel de homologação de avaliações saiu: o módulo está em produção
+          desde julho e o cron traz nota, comentário e tags todo dia. O que fica
+          é o console de chamadas cruas, pra quando uma resposta do iFood
+          precisar ser olhada por dentro.
+        </p>
         <Link
-          href="/integracao/ifood-review-homolog"
+          href="/integracao/ifood-homolog"
           className="flex items-center gap-3 rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/40"
         >
           <PlatformLogo platform="ifood" size="md" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">
-              Avaliações (Review) · homologação
-            </p>
+            <p className="text-sm font-semibold">Console da API do iFood</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Painel de testes do módulo Review v2.0 contra a loja sandbox —
-              listar, detalhar e responder avaliações.
+              Dispara chamadas na mão e mostra a resposta crua — token,
+              merchants, conciliação.
             </p>
           </div>
           <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
