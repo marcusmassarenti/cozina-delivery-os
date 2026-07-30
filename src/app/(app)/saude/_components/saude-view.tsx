@@ -181,6 +181,52 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
         </div>
       </section>
 
+      {/* Conexão que nunca começou é diferente de integração com defeito — por
+          isso seção própria, e só aparece quando tem alguém esperando. Loja
+          parada aqui não gera alerta em nenhuma outra tela: pro cliente é
+          "ainda não conectou", pra fila interna é "com o cliente". */}
+      {s.filaIfood.length > 0 && (
+        <section className="rounded-xl border bg-card shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
+            <h2 className="text-sm font-semibold">Fila de conexão do iFood</h2>
+            <span className="text-xs text-muted-foreground">
+              {s.filaIfood.length} loja{s.filaIfood.length > 1 ? "s" : ""} parada
+              {s.filaIfood.length > 1 ? "s" : ""} há 3 dias ou mais
+            </span>
+            <a
+              href="/integracao/ifood-merchants"
+              className="ml-auto text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:underline"
+            >
+              abrir a fila
+            </a>
+          </div>
+          <div className="divide-y">
+            {s.filaIfood.map((f) => (
+              <div
+                key={`${f.cnpj}-${f.loja}`}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-5 py-3 text-sm"
+              >
+                <PlatformLogo platform="ifood" size="sm" />
+                <span className="font-medium">{f.loja}</span>
+                <span className="text-xs text-muted-foreground">{f.cliente}</span>
+                <span
+                  className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                    f.gravidade === "alerta"
+                      ? "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400"
+                      : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                  }`}
+                >
+                  {f.dias} dias
+                </span>
+                <p className="basis-full text-xs text-muted-foreground">
+                  {f.motivo}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="rounded-xl border bg-card shadow-sm">
         <div className="border-b px-5 py-3">
           <h2 className="text-sm font-semibold">Rotinas automáticas</h2>

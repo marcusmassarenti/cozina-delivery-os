@@ -84,7 +84,15 @@ export const CHANGELOG: Release[] = [
           {
             kind: "melhoria",
             title: "Recusa agora explica o motivo",
-            desc: "Quando um pedido de conexão é recusado, o aviso que aparece na página da sua loja é escrito caso a caso, em vez de um texto padrão.",
+            desc: "Quando um pedido de conexão é recusado, você recebe um e-mail com o motivo e o aviso passa a aparecer também na tela inicial — antes ele só existia dentro da página daquela loja.",
+          },
+          {
+            kind: "novo",
+            title: "“Não apareceu pra aprovar”",
+            antes:
+              "Se uma loja não aparecia no seu Portal do Parceiro, o pedido ficava esperando pra sempre e não havia como avisar.",
+            depois:
+              "No aviso da loja tem “não apareceu pra aprovar”. Um clique devolve o pedido pra nossa fila e a solicitação é refeita.",
           },
         ],
       },
