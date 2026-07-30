@@ -1,0 +1,9 @@
+-- Keeta e Cardápio Web entram no painel de saúde (aplicada via MCP, 0141).
+--
+-- Ficavam de fora porque a função nasceu olhando só o que tem API. Mas "sem
+-- API" não é "sem precisar de vigilância": a Keeta é 55% das taxas da rede e
+-- depende de alguém lembrar de subir a planilha — o tipo de coisa que para sem
+-- avisar. `conectada` = entra por API; quem separa "nunca trouxe nada" de
+-- "traz por planilha" é o último pedido, não essa coluna.
+--
+-- Corpo completo em pg_get_functiondef('saude_lojas') e ('lojas_sem_dado').

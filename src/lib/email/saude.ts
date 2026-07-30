@@ -23,7 +23,13 @@ const COR = {
 } as const
 
 /** Nome da plataforma como o Marcus fala, não como o banco guarda. */
-const nomePlat = (p: string) => (p === "99food" ? "99 Food" : "iFood")
+const NOMES: Record<string, string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
+}
+const nomePlat = (p: string) => NOMES[p] ?? p
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", {
@@ -44,6 +50,21 @@ function bloco(g: "alerta" | "atencao" | "ok", titulo: string, itens: string[]):
       ${itens.map((i) => `<p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#3f3f46;">${i}</p>`).join("")}
     </td></tr>
   </table>`
+}
+
+/** Só as plataformas que a rede realmente usa entram no placar. */
+function placar(r: SaudeIntegracoes["resumo"]): string {
+  return (
+    [
+      ["iFood", r.ifood],
+      ["99 Food", r.noveNove],
+      ["Keeta", r.keeta],
+      ["Cardápio Web", r.cardapioWeb],
+    ] as const
+  )
+    .filter(([, v]) => v.total > 0)
+    .map(([nome, v]) => `${nome} ${v.ok}/${v.total}`)
+    .join(", ")
 }
 
 export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string } {
@@ -78,8 +99,8 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
               : " nas rotinas"
       }`
     : emObservacao > 0
-      ? `✅ Sem alertas — iFood ${r.ifood.ok}/${r.ifood.total}, 99 Food ${r.noveNove.ok}/${r.noveNove.total}, ${emObservacao} em observação`
-      : `✅ Tudo certo — iFood ${r.ifood.ok}/${r.ifood.total}, 99 Food ${r.noveNove.ok}/${r.noveNove.total}`
+      ? `✅ Sem alertas — ${placar(r)}, ${emObservacao} em observação`
+      : `✅ Tudo certo — ${placar(r)}`
 
   const html = `
 <div style="margin:0;padding:32px 12px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -103,17 +124,22 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
 
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px;">
         <tr>
-          <td style="width:33%;padding:14px;background:${r.ifood.alerta ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
-            <p style="margin:0;font-size:26px;font-weight:700;color:${r.ifood.alerta ? COR.alerta.texto : COR.ok.texto};">${r.ifood.ok}/${r.ifood.total}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">iFood</p>
-          </td>
-          <td style="width:8px;"></td>
-          <td style="width:33%;padding:14px;background:${r.noveNove.alerta ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
-            <p style="margin:0;font-size:26px;font-weight:700;color:${r.noveNove.alerta ? COR.alerta.texto : COR.ok.texto};">${r.noveNove.ok}/${r.noveNove.total}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">99 Food</p>
-          </td>
-          <td style="width:8px;"></td>
-          <td style="width:33%;padding:14px;background:${cronsRuins.length ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
+          ${[
+            ["iFood", r.ifood],
+            ["99 Food", r.noveNove],
+            ["Keeta", r.keeta],
+            ["Cardápio Web", r.cardapioWeb],
+          ]
+            .filter(([, v]) => (v as { total: number }).total > 0)
+            .map(([nome, v]) => {
+              const x = v as { ok: number; total: number; alerta: number }
+              return `<td style="padding:14px;background:${x.alerta ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
+            <p style="margin:0;font-size:26px;font-weight:700;color:${x.alerta ? COR.alerta.texto : COR.ok.texto};">${x.ok}/${x.total}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#71717a;">${nome}</p>
+          </td><td style="width:8px;"></td>`
+            })
+            .join("")}
+          <td style="padding:14px;background:${cronsRuins.length ? COR.alerta.fundo : COR.ok.fundo};border-radius:10px;text-align:center;">
             <p style="margin:0;font-size:26px;font-weight:700;color:${cronsRuins.length ? COR.alerta.texto : COR.ok.texto};">${r.cronsOk}/${s.crons.length}</p>
             <p style="margin:2px 0 0;font-size:12px;color:#71717a;">rotinas rodando</p>
           </td>
@@ -153,7 +179,7 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
       ${
         s.tudoCerto && !s.temObservacao
           ? bloco("ok", "Nada a fazer", [
-              `As ${r.ifood.total} lojas no iFood e as ${r.noveNove.total} na 99 Food estão com o financeiro em dia com as próprias vendas, e as ${r.cronsOk} rotinas rodaram nas últimas 24h.`,
+              `Placar de hoje: ${placar(r)} — todas com o dado em dia com as próprias vendas. E as ${r.cronsOk} rotinas rodaram nas últimas 24h.`,
             ])
           : ""
       }

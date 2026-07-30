@@ -49,8 +49,8 @@ const CRON_ATRASADO_H = 26
 
 export type Gravidade = "ok" | "atencao" | "alerta"
 
-/** As duas plataformas que hoje têm integração por API. */
-export type PlataformaSaude = "ifood" | "99food"
+/** Todas as plataformas vigiadas — com API ou não. */
+export type PlataformaSaude = "ifood" | "99food" | "keeta" | "cardapioweb"
 
 export type LojaSaude = {
   cliente: string
@@ -98,6 +98,8 @@ export type SaudeIntegracoes = {
     lojasConectadas: number
     ifood: { total: number; ok: number; alerta: number; semConexao: number }
     noveNove: { total: number; ok: number; alerta: number; semConexao: number }
+    keeta: { total: number; ok: number; alerta: number; semConexao: number }
+    cardapioWeb: { total: number; ok: number; alerta: number; semConexao: number }
     lojasOk: number
     lojasAtencao: number
     lojasAlerta: number
@@ -352,12 +354,16 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       // nunca ligou: o painel dizia "12/58" na 99 quando existiam 7 conectadas,
       // todas trazendo dado. Vermelho que mistura "nunca ligou" com "parou de
       // funcionar" deixa de significar alguma coisa, e aí ninguém olha.
-      total: ls.filter((l) => l.conectada).length,
-      ok: ls.filter((l) => l.conectada && l.gravidade === "ok").length,
-      alerta: ls.filter((l) => l.conectada && l.gravidade === "alerta").length,
+      // "Monitorada" = entra por API OU está trazendo dado por planilha. O que
+      // fica de fora é só quem nunca trouxe nada — que não é falha, é
+      // integração que ninguém acionou. A Keeta obrigou essa distinção: ela
+      // não tem API nenhuma e mesmo assim é 55% das taxas da rede.
+      total: ls.filter((l) => l.conectada || l.ultimoPedido).length,
+      ok: ls.filter((l) => (l.conectada || l.ultimoPedido) && l.gravidade === "ok").length,
+      alerta: ls.filter((l) => (l.conectada || l.ultimoPedido) && l.gravidade === "alerta").length,
       // Declaradas e nunca ligadas: não são falha, mas são receita potencial
       // parada — e antes não apareciam em lugar nenhum.
-      semConexao: ls.filter((l) => !l.conectada).length,
+      semConexao: ls.filter((l) => !l.conectada && !l.ultimoPedido).length,
     }
   }
 
@@ -410,6 +416,8 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     lojasConectadas: lojas.length,
     ifood: porPlataforma("ifood"),
     noveNove: porPlataforma("99food"),
+    keeta: porPlataforma("keeta"),
+    cardapioWeb: porPlataforma("cardapioweb"),
     lojasOk: lojas.filter((l) => l.gravidade === "ok").length,
     lojasAtencao: lojas.filter((l) => l.gravidade === "atencao").length,
     lojasAlerta: lojas.filter((l) => l.gravidade === "alerta").length,

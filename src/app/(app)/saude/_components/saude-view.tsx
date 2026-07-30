@@ -40,11 +40,21 @@ function horaCurta(v: string | null): string {
 /** Linhas mostradas por vez na tabela. */
 const PAGINA = 40
 
+/** As quatro plataformas vigiadas, na ordem em que pesam na rede. */
+const PLATS = [
+  { key: "ifood", label: "iFood", plat: "ifood" },
+  { key: "noveNove", label: "99 Food", plat: "99food" },
+  { key: "keeta", label: "Keeta", plat: "keeta" },
+  { key: "cardapioWeb", label: "Cardápio Web", plat: "cardapioweb" },
+] as const
+
 export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
   // Padrão: esconder o que está ok. Numa tela de diagnóstico, 38 linhas verdes
   // enterram as 3 que importam.
   const [mostrarOk, setMostrarOk] = React.useState(false)
-  const [plat, setPlat] = React.useState<"todas" | "ifood" | "99food">("todas")
+  const [plat, setPlat] = React.useState<
+    "todas" | "ifood" | "99food" | "keeta" | "cardapioweb"
+  >("todas")
   const [limite, setLimite] = React.useState(PAGINA)
 
   // ⚠️ DUAS TABELAS, não uma. "Nunca conectou" e "parou de funcionar" pedem
@@ -55,9 +65,13 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
     (l) => plat === "todas" || l.plataforma === plat,
   )
   const conectadas = doFiltro
-    .filter((l) => l.conectada)
+    .filter((l) => l.conectada || l.ultimoPedido)
     .filter((l) => mostrarOk || l.gravidade !== "ok")
-  const nuncaLigadas = doFiltro.filter((l) => !l.conectada)
+  // ⚠️ "Nunca conectada" é quem nunca trouxe NADA — nem por API, nem por
+  // planilha. A Keeta obrigou essa precisão: ela não tem API financeira, então
+  // conectada é sempre false e uma loja importando em dia cairia aqui como se
+  // estivesse abandonada.
+  const nuncaLigadas = doFiltro.filter((l) => !l.conectada && !l.ultimoPedido)
 
   // Corte no que é renderizado: com 700 lojas a tela vira rolagem infinita e
   // deixa de ser diagnóstico. As piores vêm primeiro, então o corte nunca
@@ -69,22 +83,21 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {/* Separado por plataforma: "41 lojas na API" não dizia se o problema
             era do iFood ou da 99, e são integrações independentes — uma pode
             cair sem a outra sentir. */}
-        <Kpi
-          titulo="iFood"
-          valor={`${s.resumo.ifood.ok}/${s.resumo.ifood.total}`}
-          ruim={s.resumo.ifood.alerta > 0}
-          bom={s.resumo.ifood.alerta === 0}
-        />
-        <Kpi
-          titulo="99 Food"
-          valor={`${s.resumo.noveNove.ok}/${s.resumo.noveNove.total}`}
-          ruim={s.resumo.noveNove.alerta > 0}
-          bom={s.resumo.noveNove.alerta === 0}
-        />
+        {/* Só entra plataforma que a rede realmente usa: card zerado de Cardápio
+            Web numa rede que só vende em marketplace é ruído. */}
+        {PLATS.filter((p) => s.resumo[p.key].total > 0).map((p) => (
+          <Kpi
+            key={p.key}
+            titulo={p.label}
+            valor={`${s.resumo[p.key].ok}/${s.resumo[p.key].total}`}
+            ruim={s.resumo[p.key].alerta > 0}
+            bom={s.resumo[p.key].alerta === 0}
+          />
+        ))}
         <Kpi
           titulo="Precisam de ação"
           valor={String(s.resumo.lojasAlerta)}
@@ -92,7 +105,9 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
         />
         <Kpi
           titulo="Nunca conectadas"
-          valor={String(s.resumo.ifood.semConexao + s.resumo.noveNove.semConexao)}
+          valor={String(
+            PLATS.reduce((n, p) => n + s.resumo[p.key].semConexao, 0),
+          )}
           detalhe="marcadas no cadastro, integração nunca ligada"
         />
         <Kpi
@@ -105,17 +120,18 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
       <section className="rounded-xl border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold">Lojas conectadas</h2>
+            <h2 className="text-sm font-semibold">Lojas trazendo dado</h2>
             <div className="flex gap-1">
               {(
                 [
                   [
                     "todas",
                     "Todas",
-                    s.resumo.ifood.total + s.resumo.noveNove.total,
+                    PLATS.reduce((n, p) => n + s.resumo[p.key].total, 0),
                   ],
-                  ["ifood", "iFood", s.resumo.ifood.total],
-                  ["99food", "99 Food", s.resumo.noveNove.total],
+                  ...PLATS.filter((p) => s.resumo[p.key].total > 0).map(
+                    (p) => [p.plat, p.label, s.resumo[p.key].total] as const,
+                  ),
                 ] as const
               ).map(([key, label, n]) => (
                 <button
