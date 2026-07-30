@@ -1,0 +1,6 @@
+-- Assinaturas de push do PWA (aplicada via MCP, 0144).
+-- UMA POR DISPOSITIVO, não por usuário: a mesma pessoa instala no celular e no
+-- tablet, e cada instalação tem seu endpoint. 404/410 do navegador marca
+-- invalid_since em vez de apagar — some do envio, mas conta a história de quem
+-- instalou e desistiu. RLS: o dono lê e apaga a própria; escrita vem do
+-- service role.

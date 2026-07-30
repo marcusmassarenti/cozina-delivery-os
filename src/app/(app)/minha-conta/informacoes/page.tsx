@@ -1,3 +1,4 @@
+import { AtivarAvisos } from "@/components/pwa/ativar-avisos"
 import { redirect } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
@@ -19,5 +20,13 @@ export default async function InformacoesTab() {
       </div>
     )
 
-  return <ContaInfoForm info={info} />
+  return (
+    <div className="flex flex-col gap-4">
+      <ContaInfoForm info={info} />
+      {/* Mora aqui, e não no dashboard, porque ligar aviso é configuração de
+          conta — e porque pedir permissão no meio da tela de números
+          atrapalharia quem só quer ver o faturamento. */}
+      <AtivarAvisos />
+    </div>
+  )
 }
