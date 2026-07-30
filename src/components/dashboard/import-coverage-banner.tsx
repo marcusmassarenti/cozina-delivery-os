@@ -3,6 +3,8 @@
 import { AlertTriangle, CircleCheck, Download, Info } from "lucide-react"
 import Link from "next/link"
 
+import { LojasSemDadoAviso } from "@/components/dashboard/lojas-sem-dado-aviso"
+import type { LojaSemDado } from "@/lib/data/lojas-sem-dado"
 import { PlatformLogo, type MarketplaceId } from "@/components/platform-logo"
 import {
   Tooltip,
@@ -53,6 +55,7 @@ export function ImportCoverageBanner({
   platformsEnabled,
   apiSync = false,
   vinculos,
+  semDado,
 }: {
   coverage: ImportCoverage
   year: number
@@ -68,6 +71,8 @@ export function ImportCoverageBanner({
    *  "o botão só deve aparecer quando pelo menos 1 loja tem vínculo").
    *  Omitido = compat (mostra pelos critérios antigos). */
   vinculos?: { ifood: boolean; ninefood: boolean }
+  /** Lojas que declararam plataforma e nunca importaram nada. */
+  semDado?: LojaSemDado[]
 }) {
   // Alvo: menor entre fim do mês e ontem (D-1). "Ontem" é calculado em horário
   // de Brasília — senão, na Vercel (UTC), depois das 21h o D-1 pula um dia.
@@ -203,6 +208,15 @@ export function ImportCoverageBanner({
               (vinculos?.ninefood ?? true) && (
                 <Ninefood99QuickSync year={year} month={month} />
               )}
+          </div>
+        )}
+        {/* Cinza, dentro da faixa que já responde "o que falta?". Sem ícone e
+            sem vermelho de propósito: isto está assim há meses e vai continuar
+            amanhã — aviso permanente pintado de urgente é como se aprende a
+            ignorar os avisos que importam. */}
+        {semDado && semDado.length > 0 && (
+          <div className="basis-full">
+            <LojasSemDadoAviso lojas={semDado} />
           </div>
         )}
       </div>

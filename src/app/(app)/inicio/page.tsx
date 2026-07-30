@@ -24,6 +24,7 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
+import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
 import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
@@ -204,6 +205,7 @@ export default async function Home({
     solicitacoesIfood,
     minhasSolicitacoesIfood,
     consumoIaPlataforma,
+    lojasSemDado,
   ] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
@@ -215,7 +217,10 @@ export default async function Home({
     getMinhasSolicitacoesIfood(),
     // Custo de IA da plataforma no mês (a função já é superadmin-only).
     getConsumoIaPorCliente(),
-  ])
+      // Lojas que declararam plataforma e nunca importaram nada — aviso
+    // discreto na faixa de cobertura, com a saída "não vendo nessa plataforma".
+    getLojasSemDado(activeUnitIds),
+])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
   // nº de lojas filtradas.
@@ -904,6 +909,7 @@ export default async function Home({
           platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
           apiSync={apiSync}
           vinculos={apiVinculos}
+          semDado={lojasSemDado}
         />
       ) : (
         <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
