@@ -37,6 +37,12 @@ export type TipoEmail =
    * senão a trava de duplicidade engoliria da segunda recusa em diante.
    */
   | "conexao-recusada"
+  /**
+   * Fechamento do mês com dias faltando. Mensal, então quem dispara manda
+   * `forcar: true` e faz a própria trava por janela de dias — a trava padrão
+   * é "uma vez e nunca mais", que aqui significaria avisar só no primeiro mês.
+   */
+  | "fechamento-mes"
 
 export type ResultadoEnvio = {
   ok: boolean

@@ -466,3 +466,68 @@ export function conexaoRecusada(d: {
     }),
   }
 }
+
+/**
+ * Fechamento do mês com dias faltando (só planilha).
+ *
+ * O assunto e a primeira linha falam de DINHEIRO, não de tarefa. "Faltam 4
+ * dias" não faz ninguém parar o que está fazendo; "seu resultado está
+ * subestimado em R$ 12 mil" faz. O número é estimativa e o e-mail diz isso com
+ * todas as letras — número inventado que parece exato é pior que nenhum.
+ */
+export function fechamentoIncompleto(d: {
+  nome: string | null
+  mesLabel: string
+  lojas: {
+    loja: string
+    plataforma: string
+    ultimoDia: string
+    diasFaltando: number
+    valorEstimado: number
+  }[]
+  totalEstimado: number
+}) {
+  const NOMES: Record<string, string> = {
+    ifood: "iFood",
+    "99food": "99 Food",
+    keeta: "Keeta",
+  }
+  const dia = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7)
+  const n = d.lojas.length
+
+  const linhas = d.lojas
+    .map(
+      (l) => `
+      <tr>
+        <td style="padding:9px 0;border-bottom:1px solid ${LINHA};font-size:14px;color:${TINTA};">
+          <strong>${l.loja}</strong>
+          <span style="color:${SUAVE};font-size:12px;"> · ${NOMES[l.plataforma] ?? l.plataforma}</span>
+          <br/>
+          <span style="font-size:12px;color:${TEXTO};">último dia importado: ${dia(l.ultimoDia)} — faltam ${l.diasFaltando} dias</span>
+        </td>
+        <td style="padding:9px 0;border-bottom:1px solid ${LINHA};text-align:right;font-size:14px;font-weight:700;color:${TINTA};white-space:nowrap;">
+          ~${brl(l.valorEstimado)}
+        </td>
+      </tr>`,
+    )
+    .join("")
+
+  return {
+    assunto: `${d.mesLabel} fechou com dias faltando — cerca de ${brl(d.totalEstimado)} fora da conta`,
+    html: layout({
+      titulo: `Seu resultado de ${d.mesLabel} está incompleto`,
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} ${n === 1 ? "Uma loja" : `${n} lojas`} ${n === 1 ? "ficou" : "ficaram"} com dias sem importar em ${d.mesLabel}. Enquanto isso não entra, o faturamento aparece menor do que foi — e a margem e o CMV% saem calculados sobre uma base menor que a real.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 6px;">
+          ${linhas}
+          <tr>
+            <td style="padding:12px 0 0;font-size:14px;font-weight:700;color:${TINTA};">Fora da conta, no total</td>
+            <td style="padding:12px 0 0;text-align:right;font-size:18px;font-weight:700;color:${LARANJA};white-space:nowrap;">~${brl(d.totalEstimado)}</td>
+          </tr>
+        </table>
+        <p style="margin:14px 0 0;font-size:13px;color:${SUAVE};">Os valores são estimativa: usamos a média diária de cada loja nos dias que já estão no sistema. O número real só aparece quando o relatório entrar.</p>`,
+      cta: { texto: "Importar agora", url: `${SITE}/importacao` },
+      ps: "Se alguma dessas lojas não vendeu nesses dias, é só ignorar — nada fica pendente.",
+    }),
+  }
+}

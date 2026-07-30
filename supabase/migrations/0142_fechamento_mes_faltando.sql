@@ -1,0 +1,7 @@
+-- O que faltou importar num mês fechado, por loja e plataforma.
+-- Aplicada em produção via MCP (0142). Mede o RABO que falta (último dia do
+-- mês menos o último dia com dado), não buracos no meio: loja fecha às
+-- segundas e furo no meio quase sempre é operação, não esquecimento.
+-- Só plataforma alimentada por planilha — se o dado vem por API e parou, o
+-- problema é nosso e não se cobra do cliente.
+-- Corpo completo em pg_get_functiondef('fechamento_mes_faltando').

@@ -8,6 +8,7 @@
  * data — rodar duas vezes no mesmo dia não manda nada duas vezes.
  */
 import { rodarReguaEmail } from "@/lib/data/regua-email"
+import { rodarReguaFechamento } from "@/lib/data/regua-fechamento"
 import { registrarCron } from "@/lib/cron/registrar"
 
 export const runtime = "nodejs"
@@ -26,11 +27,18 @@ export async function GET(req: Request) {
   return registrarCron("regua-email", async () => {
 
   const r = await rodarReguaEmail()
+
+  // Pega carona neste cron: o plano só permite uma execução por dia e criar
+  // outro cron não caberia. A régua de fechamento sai sozinha no dia certo —
+  // nos outros dias ela só devolve "não é hoje".
+  const fechamento = await rodarReguaFechamento()
+
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
     temChave: Boolean(process.env.RESEND_API_KEY),
     ...r,
+    fechamento,
   })
   })
 }
