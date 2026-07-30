@@ -9,6 +9,10 @@
 
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
+import { TAG_FINANCEIRO_IFOOD } from "@/lib/cache-tags"
+
 import { cache as reactCache } from "react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -1125,19 +1129,27 @@ export async function getNetworkTopItemsForMonth(
  * várias unidades. Pro Dashboard, que precisa agregar a rede inteira.
  * Retorna Map<unitId, FinanceiroResumo>.
  */
-export async function getFinanceiroResumoByUnits(
+
+/** Mês corrente em São Paulo — o único que ainda pode mudar sozinho. */
+function mesCorrenteBR(): { ano: number; mes: number } {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date())
+  const [ano, mes] = p.split("-").map(Number)
+  return { ano, mes }
+}
+
+type ResumoRpcRow = Record<string, unknown>
+
+async function chamarResumo(
   unitIds: string[],
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
-): Promise<Map<string, FinanceiroResumo>> {
-  const out = new Map<string, FinanceiroResumo>()
-  if (unitIds.length === 0) return out
-  const admin = createAdminClient()
-
-  // Chama a RPC que agrega tudo no Postgres (1 query vs 100+ paginadas).
-  // `dateRange` (opcional) restringe pra range custom — assume mono-mês.
-  const { data, error } = await admin.rpc(
+): Promise<{ data: ResumoRpcRow[] | null; error: string | null }> {
+  const { data, error } = await createAdminClient().rpc(
     "ifood_financeiro_resumo_by_units",
     {
       p_unit_ids: unitIds,
@@ -1148,8 +1160,57 @@ export async function getFinanceiroResumoByUnits(
         : {}),
     },
   )
+  return { data: (data ?? null) as ResumoRpcRow[] | null, error: error?.message ?? null }
+}
+
+/**
+ * Mês FECHADO responde do cache; mês corrente sempre vai ao banco.
+ *
+ * Esta RPC é o gargalo do dashboard: medida em produção com 26.810 chamadas a
+ * ~900 ms, quase 7 horas de tempo de banco acumulado. O gráfico de evolução
+ * pede janeiro a julho a cada abertura da tela — e recalcular janeiro, que não
+ * muda mais, é desperdício puro.
+ *
+ * ⚠️ Mês fechado MUDA quando é reimportado (aconteceu em 29/07: junho e julho
+ * foram recarregados e o bruto da rede mudou R$ 161 mil). Por isso o cache é
+ * marcado com a tag `ifood-financeiro`, e a gravação da conciliação derruba a
+ * tag ao terminar. Cache que serve número velho depois de uma correção seria
+ * pior do que a lentidão que ele resolve.
+ */
+async function resumoRpc(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<{ data: ResumoRpcRow[] | null; error: string | null }> {
+  const corrente = mesCorrenteBR()
+  const fechado =
+    !dateRange && (year < corrente.ano || (year === corrente.ano && month < corrente.mes))
+  if (!fechado) return chamarResumo(unitIds, year, month, dateRange)
+
+  // A chave precisa das lojas: o mesmo mês pedido pra recortes diferentes de
+  // unidade é resultado diferente. Ordenada, senão a ordem do filtro cria
+  // entradas duplicadas pro mesmo conjunto.
+  const chave = `${year}-${month}-${[...unitIds].sort().join(",")}`
+  return unstable_cache(
+    () => chamarResumo(unitIds, year, month),
+    ["ifood-financeiro-resumo", chave],
+    { tags: [TAG_FINANCEIRO_IFOOD], revalidate: 86_400 },
+  )()
+}
+
+export async function getFinanceiroResumoByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<Map<string, FinanceiroResumo>> {
+  const out = new Map<string, FinanceiroResumo>()
+  if (unitIds.length === 0) return out
+
+  const { data, error } = await resumoRpc(unitIds, year, month, dateRange)
   if (error) {
-    console.error("getFinanceiroResumoByUnits RPC error:", error.message)
+    console.error("getFinanceiroResumoByUnits RPC error:", error)
     return out
   }
 

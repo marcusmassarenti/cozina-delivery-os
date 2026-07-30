@@ -273,6 +273,20 @@ export async function persistFinanceiro(
     .update({ status: "success", rows_imported: rows.length })
     .eq("id", importLog.id)
 
+  // Derruba o cache dos meses fechados. O dashboard guarda o agregado de mês
+  // encerrado por 24h — e reimportação é justamente o caso em que um mês
+  // encerrado muda. Sem esta linha, a recuperação de junho de 29/07 teria
+  // corrigido o banco e o painel continuaria mostrando o número quebrado.
+  try {
+    const { revalidateTag } = await import("next/cache")
+    const { TAG_FINANCEIRO_IFOOD } = await import("@/lib/cache-tags")
+    // Next 16 exige o perfil de expiração no segundo argumento.
+    revalidateTag(TAG_FINANCEIRO_IFOOD, { expire: 0 })
+  } catch (e) {
+    // Fora de um contexto de request (script avulso) não há cache pra limpar.
+    console.warn("persist-financeiro: revalidateTag ignorado", e)
+  }
+
   return {
     substituido,
     rowsImported: rows.length,
