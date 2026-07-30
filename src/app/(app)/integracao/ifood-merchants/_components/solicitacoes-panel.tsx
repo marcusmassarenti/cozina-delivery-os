@@ -87,7 +87,12 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
         ]
       : s.status === "solicitada"
         ? [{ status: "recusada", rotulo: "Recusar" }]
-        : []
+        : // Já recusada: o aviso continua editável. Recusa feita antes deste
+          // campo existir ficou sem explicação nenhuma na tela do cliente —
+          // isto deixa escrever o motivo sem ter que desfazer e recusar de novo.
+          s.status === "recusada"
+          ? [{ status: "recusada", rotulo: "Salvar aviso" }]
+          : []
 
   return (
     <div className="rounded-lg border bg-muted/20 p-3">
@@ -124,14 +129,28 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
       {(proximas.length > 0 || podeDesfazer) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {proximas.map((p) => (
-            <form key={p.status} action={action}>
+            <form
+              key={p.status}
+              action={action}
+              className={p.status === "recusada" ? "flex flex-1 basis-full items-center gap-2" : undefined}
+            >
               <input type="hidden" name="id" value={s.id} />
               <input type="hidden" name="status" value={p.status} />
+              {/* A nota é O QUE O CLIENTE LÊ na faixa vermelha da loja dele.
+                  Era um hidden com texto fixo: toda recusa chegava igual,
+                  dissesse respeito a CNPJ errado, loja fechada ou app não
+                  autorizado. Agora é editável — já vem preenchida com o motivo
+                  mais comum, então recusar continua sendo um clique. */}
               {p.status === "recusada" && (
                 <input
-                  type="hidden"
+                  type="text"
                   name="nota"
-                  value="Não foi possível localizar a loja com esse CNPJ — confira o CNPJ cadastrado no iFood e solicite de novo."
+                  defaultValue={
+                    s.nota ??
+                    "Não foi possível localizar a loja com esse CNPJ — confira o CNPJ cadastrado no iFood e solicite de novo."
+                  }
+                  placeholder="O que o cliente vai ler"
+                  className="min-w-0 flex-1 rounded-md border bg-background px-2.5 py-1 text-[11px]"
                 />
               )}
               <BotaoStatus rotulo={p.rotulo} />
