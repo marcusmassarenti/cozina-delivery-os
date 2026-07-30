@@ -16,6 +16,7 @@ import {
   type CwAmbiente,
 } from "@/lib/cardapioweb/auth"
 import { fetchCw } from "@/lib/cardapioweb/client"
+import { avisarInstalacaoNova } from "@/lib/cardapioweb/avisar-instalacao"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -202,6 +203,24 @@ export async function GET(req: Request) {
   await admin
     .from("cardapioweb_sync_state")
     .upsert({ install_id: installId }, { onConflict: "install_id" })
+
+  // 6) Avisa que entrou loja nova.
+  //
+  // Diferente do iFood, a conexão do Cardápio Web acontece INTEIRA do lado do
+  // cliente: ele autoriza e pronto, sem passar por ninguém aqui. Sem este
+  // aviso, a única forma de descobrir é alguém abrir a tela — e com trinta
+  // clientes isso vira conexão que existe e ninguém sabe.
+  //
+  // Só na primeira vez: reconectar a mesma loja (token renovado, autorização
+  // refeita) não é notícia, e avisar de novo ensinaria a ignorar o aviso.
+  if (!existente) {
+    void avisarInstalacaoNova({
+      merchantName: merchantName ?? merchantId,
+      ambiente,
+      unitId: pendente.unit_id ?? null,
+      holdingId: pendente.holding_id ?? null,
+    }).catch((e: unknown) => console.error("cardapioweb: aviso de instalação", e))
+  }
 
   return voltar(req, {
     cw: "ok",

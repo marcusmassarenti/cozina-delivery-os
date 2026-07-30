@@ -43,6 +43,8 @@ export type TipoEmail =
    * é "uma vez e nunca mais", que aqui significaria avisar só no primeiro mês.
    */
   | "fechamento-mes"
+  /** Loja nova conectou no Cardápio Web — interno, um por instalação. */
+  | "cardapioweb-instalacao"
 
 export type ResultadoEnvio = {
   ok: boolean
