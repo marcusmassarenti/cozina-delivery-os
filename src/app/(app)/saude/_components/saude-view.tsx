@@ -37,18 +37,39 @@ function horaCurta(v: string | null): string {
   })
 }
 
+/** Linhas mostradas por vez na tabela. */
+const PAGINA = 40
+
 export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
   // Padrão: esconder o que está ok. Numa tela de diagnóstico, 38 linhas verdes
   // enterram as 3 que importam.
   const [mostrarOk, setMostrarOk] = React.useState(false)
   const [plat, setPlat] = React.useState<"todas" | "ifood" | "99food">("todas")
-  const lojas = s.lojas
-    .filter((l) => plat === "todas" || l.plataforma === plat)
+  const [limite, setLimite] = React.useState(PAGINA)
+
+  // ⚠️ DUAS TABELAS, não uma. "Nunca conectou" e "parou de funcionar" pedem
+  // ações opostas — uma é comercial (ligar a integração), a outra é técnica
+  // (consertar o que quebrou) — e misturadas faziam o vermelho perder o
+  // sentido. A de baixo nasce fechada porque não é ela que acorda ninguém.
+  const doFiltro = s.lojas.filter(
+    (l) => plat === "todas" || l.plataforma === plat,
+  )
+  const conectadas = doFiltro
+    .filter((l) => l.conectada)
     .filter((l) => mostrarOk || l.gravidade !== "ok")
+  const nuncaLigadas = doFiltro.filter((l) => !l.conectada)
+
+  // Corte no que é renderizado: com 700 lojas a tela vira rolagem infinita e
+  // deixa de ser diagnóstico. As piores vêm primeiro, então o corte nunca
+  // esconde o que importa.
+  const lojas = conectadas.slice(0, limite)
+  const escondidas = conectadas.length - lojas.length
+
+  React.useEffect(() => setLimite(PAGINA), [plat, mostrarOk])
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {/* Separado por plataforma: "41 lojas na API" não dizia se o problema
             era do iFood ou da 99, e são integrações independentes — uma pode
             cair sem a outra sentir. */}
@@ -70,6 +91,11 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
           ruim={s.resumo.lojasAlerta > 0}
         />
         <Kpi
+          titulo="Nunca conectadas"
+          valor={String(s.resumo.ifood.semConexao + s.resumo.noveNove.semConexao)}
+          detalhe="marcadas no cadastro, integração nunca ligada"
+        />
+        <Kpi
           titulo="Rotinas rodando"
           valor={`${s.resumo.cronsOk}/${s.crons.length}`}
           ruim={s.crons.some((c) => c.gravidade === "alerta")}
@@ -83,7 +109,11 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
             <div className="flex gap-1">
               {(
                 [
-                  ["todas", "Todas", s.resumo.lojasConectadas],
+                  [
+                    "todas",
+                    "Todas",
+                    s.resumo.ifood.total + s.resumo.noveNove.total,
+                  ],
                   ["ifood", "iFood", s.resumo.ifood.total],
                   ["99food", "99 Food", s.resumo.noveNove.total],
                 ] as const
@@ -179,7 +209,59 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
             </tbody>
           </table>
         </div>
+        {escondidas > 0 && (
+          <div className="border-t px-5 py-2.5 text-center">
+            <button
+              type="button"
+              onClick={() => setLimite((n) => n + PAGINA)}
+              className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              mostrar mais {Math.min(escondidas, PAGINA)} de {escondidas}
+            </button>
+          </div>
+        )}
       </section>
+
+      {/* As que nunca ligaram: lista separada e FECHADA por padrão. Não são
+          falha — são integração que ninguém acionou. Ficavam no meio das
+          outras inflando o vermelho. */}
+      {nuncaLigadas.length > 0 && (
+        <details className="rounded-xl border bg-card shadow-sm">
+          <summary className="cursor-pointer list-none px-5 py-3 text-sm font-semibold">
+            Nunca conectadas
+            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+              {nuncaLigadas.length}
+            </span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              a plataforma está marcada no cadastro, mas a integração nunca foi
+              ligada — é conversa comercial, não conserto
+            </span>
+          </summary>
+          <div className="max-h-96 overflow-auto border-t">
+            <ul className="divide-y">
+              {nuncaLigadas.slice(0, 200).map((l) => (
+                <li
+                  key={`${l.unitId}-${l.plataforma}`}
+                  className="flex flex-wrap items-baseline gap-x-2 px-5 py-2 text-xs"
+                >
+                  <PlatformLogo platform={l.plataforma} size="sm" />
+                  <span className="font-medium">{l.loja}</span>
+                  <span className="text-muted-foreground">{l.cliente}</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    {l.motivo}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {nuncaLigadas.length > 200 && (
+              <p className="px-5 py-2 text-[11px] text-muted-foreground">
+                e mais {nuncaLigadas.length - 200} — a lista para em 200 de
+                propósito, ela é pra dimensionar, não pra percorrer.
+              </p>
+            )}
+          </div>
+        </details>
+      )}
 
       {/* Conexão que nunca começou é diferente de integração com defeito — por
           isso seção própria, e só aparece quando tem alguém esperando. Loja
@@ -287,11 +369,14 @@ function Kpi({
   valor,
   bom,
   ruim,
+  detalhe,
 }: {
   titulo: string
   valor: string
   bom?: boolean
   ruim?: boolean
+  /** Linha de contexto — usada quando o número sozinho seria mal lido. */
+  detalhe?: string
 }) {
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm">
@@ -305,6 +390,11 @@ function Kpi({
       >
         {valor}
       </p>
+      {detalhe && (
+        <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+          {detalhe}
+        </p>
+      )}
     </div>
   )
 }

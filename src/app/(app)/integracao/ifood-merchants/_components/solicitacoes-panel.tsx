@@ -78,7 +78,7 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
   const podeDesfazer = Boolean(s.statusAnterior) || s.status === "recusada"
 
   // "Loja vinculada — ativar" saiu daqui de propósito. Era do tempo em que o
-  // vínculo era manual; hoje quem conecta é o cron de 15 min (ou o botão do
+  // vínculo era manual; hoje quem conecta é o cron diário (ou o botão do
   // topo), e manter o botão fazia parecer que faltava uma ação do operador —
   // que ao clicar só recebia "esta loja ainda não apareceu no nosso app".
   // Em "solicitada" a bola está com o CLIENTE: a única saída manual é recusar.
@@ -453,7 +453,8 @@ function Grupo({
                     <p className="mb-1.5 text-[11px] text-muted-foreground">
                       As marcadas como <b>solicitada</b> dependem do
                       Proprietário aprovar no Portal do Parceiro dele — a
-                      conexão se fecha sozinha (checamos a cada 15 min).
+                      conexão se fecha sozinha (checamos uma vez por dia; pra
+                      não esperar, use o botão acima).
                     </p>
                   )}
                 <div className="space-y-2">

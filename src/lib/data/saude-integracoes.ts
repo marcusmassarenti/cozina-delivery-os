@@ -20,7 +20,19 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
-/** Horas de atraso entre o último pedido e o financeiro pra virar alerta. */
+/**
+ * Atraso do financeiro em relação ao último pedido.
+ *
+ * DOIS degraus de propósito. A plataforma libera a conciliação em ritmo
+ * próprio — o iFood solta a de uma loja em D-1 e a da vizinha em D-3 — então
+ * gritar no primeiro dia de defasagem é gritar por causa do calendário deles,
+ * não de defeito nosso. Em 29/07 foram seis lojas em vermelho por dois dias de
+ * atraso, e nenhuma tinha problema nenhum.
+ *
+ * Passa a valer a MESMA folga da importação manual pro alerta: se planilha
+ * pode atrasar dez dias sem virar emergência, dado de API que depende do
+ * calendário da plataforma também pode.
+ */
 const TOLERANCIA_HORAS = 48
 /** Horas depois de conectar antes de cobrar o primeiro dado. */
 const CARENCIA_PRIMEIRO_DADO_H = 24
@@ -197,7 +209,10 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       // A régua: financeiro atrasado EM RELAÇÃO ao próprio movimento da loja.
       const atraso = horasEntre(fin, `${pedido}T23:59:59-03:00`)
       if (atraso > TOLERANCIA_HORAS) {
-        gravidade = qtd7d > 0 ? "alerta" : "atencao"
+        // Passou da folga da planilha (10 dias) → é defeito, não calendário da
+        // plataforma. Antes disso fica visível, mas não acorda ninguém.
+        gravidade =
+          atraso > DIAS_IMPORTACAO_MANUAL * 24 && qtd7d > 0 ? "alerta" : "atencao"
         motivo =
           qtd7d > 0
             ? `vendeu até ${fmt(pedido)} mas o financeiro parou em ${fmt(fin)}`
@@ -331,9 +346,15 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   const porPlataforma = (p: string) => {
     const ls = lojas.filter((l) => l.plataforma === p)
     return {
-      total: ls.length,
-      ok: ls.filter((l) => l.gravidade === "ok").length,
-      alerta: ls.filter((l) => l.gravidade === "alerta").length,
+      // ⚠️ ok/total conta só quem está CONECTADO.
+      //
+      // Antes o denominador somava as lojas que o cliente marcou no cadastro e
+      // nunca ligou: o painel dizia "12/58" na 99 quando existiam 7 conectadas,
+      // todas trazendo dado. Vermelho que mistura "nunca ligou" com "parou de
+      // funcionar" deixa de significar alguma coisa, e aí ninguém olha.
+      total: ls.filter((l) => l.conectada).length,
+      ok: ls.filter((l) => l.conectada && l.gravidade === "ok").length,
+      alerta: ls.filter((l) => l.conectada && l.gravidade === "alerta").length,
       // Declaradas e nunca ligadas: não são falha, mas são receita potencial
       // parada — e antes não apareciam em lugar nenhum.
       semConexao: ls.filter((l) => !l.conectada).length,
