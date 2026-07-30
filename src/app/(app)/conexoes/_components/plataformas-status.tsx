@@ -84,7 +84,7 @@ const montarPlataformas = (n: Contagens): PlatformStatus[] => [
       { label: "Vincular as demais lojas", state: "active" },
     ],
     sync: {
-      label: "Ver a fila de conexão",
+      label: "Gerenciar conexões",
       href: "/integracao/ifood-merchants",
     },
   },
@@ -128,7 +128,7 @@ const montarPlataformas = (n: Contagens): PlatformStatus[] => [
       { label: "App de produção aprovado", state: "done" },
       { label: "Conectar a primeira loja real", state: "active" },
     ],
-    sync: { label: "Conectar uma loja", href: "/integracao/cardapioweb" },
+    sync: { label: "Gerenciar conexões", href: "/integracao/cardapioweb" },
   },
 ]
 

@@ -185,13 +185,10 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "conexoes",
         superadminOnly: true,
       },
-      {
-        label: "Cardápio Web",
-        href: "/integracao/cardapioweb",
-        icon: UtensilsCrossed,
-        module: "conexoes",
-        superadminOnly: true,
-      },
+      // Cardápio Web saiu do menu: agora se chega nele PELO card da
+      // plataforma em Conexões, junto com iFood, 99 e Keeta. Conexão de
+      // plataforma morava em três endereços diferentes e cada um respondia um
+      // pedaço da mesma pergunta — a porta passa a ser uma só.
       {
         label: "Ficha Técnica ERP",
         href: "/ficha-tecnica",
