@@ -239,9 +239,30 @@ export async function linkMerchantToUnit(
       { onConflict: "unit_id,platform", ignoreDuplicates: false },
     )
     if (error) return { ok: false, error: error.message }
+
+    // Vincular É conectar: a solicitação daquela loja fecha junto.
+    //
+    // Sem isto, a loja passava a puxar dado normalmente e mesmo assim seguia na
+    // fila como "com o cliente" — e o cliente via "falta você aprovar no Portal
+    // do Parceiro" numa loja que já estava funcionando. Só o caminho automático
+    // fechava; o manual deixava os dois lados olhando um estado que não existia
+    // mais.
+    const { data: fechadas } = await admin
+      .from("ifood_activation_requests")
+      .update({ status: "ativa", updated_at: agora })
+      .eq("unit_id", unitId)
+      .in("status", ["pendente", "solicitada"])
+      .select("id")
+
     revalidatePath("/integracao/ifood-merchants")
     revalidatePath("/importacao")
-    return { ok: true, message: "Vinculado — financeiro e avaliações ligados." }
+    revalidatePath("/inicio")
+    return {
+      ok: true,
+      message: `Vinculado — financeiro e avaliações ligados.${
+        (fechadas ?? []).length > 0 ? " Solicitação encerrada." : ""
+      }`,
+    }
   } catch (e) {
     return {
       ok: false,
