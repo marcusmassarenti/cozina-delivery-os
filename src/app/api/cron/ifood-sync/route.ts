@@ -56,9 +56,15 @@ export async function GET(req: Request) {
     // Antes do sync: casa lojas recém-autorizadas (por CNPJ) e puxa o
     // histórico delas. Assim uma loja nova se integra sozinha — sem mexer no
     // banco na mão. Não deixa uma falha aqui derrubar o sync do dia.
+    //
+    // ⚠️ Com ?units, o auto-vínculo é PULADO. Ele existe pra descobrir lojas
+    // novas — e descobrir custa o download de uma conciliação por loja
+    // candidata. Numa chamada dirigida a duas lojas já conhecidas, isso é
+    // trabalho jogado fora que come o orçamento inteiro da função: em 29/07 a
+    // primeira tentativa morreu em 504 sem sequer CHEGAR no sync.
     let autoLink: Awaited<ReturnType<typeof autoLinkAndBackfill>> | null = null
     try {
-      autoLink = await autoLinkAndBackfill()
+      autoLink = units.length > 0 ? null : await autoLinkAndBackfill()
     } catch (e) {
       autoLink = {
         ok: false,
