@@ -2,6 +2,7 @@ import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView, isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { AvisoSemCnpj } from "@/components/unidades/aviso-sem-cnpj"
 import { UnitsListView } from "./_components/units-list-view"
 
 export default async function UnidadesPage() {
@@ -46,6 +47,11 @@ export default async function UnidadesPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+      <AvisoSemCnpj
+        unidades={units
+          .filter((u) => !u.cnpj || u.cnpj.replace(/\D/g, "").length !== 14)
+          .map((u) => ({ code: u.code, name: u.name }))}
+      />
       <UnitsListView
         units={units}
         canEdit={canEdit}
