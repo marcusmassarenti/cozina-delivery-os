@@ -24,7 +24,7 @@ export function SimuladoActions({
       ? await simularUpgrade()
       : await simularPagamento(sub ?? "")
     if (res.ok) {
-      router.push(upgrade ? "/consultor-ia" : "/?assinou=1")
+      router.push(upgrade ? "/nino" : "/?assinou=1")
       router.refresh()
     } else {
       setPending(false)

@@ -64,7 +64,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // upsell da página (vira vitrine que puxa upgrade). Destaque permanente.
       {
         label: "Nino AI",
-        href: "/consultor-ia",
+        href: "/nino",
         icon: Sparkles,
         highlight: true,
       },
@@ -100,7 +100,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: CalendarRange,
         module: "relatorios",
       },
-      { label: "DRE Grupo", href: "/financeiro", icon: Wallet, module: "financeiro" },
+      { label: "DRE Grupo", href: "/dre", icon: Wallet, module: "financeiro" },
     ],
   },
   {
@@ -111,7 +111,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         label: "Visão Geral",
-        href: "/caixa",
+        href: "/financeiro",
         icon: Coins,
         module: "financeiro",
         proOnly: true,
@@ -119,49 +119,49 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         label: "Fluxo de Caixa",
-        href: "/caixa/fluxo",
+        href: "/financeiro/fluxo",
         icon: TrendingUp,
         module: "financeiro",
         proOnly: true,
       },
       {
         label: "Lançamentos",
-        href: "/caixa/lancamentos",
+        href: "/financeiro/lancamentos",
         icon: ListOrdered,
         module: "financeiro",
         proOnly: true,
       },
       {
         label: "A pagar & receber",
-        href: "/caixa/aging",
+        href: "/financeiro/aging",
         icon: Scale,
         module: "financeiro",
         proOnly: true,
       },
       {
         label: "Contas",
-        href: "/caixa/contas",
+        href: "/financeiro/contas",
         icon: Wallet,
         module: "financeiro",
         proOnly: true,
       },
       {
         label: "Cartões",
-        href: "/caixa/cartoes",
+        href: "/financeiro/cartoes",
         icon: CreditCard,
         module: "financeiro",
         proOnly: true,
       },
       {
         label: "Categorias",
-        href: "/caixa/categorias",
+        href: "/financeiro/categorias",
         icon: Tag,
         module: "financeiro",
         proOnly: true,
       },
       {
         label: "Cadastros",
-        href: "/caixa/cadastros",
+        href: "/financeiro/cadastros",
         icon: Users,
         module: "financeiro",
         proOnly: true,

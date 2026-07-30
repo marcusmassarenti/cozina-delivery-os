@@ -9,7 +9,7 @@ import {
   deleteCostCategory,
   renameCostCategory,
   saveCostValue,
-} from "@/app/(app)/financeiro/_actions"
+} from "@/app/(app)/dre/_actions"
 import type { CostTipo, UnitCostBreakdown } from "@/lib/data/unit-costs"
 
 function toNumber(s: string): number {

@@ -216,7 +216,7 @@ export default async function RelatoriosPage({
       desc: "Faturamento, pedidos e cancelados loja × dia, com gráfico e ranking.",
     },
     {
-      href: `/financeiro?periodo=${periodKey}`,
+      href: `/dre?periodo=${periodKey}`,
       icon: Wallet,
       title: "DRE Grupo",
       desc: "Resultado da rede e por unidade — CMV, margem e resultado operacional.",

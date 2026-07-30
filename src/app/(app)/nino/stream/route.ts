@@ -27,7 +27,7 @@ export async function POST(req: Request): Promise<Response> {
           enviar(evt)
         }
       } catch (e) {
-        console.error("/consultor-ia/stream: erro inesperado:", e)
+        console.error("/nino/stream: erro inesperado:", e)
         enviar({
           type: "error",
           motivo: "erro",

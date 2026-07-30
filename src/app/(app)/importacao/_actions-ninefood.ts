@@ -90,7 +90,7 @@ export async function runNinefood99Sync(
       appShopIds: escopo ?? undefined,
     })
     revalidatePath("/importacao")
-    revalidatePath("/financeiro")
+    revalidatePath("/dre")
     await limparCacheAgregados()
   revalidatePath("/inicio")
 
@@ -214,7 +214,7 @@ export async function runNinefood99SyncAll(
     if (logs.length) await admin.from("platform_imports").insert(logs)
 
     revalidatePath("/importacao")
-    revalidatePath("/financeiro")
+    revalidatePath("/dre")
     await limparCacheAgregados()
   revalidatePath("/inicio")
     const erros = [

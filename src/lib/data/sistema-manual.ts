@@ -21,7 +21,7 @@ Quase toda tela tem um botão "Como funciona" no topo que abre um passo a passo 
 ## Dashboard (tela inicial, "/")
 Resumo da rede no período: faturamento bruto, líquido, pedidos, ticket, cancelamentos, nota média, taxas por plataforma, comparativo entre lojas e ranking. Use o seletor de período no topo pra mudar o intervalo. Adapta o texto pra "rede", "1 loja" ou "várias lojas" conforme a seleção.
 
-## Nino AI ("/consultor-ia")
+## Nino AI ("/nino")
 Sou eu. Respondo sobre os NÚMEROS da operação (faturamento, CMV, ticket, cancelamento, taxas, nota, evolução, projeção do mês, comparações entre lojas), sobre o MERCADO (com busca na web) e sobre COMO USAR O SISTEMA (este manual). As conversas ficam salvas na lateral e dá pra favoritar/organizar.
 
 ## OPERAÇÃO
@@ -38,27 +38,27 @@ As avaliações dos clientes (iFood/99/Keeta) por loja ou rede. Acompanha satisf
 Central dos relatórios da rede por categoria. Cada relatório deixa escolher lojas, plataformas e período. Tem: Comparativo loja×loja, Resultado da rede, Acompanhamento, Evolução/crescimento, Ranking de lojas, Faturamento por plataforma, Produtos (top/alta/queda), Comparativo de produtos, Evolução e Comparativo de nota, Comentários negativos, Cancelamentos, Ticket médio, e o link pra Cobertura de importação. Todo relatório tem "← Hub de Relatórios" pra voltar.
 ### Relatório Diário ("/relatorio-diario")
 Desempenho dia a dia da rede no período.
-### DRE Grupo ("/financeiro") — o DRE COMPLETO
+### DRE Grupo ("/dre") — o DRE COMPLETO
 DRE consolidado da rede: faturamento bruto → taxas das plataformas → líquido → CMV → custos operacionais → Resultado. Inclui também as "Despesas operacionais (do Caixa)" (aluguel, folha, fixas lançadas no Financeiro), com "Resultado após despesas do Caixa" e ponto de equilíbrio. Vira "DRE da loja" quando é uma só. Resultado negativo em vermelho. Exporta em PDF pelo botão do card. (O antigo "DRE Gerencial" do caixa foi unificado aqui.)
 
 ## FINANCEIRO (módulo Caixa — plano Pro)
 Gestão financeira da empresa: contas, cartões, categorias, lançamentos, fluxo de caixa. Tem seletor de loja no topo (Consolidado / Rede / cada loja).
-### Visão Geral ("/caixa")
+### Visão Geral ("/financeiro")
 KPIs do período (receita, despesa, balanço, saldo em conta), o card de Fluxo de Caixa (saldo projetado 30d + alerta de ruptura), comparativo por loja, painéis Pagamentos/Recebimentos (clicam pro aging), Curva ABC de despesas, contas e cartões, últimos lançamentos.
-### Fluxo de Caixa ("/caixa/fluxo")
+### Fluxo de Caixa ("/financeiro/fluxo")
 Saldo corrido PROJETADO (30/60/90 dias) juntando contas a pagar/receber + os repasses de delivery previstos (iFood/Keeta). Mostra alerta de ruptura (1º dia que o saldo fica negativo). É projeção — não mexe em lançamento.
-### Lançamentos ("/caixa/lancamentos")
+### Lançamentos ("/financeiro/lancamentos")
 Onde você registra entradas e saídas. Botão "Novo Lançamento": escolha tipo (despesa/receita/transferência), loja, valor, vencimento, conta ou cartão, categoria, cliente/fornecedor, descrição, data de pagamento e tags. Dá pra recorrência mensal e parcelar no cartão. Edição em massa (marcar pago, categorizar, excluir). Uma seção "Em aberto de meses anteriores" mostra contas vencidas de qualquer mês.
 - **Importar extrato (OFX):** botão no topo — escolha a conta e suba o arquivo .ofx do banco; vira lançamento (entrada/saída pelo sinal), já conciliado, sem duplicar o que já foi importado.
-### A pagar & receber ("/caixa/aging")
+### A pagar & receber ("/financeiro/aging")
 Tudo em aberto por faixa de vencimento: a vencer / vencido 1-30 / 31-60 / 61-90 / +90 dias, dos dois lados, com o vencido em destaque.
-### Contas ("/caixa/contas")
+### Contas ("/financeiro/contas")
 Suas contas bancárias/caixa: saldo inicial, saldo atual (inicial + efetivados), banco, cor. Transferência entre contas é um lançamento tipo "transferência".
-### Cartões ("/caixa/cartoes")
+### Cartões ("/financeiro/cartoes")
 Cartões de crédito com limite, fechamento e vencimento. A COMPRA no cartão não entra no fluxo de caixa — fica na fatura; só o "Pagar fatura" (escolhendo a conta pagadora) vira saída no caixa. Mostra fatura em aberto, limite disponível e parcelas.
-### Categorias ("/caixa/categorias") — plano de contas
+### Categorias ("/financeiro/categorias") — plano de contas
 As categorias de receita/despesa. Cada uma tem GRUPO DE DRE (Receita, Dedução, CMV, Mão de obra, Fixa, Variável, Investimento) e NATUREZA (fixo/variável) — é isso que destrava margem de contribuição, CMV%, ocupação% e ponto de equilíbrio. Botão "Criar plano de contas padrão de restaurante" pra quem começa do zero. Dá pra editar categoria e escolher ícone/cor.
-### Cadastros ("/caixa/cadastros")
+### Cadastros ("/financeiro/cadastros")
 Clientes e fornecedores (PF/PJ), com busca de CNPJ e CEP automática, prazo de pagamento e endereço. Usados no campo Cliente/Fornecedor dos lançamentos.
 
 ## INTEGRAÇÕES

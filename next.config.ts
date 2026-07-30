@@ -55,6 +55,28 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "30mb",
     },
   },
+  /**
+   * Endereços antigos continuam funcionando.
+   *
+   * As três telas trocaram de URL porque o endereço tinha ficado com o nome
+   * de quando a tela nasceu, não com o nome que ela tem hoje no menu:
+   *   /financeiro    era o "DRE Grupo"      → /dre
+   *   /caixa         era o "Financeiro"     → /financeiro
+   *   /consultor-ia  virou "Nino AI"        → /nino
+   *
+   * Permanente (308) porque a mudança é definitiva e assim o navegador para de
+   * bater no endereço velho. Os `:path*` levam junto as subpáginas — sem eles,
+   * /caixa/fluxo e as outras seis abas do financeiro morreriam em 404.
+   */
+  async redirects() {
+    return [
+      { source: "/caixa", destination: "/financeiro", permanent: true },
+      { source: "/caixa/:path*", destination: "/financeiro/:path*", permanent: true },
+      { source: "/consultor-ia", destination: "/nino", permanent: true },
+      { source: "/consultor-ia/:path*", destination: "/nino/:path*", permanent: true },
+    ]
+  },
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

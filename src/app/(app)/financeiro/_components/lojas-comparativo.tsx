@@ -24,7 +24,7 @@ export function LojasComparativo({ lojas, periodo }: { lojas: LojaResumo[]; peri
     if (periodo) p.set("periodo", periodo)
     if (id) p.set("loja", id)
     const qs = p.toString()
-    return qs ? `/caixa?${qs}` : "/caixa"
+    return qs ? `/financeiro?${qs}` : "/financeiro"
   }
 
   const Cell = ({ v, cls = "" }: { v: number; cls?: string }) => (

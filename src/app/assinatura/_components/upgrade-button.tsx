@@ -25,7 +25,7 @@ export function UpgradeButton() {
       return
     }
     if (r.imediato) {
-      window.location.href = "/consultor-ia"
+      window.location.href = "/nino"
       return
     }
     if (r.checkoutUrl) {

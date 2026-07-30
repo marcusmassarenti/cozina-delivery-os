@@ -193,7 +193,7 @@ export function ConsultorChat({
     let erroEvt: { motivo?: string; mensagem: string } | null = null
 
     try {
-      const res = await fetch("/consultor-ia/stream", {
+      const res = await fetch("/nino/stream", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ conversaId: ativaId, messages: novo }),

@@ -30,7 +30,7 @@ import { AlertTriangle } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 
-import { DailyTrendChart } from "@/app/(app)/financeiro/_components/daily-trend-chart"
+import { DailyTrendChart } from "@/app/(app)/dre/_components/daily-trend-chart"
 
 import { RelatorioFilters } from "./_components/relatorio-filters"
 import { RelatorioKpis } from "./_components/relatorio-kpis"

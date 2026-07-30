@@ -40,7 +40,7 @@ export function NinoCortesiaModal({
   }
   function abrirNino() {
     fechar()
-    router.push("/consultor-ia")
+    router.push("/nino")
   }
 
   if (!show || !ate) return null

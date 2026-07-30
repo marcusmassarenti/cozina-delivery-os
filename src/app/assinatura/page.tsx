@@ -163,7 +163,7 @@ function UpgradeScreen({ info }: { info: UpgradeAiInfo }) {
 
         <div className="mt-5 text-center">
           <Link
-            href="/consultor-ia"
+            href="/nino"
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" />

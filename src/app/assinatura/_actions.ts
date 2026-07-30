@@ -327,7 +327,7 @@ export async function iniciarUpgradeAi(): Promise<UpgradeState> {
         .from("holdings")
         .update({ plan_tier: "ai", pending_plan_tier: null })
         .eq("id", holdingId)
-      revalidatePath("/consultor-ia")
+      revalidatePath("/nino")
       revalidatePath("/", "layout")
       return { ok: true, imediato: true }
     }
@@ -409,7 +409,7 @@ export async function simularUpgrade(): Promise<{
     method: "Asaas (Simulado) · upgrade AI",
     note: `Simulado upgrade ${holdingId}`,
   })
-  revalidatePath("/consultor-ia")
+  revalidatePath("/nino")
   revalidatePath("/", "layout")
   return { ok: true }
 }
