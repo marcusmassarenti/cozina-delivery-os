@@ -593,3 +593,34 @@ export async function setAppHabilitado(
     message: ligar ? "Habilitado!" : "Desabilitado.",
   }
 }
+
+/**
+ * Marca (ou desmarca) que o CNPJ já foi lançado no Portal do Desenvolvedor.
+ *
+ * É controle manual porque o passo é manual: o portal aceita um CNPJ por vez e
+ * não devolve nada que a gente possa ler. Num lote de 14 lojas, "solicitada"
+ * sozinha não diz se você já lançou aquela ou se ela ainda está esperando você
+ * — e é exatamente aí que uma some.
+ */
+export async function marcarLancadoNoPortal(
+  _prev: SolicitacaoUpdateState,
+  formData: FormData,
+): Promise<SolicitacaoUpdateState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Apenas o admin da plataforma." }
+  }
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, error: "id ausente" }
+  const marcar = String(formData.get("marcar") ?? "") === "1"
+
+  const { error } = await createAdminClient()
+    .from("ifood_activation_requests")
+    .update({ lancado_no_portal_at: marcar ? new Date().toISOString() : null })
+    .eq("id", id)
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/integracao/ifood-merchants")
+  return { ok: true, message: marcar ? "Marcada como lançada." : "Desmarcada." }
+}

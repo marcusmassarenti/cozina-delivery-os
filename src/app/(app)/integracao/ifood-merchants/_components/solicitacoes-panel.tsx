@@ -11,6 +11,7 @@ import {
   atualizarSolicitacaoIfood,
   conferirLojasAutorizadas,
   desfazerStatusIfood,
+  marcarLancadoNoPortal,
   type ConferirAutorizadasState,
   type SolicitacaoUpdateState,
 } from "../_actions"
@@ -27,6 +28,8 @@ export type SolicitacaoAdmin = {
   clienteConfirmouAt: string | null
   /** Passo anterior da fila — habilita o Desfazer. */
   statusAnterior: string | null
+  /** Você já lançou este CNPJ no Portal do Desenvolvedor? */
+  lancadoNoPortal: boolean
 }
 
 function fmtCnpj(d: string): string {
@@ -86,6 +89,8 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
 
   /** Recusar é uma ação à parte: ela pede o aviso que o cliente vai ler. */
   const podeRecusar = s.status === "pendente" || s.status === "solicitada"
+  /** Só faz sentido riscar da lista o que ainda depende de você lançar. */
+  const podeMarcarLancado = podeRecusar
   const jaRecusada = s.status === "recusada"
 
   // Fecha o campo assim que a gravação passa: depois de salvar, o aviso vira
@@ -96,11 +101,17 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
   }, [state.ok])
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
+    <div
+      className={`rounded-lg border p-3 ${s.lancadoNoPortal ? "border-dashed bg-muted/10 opacity-70" : "bg-muted/20"}`}
+    >
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-semibold">{s.holdingName}</span>
-        <span className="tabular-nums">{fmtCnpj(s.cnpj)}</span>
+        <span
+          className={`tabular-nums ${s.lancadoNoPortal ? "text-muted-foreground line-through" : "font-medium"}`}
+        >
+          {fmtCnpj(s.cnpj)}
+        </span>
         <CopiarCnpj cnpj={s.cnpj} />
+        {podeMarcarLancado && <BotaoLancado id={s.id} lancado={s.lancadoNoPortal} />}
         {s.unitLabel && (
           <span className="text-muted-foreground">{s.unitLabel}</span>
         )}
@@ -377,11 +388,107 @@ export function SolicitacoesPanel({
         tabela abaixo).
       </p>
       {abertas.length > 0 && <BotaoConferir />}
-      <div className="mt-3 space-y-2">
-        {naFila.map((s) => (
-          <Linha key={s.id} s={s} />
-        ))}
+
+      {/* Agrupado POR CLIENTE porque o trabalho é por cliente: você abre o
+          Portal do Desenvolvedor uma vez e despacha o lote dele inteiro. Solto,
+          um lote de 14 lojas ficava intercalado com o de outro cliente e era
+          impossível saber onde você tinha parado. */}
+      <div className="mt-3 space-y-4">
+        {[...new Map(naFila.map((s) => [s.holdingName, true])).keys()].map(
+          (cliente) => {
+            const doCliente = naFila.filter((s) => s.holdingName === cliente)
+            const aLancar = doCliente
+              .filter(
+                (s) =>
+                  !s.lancadoNoPortal &&
+                  (s.status === "pendente" || s.status === "solicitada"),
+              )
+              .map((s) => s.cnpj)
+            return (
+              <div key={cliente}>
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <h3 className="text-xs font-semibold">{cliente}</h3>
+                  <span className="text-[10px] text-muted-foreground">
+                    {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
+                    {aLancar.length > 0 && ` · ${aLancar.length} a lançar`}
+                  </span>
+                  <CopiarLote cnpjs={aLancar} />
+                </div>
+                <div className="space-y-2">
+                  {doCliente.map((s) => (
+                    <Linha key={s.id} s={s} />
+                  ))}
+                </div>
+              </div>
+            )
+          },
+        )}
       </div>
     </div>
+  )
+}
+
+/**
+ * O risco na lista: "esse CNPJ eu já lancei no portal".
+ *
+ * O Portal do Desenvolvedor aceita um CNPJ por vez e não devolve nada que dê
+ * pra ler de volta. Com 14 lojas de um cliente só, o operador perdia o fio de
+ * quais já tinham passado — e loja pulada vira loja esquecida. Isto é o
+ * caderninho que faltava, dentro da própria fila.
+ */
+function BotaoLancado({ id, lancado }: { id: string; lancado: boolean }) {
+  const [, action] = useActionState<SolicitacaoUpdateState, FormData>(
+    marcarLancadoNoPortal,
+    { ok: false },
+  )
+  return (
+    <form action={action} className="inline">
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="marcar" value={lancado ? "0" : "1"} />
+      <BotaoLancadoSubmit lancado={lancado} />
+    </form>
+  )
+}
+
+function BotaoLancadoSubmit({ lancado }: { lancado: boolean }) {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors disabled:opacity-50 ${
+        lancado
+          ? "border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-400"
+          : "text-muted-foreground hover:bg-muted"
+      }`}
+      title={
+        lancado
+          ? "Desmarcar — voltar pra lista de CNPJs a lançar"
+          : "Marcar que você já lançou este CNPJ no Portal do Desenvolvedor"
+      }
+    >
+      {lancado ? <Check className="size-3" /> : null}
+      {pending ? "..." : lancado ? "lancei" : "marcar lançada"}
+    </button>
+  )
+}
+
+/** Todos os CNPJs que ainda faltam lançar deste cliente, de uma vez só. */
+function CopiarLote({ cnpjs }: { cnpjs: string[] }) {
+  const [copiado, setCopiado] = React.useState(false)
+  if (cnpjs.length === 0) return null
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard.writeText(cnpjs.join("\n"))
+        setCopiado(true)
+        setTimeout(() => setCopiado(false), 1500)
+      }}
+      className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted"
+    >
+      {copiado ? <Check className="size-3" /> : <Copy className="size-3" />}
+      {copiado ? "copiados" : `copiar os ${cnpjs.length} que faltam`}
+    </button>
   )
 }

@@ -52,13 +52,20 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
   const atencoes = s.lojas.filter((l) => l.gravidade === "atencao")
   const cronsRuins = s.crons.filter((c) => c.gravidade === "alerta")
   const cronsAviso = s.crons.filter((c) => c.gravidade === "atencao")
+  // Loja parada na fila de conexão não é "integração com defeito" — é conexão
+  // que nunca começou. Entra nos mesmos blocos porque a pergunta é a mesma:
+  // tem algo esperando alguém agir?
+  const filaRuim = s.filaIfood.filter((f) => f.gravidade === "alerta")
+  const filaAviso = s.filaIfood.filter((f) => f.gravidade === "atencao")
+  const linhaFila = (f: (typeof s.filaIfood)[number]) =>
+    `<strong>${f.cliente} · ${f.loja}</strong> <span style="font-size:12px;color:#71717a;">(conexão iFood)</span><br/>${f.motivo}`
 
   // O assunto carrega o veredito inteiro. É a única linha que você é obrigado
   // a ler, então ela precisa bastar.
-  const emObservacao = atencoes.length + cronsAviso.length
+  const emObservacao = atencoes.length + cronsAviso.length + filaAviso.length
   const assunto = !s.tudoCerto
-    ? `⚠️ ${r.lojasAlerta + cronsRuins.length} ${
-        r.lojasAlerta + cronsRuins.length === 1 ? "problema" : "problemas"
+    ? `⚠️ ${r.lojasAlerta + cronsRuins.length + filaRuim.length} ${
+        r.lojasAlerta + cronsRuins.length + filaRuim.length === 1 ? "problema" : "problemas"
       }${
         // Diz logo no assunto ONDE está o problema: iFood e 99 são integrações
         // independentes, e saber qual delas caiu já muda o que você vai abrir.
@@ -124,6 +131,7 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
           ...cronsRuins.map(
             (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
           ),
+          ...filaRuim.map(linhaFila),
         ],
       )}
 
@@ -138,6 +146,7 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
           ...cronsAviso.map(
             (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
           ),
+          ...filaAviso.map(linhaFila),
         ],
       )}
 

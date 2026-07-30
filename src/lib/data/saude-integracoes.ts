@@ -67,9 +67,20 @@ export type CronSaude = {
   motivo: string
 }
 
+/** Loja parada na fila de conexão do iFood — esperando alguém agir. */
+export type FilaIfood = {
+  cliente: string
+  loja: string
+  cnpj: string
+  dias: number
+  gravidade: Gravidade
+  motivo: string
+}
+
 export type SaudeIntegracoes = {
   geradoEm: string
   lojas: LojaSaude[]
+  filaIfood: FilaIfood[]
   crons: CronSaude[]
   resumo: {
     lojasConectadas: number
@@ -329,6 +340,51 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     }
   }
 
+  // ── Fila de conexão do iFood ───────────────────────────────────────────
+  // A solicitação é feita À MÃO no Portal do Desenvolvedor, um CNPJ por vez.
+  // Numa leva de 14 lojas, uma passar batido é questão de tempo — e aí ela
+  // fica em 'solicitada' pra sempre: pro cliente é "ainda não conectou", pra
+  // fila é "com o cliente", e ninguém cobra. É o tipo de coisa que só aparece
+  // se alguém for olhar; então o relatório vai olhar todo dia.
+  const PARADA_DIAS = 3
+  const filaIfood: FilaIfood[] = []
+  {
+    const { data: fila } = await admin
+      .from("ifood_activation_requests")
+      .select("cnpj, status, updated_at, holdings(name), units(code, name)")
+      .in("status", ["pendente", "solicitada"])
+    for (const r of (fila ?? []) as unknown as {
+      cnpj: string
+      status: string
+      updated_at: string
+      holdings: { name: string } | null
+      units: { code: string; name: string } | null
+    }[]) {
+      const dias = Math.floor(
+        (Date.parse(agora) - Date.parse(r.updated_at)) / 86_400_000,
+      )
+      if (dias < PARADA_DIAS) continue
+      filaIfood.push({
+        cliente: r.holdings?.name ?? "—",
+        loja: r.units
+          ? `${r.units.code ? `${r.units.code} · ` : ""}${r.units.name}`
+          : "loja sem cadastro",
+        cnpj: r.cnpj,
+        dias,
+        // 'pendente' é a SUA vez: parada aí é fila que você não despachou.
+        // 'solicitada' pode ser o cliente demorando pra aprovar — mas passando
+        // de uma semana, o mais provável é que a loja nunca tenha aparecido
+        // pra ele, e é exatamente esse o caso que some sem avisar.
+        gravidade: r.status === "pendente" || dias >= 7 ? "alerta" : "atencao",
+        motivo:
+          r.status === "pendente"
+            ? `Parada há ${dias} dias esperando você solicitar no Portal do Desenvolvedor.`
+            : `Solicitada há ${dias} dias e o cliente ainda não aprovou. Confira se ela apareceu no Portal do Parceiro dele — se não apareceu, refaça a solicitação.`,
+      })
+    }
+    filaIfood.sort((a, b) => b.dias - a.dias)
+  }
+
   const resumo = {
     lojasConectadas: lojas.length,
     ifood: porPlataforma("ifood"),
@@ -343,16 +399,22 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   return {
     geradoEm: agora,
     lojas,
+    filaIfood,
     crons,
     resumo,
     // "Atenção" não acorda ninguém — só alerta. Loja conectada há 2 horas sem
     // dado é esperado, não é problema.
-    tudoCerto: resumo.lojasAlerta === 0 && crons.every((c) => c.gravidade !== "alerta"),
+    tudoCerto:
+      resumo.lojasAlerta === 0 &&
+      crons.every((c) => c.gravidade !== "alerta") &&
+      filaIfood.every((f) => f.gravidade !== "alerta"),
     // Separado de propósito: dizer "tudo certo" com 8 rotinas ainda sem
     // registro é tecnicamente verdade e humanamente mentira. Quem lê vê o
     // selo verde ao lado de "0/8 rodando" e para de confiar no selo.
     temObservacao:
-      resumo.lojasAtencao > 0 || crons.some((c) => c.gravidade === "atencao"),
+      resumo.lojasAtencao > 0 ||
+      crons.some((c) => c.gravidade === "atencao") ||
+      filaIfood.some((f) => f.gravidade === "atencao"),
   }
 }
 
