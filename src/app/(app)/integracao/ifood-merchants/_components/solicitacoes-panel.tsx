@@ -210,9 +210,13 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
             <span
               className={`text-[11px] ${s.clienteConfirmouAt ? "font-medium text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}
             >
+              {/* O texto genérico "nada a fazer daqui" saiu: repetido em 12
+                  linhas iguais, ele triplicava a altura da fila e escondia o
+                  que era específico de cada loja. Agora só aparece o que muda
+                  de linha pra linha. */}
               {s.clienteConfirmouAt
                 ? 'O cliente avisou que já aprovou — use "Já autorizei — conferir e vincular" no topo.'
-                : "Nada a fazer daqui: o Proprietário precisa aprovar no Portal do Parceiro dele. Assim que aprovar, a conexão se fecha sozinha (checamos a cada 15 min)."}
+                : ""}
             </span>
           )}
         </div>
@@ -370,6 +374,7 @@ export function SolicitacoesPanel({
   const abertas = naFila.filter(
     (s) => s.status === "pendente" || s.status === "solicitada",
   )
+  const recusadas = naFila.filter((s) => s.status === "recusada")
   return (
     <div className="rounded-xl border bg-card p-5">
       <h2 className="text-sm font-semibold">
@@ -393,10 +398,38 @@ export function SolicitacoesPanel({
           Portal do Desenvolvedor uma vez e despacha o lote dele inteiro. Solto,
           um lote de 14 lojas ficava intercalado com o de outro cliente e era
           impossível saber onde você tinha parado. */}
-      <div className="mt-3 space-y-4">
-        {[...new Map(naFila.map((s) => [s.holdingName, true])).keys()].map(
+      <Grupo titulo="Aguardando" itens={abertas} />
+      <Grupo titulo="Recusadas" itens={recusadas} />
+    </div>
+  )
+}
+
+/**
+ * Um bloco da fila. Separar aguardando de recusada importa porque são duas
+ * perguntas diferentes: "o que ainda tenho que despachar?" e "o que travou e
+ * precisa de resposta?". Misturadas, a segunda some no meio da primeira.
+ */
+function Grupo({
+  titulo,
+  itens,
+}: {
+  titulo: string
+  itens: SolicitacaoAdmin[]
+}) {
+  if (itens.length === 0) return null
+  const aguardando = titulo === "Aguardando"
+  return (
+    <div className="mt-5">
+      <div className="mb-2 flex items-center gap-2 border-b pb-1.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {titulo}
+        </h3>
+        <span className="text-[10px] text-muted-foreground">{itens.length}</span>
+      </div>
+      <div className="space-y-4">
+        {[...new Map(itens.map((s) => [s.holdingName, true])).keys()].map(
           (cliente) => {
-            const doCliente = naFila.filter((s) => s.holdingName === cliente)
+            const doCliente = itens.filter((s) => s.holdingName === cliente)
             const aLancar = doCliente
               .filter(
                 (s) =>
@@ -412,8 +445,17 @@ export function SolicitacoesPanel({
                     {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
                     {aLancar.length > 0 && ` · ${aLancar.length} a lançar`}
                   </span>
-                  <CopiarLote cnpjs={aLancar} />
+                  {aguardando && <CopiarLote cnpjs={aLancar} />}
                 </div>
+                {/* A explicação vive AQUI, uma vez por cliente. */}
+                {aguardando &&
+                  doCliente.some((s) => s.status === "solicitada") && (
+                    <p className="mb-1.5 text-[11px] text-muted-foreground">
+                      As marcadas como <b>solicitada</b> dependem do
+                      Proprietário aprovar no Portal do Parceiro dele — a
+                      conexão se fecha sozinha (checamos a cada 15 min).
+                    </p>
+                  )}
                 <div className="space-y-2">
                   {doCliente.map((s) => (
                     <Linha key={s.id} s={s} />
