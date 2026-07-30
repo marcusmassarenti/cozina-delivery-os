@@ -42,6 +42,55 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.6",
+    date: "2026-07-29",
+    tag: "Correções",
+    title: "Faturamento de junho e julho recuperado",
+    summary:
+      "Lojas com muito movimento podiam ter o mês gravado pela metade na importação do iFood. Os meses afetados foram reimportados e a gravação foi refeita pra que isso não aconteça mais.",
+    // Mexeu num número que a pessoa já tinha visto no painel — ela precisa
+    // saber por que o faturamento mudou.
+    destaque: true,
+    areas: [
+      {
+        area: "Importação do iFood",
+        items: [
+          {
+            kind: "correcao",
+            title: "O mês não é mais apagado antes da carga nova entrar",
+            antes:
+              "A importação apagava o mês e só então gravava o novo. Se a gravação parasse no meio, o mês ficava pela metade e o histórico mesmo assim dizia “sucesso”.",
+            depois:
+              "A carga nova entra inteira, o sistema confere se tudo foi gravado, e só aí a antiga sai. Se falhar no meio, o mês anterior continua de pé e o histórico mostra o erro com o motivo.",
+          },
+          {
+            kind: "correcao",
+            title: "Junho e julho reimportados",
+            desc: "As lojas afetadas tiveram os dois meses recarregados do iFood. O faturamento voltou ao valor correto.",
+          },
+        ],
+      },
+      {
+        area: "Conexão iFood",
+        items: [
+          {
+            kind: "melhoria",
+            title: "CNPJ conferido na hora de pedir a conexão",
+            antes:
+              "Bastava ter 14 dígitos. Um número trocado passava e o pedido só era recusado dias depois.",
+            depois:
+              "O CNPJ é validado na hora. Se algum número estiver trocado, o aviso aparece na tela antes de enviar.",
+          },
+          {
+            kind: "melhoria",
+            title: "Recusa agora explica o motivo",
+            desc: "Quando um pedido de conexão é recusado, o aviso que aparece na página da sua loja é escrito caso a caso, em vez de um texto padrão.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.5",
     date: "2026-07-27",
     tag: "Grande novidade",
