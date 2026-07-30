@@ -15,7 +15,7 @@ import { IndicacoesView } from "./_components/indicacoes-view"
 export const dynamic = "force-dynamic"
 
 export default async function IndicacoesPage() {
-  if (!(await isSuperadmin())) redirect("/")
+  if (!(await isSuperadmin())) redirect("/inicio")
 
   const [indicadores, comissoes] = await Promise.all([
     listarIndicadores(),

@@ -163,7 +163,7 @@ export async function signUp(
   // Se o projeto NÃO exige confirmação de e-mail, o Supabase já devolve sessão
   // → entra direto. Se exige, não há sessão → tela "confira seu e-mail".
   if (signUpData.session) {
-    redirect("/")
+    redirect("/inicio")
   }
   redirect(`/cadastro/confirme?email=${encodeURIComponent(email)}`)
 }

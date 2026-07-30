@@ -33,7 +33,7 @@ export default async function FichaTecnicaPage({
   } catch {
     // não-admin
   }
-  if (!ok) redirect("/")
+  if (!ok) redirect("/inicio")
 
   const sp = await searchParams
   const { range: periodRange, year, month } = readPeriod(sp)

@@ -37,5 +37,5 @@ export async function confirmEmail(
         "Este link não é mais válido (pode ter expirado ou já sido usado). Peça um novo e-mail de confirmação.",
     }
   }
-  redirect("/")
+  redirect("/inicio")
 }

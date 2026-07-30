@@ -167,7 +167,7 @@ export async function confirmarAprovacaoIfood(
     .is("cliente_confirmou_at", null)
   if (error) return { ok: false, message: `Falha: ${error.message}` }
 
-  revalidatePath("/")
+  revalidatePath("/inicio")
   revalidatePath("/unidades")
   return { ok: true, message: "Avisamos a equipe — falta pouco!" }
 }
@@ -207,7 +207,7 @@ export async function confirmarTodasAprovacoesIfood(
   if (error) return { ok: false, message: `Falha: ${error.message}` }
 
   const n = (data ?? []).length
-  revalidatePath("/")
+  revalidatePath("/inicio")
   revalidatePath("/unidades")
   return {
     ok: true,
@@ -349,7 +349,7 @@ export async function reportarLojaNaoApareceu(
     .eq("id", id)
   if (error) return { ok: false, message: `Falha: ${error.message}` }
 
-  revalidatePath("/")
+  revalidatePath("/inicio")
   revalidatePath("/unidades")
   return {
     ok: true,

@@ -8,7 +8,7 @@ import { EsqueciForm } from "./_components/esqueci-form"
 export default async function EsqueciSenhaPage() {
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
-  if (data.user) redirect("/")
+  if (data.user) redirect("/inicio")
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">

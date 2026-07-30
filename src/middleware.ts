@@ -2,13 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { updateSession } from "@/lib/supabase/middleware"
 
-// Domínio da landing do SaaS. A raiz desse domínio mostra a landing
-// (/deliveryos) em vez do app. Trocar aqui se o domínio mudar.
-const LANDING_HOSTS = new Set(["deliveryos.food", "www.deliveryos.food"])
-
 export async function middleware(request: NextRequest) {
-  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase()
-  const isLandingHost = LANDING_HOSTS.has(host)
   const pathname = request.nextUrl.pathname
 
   // Sondas de readiness (preview do Claude, monitores de uptime) batem em
@@ -17,18 +11,31 @@ export async function middleware(request: NextRequest) {
     return new NextResponse(null, { status: 200 })
   }
 
-  // deliveryos.food/  → landing pra VISITANTE; app (dashboard) pra quem está
-  // LOGADO. Assim o cliente que confirma o e-mail e cai em "/" vê o sistema,
-  // não a página de vendas. O app principal (cozinafoods) não é afetado.
-  if (isLandingHost && pathname === "/") {
+  // A RAIZ É A LANDING. O sistema mora em /inicio.
+  //
+  // Antes o dashboard ocupava "/" e a landing só aparecia por um desvio no
+  // domínio do SaaS — o que deixava a tela principal sem endereço próprio:
+  // não dava pra mandar o link do painel pra ninguém, e o histórico do
+  // navegador guardava "deliveryos.food" tanto pra página de vendas quanto
+  // pro sistema.
+  //
+  // Quem está LOGADO não vê a página de vendas: vai direto pro sistema. É o
+  // caso do cliente que confirma o e-mail e cai em "/".
+  if (pathname === "/") {
     const hasAuthCookie = request.cookies
       .getAll()
       .some((c) => c.name.includes("auth-token"))
     if (hasAuthCookie) {
       const { response, user } = await updateSession(request)
-      if (user) return response // logado → segue pro dashboard do app
+      if (user) {
+        const url = request.nextUrl.clone()
+        url.pathname = "/inicio"
+        return NextResponse.redirect(url)
+      }
+      void response
     }
-    // sem sessão → landing (rewrite, mantém a URL na barra)
+    // Visitante → landing por REWRITE: a URL na barra continua sendo a raiz,
+    // que é o endereço que a gente divulga.
     const url = request.nextUrl.clone()
     url.pathname = "/deliveryos"
     return NextResponse.rewrite(url)

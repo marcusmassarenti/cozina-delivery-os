@@ -49,7 +49,7 @@ export default function UsuariosError({
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
           <Link
-            href="/"
+            href="/inicio"
             className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium hover:bg-muted"
           >
             <ArrowLeft className="size-3.5" />

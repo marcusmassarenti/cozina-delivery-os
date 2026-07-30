@@ -92,7 +92,7 @@ export async function runNinefood99Sync(
     revalidatePath("/importacao")
     revalidatePath("/financeiro")
     await limparCacheAgregados()
-  revalidatePath("/")
+  revalidatePath("/inicio")
 
     const comErro = results.filter((r) => r.error)
     return {
@@ -216,7 +216,7 @@ export async function runNinefood99SyncAll(
     revalidatePath("/importacao")
     revalidatePath("/financeiro")
     await limparCacheAgregados()
-  revalidatePath("/")
+  revalidatePath("/inicio")
     const erros = [
       ...fin.results.filter((r) => r.error),
       ...card.results.filter((r) => r.error),

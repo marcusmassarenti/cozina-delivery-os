@@ -344,7 +344,7 @@ export async function importIfoodReports(
     revalidateTag("units", "max")
     revalidatePath("/importacao")
     await limparCacheAgregados()
-  revalidatePath("/")
+  revalidatePath("/inicio")
   }
 
   // ⚠️ FALHA TAMBÉM VIRA REGISTRO.
@@ -3763,7 +3763,7 @@ export async function createUnitAndImport(
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   await limparCacheAgregados()
-  revalidatePath("/")
+  revalidatePath("/inicio")
 
   const result: ImportFileResult = {
     filename: file.name,
@@ -3854,7 +3854,7 @@ export async function recheckAndImport(
     revalidatePath("/importacao")
     revalidatePath("/unidades")
     await limparCacheAgregados()
-  revalidatePath("/")
+  revalidatePath("/inicio")
   }
 
   return {
@@ -3972,7 +3972,7 @@ export async function linkUnitAndImport(
   revalidatePath("/importacao")
   revalidatePath("/unidades")
   await limparCacheAgregados()
-  revalidatePath("/")
+  revalidatePath("/inicio")
 
   const result: ImportFileResult = {
     filename: file.name,

@@ -14,7 +14,7 @@ import { SaudeView } from "./_components/saude-view"
 export const dynamic = "force-dynamic"
 
 export default async function SaudePage() {
-  if (!(await isSuperadmin())) redirect("/")
+  if (!(await isSuperadmin())) redirect("/inicio")
 
   const s = await diagnosticarIntegracoes()
 

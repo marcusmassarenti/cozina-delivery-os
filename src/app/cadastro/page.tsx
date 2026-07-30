@@ -24,7 +24,7 @@ const BENEFICIOS = [
 export default async function CadastroPage() {
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
-  if (data.user) redirect("/")
+  if (data.user) redirect("/inicio")
 
   return (
     <TooltipProvider>

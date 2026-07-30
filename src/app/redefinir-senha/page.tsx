@@ -66,7 +66,7 @@ export default function RedefinirSenhaPage() {
       return
     }
     setPhase("done")
-    setTimeout(() => router.push("/"), 1800)
+    setTimeout(() => router.push("/inicio"), 1800)
   }
 
   return (

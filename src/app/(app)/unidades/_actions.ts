@@ -192,7 +192,7 @@ export async function createUnit(
     revalidateTag("units", "max")
     revalidateTag("reports", "max")
     revalidatePath("/unidades")
-    revalidatePath("/")
+    revalidatePath("/inicio")
     return { ok: true }
   } catch (err) {
     return {
@@ -260,7 +260,7 @@ export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
     revalidateTag("units", "max")
     revalidateTag("reports", "max")
     revalidatePath("/unidades")
-    revalidatePath("/")
+    revalidatePath("/inicio")
     return { ok: true }
   } catch (err) {
     return {
@@ -294,7 +294,7 @@ export async function saveUnitLogo(formData: FormData): Promise<CreateUnitState>
     if (error) return { ok: false, message: error.message }
     revalidateTag("units", "max")
     revalidatePath("/unidades")
-    revalidatePath("/")
+    revalidatePath("/inicio")
     return { ok: true }
   } catch (err) {
     return {
@@ -318,7 +318,7 @@ export async function removeUnitLogo(unitId: string): Promise<CreateUnitState> {
     if (error) return { ok: false, message: error.message }
     revalidateTag("units", "max")
     revalidatePath("/unidades")
-    revalidatePath("/")
+    revalidatePath("/inicio")
     return { ok: true }
   } catch (err) {
     return {
@@ -478,7 +478,7 @@ export async function updateUnit(
     revalidateTag("units", "max")
     revalidateTag("reports", "max")
     revalidatePath("/unidades")
-    revalidatePath("/")
+    revalidatePath("/inicio")
     revalidatePath("/importacao")
     revalidatePath(`/unidades/[codigo]`, "page")
     return { ok: true }

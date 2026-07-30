@@ -15,7 +15,7 @@ export default async function SuspensoPage() {
   const superadmin = await isSuperadmin()
   const billing = await getCurrentHoldingBilling()
   // Não está suspenso? Volta pro sistema.
-  if (superadmin || billing?.status !== "suspended") redirect("/")
+  if (superadmin || billing?.status !== "suspended") redirect("/inicio")
 
   // Suspenso por FIM DE TESTE (tem trial_ends_at) vs pendência de pagamento.
   const isTrial = !!billing?.trialEndsAt

@@ -69,7 +69,7 @@ export async function verificarCodigo2FA(
   }
 
   revalidatePath("/", "layout")
-  redirect("/")
+  redirect("/inicio")
 }
 
 /**

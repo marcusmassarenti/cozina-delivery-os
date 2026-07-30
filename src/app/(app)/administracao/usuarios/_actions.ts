@@ -391,7 +391,7 @@ export async function createUser(
       revalidateTag("units", "max")
       revalidateTag("reports", "max")
       revalidatePath("/unidades")
-      revalidatePath("/")
+      revalidatePath("/inicio")
     }
     revalidatePath("/administracao/usuarios")
     return { ok: true }

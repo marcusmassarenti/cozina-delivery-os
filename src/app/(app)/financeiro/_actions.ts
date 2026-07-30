@@ -58,7 +58,7 @@ export async function saveUnitCosts(input: {
     revalidateTag("reports", "max")
     revalidatePath("/financeiro")
     revalidatePath("/unidades/[codigo]", "page")
-    revalidatePath("/")
+    revalidatePath("/inicio")
     return { ok: true }
   } catch (err) {
     return {
@@ -136,7 +136,7 @@ function revalidateCosts() {
   revalidateTag("reports", "max")
   revalidatePath("/financeiro")
   revalidatePath("/unidades/[codigo]", "page")
-  revalidatePath("/")
+  revalidatePath("/inicio")
 }
 
 /** Cria uma categoria de custo na unidade. Se for a 1ª do tipo, move o valor

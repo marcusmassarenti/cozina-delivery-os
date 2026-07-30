@@ -66,7 +66,7 @@ export async function signIn(
     redirect("/login/verificacao")
   }
 
-  redirect("/")
+  redirect("/inicio")
 }
 
 export async function signOut() {

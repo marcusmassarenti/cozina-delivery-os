@@ -56,7 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         label: "Dashboard",
-        href: "/",
+        href: "/inicio",
         icon: LayoutDashboard,
         module: "dashboard",
       },
