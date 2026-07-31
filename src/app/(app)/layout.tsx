@@ -1,3 +1,4 @@
+import { ConviteInstalar } from "@/components/pwa/convite-instalar"
 import { redirect } from "next/navigation"
 import { after } from "next/server"
 
@@ -144,7 +145,11 @@ export default async function AppLayout({
               </a>
             </div>
           )}
-          <NavigationProgress>{children}</NavigationProgress>
+          <NavigationProgress>
+            {/* Só aparece no celular, e só pra quem ainda não instalou. */}
+            <ConviteInstalar />
+            {children}
+          </NavigationProgress>
         </SidebarInset>
         <WelcomeTour
           initialOnboarded={userContext.onboarded}
