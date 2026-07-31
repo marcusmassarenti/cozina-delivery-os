@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 // Content-Security-Policy — só em produção (em dev o HMR do Next usa eval/ws e
 // quebraria). script/style com 'unsafe-inline' porque o Next injeta scripts/
@@ -49,6 +50,22 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  /**
+   * Trava a raiz do projeto.
+   *
+   * O Turbopack descobre a raiz sozinho procurando o lockfile mais alto na
+   * árvore de pastas. Em 30/jul/26 um `npm install` rodado sem entrar na pasta
+   * do projeto criou um package-lock.json solto em ~/, e o Turbopack elegeu a
+   * pasta pessoal inteira como raiz — passando a vigiar ~300 mil arquivos
+   * (só o ~/Library tem 277k, e é onde todo app do Mac escreve cache sem
+   * parar). O processo do node inflou até 4,5 GB e o macOS começou a matar
+   * aplicativos por falta de memória (jetsam).
+   *
+   * Fixando a raiz aqui, um lockfile perdido lá fora não muda mais nada.
+   */
+  turbopack: {
+    root: path.join(__dirname),
+  },
   experimental: {
     serverActions: {
       // XLSX do iFood pode chegar a vários MB (Financeiro tem 11k linhas).

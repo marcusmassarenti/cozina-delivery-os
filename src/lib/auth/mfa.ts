@@ -18,6 +18,7 @@
 import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
+import { aparelhoConfiavel } from "./trusted-device"
 
 export type MfaStatus = {
   /** Já existe um app autenticador confirmado nesta conta. */
@@ -44,10 +45,19 @@ export async function getMfaStatus(): Promise<MfaStatus> {
     .filter((f) => f.status !== "verified")
     .map((f) => f.id)
 
+  const deveCodigo =
+    aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2"
+
+  // Navegador que já provou o segundo fator nos últimos 15 dias não é
+  // perguntado de novo. Só chega a consultar o cookie quando o código seria
+  // pedido — em qualquer outro caso a resposta não mudaria nada. É leitura de
+  // cookie, sem ida à rede: esta função roda no layout de TODAS as telas.
+  const confiavel =
+    deveCodigo && verificado ? await aparelhoConfiavel(verificado.id) : false
+
   return {
     ativo: !!verificado,
-    precisaVerificar:
-      aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2",
+    precisaVerificar: deveCodigo && !confiavel,
     factorId: verificado?.id ?? null,
     pendentes,
   }

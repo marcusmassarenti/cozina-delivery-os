@@ -79,11 +79,28 @@ export async function persistFinanceiro(
     ...new Set(parsed.lancamentos.map((l) => l.competencia)),
   ].filter(Boolean)
 
-  const { count: existingCount } = await admin
+  const { count: existingCount, error: countErr } = await admin
     .from("ifood_financeiro_lancamentos")
     .select("id", { count: "exact", head: true })
     .eq("unit_id", unit.unitId)
     .in("competencia", competencias.length > 0 ? competencias : ["__none__"])
+
+  // ⚠️ Erro nesta contagem NÃO pode virar zero.
+  //
+  // Ela decidia se a carga antiga seria apagada. Quando o count estourava o
+  // statement timeout — o que acontece justamente nas lojas de mais volume — o
+  // erro era ignorado, `existingCount` virava null, o código concluía "não
+  // tinha nada aqui" e NÃO apagava. A carga nova entrava por cima da antiga e
+  // o mês ficava contado duas vezes.
+  //
+  // Foi o que aconteceu com a Yakisushi e a Churras Popular em 31/07: 49% de
+  // linhas duplicadas, líquido maior que o bruto, e o cliente reclamando de um
+  // número que estava mesmo errado.
+  if (countErr) {
+    throw new Error(
+      `Não consegui contar a carga anterior (${countErr.message}). Abortado: gravar sem saber o que já existe duplica o mês.`,
+    )
+  }
   const substituido = (existingCount ?? 0) > 0
 
   // ⚠️ TRAVA DE REGRESSÃO.
@@ -254,7 +271,10 @@ export async function persistFinanceiro(
 
   // Agora sim: fora a carga antiga (tudo que é da mesma competência e não
   // veio deste import).
-  if (substituido) {
+  // Roda SEMPRE, não só quando `substituido`. Se a contagem lá em cima errar
+  // pra menos por qualquer motivo, o delete ainda limpa — e apagar "nada" é
+  // barato. Depender do flag foi o que deixou o mês duplicado passar.
+  {
     const { error: delErr } = await admin
       .from("ifood_financeiro_lancamentos")
       .delete()

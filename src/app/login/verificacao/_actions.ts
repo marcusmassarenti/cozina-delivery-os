@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 import { consumirCodigo } from "@/lib/auth/backup-codes"
+import { confiarNesteAparelho } from "@/lib/auth/trusted-device"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
@@ -67,6 +68,13 @@ export async function verificarCodigo2FA(
           : "Não foi possível verificar. Tente de novo.",
     }
   }
+
+  // Código certo: este navegador passa a ser confiável por 15 dias, então os
+  // próximos logins (inclusive depois de sair) não pedem os 6 dígitos de novo.
+  // Ver o trade-off documentado em `trusted-device.ts`.
+  //
+  // Antes do redirect, que lança exceção e nunca volta.
+  await confiarNesteAparelho(factorId)
 
   revalidatePath("/", "layout")
   redirect("/inicio")

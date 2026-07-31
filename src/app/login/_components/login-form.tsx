@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { signIn, type SignInState } from "../_actions"
-import { TurnstileWidget } from "./turnstile-widget"
+import { TurnstileWidget, resetTurnstile } from "./turnstile-widget"
 
 const initial: SignInState = { ok: false }
 
@@ -18,6 +18,17 @@ export function LoginForm() {
   const [state, formAction] = useActionState(signIn, initial)
   const [remember, setRemember] = React.useState(false)
   const [showPassword, setShowPassword] = React.useState(false)
+
+  // Login recusado → pede um token novo ao Turnstile. Sem isto a 2ª tentativa
+  // reenvia o token já queimado e falha por "verificação expirada" mesmo com a
+  // senha certa. Ver o comentário em `resetTurnstile`.
+  //
+  // Só no caminho de ERRO: quando o login dá certo a página navega e o widget
+  // sai de cena junto.
+  React.useEffect(() => {
+    if (state.ok || !state.message) return
+    resetTurnstile()
+  }, [state])
 
   return (
     <form action={formAction} className="flex flex-col gap-5">

@@ -1,0 +1,6 @@
+-- A comissão do iFood tem CINCO nomes e a gente reconhecia dois (aplicada via
+-- MCP, 0145). Faltavam "(entrega própria da loja)", "- percentagem fixa" e
+-- "- valor flexível". Trocado por prefixo em vez de lista fechada: o iFood cria
+-- variante nova sem avisar, e lista fechada falha em SILÊNCIO — mostra zero de
+-- comissão, que parece um número, não um erro.
+-- Corpo completo em pg_get_functiondef('ifood_financeiro_resumo_by_units').

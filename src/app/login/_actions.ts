@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
+import { getMfaStatus } from "@/lib/auth/mfa"
 import { createClient } from "@/lib/supabase/server"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 import { verificarTurnstile } from "@/lib/security/turnstile"
@@ -60,9 +61,12 @@ export async function signIn(
 
   // Se a conta tem 2FA, a senha só entrega metade do login: manda direto pra
   // segunda etapa em vez de passar pelo dashboard e ser rebatido de volta.
-  const { data: aal } =
-    await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  if (aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2") {
+  //
+  // Passa por `getMfaStatus` em vez de olhar o aal cru: é lá que mora a
+  // exceção do aparelho confiável. Repetir a regra aqui faria as duas portas
+  // (esta e a do layout) discordarem — e quem manda seria a mais burra.
+  const { precisaVerificar } = await getMfaStatus()
+  if (precisaVerificar) {
     redirect("/login/verificacao")
   }
 
