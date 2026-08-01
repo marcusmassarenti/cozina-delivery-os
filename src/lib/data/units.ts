@@ -25,6 +25,23 @@ export type Unit = {
   city: string | null
   state: string | null
   cnpj: string | null
+  /** Cadastro rico: Receita + perfil da loja. Todos opcionais no tipo porque
+   *  as 18 unidades antigas ainda não têm — o formulário é que cobra. */
+  razao_social?: string | null
+  nome_fantasia?: string | null
+  tipo_cozinha?: string | null
+  tipo_operacao?: string | null
+  tipo_entrega?: string | null
+  logradouro?: string | null
+  numero?: string | null
+  complemento?: string | null
+  bairro?: string | null
+  cep?: string | null
+  telefone?: string | null
+  responsavel_nome?: string | null
+  responsavel_email?: string | null
+  cnae_descricao?: string | null
+  situacao_cadastral?: string | null
   active: boolean
   brand_id: string
   data_inauguracao: string | null // "YYYY-MM-DD"
@@ -46,6 +63,23 @@ type DbUnit = {
   city: string | null
   state: string | null
   cnpj: string | null
+  /** Cadastro rico: Receita + perfil da loja. Todos opcionais no tipo porque
+   *  as 18 unidades antigas ainda não têm — o formulário é que cobra. */
+  razao_social?: string | null
+  nome_fantasia?: string | null
+  tipo_cozinha?: string | null
+  tipo_operacao?: string | null
+  tipo_entrega?: string | null
+  logradouro?: string | null
+  numero?: string | null
+  complemento?: string | null
+  bairro?: string | null
+  cep?: string | null
+  telefone?: string | null
+  responsavel_nome?: string | null
+  responsavel_email?: string | null
+  cnae_descricao?: string | null
+  situacao_cadastral?: string | null
   active: boolean
   brand_id: string
   data_inauguracao: string | null
@@ -81,7 +115,7 @@ async function getUnitsUncached(): Promise<Unit[]> {
     supabase
       .from("units")
       .select(
-        "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento",
+        "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento, razao_social, nome_fantasia, tipo_cozinha, tipo_operacao, tipo_entrega, logradouro, numero, complemento, bairro, cep, telefone, responsavel_nome, responsavel_email, cnae_descricao, situacao_cadastral",
       )
       .order("code"),
     supabase
@@ -196,7 +230,7 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   let q = supabase
     .from("units")
     .select(
-      "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento",
+      "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento, razao_social, nome_fantasia, tipo_cozinha, tipo_operacao, tipo_entrega, logradouro, numero, complemento, bairro, cep, telefone, responsavel_nome, responsavel_email, cnae_descricao, situacao_cadastral",
     )
     .eq("code", code)
     .order("id")

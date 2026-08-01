@@ -1,5 +1,7 @@
 "use client"
 
+import { DadosDaUnidade, OperacaoDaUnidade } from "@/components/unidades/dados-da-unidade"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
@@ -115,6 +117,21 @@ export type EditUnitInitial = {
   platformInauguracoes?: Partial<Record<PlatformId, string | null>>
   /** Logo da loja (white-label por unidade). */
   logoUrl?: string | null
+  /** Cadastro rico. Opcionais: as unidades antigas ainda não têm. */
+  razaoSocial?: string | null
+  tipoCozinha?: string | null
+  tipoOperacao?: string | null
+  tipoEntrega?: string | null
+  logradouro?: string | null
+  numero?: string | null
+  complemento?: string | null
+  bairro?: string | null
+  cep?: string | null
+  telefone?: string | null
+  responsavelNome?: string | null
+  responsavelEmail?: string | null
+  cnaeDescricao?: string | null
+  situacaoCadastral?: string | null
 }
 
 /** Situação da conexão iFood-via-API, resumida pro cadastro. */
@@ -146,6 +163,7 @@ export function EditUnitDialog({
   )
   const [cnpj, setCnpj] = React.useState(unit.cnpj ? maskCnpj(unit.cnpj) : "")
   const [uf, setUf] = React.useState(unit.state ?? "SP")
+  const [cidade, setCidade] = React.useState(unit.city ?? "")
   const router = useRouter()
 
   React.useEffect(() => {
@@ -214,85 +232,87 @@ export function EditUnitDialog({
         >
           <input type="hidden" name="unitId" value={unit.unitId} />
 
-          {/* Grade de 12 colunas: labels sempre numa linha e campos alinhados
-              em terços — o "Encerramento (se fechou)" quebrava em 2 linhas e
-              desalinhava a fileira (feedback do Marcus). */}
-          <div className="grid gap-3 sm:grid-cols-12">
-            <div data-tour="u-nome" className="sm:col-span-5">
-              <Field label="Nome *" error={state.fieldErrors?.name}>
-                <Input
-                  name="name"
-                  defaultValue={unit.name}
-                  placeholder="ex.: Loja Centro"
-                  required
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-5">
-              <Field label="Cidade *" error={state.fieldErrors?.city}>
-                <Input
-                  name="city"
-                  defaultValue={unit.city ?? ""}
-                  placeholder="ex.: São Paulo"
-                  required
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="UF" error={state.fieldErrors?.state}>
-                <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {UFs.map((u) => (
-                      <SelectItem key={u} value={u}>
-                        {u}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <input type="hidden" name="state" value={uf} />
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field
-                label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
-                error={state.fieldErrors?.cnpj}
+          {/* Mesmas duas abas do "Nova unidade": o cadastro que quase não
+              muda de um lado, o que muda toda semana do outro. */}
+          <Tabs defaultValue="dados">
+            <TabsList>
+              <TabsTrigger value="dados">Dados da unidade</TabsTrigger>
+              <TabsTrigger value="operacao">Operação</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="dados" className="pt-3">
+              <DadosDaUnidade
+                nome={unit.name}
+                erroCnpj={state.fieldErrors?.cnpj}
+                cidade={cidade}
+                onCidade={setCidade}
+                perfil={{
+                  cnpj: unit.cnpj ? maskCnpj(unit.cnpj) : "",
+                  razaoSocial: unit.razaoSocial,
+                  tipoCozinha: unit.tipoCozinha,
+                  tipoOperacao: unit.tipoOperacao,
+                  tipoEntrega: unit.tipoEntrega,
+                  logradouro: unit.logradouro,
+                  numero: unit.numero,
+                  complemento: unit.complemento,
+                  bairro: unit.bairro,
+                  cep: unit.cep,
+                  telefone: unit.telefone,
+                  responsavelNome: unit.responsavelNome,
+                  responsavelEmail: unit.responsavelEmail,
+                  cnaeDescricao: unit.cnaeDescricao,
+                  situacaoCadastral: unit.situacaoCadastral,
+                }}
+              />
+              <input type="hidden" name="state" value={uf} />
+              <div className="mt-3 w-32">
+                <Field label="UF" error={state.fieldErrors?.state}>
+                  <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UFs.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="operacao" className="flex flex-col gap-3 pt-3">
+              <OperacaoDaUnidade
+                perfil={{
+                  tipoOperacao: unit.tipoOperacao,
+                  tipoEntrega: unit.tipoEntrega,
+                }}
               >
-                <Input
-                  name="cnpj"
-                  placeholder="00.000.000/0000-00"
-                  value={cnpj}
-                  onChange={(e) => setCnpj(maskCnpj(e.target.value))}
-                  maxLength={18}
-                  required={cadastroExigente}
-                />
-              </Field>
-            </div>
-            <div data-tour="u-inauguracao" className="sm:col-span-4">
-              <Field
-                label={cadastroExigente ? "Inauguração *" : "Inauguração"}
-                error={state.fieldErrors?.data_inauguracao}
-              >
-                <Input
-                  name="data_inauguracao"
-                  type="date"
-                  defaultValue={unit.dataInauguracao ?? ""}
-                  required={cadastroExigente}
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field label="Encerramento (se fechou)">
-                <Input
-                  name="data_encerramento"
-                  type="date"
-                  defaultValue={unit.dataEncerramento ?? ""}
-                />
-              </Field>
-            </div>
-          </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div data-tour="u-inauguracao">
+                    <Field
+                      label={cadastroExigente ? "Inauguração *" : "Inauguração"}
+                      error={state.fieldErrors?.data_inauguracao}
+                    >
+                      <Input
+                        name="data_inauguracao"
+                        type="date"
+                        defaultValue={unit.dataInauguracao ?? ""}
+                        required={cadastroExigente}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Encerramento (se fechou)">
+                    <Input
+                      name="data_encerramento"
+                      type="date"
+                      defaultValue={unit.dataEncerramento ?? ""}
+                    />
+                  </Field>
+                </div>
+              </OperacaoDaUnidade>
 
           <p className="-mt-2 text-[11px] text-muted-foreground">
             A inauguração faz a Cobertura ignorar meses antes da loja existir
@@ -427,6 +447,9 @@ export function EditUnitDialog({
               {state.message}
             </div>
           )}
+
+            </TabsContent>
+          </Tabs>
 
           <DialogFooter>
             <Button

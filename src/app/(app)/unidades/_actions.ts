@@ -144,6 +144,7 @@ export async function createUnit(
   const perfil = {
     tipo_cozinha: txt("tipo_cozinha"),
     tipo_operacao: txt("tipo_operacao"),
+    tipo_entrega: txt("tipo_entrega"),
     razao_social: txt("razao_social"),
     nome_fantasia: txt("nome_fantasia"),
     cnae_codigo: txt("cnae_codigo"),
@@ -385,6 +386,7 @@ export async function updateUnit(
   const perfil = {
     tipo_cozinha: txt("tipo_cozinha"),
     tipo_operacao: txt("tipo_operacao"),
+    tipo_entrega: txt("tipo_entrega"),
     razao_social: txt("razao_social"),
     nome_fantasia: txt("nome_fantasia"),
     cnae_codigo: txt("cnae_codigo"),

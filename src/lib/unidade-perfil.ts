@@ -43,6 +43,21 @@ export const TIPOS_OPERACAO = [
   { id: "licenciada", label: "Licenciada" },
 ] as const
 
+/**
+ * Quem entrega. Não é detalhe de cadastro: muda a leitura do dinheiro.
+ *
+ * Em entrega própria o iFood nomeia a comissão de outro jeito, o frete cobrado
+ * do cliente entra no caixa da loja, e o "% que fica na loja" tem outro
+ * patamar. Comparar uma loja de entrega própria com uma de entrega iFood sem
+ * saber disso é comparar coisas diferentes — foi o que confundiu a leitura da
+ * Yakisushi em 31/07.
+ */
+export const TIPOS_ENTREGA = [
+  { id: "plataforma", label: "Entrega da plataforma" },
+  { id: "propria", label: "Entrega própria da loja" },
+  { id: "ambas", label: "As duas" },
+] as const
+
 export type TipoCozinha = (typeof TIPOS_COZINHA)[number]["id"]
 
 export const rotuloCozinha = (id: string | null | undefined) =>

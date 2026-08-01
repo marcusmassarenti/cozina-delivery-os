@@ -1,5 +1,7 @@
 "use client"
 
+import { DadosDaUnidade, OperacaoDaUnidade } from "@/components/unidades/dados-da-unidade"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CampoCnpj } from "@/components/unidades/campo-cnpj"
 import { TIPOS_COZINHA, TIPOS_OPERACAO } from "@/lib/unidade-perfil"
 import * as React from "react"
@@ -109,112 +111,61 @@ export function NewUnitDialog({
           {...validacaoPtBr}
           className="flex flex-col gap-3"
         >
-          {/* 2 colunas no desktop: metade da altura — em monitor pequeno o
-              dialog inteiro cabia só com zoom 50% (feedback de cliente). */}
-          {/* 12 colunas: labels numa linha e campos alinhados em terços. */}
-          <div className="grid gap-3 sm:grid-cols-12">
-            <div className="sm:col-span-5">
-              <Field label="Nome *" error={state.fieldErrors?.name}>
-                <Input name="name" placeholder="ex.: Loja Centro" required />
-              </Field>
-            </div>
-            <div className="sm:col-span-5">
-              <Field label="Cidade *" error={state.fieldErrors?.city}>
-                <Input
-                  name="city"
-                  placeholder="ex.: São Paulo"
-                  value={cidade}
-                  onChange={(e) => setCidade(e.target.value)}
-                  required
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="UF" error={state.fieldErrors?.state}>
+          {/* Duas abas: o cadastro que quase não muda de um lado, o que muda
+              toda semana do outro. Juntos, o CNPJ ficava soterrado embaixo de
+              campo técnico de plataforma — e foi assim que 18 unidades
+              chegaram sem CNPJ nenhum. */}
+          <Tabs defaultValue="dados">
+            <TabsList>
+              <TabsTrigger value="dados">Dados da unidade</TabsTrigger>
+              <TabsTrigger value="operacao">Operação</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="dados" className="pt-3">
+              <DadosDaUnidade
+                erroCnpj={state.fieldErrors?.cnpj}
+                cidade={cidade}
+                onCidade={setCidade}
+              />
+              <input type="hidden" name="state" value={uf} />
+              <div className="mt-3 w-32">
+                <label className="text-xs font-medium">UF</label>
                 <Select value={uf} onValueChange={(v) => setUf(v ?? "SP")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-1 h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {UFs.map((u) => (
+                    {UFs.map((u: string) => (
                       <SelectItem key={u} value={u}>
                         {u}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <input type="hidden" name="state" value={uf} />
-              </Field>
-            </div>
-            <div className="sm:col-span-6">
-              {/* Consulta a Receita ao sair do campo e preenche o resto. */}
-              <CampoCnpj
-                erro={state.fieldErrors?.cnpj}
-                onDados={(d) => {
-                  if (d.cidade) setCidade(d.cidade)
-                  if (d.uf) setUf(d.uf)
-                }}
-              />
-            </div>
-            <div className="sm:col-span-6">
-              <Field label="Tipo de cozinha">
-                <select
-                  name="tipo_cozinha"
-                  defaultValue=""
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="">Selecione…</option>
-                  {TIPOS_COZINHA.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field
-                label={cadastroExigente ? "Inauguração *" : "Inauguração"}
-                error={state.fieldErrors?.data_inauguracao}
-              >
-                <Input
-                  name="data_inauguracao"
-                  type="date"
-                  required={cadastroExigente}
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field label="Encerramento (se fechou)">
-                <Input name="data_encerramento" type="date" />
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field label="Operação">
-                <select
-                  name="tipo_operacao"
-                  defaultValue="propria"
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  {TIPOS_OPERACAO.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field label="Responsável">
-                <Input name="responsavel_nome" placeholder="quem toca a loja" />
-              </Field>
-            </div>
-            <div className="sm:col-span-4">
-              <Field label="E-mail do responsável">
-                <Input name="responsavel_email" type="email" placeholder="opcional" />
-              </Field>
-            </div>
-          </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="operacao" className="pt-3">
+              <OperacaoDaUnidade>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-medium">
+                      Inauguração{cadastroExigente ? " *" : ""}
+                    </label>
+                    <Input
+                      className="mt-1"
+                      name="data_inauguracao"
+                      type="date"
+                      required={cadastroExigente}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">
+                      Encerramento (se fechou)
+                    </label>
+                    <Input className="mt-1" name="data_encerramento" type="date" />
+                  </div>
+                </div>
 
           <div className="flex flex-col gap-2">
             <Label className="text-xs font-medium">
@@ -234,6 +185,7 @@ export function NewUnitDialog({
               Marque as plataformas onde essa loja opera. Pode mudar depois.
             </p>
           </div>
+
 
           <div className="flex items-center gap-2">
             <input
@@ -256,6 +208,11 @@ export function NewUnitDialog({
               {state.message}
             </div>
           )}
+
+
+              </OperacaoDaUnidade>
+            </TabsContent>
+          </Tabs>
 
           <DialogFooter>
             <Button
