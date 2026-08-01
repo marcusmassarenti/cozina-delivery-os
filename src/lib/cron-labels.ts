@@ -52,6 +52,10 @@ export const CRON_LABEL: Record<string, RotinaLabel> = {
     titulo: "Relatório de saúde",
     descricao: "Este relatório — confere se tudo acima está entregando dado",
   },
+  "resumo-semanal": {
+    titulo: "Resumo da semana",
+    descricao: "Push de segunda com o fechamento da semana anterior",
+  },
 }
 
 export function rotulo(nome: string): RotinaLabel {

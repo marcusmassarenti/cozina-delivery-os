@@ -24,6 +24,7 @@ export type NomeCron =
   | "emitir-faturas"
   | "regua-email"
   | "saude-diaria"
+  | "resumo-semanal"
 
 /**
  * Roda o cron registrando início e fim. O sucesso é lido do STATUS da

@@ -1,0 +1,6 @@
+-- Resumo da semana por holding, SÓ com as três plataformas fechadas (0146, MCP).
+-- Diário não dá: iFood entra pela API todo dia, 99 e Keeta dependem de planilha.
+-- `completo` = toda plataforma que a holding usa tem dado até o último dia da
+-- semana. Faltando uma, quem consome não manda nada — silêncio é melhor que um
+-- número que parece total e não é.
+-- Corpo completo em pg_get_functiondef('resumo_semanal').
