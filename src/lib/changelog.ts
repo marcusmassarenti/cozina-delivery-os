@@ -42,6 +42,47 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.10.0",
+    date: "2026-07-31",
+    tag: "Grande novidade",
+    title: "Cadastro da unidade agora se preenche sozinho pelo CNPJ",
+    summary:
+      "A tela de unidade foi dividida em duas abas — os dados da loja de um lado, a operação do outro — e o CNPJ passou a puxar razão social, endereço completo e data de abertura direto da Receita.",
+    areas: [
+      {
+        area: "Cadastro de unidade",
+        items: [
+          {
+            kind: "novo",
+            title: "Digite o CNPJ e o endereço aparece",
+            antes:
+              "Razão social, rua, número, bairro e CEP eram digitados um a um, e o CNPJ era opcional — muita loja ficava sem.",
+            depois:
+              "Ao sair do campo de CNPJ, o sistema consulta a Receita e preenche razão social, endereço completo, CEP, telefone e data de abertura. Se a empresa estiver com situação irregular, um aviso aparece na hora.",
+          },
+          {
+            kind: "novo",
+            title: "Tipo de cozinha sugerido pelo nome",
+            desc: "Ao digitar o nome da loja, o sistema já marca o tipo de cozinha (pizzaria, hamburgueria, japonesa…). É só uma sugestão — troque no seletor quando não for.",
+          },
+          {
+            kind: "melhoria",
+            title: "Duas abas: Dados da unidade e Operação",
+            antes:
+              "Um formulário só, com o cadastro da loja misturado com plataforma, IDs e datas de inauguração.",
+            depois:
+              "Aba “Dados da unidade” para quem a loja é no papel; aba “Operação” para plataformas, quem entrega e se a unidade está ativa. Editar uma unidade abre exatamente a mesma tela de criar.",
+          },
+          {
+            kind: "melhoria",
+            title: "Quem entrega passou a ser uma informação do cadastro",
+            desc: "Entrega própria muda a leitura do dinheiro: o frete cobrado do cliente entra no caixa da loja e a comissão do iFood aparece com outro nome no extrato. Agora o sistema sabe disso por unidade.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.9.6",
     date: "2026-07-29",
     tag: "Correções",

@@ -4,6 +4,7 @@ import * as React from "react"
 
 import { CampoCnpj } from "@/components/unidades/campo-cnpj"
 import {
+  inferirCozinha,
   TIPOS_COZINHA,
   TIPOS_ENTREGA,
   TIPOS_OPERACAO,
@@ -84,12 +85,31 @@ export function DadosDaUnidade({
   const [cep, setCep] = React.useState(perfil?.cep ?? "")
   const [telefone, setTelefone] = React.useState(perfil?.telefone ?? "")
 
+  // Sugestão de cozinha pelo nome. Só sugere enquanto a pessoa não escolheu:
+  // sobrescrever escolha manual a cada tecla digitada seria pior que não
+  // sugerir nada.
+  const [nomeUnidade, setNomeUnidade] = React.useState(nome ?? "")
+  const [cozinha, setCozinha] = React.useState(perfil?.tipoCozinha ?? "")
+  const [sugerida, setSugerida] = React.useState(false)
+  const escolhidaNaMao = React.useRef(Boolean(perfil?.tipoCozinha))
+
+  function sugerir(nomeDigitado: string, nomeFantasia?: string | null) {
+    if (escolhidaNaMao.current) return
+    const tipo = inferirCozinha(nomeDigitado, nomeFantasia)
+    setCozinha(tipo ?? "")
+    setSugerida(Boolean(tipo))
+  }
+
   return (
     <div className="grid grid-cols-12 gap-3">
       <Campo label="Nome da unidade *" span={6}>
         <input
           name="name"
-          defaultValue={nome ?? ""}
+          value={nomeUnidade}
+          onChange={(e) => {
+            setNomeUnidade(e.target.value)
+            sugerir(e.target.value)
+          }}
           placeholder="ex.: Loja Centro"
           required
           className={inputCls}
@@ -111,6 +131,9 @@ export function DadosDaUnidade({
             if (d.bairro) setBairro(d.bairro)
             if (d.cep) setCep(d.cep)
             if (d.telefone) setTelefone(d.telefone)
+            // Segunda chance pra cozinha: o nome fantasia da Receita às vezes
+            // diz o que o nome interno esconde ("Bello Pane" → padaria).
+            sugerir(nomeUnidade, d.nomeFantasia)
           }}
         />
       </div>
@@ -128,7 +151,12 @@ export function DadosDaUnidade({
       <Campo label="Tipo de cozinha" span={5}>
         <select
           name="tipo_cozinha"
-          defaultValue={perfil?.tipoCozinha ?? ""}
+          value={cozinha}
+          onChange={(e) => {
+            escolhidaNaMao.current = true
+            setSugerida(false)
+            setCozinha(e.target.value)
+          }}
           className={inputCls}
         >
           <option value="">Selecione…</option>
@@ -138,6 +166,11 @@ export function DadosDaUnidade({
             </option>
           ))}
         </select>
+        {sugerida && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Sugerido pelo nome — troque se não for.
+          </p>
+        )}
       </Campo>
 
       <Campo label="Endereço" span={7}>
