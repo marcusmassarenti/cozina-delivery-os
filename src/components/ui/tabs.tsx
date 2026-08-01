@@ -69,11 +69,26 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   )
 }
 
+/**
+ * Painel de aba — MONTADO por padrão, mesmo escondido.
+ *
+ * ⚠️ O padrão do Base UI é desmontar o painel inativo. Dentro de um
+ * formulário isso é destrutivo: os campos da aba escondida somem do DOM e não
+ * são enviados no submit — o servidor recebe como se estivessem vazios.
+ *
+ * Foi assim que a JK perdeu as três plataformas e o "unidade ativa" em
+ * 31/07/26: o Marcus salvou pela aba "Dados" e os checkboxes da aba "Operação"
+ * nem existiam naquele instante. `hidden` esconde sem desmontar.
+ */
 function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      keepMounted
+      className={cn(
+        "flex-1 text-sm outline-none data-[hidden]:hidden",
+        className,
+      )}
       {...props}
     />
   )
