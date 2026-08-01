@@ -1,5 +1,7 @@
 "use client"
 
+import { CampoCnpj } from "@/components/unidades/campo-cnpj"
+import { TIPOS_COZINHA, TIPOS_OPERACAO } from "@/lib/unidade-perfil"
 import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
@@ -67,6 +69,8 @@ export function NewUnitDialog({
   const [state, formAction] = useActionState(createUnit, initial)
   const [cnpj, setCnpj] = React.useState("")
   const [uf, setUf] = React.useState("SP")
+  // Preenchida pela Receita quando o CNPJ é consultado; editável sempre.
+  const [cidade, setCidade] = React.useState("")
   const router = useRouter()
 
   React.useEffect(() => {
@@ -116,7 +120,13 @@ export function NewUnitDialog({
             </div>
             <div className="sm:col-span-5">
               <Field label="Cidade *" error={state.fieldErrors?.city}>
-                <Input name="city" placeholder="ex.: São Paulo" required />
+                <Input
+                  name="city"
+                  placeholder="ex.: São Paulo"
+                  value={cidade}
+                  onChange={(e) => setCidade(e.target.value)}
+                  required
+                />
               </Field>
             </div>
             <div className="sm:col-span-2">
@@ -136,19 +146,30 @@ export function NewUnitDialog({
                 <input type="hidden" name="state" value={uf} />
               </Field>
             </div>
-            <div className="sm:col-span-4">
-              <Field
-                label={cadastroExigente ? "CNPJ *" : "CNPJ (opcional)"}
-                error={state.fieldErrors?.cnpj}
-              >
-                <Input
-                  name="cnpj"
-                  placeholder="00.000.000/0000-00"
-                  value={cnpj}
-                  onChange={(e) => setCnpj(maskCnpj(e.target.value))}
-                  maxLength={18}
-                  required={cadastroExigente}
-                />
+            <div className="sm:col-span-6">
+              {/* Consulta a Receita ao sair do campo e preenche o resto. */}
+              <CampoCnpj
+                erro={state.fieldErrors?.cnpj}
+                onDados={(d) => {
+                  if (d.cidade) setCidade(d.cidade)
+                  if (d.uf) setUf(d.uf)
+                }}
+              />
+            </div>
+            <div className="sm:col-span-6">
+              <Field label="Tipo de cozinha">
+                <select
+                  name="tipo_cozinha"
+                  defaultValue=""
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">Selecione…</option>
+                  {TIPOS_COZINHA.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
             <div className="sm:col-span-4">
@@ -166,6 +187,31 @@ export function NewUnitDialog({
             <div className="sm:col-span-4">
               <Field label="Encerramento (se fechou)">
                 <Input name="data_encerramento" type="date" />
+              </Field>
+            </div>
+            <div className="sm:col-span-4">
+              <Field label="Operação">
+                <select
+                  name="tipo_operacao"
+                  defaultValue="propria"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {TIPOS_OPERACAO.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="sm:col-span-4">
+              <Field label="Responsável">
+                <Input name="responsavel_nome" placeholder="quem toca a loja" />
+              </Field>
+            </div>
+            <div className="sm:col-span-4">
+              <Field label="E-mail do responsável">
+                <Input name="responsavel_email" type="email" placeholder="opcional" />
               </Field>
             </div>
           </div>

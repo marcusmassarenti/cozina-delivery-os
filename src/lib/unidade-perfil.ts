@@ -1,0 +1,112 @@
+/**
+ * Perfil da unidade: tipo de cozinha e modelo de operação.
+ *
+ * Lista FECHADA de propósito. Em texto livre a mesma coisa vira "Japonês",
+ * "japonesa" e "comida japonesa" na mesma base — e aí não dá pra responder a
+ * pergunta que justifica ter o campo: "a minha hamburgueria fatura acima ou
+ * abaixo das outras hamburguerias?".
+ *
+ * A ordem é por frequência no delivery brasileiro, não alfabética: quem
+ * cadastra encontra o seu nas primeiras opções.
+ */
+export const TIPOS_COZINHA = [
+  { id: "hamburgueria", label: "Hamburgueria" },
+  { id: "pizzaria", label: "Pizzaria" },
+  { id: "japonesa", label: "Japonesa / Oriental" },
+  { id: "brasileira", label: "Brasileira / Caseira" },
+  { id: "marmita", label: "Marmita / Prato feito" },
+  { id: "lanches", label: "Lanches / Sanduíches" },
+  { id: "churrasco", label: "Churrasco / Espetinho" },
+  { id: "frango", label: "Frango / Assados" },
+  { id: "acai", label: "Açaí" },
+  { id: "doces", label: "Doces / Confeitaria" },
+  { id: "sorveteria", label: "Sorveteria" },
+  { id: "saudavel", label: "Saudável / Fit" },
+  { id: "italiana", label: "Italiana" },
+  { id: "massas", label: "Massas" },
+  { id: "arabe", label: "Árabe" },
+  { id: "mexicana", label: "Mexicana" },
+  { id: "peixes", label: "Peixes / Frutos do mar" },
+  { id: "vegetariana", label: "Vegetariana / Vegana" },
+  { id: "pastel", label: "Pastelaria" },
+  { id: "salgados", label: "Salgados" },
+  { id: "padaria", label: "Padaria" },
+  { id: "cafeteria", label: "Cafeteria" },
+  { id: "bebidas", label: "Bebidas / Adega" },
+  { id: "mercado", label: "Mercado / Conveniência" },
+  { id: "outros", label: "Outros" },
+] as const
+
+export const TIPOS_OPERACAO = [
+  { id: "propria", label: "Própria" },
+  { id: "franquia", label: "Franquia" },
+  { id: "licenciada", label: "Licenciada" },
+] as const
+
+export type TipoCozinha = (typeof TIPOS_COZINHA)[number]["id"]
+
+export const rotuloCozinha = (id: string | null | undefined) =>
+  TIPOS_COZINHA.find((t) => t.id === id)?.label ?? null
+
+/** O que a BrasilAPI devolve e a gente aproveita. */
+export type DadosReceita = {
+  razaoSocial: string
+  nomeFantasia: string | null
+  cnaeCodigo: string | null
+  cnaeDescricao: string | null
+  dataAbertura: string | null
+  situacao: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cep: string | null
+  cidade: string | null
+  uf: string | null
+  telefone: string | null
+}
+
+/**
+ * Consulta o CNPJ na BrasilAPI (pública, sem chave, já liberada no CSP).
+ *
+ * Roda no NAVEGADOR de propósito: é o usuário digitando e vendo o campo
+ * preencher. Se fosse no servidor, cada tecla viraria round-trip.
+ *
+ * Devolve null em qualquer falha — cadastro não pode travar porque a Receita
+ * está fora do ar. O CNPJ continua obrigatório; o preenchimento é que é
+ * conveniência.
+ */
+export async function consultarCnpj(
+  cnpjDigitos: string,
+): Promise<DadosReceita | null> {
+  try {
+    const r = await fetch(
+      `https://brasilapi.com.br/api/cnpj/v1/${cnpjDigitos}`,
+      { headers: { Accept: "application/json" } },
+    )
+    if (!r.ok) return null
+    const d = (await r.json()) as Record<string, unknown>
+    const txt = (k: string) => {
+      const v = d[k]
+      return typeof v === "string" && v.trim() ? v.trim() : null
+    }
+    return {
+      razaoSocial: txt("razao_social") ?? "",
+      nomeFantasia: txt("nome_fantasia"),
+      cnaeCodigo: d.cnae_fiscal ? String(d.cnae_fiscal) : null,
+      cnaeDescricao: txt("cnae_fiscal_descricao"),
+      dataAbertura: txt("data_inicio_atividade"),
+      situacao: txt("descricao_situacao_cadastral"),
+      logradouro: txt("logradouro"),
+      numero: txt("numero"),
+      complemento: txt("complemento"),
+      bairro: txt("bairro"),
+      cep: txt("cep"),
+      cidade: txt("municipio"),
+      uf: txt("uf"),
+      telefone: txt("ddd_telefone_1"),
+    }
+  } catch {
+    return null
+  }
+}

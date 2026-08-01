@@ -1,0 +1,10 @@
+-- Cadastro rico da unidade (aplicada via MCP, 0147): campos da Receita
+-- (razão social, CNAE, abertura, situação, endereço) + perfil da loja
+-- (tipo_cozinha, tipo_operacao, responsável).
+--
+-- Tipo de cozinha é lista FECHADA por CHECK: em texto livre a mesma coisa vira
+-- "Japonês", "japonesa" e "comida japonesa" na mesma base, e aí não dá pra
+-- responder a pergunta que justifica o campo — "a minha hamburgueria fatura
+-- acima ou abaixo das outras hamburguerias?".
+--
+-- Corpo completo em information_schema.columns / pg_constraint.

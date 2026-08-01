@@ -108,8 +108,14 @@ async function aplicarCadastroExigente(
     platformsCount: number
   },
 ): Promise<void> {
-  if (await isSuperadmin()) return
+  // ⚠️ O CNPJ é cobrado ANTES da isenção do superadmin, de propósito.
+  //
+  // Num SaaS o cadastro é o ativo: sem CNPJ não dá pra casar a loja com o
+  // extrato da plataforma sozinho (foi o que travou a Edmai's e a Forno Itália
+  // em 30/07), nem comparar loja com loja. A isenção existia pra caso legado —
+  // e o caso legado virou 18 unidades sem CNPJ, 12 delas da própria Cozina.
   if (!dados.cnpjRaw) fieldErrors.cnpj = "CNPJ obrigatório"
+  if (await isSuperadmin()) return
   if (!dados.dataInauguracao)
     fieldErrors.data_inauguracao = "Inauguração obrigatória"
   if (dados.platformsCount === 0)
@@ -127,6 +133,33 @@ export async function createUnit(
   const active = formData.get("active") === "on"
   const dataInauguracao = dateOrNull(formData.get("data_inauguracao"))
   const dataEncerramento = dateOrNull(formData.get("data_encerramento"))
+
+  // Perfil + o que veio da Receita. Tudo opcional: o CNPJ é que é obrigatório,
+  // e a consulta é conveniência — se a BrasilAPI estiver fora, o cadastro
+  // continua possível na mão.
+  const txt = (k: string) => {
+    const v = String(formData.get(k) ?? "").trim()
+    return v || null
+  }
+  const perfil = {
+    tipo_cozinha: txt("tipo_cozinha"),
+    tipo_operacao: txt("tipo_operacao"),
+    razao_social: txt("razao_social"),
+    nome_fantasia: txt("nome_fantasia"),
+    cnae_codigo: txt("cnae_codigo"),
+    cnae_descricao: txt("cnae_descricao"),
+    data_abertura: dateOrNull(formData.get("data_abertura")),
+    situacao_cadastral: txt("situacao_cadastral"),
+    logradouro: txt("logradouro"),
+    numero: txt("numero"),
+    complemento: txt("complemento"),
+    bairro: txt("bairro"),
+    cep: txt("cep"),
+    telefone: txt("telefone"),
+    responsavel_nome: txt("responsavel_nome"),
+    responsavel_email: txt("responsavel_email"),
+    receita_consultada_em: txt("razao_social") ? new Date().toISOString() : null,
+  }
 
   // Plataformas vêm como múltiplos checkboxes com nome="platforms"
   const platformsRaw = formData.getAll("platforms").map(String)
@@ -168,6 +201,7 @@ export async function createUnit(
         active,
         data_inauguracao: dataInauguracao,
         data_encerramento: dataEncerramento,
+        ...perfil,
       })
       .select("id")
       .single()
@@ -341,6 +375,33 @@ export async function updateUnit(
   const dataInauguracao = dateOrNull(formData.get("data_inauguracao"))
   const dataEncerramento = dateOrNull(formData.get("data_encerramento"))
 
+  // Perfil + o que veio da Receita. Tudo opcional: o CNPJ é que é obrigatório,
+  // e a consulta é conveniência — se a BrasilAPI estiver fora, o cadastro
+  // continua possível na mão.
+  const txt = (k: string) => {
+    const v = String(formData.get(k) ?? "").trim()
+    return v || null
+  }
+  const perfil = {
+    tipo_cozinha: txt("tipo_cozinha"),
+    tipo_operacao: txt("tipo_operacao"),
+    razao_social: txt("razao_social"),
+    nome_fantasia: txt("nome_fantasia"),
+    cnae_codigo: txt("cnae_codigo"),
+    cnae_descricao: txt("cnae_descricao"),
+    data_abertura: dateOrNull(formData.get("data_abertura")),
+    situacao_cadastral: txt("situacao_cadastral"),
+    logradouro: txt("logradouro"),
+    numero: txt("numero"),
+    complemento: txt("complemento"),
+    bairro: txt("bairro"),
+    cep: txt("cep"),
+    telefone: txt("telefone"),
+    responsavel_nome: txt("responsavel_nome"),
+    responsavel_email: txt("responsavel_email"),
+    receita_consultada_em: txt("razao_social") ? new Date().toISOString() : null,
+  }
+
   const platformsRaw = formData.getAll("platforms").map(String)
   const platforms: PlatformId[] = ALL_PLATFORMS.filter((p) =>
     platformsRaw.includes(p),
@@ -394,6 +455,7 @@ export async function updateUnit(
         active,
         data_inauguracao: dataInauguracao,
         data_encerramento: dataEncerramento,
+        ...perfil,
       })
       .eq("id", unitId)
 
