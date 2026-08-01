@@ -42,6 +42,50 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.11.0",
+    date: "2026-08-01",
+    tag: "Grande novidade",
+    title: "Conecte várias lojas ao iFood de uma vez",
+    summary:
+      "Antes a conexão era pedida loja por loja, dentro da página de cada unidade. Agora uma tela só lista todas as que faltam e pede a conexão de todas com um clique.",
+    areas: [
+      {
+        area: "Conexão iFood",
+        items: [
+          {
+            kind: "novo",
+            title: "Uma tela com todas as lojas que faltam",
+            antes:
+              "Para conectar cada loja era preciso entrar na página dela e repetir o mesmo formulário. Com muitas lojas, isso virava dezenas de repetições — e na prática as lojas ficavam sem conectar.",
+            depois:
+              "A tela mostra todas as lojas que ainda dependem de planilha, já marcadas, e um botão só pede a conexão de todas. Se alguma tiver problema, as outras seguem e ela volta com o motivo escrito na própria linha.",
+          },
+          {
+            kind: "novo",
+            title: "Aviso na tela inicial",
+            desc: "Uma faixa discreta mostra quantas lojas ainda dependem de planilha (\"8 de 49\") e leva direto para a tela de conexão. Quem já tem tudo conectado não vê nada.",
+          },
+          {
+            kind: "melhoria",
+            title: "Loja sem CNPJ resolve na mesma tela",
+            antes:
+              "Sem CNPJ a loja não conecta — e era preciso sair para o cadastro da unidade, preencher lá e voltar.",
+            depois:
+              "O campo de CNPJ fica na própria linha da loja, e a razão social aparece embaixo confirmando que é a empresa certa. O que você digitar aqui também fica salvo no cadastro da unidade.",
+          },
+          {
+            kind: "melhoria",
+            title: "Pedido recusado não repete o mesmo CNPJ",
+            antes:
+              "Uma loja recusada voltava para a lista com o mesmo CNPJ preenchido — clicar de novo trazia a mesma recusa.",
+            depois:
+              "O campo vem vazio, avisando qual número já foi tentado. Quase sempre o CNPJ está certo na Receita e o que difere é o cadastrado no iFood — o aviso indica olhar no Portal do Parceiro.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-07-31",
     tag: "Grande novidade",
