@@ -24,6 +24,8 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
+import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
+import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
 import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
@@ -206,6 +208,7 @@ export default async function Home({
     minhasSolicitacoesIfood,
     consumoIaPlataforma,
     lojasSemDado,
+    panoramaConexao,
   ] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
@@ -220,6 +223,8 @@ export default async function Home({
       // Lojas que declararam plataforma e nunca importaram nada — aviso
     // discreto na faixa de cobertura, com a saída "não vendo nessa plataforma".
     getLojasSemDado(activeUnitIds),
+    // Lojas do iFood que nunca pediram conexão — faixa "conectar".
+    getPanoramaConexaoIfood(),
 ])
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
@@ -857,6 +862,12 @@ export default async function Home({
       {/* Cliente: falta aprovar no iFood / loja conectada. */}
       <IfoodClienteAviso
           solicitacoes={minhasSolicitacoesIfood} />
+
+      {/* Cliente: lojas que nunca pediram conexão nenhuma. */}
+      <IfoodConectarAviso
+        faltando={panoramaConexao.faltando.length}
+        totalComIfood={panoramaConexao.totalComIfood}
+      />
 
       {/* Dono: quanto a IA custou na plataforma neste mês. */}
       {consumoIaPlataforma.totalMensagens > 0 && (
