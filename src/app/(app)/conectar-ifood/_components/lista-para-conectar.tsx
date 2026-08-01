@@ -24,19 +24,34 @@ function mascara(v: string) {
 
 type Confere = { razao?: string; situacao?: string; erro?: boolean }
 
-function Botao({ marcadas }: { marcadas: number }) {
+/**
+ * Conta só o que tem CNPJ preenchido, não o que está marcado.
+ *
+ * Prometer "pedir conexão de 8 lojas" quando 5 estão sem CNPJ é prometer o que
+ * não vai acontecer: essas 5 voltam na hora com "preencha o CNPJ". O número no
+ * botão tem que ser o que de fato vai entrar na fila.
+ */
+function Botao({ prontas, faltamCnpj }: { prontas: number; faltamCnpj: number }) {
   const { pending } = useFormStatus()
   return (
-    <button
-      type="submit"
-      disabled={pending || marcadas === 0}
-      className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-    >
-      {pending && <Loader2 className="size-4 animate-spin" />}
-      {marcadas === 0
-        ? "Marque as lojas"
-        : `Pedir conexão de ${marcadas} ${marcadas === 1 ? "loja" : "lojas"}`}
-    </button>
+    <div className="flex flex-col gap-1">
+      <button
+        type="submit"
+        disabled={pending || prontas === 0}
+        className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+      >
+        {pending && <Loader2 className="size-4 animate-spin" />}
+        {prontas === 0
+          ? "Preencha o CNPJ pra continuar"
+          : `Pedir conexão de ${prontas} ${prontas === 1 ? "loja" : "lojas"}`}
+      </button>
+      {faltamCnpj > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          {faltamCnpj} {faltamCnpj === 1 ? "loja fica" : "lojas ficam"} de fora
+          por enquanto — {faltamCnpj === 1 ? "falta o CNPJ" : "faltam os CNPJs"}.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -49,8 +64,16 @@ export function ListaParaConectar({ lojas }: { lojas: LojaParaConectar[] }) {
   const [marcadas, setMarcadas] = React.useState<Set<string>>(
     () => new Set(lojas.map((l) => l.unitId)),
   )
+  // Campo começa VAZIO quando o CNPJ do cadastro é exatamente o que já foi
+  // recusado. Repor o número recusado convida a pessoa a clicar e tomar a
+  // mesma recusa; vazio obriga a olhar o aviso logo abaixo.
   const [cnpjs, setCnpjs] = React.useState<Record<string, string>>(() =>
-    Object.fromEntries(lojas.map((l) => [l.unitId, mascara(l.cnpj ?? "")])),
+    Object.fromEntries(
+      lojas.map((l) => [
+        l.unitId,
+        l.cnpj && l.cnpj === l.recusadoAntes ? "" : mascara(l.cnpj ?? ""),
+      ]),
+    ),
   )
   const [confere, setConfere] = React.useState<Record<string, Confere>>({})
 
@@ -139,6 +162,13 @@ export function ListaParaConectar({ lojas }: { lojas: LojaParaConectar[] }) {
                     {erro}
                   </p>
                 )}
+                {!erro && l.recusadoAntes && (
+                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                    Já tentamos {mascara(l.recusadoAntes)} e o iFood não achou a
+                    loja. Veja no Portal do Parceiro qual CNPJ está no cadastro
+                    dela — costuma ser outro.
+                  </p>
+                )}
                 {!erro && c?.razao && (
                   <p className="mt-1 truncate text-[11px] text-muted-foreground">
                     {c.razao}
@@ -163,7 +193,18 @@ export function ListaParaConectar({ lojas }: { lojas: LojaParaConectar[] }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Botao marcadas={marcadas.size} />
+        <Botao
+          prontas={
+            [...marcadas].filter(
+              (id) => (cnpjs[id] ?? "").replace(/\D/g, "").length === 14,
+            ).length
+          }
+          faltamCnpj={
+            [...marcadas].filter(
+              (id) => (cnpjs[id] ?? "").replace(/\D/g, "").length !== 14,
+            ).length
+          }
+        />
         <p className="text-xs text-muted-foreground">
           Depois de pedir, o iFood mostra a autorização no seu Portal do
           Parceiro — é lá que você aprova.

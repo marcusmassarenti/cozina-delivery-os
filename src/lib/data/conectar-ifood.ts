@@ -10,6 +10,17 @@ export type LojaParaConectar = {
   city: string | null
   /** Sem CNPJ a loja não tem como casar com a do iFood — precisa preencher. */
   cnpj: string | null
+  /**
+   * CNPJ que já foi tentado e recusado nesta loja, se houve.
+   *
+   * Sem isso a tela repõe o mesmo número recusado no campo, a pessoa clica em
+   * "pedir conexão" confiante e toma a recusa idêntica — o convite vira um
+   * looping. E o pedido certo quase nunca é "corrija o CNPJ": nas duas
+   * recusas da base o CNPJ era de empresa ativa, com nome fantasia e cidade
+   * batendo com a loja. O que não bate é o CNPJ que o iFood tem no cadastro
+   * DELE, que é outro.
+   */
+  recusadoAntes: string | null
 }
 
 export type PanoramaConexaoIfood = {
@@ -70,14 +81,22 @@ export async function getPanoramaConexaoIfood(
       .in("unit_id", unitIds),
     admin
       .from("ifood_activation_requests")
-      .select("unit_id")
+      .select("unit_id, cnpj, status, updated_at")
       .eq("holding_id", holdingId)
-      .in("status", ["pendente", "solicitada"]),
+      .in("status", ["pendente", "solicitada", "recusada"])
+      .order("updated_at", { ascending: true }),
   ])
 
-  const comPedidoAberto = new Set(
-    (pedidos ?? []).map((p) => p.unit_id as string).filter(Boolean),
-  )
+  const comPedidoAberto = new Set<string>()
+  // Guarda a recusa MAIS RECENTE por loja — a consulta vem em ordem crescente,
+  // então a última gravação sobrescreve as anteriores.
+  const recusaPorUnidade = new Map<string, string>()
+  for (const p of pedidos ?? []) {
+    const uid = p.unit_id as string
+    if (!uid) continue
+    if (p.status === "recusada") recusaPorUnidade.set(uid, p.cnpj as string)
+    else comPedidoAberto.add(uid)
+  }
 
   const porUnidade = new Map(units.map((u) => [u.id, u]))
   const faltando: LojaParaConectar[] = []
@@ -101,6 +120,7 @@ export async function getPanoramaConexaoIfood(
       name: u.name,
       city: u.city,
       cnpj: u.cnpj,
+      recusadoAntes: recusaPorUnidade.get(u.id) ?? null,
     })
   }
 
