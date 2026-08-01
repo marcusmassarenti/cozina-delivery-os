@@ -188,9 +188,17 @@ export async function persistFinanceiro(
       .in("import_id", idsIncompletos)
   }
 
-  // Conciliação do iFood tem MUITOS lançamentos (7k+ por loja/mês). Chunks
-  // grandes cortam os round-trips ao Postgres — o gargalo é o volume.
-  const CHUNK = 5000
+  // Conciliação do iFood tem MUITOS lançamentos (7k+ por loja/mês, 21k nas
+  // maiores). O limite aqui NÃO é round-trip, é o statement_timeout de 8s que
+  // o Supabase põe no papel `authenticator` — e o `service_role` não o
+  // sobrescreve.
+  //
+  // Era 5000 e passava, até a ordem virar grava→confere→apaga: agora a carga
+  // nova e a antiga convivem na tabela durante a gravação, cada insert
+  // mantém 7 índices num volume dobrado, e as 4 maiores lojas começaram a
+  // estourar os 8s (JK, Cardeal, Brooklin, Jardins, em 31/07). 1000 dá folga
+  // de sobra e custa alguns round-trips a mais.
+  const CHUNK = 1000
   const rows = parsed.lancamentos.map((l) => ({
     unit_id: unit.unitId,
     competencia: l.competencia,
@@ -274,17 +282,43 @@ export async function persistFinanceiro(
   // Roda SEMPRE, não só quando `substituido`. Se a contagem lá em cima errar
   // pra menos por qualquer motivo, o delete ainda limpa — e apagar "nada" é
   // barato. Depender do flag foi o que deixou o mês duplicado passar.
+  //
+  // Apaga em páginas pelo mesmo motivo do insert: um DELETE de 20 mil linhas
+  // com 7 índices não cabe nos 8s de statement_timeout. Em 30/07 a Sushi Bar
+  // caiu exatamente aqui ("Falha ao remover a carga antiga: statement
+  // timeout"), e nesse ponto o mês já tinha as duas cargas na tabela — que é
+  // o pior lugar pra parar.
+  //
+  // Lote menor que o do insert porque aqui o limite é OUTRO: os ids viajam na
+  // URL do PostgREST. Com 1000 UUIDs a requisição passa de 35 KB e volta "Bad
+  // Request" antes de chegar no banco.
   {
-    const { error: delErr } = await admin
-      .from("ifood_financeiro_lancamentos")
-      .delete()
-      .eq("unit_id", unit.unitId)
-      .in("competencia", competencias)
-      // `neq` sozinho não pega linha com import_id nulo (comparação com NULL
-      // é NULL, não "diferente") — e linha antiga sem import_id existe.
-      .or(`import_id.is.null,import_id.neq.${importLog.id}`)
-    if (delErr) {
-      await abortar(`Falha ao remover a carga antiga: ${delErr.message}`)
+    const DELETE_CHUNK = 200
+    for (;;) {
+      const { data: velhas, error: selErr } = await admin
+        .from("ifood_financeiro_lancamentos")
+        .select("id")
+        .eq("unit_id", unit.unitId)
+        .in("competencia", competencias)
+        // `neq` sozinho não pega linha com import_id nulo (comparação com NULL
+        // é NULL, não "diferente") — e linha antiga sem import_id existe.
+        .or(`import_id.is.null,import_id.neq.${importLog.id}`)
+        .limit(DELETE_CHUNK)
+      if (selErr) {
+        await abortar(`Falha ao localizar a carga antiga: ${selErr.message}`)
+      }
+      if (!velhas || velhas.length === 0) break
+
+      const { error: delErr } = await admin
+        .from("ifood_financeiro_lancamentos")
+        .delete()
+        .in(
+          "id",
+          velhas.map((v) => v.id),
+        )
+      if (delErr) {
+        await abortar(`Falha ao remover a carga antiga: ${delErr.message}`)
+      }
     }
   }
 
