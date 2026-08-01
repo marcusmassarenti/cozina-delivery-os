@@ -73,7 +73,16 @@ export function DadosDaUnidade({
   onCidade: (v: string) => void
   nome?: string | null
 }) {
+  // Controlados porque a consulta ao CNPJ os preenche. Com defaultValue eles
+  // ficariam parados na tela — foi o que aconteceu no primeiro teste: a Receita
+  // respondia, a razão social aparecia e o endereço continuava vazio.
   const [razao, setRazao] = React.useState(perfil?.razaoSocial ?? "")
+  const [logradouro, setLogradouro] = React.useState(perfil?.logradouro ?? "")
+  const [numero, setNumero] = React.useState(perfil?.numero ?? "")
+  const [complemento, setComplemento] = React.useState(perfil?.complemento ?? "")
+  const [bairro, setBairro] = React.useState(perfil?.bairro ?? "")
+  const [cep, setCep] = React.useState(perfil?.cep ?? "")
+  const [telefone, setTelefone] = React.useState(perfil?.telefone ?? "")
 
   return (
     <div className="grid grid-cols-12 gap-3">
@@ -92,8 +101,16 @@ export function DadosDaUnidade({
           defaultValue={perfil?.cnpj ?? ""}
           erro={erroCnpj}
           onDados={(d) => {
+            // Só sobrescreve o que a Receita realmente trouxe: se ela vier sem
+            // complemento, não apaga o que a pessoa já tinha digitado.
             setRazao(d.razaoSocial)
             if (d.cidade) onCidade(d.cidade)
+            if (d.logradouro) setLogradouro(d.logradouro)
+            if (d.numero) setNumero(d.numero)
+            if (d.complemento) setComplemento(d.complemento)
+            if (d.bairro) setBairro(d.bairro)
+            if (d.cep) setCep(d.cep)
+            if (d.telefone) setTelefone(d.telefone)
           }}
         />
       </div>
@@ -126,27 +143,44 @@ export function DadosDaUnidade({
       <Campo label="Endereço" span={7}>
         <input
           name="logradouro"
-          defaultValue={perfil?.logradouro ?? ""}
+          value={logradouro}
+          onChange={(e) => setLogradouro(e.target.value)}
           placeholder="rua / avenida"
           className={inputCls}
         />
       </Campo>
       <Campo label="Número" span={2}>
-        <input name="numero" defaultValue={perfil?.numero ?? ""} className={inputCls} />
+        <input
+          name="numero"
+          value={numero}
+          onChange={(e) => setNumero(e.target.value)}
+          className={inputCls}
+        />
       </Campo>
       <Campo label="Complemento" span={3}>
         <input
           name="complemento"
-          defaultValue={perfil?.complemento ?? ""}
+          value={complemento}
+          onChange={(e) => setComplemento(e.target.value)}
           className={inputCls}
         />
       </Campo>
 
       <Campo label="Bairro" span={4}>
-        <input name="bairro" defaultValue={perfil?.bairro ?? ""} className={inputCls} />
+        <input
+          name="bairro"
+          value={bairro}
+          onChange={(e) => setBairro(e.target.value)}
+          className={inputCls}
+        />
       </Campo>
       <Campo label="CEP" span={3}>
-        <input name="cep" defaultValue={perfil?.cep ?? ""} className={inputCls} />
+        <input
+          name="cep"
+          value={cep}
+          onChange={(e) => setCep(e.target.value)}
+          className={inputCls}
+        />
       </Campo>
       <Campo label="Cidade *" span={5}>
         <input
@@ -161,7 +195,8 @@ export function DadosDaUnidade({
       <Campo label="Telefone" span={4}>
         <input
           name="telefone"
-          defaultValue={perfil?.telefone ?? ""}
+          value={telefone}
+          onChange={(e) => setTelefone(e.target.value)}
           placeholder="(11) 90000-0000"
           className={inputCls}
         />

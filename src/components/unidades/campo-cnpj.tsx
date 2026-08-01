@@ -110,25 +110,22 @@ export function CampoCnpj({
         </p>
       )}
 
-      {/* O que a Receita devolveu viaja junto no envio. Guardado no banco pra
-          nao depender de consultar de novo, e porque a razao social e o que
-          casa a loja com o extrato quando o CNPJ nao vem. */}
+      {/* Só o que NÃO tem campo visível no formulário.
+          
+          ⚠️ Endereço, bairro, CEP, telefone e razão social saíram daqui: eles
+          têm input visível com o MESMO name, e o navegador mandava os dois. O
+          vazio (visível) sobrescrevia o preenchido (escondido) e o endereço
+          nunca era salvo. Quem preenche o campo visível agora é o onDados. */}
       {achado && (
         <>
-          <input type="hidden" name="razao_social" value={achado.razaoSocial} />
           <input type="hidden" name="nome_fantasia" value={achado.nomeFantasia ?? ""} />
           <input type="hidden" name="cnae_codigo" value={achado.cnaeCodigo ?? ""} />
           <input type="hidden" name="cnae_descricao" value={achado.cnaeDescricao ?? ""} />
           <input type="hidden" name="data_abertura" value={achado.dataAbertura ?? ""} />
           <input type="hidden" name="situacao_cadastral" value={achado.situacao ?? ""} />
-          <input type="hidden" name="logradouro" value={achado.logradouro ?? ""} />
-          <input type="hidden" name="numero" value={achado.numero ?? ""} />
-          <input type="hidden" name="complemento" value={achado.complemento ?? ""} />
-          <input type="hidden" name="bairro" value={achado.bairro ?? ""} />
-          <input type="hidden" name="cep" value={achado.cep ?? ""} />
-          <input type="hidden" name="telefone" value={achado.telefone ?? ""} />
         </>
       )}
+
     </div>
   )
 }
