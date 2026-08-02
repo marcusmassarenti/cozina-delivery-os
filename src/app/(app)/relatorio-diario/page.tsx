@@ -285,7 +285,11 @@ export default async function RelatorioDiarioPage({
         </div>
       ) : (
         <>
-          <RelatorioKpis matrix={matrix} metric={metric} />
+          <RelatorioKpis
+            matrix={matrix}
+            metric={metric}
+            periodoLabel={isFullMonth ? "no mês" : "no período"}
+          />
           <DailyTrendChart
             key={platform}
             data={dailyByPlat}

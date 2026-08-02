@@ -80,11 +80,25 @@ export async function FinanceiroLojaTab({
   monthly,
   year,
   month,
+  periodoParcial = false,
 }: {
   unitId: string
   monthly: UnitMonthly
   year: number
   month: number
+  /**
+   * true quando o filtro da página é um recorte de dias, não o mês inteiro.
+   *
+   * As doze consultas abaixo são POR MÊS — só uma delas aceita recorte hoje.
+   * O `monthly` que chega já vem filtrado pelo período, então num recorte de
+   * 10 dias a receita é de 10 dias e as taxas são de 30. A margem sai
+   * destruída e a linha de resto do DRE vira um crédito fantasma.
+   *
+   * Enquanto as consultas não forem por período, a aba AVISA em vez de deixar
+   * a pessoa ler um número que não existe. Número errado sem aviso é pior que
+   * número ausente.
+   */
+  periodoParcial?: boolean
 }) {
   const m = monthly
   const [
@@ -266,6 +280,17 @@ export async function FinanceiroLojaTab({
 
   return (
     <div className="space-y-4">
+      {periodoParcial && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+          <span aria-hidden>⚠️</span>
+          <p>
+            <b>Este bloco é do mês inteiro</b>, não do período que você
+            escolheu no filtro. Taxas, pagamentos e custos ainda são apurados
+            por mês fechado — comparar com a receita de um recorte de dias dá
+            uma margem menor do que a real.
+          </p>
+        </div>
+      )}
       {/* DRE da loja */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">

@@ -64,6 +64,8 @@ export default async function PlataformasPage({
     bruto: number
     pedidos: number
     liquido: number
+    /** Pago na porta (dinheiro/PIX/maquininha). Só o iFood mede hoje. */
+    vendaDireta: number
     /** Marketplace desconta comissão do repasse; canal próprio, não. */
     temRepasse: boolean
   }[] = [
@@ -73,6 +75,10 @@ export default async function PlataformasPage({
       bruto: sumBy(ifoodMap, (v) => v.bruto),
       pedidos: sumBy(ifoodMap, (v) => v.pedidosUnicos),
       liquido: sumBy(ifoodMap, (v) => v.liquido),
+      // Venda direta (dinheiro/PIX/maquininha na porta) é dinheiro da loja e
+      // não passa pelo repasse. Sem ela, esta tela mostrava o iFood entregando
+      // MENOS do que entrega e divergia do DRE, que já contava certo.
+      vendaDireta: sumBy(ifoodMap, (v) => v.recebidoDireto),
       temRepasse: true,
     },
     {
@@ -81,6 +87,7 @@ export default async function PlataformasPage({
       bruto: sumBy(nineMap, (v) => v.bruto),
       pedidos: sumBy(nineMap, (v) => v.pedidos),
       liquido: sumBy(nineMap, (v) => v.liquido),
+      vendaDireta: 0,
       temRepasse: true,
     },
     {
@@ -89,6 +96,7 @@ export default async function PlataformasPage({
       bruto: sumBy(keetaMap, (v) => v.bruto),
       pedidos: sumBy(keetaMap, (v) => v.pedidos),
       liquido: sumBy(keetaMap, (v) => v.liquido),
+      vendaDireta: 0,
       temRepasse: true,
     },
     {
@@ -97,6 +105,7 @@ export default async function PlataformasPage({
       bruto: sumBy(cwMap, (v) => v.bruto),
       pedidos: sumBy(cwMap, (v) => v.pedidos),
       liquido: sumBy(cwMap, (v) => v.liquido),
+      vendaDireta: 0,
       temRepasse: false,
     },
   ]
@@ -227,13 +236,18 @@ export default async function PlataformasPage({
                 <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
                   <span>{fmtNum(p.pedidos)} pedidos</span>
                   <span>
-                    {fmtBRL(p.liquido)}{" "}
+                    {fmtBRL(p.liquido + p.vendaDireta)}{" "}
                     {/* No canal próprio "líquido" não é bruto menos comissão
                         (não existe comissão) — é o que sobrou fora dos
                         cancelamentos. Chamar de "líquido" ali daria a
                         impressão de um repasse de 100% negociado. */}
-                    {p.temRepasse ? "líquido" : "sem comissão"}
+                    {p.temRepasse ? "fica na loja" : "sem comissão"}
                   </span>
+                  {p.vendaDireta > 0 && (
+                    <span className="text-teal-700 dark:text-teal-300">
+                      inclui {fmtBRL(p.vendaDireta)} de venda direta
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

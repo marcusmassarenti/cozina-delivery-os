@@ -352,6 +352,7 @@ export default async function UnidadeDetalhePage({
             usaKeeta={usaKeeta}
             year={year}
             month={month}
+            isFullMonth={isFullMonth}
             fechamentos={fechamentos}
             canEditFechamento={canEditFechamento}
           />
@@ -566,6 +567,7 @@ function DetailTabs({
   usaKeeta,
   year,
   month,
+  isFullMonth,
   fechamentos,
   canEditFechamento,
 }: {
@@ -578,6 +580,8 @@ function DetailTabs({
   usaKeeta: boolean
   year: number
   month: number
+  /** false quando o filtro é recorte de dias — a aba Financeiro avisa. */
+  isFullMonth: boolean
   fechamentos: Fechamento[]
   canEditFechamento: boolean
 }) {
@@ -677,6 +681,7 @@ function DetailTabs({
             monthly={m}
             year={year}
             month={month}
+            periodoParcial={!isFullMonth}
           />
         </Suspense>
       </TabsContent>

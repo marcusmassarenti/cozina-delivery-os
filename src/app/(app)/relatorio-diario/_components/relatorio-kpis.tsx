@@ -22,17 +22,24 @@ type KpiDef = {
 }
 
 /**
- * KPIs do mês — contextuais por métrica:
+ * KPIs do PERÍODO — contextuais por métrica:
  *  - Faturamento → conjunto completo
  *  - Pedidos → só cards de pedido
  *  - Cancelamentos → só cards de cancelamento
+ *
+ * Os rótulos diziam "do mês" mesmo quando a pessoa tinha escolhido 10 dias no
+ * filtro. A matriz já vinha recortada pelo período — só o texto mentia, o que
+ * é pior que errar a conta: o número está certo e a leitura, errada.
  */
 export function RelatorioKpis({
   matrix,
   metric,
+  periodoLabel = "no período",
 }: {
   matrix: DailyReportMatrix
   metric: DailyMetric
+  /** "no mês" quando o filtro é o mês inteiro; "no período" quando é recorte. */
+  periodoLabel?: string
 }) {
   const { totalFaturamento, totalPedidos, totalCancelamentos, networkByDay, days } =
     matrix
@@ -80,7 +87,7 @@ export function RelatorioKpis({
     kpis = [
       {
         icon: ShoppingBag,
-        label: "Pedidos do mês",
+        label: `Pedidos ${periodoLabel}`,
         value: fmtNum(totalPedidos),
         hint: "todas as lojas",
       },
@@ -110,7 +117,7 @@ export function RelatorioKpis({
         icon: Percent,
         label: "Taxa de cancelamento",
         value: fmtPct(cancelPct),
-        hint: "sobre os pedidos do mês",
+        hint: `sobre os pedidos ${periodoLabel}`,
         tone: cancelPct >= 5 ? "warning" : "neutral",
       },
       {
@@ -129,7 +136,7 @@ export function RelatorioKpis({
       },
       {
         icon: ShoppingBag,
-        label: "Pedidos no mês",
+        label: `Pedidos ${periodoLabel}`,
         value: fmtNum(totalPedidos),
         hint: "base de cálculo",
       },
@@ -139,7 +146,7 @@ export function RelatorioKpis({
     kpis = [
       {
         icon: DollarSign,
-        label: "Faturamento do mês",
+        label: `Faturamento ${periodoLabel}`,
         value: fmtBRLShort(totalFaturamento),
         hint: "bruto · todas as lojas",
       },
@@ -147,7 +154,7 @@ export function RelatorioKpis({
         icon: ShoppingBag,
         label: "Pedidos",
         value: fmtNum(totalPedidos),
-        hint: "no mês",
+        hint: periodoLabel,
       },
       {
         icon: Receipt,
