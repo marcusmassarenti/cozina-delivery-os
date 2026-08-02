@@ -64,7 +64,7 @@ export function UnitsTable({
           0,
         )
         const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
-        const ficaNaLoja = m.faturamentoLiquido + recebidoDireto + vrLiquido
+        const ficaNaLoja = m.faturamentoLiquido + recebidoDireto // VR ja no repasse
         const taxas = Math.max(
           0,
           m.faturamentoBruto - m.faturamentoLiquido - recebidoDireto,

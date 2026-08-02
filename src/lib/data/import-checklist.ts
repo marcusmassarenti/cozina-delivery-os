@@ -17,6 +17,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
 import {
   loadCoverageContext,
   shouldExpectDataForMonth,
@@ -170,14 +171,23 @@ export async function getImportChecklistForMonth(
   }
 
   // Log de importação do mês (só perStore iFood — pequeno e rápido).
-  let impQuery = admin
-    .from("platform_imports")
-    .select("unit_id, platform, report_type")
-    .eq("ref_year", year)
-    .eq("ref_month", month)
-    .eq("status", "success")
-  if (allowed) impQuery = impQuery.in("unit_id", allowed)
-  const { data: impRows } = await impQuery
+  // PAGINADO: julho/26 tem 2.083 logs `success` e o teto do PostgREST e 1.000.
+  // Sem paginar, o checklist lia menos da metade e marcava como PENDENTE loja
+  // que ja tinha importado — o usuario reimportava arquivo que ja estava la.
+  const impRows = await fetchAllRows<{
+    unit_id: string
+    platform: string
+    report_type: string
+  }>((from, to) => {
+    let q = admin
+      .from("platform_imports")
+      .select("unit_id, platform, report_type")
+      .eq("ref_year", year)
+      .eq("ref_month", month)
+      .eq("status", "success")
+    if (allowed) q = q.in("unit_id", allowed)
+    return q.order("id").range(from, to)
+  }, "import-checklist:platform_imports")
   const importedByKey = new Map<string, Set<string>>() // `${platform}/${report_type}` → unit_ids
   for (const r of impRows ?? []) {
     const k = `${r.platform}/${r.report_type}`

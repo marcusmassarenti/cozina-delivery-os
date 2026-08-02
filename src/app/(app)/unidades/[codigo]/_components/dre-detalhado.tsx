@@ -171,7 +171,12 @@ export function DreDetalhado({
   const resultadoOpPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
   // Operacional sempre entra no resultado (é 0 quando não há custo lançado, aí
   // o resultado operacional = margem).
-  const resultadoTotal = resultadoOperacional + vr + recebidoDireto
+  // VR NÃO soma aqui. A premissa antiga ("o iFood paga o vale à parte") não se
+  // sustenta no dado: em julho/26, 2.201 de 2.201 pedidos pagos em vale têm
+  // Entrada Financeira no repasse, com valor idêntico ao pago pelo cliente.
+  // Vale é forma de pagamento, não receita adicional — somá-lo contava o mesmo
+  // dinheiro duas vezes.
+  const resultadoTotal = resultadoOperacional + recebidoDireto
   // Análise vertical: cada linha como % do faturamento bruto do escopo.
   const pctOf = (v: number) => (bruto > 0 ? (v / bruto) * 100 : 0)
 
@@ -440,9 +445,8 @@ function VrLine({
   if (!info) {
     return (
       <Row
-        label="(+) VR recebido à parte"
-        value={`+ ${fmtBRL(vrLiquido)}`}
-        tone="pos"
+        label="Vendido em vale-refeição (já no repasse)"
+        value={fmtBRL(vrLiquido)}
         pct={pct}
       />
     )
@@ -452,10 +456,10 @@ function VrLine({
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 [&::-webkit-details-marker]:hidden">
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-        <span className="text-xs">(+) VR recebido à parte</span>
+        <span className="text-xs">Vendido em vale-refeição (já no repasse)</span>
         <span className="ml-auto flex items-baseline gap-1.5">
-          <span className="text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-            + {fmtBRL(vrLiquido)}
+          <span className="text-sm font-medium tabular-nums text-muted-foreground">
+            {fmtBRL(vrLiquido)}
           </span>
           {pct != null && (
             <span className="w-11 text-right text-[10px] font-normal tabular-nums text-muted-foreground">

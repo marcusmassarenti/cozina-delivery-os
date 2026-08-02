@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
+import { fetchAllRows } from "@/lib/data/paginate"
 import {
   getAccountsWithBalance,
   getCaixaHoldingId,
@@ -166,14 +167,31 @@ export async function getFluxoCaixa(
 
     // iFood: sem status por linha, então só o que ainda VAI cair
     // (data_repasse_esperada >= hoje). valor = líquido (impacto_no_repasse).
-    let qI = admin
-      .from("ifood_financeiro_lancamentos")
-      .select("data_repasse_esperada, valor, unit_id")
-      .eq("impacto_no_repasse", true)
-      .gte("data_repasse_esperada", today)
-      .lte("data_repasse_esperada", end)
-    if (du.units) qI = qI.in("unit_id", du.units.length ? du.units : ["00000000-0000-0000-0000-000000000000"])
-    const { data: ifood } = await qI
+    // PAGINADO. Sem isso o PostgREST devolvia as 1.000 primeiras linhas e
+    // pronto: em 01/08/26 o horizonte de 30 dias tinha 116.497 linhas somando
+    // R$ 754.737,88, e a tela mostrava ~R$ 4.936 — 0,65% do valor. Pior: sem
+    // `order`, quais 1.000 linhas voltavam era decisão do planner, então o
+    // numero mudava entre dois F5 sem nada ter mudado. E o saldo projetado
+    // ficava artificialmente negativo, sugerindo aperto de caixa inexistente.
+    const unitsFiltro = du.units
+      ? du.units.length
+        ? du.units
+        : ["00000000-0000-0000-0000-000000000000"]
+      : null
+    const ifood = await fetchAllRows<{
+      data_repasse_esperada: string | null
+      valor: number | string | null
+      unit_id: string
+    }>((from, to) => {
+      let q = admin
+        .from("ifood_financeiro_lancamentos")
+        .select("data_repasse_esperada, valor, unit_id")
+        .eq("impacto_no_repasse", true)
+        .gte("data_repasse_esperada", today)
+        .lte("data_repasse_esperada", end)
+      if (unitsFiltro) q = q.in("unit_id", unitsFiltro)
+      return q.order("id").range(from, to)
+    }, "fluxo-caixa:ifood")
     const byDay = new Map<string, number>()
     for (const r of ifood ?? []) {
       const d = r.data_repasse_esperada as string | null

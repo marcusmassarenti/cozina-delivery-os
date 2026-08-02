@@ -128,7 +128,7 @@ export function DetalheLoja({
     0,
   )
   const vrLiquido = Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
-  const extraForaRepasse = recebidoDireto + vrLiquido
+  const extraForaRepasse = recebidoDireto // VR nao: ja esta no repasse
   const resultadoLoja = m.faturamentoLiquido + extraForaRepasse
   // "% que fica" + "% de taxa" fecham 100%: a base é TODO o dinheiro que
   // circulou (o que a loja recebeu + a taxa da plataforma). O VR entra do lado

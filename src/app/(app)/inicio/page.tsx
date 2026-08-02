@@ -1835,7 +1835,10 @@ function networkTotalsMerged(
   // VR. A TAXA real = bruto − repasse − recebido direto (o recebido direto não
   // é taxa). A base pra fechar 100% é TODO o dinheiro (repasse + recebido + VR
   // + taxa = bruto + VR), então "% que fica" + "% taxa" = 100%.
-  const recebidoForaRepasse = recebidoDiretoRede + vrRede
+  // VR fora: e forma de pagamento de pedido que JA veio no repasse (2.201 de
+  // 2.201 pedidos com vale tem Entrada Financeira, valor identico). Somar
+  // inflava a receita. `vrRede` segue calculado so pro mix de pagamento.
+  const recebidoForaRepasse = recebidoDiretoRede
   const liquidoPraVoce = liquido + recebidoForaRepasse
   const taxasPlataforma = Math.max(0, bruto - liquido - recebidoDiretoRede)
   const totalDinheiro = liquidoPraVoce + taxasPlataforma

@@ -195,7 +195,14 @@ export async function getNetworkResultadoForMonth(
       (hasIfood ? Math.abs(fin!.promocaoLoja) : 0) +
       (has99 ? Math.abs(nine!.promocoesRs) : 0) +
       (keetaPromoLojaByUnit.get(u.id) ?? 0)
-    const totalLiquido = liquidoPlataformas + vrLiquido + recebidoDireto
+    // VR NÃO entra aqui. Ele parecia "receita paga à parte pelo iFood", mas o
+    // dado diz o contrário: em julho/26, 2.201 de 2.201 pedidos pagos em vale
+    // TÊM Entrada Financeira no repasse, e o valor bate centavo a centavo com
+    // o total pago pelo cliente. Vale-refeição é FORMA DE PAGAMENTO de um
+    // pedido que já foi repassado — somá-lo de novo inflava a receita da rede
+    // em ~R$ 97 mil/mês. Continua exposto como mix de pagamento, que é o que
+    // ele de fato responde ("quanto do meu faturamento vem de vale?").
+    const totalLiquido = liquidoPlataformas + recebidoDireto
     const margemLiquida = totalLiquido - cmvTotal
     const margemPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
     const resultadoOperacional = margemLiquida - custoOperacao
