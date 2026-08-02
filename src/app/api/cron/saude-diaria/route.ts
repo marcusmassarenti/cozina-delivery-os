@@ -13,7 +13,8 @@
  * que diário FALHA O DEPLOY — não é aviso, o build quebra.
  */
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
-import { emailSaude } from "@/lib/email/saude"
+import { emailSaude, type ConferenciaResumo } from "@/lib/email/saude"
+import { conferirFontes } from "@/lib/data/conferencia-fontes"
 import { enviarEmail } from "@/lib/email/enviar"
 import { registrarCron } from "@/lib/cron/registrar"
 
@@ -32,7 +33,36 @@ export async function GET(req: Request) {
 
   return registrarCron("saude-diaria", async () => {
     const s = await diagnosticarIntegracoes()
-    const msg = emailSaude(s)
+
+    // Conferência API × planilha do mês corrente. Nunca derruba o relatório de
+    // saúde: se ela falhar, o e-mail sai sem a seção — silêncio no diagnóstico
+    // inteiro seria pior que a ausência de um bloco.
+    const agora = new Date()
+    let conferencia: ConferenciaResumo[] = []
+    try {
+      const linhas = await conferirFontes(
+        agora.getFullYear(),
+        agora.getMonth() + 1,
+      )
+      conferencia = linhas
+        // Só as que têm DIA faltando. Diferença só de valor entra na fase de
+        // calibragem depois — começar por ela encheria o e-mail de ruído.
+        .filter((l) => l.diasSoNaApi.length > 0 || l.diasSoNaPlanilha.length > 0)
+        .slice(0, 25)
+        .map((l) => ({
+          clienteNome: l.clienteNome,
+          unitCode: l.unitCode,
+          unitName: l.unitName,
+          plataforma: l.plataforma === "ifood" ? "iFood" : "99 Food",
+          pedidosApi: l.pedidosApi,
+          pedidosPlanilha: l.pedidosPlanilha,
+          provavelMotivo: l.provavelMotivo,
+        }))
+    } catch (e) {
+      console.error("saude-diaria: conferência de fontes falhou:", e)
+    }
+
+    const msg = emailSaude(s, conferencia)
 
     // holdingId null + forcar: este e-mail não pertence a cliente nenhum e
     // precisa sair TODO dia — a trava de "já enviei este tipo" mataria o
@@ -52,6 +82,7 @@ export async function GET(req: Request) {
       assunto: msg.assunto,
       email: envio.ok ? "enviado" : `falhou: ${envio.erro}`,
       resumo: s.resumo,
+      conferencia: conferencia.length,
       alertas: [
         ...s.lojas.filter((l) => l.gravidade === "alerta").map((l) => `${l.cliente}/${l.loja}: ${l.motivo}`),
         ...s.crons.filter((c) => c.gravidade === "alerta").map((c) => `${c.nome}: ${c.motivo}`),

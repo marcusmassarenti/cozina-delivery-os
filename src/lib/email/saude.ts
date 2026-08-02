@@ -67,7 +67,30 @@ function placar(r: SaudeIntegracoes["resumo"]): string {
     .join(", ")
 }
 
-export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string } {
+/** Uma linha da conferência API × planilha (só as que divergem em dia). */
+export type ConferenciaResumo = {
+  clienteNome: string
+  unitCode: string
+  unitName: string
+  plataforma: string
+  pedidosApi: number
+  pedidosPlanilha: number
+  provavelMotivo: string
+}
+
+export function emailSaude(
+  s: SaudeIntegracoes,
+  /**
+   * Conferência entre as duas fontes do mesmo pedido. Vai NESTE e-mail e não
+   * num novo: já é o relatório interno diário, e um segundo e-mail competiria
+   * com ele pela mesma atenção.
+   *
+   * Sem limiar por enquanto — de propósito. A lista sai crua e ordenada pra a
+   * gente ver a distribuição real na base antes de escolher o corte, em vez de
+   * calibrar o alarme por palpite.
+   */
+  conferencia: ConferenciaResumo[] = [],
+): { assunto: string; html: string } {
   const r = s.resumo
   const problemas = s.lojas.filter((l) => l.gravidade === "alerta")
   const atencoes = s.lojas.filter((l) => l.gravidade === "atencao")
@@ -189,6 +212,30 @@ export function emailSaude(s: SaudeIntegracoes): { assunto: string; html: string
           <a href="${SITE}/saude" style="display:inline-block;background:${LARANJA};color:#ffffff;text-decoration:none;padding:14px 34px;border-radius:999px;font-size:15px;font-weight:700;">Ver o detalhe de todas as lojas</a>
         </td></tr>
       </table>
+
+      ${
+        conferencia.length > 0
+          ? `
+      <hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0 16px;" />
+      <p style="margin:0 0 10px;font-size:15px;font-weight:700;color:#18181b;">API × planilha — ${conferencia.length} loja(s) com dia faltando</p>
+      <p style="margin:0 0 12px;font-size:12px;line-height:1.6;color:#71717a;">
+        Comparação entre o que a API trouxe e o que o cliente subiu, por dia. Só entram lojas que têm as DUAS fontes.
+      </p>
+      ${conferencia
+        .map(
+          (c) => `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;background:#fafafa;border-radius:10px;">
+        <tr><td style="padding:10px 12px;font-size:13px;line-height:1.6;color:#3f3f46;">
+          <strong>${c.clienteNome} · ${c.unitCode} ${c.unitName}</strong>
+          <span style="font-size:12px;color:#71717a;">(${c.plataforma})</span><br/>
+          API ${c.pedidosApi} pedidos · planilha ${c.pedidosPlanilha}<br/>
+          <span style="color:#71717a;">${c.provavelMotivo}</span>
+        </td></tr>
+      </table>`,
+        )
+        .join("")}`
+          : ""
+      }
 
       <hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0 16px;" />
       <p style="margin:0;font-size:12px;line-height:1.6;color:#a1a1aa;">
