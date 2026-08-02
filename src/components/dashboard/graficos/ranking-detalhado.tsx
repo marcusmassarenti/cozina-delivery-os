@@ -194,9 +194,9 @@ export function DetalheLoja({
             </div>
             {extraForaRepasse > 0.005 && (
               <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
-                Inclui {fmtBRLShort(extraForaRepasse)} recebido fora do repasse
-                (dinheiro/PIX na entrega + VR) — por isso fica acima do repasse
-                de cada plataforma abaixo.
+                Inclui {fmtBRLShort(extraForaRepasse)} de venda direta —
+                dinheiro, PIX ou maquininha pagos na loja, que não passam pelo
+                repasse. Por isso fica acima do repasse de cada plataforma.
               </p>
             )}
           </div>
@@ -216,6 +216,12 @@ export function DetalheLoja({
               const pctLojaP = p.bruto > 0 ? (lojaValorP / p.bruto) * 100 : 0
               const pTaxas = Math.max(0, p.bruto - p.liquido - recDir)
               const pctTaxas = Math.max(0, 100 - pctLojaP)
+              // A fatia da loja abre em duas: o que a plataforma repassa e o
+              // que o cliente pagou na porta (dinheiro/PIX/maquininha). Sem
+              // essa separação o lojista lê tudo como repasse e acha que o
+              // iFood mandou mais do que mandou — foi o que o Diego apontou.
+              const pctRepasseP = p.bruto > 0 ? (p.liquido / p.bruto) * 100 : 0
+              const pctDiretaP = p.bruto > 0 ? (recDir / p.bruto) * 100 : 0
               const hasP = p.bruto > 0
               return (
                 <div key={p.id} className="rounded-md border bg-card p-2">
@@ -233,7 +239,11 @@ export function DetalheLoja({
                       <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-muted">
                         <div
                           className="bg-emerald-500"
-                          style={{ width: `${pctLojaP}%` }}
+                          style={{ width: `${pctRepasseP}%` }}
+                        />
+                        <div
+                          className="bg-teal-300 dark:bg-teal-400"
+                          style={{ width: `${pctDiretaP}%` }}
                         />
                         <div
                           className="bg-slate-500 dark:bg-slate-600"
@@ -254,6 +264,12 @@ export function DetalheLoja({
                           </span>
                         </span>
                       </div>
+                      {recDir > 0 && (
+                        <p className="mt-0.5 text-[10px] leading-tight tabular-nums text-teal-700 dark:text-teal-300">
+                          desses, {fmtPct(pctDiretaP)} ({fmtBRLShort(recDir)})
+                          o cliente pagou direto na loja
+                        </p>
+                      )}
                     </>
                   ) : (
                     <p className="mt-1 text-[10px] text-muted-foreground">
@@ -263,6 +279,23 @@ export function DetalheLoja({
                 </div>
               )
             })}
+          </div>
+
+          {/* Legenda: sem ela as três cores viram enfeite. A ordem segue a da
+              barra, pra leitura ser direta da esquerda pra direita. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              Repasse da plataforma
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="size-2 rounded-full bg-teal-300 dark:bg-teal-400" />
+              Venda direta (pago na loja)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="size-2 rounded-full bg-slate-500 dark:bg-slate-600" />
+              Fica com a plataforma
+            </span>
           </div>
         </>
       )}

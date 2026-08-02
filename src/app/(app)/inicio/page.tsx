@@ -598,7 +598,7 @@ export default async function Home({
           ? (network.liquidoPraVoce / network.totalDinheiro) * 100
           : 0,
       ),
-      trend: "repasse + dinheiro na entrega + VR",
+      trend: "repasse + venda direta na loja",
       tone: "positive",
       icon: Percent,
       platforms: finPlatforms,
