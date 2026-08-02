@@ -162,21 +162,24 @@ export function DreDetalhado({
   const share = totalBruto > 0 ? bruto / totalBruto : 0
   const cmvScope = isTodas ? cmv : cmv * share
   const opScope = isTodas ? operacao : operacao * share
-  // A margem NÃO inclui o VR — pra bater com o Resumo/Hero/dashboard (mesma
-  // definição em todo o app). O VR entra DEPOIS como ganho à parte, levando ao
-  // "Resultado total da loja". Assim a % de margem fica única e confiável.
-  const margem = liquido - cmvScope
+  // Régua única (src/lib/financeiro/regua.ts): a margem parte do que FICA na
+  // loja — repasse + venda direta. Antes ela partia só do repasse, e o card
+  // "Para onde vai o bruto", renderizado LADO A LADO com este, partia do
+  // repasse + venda direta. Duas "Margem líquida" com valores diferentes, na
+  // mesma tela, separadas exatamente pelo dinheiro pago na porta.
+  const ficaNaLoja = liquido + recebidoDireto
+  const margem = ficaNaLoja - cmvScope
   const margemPct = bruto > 0 ? (margem / bruto) * 100 : 0
   const resultadoOperacional = margem - opScope
   const resultadoOpPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
   // Operacional sempre entra no resultado (é 0 quando não há custo lançado, aí
   // o resultado operacional = margem).
-  // VR NÃO soma aqui. A premissa antiga ("o iFood paga o vale à parte") não se
-  // sustenta no dado: em julho/26, 2.201 de 2.201 pedidos pagos em vale têm
-  // Entrada Financeira no repasse, com valor idêntico ao pago pelo cliente.
-  // Vale é forma de pagamento, não receita adicional — somá-lo contava o mesmo
-  // dinheiro duas vezes.
-  const resultadoTotal = resultadoOperacional + recebidoDireto
+  // Não existe mais linha "resultado total" separada: a venda direta já entrou
+  // na margem e o VR já está dentro do repasse (2.201 de 2.201 pedidos pagos
+  // em vale têm Entrada Financeira, valor idêntico ao pago pelo cliente).
+  // Somar qualquer um dos dois de novo contava o mesmo dinheiro duas vezes —
+  // e duas linhas de "resultado" com valores diferentes era o que fazia o
+  // lojista não saber qual olhar.
   // Análise vertical: cada linha como % do faturamento bruto do escopo.
   const pctOf = (v: number) => (bruto > 0 ? (v / bruto) * 100 : 0)
 
@@ -312,6 +315,26 @@ export function DreDetalhado({
         pct={pctOf(liquido)}
       />
 
+      {/* A venda direta precisa aparecer AQUI, entre o repasse e a margem —
+          ela entra na margem agora, e uma conta que salta um degrau é uma
+          conta que o lojista não consegue conferir. */}
+      {recebidoDireto > 0 && (
+        <>
+          <Row
+            label="(+) Venda direta (dinheiro / PIX / maquininha na loja)"
+            value={`+ ${fmtBRL(recebidoDireto)}`}
+            tone="pos"
+            pct={pctOf(recebidoDireto)}
+          />
+          <Row
+            label="= Fica na loja"
+            value={fmtBRL(ficaNaLoja)}
+            bold
+            pct={pctOf(ficaNaLoja)}
+          />
+        </>
+      )}
+
       {antecip > 0 && (
         <div className="my-1 ml-1 rounded-md border-l-2 border-amber-300 bg-amber-50/60 py-0.5 pl-3 pr-2 dark:border-amber-800 dark:bg-amber-950/20">
           <Row
@@ -375,7 +398,7 @@ export function DreDetalhado({
       />
       <Divider />
       <Row
-        label="= Resultado operacional"
+        label={`= ${totalLabel}`}
         value={
           <span className="flex items-baseline gap-2">
             {fmtBRL(resultadoOperacional)}
@@ -393,40 +416,17 @@ export function DreDetalhado({
           </span>
         }
         bold
-        highlight={vr <= 0 && recebidoDireto <= 0}
+        highlight
         negative={resultadoOperacional < 0}
       />
-      {(vr > 0 || recebidoDireto > 0) && (
-        <>
-          {recebidoDireto > 0 && (
-            <Row
-              label="(+) Recebido direto pela loja (PIX / dinheiro / VR / maquininha)"
-              value={`+ ${fmtBRL(recebidoDireto)}`}
-              tone="pos"
-              pct={pctOf(recebidoDireto)}
-            />
-          )}
-          {vr > 0 && <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />}
-          <Divider />
-          <Row
-            label={`= ${totalLabel}`}
-            value={fmtBRL(resultadoTotal)}
-            bold
-            highlight
-            negative={resultadoTotal < 0}
-            pct={pctOf(resultadoTotal)}
-          />
-        </>
-      )}
+      {vr > 0 && <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />}
 
       <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-        A <b>margem</b> é só das vendas das plataformas (mesma do Resumo). O{" "}
-        <b>VR</b> (líquido = recebido − 8%) e o <b>recebido direto pela loja</b>{" "}
-        são pagos/recebidos à parte, então entram como ganhos extras no{" "}
-        resultado total — não na margem.
-        {!isTodas && cmv > 0 && (
-          <> CMV e operação rateados pela fatia do bruto desta plataforma.</>
-        )}
+        A <b>margem</b> parte do que fica na loja: o repasse da plataforma mais
+        a <b>venda direta</b> (dinheiro, PIX ou maquininha pagos na porta), que
+        é dinheiro seu e não passa pelo repasse. O <b>vale-refeição</b> aparece
+        só como informação: ele já vem dentro do repasse, então somá-lo
+        contaria o mesmo dinheiro duas vezes.
       </p>
     </div>
   )

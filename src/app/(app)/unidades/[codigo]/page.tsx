@@ -36,6 +36,7 @@ import {
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
+import { lerFinanceiro } from "@/lib/financeiro/regua"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -395,28 +396,23 @@ function HeroKpis({
 }) {
   const cancelPct =
     m.pedidos > 0 ? (m.pedidosCancelados / m.pedidos) * 100 : 0
-  const repassePct =
-    m.faturamentoBruto > 0 ? (m.totalLiquido / m.faturamentoBruto) * 100 : 0
-  // VR é pago à parte pelo iFood (fora do repasse) — é receita real que entra
-  // na conta. O "Resultado" da loja = margem operacional + VR líquido, mesma
-  // definição do /resultado (que já soma o VR). Assim as duas telas batem.
-  // Se o "recebido real" foi lançado manualmente, ele JÁ inclui o VR — não
-  // soma de novo (evita double-count). Senão, soma o VR líquido por cima.
-  const vrLiquido =
-    m.totalRecebidoReal > 0 ? 0 : Math.max(0, m.vrRecebido - m.vrTaxaMedia8)
-  // Recebido direto (dinheiro/PIX na entrega, iFood): dinheiro que a loja já
-  // embolsou fora do repasse. Entra no resultado igual ao VR e igual ao
-  // "Resultado total da loja" do DRE abaixo — sem isto, o hero ficava MENOR
-  // que o DRE da própria página. Se há "recebido real" manual, ele já inclui
-  // esse valor (não soma de novo).
-  const recebidoDireto =
-    m.totalRecebidoReal > 0
-      ? 0
-      : m.platforms.reduce((a, p) => a + (p.recebidoDireto ?? 0), 0)
-  const resultadoComVr = m.margemLiquida + vrLiquido + recebidoDireto
-  const resultadoPct =
-    m.faturamentoBruto > 0 ? (resultadoComVr / m.faturamentoBruto) * 100 : 0
 
+  // Régua única (src/lib/financeiro/regua.ts). Este cabeçalho tinha conta
+  // própria e por isso mostrava um "% repasse" MENOR que o "% que fica na
+  // loja" do dashboard pra mesma loja: aqui não somava a venda direta e lá
+  // somava. Duas telas, dois números, mesma pergunta.
+  const fin = lerFinanceiro({
+    bruto: m.faturamentoBruto,
+    liquido: m.totalLiquido,
+    recebidoDireto: m.platforms.reduce(
+      (a, p) => a + (p.recebidoDireto ?? 0),
+      0,
+    ),
+    cancelCesta: cancelCesta?.valor ?? 0,
+    cmv: m.custoProdutosCozina + (m.custoProdutosLoja ?? 0),
+    operacao: m.custoOperacao,
+    totalRecebidoReal: m.totalRecebidoReal,
+  })
   const stats: {
     label: string
     value: string
@@ -430,7 +426,7 @@ function HeroKpis({
       // Marcus: o hero mostra o n\u00FAmero do portal; margem/taxas/percentuais
       // continuam calculados na base v\u00E1lida (ap\u00F3s cancelamentos), como o DRE.
       label: "Bruto",
-      value: fmtBRL(m.faturamentoBruto + (cancelCesta?.valor ?? 0)),
+      value: fmtBRL(fin.brutoTotal),
       title:
         cancelCesta && cancelCesta.valor > 0
           ? "Vendas totais, igual ao \u201CValor das vendas\u201D do portal iFood (inclui os pedidos cancelados). O DRE desconta os cancelados antes de calcular taxas e margem."
@@ -442,23 +438,26 @@ function HeroKpis({
       }`,
     },
     {
-      label: "Líquido",
-      value: fmtBRL(m.totalLiquido),
-      sub: `${fmtPct(repassePct)} repasse`,
+      label: "Fica na loja",
+      value: fmtBRL(fin.ficaNaLoja),
+      sub:
+        fin.vendaDireta > 0
+          ? `${fmtPct(fin.pctFicaNaLoja)} · inclui venda direta`
+          : `${fmtPct(fin.pctFicaNaLoja)} do válido`,
+      title:
+        fin.vendaDireta > 0
+          ? `Repasse ${fmtBRL(fin.repasse)} + venda direta ${fmtBRL(fin.vendaDireta)} (dinheiro/PIX/maquininha pagos na loja).`
+          : "O que a plataforma repassou.",
       tone: "pos",
     },
     {
       label: "Resultado",
-      value: fmtBRL(resultadoComVr),
+      value: fmtBRL(fin.resultado),
       sub:
-        vrLiquido > 0
-          ? m.custoProdutosCozina > 0
-            ? `${fmtPct(resultadoPct)} · c/ VR`
-            : "c/ VR · lance o CMV"
-          : m.custoProdutosCozina > 0
-            ? fmtPct(m.margemLucroPct)
-            : "lance o CMV",
-      tone: resultadoComVr >= 0 ? "pos" : "neg",
+        m.custoProdutosCozina > 0
+          ? fmtPct(fin.pctResultado)
+          : "lance o CMV",
+      tone: fin.resultado >= 0 ? "pos" : "neg",
     },
     { label: "Ticket médio", value: fmtBRL(m.ticketMedio) },
     {

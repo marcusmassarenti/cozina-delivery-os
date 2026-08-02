@@ -32,6 +32,18 @@ export const COMPARATIVO_METRICS: {
 
 export type UnitMetrics = Record<ComparativoMetric, number> & {
   hasData: boolean
+  /**
+   * Bruto e líquido SÓ de marketplace (sem o canal próprio). É a base do
+   * repasse: canal próprio não tem repasse, e somá-lo puxava o percentual
+   * pra cima como se a plataforma tivesse melhorado.
+   *
+   * Existem porque a série de evolução refaz o repasse a partir dos totais
+   * somados — sem esses dois campos ela usava bruto/líquido COM canal próprio
+   * e mostrava um repasse diferente do /relatorios/comparativo, no mesmo
+   * filtro. Duas telas, dois números, nada tendo mudado no meio.
+   */
+  brutoMarketplace?: number
+  liquidoMarketplace?: number
 }
 
 /** Δ% entre dois valores (base = anterior). null se base = 0 e atual ≠ 0. */

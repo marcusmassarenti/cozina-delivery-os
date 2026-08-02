@@ -336,6 +336,16 @@ export default async function Home({
       activeUnitIds,
       isFullMonth ? undefined : periodRange,
     ),
+    // Mensal DO PERÍODO. `unit.monthly` (de getVisibleUnits) é sempre do mês
+    // corrente: olhando julho no dia 1º de agosto ele zerava promoções e
+    // Cardápio Web, e no dia 20 INFLARIA julho com o movimento de agosto.
+    // A /dre e o /relatorios já faziam certo; o dashboard era o que faltava.
+    getRealMonthlyForUnits(
+      activeUnitIds,
+      year,
+      month,
+      isFullMonth ? undefined : periodRange,
+    ),
   ])
 
   // No caso comum (sem filtro "Com faturamento") o escopo da rede já é conhecido
@@ -351,11 +361,20 @@ export default async function Home({
     deliveryFee,
     cwByUnit,
     vrByUnit,
+    monthlyPeriodo,
   ] = await fase2aP
+
+  // Troca o mensal do mês corrente pelo mensal do PERÍODO, antes de qualquer
+  // conta. Tudo que lê `u.monthly` daqui pra frente — promoções, Cardápio Web,
+  // CMV, fallback de loja sem importação — passa a falar do período escolhido.
+  const unitsPeriodo = units.map((u) => {
+    const m = monthlyPeriodo.get(u.id)
+    return m ? { ...u, monthly: m } : u
+  })
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
   // a UnitsTable mostra dados reais sem precisar de prop nova.
-  const unitsMerged = units.map((u) =>
+  const unitsMerged = unitsPeriodo.map((u) =>
     mergeUnitMonthlyForDashboard(
       u,
       finByUnit.get(u.id),

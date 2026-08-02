@@ -97,6 +97,8 @@ export async function getUnitMetricsForMonth(
       brutoMarketplace > 0 ? (liquidoMarketplace / brutoMarketplace) * 100 : 0
 
     out.set(id, {
+      brutoMarketplace,
+      liquidoMarketplace,
       bruto,
       liquido,
       pedidos,
@@ -128,16 +130,21 @@ export async function getEvolucaoSeries(
     let liquido = 0
     let pedidos = 0
     let cancelados = 0
+    let brutoMkt = 0
+    let liquidoMkt = 0
     let hasData = false
     for (const m of maps[i].values()) {
       bruto += m.bruto
       liquido += m.liquido
       pedidos += m.pedidos
       cancelados += m.cancelados
+      brutoMkt += m.brutoMarketplace ?? m.bruto
+      liquidoMkt += m.liquidoMarketplace ?? m.liquido
       if (m.hasData) hasData = true
     }
     const ticket = pedidos > 0 ? bruto / pedidos : 0
-    const repasse = bruto > 0 ? (liquido / bruto) * 100 : 0
+    // Mesma base do /relatorios/comparativo: só marketplace.
+    const repasse = brutoMkt > 0 ? (liquidoMkt / brutoMkt) * 100 : 0
     return {
       year: p.year,
       month: p.month,

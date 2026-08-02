@@ -14,6 +14,8 @@
 
 import "server-only"
 
+import { lerFinanceiro } from "@/lib/financeiro/regua"
+
 import { getUnits } from "@/lib/data/units"
 import {
   getCancelamentoCestaByUnits,
@@ -202,11 +204,25 @@ export async function getNetworkResultadoForMonth(
     // pedido que já foi repassado — somá-lo de novo inflava a receita da rede
     // em ~R$ 97 mil/mês. Continua exposto como mix de pagamento, que é o que
     // ele de fato responde ("quanto do meu faturamento vem de vale?").
-    const totalLiquido = liquidoPlataformas + recebidoDireto
-    const margemLiquida = totalLiquido - cmvTotal
-    const margemPct = bruto > 0 ? (margemLiquida / bruto) * 100 : 0
-    const resultadoOperacional = margemLiquida - custoOperacao
-    const resultadoPct = bruto > 0 ? (resultadoOperacional / bruto) * 100 : 0
+    // Régua única (src/lib/financeiro/regua.ts). Estas cinco linhas eram
+    // escritas de novo, com pequenas diferenças, em cada tela — daí as cinco
+    // definições de "margem" que a auditoria achou, duas delas renderizadas
+    // lado a lado na mesma página.
+    const leitura = lerFinanceiro({
+      bruto,
+      liquido: liquidoPlataformas,
+      recebidoDireto,
+      cmv: cmvTotal,
+      operacao: custoOperacao,
+    })
+    const totalLiquido = leitura.ficaNaLoja
+    const margemLiquida = leitura.margem
+    const margemPct = leitura.pctMargem
+    const resultadoOperacional = leitura.resultado
+    const resultadoPct = leitura.pctResultado
+    // Repasse PURO (sem venda direta) — é o que a plataforma mandou, e serve
+    // pra comparar plataformas entre si. Diferente do "% que fica na loja",
+    // que é o que a loja embolsou no total.
     const repassePct = bruto > 0 ? (liquidoPlataformas / bruto) * 100 : 0
 
     // Só entra no DRE quem tem faturamento (import ou manual)
