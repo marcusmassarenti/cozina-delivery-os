@@ -30,6 +30,7 @@ import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
 import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
+import { getVrValorByUnits } from "@/lib/data/ifood-pedidos"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { DashboardPdfButton } from "@/components/dashboard/dashboard-pdf-button"
 import {
@@ -325,6 +326,16 @@ export default async function Home({
       month,
       isFullMonth ? undefined : periodRange,
     ),
+    // VR do PERÍODO. Ele também mora em `unit.monthly`, que é sempre do mês
+    // corrente — então, olhando julho no dia 1º de agosto, o VR vinha ~zero.
+    // É dinheiro que o iFood paga à parte, fora do repasse: sem ele o "% que
+    // fica na loja" mente pra baixo.
+    getVrValorByUnits(
+      year,
+      month,
+      activeUnitIds,
+      isFullMonth ? undefined : periodRange,
+    ),
   ])
 
   // No caso comum (sem filtro "Com faturamento") o escopo da rede já é conhecido
@@ -339,6 +350,7 @@ export default async function Home({
     importCoverage,
     deliveryFee,
     cwByUnit,
+    vrByUnit,
   ] = await fase2aP
 
   // Substitui unit.monthly pelos valores importados quando há dados — assim
@@ -351,6 +363,7 @@ export default async function Home({
       keetaByUnit.get(u.id),
       cwByUnit.get(u.id),
       plataformasFilter,
+      vrByUnit.get(u.id),
     ),
   )
 
@@ -1857,6 +1870,8 @@ function mergeUnitMonthlyForDashboard(
   cw: CwResumo | undefined,
   /** Vazio = todas as plataformas entram. */
   platformFilter: PlatformId[],
+  /** VR recebido no PERÍODO (o de `u.monthly` é sempre do mês corrente). */
+  vrPeriodo?: number,
 ): Awaited<ReturnType<typeof getVisibleUnits>>[number] {
   const hasIfood = fin?.hasData ?? false
   const has99 = nine?.hasData ?? false
@@ -1866,17 +1881,46 @@ function mergeUnitMonthlyForDashboard(
   // plataformas (platforms[]) continua mostrando todas com valores reais.
   const want = (id: PlatformId) =>
     platformFilter.length === 0 || platformFilter.includes(id)
-  if (!hasIfood && !has99 && !hasKeeta && !cw?.hasData && platformFilter.length === 0)
-    return u
+  if (
+    !hasIfood &&
+    !has99 &&
+    !hasKeeta &&
+    !cw?.hasData &&
+    platformFilter.length === 0
+  ) {
+    // Nada importado no período — mas o VR ainda tem que ser o do período, e
+    // não o do mês corrente que veio em `u.monthly`.
+    if (vrPeriodo === undefined) return u
+    return {
+      ...u,
+      monthly: {
+        ...u.monthly,
+        vrRecebido: vrPeriodo,
+        vrTaxaMedia8: vrPeriodo * 0.08,
+      },
+    }
+  }
 
   // Constrói novos valores por plataforma
   const platforms = u.monthly.platforms.map((p) => {
     if (p.id === "ifood" && hasIfood) {
-      const ifoodPctLoja = fin!.bruto > 0 ? (fin!.liquido / fin!.bruto) * 100 : 0
+      // `recebidoDireto` PRECISA vir do `fin` (período escolhido). O `...p`
+      // abaixo carrega o valor de `u.monthly`, que é SEMPRE do mês corrente —
+      // então, olhando julho, entrava o recebido direto de agosto.
+      //
+      // Em 01/08/26 isso apareceu na cara do cliente: mês corrente recém
+      // começado = recebido direto ~0, o dinheiro da maquininha e do PIX na
+      // entrega sumiu da conta, e o "% que fica na loja" da Santo Peixe caiu
+      // de 75,4% pra 66,9% — dando a impressão de que o iFood ficava com mais
+      // do que fica de verdade.
+      const recDir = fin!.recebidoDireto
+      const ifoodPctLoja =
+        fin!.bruto > 0 ? ((fin!.liquido + recDir) / fin!.bruto) * 100 : 0
       return {
         ...p,
         bruto: fin!.bruto,
         liquido: fin!.liquido,
+        recebidoDireto: recDir,
         pctLoja: ifoodPctLoja,
       }
     }
@@ -1954,6 +1998,7 @@ function mergeUnitMonthlyForDashboard(
   }
 
   const ticket = totalPedidos > 0 ? totalBruto / totalPedidos : 0
+  const vr = vrPeriodo ?? u.monthly.vrRecebido
   return {
     ...u,
     monthly: {
@@ -1964,6 +2009,9 @@ function mergeUnitMonthlyForDashboard(
       faturamentoBruto: totalBruto,
       faturamentoLiquido: totalLiquido,
       totalLiquido: totalLiquido,
+      vrRecebido: vr,
+      // Taxa média de 8% — mesma régua do resto do sistema.
+      vrTaxaMedia8: vr * 0.08,
       platforms,
     },
   }

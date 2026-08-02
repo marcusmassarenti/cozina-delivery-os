@@ -42,6 +42,40 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.11.1",
+    date: "2026-08-01",
+    tag: "Correções",
+    title: "O que fica na loja voltou a contar o dinheiro recebido na entrega",
+    summary:
+      "Ao olhar um mês que não é o atual, o dashboard deixava de fora o que o cliente paga direto na loja (dinheiro, PIX e maquininha na entrega) e o vale-refeição. Só o repasse do iFood era contado, e a margem aparecia bem menor do que a real.",
+    // Mexeu num número que o cliente já tinha visto e usa pra julgar a
+    // plataforma — ele precisa saber por que mudou.
+    destaque: true,
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "correcao",
+            title: "Dinheiro recebido na entrega volta pra conta",
+            antes:
+              "Em julho, uma loja com R$ 52,5 mil de bruto aparecia com 66,9% ficando na loja — porque os R$ 4,5 mil pagos direto na entrega não entravam.",
+            depois:
+              "A mesma loja mostra 75,4%. O que o cliente paga na porta é da loja, não é taxa da plataforma, e agora aparece tanto no “% que fica na loja” quanto na barra de margem de cada plataforma.",
+          },
+          {
+            kind: "correcao",
+            title: "Vale-refeição também é do período escolhido",
+            antes:
+              "O VR mostrado era sempre o do mês corrente, qualquer que fosse o período no filtro. No dia 1º de cada mês ele aparecia praticamente zerado.",
+            depois:
+              "O VR passa a ser o do período que você escolheu no filtro.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.11.0",
     date: "2026-08-01",
     tag: "Grande novidade",

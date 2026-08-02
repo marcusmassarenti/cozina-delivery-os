@@ -262,7 +262,10 @@ function platformBreakdown(
     name,
     bruto,
     liquido,
-    pctLoja: bruto > 0 ? (liquido / bruto) * 100 : 0,
+    // O que FICA na loja, não só o repasse: dinheiro/PIX na entrega é da loja,
+    // não é taxa da plataforma. Contar só o repasse fazia a loja parecer
+    // entregar ao iFood um pedaço que ela na verdade embolsou.
+    pctLoja: bruto > 0 ? ((liquido + recebidoDireto) / bruto) * 100 : 0,
     recebidoDireto,
     promocoesLoja,
   }

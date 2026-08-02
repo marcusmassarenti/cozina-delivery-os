@@ -302,22 +302,64 @@ export type VrPorUnidade = {
 }
 
 /** VR por unidade no mês — pra ranking/tabela na tela Pedidos. */
+/**
+ * Só o VALOR de VR por loja — para o dashboard, que precisa de um número e não
+ * do painel de pagamentos inteiro.
+ *
+ * `getVrByUnits` puxa 15 colunas de TODOS os pedidos do mês pra depois somar
+ * em memória: no dashboard isso são dezenas de milhares de linhas atravessando
+ * a rede pra virar um `sum()`. Aqui o filtro `bandeira_vr not null` corta pra
+ * algumas centenas (só pedido pago em vale) e traz 2 colunas.
+ */
+export async function getVrValorByUnits(
+  year: number,
+  month: number,
+  filterUnitIds: string[],
+  dateRange?: { start: string; end: string },
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (filterUnitIds.length === 0) return out
+  const admin = createAdminClient()
+  const rows = await pageAll<{ unit_id: string; total_pago_cliente: number }>(
+    (a, b) => {
+      let q = admin
+        .from("ifood_pedidos")
+        .select("unit_id, total_pago_cliente")
+        .not("bandeira_vr", "is", null)
+        .in("unit_id", filterUnitIds)
+      if (dateRange) {
+        q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+      } else {
+        q = q.eq("ref_year", year).eq("ref_month", month)
+      }
+      return q.order("id").range(a, b)
+    },
+  )
+  for (const r of rows) {
+    out.set(r.unit_id, (out.get(r.unit_id) ?? 0) + (Number(r.total_pago_cliente) || 0))
+  }
+  return out
+}
+
 export async function getVrByUnits(
   year: number,
   month: number,
   filterUnitIds?: string[],
+  /** Período customizado do dashboard. Quando vem, manda no lugar do mês. */
+  dateRange?: { start: string; end: string },
 ): Promise<VrPorUnidade[]> {
   const admin = createAdminClient()
   const rows = await pageAll<Row & { bandeira_vr: string | null }>((a, b) => {
-    let q = admin
-      .from("ifood_pedidos")
-      .select(SELECT_COLS)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(a, b)
-    if (filterUnitIds)
-      q = q.in("unit_id", filterUnitIds)
+    let q = admin.from("ifood_pedidos").select(SELECT_COLS)
+    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
+    // sempre o mês inteiro, e um período de 10 dias traria o VR dos 30.
+    if (dateRange) {
+      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
+    } else {
+      q = q.eq("ref_year", year).eq("ref_month", month)
+    }
+    q = q.order("id").range(a, b)
+    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
     return q
   })
   if (rows.length === 0) return []
