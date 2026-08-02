@@ -42,6 +42,39 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.11.2",
+    date: "2026-08-02",
+    tag: "Melhorias",
+    title: "A barra de cada plataforma agora separa a venda direta",
+    summary:
+      "Dava pra ver quanto ficava na loja, mas não quanto disso o cliente pagou na porta. Lido como repasse, dava a impressão de que a plataforma mandou mais do que mandou.",
+    areas: [
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Três faixas em vez de duas, com legenda",
+            antes:
+              "A barra mostrava só duas cores: o que fica na loja e o que fica com a plataforma.",
+            depois:
+              "Agora são três — repasse da plataforma, venda direta (pago na loja) e o que fica com a plataforma — com legenda embaixo dizendo o que é cada cor.",
+          },
+          {
+            kind: "melhoria",
+            title: "Quanto da sua fatia veio da porta",
+            desc: "Abaixo dos números aparece, por exemplo, “desses, 14,4% (R$ 25,3 mil) o cliente pagou direto na loja”.",
+          },
+          {
+            kind: "correcao",
+            title: "Textos que citavam vale-refeição",
+            desc: "O “% que fica na loja” dizia “repasse + dinheiro na entrega + VR”. O vale saiu da conta na versão anterior (ele já vem dentro do repasse), e o texto ficou para trás. Corrigido.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.11.1",
     date: "2026-08-01",
     tag: "Correções",
