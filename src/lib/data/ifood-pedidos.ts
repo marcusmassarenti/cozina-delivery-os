@@ -247,18 +247,23 @@ export async function getPagamentoResumoForMonth(
   unitId: string,
   year: number,
   month: number,
+  /**
+   * Recorte de dias do filtro. Sem ele, a aba Financeiro somava as taxas do
+   * MES inteiro contra a receita de 10 dias e a margem saia destruida.
+   */
+  dateRange?: { start: string; end: string },
 ): Promise<PagamentoResumo> {
   const admin = createAdminClient()
-  const rows = await pageAll<Row>((a, b) =>
-    admin
+  const rows = await pageAll<Row>((a, b) => {
+    let q = admin
       .from("ifood_pedidos")
       .select(SELECT_COLS)
       .eq("unit_id", unitId)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(a, b),
-  )
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    return q.order("id").range(a, b)
+  })
   return aggregate(rows)
 }
 

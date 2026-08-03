@@ -281,8 +281,10 @@ export async function getDeliveryFeeForMonth(
   unitId: string,
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a aba somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<DeliveryFee> {
-  const map = await getDeliveryFeeByUnits([unitId], year, month)
+  const map = await getDeliveryFeeByUnits([unitId], year, month, dateRange)
   return map.get(unitId) ?? emptyFee()
 }
 
@@ -349,12 +351,20 @@ export async function getQuemPagaEntrega(
   unitIds: string[],
   year: number,
   month: number,
+  /**
+   * Recorte de dias do filtro. O RPC já recebia início e fim — só o invólucro
+   * é que fixava o mês inteiro, e a aba Financeiro herdava isso.
+   */
+  dateRange?: { start: string; end: string },
 ): Promise<QuemPagaEntrega[]> {
   if (!unitIds.length) return []
   const admin = createAdminClient()
-  const ini = `${year}-${String(month).padStart(2, "0")}-01`
   const fimDia = new Date(year, month, 0).getDate()
-  const fim = `${year}-${String(month).padStart(2, "0")}-${String(fimDia).padStart(2, "0")}`
+  const ini =
+    dateRange?.start ?? `${year}-${String(month).padStart(2, "0")}-01`
+  const fim =
+    dateRange?.end ??
+    `${year}-${String(month).padStart(2, "0")}-${String(fimDia).padStart(2, "0")}`
 
   const { data, error } = await admin.rpc("quem_paga_entrega", {
     p_unit_ids: unitIds,

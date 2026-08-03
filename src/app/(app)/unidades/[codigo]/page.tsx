@@ -353,6 +353,7 @@ export default async function UnidadeDetalhePage({
             year={year}
             month={month}
             isFullMonth={isFullMonth}
+            periodRange={periodRange}
             fechamentos={fechamentos}
             canEditFechamento={canEditFechamento}
           />
@@ -568,6 +569,7 @@ function DetailTabs({
   year,
   month,
   isFullMonth,
+  periodRange,
   fechamentos,
   canEditFechamento,
 }: {
@@ -582,6 +584,7 @@ function DetailTabs({
   month: number
   /** false quando o filtro é recorte de dias — a aba Financeiro avisa. */
   isFullMonth: boolean
+  periodRange: { start: string; end: string }
   fechamentos: Fechamento[]
   canEditFechamento: boolean
 }) {
@@ -682,6 +685,7 @@ function DetailTabs({
             year={year}
             month={month}
             periodoParcial={!isFullMonth}
+            dateRange={isFullMonth ? undefined : periodRange}
           />
         </Suspense>
       </TabsContent>

@@ -81,11 +81,14 @@ export async function FinanceiroLojaTab({
   year,
   month,
   periodoParcial = false,
+  dateRange,
 }: {
   unitId: string
   monthly: UnitMonthly
   year: number
   month: number
+  /** Recorte de dias quando o filtro não é o mês inteiro. */
+  dateRange?: { start: string; end: string }
   /**
    * true quando o filtro da página é um recorte de dias, não o mês inteiro.
    *
@@ -115,20 +118,25 @@ export async function FinanceiroLojaTab({
     cancelCesta,
     quemPaga,
   ] = await Promise.all([
-    getPagamentoResumoForMonth(unitId, year, month),
-    getDeliveryFeeForMonth(unitId, year, month),
+    // Estas SEGUEM o período escolhido — as tabelas têm data por pedido.
+    getPagamentoResumoForMonth(unitId, year, month, dateRange),
+    getDeliveryFeeForMonth(unitId, year, month, dateRange),
     getDailyReportMatrix(year, month, "todas", [
       { id: unitId, code: "", name: "" },
     ]),
-    getNinefoodResumoForMonth(unitId, year, month),
+    getNinefoodResumoForMonth(unitId, year, month, dateRange),
+    // ── Daqui pra baixo, MENSAIS POR NATUREZA. Não é limitação de código:
+    // antecipação, fatura e repasse da Keeta e os custos (CMV/operação) só
+    // existem fechados por mês. Recortá-los por dia seria ratear um número
+    // que ninguém apurou por dia — inventar precisão que o dado não tem.
     getAntecipacaoFeeByUnits([unitId], year, month),
-    getKeetaPromocaoResumo([unitId], year, month),
+    getKeetaPromocaoResumo([unitId], year, month, dateRange),
     getUnitCostBreakdown(unitId, year, month),
     getKeetaRepasseResumo(year, month, unitId),
-    getKeetaPedidoResumoForMonth(unitId, year, month),
+    getKeetaPedidoResumoForMonth(unitId, year, month, dateRange),
     getKeetaFaturaTaxasForMonth(unitId, year, month),
-    getCancelamentoCestaForMonth(unitId, year, month),
-    getQuemPagaEntrega([unitId], year, month),
+    getCancelamentoCestaForMonth(unitId, year, month, dateRange),
+    getQuemPagaEntrega([unitId], year, month, dateRange),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -284,10 +292,11 @@ export async function FinanceiroLojaTab({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
           <span aria-hidden>⚠️</span>
           <p>
-            <b>Este bloco é do mês inteiro</b>, não do período que você
-            escolheu no filtro. Taxas, pagamentos e custos ainda são apurados
-            por mês fechado — comparar com a receita de um recorte de dias dá
-            uma margem menor do que a real.
+            Faturamento, taxas de plataforma, entrega e cancelados seguem o
+            período que você escolheu. Já <b>CMV, custos operacionais e a
+            fatura da Keeta são do mês inteiro</b> — eles só existem fechados
+            por mês, e ratear por dia seria inventar uma precisão que o dado
+            não tem. Num recorte curto, a margem sai menor do que a real.
           </p>
         </div>
       )}

@@ -53,6 +53,8 @@ export async function getKeetaPromocaoResumo(
   unitIds: string[],
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a aba somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<KeetaPromocaoResumo> {
   if (unitIds.length === 0) return empty()
   const admin = createAdminClient()
@@ -61,16 +63,16 @@ export async function getKeetaPromocaoResumo(
   let from = 0
   const pageSize = 1000
   for (let i = 0; i < 300; i++) {
-    const { data, error } = await admin
+    let q = admin
       .from("keeta_promocoes")
       .select(
         "ato_id, regra_desconto, pedidos_campanha, vendas_promo_itens, despesa_campanha",
       )
       .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(from, from + pageSize - 1)
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    const { data, error } = await q.order("id").range(from, from + pageSize - 1)
     if (error) {
       console.error("getKeetaPromocaoResumo:", error.message)
       break

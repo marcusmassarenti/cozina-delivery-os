@@ -222,18 +222,20 @@ export async function getKeetaPedidoResumoForMonth(
   unitId: string,
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a aba somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<KeetaPedidoResumo> {
   const admin = createAdminClient()
-  const rows = await pageAll((from, to) =>
-    admin
+  const rows = await pageAll((from, to) => {
+    let q = admin
       .from("keeta_pedidos_recentes")
       .select(SELECT)
       .eq("unit_id", unitId)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(from, to),
-  )
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    return q.order("id").range(from, to)
+  })
   return aggregate(rows)
 }
 
