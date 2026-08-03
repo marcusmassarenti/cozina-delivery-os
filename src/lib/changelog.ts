@@ -42,6 +42,42 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.11.3",
+    date: "2026-08-03",
+    tag: "Correções",
+    title: "Visão Geral e Dashboard voltaram a abrir rápido",
+    summary:
+      "Duas telas estavam demorando a ponto de parecer travadas. O motivo era o mesmo nas duas, e foi corrigido.",
+    areas: [
+      {
+        area: "Financeiro",
+        items: [
+          {
+            kind: "correcao",
+            title: "Visão Geral não abria",
+            antes:
+              "A tela ficava no carregamento sem terminar. Pra montar a projeção de caixa, ela baixava mais de 126 mil linhas de repasse — de mil em mil, uma consulta por vez — só pra somar 5 totais diários.",
+            depois:
+              "A soma passou a ser feita no banco: uma consulta, 5 linhas. A tela abre em menos de 1 segundo. Os valores são exatamente os mesmos, conferidos ao centavo.",
+          },
+        ],
+      },
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Carregamento mais rápido",
+            antes:
+              "As setas de comparação com o mês passado esperavam todo o resto da página terminar pra só então começar a calcular.",
+            depois:
+              "Agora são calculadas junto com o resto. O tempo de abertura caiu para menos da metade.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.11.2",
     date: "2026-08-02",
     tag: "Melhorias",
