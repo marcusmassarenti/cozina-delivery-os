@@ -50,10 +50,25 @@ export type IfoodSettlementsResponse = {
   settlements?: IfoodSettlementPeriod[]
 }
 
+/**
+ * Repasses do merchant no período.
+ *
+ * ⚠️ Os parâmetros NÃO são `beginDate`/`endDate` — era o que mandávamos, e a
+ * API respondia 400 com a lista dos nomes certos. Falhava em silêncio (o
+ * chamador só via "não ok"), então ninguém percebeu. Achado em 03/ago/26
+ * enquanto eu procurava uma fonte de CNPJ pro auto-vínculo.
+ *
+ * A API aceita dois recortes, e são coisas diferentes:
+ *   - `calculo`   (padrão) → `beginCalculationDate`/`endCalculationDate`:
+ *     quando as vendas foram APURADAS. É o que casa com a competência.
+ *   - `pagamento`          → `beginPaymentDate`/`endPaymentDate`:
+ *     quando o dinheiro CAIU na conta. Use pra conciliar extrato bancário.
+ */
 export async function getSettlements(
   merchantId: string,
   beginDate: string,
   endDate: string,
+  por: "calculo" | "pagamento" = "calculo",
 ): Promise<IfoodFetchResult<IfoodSettlementsResponse>> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(beginDate)) {
     throw new Error(`beginDate deve ser YYYY-MM-DD (recebido: ${beginDate})`)
@@ -65,10 +80,14 @@ export async function getSettlements(
     "{merchantId}",
     encodeURIComponent(merchantId),
   )
+  const query =
+    por === "pagamento"
+      ? { beginPaymentDate: beginDate, endPaymentDate: endDate }
+      : { beginCalculationDate: beginDate, endCalculationDate: endDate }
   return fetchIfood<IfoodSettlementsResponse>({
     path,
     method: "GET",
-    query: { beginDate, endDate },
+    query,
     responseType: "json",
     merchantId,
     endpointLabel: "GET /financial/v3.0/merchants/{id}/settlements",
