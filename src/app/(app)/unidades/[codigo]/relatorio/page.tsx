@@ -33,6 +33,7 @@ import { AvaliacoesTab } from "../_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "../_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "../_components/avaliacoes-keeta-tab"
 import { mergeMonthly } from "../_components/merge-monthly"
+import { lerFinanceiro } from "@/lib/financeiro/regua"
 
 export default async function RelatorioMensalUnidade({
   params,
@@ -78,6 +79,21 @@ export default async function RelatorioMensalUnidade({
 
   // monthly enriquecido (igual ao detalhe da loja) — alimenta o Financeiro.
   const m = mergeMonthly(monthlyMap.get(unit.id) ?? emptyMonthly, fin, nine, keeta)
+
+  // MESMA régua da tela da loja e do DRE logo abaixo. Antes o resumo lia
+  // `m.totalLiquido` cru e chamava de "Líquido (recebido)": deixava a VENDA
+  // DIRETA de fora e discordava do próprio DRE dois blocos abaixo, que soma
+  // ela pra chegar em "Fica na loja". Na JK/jul-26 eram R$ 161.320,55 no card
+  // contra R$ 186.897,95 no DRE — R$ 25.577,40 de diferença na mesma página.
+  const leitura = lerFinanceiro({
+    bruto: m.faturamentoBruto,
+    liquido: m.totalLiquido,
+    recebidoDireto: m.platforms.reduce((a, p) => a + (p.recebidoDireto ?? 0), 0),
+    cancelCesta: cancelCesta?.valor ?? 0,
+    cmv: m.custoProdutosCozina + (m.custoProdutosLoja ?? 0),
+    operacao: m.custoOperacao,
+    totalRecebidoReal: m.totalRecebidoReal,
+  })
 
   // Nota média ponderada das 3 plataformas com avaliação.
   const notaParts = [
@@ -145,13 +161,29 @@ export default async function RelatorioMensalUnidade({
           {/* Bruto TOTAL (com cancelados) = "Valor das vendas" do portal. */}
           <Kpi
             label="Faturamento bruto"
-            value={fmtBRL(m.faturamentoBruto + cancelCesta.valor)}
+            value={fmtBRL(leitura.brutoTotal)}
           />
-          <Kpi label="Líquido (recebido)" value={fmtBRL(m.totalLiquido)} accent />
+          {/* Mesmo nome e mesmo número da tela da loja e da linha do DRE. */}
+          <Kpi
+            label="Fica na loja"
+            value={fmtBRL(leitura.ficaNaLoja)}
+            sub={
+              leitura.vendaDireta > 0
+                ? `${fmtPct(leitura.pctFicaNaLoja)} · inclui venda direta`
+                : fmtPct(leitura.pctFicaNaLoja)
+            }
+            accent
+          />
           <Kpi
             label="Margem líquida"
-            value={fmtBRL(m.margemLiquida)}
-            sub={fmtPct(m.margemLucroPct)}
+            value={fmtBRL(leitura.margem)}
+            // Mesma condição da tela da loja: sem CMV lançado, mostrar "%" seria
+            // vender como margem um número que ainda não desconta mercadoria.
+            sub={
+              m.custoProdutosCozina + (m.custoProdutosLoja ?? 0) > 0
+                ? fmtPct(leitura.pctMargem)
+                : "lance o CMV"
+            }
           />
           <Kpi label="Ticket médio" value={fmtBRL(m.ticketMedio)} />
           <Kpi label="Pedidos" value={fmtNum(m.pedidos)} />
