@@ -351,9 +351,21 @@ export async function getRealMonthlyForUnits(
     // VR é pago À PARTE pelo iFood (fora do líquido da Conciliação). Puxamos
     // por TODAS as lojas: serve de fallback de bruto/líquido/pedidos pras lojas
     // sem Conciliação E alimenta o VR líquido do DRE em todas elas.
+    //
+    // O RECORTE PRECISA IR JUNTO. Sem ele a função cai no ref_year/ref_month e
+    // devolve o mês inteiro -- exatamente o que o comentário dentro dela avisa.
+    // Duas consequências, medidas em 03/08/26 na janela de 1 a 3 de julho:
+    //   • número: loja sem Conciliação na janela recebia 30 dias de VR como
+    //     fallback de 3 dias, inflando o lado "mês passado" das setas do herói;
+    //   • tempo: 27.764 linhas (28 idas ao banco) onde 2.936 (3 idas) bastavam.
     unitIds.length > 0
-      ? getVrByUnits(year, month, unitIds)
+      ? getVrByUnits(year, month, unitIds, dateRange)
       : Promise.resolve([]),
+    // MESMO problema latente aqui: esta busca o mês inteiro e não aceita
+    // recorte. Não corrigi junto porque hoje não afeta ninguém -- as 10 lojas
+    // com Keeta no mês também têm dado nos 3 dias, então o fallback não entra
+    // pra nenhuma. Passa a valer no dia em que uma loja ficar sem Loja diária
+    // no meio do período.
     keetaFbIds.length > 0
       ? getKeetaPedidoPorLoja(keetaFbIds, year, month)
       : Promise.resolve([]),
