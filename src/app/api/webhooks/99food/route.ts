@@ -49,6 +49,25 @@ export async function GET(req: Request) {
   return Response.json({ ok: true, webhook: "99food" })
 }
 
+/**
+ * Envolve em aspas todo inteiro com 16+ dígitos ANTES do JSON.parse.
+ *
+ * O `order_id` do 99 tem 19 dígitos e vem no JSON como número, sem aspas.
+ * `JSON.parse` transforma isso em double, que só guarda 15–16 dígitos com
+ * exatidão — e o resto vira zero. O pedido 5764677071083212473 virava
+ * 5764677071083213000, e a corrupção era gravada assim no banco.
+ *
+ * Não dava pra consertar depois: quando o valor chega no código já é o número
+ * arredondado, e `String()` só formata o estrago. Tem que ser no texto cru.
+ *
+ * Custou caro: 4.663 pedidos (100% dos que entraram por webhook) ficaram com
+ * id inválido, e a chave `unit_id + pedido_id` é a trava de duplicidade —
+ * dois pedidos diferentes cujo id arredondado coincidisse virariam um só.
+ */
+function protegerIdsLongos(texto: string): string {
+  return texto.replace(/:(\s*)(-?\d{16,})(\s*[,}\]])/g, ':$1"$2"$3')
+}
+
 export async function POST(req: Request) {
   // Proteção PROGRESSIVA (webhook de ALTO volume, ~33k eventos/mês): enquanto
   // NINEFOOD_WEBHOOK_SECRET não estiver setado, aceita (pra não derrubar a
@@ -76,7 +95,7 @@ export async function POST(req: Request) {
 
   let payload: Record<string, unknown> = {}
   try {
-    payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    payload = raw ? (JSON.parse(protegerIdsLongos(raw)) as Record<string, unknown>) : {}
   } catch {
     // Alguns webhooks mandam form/texto em vez de JSON.
     payload = raw ? { raw } : {}
