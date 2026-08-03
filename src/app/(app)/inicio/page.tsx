@@ -8,7 +8,6 @@ import {
   DollarSign,
   MessageCircle,
   Package,
-  Percent,
   Receipt,
   Sparkles,
   Star,
@@ -606,6 +605,12 @@ export default async function Home({
   const cancelQ = sp.periodo
     ? `?metrica=cancelamentos&periodo=${sp.periodo}`
     : "?metrica=cancelamentos"
+  // Fatia que fica com a loja. Base = TODO o dinheiro (o que fica + a taxa),
+  // pra "% que fica" + "% de taxa" fecharem 100%.
+  const pctFicaNaLoja =
+    network.totalDinheiro > 0
+      ? (network.liquidoPraVoce / network.totalDinheiro) * 100
+      : 0
   const kpis: Kpi[] = [
     {
       label: "Pedidos",
@@ -661,29 +666,21 @@ export default async function Home({
       // VR NÃO entra: está DENTRO do repasse (2.201 de 2.201 pedidos pagos em
       // vale em jul/26 têm Entrada Financeira na conciliação). Somá-lo à parte
       // inflava a receita da rede em ~R$ 97 mil/mês.
+      // Valor e PORCENTAGEM no mesmo card. Eram dois ("Líquido pra Você" e
+      // "% que fica na loja"), lado a lado, dizendo a mesma coisa em unidades
+      // diferentes — dois espaços da faixa pra uma informação só. A tela da
+      // loja já mostrava junto; agora o dashboard também.
+      //
+      // A variação da PORCENTAGEM (que era a seta do card removido) não some:
+      // vai pro hover, porque a seta do card acompanha o valor em R$.
       label: ROTULOS.ficaNaLoja,
       value: fmtBRLShort(network.liquidoPraVoce),
-      trend: DEFINICOES.ficaNaLoja.curto,
+      trend: `${fmtPct(pctFicaNaLoja)} do bruto · ${DEFINICOES.ficaNaLoja.curto}`,
+      // A variação da PORCENTAGEM é acrescentada mais abaixo, quando
+      // `heroDeltas` já existe (ele é calculado depois deste array).
       title: DEFINICOES.ficaNaLoja.completo,
       tone: "positive",
       icon: DollarSign,
-      platforms: finPlatforms,
-      href: `/financeiro${periodQ}`,
-    },
-    {
-      // Antes "Taxa de Repasse" (só o repasse, líquido/bruto). Virou a versão
-      // em % do card acima. Base = bruto com cancelados (mesma do card
-      // Faturamento Bruto e do detalhe por loja).
-      label: ROTULOS.pctFicaNaLoja,
-      value: fmtPct(
-        network.totalDinheiro > 0
-          ? (network.liquidoPraVoce / network.totalDinheiro) * 100
-          : 0,
-      ),
-      trend: DEFINICOES.ficaNaLoja.curto,
-      title: DEFINICOES.ficaNaLoja.completo,
-      tone: "positive",
-      icon: Percent,
       platforms: finPlatforms,
       href: `/financeiro${periodQ}`,
     },
@@ -807,6 +804,15 @@ export default async function Home({
   for (const k of kpis) {
     k.platformCoverage =
       k.label === "Nota Média" ? avalCobertura : finCobertura
+    // O card "Fica na loja" absorveu o antigo "% que fica na loja". A seta dele
+    // acompanha o valor em R$, então a variação da PORCENTAGEM — que era a seta
+    // do card removido — vai pro hover, em vez de sumir junto com o card.
+    if (k.label === ROTULOS.ficaNaLoja && heroDeltas.repasse != null) {
+      const d = heroDeltas.repasse
+      k.title = `${DEFINICOES.ficaNaLoja.completo} A fatia que fica na loja está ${fmtPct(
+        Math.abs(d),
+      )} ${d >= 0 ? "acima" : "abaixo"} do mês passado.`
+    }
   }
 
   // Primeira linha única (manchete clean): dinheiro primeiro, operação depois.
@@ -822,7 +828,6 @@ export default async function Home({
     "Pedidos Cancelados",
     "Média Pedidos/Dia",
     "Ticket Médio",
-    ROTULOS.pctFicaNaLoja,
     // ⚠️ KPI que não estiver NESTA lista é criado e descartado logo abaixo.
     "Custo de Entrega",
   ]
@@ -837,7 +842,6 @@ export default async function Home({
     [ROTULOS.ficaNaLoja]: heroDeltas.liquido,
     Pedidos: heroDeltas.pedidos,
     "Ticket Médio": heroDeltas.ticket,
-    [ROTULOS.pctFicaNaLoja]: heroDeltas.repasse,
     "Média Pedidos/Dia": heroDeltas.mediaDia,
   }
   // Vazio de propósito: o `trend` do card já diz "repasse + venda direta", que
@@ -1054,7 +1058,7 @@ export default async function Home({
             {/* Linha 1: os 4 do topo (dinheiro), maiores. */}
             <HeroFaixa metrics={manchete.slice(0, 4)} cols={4} big />
             {/* Linha 2: os 5 de operação. */}
-            <HeroFaixa metrics={manchete.slice(4)} cols={5} />
+            <HeroFaixa metrics={manchete.slice(4)} cols={4} />
           </div>
         </DashboardSection>
       )}
