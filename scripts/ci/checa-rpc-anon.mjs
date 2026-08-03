@@ -33,12 +33,28 @@ if (!TOKEN || !REF) {
   process.exit(0)
 }
 
-const REGRAS_QUE_BLOQUEIAM = new Set([
+// Bloqueiam em QUALQUER nível (INFO/WARN/ERROR), não só em ERROR.
+//
+// Não é excesso de zelo: o advisor classifica o nível por conta dele, e a
+// classificação muda. `touch_last_seen` sai como WARN. Se um dia a regra do
+// anônimo sair como WARN, um gate que só olha ERROR passaria batido -- falso
+// negativo silencioso, que é pior do que não ter gate: o CI verde vira prova
+// de que está tudo bem justamente quando não está.
+//
+// Nenhuma destas deveria aparecer NUNCA, em nível nenhum.
+const SEMPRE_BLOQUEIA = new Set([
   "anon_security_definer_function_executable", // o P0 de jul e ago
   "rls_disabled_in_public",
-  "security_definer_view",
+  "security_definer_view", // view ignorando RLS: a irmã gêmea do P0
   "policy_exists_rls_disabled",
+  "exposed_auth_users",
+  "unsupported_reg_types",
 ])
+
+// Estas são ruído normal em nível baixo; só bloqueiam se o advisor as marcar
+// como ERROR. `rls_enabled_no_policy` (INFO, 37 tabelas) mora aqui: tabela
+// exclusiva do servidor sem policy é o estado esperado.
+const BLOQUEIA_SE_ERROR = true
 
 const resp = await fetch(
   `https://api.supabase.com/v1/projects/${REF}/advisors/security`,
@@ -55,21 +71,30 @@ if (!resp.ok) {
 
 const { lints = [] } = await resp.json()
 const bloqueiam = lints.filter(
-  (l) => REGRAS_QUE_BLOQUEIAM.has(l.name) && l.level === "ERROR",
+  (l) =>
+    SEMPRE_BLOQUEIA.has(l.name) || (BLOQUEIA_SE_ERROR && l.level === "ERROR"),
 )
 
 if (bloqueiam.length === 0) {
-  const avisos = lints.filter((l) => l.level !== "ERROR").length
+  const porNivel = lints.reduce((a, l) => {
+    a[l.level] = (a[l.level] ?? 0) + 1
+    return a
+  }, {})
+  const resumo =
+    Object.entries(porNivel)
+      .map(([n, q]) => `${q} ${n}`)
+      .join(", ") || "nada"
   console.log(
-    `✓ Nenhuma função security definer alcançável pelo anônimo. ` +
-      `(${avisos} aviso(s) não-bloqueante(s) no advisor)`,
+    `✓ Nenhuma função security definer alcançável pelo anônimo, ` +
+      `nenhuma view ignorando RLS, RLS ligada em tudo.\n` +
+      `  (advisor: ${resumo} — não-bloqueantes)`,
   )
   process.exit(0)
 }
 
 console.error(`\n✗ ${bloqueiam.length} achado(s) de segurança BLOQUEANTES:\n`)
 for (const l of bloqueiam) {
-  console.error(`  [${l.name}] ${l.title}`)
+  console.error(`  [${l.level}] ${l.name} — ${l.title}`)
   console.error(`     ${l.detail?.replace(/<\/?[^>]+>/g, "") ?? ""}`)
   if (l.remediation) console.error(`     → ${l.remediation}`)
   console.error("")
