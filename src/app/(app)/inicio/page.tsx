@@ -109,6 +109,7 @@ import {
 } from "@/components/dashboard/attention-section"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { createClient } from "@/lib/supabase/server"
+import { criarCronometro } from "@/lib/perf"
 
 async function checkSupabase() {
   try {
@@ -139,6 +140,7 @@ export default async function Home({
     ativo?: string // "1" pra mostrar só com faturamento
   }>
 }) {
+  const cron = criarCronometro("dashboard")
   const sp = await searchParams
   // Range de período custom (ou mês inteiro como default). Por enquanto as
   // queries continuam por (year, month) do início — quando range é o mês
@@ -170,6 +172,7 @@ export default async function Home({
     !filtrandoPlataforma || plataformasFilter.includes(id)
   const onlyComFaturamento = sp.ativo === "1"
   const userCtx = await getCurrentUserContext()
+  cron.marca("auth")
   const brandLogoUrl = userCtx.logoUrl
   const primeiroNome = userCtx.fullName.split(" ")[0]
   const horaBR = Number(
@@ -191,6 +194,7 @@ export default async function Home({
       getAvailablePeriods(),
       getAccessibleUnitIds(),
     ])
+  cron.marca("base")
   // accessibleIds === null → admin/gerente (vê a rede toda).
   // accessibleIds !== null → franqueado (só as lojas dele; allUnits já vem
   // pré-filtrado por getVisibleUnits).
@@ -227,6 +231,7 @@ export default async function Home({
     // Lojas do iFood que nunca pediram conexão — faixa "conectar".
     getPanoramaConexaoIfood(),
 ])
+  cron.marca("avisos")
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
   // nº de lojas filtradas.
@@ -363,6 +368,7 @@ export default async function Home({
     vrByUnit,
     monthlyPeriodo,
   ] = await fase2aP
+  cron.marca("resumos")
 
   // Troca o mensal do mês corrente pelo mensal do PERÍODO, antes de qualquer
   // conta. Tudo que lê `u.monthly` daqui pra frente — promoções, Cardápio Web,
@@ -414,6 +420,7 @@ export default async function Home({
     networkTopItemsKeeta,
     networkAvaliacoesKeeta,
   ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
+  cron.marca("rede")
 
   // Cesta dos pedidos cancelados no iFood (escopo visível) — o card
   // "Faturamento Bruto" mostra o total COM cancelados ("Valor das vendas" do
@@ -431,6 +438,7 @@ export default async function Home({
     for (const u of unitsToShow)
       cancelCestaTotal += cestaByUnit.get(u.id)?.valor ?? 0
   }
+  cron.marca("cesta")
 
   // Vitrine por loja (tabela/detalhe): o faturamento exibido também é o TOTAL
   // com cancelados. Ticket/margem já foram derivados na base válida.
@@ -670,6 +678,7 @@ export default async function Home({
 
   // Primeiros passos (onboarding guiado) — some quando os 3 passos estão feitos.
   const onboarding = await getOnboardingProgress()
+  cron.marca("onboarding")
 
   // Setas do herói: variação vs o MESMO período do mês passado (mês corrente até
   // hoje × mês passado nos mesmos dias). Só quando o filtro é um mês inteiro.
@@ -738,6 +747,7 @@ export default async function Home({
       mediaDia: pct(ratio(c.p, corte), ratio(pr.p, cortePrev)),
     }
   }
+  cron.marca("deltas")
 
   // Cobertura por plataforma nos cards: mostra as 3, apagando a que não tem
   // dado no período — dá pra ver num relance se todas entraram.
@@ -831,6 +841,13 @@ export default async function Home({
         plat: p.id,
       })),
   ]
+
+  cron.fim({
+    lojas: activeUnitIds.length,
+    periodo: `${year}-${String(month).padStart(2, "0")}`,
+    mesInteiro: isFullMonth ? 1 : 0,
+    escopo: isScoped ? "loja" : "rede",
+  })
 
   return (
     <div data-dashboard-root className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
