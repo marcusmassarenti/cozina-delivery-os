@@ -66,6 +66,47 @@ function soDigitos(v: string | null | undefined): string {
   return (v ?? "").replace(/\D/g, "")
 }
 
+/**
+ * IDENTIDADE PELO `corporateName` — resolve o caso que a conciliação não resolve.
+ *
+ * O problema original: o CNPJ do merchant só existia dentro da conciliação, e
+ * loja recém-conectada não tem extrato. Ou seja, o dado que identifica a loja
+ * só aparece DEPOIS que ela fatura — justamente quando não precisamos mais.
+ * Duas lojas da DG Foods ficaram semanas presas nisso.
+ *
+ * Descoberto em 03/ago/26 medindo a resposta real da API: o `corporateName` da
+ * LISTA de merchants (sem chamada extra, sem depender de faturamento) traz a
+ * identidade de dois jeitos:
+ *
+ *   1. MEI / firma individual → a RAIZ do CNPJ vem no texto:
+ *      "58.654.266 PAMELA PEREIRA MARTINS" → 58654266
+ *   2. LTDA → o texto é a RAZÃO SOCIAL, idêntica à que importamos da Receita:
+ *      "CASA DO PAO PARQUE SAO VICENTE LTDA"
+ *
+ * Validado contra os 62 vínculos que já existiam e estão certos:
+ * **39 acertos, 0 erros, 23 abstenções**.
+ *
+ * ⚠️ A unicidade tem que valer nos DOIS LADOS. Testando só o lado do merchant,
+ * duas lojas de mesma razão social (Kawaii Poke e Santo Peixe) apontaram para o
+ * MESMO merchant — dois vínculos errados. Vincular errado mistura o faturamento
+ * de dois clientes e ninguém percebe até fechar o mês, então na dúvida NÃO
+ * vincula: cai pro caminho antigo e, se ainda assim não der, pro humano.
+ */
+const RAIZ_NO_NOME = /(\d{2}\.\d{3}\.\d{3})/
+
+function raizDoCorporateName(s: string | null | undefined): string {
+  const m = RAIZ_NO_NOME.exec(s ?? "")
+  return m ? soDigitos(m[1]) : ""
+}
+
+function normRazao(s: string | null | undefined): string {
+  return (s ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+}
+
 /** YYYY-MM do mês corrente e do anterior (onde procurar extrato). */
 function competenciasParaSondar(): string[] {
   const d = new Date()
@@ -260,7 +301,11 @@ export async function autoLinkIfoodMerchants(
   //    O `cnpj` do pedido é a chave de VERIFICAÇÃO (ver validação abaixo).
   let reqQ = admin
     .from("ifood_activation_requests")
-    .select("unit_id, status, cnpj, units!inner(id, code, name)")
+    // razao_social vem junto: é uma das duas chaves de identidade pelo
+    // `corporateName` do merchant (ver raizDoCorporateName).
+    .select(
+      "unit_id, status, cnpj, units!inner(id, code, name, razao_social)",
+    )
     .in("status", ["pendente", "solicitada"])
   if (restrictUnitIds) reqQ = reqQ.in("unit_id", restrictUnitIds)
   const { data: reqs, error: e1 } = await reqQ
@@ -278,7 +323,13 @@ export async function autoLinkIfoodMerchants(
   const abertas = ((reqs ?? []) as unknown as {
     unit_id: string
     cnpj: string | null
-    units: { id: string; code: string; name: string }
+    units: {
+      id: string
+      code: string
+      name: string
+      /** Da Receita (import por CNPJ). Casa com o `corporateName` do merchant. */
+      razao_social: string | null
+    }
   }[]).filter((row) => !jaVinculados.has(row.unit_id))
 
   const vinculadas: AutoLinkResult["vinculadas"] = []
@@ -354,6 +405,51 @@ export async function autoLinkIfoodMerchants(
     pendentes.push(row)
   }
 
+  // Índices de identidade pelo `corporateName`, montados UMA vez por rodada.
+  // Guardam quantos merchants E quantas solicitações caem em cada chave: só
+  // vale quando é 1 de cada lado (ver raizDoCorporateName).
+  const merchantsPorRaiz = new Map<string, IfoodMerchant[]>()
+  const merchantsPorRazao = new Map<string, IfoodMerchant[]>()
+  for (const m of candidatos) {
+    if (usados.has(m.id)) continue
+    const raiz = raizDoCorporateName(m.corporateName)
+    if (raiz) merchantsPorRaiz.set(raiz, [...(merchantsPorRaiz.get(raiz) ?? []), m])
+    const rz = normRazao(m.corporateName)
+    if (rz) merchantsPorRazao.set(rz, [...(merchantsPorRazao.get(rz) ?? []), m])
+  }
+  const pedidosPorRaiz = new Map<string, number>()
+  const pedidosPorRazao = new Map<string, number>()
+  for (const row of pendentes) {
+    const c = soDigitos(row.cnpj)
+    if (c.length === 14) {
+      const k = c.slice(0, 8)
+      pedidosPorRaiz.set(k, (pedidosPorRaiz.get(k) ?? 0) + 1)
+    }
+    const rz = normRazao(row.units.razao_social)
+    if (rz) pedidosPorRazao.set(rz, (pedidosPorRazao.get(rz) ?? 0) + 1)
+  }
+
+  /** Merchant identificado sem custo, ou null se houver qualquer dúvida. */
+  function porCorporateName(row: (typeof pendentes)[number]): {
+    m: IfoodMerchant
+    via: string
+  } | null {
+    const c = soDigitos(row.cnpj)
+    if (c.length === 14) {
+      const k = c.slice(0, 8)
+      const ms = merchantsPorRaiz.get(k)
+      if (ms?.length === 1 && pedidosPorRaiz.get(k) === 1)
+        return { m: ms[0], via: "raiz do CNPJ no nome empresarial" }
+    }
+    const rz = normRazao(row.units.razao_social)
+    if (rz) {
+      const ms = merchantsPorRazao.get(rz)
+      if (ms?.length === 1 && pedidosPorRazao.get(rz) === 1)
+        return { m: ms[0], via: "razão social idêntica" }
+    }
+    return null
+  }
+
   // Compartilhado por todas as solicitações desta rodada.
   const sondadosAgora = new Set<string>()
   let processadas = 0
@@ -369,6 +465,25 @@ export async function autoLinkIfoodMerchants(
         motivo: "Solicitação sem CNPJ válido — não dá pra verificar.",
       })
       continue
+    }
+
+    // PRIMEIRO o caminho de graça: identidade pelo `corporateName`. Resolve a
+    // loja recém-conectada, que não tem extrato e por isso nunca fecharia pelo
+    // CNPJ. Só decide quando é inequívoco nos dois lados.
+    const direto = porCorporateName(row)
+    if (direto && !usados.has(direto.m.id)) {
+      const ok = await fechar(
+        row,
+        direto.m.id,
+        coberturaNome(row.units.name, direto.m),
+        cnpjPedido,
+      )
+      if (ok) {
+        console.log(
+          `[auto-link] ${row.units.name} → ${direto.m.name} (${direto.via})`,
+        )
+        continue
+      }
     }
 
     // Ordena candidatos por cobertura de nome: o nome NÃO decide, só define
