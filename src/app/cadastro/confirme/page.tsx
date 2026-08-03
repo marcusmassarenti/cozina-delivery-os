@@ -13,10 +13,13 @@ export const metadata = {
 export default async function ConfirmePage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string }>
+  searchParams: Promise<{ email?: string; reenviado?: string }>
 }) {
   const sp = await searchParams
   const email = (sp.email ?? "").trim()
+  // Veio de um cadastro repetido: a conta já existia sem confirmar e mandamos
+  // um link NOVO. Sem dizer isso, a pessoa acha que caiu na tela errada.
+  const reenviado = sp.reenviado === "1"
   // Sem e-mail no link → veio de fora do fluxo; manda pro cadastro.
   if (!email) redirect("/cadastro")
 
@@ -39,6 +42,15 @@ export default async function ConfirmePage({
         </div>
 
         <h1 className="mt-4 text-xl font-semibold">Confirme seu e-mail</h1>
+
+        {reenviado && (
+          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
+            Você já tinha começado um cadastro com esse e-mail e ele ainda não
+            tinha sido confirmado. <strong>Mandamos um link novo</strong> — o
+            anterior já não vale. Sua conta e seus dados continuam os mesmos.
+          </p>
+        )}
+
         <p className="mt-2 text-sm text-muted-foreground">
           Enviamos um link de confirmação para{" "}
           <span className="font-medium text-foreground">{email}</span>. Clique

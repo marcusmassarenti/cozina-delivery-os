@@ -80,12 +80,20 @@ export async function signUp(
   if (signUpErr) {
     const code = signUpErr.code ?? ""
     const m = signUpErr.message.toLowerCase()
+    // SEMPRE loga: em 03/ago um cliente ficou dias sem conseguir entrar e o
+    // erro real (SMTP recusando credencial, 535) só apareceu no log do Supabase
+    // porque aqui a gente devolvia "tenta de novo" sem registrar nada.
+    console.error(
+      `[cadastro] signUp falhou · code=${code || "(vazio)"} · status=${
+        signUpErr.status ?? "?"
+      } · ${signUpErr.message}`,
+    )
     if (
       code === "user_already_exists" ||
       m.includes("already") ||
       m.includes("registered")
     )
-      return { ok: false, message: "Esse e-mail já tem conta. Faça login." }
+      return await jaTemConta(supabase, email, origin)
     if (code === "weak_password" || m.includes("weak") || m.includes("leaked"))
       return {
         ok: false,
@@ -99,17 +107,26 @@ export async function signUp(
         ok: false,
         message: "Muitas tentativas agora. Espera um minuto e tenta de novo.",
       }
+    // 500 do Supabase = falha NOSSA (foi assim que o SMTP recusado derrubou o
+    // cadastro por dias). Não mandar o cliente "tentar de novo": tentar de novo
+    // não conserta, e ele fica achando que errou alguma coisa.
+    if (code === "unexpected_failure" || (signUpErr.status ?? 0) >= 500)
+      return {
+        ok: false,
+        message:
+          "Nosso envio de e-mail está com problema — a falha é nossa, não sua. Já fomos avisados. Chame no WhatsApp que a gente libera seu acesso na hora.",
+      }
     return { ok: false, message: "Não foi possível criar a conta. Tenta de novo." }
   }
 
-  // Anti-enumeração do Supabase: se o e-mail já existe, devolve user com
-  // identities vazio. Tratamos como "já tem conta".
+  // Anti-enumeração do Supabase: e-mail já existente volta com identities
+  // vazio (sem erro). Mesmo tratamento do "já existe".
   if (
     signUpData.user &&
     Array.isArray(signUpData.user.identities) &&
     signUpData.user.identities.length === 0
   ) {
-    return { ok: false, message: "Esse e-mail já tem conta. Faça login." }
+    return await jaTemConta(supabase, email, origin)
   }
   const userId = signUpData.user?.id
   if (!userId)
@@ -166,6 +183,58 @@ export async function signUp(
     redirect("/inicio")
   }
   redirect(`/cadastro/confirme?email=${encodeURIComponent(email)}`)
+}
+
+/**
+ * E-mail já cadastrado — em vez de beco sem saída, REENVIA a confirmação.
+ *
+ * O caso real (03/ago/26): cliente se cadastrou em 27/jul, não confirmou a
+ * tempo, e o link venceu. Ao tentar de novo, ouvia "Esse e-mail já tem conta,
+ * faça login" — mas login ele não conseguia, justamente por não ter
+ * confirmado. Beco sem saída, e a única saída era APAGAR o usuário na mão.
+ *
+ * `resend` só funciona pra conta NÃO confirmada; em conta confirmada o
+ * Supabase devolve erro, e aí sim "faça login" é a resposta certa. Ou seja: a
+ * própria tentativa distingue os dois casos, sem precisar consultar o
+ * auth.users nem expor se o e-mail existe.
+ *
+ * Também não recria empresa/marca/acesso: eles já existem do cadastro
+ * anterior, e cadastrar de novo duplicaria tudo.
+ */
+async function jaTemConta(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  email: string,
+  origin: string,
+): Promise<SignUpState> {
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${origin}/auth/callback` },
+  })
+
+  if (!error) {
+    redirect(
+      `/cadastro/confirme?email=${encodeURIComponent(email)}&reenviado=1`,
+    )
+  }
+
+  const m = error.message.toLowerCase()
+  if ((error.code ?? "").includes("rate") || m.includes("rate limit"))
+    return {
+      ok: false,
+      message:
+        "Já mandamos um e-mail há pouco. Confira a caixa de entrada e o spam — se não achar, espera um minuto e tenta de novo.",
+    }
+  if ((error.status ?? 0) >= 500)
+    return {
+      ok: false,
+      message:
+        "Nosso envio de e-mail está com problema — a falha é nossa, não sua. Chame no WhatsApp que a gente libera seu acesso na hora.",
+    }
+  console.error(
+    `[cadastro] resend falhou · code=${error.code ?? "(vazio)"} · ${error.message}`,
+  )
+  return { ok: false, message: "Esse e-mail já tem conta. Faça login." }
 }
 
 /** Reenvia o e-mail de confirmação (botão na tela /cadastro/confirme). */
