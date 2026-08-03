@@ -24,6 +24,7 @@ import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-ban
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
 import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
+import { AvisosConvite } from "@/components/dashboard/avisos-convite"
 import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
 import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
@@ -1004,6 +1005,12 @@ export default async function Home({
           </span>
         </div>
       )}
+
+      {/* Convite pra ligar os avisos. O controle existia só em Minha conta →
+          Informações, onde ninguém passa: em 03/ago/26 o sistema INTEIRO tinha
+          uma assinatura de push (a do teste), com clientes usando o app todo
+          dia. Some sozinho quando a pessoa liga ou dispensa. */}
+      <AvisosConvite />
 
       {status.ok ? (
         <ImportCoverageBanner
