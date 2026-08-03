@@ -156,6 +156,10 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
     .select(
       "id, cnpj, status, status_anterior, nota, created_at, cliente_confirmou_at, lancado_no_portal_at, holdings(name), units(code, name)",
     )
+    // Arquivadas saem da FILA (o histórico continua no banco). Sem isso, uma
+    // recusa antiga ficava aqui pra sempre e o painel virava um cemitério
+    // misturado com o que de fato precisa de ação.
+    .neq("status", "arquivada")
     .order("created_at", { ascending: false })
     .limit(30)
   return (data ?? []).map((s) => {

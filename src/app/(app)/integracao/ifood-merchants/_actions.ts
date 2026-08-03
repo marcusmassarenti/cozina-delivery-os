@@ -375,7 +375,12 @@ export async function atualizarSolicitacaoIfood(
   const nota = String(formData.get("nota") ?? "").trim() || null
 
   if (!id) return { ok: false, error: "id ausente" }
-  if (!["pendente", "solicitada", "ativa", "recusada"].includes(status)) {
+  // "arquivada" = resolvida, sai da fila sem apagar (ver migration 0152).
+  if (
+    !["pendente", "solicitada", "ativa", "recusada", "arquivada"].includes(
+      status,
+    )
+  ) {
     return { ok: false, error: "status inválido" }
   }
 

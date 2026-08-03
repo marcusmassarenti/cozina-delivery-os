@@ -19,7 +19,8 @@ import {
 export type SolicitacaoAdmin = {
   id: string
   cnpj: string
-  status: "pendente" | "solicitada" | "ativa" | "recusada"
+  /** "arquivada" = resolvida; não chega aqui (a query da fila filtra fora). */
+  status: "pendente" | "solicitada" | "ativa" | "recusada" | "arquivada"
   nota: string | null
   holdingName: string
   unitLabel: string | null
@@ -199,6 +200,19 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
           {/* Recusada sempre pode voltar; sem histórico, volta pro início. */}
           {podeDesfazer && (
             <BotaoDesfazer id={s.id} para={s.statusAnterior ?? "pendente"} />
+          )}
+          {/* RESOLVER: tira da fila sem apagar. Antes, uma recusa só saía daqui
+              por "Desfazer" — que REABRE o pedido, o oposto do que se quer
+              quando o assunto acabou (loja que não usa iFood, CNPJ trocado,
+              duplicata). Sem isso a fila acumula pra sempre, e fila que
+              ninguém confia é fila que ninguém olha. */}
+          {jaRecusada && (
+            <form action={action}>
+              <input type="hidden" name="id" value={s.id} />
+              <input type="hidden" name="status" value="arquivada" />
+              <input type="hidden" name="nota" value={s.nota ?? ""} />
+              <BotaoStatus rotulo="Resolver" />
+            </form>
           )}
           {s.status === "pendente" && (
             <span className="text-[11px] text-muted-foreground">
