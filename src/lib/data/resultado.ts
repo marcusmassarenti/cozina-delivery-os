@@ -170,9 +170,13 @@ export async function getNetworkResultadoForMonth(
     // Recebido direto (dinheiro/PIX na entrega, só iFood): dinheiro que a loja
     // pegou fora do repasse. Não é taxa e conta como receita — mesma régua do
     // DRE detalhado. Sem isto, as taxas inflavam e o resultado subestimava.
-    const recebidoDireto = hasIfood
-      ? fin!.recebidoDireto
-      : monthlyM.platforms.find((p) => p.id === "ifood")?.recebidoDireto ?? 0
+    const recebidoDireto =
+      (hasIfood
+        ? fin!.recebidoDireto
+        : monthlyM.platforms.find((p) => p.id === "ifood")?.recebidoDireto ??
+          0) +
+      // 99 Food: dinheiro pago na porta também fica com a loja.
+      (has99 ? nine!.recebidoDireto : 0)
 
     let pedidos = 0
     if (hasIfood) pedidos += fin!.pedidosUnicos

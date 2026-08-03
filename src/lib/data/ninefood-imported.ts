@@ -77,11 +77,67 @@ export type NinefoodResumo = {
   ticketMedio: number
   /** Percentual líquido / bruto */
   pctLoja: number
+  /**
+   * Venda direta: pedido pago em DINHEIRO na porta, cujo valor fica no caixa
+   * da loja e não passa pelo repasse do 99.
+   *
+   * Confirmado pelo cliente (Diego, ago/26): o dinheiro fica com a loja e o 99
+   * cobra a comissão depois. Mesma natureza do `recebidoDireto` do iFood.
+   *
+   * Vem de `ninefood_pedidos` (não do diário agregado, que não separa forma de
+   * pagamento). Dois vocabulários convivem na coluna: a planilha grava o texto
+   * "Pagamento em dinheiro" e o webhook grava o código do `pay_method` da 99
+   * ("2" = dinheiro, documentado em src/lib/ninefood/pagamento.ts).
+   */
+  recebidoDireto: number
   /** True se há dados importados pra essa unidade/mês */
   hasData: boolean
 }
 
 // ─── getNinefoodResumoByUnits ────────────────────────────────────────
+
+/**
+ * Venda direta do 99: soma do que o cliente pagou em DINHEIRO na porta.
+ *
+ * Esse valor fica no caixa da loja e não passa pelo repasse — o 99 cobra a
+ * comissão depois (confirmado pelo cliente em ago/26). Sem contá-lo, o "% que
+ * fica na loja" do 99 aparece MENOR do que é, exatamente o problema que o
+ * cliente apontou no iFood.
+ *
+ * Aceita os dois vocabulários da coluna: o texto da planilha e o código do
+ * `pay_method` que o webhook grava cru ("2" = dinheiro).
+ */
+async function getNinefoodVendaDiretaByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (unitIds.length === 0) return out
+  const admin = createAdminClient()
+  const rows = await fetchAllRows<{
+    unit_id: string
+    receita_vendas: number | string | null
+  }>((from, to) => {
+    let q = admin
+      .from("ninefood_pedidos")
+      .select("unit_id, receita_vendas")
+      .in("unit_id", unitIds)
+      .in("forma_pagamento", ["Pagamento em dinheiro", "2"])
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    return q.order("id").range(from, to)
+  }, "ninefood:venda-direta")
+  for (const r of rows) {
+    out.set(
+      r.unit_id,
+      (out.get(r.unit_id) ?? 0) + (Number(r.receita_vendas) || 0),
+    )
+  }
+  return out
+}
 
 export async function getNinefoodResumoByUnits(
   unitIds: string[],
@@ -93,6 +149,12 @@ export async function getNinefoodResumoByUnits(
   if (unitIds.length === 0) return out
 
   const admin = createAdminClient()
+  const diretoByUnit = await getNinefoodVendaDiretaByUnits(
+    unitIds,
+    year,
+    month,
+    dateRange,
+  )
   // Pagina: ninefood_daily_loja é 1 linha por loja por dia; com a rede
   // crescendo (~35 lojas × 30 dias = 1050) passa do cap de 1000 do Supabase e
   // descartaria dias silenciosamente. fetchAllRows + .order('id') resolve.
@@ -206,6 +268,7 @@ export async function getNinefoodResumoByUnits(
       diasComDados: acc.dias.size,
       ticketMedio,
       pctLoja,
+      recebidoDireto: diretoByUnit.get(unitId) ?? 0,
       hasData: acc.bruto > 0 || acc.pedidos > 0,
     })
   }
@@ -317,6 +380,11 @@ async function deriveNinefoodFromApiBill(
     const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
     const pctLoja = acc.bruto > 0 ? (acc.liquido / acc.bruto) * 100 : 0
     out.set(unitId, {
+      // 0 de propósito: este é o caminho do extrato da API, que não separa
+      // forma de pagamento por pedido. Loja só-API fica sem venda direta até
+      // o relatório de pedidos ser importado — melhor zero declarado aqui do
+      // que um número derivado de dado que a fonte não tem.
+      recebidoDireto: 0,
       pedidos: acc.pedidos,
       bruto: acc.bruto,
       liquido: acc.liquido,
@@ -350,6 +418,7 @@ export async function getNinefoodResumoForMonth(
   const batch = await getNinefoodResumoByUnits([unitId], year, month, dateRange)
   return (
     batch.get(unitId) ?? {
+      recebidoDireto: 0,
       pedidos: 0,
       bruto: 0,
       liquido: 0,

@@ -416,7 +416,17 @@ export async function getRealMonthlyForUnits(
         ifoodRecebidoDireto,
         ifoodPromoLoja,
       ),
-      platformBreakdown("99food", "99 Food", nineBruto, nineLiquido, 0, ninePromoLoja),
+      platformBreakdown(
+        "99food",
+        "99 Food",
+        nineBruto,
+        nineLiquido,
+        // Dinheiro pago na porta fica no caixa da loja (confirmado pelo
+        // cliente). Era 0 fixo aqui, e o 99 aparecia entregando menos do que
+        // entrega — o mesmo defeito que o cliente apontou no iFood.
+        nine?.recebidoDireto ?? 0,
+        ninePromoLoja,
+      ),
       platformBreakdown("keeta", "Keeta", keetaBruto, keetaLiquido, 0, keetaPromoLoja),
       // recebidoDireto FICA ZERO de propósito. No iFood esse campo é o
       // dinheiro/PIX pago na entrega, que NÃO está no líquido da Conciliação

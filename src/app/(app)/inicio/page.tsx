@@ -1794,6 +1794,10 @@ function networkTotalsMerged(
     }
 
     if (inc("99food")) {
+      // Dinheiro pago na porta no 99 também fica com a loja (confirmado pelo
+      // cliente). Fica FORA do `if (hasData)` de propósito: vem de outra
+      // fonte (relatório de pedidos) que pode existir sem o diário.
+      recebidoDiretoRede += nineImp?.recebidoDireto ?? 0
       if (nineImp?.hasData) {
         pedidos += nineImp.pedidos
         bruto += nineImp.bruto
@@ -1947,11 +1951,16 @@ function mergeUnitMonthlyForDashboard(
       }
     }
     if (p.id === "99food" && has99) {
+      const recDir99 = nine!.recebidoDireto
       return {
         ...p,
         bruto: nine!.bruto,
         liquido: nine!.liquido,
-        pctLoja: nine!.pctLoja,
+        recebidoDireto: recDir99,
+        pctLoja:
+          nine!.bruto > 0
+            ? ((nine!.liquido + recDir99) / nine!.bruto) * 100
+            : 0,
       }
     }
     if (p.id === "keeta" && hasKeeta) {
