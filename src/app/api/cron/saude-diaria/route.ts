@@ -45,15 +45,16 @@ export async function GET(req: Request) {
         agora.getMonth() + 1,
       )
       conferencia = linhas
-        // Só as que têm DIA faltando. Diferença só de valor entra na fase de
-        // calibragem depois — começar por ela encheria o e-mail de ruído.
-        .filter((l) => l.diasSoNaApi.length > 0 || l.diasSoNaPlanilha.length > 0)
+        // Só o MIOLO do mês. Faltante na borda é pedido da virada, com o
+        // evento financeiro na competência vizinha — em julho/26 isso era
+        // 100% dos faltantes, e alarmar por ele seria ruído puro.
+        .filter((l) => l.soApiMiolo > 0 || l.soPlanilhaMiolo > 0)
         .slice(0, 25)
         .map((l) => ({
           clienteNome: l.clienteNome,
           unitCode: l.unitCode,
           unitName: l.unitName,
-          plataforma: l.plataforma === "ifood" ? "iFood" : "99 Food",
+          plataforma: "iFood",
           pedidosApi: l.pedidosApi,
           pedidosPlanilha: l.pedidosPlanilha,
           provavelMotivo: l.provavelMotivo,

@@ -3,16 +3,21 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 /**
- * Conferência entre as duas fontes do mesmo pedido (API × planilha).
+ * Conferência entre as duas fontes do mesmo pedido do iFood: a Conciliação que
+ * o cliente sobe e os Financial Events que puxamos pela API.
  *
- * NÃO julga: mede e devolve os dois lados. O corte do que é "divergência de
- * verdade" ainda não existe de propósito — vamos olhar a distribuição real na
- * base antes de escolher o limiar, em vez de eu chutar um número e calibrar o
- * alarme pelo palpite.
+ * As duas nunca foram comparadas. A única vez que a comparação foi feita à mão
+ * achou dois dias inteiros faltando no arquivo do cliente.
  *
- * Existe porque as duas fontes nunca foram comparadas, e a única vez que a
- * comparação foi feita — à mão — achou dois dias inteiros faltando na planilha
- * do cliente (2.832 pedidos na API contra 2.579 no arquivo).
+ * A comparação é POR NÚMERO DO PEDIDO, não por dia — as duas fontes datam o
+ * mesmo pedido de formas diferentes (a Conciliação usa a data do evento
+ * financeiro, que empurra o pedido de domingo pra segunda). O detalhe está na
+ * migration 0149, junto do que a verificação reprovou.
+ *
+ * 99 Food está de fora: os identificadores casam em quase toda a base, mas em
+ * algumas lojas nenhum casa com os totais diários batendo exato — sinal de
+ * vínculo `app_shop_id → loja` errado, não de pedido faltando. Incluir hoje
+ * geraria alarme falso.
  */
 
 export type ConferenciaLinha = {
@@ -20,61 +25,53 @@ export type ConferenciaLinha = {
   unitCode: string
   unitName: string
   clienteNome: string
-  plataforma: "ifood" | "99food"
   pedidosApi: number
   pedidosPlanilha: number
-  valorApi: number
-  valorPlanilha: number
-  /** Dias com pedido na API e NENHUM na planilha. O caso que mais acontece. */
-  diasSoNaApi: string[]
-  /** Dias com pedido na planilha e nenhum na API. Raro — merece olhar. */
-  diasSoNaPlanilha: string[]
-  /** Diferença de valor em % sobre o maior dos dois lados. */
-  diffValorPct: number
-  /** Leitura provável, pra não obrigar ninguém a interpretar número cru. */
+  /** A API tem e a planilha não, no MIOLO do mês. É isto que merece alarme. */
+  soApiMiolo: number
+  /** A planilha tem e a API não, no miolo. Sugere sync parado nessa loja. */
+  soPlanilhaMiolo: number
+  /** Faltantes no 1º/último dia — evento financeiro na competência vizinha. */
+  soApiBorda: number
+  soPlanilhaBorda: number
+  primeiroDiaFaltante: string | null
   provavelMotivo: string
 }
 
 type Row = {
   unit_id: string
-  plataforma: "ifood" | "99food"
-  dia: string
   pedidos_api: number
   pedidos_planilha: number
-  valor_api: number | string
-  valor_planilha: number | string
+  so_api_miolo: number
+  so_planilha_miolo: number
+  so_api_borda: number
+  so_planilha_borda: number
+  primeiro_dia_faltante: string | null
 }
 
 /**
- * Explica a diferença em uma frase.
+ * Traduz os números numa frase acionável.
  *
- * A ordem importa: "planilha subida antes do fim do mês" tem que ser testada
- * ANTES de "arquivo incompleto", senão o caso mais comum e mais inofensivo
- * seria rotulado como o mais grave — e um alerta que exagera é um alerta que
- * as pessoas param de ler.
+ * A ordem dos testes importa: "planilha baixada antes do mês fechar" vem ANTES
+ * de "arquivo incompleto". O caso mais comum é também o mais inofensivo, e um
+ * alerta que exagera é um alerta que as pessoas param de ler.
  */
-function explicar(
-  diasSoNaApi: string[],
-  diasSoNaPlanilha: string[],
-  diffPct: number,
-  ultimoDiaDoMes: number,
-): string {
-  if (diasSoNaApi.length === 0 && diasSoNaPlanilha.length === 0) {
-    if (diffPct < 1) return "Fecham. Diferença abaixo de 1%."
-    return `Mesmos dias nas duas fontes, mas ${diffPct.toFixed(1)}% de diferença no valor.`
-  }
+function explicar(l: ConferenciaLinha, ultimoDia: number): string {
+  if (l.soApiMiolo === 0 && l.soPlanilhaMiolo === 0) return "Fecham."
 
-  if (diasSoNaApi.length > 0) {
-    const nums = diasSoNaApi.map((d) => Number(d.slice(8, 10))).sort((a, b) => a - b)
-    const ehFinal = nums[nums.length - 1] >= ultimoDiaDoMes - 2
-    const sequencia = nums[nums.length - 1] - nums[0] === nums.length - 1
-    if (ehFinal && sequencia) {
-      return `Planilha provavelmente baixada antes do mês fechar — faltam os dias ${nums.join(", ")}.`
+  if (l.soApiMiolo > 0) {
+    const dia = l.primeiroDiaFaltante
+      ? Number(l.primeiroDiaFaltante.slice(8, 10))
+      : null
+    if (dia !== null && dia >= ultimoDia - 3) {
+      return `${l.soApiMiolo} pedido(s) que a API tem não estão na planilha, a partir do dia ${dia} — provavelmente o arquivo foi baixado antes do mês fechar.`
     }
-    return `Faltam ${nums.length} dia(s) na planilha (${nums.join(", ")}) que a API tem.`
+    return `${l.soApiMiolo} pedido(s) que a API tem não estão na planilha${
+      dia !== null ? `, o primeiro no dia ${dia}` : ""
+    }.`
   }
 
-  return `A planilha tem ${diasSoNaPlanilha.length} dia(s) que a API não trouxe — vale checar se o sync está rodando nessa loja.`
+  return `${l.soPlanilhaMiolo} pedido(s) da planilha não vieram pela API — vale checar se o sync está rodando nesta loja.`
 }
 
 export async function conferirFontes(
@@ -83,20 +80,20 @@ export async function conferirFontes(
 ): Promise<ConferenciaLinha[]> {
   const admin = createAdminClient()
 
-  const { data, error } = await admin.rpc("conferencia_fontes_por_dia", {
+  const { data, error } = await admin.rpc("conferencia_fontes_ifood", {
     p_year: year,
     p_month: month,
   })
   if (error) {
-    // Erro aqui NÃO pode virar "nenhuma divergência" — silêncio seria lido
-    // como "está tudo certo", que é o oposto do que aconteceu.
+    // Erro aqui NÃO pode virar "nenhuma divergência": silêncio seria lido como
+    // "está tudo certo", que é o oposto do que aconteceu.
     throw new Error(`conferirFontes: ${error.message}`)
   }
 
   const rows = (data ?? []) as Row[]
   if (rows.length === 0) return []
 
-  // Nome da loja e do cliente pra mensagem ser acionável ("qual cliente, qual
+  // Nome do cliente e da loja pra mensagem ser acionável ("qual cliente, qual
   // loja") em vez de devolver um uuid.
   const unitIds = [...new Set(rows.map((r) => r.unit_id))]
   const { data: units } = await admin
@@ -117,67 +114,32 @@ export async function conferirFontes(
     }),
   )
 
-  const ultimoDiaDoMes = new Date(year, month, 0).getDate()
-  const porChave = new Map<string, ConferenciaLinha>()
+  const ultimoDia = new Date(year, month, 0).getDate()
 
-  for (const r of rows) {
-    const chave = `${r.unit_id}|${r.plataforma}`
+  const saida = rows.map((r) => {
     const m = meta.get(r.unit_id)
-    let l = porChave.get(chave)
-    if (!l) {
-      l = {
-        unitId: r.unit_id,
-        unitCode: m?.code ?? "?",
-        unitName: m?.name ?? "(loja)",
-        clienteNome: m?.cliente ?? "(cliente)",
-        plataforma: r.plataforma,
-        pedidosApi: 0,
-        pedidosPlanilha: 0,
-        valorApi: 0,
-        valorPlanilha: 0,
-        diasSoNaApi: [],
-        diasSoNaPlanilha: [],
-        diffValorPct: 0,
-        provavelMotivo: "",
-      }
-      porChave.set(chave, l)
+    const l: ConferenciaLinha = {
+      unitId: r.unit_id,
+      unitCode: m?.code ?? "?",
+      unitName: m?.name ?? "(loja)",
+      clienteNome: m?.cliente ?? "(cliente)",
+      pedidosApi: r.pedidos_api,
+      pedidosPlanilha: r.pedidos_planilha,
+      soApiMiolo: r.so_api_miolo,
+      soPlanilhaMiolo: r.so_planilha_miolo,
+      soApiBorda: r.so_api_borda,
+      soPlanilhaBorda: r.so_planilha_borda,
+      primeiroDiaFaltante: r.primeiro_dia_faltante,
+      provavelMotivo: "",
     }
-    l.pedidosApi += r.pedidos_api
-    l.pedidosPlanilha += r.pedidos_planilha
-    l.valorApi += Number(r.valor_api) || 0
-    l.valorPlanilha += Number(r.valor_planilha) || 0
-    if (r.pedidos_api > 0 && r.pedidos_planilha === 0) l.diasSoNaApi.push(r.dia)
-    if (r.pedidos_planilha > 0 && r.pedidos_api === 0)
-      l.diasSoNaPlanilha.push(r.dia)
-  }
+    l.provavelMotivo = explicar(l, ultimoDia)
+    return l
+  })
 
-  const saida: ConferenciaLinha[] = []
-  for (const l of porChave.values()) {
-    // Só compara quem tem AS DUAS fontes. Loja que só sobe planilha (ou que só
-    // tem API) apareceria como 100% divergente — e uma lista cheia de falso
-    // positivo é uma lista que ninguém abre na segunda semana.
-    if (l.pedidosApi === 0 || l.pedidosPlanilha === 0) continue
-
-    const maior = Math.max(l.valorApi, l.valorPlanilha)
-    l.diffValorPct =
-      maior > 0 ? (Math.abs(l.valorApi - l.valorPlanilha) / maior) * 100 : 0
-    l.diasSoNaApi.sort()
-    l.diasSoNaPlanilha.sort()
-    l.provavelMotivo = explicar(
-      l.diasSoNaApi,
-      l.diasSoNaPlanilha,
-      l.diffValorPct,
-      ultimoDiaDoMes,
-    )
-    saida.push(l)
-  }
-
-  // Maior diferença primeiro — é por onde a leitura começa.
+  // Maior divergência primeiro — é por onde a leitura começa.
   saida.sort(
     (a, b) =>
-      b.diasSoNaApi.length + b.diasSoNaPlanilha.length -
-        (a.diasSoNaApi.length + a.diasSoNaPlanilha.length) ||
-      b.diffValorPct - a.diffValorPct,
+      b.soApiMiolo + b.soPlanilhaMiolo - (a.soApiMiolo + a.soPlanilhaMiolo),
   )
   return saida
 }
