@@ -118,7 +118,26 @@ export default async function LoginPage({
 
             <LoginForm />
 
-            <p className="mt-8 text-center text-[11px] leading-relaxed text-muted-foreground">
+            {/* Caminho pro cadastro. O /cadastro sempre teve "Já tem conta?
+                Entrar", mas o login não tinha o inverso — e é aqui que a maioria
+                cai, porque o link do login é o que circula. Quem chegava sem
+                conta ficava sem saída visível: ou adivinhava a URL, ou desistia. */}
+            <div className="mt-7 border-t pt-5 text-center">
+              <p className="text-sm text-muted-foreground">
+                É novo por aqui?{" "}
+                <Link
+                  href="/cadastro"
+                  className="font-medium text-primary hover:underline"
+                >
+                  Criar minha conta
+                </Link>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                7 dias grátis, sem cartão de crédito.
+              </p>
+            </div>
+
+            <p className="mt-6 text-center text-[11px] leading-relaxed text-muted-foreground">
               Ao acessar, você concorda com os{" "}
               <Link href="/termos" className="underline hover:text-foreground">
                 Termos de Uso
