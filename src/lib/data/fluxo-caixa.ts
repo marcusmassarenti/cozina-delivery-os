@@ -2,7 +2,6 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
-import { fetchAllRows } from "@/lib/data/paginate"
 import {
   getAccountsWithBalance,
   getCaixaHoldingId,
@@ -167,38 +166,37 @@ export async function getFluxoCaixa(
 
     // iFood: sem status por linha, então só o que ainda VAI cair
     // (data_repasse_esperada >= hoje). valor = líquido (impacto_no_repasse).
-    // PAGINADO. Sem isso o PostgREST devolvia as 1.000 primeiras linhas e
-    // pronto: em 01/08/26 o horizonte de 30 dias tinha 116.497 linhas somando
-    // R$ 754.737,88, e a tela mostrava ~R$ 4.936 — 0,65% do valor. Pior: sem
-    // `order`, quais 1.000 linhas voltavam era decisão do planner, então o
-    // numero mudava entre dois F5 sem nada ter mudado. E o saldo projetado
-    // ficava artificialmente negativo, sugerindo aperto de caixa inexistente.
+    //
+    // SOMADO NO BANCO (migration 0150). Duas armadilhas já caíram aqui:
+    //
+    // 1. Sem paginar, o PostgREST devolvia as 1.000 primeiras linhas e pronto:
+    //    em 01/08/26 o horizonte tinha 116.497 linhas somando R$ 754.737,88 e
+    //    a tela mostrava ~R$ 4.936 (0,65%). Sem `order`, quais 1.000 voltavam
+    //    era decisão do planner, então o número mudava entre dois F5.
+    // 2. Paginar corrigiu o valor e criou lentidão: 126.761 linhas em 03/08/26
+    //    viravam 127 requisições sequenciais -- para produzir 5 números, já que
+    //    o período tem só 5 dias distintos de repasse. A tela ficava no
+    //    esqueleto de carregamento tempo suficiente pra parecer quebrada.
+    //
+    // A tabela tem 779 mil linhas e cresce a cada importação, então trazer
+    // linha crua pra somar em JS não escala. A função devolve uma por dia.
     const unitsFiltro = du.units
       ? du.units.length
         ? du.units
         : ["00000000-0000-0000-0000-000000000000"]
       : null
-    const ifood = await fetchAllRows<{
-      data_repasse_esperada: string | null
-      valor: number | string | null
-      unit_id: string
-    }>((from, to) => {
-      let q = admin
-        .from("ifood_financeiro_lancamentos")
-        .select("data_repasse_esperada, valor, unit_id")
-        .eq("impacto_no_repasse", true)
-        .gte("data_repasse_esperada", today)
-        .lte("data_repasse_esperada", end)
-      if (unitsFiltro) q = q.in("unit_id", unitsFiltro)
-      return q.order("id").range(from, to)
-    }, "fluxo-caixa:ifood")
-    const byDay = new Map<string, number>()
-    for (const r of ifood ?? []) {
-      const d = r.data_repasse_esperada as string | null
-      if (!d) continue
-      byDay.set(d, (byDay.get(d) ?? 0) + Number(r.valor ?? 0))
+    const { data: porDia, error: errRepasse } = await admin.rpc(
+      "fluxo_caixa_repasses_ifood",
+      { p_inicio: today, p_fim: end, p_unit_ids: unitsFiltro },
+    )
+    // Erro aqui não pode virar "nenhum repasse previsto": o saldo projetado
+    // ficaria falsamente apertado, que é pior do que a tela não abrir.
+    if (errRepasse)
+      throw new Error(`fluxo-caixa: repasses do iFood — ${errRepasse.message}`)
+    for (const r of (porDia ?? []) as { dia: string; total: number | string }[]) {
+      const v = Number(r.total ?? 0)
+      if (v > 0) at(r.dia).entDelivery += v
     }
-    for (const [d, v] of byDay) if (v > 0) at(d).entDelivery += v
   }
 
   // 4) Série diária com saldo corrido.
