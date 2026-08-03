@@ -203,6 +203,42 @@ export default async function Home({
     ? allUnits.filter((u) => unidadesFilter.has(u.code))
     : allUnits
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
+
+  // Setas do herói: variação vs o MESMO período do mês passado. São duas
+  // agregações caras que não dependem de mais nada além das lojas ativas — e
+  // ficavam paradas no fim da página, esperando todo o resto terminar.
+  //
+  // Medido em produção (13 lojas): custavam de 1,5 s a 6,7 s de espera pura,
+  // até 61% do tempo total da página, só pra desenhar as setinhas de variação.
+  // Disparadas aqui, correm junto com os resumos e a rede e somem do caminho
+  // crítico. É a mesma técnica que já deixa a fase `rede` em zero (earlyNetworkP).
+  const p2 = (n: number) => String(n).padStart(2, "0")
+  const hojeBR = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+  const [hY, hM, hD] = hojeBR.split("-").map(Number)
+  const corte =
+    hY === year && hM === month ? hD : new Date(year, month, 0).getDate()
+  const prevM = month === 1 ? 12 : month - 1
+  const prevY = month === 1 ? year - 1 : year
+  const cortePrev = Math.min(corte, new Date(prevY, prevM, 0).getDate())
+  const heroDeltasP =
+    isFullMonth && activeUnitIds.length > 0
+      ? Promise.all([
+          getRealMonthlyForUnits(activeUnitIds, year, month, {
+            start: `${year}-${p2(month)}-01`,
+            end: `${year}-${p2(month)}-${p2(corte)}`,
+          }),
+          getRealMonthlyForUnits(activeUnitIds, prevY, prevM, {
+            start: `${prevY}-${p2(prevM)}-01`,
+            end: `${prevY}-${p2(prevM)}-${p2(cortePrev)}`,
+          }),
+        ])
+      : null
+
   // Plataformas habilitadas do tenant (só essas na cobertura) + se o sync via
   // API está ligado (SaaS: só importação manual → sem botões de Sincronizar).
   const [
@@ -697,30 +733,9 @@ export default async function Home({
     repasse: null,
     mediaDia: null,
   }
-  if (isFullMonth && activeUnitIds.length > 0) {
-    const hojeBR = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date())
-    const [hY, hM, hD] = hojeBR.split("-").map(Number)
-    const ehMesCorrente = hY === year && hM === month
-    const corte = ehMesCorrente ? hD : new Date(year, month, 0).getDate()
-    const prevM = month === 1 ? 12 : month - 1
-    const prevY = month === 1 ? year - 1 : year
-    const cortePrev = Math.min(corte, new Date(prevY, prevM, 0).getDate())
-    const p2 = (n: number) => String(n).padStart(2, "0")
-    const [curMap, prevMap] = await Promise.all([
-      getRealMonthlyForUnits(activeUnitIds, year, month, {
-        start: `${year}-${p2(month)}-01`,
-        end: `${year}-${p2(month)}-${p2(corte)}`,
-      }),
-      getRealMonthlyForUnits(activeUnitIds, prevY, prevM, {
-        start: `${prevY}-${p2(prevM)}-01`,
-        end: `${prevY}-${p2(prevM)}-${p2(cortePrev)}`,
-      }),
-    ])
+  if (heroDeltasP) {
+    // Já disparado lá em cima, junto com os resumos — aqui é só colher.
+    const [curMap, prevMap] = await heroDeltasP
     const agg = (map: Map<string, { faturamentoBruto: number; faturamentoLiquido: number; pedidos: number }>) => {
       let b = 0
       let l = 0
