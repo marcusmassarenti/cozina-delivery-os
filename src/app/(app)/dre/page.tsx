@@ -244,7 +244,7 @@ export default async function ResultadoPage({
                 totals.bruto > 0
                   ? (totals.totalLiquido / totals.bruto) * 100
                   : 0,
-              )} do bruto · com recebido na entrega + VR`}
+              )} do bruto · repasse + venda direta na loja`}
               tone="positive"
             />
             <Kpi

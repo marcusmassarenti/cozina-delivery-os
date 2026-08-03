@@ -174,7 +174,7 @@ export default async function RelatoriosPage({
       value: fmtBRL(t.totalLiquido),
       trend: `${fmtPct(
         t.bruto > 0 ? (t.totalLiquido / t.bruto) * 100 : 0,
-      )} do bruto · com recebido na entrega + VR`,
+      )} do bruto · repasse + venda direta na loja`,
       tone: "positive",
       icon: Wallet,
     },

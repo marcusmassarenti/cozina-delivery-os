@@ -654,8 +654,11 @@ export default async function Home({
     },
     {
       label: "Líquido pra Você",
-      // Resultado total: repasse + recebido fora do repasse (dinheiro/PIX na
-      // entrega + VR). Bate com a soma do "% que fica na loja" de cada unidade.
+      // Resultado total: repasse + venda direta na loja (dinheiro/PIX/maquininha).
+      // Bate com a soma do "% que fica na loja" de cada unidade.
+      // VR NÃO entra: está DENTRO do repasse (2.201 de 2.201 pedidos pagos em
+      // vale em jul/26 têm Entrada Financeira na conciliação). Somá-lo à parte
+      // inflava a receita da rede em ~R$ 97 mil/mês.
       value: fmtBRLShort(network.liquidoPraVoce),
       tone: "positive",
       icon: DollarSign,
@@ -1790,14 +1793,16 @@ function networkTotalsMerged(
   let bruto = 0
   let liquido = 0
   let cancelados = 0
-  // Recebido fora do repasse (dinheiro/PIX na entrega + VR) — só iFood tem.
-  // Somado sempre que o iFood entra no escopo, pra que o "Líquido pra Você" da
-  // rede seja o RESULTADO TOTAL (repasse + esses extras), igual ao detalhe por
+  // Venda direta: dinheiro/PIX/maquininha pagos na loja — não passa pelo
+  // repasse. Somada sempre que a plataforma entra no escopo, pra que o
+  // "Líquido pra Você" da rede seja o RESULTADO TOTAL, igual ao detalhe por
   // loja e ao DRE. Sem isso, o número da rede subestimava o que o dono embolsa.
-  // Recebido direto e VR ficam SEPARADOS: o recebido direto sai do bruto (não
-  // é taxa); o VR é renda À PARTE (fora do bruto). Pra "% que fica na loja" +
-  // "% de taxa" fecharem 100%, a base é TODO o dinheiro (bruto + VR), e a taxa
-  // = bruto − repasse − recebido direto.
+  //
+  // ⚠️ O VR NÃO entra aqui, e o `vrRede` abaixo só alimenta o mix de pagamento.
+  // Ele JÁ ESTÁ dentro do repasse: em jul/26, 2.201 de 2.201 pedidos pagos em
+  // vale tinham Entrada Financeira na conciliação, com valores batendo ao
+  // centavo. Somá-lo à parte inflava a receita da rede em ~R$ 97 mil/mês.
+  // A taxa da plataforma = bruto − repasse − venda direta.
   let recebidoDiretoRede = 0
   let vrRede = 0
   const recebidoIfood = (u: (typeof active)[number]) =>
@@ -1898,13 +1903,15 @@ function networkTotalsMerged(
   // não 30 fixo — senão fev e o mês corrente parcial saem errados.
   const mediaDia = Math.round(pedidos / daysElapsedInMonth({ year, month }))
   const taxaRepasse = bruto > 0 ? (liquido / bruto) * 100 : 0
-  // "Líquido pra Você" = tudo que a loja recebeu: repasse + recebido direto +
-  // VR. A TAXA real = bruto − repasse − recebido direto (o recebido direto não
-  // é taxa). A base pra fechar 100% é TODO o dinheiro (repasse + recebido + VR
-  // + taxa = bruto + VR), então "% que fica" + "% taxa" = 100%.
-  // VR fora: e forma de pagamento de pedido que JA veio no repasse (2.201 de
-  // 2.201 pedidos com vale tem Entrada Financeira, valor identico). Somar
-  // inflava a receita. `vrRede` segue calculado so pro mix de pagamento.
+  // "Líquido pra Você" = tudo que a loja recebeu: repasse + venda direta.
+  // A TAXA real = bruto − repasse − venda direta (venda direta não é taxa).
+  // Base pra fechar 100% = repasse + venda direta + taxa = bruto, então
+  // "% que fica" + "% taxa" = 100%.
+  //
+  // VR fica FORA: é forma de pagamento de pedido que JÁ veio no repasse
+  // (2.201 de 2.201 pedidos com vale em jul/26 têm Entrada Financeira, valor
+  // idêntico). Somar inflava a receita em ~R$ 97 mil/mês. `vrRede` segue
+  // calculado só pro mix de pagamento.
   const recebidoForaRepasse = recebidoDiretoRede
   const liquidoPraVoce = liquido + recebidoForaRepasse
   const taxasPlataforma = Math.max(0, bruto - liquido - recebidoDiretoRede)
