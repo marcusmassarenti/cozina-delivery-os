@@ -28,6 +28,9 @@ export type AcaoAuditada =
   | "trial.iniciado"
   | "indicador.alterado"
   | "comissao.paga"
+  /** Aviso por push disparado à mão pela tela de Clientes. Push não tem como
+   *  despublicar, então saber o que foi dito e pra quantos é o que sobra. */
+  | "push.aviso"
 
 /**
  * Grava uma entrada no log. Nunca lança: auditoria que quebra a operação é

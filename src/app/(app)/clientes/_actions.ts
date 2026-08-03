@@ -690,3 +690,111 @@ export async function toggleNinoDegustacao(
     return { ok: true }
   })
 }
+
+// ─── Aviso por push ──────────────────────────────────────────────────────────
+
+export type AvisoPushState = {
+  ok: boolean
+  message?: string
+  /** Quantos aparelhos receberam de fato. */
+  enviados?: number
+}
+
+/**
+ * Quantos APARELHOS receberiam o aviso — chamado ANTES de enviar.
+ *
+ * Este número é o ponto da tela. Em 03/ago/26 o Marcus pediu um push de
+ * boas-vindas pra um cliente que usava o app todo dia; o sistema INTEIRO tinha
+ * uma assinatura (a do teste interno), e o envio teria retornado "0 enviados"
+ * sem ninguém perceber. Push não tem como despublicar, mas também não avisa
+ * quando não chega em ninguém — ver o número antes é a única defesa.
+ */
+export async function contarAparelhosPush(
+  holdingId: string | null,
+): Promise<{ aparelhos: number; pessoas: number }> {
+  const { admin } = await requireSuperadmin()
+
+  let userIds: string[] | null = null
+  if (holdingId) {
+    const { data } = await admin
+      .from("user_unit_access")
+      .select("user_id")
+      .eq("scope_type", "holding")
+      .eq("scope_id", holdingId)
+    userIds = [...new Set((data ?? []).map((r) => r.user_id as string))]
+    if (userIds.length === 0) return { aparelhos: 0, pessoas: 0 }
+  }
+
+  let q = admin
+    .from("push_subscriptions")
+    .select("user_id")
+    .is("invalid_since", null)
+  if (userIds) q = q.in("user_id", userIds)
+  const { data } = await q
+  const linhas = (data ?? []) as { user_id: string }[]
+  return {
+    aparelhos: linhas.length,
+    pessoas: new Set(linhas.map((l) => l.user_id)).size,
+  }
+}
+
+/** Dispara o aviso. `holdingId` vazio = todos os clientes. */
+export async function enviarAvisoPush(
+  _prev: AvisoPushState,
+  formData: FormData,
+): Promise<AvisoPushState> {
+  const { admin } = await requireSuperadmin()
+
+  const holdingId = String(formData.get("holdingId") ?? "").trim() || null
+  const titulo = String(formData.get("titulo") ?? "").trim()
+  const corpo = String(formData.get("corpo") ?? "").trim()
+  const url = String(formData.get("url") ?? "").trim() || "/inicio"
+
+  if (titulo.length < 3) return { ok: false, message: "Escreva um título." }
+  if (corpo.length < 5) return { ok: false, message: "Escreva a mensagem." }
+
+  let userIds: string[] = []
+  if (holdingId) {
+    const { data } = await admin
+      .from("user_unit_access")
+      .select("user_id")
+      .eq("scope_type", "holding")
+      .eq("scope_id", holdingId)
+    userIds = [...new Set((data ?? []).map((r) => r.user_id as string))]
+  } else {
+    const { data } = await admin
+      .from("push_subscriptions")
+      .select("user_id")
+      .is("invalid_since", null)
+    userIds = [...new Set((data ?? []).map((r) => r.user_id as string))]
+  }
+
+  if (userIds.length === 0)
+    return { ok: false, message: "Ninguém pra receber neste escopo." }
+
+  const { enviarPush } = await import("@/lib/push/enviar")
+  const r = await enviarPush(userIds, { titulo, corpo, url, tag: "aviso-admin" })
+
+  if (r.semChave)
+    return { ok: false, message: "VAPID ausente no servidor — nada enviado." }
+
+  // Fica no histórico do cliente: push não dá pra despublicar, então saber
+  // exatamente o que foi dito e quando é o que sobra.
+  await auditar("push.aviso", holdingId, {
+    titulo,
+    corpo,
+    url,
+    aparelhos: r.enviados,
+    escopo: holdingId ? "cliente" : "todos os clientes",
+  })
+
+  revalidatePath("/clientes")
+  return {
+    ok: true,
+    enviados: r.enviados,
+    message:
+      r.enviados === 0
+        ? "Ninguém tinha aparelho ativo — nada foi entregue."
+        : `Entregue em ${r.enviados} aparelho(s).`,
+  }
+}

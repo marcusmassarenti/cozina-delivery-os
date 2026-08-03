@@ -21,6 +21,7 @@ import { fmtBRL } from "@/lib/format"
 import { ACAO_LABEL } from "@/lib/auditoria-labels"
 
 import { ConviteAsaasButton } from "./convite-asaas-button"
+import { AvisoPushDialog } from "./aviso-push-dialog"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
 
@@ -301,6 +302,9 @@ export function ClientDetailView({
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <EditBillingDialog client={c} />
+              {/* Antes, falar por push com um cliente exigia rodar script na
+                  mão — o único disparo automático era o resumo semanal. */}
+              <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
             </div>
             {!c.contaInterna && (
               <div className="mt-2 border-t pt-2">
