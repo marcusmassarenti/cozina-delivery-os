@@ -21,6 +21,12 @@ export type Kpi = {
   platformCoverage?: { id: PlatformId; on: boolean }[]
   /** Se presente, o card vira link pra essa tela. */
   href?: string
+  /**
+   * Explicação no hover. O `trend` é uma linha de 10px — cabe "58% do bruto ·
+   * repasse + venda direta", não cabe a definição inteira. O que não coube vem
+   * pra cá em vez de virar rótulo comprido ou nota de rodapé que ninguém lê.
+   */
+  title?: string
 }
 
 const toneClass: Record<KpiTone, string> = {
@@ -36,6 +42,7 @@ export function KpiCard({ kpi }: { kpi: Kpi }) {
 
   const card = (
     <div
+      title={kpi.title}
       className={`relative h-full rounded-xl border bg-card p-3.5 shadow-sm ${
         clickable
           ? "transition-colors hover:border-primary/40 hover:bg-muted/30"

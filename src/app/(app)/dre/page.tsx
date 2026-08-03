@@ -39,6 +39,7 @@ import {
 import { BrutoBreakdown } from "@/app/(app)/unidades/[codigo]/_components/bruto-breakdown"
 
 import { ResultadoTable } from "./_components/resultado-table"
+import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 
 /**
  * Tela /financeiro ("DRE Grupo") — DRE consolidado da rede no mês.
@@ -238,13 +239,17 @@ export default async function ResultadoPage({
             />
             <Kpi
               icon={<PiggyBank className="size-4" />}
-              label="Líquido (entra na conta)"
+              // Era "Líquido (entra na conta)". `totals.totalLiquido` já É o
+              // fica-na-loja (a régua roda dentro de resultado.ts) — só o
+              // rótulo estava fora do padrão.
+              label={ROTULOS.ficaNaLoja}
               value={fmtBRLShort(totals.totalLiquido)}
               hint={`${fmtPct(
                 totals.bruto > 0
                   ? (totals.totalLiquido / totals.bruto) * 100
                   : 0,
-              )} do bruto · repasse + venda direta na loja`}
+              )} do bruto · ${DEFINICOES.ficaNaLoja.curto}`}
+              title={DEFINICOES.ficaNaLoja.completo}
               tone="positive"
             />
             <Kpi
@@ -526,12 +531,15 @@ function Kpi({
   label,
   value,
   hint,
+  title,
   tone,
 }: {
   icon: React.ReactNode
   label: string
   value: string
   hint?: string
+  /** Explicação no hover — o que não cabe na linha de 11px do `hint`. */
+  title?: string
   tone?: "positive" | "warn" | "negative" | "neutral"
 }) {
   const valueColor =
@@ -543,7 +551,7 @@ function Kpi({
           ? "text-rose-700 dark:text-rose-400"
           : "text-foreground"
   return (
-    <div className="rounded-xl border bg-card p-5 shadow-sm">
+    <div title={title} className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
         {icon}
       </div>

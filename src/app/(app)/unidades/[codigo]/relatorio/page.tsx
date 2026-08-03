@@ -33,7 +33,7 @@ import { AvaliacoesTab } from "../_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "../_components/avaliacoes-99-tab"
 import { AvaliacoesKeetaTab } from "../_components/avaliacoes-keeta-tab"
 import { mergeMonthly } from "../_components/merge-monthly"
-import { lerFinanceiro } from "@/lib/financeiro/regua"
+import { lerFinanceiro, ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 
 export default async function RelatorioMensalUnidade({
   params,
@@ -165,11 +165,11 @@ export default async function RelatorioMensalUnidade({
           />
           {/* Mesmo nome e mesmo número da tela da loja e da linha do DRE. */}
           <Kpi
-            label="Fica na loja"
+            label={ROTULOS.ficaNaLoja}
             value={fmtBRL(leitura.ficaNaLoja)}
             sub={
               leitura.vendaDireta > 0
-                ? `${fmtPct(leitura.pctFicaNaLoja)} · inclui venda direta`
+                ? `${fmtPct(leitura.pctFicaNaLoja)} · ${DEFINICOES.ficaNaLoja.curto}`
                 : fmtPct(leitura.pctFicaNaLoja)
             }
             accent

@@ -48,6 +48,7 @@ import {
   rangeFromPeriod,
   type DateRange,
 } from "@/lib/period"
+import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
 
@@ -170,11 +171,14 @@ export default async function RelatoriosPage({
       platforms: tenantPlatforms,
     },
     {
-      label: "Total líquido",
+      // Era "Total líquido". `t.totalLiquido` já É o fica-na-loja (a régua roda
+      // dentro de resultado.ts) — só o rótulo estava fora do padrão.
+      label: ROTULOS.ficaNaLoja,
       value: fmtBRL(t.totalLiquido),
       trend: `${fmtPct(
         t.bruto > 0 ? (t.totalLiquido / t.bruto) * 100 : 0,
-      )} do bruto · repasse + venda direta na loja`,
+      )} do bruto · ${DEFINICOES.ficaNaLoja.curto}`,
+      title: DEFINICOES.ficaNaLoja.completo,
       tone: "positive",
       icon: Wallet,
     },

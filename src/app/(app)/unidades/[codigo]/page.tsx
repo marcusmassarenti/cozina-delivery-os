@@ -36,7 +36,7 @@ import {
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
-import { lerFinanceiro } from "@/lib/financeiro/regua"
+import { lerFinanceiro, ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
@@ -440,16 +440,18 @@ function HeroKpis({
       }`,
     },
     {
-      label: "Fica na loja",
+      label: ROTULOS.ficaNaLoja,
       value: fmtBRL(fin.ficaNaLoja),
       sub:
         fin.vendaDireta > 0
-          ? `${fmtPct(fin.pctFicaNaLoja)} · inclui venda direta`
+          ? `${fmtPct(fin.pctFicaNaLoja)} · ${DEFINICOES.ficaNaLoja.curto}`
           : `${fmtPct(fin.pctFicaNaLoja)} do válido`,
+      // Aqui dá pra mostrar os valores de verdade, então o hover é mais útil
+      // que a definição genérica — mas diz a mesma coisa, com números.
       title:
         fin.vendaDireta > 0
-          ? `Repasse ${fmtBRL(fin.repasse)} + venda direta ${fmtBRL(fin.vendaDireta)} (dinheiro/PIX/maquininha pagos na loja).`
-          : "O que a plataforma repassou.",
+          ? `Repasse ${fmtBRL(fin.repasse)} + venda direta ${fmtBRL(fin.vendaDireta)} (dinheiro, PIX e maquininha pagos na loja).`
+          : DEFINICOES.ficaNaLoja.completo,
       tone: "pos",
     },
     {

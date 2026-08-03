@@ -110,6 +110,7 @@ import {
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { createClient } from "@/lib/supabase/server"
 import { criarCronometro } from "@/lib/perf"
+import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 
 async function checkSupabase() {
   try {
@@ -653,13 +654,17 @@ export default async function Home({
       href: `/financeiro${periodQ}`,
     },
     {
-      label: "Líquido pra Você",
-      // Resultado total: repasse + venda direta na loja (dinheiro/PIX/maquininha).
-      // Bate com a soma do "% que fica na loja" de cada unidade.
+      // Era "Líquido pra Você". Virou o rótulo da régua: o MESMO número
+      // aparecia com quatro nomes diferentes pelo sistema, e foi isso que fez o
+      // Marcus não saber, olhando duas telas, se eram o mesmo conceito.
+      //
       // VR NÃO entra: está DENTRO do repasse (2.201 de 2.201 pedidos pagos em
       // vale em jul/26 têm Entrada Financeira na conciliação). Somá-lo à parte
       // inflava a receita da rede em ~R$ 97 mil/mês.
+      label: ROTULOS.ficaNaLoja,
       value: fmtBRLShort(network.liquidoPraVoce),
+      trend: DEFINICOES.ficaNaLoja.curto,
+      title: DEFINICOES.ficaNaLoja.completo,
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
@@ -667,16 +672,16 @@ export default async function Home({
     },
     {
       // Antes "Taxa de Repasse" (só o repasse, líquido/bruto). Virou a versão
-      // em % do "Líquido pra Você": inclui o recebido direto (dinheiro/PIX na
-      // entrega) e o VR — o que a loja de fato embolsa. Base = bruto com
-      // cancelados (mesma do card Faturamento Bruto e do detalhe por loja).
-      label: "% que fica na loja",
+      // em % do card acima. Base = bruto com cancelados (mesma do card
+      // Faturamento Bruto e do detalhe por loja).
+      label: ROTULOS.pctFicaNaLoja,
       value: fmtPct(
         network.totalDinheiro > 0
           ? (network.liquidoPraVoce / network.totalDinheiro) * 100
           : 0,
       ),
-      trend: "repasse + venda direta na loja",
+      trend: DEFINICOES.ficaNaLoja.curto,
+      title: DEFINICOES.ficaNaLoja.completo,
       tone: "positive",
       icon: Percent,
       platforms: finPlatforms,

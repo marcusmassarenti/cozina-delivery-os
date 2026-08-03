@@ -42,6 +42,38 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.12.0",
+    date: "2026-08-03",
+    tag: "Melhorias",
+    title: '"Fica na loja" agora se chama assim em todas as telas',
+    summary:
+      "O mesmo número aparecia com quatro nomes diferentes pelo sistema. Agora é um só, com a explicação do que ele inclui.",
+    destaque: true,
+    areas: [
+      {
+        area: "Em todas as telas",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Um nome só para o dinheiro que fica com você",
+            antes:
+              'O mesmo valor aparecia como "Líquido pra Você" no Dashboard, "Líquido (entra na conta)" no DRE Grupo, "Total líquido" nos Relatórios e "Fica na loja" na tela da loja. Olhando duas telas, não dava para saber se era o mesmo número ou dois conceitos diferentes.',
+            depois:
+              'Em todas as telas o nome é "Fica na loja", com a composição embaixo: repasse + venda direta. Passando o mouse, aparece a explicação completa.',
+          },
+          {
+            kind: "correcao",
+            title: "Resumo do Relatório do mês estava incompleto",
+            antes:
+              'O card "Líquido (recebido)" mostrava só o repasse das plataformas e deixava de fora a venda direta — discordando do DRE logo abaixo, na mesma página.',
+            depois:
+              "Agora mostra o total que fica com a loja, igual ao DRE e à tela da loja.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.11.3",
     date: "2026-08-03",
     tag: "Correções",

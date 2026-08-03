@@ -183,3 +183,36 @@ export const ROTULOS = {
   margem: "Margem",
   resultado: "Resultado",
 } as const
+
+/**
+ * O que cada número significa, em uma frase.
+ *
+ * Mora aqui junto com o rótulo de propósito: enquanto a explicação era
+ * reescrita em cada tela, elas divergiram. Em 03/ago/26 o MESMO valor aparecia
+ * como "Líquido (recebido)", "Líquido (entra na conta)", "Total líquido" e
+ * "Líquido pra Você" — e três dessas telas ainda prometiam VR na composição,
+ * meses depois de o VR sair da conta.
+ *
+ * `curto` cabe na linha de 10px embaixo do valor. `completo` é o hover.
+ */
+export const DEFINICOES = {
+  ficaNaLoja: {
+    curto: "repasse + venda direta",
+    completo:
+      "Repasse das plataformas + venda direta na loja (dinheiro, PIX e maquininha). É tudo que a loja recebeu, antes de descontar mercadoria e custos.",
+  },
+  taxaPlataforma: {
+    curto: "comissão, entrega e promoções",
+    completo:
+      "O que a plataforma reteve do bruto: comissão, taxa de entrega, taxa de pagamento e promoções que ela não bancou.",
+  },
+  margem: {
+    curto: "depois da mercadoria",
+    completo: "O que fica na loja menos o CMV (custo da mercadoria vendida).",
+  },
+  resultado: {
+    curto: "depois de mercadoria e operação",
+    completo:
+      "A margem menos os custos de operação (aluguel, folha, etc.). É o que sobra de fato.",
+  },
+} as const
