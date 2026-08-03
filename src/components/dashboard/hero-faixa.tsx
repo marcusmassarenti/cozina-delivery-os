@@ -13,6 +13,13 @@ export type HeroMetric = {
    * no período. Fica claro num relance se todas entraram.
    */
   platformCoverage?: { id: PlatformId; on: boolean }[]
+  /**
+   * Explicação no hover. O `sub` é uma linha curta ("repasse + venda direta");
+   * a definição inteira não cabe ali e vem pra cá. Sem isto, o `title` que o
+   * KpiCard aceita se perdia no caminho: a primeira faixa do dashboard NÃO usa
+   * o KpiCard, converte pra HeroMetric — e o campo caía fora silenciosamente.
+   */
+  title?: string
 }
 
 function DeltaSeta({ delta }: { delta: number | null | undefined }) {
@@ -61,7 +68,11 @@ export function HeroFaixa({
     <div className="overflow-hidden rounded-xl border bg-card">
       <div className={`grid gap-px bg-border ${COLS_CLASS[cols]}`}>
         {metrics.map((m) => (
-          <div key={m.label} className="flex flex-col gap-1 bg-card p-3.5">
+          <div
+            key={m.label}
+            title={m.title}
+            className="flex flex-col gap-1 bg-card p-3.5"
+          >
             <div className="flex items-start justify-between gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {m.label}

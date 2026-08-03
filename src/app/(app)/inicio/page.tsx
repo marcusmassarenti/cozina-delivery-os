@@ -848,6 +848,8 @@ export default async function Home({
     value: k.value,
     delta: DELTA_MANCHETE[k.label],
     sub: SUB_MANCHETE[k.label] ?? k.trend,
+    // Sem isto o `title` do KPI morre aqui: a faixa não usa o KpiCard.
+    title: k.title,
     platformCoverage: k.platformCoverage,
   }))
 
