@@ -298,20 +298,36 @@ export async function getRealMonthlyForUnits(
 
   const supabase = createAdminClient()
 
+  // Esta função é a mais cara do dashboard e roda 3x por carregamento (uma na
+  // fase 2a, duas nas setas de variação). Medir por FONTE, senão a gente fica
+  // otimizando no escuro: cachear só o iFood não moveu o ponteiro, e sem este
+  // detalhe não dá pra saber se o custo está no 99, na Keeta ou no VR.
+  const tIni = Date.now()
+  const marcas: string[] = []
+  const medir = async <T,>(nome: string, p: Promise<T> | PromiseLike<T>) => {
+    const t = Date.now()
+    try {
+      return await p
+    } finally {
+      marcas.push(`${nome}=${Date.now() - t}`)
+    }
+  }
+
   const [finMap, nineMap, keetaMap, cwMap, monthlyRes] = await Promise.all([
-    getFinanceiroResumoByUnits(unitIds, year, month, dateRange),
-    getNinefoodResumoByUnits(unitIds, year, month, dateRange),
-    getKeetaResumoByUnits(unitIds, year, month, dateRange),
-    getCardapioWebResumoByUnits(unitIds, year, month, dateRange),
-    supabase
+    medir("ifood", getFinanceiroResumoByUnits(unitIds, year, month, dateRange)),
+    medir("99", getNinefoodResumoByUnits(unitIds, year, month, dateRange)),
+    medir("keeta", getKeetaResumoByUnits(unitIds, year, month, dateRange)),
+    medir("cardapioweb", getCardapioWebResumoByUnits(unitIds, year, month, dateRange)),
+    medir("mensal", supabase
       .from("monthly_entries")
       .select(
         "unit_id, custo_produtos_cozina, custo_produtos_loja, custo_operacao, clientes_novos, nota_media, observacoes, total_recebido_real",
       )
       .in("unit_id", unitIds)
       .eq("year", year)
-      .eq("month", month),
+      .eq("month", month)),
   ])
+  const msOnda1 = Date.now() - tIni
 
   type MonthlyRow = {
     unit_id: string
@@ -330,6 +346,7 @@ export async function getRealMonthlyForUnits(
   // Keeta cai no preço de tabela do Pedidos recentes quando não há Loja diária.
   const keetaFbIds = unitIds.filter((id) => !(keetaMap.get(id)?.hasData ?? false))
 
+  const tOnda2 = Date.now()
   const [vrRows, keetaPorLoja] = await Promise.all([
     // VR é pago À PARTE pelo iFood (fora do líquido da Conciliação). Puxamos
     // por TODAS as lojas: serve de fallback de bruto/líquido/pedidos pras lojas
@@ -341,6 +358,13 @@ export async function getRealMonthlyForUnits(
       ? getKeetaPedidoPorLoja(keetaFbIds, year, month)
       : Promise.resolve([]),
   ])
+  // Uma linha por chamada. O `recorte` separa as três: a fase 2a pede o mês
+  // inteiro (recorte=mes) e as setas pedem dia 1 até o corte.
+  console.log(
+    `[perf] realmonthly ${year}-${String(month).padStart(2, "0")} recorte=${
+      dateRange ? `${dateRange.start.slice(8)}..${dateRange.end.slice(8)}` : "mes"
+    } onda1=${msOnda1}ms [${marcas.join(" ")}] onda2=${Date.now() - tOnda2}ms lojas=${unitIds.length}`,
+  )
   const ifoodFb = new Map(
     vrRows.map((v) => [
       v.unitId,
