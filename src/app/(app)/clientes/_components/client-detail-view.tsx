@@ -176,6 +176,15 @@ export function ClientDetailView({
 
   return (
     <div className={embedded ? "flex flex-col gap-5" : "flex flex-1 flex-col gap-5 bg-muted/30 p-6"}>
+      {/* Ações SOBRE o cliente ficam no topo, não dentro de um card de assunto.
+          O "Enviar aviso" nasceu colado no Editar da mensalidade e ninguém
+          acharia: push não tem nada a ver com cobrança. No drawer o cabeçalho é
+          do Sheet, então a barra aparece aqui em cima do conteúdo. */}
+      {embedded && (
+        <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+          <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
+        </div>
+      )}
       {!embedded && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -196,6 +205,9 @@ export function ClientDetailView({
                 Asaas ✓
               </span>
             )}
+            <span className="ml-auto">
+              <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
+            </span>
           </div>
           <p className="text-sm text-muted-foreground">
             {c.establishmentType ?? "Tipo não definido"} · {c.activeUnits} loja
@@ -302,9 +314,6 @@ export function ClientDetailView({
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <EditBillingDialog client={c} />
-              {/* Antes, falar por push com um cliente exigia rodar script na
-                  mão — o único disparo automático era o resumo semanal. */}
-              <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
             </div>
             {!c.contaInterna && (
               <div className="mt-2 border-t pt-2">

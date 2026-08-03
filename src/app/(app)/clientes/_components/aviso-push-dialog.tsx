@@ -58,7 +58,8 @@ export function AvisoPushDialog({
     setConfirmando(false)
     if (v) {
       setAlcance(null)
-      void contarAparelhosPush(holdingId).then(setAlcance)
+      // holdingId vazio = todos os clientes.
+      void contarAparelhosPush(holdingId || null).then(setAlcance)
     } else {
       // Limpa ao fechar pra não reenviar o mesmo texto sem querer depois.
       setTitulo("")
@@ -66,6 +67,7 @@ export function AvisoPushDialog({
     }
   }
 
+  const todos = holdingId === ""
   const semAparelho = alcance?.aparelhos === 0
   const podeEnviar = titulo.trim().length >= 3 && corpo.trim().length >= 5
 
@@ -75,14 +77,16 @@ export function AvisoPushDialog({
         render={
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
             <Bell className="size-3.5" />
-            Enviar aviso
+            {holdingId === "" ? "Avisar todos" : "Enviar aviso"}
           </Button>
         }
       />
       <DialogContent className="max-w-md">
         <DialogTitle className="text-base">Enviar aviso</DialogTitle>
         <DialogDescription className="text-xs">
-          Notificação no celular de {holdingName}.
+          {todos
+            ? "Notificação no celular de TODOS os clientes que ativaram avisos."
+            : `Notificação no celular de ${holdingName}.`}
         </DialogDescription>
 
         {/* Alcance PRIMEIRO: se é zero, o resto do formulário não importa. */}
@@ -97,9 +101,12 @@ export function AvisoPushDialog({
             "Conferindo quantos aparelhos vão receber…"
           ) : semAparelho ? (
             <>
-              <strong>Ninguém vai receber.</strong> Nenhuma pessoa desse cliente
-              ativou os avisos. Elas precisam abrir o app e aceitar na faixa do
-              painel — até lá, o envio não chega em lugar nenhum.
+              <strong>Ninguém vai receber.</strong>{" "}
+              {todos
+                ? "Nenhum cliente ativou os avisos ainda."
+                : "Nenhuma pessoa desse cliente ativou os avisos."}{" "}
+              Elas precisam abrir o app e aceitar na faixa do painel — até lá, o
+              envio não chega em lugar nenhum.
             </>
           ) : (
             <>
@@ -182,8 +189,19 @@ export function AvisoPushDialog({
           ) : confirmando ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/20">
               <p className="text-[11px] text-rose-800 dark:text-rose-300">
-                Confirma? Notificação enviada <strong>não tem volta</strong> —
-                não dá pra apagar do celular de ninguém.
+                {todos ? (
+                  <>
+                    Isto vai para <strong>TODOS os clientes</strong> de uma vez.
+                    Notificação enviada <strong>não tem volta</strong> — não dá
+                    pra apagar do celular de ninguém.
+                  </>
+                ) : (
+                  <>
+                    Confirma? Notificação enviada{" "}
+                    <strong>não tem volta</strong> — não dá pra apagar do
+                    celular de ninguém.
+                  </>
+                )}
               </p>
               <div className="mt-2 flex gap-2">
                 <Button type="submit" size="sm" className="h-7 gap-1.5 text-xs">

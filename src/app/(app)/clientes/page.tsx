@@ -24,6 +24,7 @@ import { fmtBRL, fmtNum } from "@/lib/format"
 
 import { NfSetupButton } from "./_components/nf-setup-button"
 import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
+import { AvisoPushDialog } from "./_components/aviso-push-dialog"
 import { PlanSettingsDialog } from "./_components/plan-settings-dialog"
 import { ClientsTable } from "./_components/clients-table"
 
@@ -146,6 +147,10 @@ export default async function PlataformaPage() {
             <TrendingUp className="size-4" />
             Analytics
           </Link>
+          {/* Aviso pra TODOS de uma vez. Sem holdingId, a ação manda pra quem
+              tiver aparelho ativo em qualquer cliente — e a tela mostra o
+              número antes, que é o que impede um envio pro vazio. */}
+          <AvisoPushDialog holdingId="" holdingName="todos os clientes" />
           <PlanSettingsDialog precos={defaultPlan} pacotePreco={pacote.preco} />
           <NovoClienteDialog />
         </div>
