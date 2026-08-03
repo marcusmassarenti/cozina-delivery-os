@@ -204,14 +204,22 @@ export default async function Home({
     : allUnits
   const activeUnitIds = units.filter((u) => u.active).map((u) => u.id)
 
-  // Setas do herói: variação vs o MESMO período do mês passado. São duas
-  // agregações caras que não dependem de mais nada além das lojas ativas — e
-  // ficavam paradas no fim da página, esperando todo o resto terminar.
+  // Setas do herói: variação vs o MESMO período do mês passado.
   //
-  // Medido em produção (13 lojas): custavam de 1,5 s a 6,7 s de espera pura,
-  // até 61% do tempo total da página, só pra desenhar as setinhas de variação.
-  // Disparadas aqui, correm junto com os resumos e a rede e somem do caminho
-  // crítico. É a mesma técnica que já deixa a fase `rede` em zero (earlyNetworkP).
+  // `getRealMonthlyForUnits` é a função mais cara da página (5 consultas, espera,
+  // mais 2) e era chamada TRÊS vezes por carregamento: uma na fase 2a e mais
+  // duas aqui, pro mês atual e o anterior. Medido em produção, essas setinhas
+  // custavam de 1,5 s a 6,7 s -- até 61% do tempo total.
+  //
+  // Duas correções:
+  //  1. Disparar cedo, em vez de esperar o resto da página (fase `rede` já
+  //     provava que funciona: 10 consultas dela custam 0 ms por correrem junto).
+  //  2. Os DOIS lados continuam vindo do mesmo recorte por data. Tentei reusar
+  //     `monthlyPeriodo` (da fase 2a) como lado "mês atual" pra eliminar uma das
+  //     chamadas, e medindo deu 1,555% de diferença no líquido: a fase 2a filtra
+  //     por ref_year/ref_month e o corte filtra por data, então pedido de virada
+  //     de mês cai de um lado só. Trocar só um lado faria a seta comparar um
+  //     método contra o outro e cuspir uma variação que não existe. NÃO FAZER.
   const p2 = (n: number) => String(n).padStart(2, "0")
   const hojeBR = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
@@ -238,6 +246,10 @@ export default async function Home({
           }),
         ])
       : null
+  // Disparada antes de ser aguardada: se algo estourar no meio da página, a
+  // rejeição ficaria sem dono (unhandledRejection derruba o processo no Node).
+  // Este catch só a marca como tratada; o `await` lá embaixo segue estourando.
+  heroDeltasP?.catch(() => {})
 
   // Plataformas habilitadas do tenant (só essas na cobertura) + se o sync via
   // API está ligado (SaaS: só importação manual → sem botões de Sincronizar).

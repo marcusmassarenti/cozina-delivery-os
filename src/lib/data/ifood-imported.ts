@@ -1184,16 +1184,25 @@ async function resumoRpc(
   dateRange?: { start: string; end: string },
 ): Promise<{ data: ResumoRpcRow[] | null; error: string | null }> {
   const corrente = mesCorrenteBR()
+  // Recorte de data TAMBÉM entra no cache, desde que o mês esteja fechado. Antes
+  // ficava de fora, e isso deixava a parte mais cara do dashboard sem cache: as
+  // setas de variação pedem o mês passado com recorte (dia 1 até o mesmo dia do
+  // mês corrente), que é justamente um mês fechado cujo resultado não muda mais.
   const fechado =
-    !dateRange && (year < corrente.ano || (year === corrente.ano && month < corrente.mes))
+    year < corrente.ano || (year === corrente.ano && month < corrente.mes)
   if (!fechado) return chamarResumo(unitIds, year, month, dateRange)
 
   // A chave precisa das lojas: o mesmo mês pedido pra recortes diferentes de
   // unidade é resultado diferente. Ordenada, senão a ordem do filtro cria
-  // entradas duplicadas pro mesmo conjunto.
-  const chave = `${year}-${month}-${[...unitIds].sort().join(",")}`
+  // entradas duplicadas pro mesmo conjunto. E precisa do recorte: mês inteiro e
+  // "dia 1 ao 15" são respostas diferentes pra mesma competência.
+  const recorte = dateRange ? `${dateRange.start}..${dateRange.end}` : "mes"
+  const chave = `${year}-${month}-${recorte}-${[...unitIds].sort().join(",")}`
   return unstable_cache(
-    () => chamarResumo(unitIds, year, month),
+    // dateRange PRECISA ser repassado — sem ele o cache guardaria o mês inteiro
+    // sob a chave de um recorte, e a seta compararia períodos de tamanhos
+    // diferentes.
+    () => chamarResumo(unitIds, year, month, dateRange),
     ["ifood-financeiro-resumo", chave],
     { tags: [TAG_FINANCEIRO_IFOOD], revalidate: 86_400 },
   )()
@@ -1517,105 +1526,6 @@ export async function getCancelamentosPorMotivo(
     .sort((a, b) => b.pedidos - a.pedidos)
 }
 
-// ─── Pedidos / Drill-down ────────────────────────────────────────────
-
-export async function listPedidosForMonth(
-  unitId: string,
-  year: number,
-  month: number,
-  opts: { search?: string; cancelado?: boolean; limit?: number } = {},
-): Promise<PedidoResumo[]> {
-  const admin = createAdminClient()
-  // 1 pedido = ~7 linhas; pra resumo precisa ler tudo (paginado)
-  const data = await fetchAllRows<{
-    pedido_associado_ifood: string | null
-    pedido_associado_ifood_curto: string | null
-    data_criacao_pedido: string | null
-    valor_transacao: number | string | null
-    valor: number | string | null
-    valor_cesta_final: number | string | null
-    fato_gerador: string | null
-    descricao_lancamento: string | null
-    motivo_cancelamento: string | null
-  }>((from, to) => {
-    let query = admin
-      .from("ifood_financeiro_lancamentos")
-      .select(
-        "pedido_associado_ifood, pedido_associado_ifood_curto, data_criacao_pedido, valor_transacao, valor, valor_cesta_final, fato_gerador, descricao_lancamento, motivo_cancelamento",
-      )
-      .eq("unit_id", unitId)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .not("pedido_associado_ifood", "is", null)
-      .order("id")
-      .range(from, to)
-
-    if (opts.search) {
-      const s = opts.search.trim()
-      if (s) {
-        query = query.or(
-          `pedido_associado_ifood_curto.ilike.%${s}%,pedido_associado_ifood.ilike.%${s}%`,
-        )
-      }
-    }
-    return query
-  }, "ifood_financeiro_lancamentos pedidos unidade")
-
-  const acc = new Map<string, PedidoResumo>()
-  for (const r of data) {
-    const id = r.pedido_associado_ifood as string
-    if (!id) continue
-    const cur = acc.get(id) ?? {
-      pedidoIfood: id,
-      pedidoCurto: r.pedido_associado_ifood_curto,
-      dataCriacao: r.data_criacao_pedido,
-      valorTransacao: r.valor_transacao ? Number(r.valor_transacao) : null,
-      bruto: 0,
-      liquido: 0,
-      comissao: 0,
-      taxaEntrega: 0,
-      promocaoLoja: 0,
-      cancelado: false,
-      motivoCancelamento: null,
-    }
-    const desc = r.descricao_lancamento ?? ""
-    const fg = r.fato_gerador ?? ""
-    const val = Number(r.valor) || 0
-
-    // Bruto do pedido = valor dos itens (cesta), igual à definição da tela.
-    // A cesta repete em cada linha de Venda; usa SET (não soma).
-    if (fg === "Venda" && r.valor_cesta_final != null)
-      cur.bruto = Number(r.valor_cesta_final)
-    if (
-      fg === "Venda" &&
-      (desc === "Comissão do iFood (entrega iFood)" ||
-        desc === "Comissão do iFood")
-    )
-      cur.comissao += val
-    if (fg === "Venda" && desc === "Taxa entrega iFood") cur.taxaEntrega += val
-    if (fg === "Venda" && desc?.startsWith("Promoção custeada pela loja"))
-      cur.promocaoLoja += val
-    if (fg === "Cancelamento Total" || fg === "Cancelamento Parcial") {
-      cur.cancelado = true
-      if (!cur.motivoCancelamento && r.motivo_cancelamento) {
-        cur.motivoCancelamento = r.motivo_cancelamento as string
-      }
-    }
-    cur.liquido += val // simplificação: soma tudo (ajustamos depois se precisar)
-    acc.set(id, cur)
-  }
-  let list = Array.from(acc.values())
-  if (opts.cancelado != null) {
-    list = list.filter((p) => p.cancelado === opts.cancelado)
-  }
-  // Ordena por data DESC
-  list.sort((a, b) => {
-    const da = a.dataCriacao ? new Date(a.dataCriacao).getTime() : 0
-    const db = b.dataCriacao ? new Date(b.dataCriacao).getTime() : 0
-    return db - da
-  })
-  return list.slice(0, opts.limit ?? 100)
-}
 
 export async function getPedidoDetalhe(
   unitId: string,
