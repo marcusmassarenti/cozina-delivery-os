@@ -810,15 +810,19 @@ export default async function Home({
   }
 
   // Primeira linha única (manchete clean): dinheiro primeiro, operação depois.
+  // ⚠️ A seleção é por TEXTO do rótulo. Renomear um KPI sem mexer aqui faz o
+  // card SUMIR da tela, sem erro de tipo e sem quebrar o build — foi o que
+  // aconteceu ao trocar "Líquido pra Você" por "Fica na loja" em 03/ago/26.
+  // Por isso os dois rótulos da régua entram por constante, não por string.
   const ORDEM_KPI = [
     "Faturamento Bruto",
-    "Líquido pra Você",
+    ROTULOS.ficaNaLoja,
     "Pedidos",
     "Nota Média",
     "Pedidos Cancelados",
     "Média Pedidos/Dia",
     "Ticket Médio",
-    "% que fica na loja",
+    ROTULOS.pctFicaNaLoja,
     // ⚠️ KPI que não estiver NESTA lista é criado e descartado logo abaixo.
     "Custo de Entrega",
   ]
@@ -830,15 +834,15 @@ export default async function Home({
   // passado quando dá pra comparar; a legenda descritiva (trend) vai no sub.
   const DELTA_MANCHETE: Record<string, number | null | undefined> = {
     "Faturamento Bruto": heroDeltas.bruto,
-    "Líquido pra Você": heroDeltas.liquido,
+    [ROTULOS.ficaNaLoja]: heroDeltas.liquido,
     Pedidos: heroDeltas.pedidos,
     "Ticket Médio": heroDeltas.ticket,
-    "% que fica na loja": heroDeltas.repasse,
+    [ROTULOS.pctFicaNaLoja]: heroDeltas.repasse,
     "Média Pedidos/Dia": heroDeltas.mediaDia,
   }
-  const SUB_MANCHETE: Record<string, string> = {
-    "Líquido pra Você": "o que de fato entra",
-  }
+  // Vazio de propósito: o `trend` do card já diz "repasse + venda direta", que
+  // é mais informativo que o antigo "o que de fato entra" e vem da régua.
+  const SUB_MANCHETE: Record<string, string> = {}
   const manchete: HeroMetric[] = kpisOrdenados.map((k) => ({
     label: k.label,
     value: k.value,
