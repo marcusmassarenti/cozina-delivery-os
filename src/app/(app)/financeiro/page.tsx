@@ -31,6 +31,7 @@ import { getFluxoCaixa } from "@/lib/data/fluxo-caixa"
 import { FinIcon } from "./_components/fin-icon"
 import { BankBadge } from "./_components/bank-badge"
 import { LojasComparativo } from "./_components/lojas-comparativo"
+import { criarCronometro } from "@/lib/perf"
 
 function fmtDiaLongo(iso: string): string {
   return new Date(`${iso}T12:00:00-03:00`).toLocaleDateString("pt-BR", {
@@ -51,22 +52,45 @@ export default async function VisaoGeralPage({
 }: {
   searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; loja?: string }>
 }) {
+  const cron = criarCronometro("financeiro")
   const holdingId = await getCaixaHoldingId()
   if (!holdingId) return null
+  cron.marca("holding")
 
   const sp = await searchParams
   const loja = sp.loja
   const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
-  const [dash, categories, top] = await Promise.all([
-    getCaixaDashboard(holdingId, year, month, loja),
-    getCategoriesFlat(holdingId),
-    getTopTitulares(holdingId, year, month, loja),
-  ])
   // No Consolidado, mostra o comparativo por loja.
   const consolidado = !loja || loja === "todas"
-  const lojas = consolidado ? await getCaixaPorLoja(holdingId, year, month) : []
+
+  // As cinco consultas são disparadas JUNTAS: nenhuma depende do resultado da
+  // outra. Antes, o comparativo por loja e o fluxo projetado esperavam o
+  // Promise.all acima terminar pra só então começar -- e o fluxo é o mais
+  // pesado dos cinco, então a tela inteira ficava atrás dele.
+  const pDash = getCaixaDashboard(holdingId, year, month, loja)
+  const pCategories = getCategoriesFlat(holdingId)
+  const pTop = getTopTitulares(holdingId, year, month, loja)
+  const pLojas = consolidado
+    ? getCaixaPorLoja(holdingId, year, month)
+    : Promise.resolve([])
   // Resumo do fluxo de caixa projetado (30 dias) pro topo.
-  const fluxo = await getFluxoCaixa(30, loja)
+  const pFluxo = getFluxoCaixa(30, loja)
+
+  // Disparar antes de aguardar cria uma janela: se uma das primeiras falhar, a
+  // página estoura e a rejeição das últimas fica sem dono (unhandledRejection,
+  // que no Node derruba o processo). Este catch vazio só marca a promise como
+  // tratada -- o `await` abaixo continua estourando normalmente.
+  pLojas.catch(() => {})
+  pFluxo.catch(() => {})
+
+  // Colhidas em etapas só pra o cronômetro conseguir separar quem demora.
+  const [dash, categories, top] = await Promise.all([pDash, pCategories, pTop])
+  cron.marca("dados")
+  const lojas = await pLojas
+  cron.marca("lojas")
+  const fluxo = await pFluxo
+  cron.marca("fluxo")
+  cron.fim({ loja: loja ?? "todas", periodo: `${year}-${String(month).padStart(2, "0")}` })
 
   const now = new Date()
   const periods: { year: number; month: number }[] = []
