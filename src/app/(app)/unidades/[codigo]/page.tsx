@@ -68,6 +68,7 @@ import { DiagnosticoTab } from "./_components/diagnostico-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { CardapioCwTab } from "./_components/cardapio-cw-tab"
+import { AvaliacoesCwTab } from "./_components/avaliacoes-cw-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
 import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
@@ -670,6 +671,18 @@ function DetailTabs({
       content: (
         <Suspense fallback={<TabSkeleton />}>
           <AvaliacoesKeetaTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+    {
+      // Avaliação do canal próprio vem pela API, com sub-nota por dimensão —
+      // atendimento, produto, embalagem, tempo e custo/benefício. Nenhum
+      // marketplace abre esse detalhe.
+      platform: "cardapioweb" as const,
+      empty: false,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <AvaliacoesCwTab unitId={unit.id} year={year} month={month} />
         </Suspense>
       ),
     },

@@ -9,7 +9,8 @@
  * Ordem dentro de uma rodada:
  *   1. Incremental — cabeçalhos novos desde a última janela
  *   2. Backfill    — anda mais uma janela pra trás, se ainda faltar
- *   3. Detalhe     — consome a fila até o limite do lote
+ *   3. Avaliações  — varredura curta (não filtra por data, mas é barata)
+ *   4. Detalhe     — consome a fila até o limite do lote
  *
  * O detalhe vem por último e sempre roda: assim o usuário vê dado útil
  * aparecendo já na primeira execução, em vez de esperar o backfill inteiro.
@@ -24,6 +25,7 @@ import {
   importarHistorico,
   type CwInstall,
 } from "./pedidos"
+import { sincronizarAvaliacoes } from "./avaliacoes"
 
 /** Janela do backfill. O /orders/history aceita no máximo 6 meses por
  *  consulta; 30 dias por rodada mantém cada execução curta. */
@@ -37,6 +39,7 @@ export type ResultadoSync = {
   incremental?: { pedidos: number; erro?: string }
   backfill?: { de: string; ate: string; pedidos: number; erro?: string }
   detalhe?: { processados: number; erros: number; restantes: number }
+  avaliacoes?: { gravadas: number; total: number | null; erro?: string }
   concluido: boolean
   erro?: string
 }
@@ -181,7 +184,20 @@ export async function sincronizarInstall(
     }
   }
 
-  // ── 3) Detalhe: consome a fila ────────────────────────────────────────
+  // ── 3) Avaliações ─────────────────────────────────────────────────────
+  //
+  // Barata e sem cursor: a listagem não filtra por data, mas avaliação não
+  // muda depois de escrita, então o upsert por review_id faz repetir sair de
+  // graça. Roda antes do detalhe porque é rápida e o detalhe é quem consome o
+  // tempo que sobrar.
+  const aval = await sincronizarAvaliacoes(install)
+  resultado.avaliacoes = {
+    gravadas: aval.novas,
+    total: aval.total,
+    erro: aval.erro,
+  }
+
+  // ── 4) Detalhe: consome a fila ────────────────────────────────────────
   const det = await detalharPendentes(install, opts.loteDetalhe ?? LOTE_DETALHE)
   resultado.detalhe = det
 
