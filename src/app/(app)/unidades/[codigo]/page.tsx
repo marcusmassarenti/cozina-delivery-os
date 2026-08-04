@@ -67,6 +67,7 @@ import { CardapioTab } from "./_components/cardapio-tab"
 import { DiagnosticoTab } from "./_components/diagnostico-tab"
 import { Cardapio99Tab } from "./_components/cardapio-99-tab"
 import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
+import { CardapioCwTab } from "./_components/cardapio-cw-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
 import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
@@ -629,6 +630,17 @@ function DetailTabs({
       content: (
         <Suspense fallback={<TabSkeleton />}>
           <CardapioKeetaTab unitId={unit.id} year={year} month={month} />
+        </Suspense>
+      ),
+    },
+    {
+      // Único cardápio que NÃO depende de planilha: a API do Cardápio Web
+      // devolve o catálogo inteiro, então a aba já nasce preenchida.
+      platform: "cardapioweb" as const,
+      empty: false,
+      content: (
+        <Suspense fallback={<TabSkeleton />}>
+          <CardapioCwTab unitId={unit.id} />
         </Suspense>
       ),
     },
