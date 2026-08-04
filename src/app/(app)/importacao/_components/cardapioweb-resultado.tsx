@@ -70,8 +70,8 @@ export function CardapiowebResultado({
             {loja ? `: ${loja}` : ""}
           </p>
           <p className="mt-0.5 text-xs text-emerald-800/80 dark:text-emerald-400/80">
-            Os pedidos novos passam a entrar sozinhos. O histórico antigo vem
-            aos poucos —{" "}
+            Os pedidos novos passam a entrar sozinhos, todo dia. O histórico
+            deste ano vem aos poucos, algumas semanas por noite —{" "}
             <Link href="/integracao/cardapioweb?cw=manual" className="underline">
               acompanhe aqui
             </Link>

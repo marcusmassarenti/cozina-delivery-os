@@ -32,6 +32,11 @@ export const CRON_LABEL: Record<string, RotinaLabel> = {
     titulo: "Financeiro da 99 Food",
     descricao: "Puxa o faturamento e o cardápio das lojas na 99",
   },
+  "cardapioweb-sync": {
+    titulo: "Vendas do Cardápio Web",
+    descricao:
+      "Traz os pedidos novos do canal próprio e completa o histórico do ano",
+  },
   "process-99-webhooks": {
     titulo: "Pedidos da 99 Food",
     descricao: "Processa os pedidos que a 99 envia em tempo real",

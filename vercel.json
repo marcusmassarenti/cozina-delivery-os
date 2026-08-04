@@ -13,6 +13,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/cardapioweb-sync",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/ifood-auto-vincular",
       "schedule": "*/15 * * * *"
     },

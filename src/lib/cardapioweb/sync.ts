@@ -130,8 +130,20 @@ export async function sincronizarInstall(
   const st = stRow as StateRow
 
   const hoje = new Date()
-  const alvo =
-    paraData(st.backfill_alvo) ?? diasAtras((opts.mesesAlvo ?? 6) * 30)
+
+  // Até onde o backfill volta. O padrão é 1º de janeiro do ano corrente: é o
+  // que o lojista espera ver quando conecta ("o meu ano"), e é o recorte que
+  // o dashboard e o DRE usam pra comparar mês a mês. Antes eram 6 meses, o
+  // que cortava janeiro/fevereiro no meio do ano sem avisar ninguém.
+  //
+  // Alvo já guardado só continua valendo se for MAIS FUNDO que o padrão.
+  // Instalação que nasceu na regra dos 6 meses tem alvo mais raso, e
+  // respeitá-lo deixaria o começo do ano de fora pra sempre.
+  const alvoPadrao = opts.mesesAlvo
+    ? diasAtras(opts.mesesAlvo * 30)
+    : new Date(Date.UTC(hoje.getUTCFullYear(), 0, 1))
+  const alvoSalvo = paraData(st.backfill_alvo)
+  const alvo = alvoSalvo && alvoSalvo < alvoPadrao ? alvoSalvo : alvoPadrao
 
   const resultado: ResultadoSync = {
     installId,
@@ -146,7 +158,9 @@ export async function sincronizarInstall(
 
   // ── 2) Backfill: mais uma janela pra trás ─────────────────────────────
   let cursor = paraData(st.backfill_cursor) ?? hoje
-  let backfillConcluido = st.backfill_concluido
+  // Alvo alargado reabre um backfill que já tinha se dado por concluído —
+  // senão a loja que terminou nos 6 meses nunca buscaria o resto do ano.
+  let backfillConcluido = st.backfill_concluido && cursor <= alvo
 
   if (!backfillConcluido && inc.ok) {
     const fim = new Date(cursor)
@@ -187,6 +201,55 @@ export async function sincronizarInstall(
   // "Concluído" = nada mais pra trás E fila vazia.
   resultado.concluido = backfillConcluido && det.restantes === 0
   return resultado
+}
+
+/**
+ * Roda o sync de TODAS as lojas conectadas — é o que o cron diário chama.
+ *
+ * Só produção: instalação de sandbox é teste nosso, e gastar a cota de
+ * chamadas do Cardápio Web com ela atrasaria loja de cliente de verdade.
+ *
+ * Uma loja que falha não derruba as outras — o erro fica no resultado dela e
+ * o laço segue. Sem isso, a primeira loja com token vencido faria o cron
+ * inteiro morrer e ninguém sincronizaria naquele dia.
+ */
+export async function sincronizarTodas(
+  opts: { loteDetalhe?: number; limiteMs?: number } = {},
+): Promise<ResultadoSync[]> {
+  const admin = createAdminClient()
+  const prazo = Date.now() + (opts.limiteMs ?? 4 * 60_000)
+  const { data } = await admin
+    .from("cardapioweb_installs")
+    .select("id, merchant_name")
+    .eq("active", true)
+    .eq("ambiente", "producao")
+    .not("unit_id", "is", null) // sem loja o dado não aparece em tela nenhuma
+    .order("created_at")
+
+  const out: ResultadoSync[] = []
+  for (const i of data ?? []) {
+    const id = i.id as string
+    // A function da Vercel tem 5 minutos. Parar de COMEÇAR loja nova perto do
+    // teto é melhor que ser cortado no meio: o cursor de cada loja guarda
+    // onde parou, então quem ficou de fora entra na rodada seguinte.
+    if (Date.now() > prazo) {
+      console.log(`[cw-cron] prazo estourou — ${id} fica pra próxima rodada.`)
+      break
+    }
+    try {
+      out.push(await sincronizarInstall(id, opts))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error(`[cw-cron] ${i.merchant_name ?? id}: ${msg}`)
+      out.push({
+        installId: id,
+        loja: (i.merchant_name as string | null) ?? id.slice(0, 8),
+        concluido: false,
+        erro: msg,
+      })
+    }
+  }
+  return out
 }
 
 /** Roda o sync de todas as lojas ativas de uma holding. */

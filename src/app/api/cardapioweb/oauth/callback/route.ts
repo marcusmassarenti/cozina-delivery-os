@@ -9,6 +9,8 @@
  * Se a loja já estava conectada, os tokens novos substituem os antigos na
  * instalação existente em vez de criar uma segunda.
  */
+import { after } from "next/server"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   salvarTokens,
@@ -18,9 +20,13 @@ import {
 import { fetchCw } from "@/lib/cardapioweb/client"
 import { avisarInstalacaoNova } from "@/lib/cardapioweb/avisar-instalacao"
 import { vincularSeObvio } from "@/lib/cardapioweb/vincular-automatico"
+import { sincronizarInstall } from "@/lib/cardapioweb/sync"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+// A primeira fatia de sync roda depois da resposta (ver passo 7) e precisa de
+// fôlego: o redirect sai na hora, a function é que fica viva mais um pouco.
+export const maxDuration = 120
 
 /** Volta pra tela de importação com o resultado na query. */
 function voltar(req: Request, params: Record<string, string>): Response {
@@ -236,6 +242,31 @@ export async function GET(req: Request) {
       holdingId: pendente.holding_id ?? null,
     }).catch((e: unknown) => console.error("cardapioweb: aviso de instalação", e))
   }
+
+  // 7) Puxa a primeira fatia de dados sem segurar o redirect.
+  //
+  // O cron diário completaria o histórico sozinho, mas quem conecta às 15h
+  // esperaria até o meio-dia seguinte pra ver QUALQUER coisa — e o lojista
+  // acabou de autorizar justamente pra ver os números dele. Uma fatia aqui
+  // (pedidos recentes + a primeira janela de 30 dias + um lote de detalhe)
+  // faz a tela já ter faturamento em poucos minutos; o resto do ano vem nas
+  // rodadas seguintes do cron.
+  //
+  // `after` mantém a function viva DEPOIS da resposta: o navegador do
+  // lojista não fica preso esperando o sync terminar.
+  const idParaSync = installId
+  after(async () => {
+    try {
+      const r = await sincronizarInstall(idParaSync)
+      console.log(
+        `[cw-primeiro-sync] ${r.loja}: ${r.incremental?.pedidos ?? 0} recentes, ` +
+          `${r.backfill?.pedidos ?? 0} do histórico, ${r.detalhe?.processados ?? 0} detalhados`,
+      )
+    } catch (e) {
+      // Falhar aqui não quebra a conexão — o cron tenta de novo amanhã.
+      console.error("[cw-primeiro-sync]", e)
+    }
+  })
 
   return voltar(req, {
     cw: "ok",

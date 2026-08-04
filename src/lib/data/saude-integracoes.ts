@@ -255,6 +255,7 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     "ifood-review-sync",
     "ifood-auto-vincular",
     "ninefood-sync",
+    "cardapioweb-sync",
     "process-99-webhooks",
     "billing-vencimentos",
     "emitir-faturas",
