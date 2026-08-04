@@ -147,11 +147,15 @@ export default async function CardapioWebPage({
   // Não dá pra confiar nele pra segurança — mas aqui ele só decide se
   // adiantamos um clique, e o consentimento continua sendo dado no portal
   // deles. `?cw=manual` desarma, pra quem quiser ficar nesta tela.
-  const veioDaAppStore = (await headers())
-    .get("referer")
-    ?.includes("cardapioweb.com")
+  // O AMBIENTE SAI DO PRÓPRIO REFERER. Fixar "producao" mandava quem veio da
+  // loja de sandbox pro portal de produção, onde ele não tem sessão — cai numa
+  // tela de login que não explica nada. Quem vem de portal.sandbox volta pro
+  // sandbox; o resto vai pra produção, que é o caso do lojista de verdade.
+  const referer = (await headers()).get("referer") ?? ""
+  const veioDaAppStore = referer.includes("cardapioweb.com")
   if (veioDaAppStore && sp.cw !== "manual") {
-    redirect("/api/cardapioweb/oauth/start?ambiente=producao")
+    const amb = referer.includes("sandbox") ? "sandbox" : "producao"
+    redirect(`/api/cardapioweb/oauth/start?ambiente=${amb}`)
   }
   const [{ installs, porInstall, porStats }, unidades, superadmin] =
     await Promise.all([

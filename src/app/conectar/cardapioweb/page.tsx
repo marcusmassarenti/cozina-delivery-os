@@ -1,3 +1,4 @@
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
@@ -20,13 +21,28 @@ export const dynamic = "force-dynamic"
  * funciona pra quem JÁ está logado. Esta rota cobre o resto — e é a que vale
  * pedir ao Cardápio Web pra cadastrar como URL de onboarding do app.
  */
-export default async function ConectarCardapioWebPage() {
+export default async function ConectarCardapioWebPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ambiente?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
 
+  // O ambiente vem da URL quando explícito, senão do portal de onde a pessoa
+  // veio. Precisa viajar na URL porque, depois do login, o Referer é a NOSSA
+  // tela de login — a origem original se perde ali.
+  const referer = (await headers()).get("referer") ?? ""
+  const ambiente =
+    sp.ambiente === "sandbox" || referer.includes("portal.sandbox.cardapioweb")
+      ? "sandbox"
+      : "producao"
+
   if (!data.user) {
-    redirect(`/login?next=${encodeURIComponent("/conectar/cardapioweb")}`)
+    const volta = `/conectar/cardapioweb?ambiente=${ambiente}`
+    redirect(`/login?next=${encodeURIComponent(volta)}`)
   }
 
-  redirect("/api/cardapioweb/oauth/start?ambiente=producao")
+  redirect(`/api/cardapioweb/oauth/start?ambiente=${ambiente}`)
 }
