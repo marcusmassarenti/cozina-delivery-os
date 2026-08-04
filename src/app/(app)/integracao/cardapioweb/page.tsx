@@ -235,29 +235,17 @@ export default async function CardapioWebPage({
                       >
                         {i.ambiente}
                       </span>
-                      {/* "OAuth" / "API key" é assunto de quem construiu a
-                          integração. Pro lojista, ou a loja está conectada ou
-                          não está — como ela autentica não muda nada do lado
-                          dele. Fica só pro superadmin, pra depurar. */}
-                      {superadmin && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                          {i.auth_mode === "api_key" ? "API key" : "OAuth"}
-                        </span>
-                      )}
+                      {/* Como a loja autentica (OAuth ou chave) não muda nada
+                          pra ninguém no dia a dia — nem pro lojista, nem pra
+                          mim. Fica no bloco de detalhes técnicos, que só abre
+                          quando alguém precisa falar com o suporte deles. */}
                       {!i.active && (
                         <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
                           inativa
                         </span>
                       )}
                     </div>
-                    {/* O id interno da loja no Cardápio Web não diz nada pro
-                        lojista — só serve quando a gente fala com o suporte
-                        deles. Some da tela do cliente. */}
-                    {superadmin && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Loja no Cardápio Web: {i.merchant_id ?? "—"}
-                      </p>
-                    )}
+
                     {i.ambiente === "sandbox" && (
                       <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         Ambiente de teste — o faturamento desta loja NÃO entra
@@ -292,21 +280,22 @@ export default async function CardapioWebPage({
                 </div>
 
                 {/* Métricas de sync */}
-                {/* Duas leituras da MESMA coisa. "Cabeçalhos", "detalhados",
-                    "backfill" e "cursor" são palavras de quem construiu o
-                    importador — o lojista quer saber quantos pedidos entraram,
-                    quanto isso deu e se ainda falta buscar. */}
+                {/* Um jeito só de ler, pro cliente e pra mim. O que era
+                    exclusivo do superadmin (id da loja, selo OAuth, % de
+                    detalhados, cursor do backfill) ou não muda decisão nenhuma
+                    ou só importa quando está RUIM — então "Detalhados" aparece
+                    apenas quando falta detalhe, e o resto foi pro bloco técnico. */}
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Metrica
                     label="Pedidos"
                     valor={fmtNum(s?.pedidos ?? 0)}
-                    nota={superadmin ? "cabeçalhos importados" : "já importados"}
+                    nota="já importados"
                   />
-                  {superadmin ? (
+                  {pct < 100 && (s?.pedidos ?? 0) > 0 ? (
                     <Metrica
-                      label="Detalhados"
-                      valor={`${fmtNum(s?.detalhados ?? 0)} · ${pct}%`}
-                      nota="com itens e pagamento"
+                      label="Sem detalhe"
+                      valor={`${fmtNum((s?.pedidos ?? 0) - (s?.detalhados ?? 0))}`}
+                      nota={`${100 - pct}% ainda sem itens`}
                     />
                   ) : (
                     <Metrica
@@ -318,29 +307,15 @@ export default async function CardapioWebPage({
                   <Metrica
                     label="Faturamento"
                     valor={fmtBRL(fat?.faturamento ?? 0)}
-                    nota={
-                      superadmin
-                        ? `ticket médio ${fmtBRL(fat?.ticket ?? 0)}`
-                        : "do que já entrou"
-                    }
+                    nota="do que já entrou"
                   />
                   <Metrica
-                    label={superadmin ? "Histórico até" : "Situação"}
-                    valor={
-                      superadmin
-                        ? st?.backfill_cursor ?? "—"
-                        : st?.backfill_concluido
-                          ? "Em dia"
-                          : "Importando"
-                    }
+                    label="Situação"
+                    valor={st?.backfill_concluido ? "Em dia" : "Importando"}
                     nota={
-                      superadmin
-                        ? st?.backfill_concluido
-                          ? "backfill concluído"
-                          : "ainda voltando no tempo"
-                        : st?.backfill_concluido
-                          ? "todo o histórico já entrou"
-                          : `histórico chegou até ${st?.backfill_cursor ?? "—"}`
+                      st?.backfill_concluido
+                        ? "todo o histórico já entrou"
+                        : `histórico chegou até ${st?.backfill_cursor ?? "—"}`
                     }
                   />
                 </div>
@@ -358,6 +333,17 @@ export default async function CardapioWebPage({
                     fica leve, e nada pesado é sequer buscado no servidor. */}
                 {aberta ? (
                   <>
+
+                {/* Detalhes técnicos: o que só serve pra falar com o suporte
+                    deles ou depurar. Fora daqui poluía a lista inteira com
+                    informação que ninguém usa pra decidir nada. */}
+                {superadmin && (
+                  <p className="mt-4 text-[11px] text-muted-foreground">
+                    Loja no Cardápio Web: <code className="font-mono">{i.merchant_id ?? "—"}</code>
+                    {" · "}autenticação {i.auth_mode === "api_key" ? "por chave" : "OAuth"}
+                    {i.scopes?.length ? ` · escopos: ${i.scopes.join(", ")}` : ""}
+                  </p>
+                )}
 
                 {/* Canal de origem — o trunfo que nenhuma outra tela tem */}
                 {fat && fat.faturamento > 0 && (
