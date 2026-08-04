@@ -27,6 +27,8 @@ import { ClientesButton } from "./_components/clientes-button"
 import { ConectarLoja } from "./_components/conectar-loja"
 import { SyncButton } from "./_components/sync-button"
 import { VinculoUnidade } from "./_components/vinculo-unidade"
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"
 
@@ -129,9 +131,28 @@ async function carregar(lojaAberta: string | null) {
 export default async function CardapioWebPage({
   searchParams,
 }: {
-  searchParams: Promise<{ loja?: string; sandbox?: string }>
+  searchParams: Promise<{ loja?: string; sandbox?: string; cw?: string }>
 }) {
   const sp = await searchParams
+
+  // CHEGOU PELO "INSTALAR" DA CW APP STORE → emenda direto no OAuth.
+  //
+  // O botão da App Store manda o lojista pra cá e para. Ele vê uma tela que
+  // não pediu e precisa descobrir sozinho que falta clicar em "Conectar" —
+  // então acha que instalou, sai, e do lado deles fica "não instalado". Foi
+  // exatamente a reclamação que o Cardápio Web trouxe em 03/ago/26: quatro
+  // lojas de clientes reais declararam usar a plataforma e NENHUMA conectou.
+  //
+  // A App Store não manda parâmetro nenhum na URL, então a pista é o Referer.
+  // Não dá pra confiar nele pra segurança — mas aqui ele só decide se
+  // adiantamos um clique, e o consentimento continua sendo dado no portal
+  // deles. `?cw=manual` desarma, pra quem quiser ficar nesta tela.
+  const veioDaAppStore = (await headers())
+    .get("referer")
+    ?.includes("cardapioweb.com")
+  if (veioDaAppStore && sp.cw !== "manual") {
+    redirect("/api/cardapioweb/oauth/start?ambiente=producao")
+  }
   const [{ installs, porInstall, porStats }, unidades, superadmin] =
     await Promise.all([
       carregar(sp.loja ?? null),
@@ -160,8 +181,10 @@ export default async function CardapioWebPage({
           Integração Cardápio Web
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Cada loja conecta a própria conta. O histórico entra em lotes — o
-          sync é retomável, então pode rodar quantas vezes precisar.
+          {/* Antes: "o histórico entra em lotes — o sync é retomável". Descreve
+              como NÓS construímos, não o que o lojista precisa saber. */}
+          Conecte sua loja e os pedidos passam a entrar sozinhos. O histórico
+          antigo vem aos poucos: pode fechar a página e continuar depois.
         </p>
       </div>
 
@@ -212,18 +235,29 @@ export default async function CardapioWebPage({
                       >
                         {i.ambiente}
                       </span>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                        {i.auth_mode === "api_key" ? "API key" : "OAuth"}
-                      </span>
+                      {/* "OAuth" / "API key" é assunto de quem construiu a
+                          integração. Pro lojista, ou a loja está conectada ou
+                          não está — como ela autentica não muda nada do lado
+                          dele. Fica só pro superadmin, pra depurar. */}
+                      {superadmin && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          {i.auth_mode === "api_key" ? "API key" : "OAuth"}
+                        </span>
+                      )}
                       {!i.active && (
                         <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
                           inativa
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Loja no Cardápio Web: {i.merchant_id ?? "—"}
-                    </p>
+                    {/* O id interno da loja no Cardápio Web não diz nada pro
+                        lojista — só serve quando a gente fala com o suporte
+                        deles. Some da tela do cliente. */}
+                    {superadmin && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Loja no Cardápio Web: {i.merchant_id ?? "—"}
+                      </p>
+                    )}
                     {i.ambiente === "sandbox" && (
                       <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         Ambiente de teste — o faturamento desta loja NÃO entra
@@ -258,29 +292,55 @@ export default async function CardapioWebPage({
                 </div>
 
                 {/* Métricas de sync */}
+                {/* Duas leituras da MESMA coisa. "Cabeçalhos", "detalhados",
+                    "backfill" e "cursor" são palavras de quem construiu o
+                    importador — o lojista quer saber quantos pedidos entraram,
+                    quanto isso deu e se ainda falta buscar. */}
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Metrica
                     label="Pedidos"
                     valor={fmtNum(s?.pedidos ?? 0)}
-                    nota="cabeçalhos importados"
+                    nota={superadmin ? "cabeçalhos importados" : "já importados"}
                   />
-                  <Metrica
-                    label="Detalhados"
-                    valor={`${fmtNum(s?.detalhados ?? 0)} · ${pct}%`}
-                    nota="com itens e pagamento"
-                  />
+                  {superadmin ? (
+                    <Metrica
+                      label="Detalhados"
+                      valor={`${fmtNum(s?.detalhados ?? 0)} · ${pct}%`}
+                      nota="com itens e pagamento"
+                    />
+                  ) : (
+                    <Metrica
+                      label="Ticket médio"
+                      valor={fmtBRL(fat?.ticket ?? 0)}
+                      nota="por pedido"
+                    />
+                  )}
                   <Metrica
                     label="Faturamento"
                     valor={fmtBRL(fat?.faturamento ?? 0)}
-                    nota={`ticket médio ${fmtBRL(fat?.ticket ?? 0)}`}
+                    nota={
+                      superadmin
+                        ? `ticket médio ${fmtBRL(fat?.ticket ?? 0)}`
+                        : "do que já entrou"
+                    }
                   />
                   <Metrica
-                    label="Histórico até"
-                    valor={st?.backfill_cursor ?? "—"}
+                    label={superadmin ? "Histórico até" : "Situação"}
+                    valor={
+                      superadmin
+                        ? st?.backfill_cursor ?? "—"
+                        : st?.backfill_concluido
+                          ? "Em dia"
+                          : "Importando"
+                    }
                     nota={
-                      st?.backfill_concluido
-                        ? "backfill concluído"
-                        : "ainda voltando no tempo"
+                      superadmin
+                        ? st?.backfill_concluido
+                          ? "backfill concluído"
+                          : "ainda voltando no tempo"
+                        : st?.backfill_concluido
+                          ? "todo o histórico já entrou"
+                          : `histórico chegou até ${st?.backfill_cursor ?? "—"}`
                     }
                   />
                 </div>

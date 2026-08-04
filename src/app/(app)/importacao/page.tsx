@@ -19,6 +19,7 @@ import {
 } from "@/lib/auth/permissions"
 
 import { CardapiowebResultado } from "./_components/cardapioweb-resultado"
+import { CardapiowebConvite } from "./_components/cardapioweb-convite"
 import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
@@ -165,6 +166,10 @@ export default async function ImportacaoPage({
         motivo={sp.motivo}
         detalhe={sp.detalhe}
       />
+
+      {/* Declarou Cardápio Web e nunca conectou → o faturamento de lá está
+          fora do sistema sem ninguém perceber. Some quando conecta. */}
+      <CardapiowebConvite />
 
       <div data-tour="download">
         <DownloadGuide enabled={enabledReports} />

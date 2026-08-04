@@ -15,11 +15,13 @@ function Botao({ concluido }: { concluido: boolean }) {
   return (
     <Button type="submit" disabled={pending} size="sm">
       <RefreshCw className={`size-4 ${pending ? "animate-spin" : ""}`} />
+      {/* "Lote" é palavra nossa: quem lê é o lojista, e pra ele o que importa
+          é que cada clique traz mais pedidos antigos. */}
       {pending
-        ? "Sincronizando..."
+        ? "Buscando..."
         : concluido
-          ? "Sincronizar de novo"
-          : "Sincronizar mais um lote"}
+          ? "Buscar pedidos novos"
+          : "Buscar mais histórico"}
     </Button>
   )
 }
