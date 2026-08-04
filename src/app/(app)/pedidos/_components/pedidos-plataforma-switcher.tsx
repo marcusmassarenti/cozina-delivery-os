@@ -5,7 +5,6 @@ import { useNavigate } from "@/components/shared/navigation-progress"
 
 import {
   PlatformLogo,
-  type MarketplaceId,
   type PlatformId,
 } from "@/components/platform-logo"
 
@@ -18,14 +17,14 @@ export function PedidosPlataformaSwitcher({
   current,
   platforms,
 }: {
-  current: "ifood" | "99food" | "keeta"
+  current: "ifood" | "99food" | "keeta" | "cardapioweb"
   /** Plataformas habilitadas no escopo — só essas viram aba. */
   platforms: PlatformId[]
 }) {
   const navigate = useNavigate()
   const sp = useSearchParams()
 
-  const go = (p: "ifood" | "99food" | "keeta") => {
+  const go = (p: "ifood" | "99food" | "keeta" | "cardapioweb") => {
     const params = new URLSearchParams(sp.toString())
     if (p === "ifood") params.delete("plataforma")
     else params.set("plataforma", p)
@@ -33,15 +32,17 @@ export function PedidosPlataformaSwitcher({
     navigate(qs ? `/pedidos?${qs}` : "/pedidos")
   }
 
-  // Só marketplace: a listagem de pedidos desta tela lê as tabelas de
-  // cada marketplace. O Cardápio Web tem pedidos importados, mas ainda
-  // sem tela de listagem — abrir a aba aqui mostraria vazio.
-  const opts: { id: MarketplaceId; label: string }[] = (
+  // O Cardápio Web entrou na lista: a aba dele existe desde que a tela de
+  // listagem foi construída. O conteúdo é OUTRO — marketplace mostra VR,
+  // subsídio e comissão; canal próprio mostra tipo de pedido, horário e forma
+  // de pagamento, que só o hub da própria loja sabe.
+  const opts: { id: PlatformId; label: string }[] = (
     [
       { id: "ifood", label: "iFood" },
       { id: "99food", label: "99 Food" },
       { id: "keeta", label: "Keeta" },
-    ] as { id: MarketplaceId; label: string }[]
+      { id: "cardapioweb", label: "Cardápio Web" },
+    ] as { id: PlatformId; label: string }[]
   ).filter((o) => platforms.includes(o.id))
 
   return (

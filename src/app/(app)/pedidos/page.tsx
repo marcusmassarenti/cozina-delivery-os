@@ -25,6 +25,7 @@ import {
   getNetworkNinefoodPedidoResumo,
 } from "@/lib/data/ninefood-pedidos"
 import { getVisibleUnits } from "@/lib/data/units"
+import { getOperacaoCardapioWeb } from "@/lib/data/cardapioweb-operacao"
 import { assertCanView } from "@/lib/auth/permissions"
 import {
   formatPeriodLabel,
@@ -38,6 +39,7 @@ import { PedidosIfoodView } from "./_components/pedidos-ifood-view"
 import { PedidosKeetaView } from "./_components/pedidos-keeta-view"
 import { PedidosNinefoodView } from "./_components/pedidos-ninefood-view"
 import { PedidosPlataformaSwitcher } from "./_components/pedidos-plataforma-switcher"
+import { PedidosCardapiowebView } from "./_components/pedidos-cardapioweb-view"
 
 /**
  * Tela /pedidos — detalhe do "Relatório de pedidos" por plataforma.
@@ -65,12 +67,14 @@ export default async function PedidosPage({
   const month = Number(periodRange.start.slice(5, 7))
   const queryRange = isFullMonth ? undefined : periodRange
   const periodoParam = sp.periodo
-  const plataforma: "ifood" | "99food" | "keeta" =
+  const plataforma: "ifood" | "99food" | "keeta" | "cardapioweb" =
     sp.plataforma === "keeta"
       ? "keeta"
       : sp.plataforma === "99food"
         ? "99food"
-        : "ifood"
+        : sp.plataforma === "cardapioweb"
+          ? "cardapioweb"
+          : "ifood"
 
   const [allUnits, availablePeriods] = await Promise.all([
     getVisibleUnits(),
@@ -83,10 +87,12 @@ export default async function PedidosPage({
       ? activeUnits.filter((u) => lojaCodes.includes(u.code))
       : activeUnits
   const ids = filteredUnits.map((u) => u.id)
+  // Marketplaces + Cardápio Web. Antes só marketplace, porque a tela inteira
+  // era sobre VR, subsídio e comissão — que não existem em canal próprio. A
+  // aba do Cardápio Web mostra OUTRA coisa (tipo de pedido, horário, forma de
+  // pagamento), então ela cabe aqui sem forçar o conceito de repasse.
   const tenantPlats: PlatformId[] = (
-    // MarketplaceId, não PlatformId: esta tela abre VR, subsídio e comissão —
-    // tudo inexistente em canal próprio. O tipo agora documenta a intenção.
-    MARKETPLACES
+    [...MARKETPLACES, "cardapioweb"] as PlatformId[]
   ).filter((p) => filteredUnits.some((u) => u.platforms.includes(p)))
 
   // Dados específicos da plataforma selecionada (sempre consolidado das lojas
@@ -146,6 +152,12 @@ export default async function PedidosPage({
           return { resumo, unitsWithData, porLoja: enriched }
         })()
       : null
+  // Canal próprio: uma chamada só devolve todos os cortes (tipo de pedido,
+  // horário, pagamento, cancelamento, taxas), agregados dentro do banco.
+  const cw =
+    plataforma === "cardapioweb"
+      ? await getOperacaoCardapioWeb(ids, year, month, queryRange)
+      : null
 
   // Cobertura (lojas com dado) por plataforma — pro texto de consolidado.
   const dataCodes =
@@ -161,7 +173,15 @@ export default async function PedidosPage({
               .filter((u) => ninefood!.unitsWithData.has(u.id))
               .map((u) => u.code),
           )
-        : new Set(ifood!.vrByUnit.map((u) => u.unitCode))
+        : // O ramo final era um `else` sem condição, e por isso a aba nova do
+          // Cardápio Web caía nele e estourava em `ifood!.vrByUnit`. Agora cada
+          // plataforma diz o seu nome — é o padrão que já causou quatro bugs de
+          // dinheiro neste projeto quando ficou implícito.
+          plataforma === "ifood"
+          ? new Set(ifood!.vrByUnit.map((u) => u.unitCode))
+          : // Canal próprio não tem cobertura por planilha: ou a loja está
+            // conectada e o dado vem sozinho, ou não está.
+            new Set(filteredUnits.map((u) => u.code))
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -203,7 +223,9 @@ export default async function PedidosPage({
         </div>
       )}
 
-      {plataforma === "keeta" ? (
+      {plataforma === "cardapioweb" ? (
+        <PedidosCardapiowebView op={cw!} lojas={filteredUnits.length} />
+      ) : plataforma === "keeta" ? (
         <PedidosKeetaView
           resumo={keeta!.resumo}
           porLoja={keeta!.porLoja}

@@ -180,7 +180,8 @@ export function ClientDetailView({
       {/* Ações SOBRE o cliente ficam no topo, não dentro de um card de assunto.
           O "Enviar aviso" nasceu colado no Editar da mensalidade e ninguém
           acharia: push não tem nada a ver com cobrança. No drawer o cabeçalho é
-          do Sheet, então a barra aparece aqui em cima do conteúdo. */}
+          do Sheet, então a barra aparece aqui em cima do conteúdo — a página
+          cheia tem as mesmas ações dentro do próprio cabeçalho, mais abaixo. */}
       {embedded && (
         <div className="flex flex-wrap items-center gap-2 border-b pb-3">
           <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
@@ -209,6 +210,7 @@ export function ClientDetailView({
             )}
             <span className="ml-auto">
               <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
+              <VerComoBotao holdingId={c.id} holdingName={c.name} />
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
