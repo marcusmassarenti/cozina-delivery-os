@@ -5,6 +5,12 @@ import { createHash } from "node:crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { isAiPlan } from "@/lib/data/billing"
+import { PLATAFORMAS } from "@/components/platform-logo"
+import {
+  getOperacaoCardapioWeb,
+  ROTULO_TIPO,
+} from "@/lib/data/cardapioweb-operacao"
+import { getAvaliacoesCardapioWeb } from "@/lib/data/cardapioweb-avaliacoes"
 import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
 import { getMonthlyGeneral } from "@/lib/data/lancamentos"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
@@ -55,10 +61,10 @@ async function montarSnapshot(
     consol,
     geral,
     comentarios,
-    topIf,
-    top99,
-    topKe,
+    topPorPlataforma,
     keFat,
+    opCw,
+    avalCw,
   ] = await Promise.all([
     getFunnelForMonth(unitId, year, month),
     getCardapioPeriodoForMonth(unitId, year, month),
@@ -69,10 +75,22 @@ async function montarSnapshot(
     getOperacaoConsolidada(unitId, year, month),
     getMonthlyGeneral(unitId, year, month),
     getComentariosNegativos(year, month, [unitId], 2),
-    getTopProdutos("ifood", [unitId], year, month, 15),
-    getTopProdutos("99food", [unitId], year, month, 15),
-    getTopProdutos("keeta", [unitId], year, month, 15),
+    // DERIVADO de PLATAFORMAS, não escrito à mão. Aqui estavam as três
+    // plataformas de marketplace fixas no código, e o Cardápio Web ficou de
+    // fora: numa loja de canal próprio a IA via ZERO produtos e montava plano
+    // de ação sem saber o que a loja vende. É o padrão que já causou quatro
+    // bugs de dinheiro neste projeto — lista de 3 num tipo de 4, sem erro de
+    // compilação. Derivando, plataforma nova entra sozinha.
+    Promise.all(
+      PLATAFORMAS.map((p) => getTopProdutos(p, [unitId], year, month, 15)),
+    ),
     getKeetaFaturaTaxasForMonth(unitId, year, month),
+    // Canal próprio: o hub da loja sabe coisas que marketplace nenhum conta —
+    // se foi mesa ou entrega, a que horas, por que cancelou, e a nota separada
+    // por dimensão. É a matéria-prima do plano de ação numa loja sem
+    // marketplace, que antes chegava aqui sem NADA.
+    getOperacaoCardapioWeb([unitId], year, month),
+    getAvaliacoesCardapioWeb([unitId], year, month),
   ])
 
   // CMV (manual) — só entra se foi lançado (senão o plano da IA acharia 0% ótimo).
@@ -82,9 +100,9 @@ async function montarSnapshot(
       ? (cmvValor / consol.total.bruto) * 100
       : null
 
-  // Top produtos da operação: soma as 3 plataformas por nome do item.
+  // Top produtos da operação: soma TODAS as plataformas por nome do item.
   const prodMap = new Map<string, { item: string; qtd: number; valor: number }>()
-  for (const p of [...topIf, ...top99, ...topKe]) {
+  for (const p of topPorPlataforma.flat()) {
     const chave = p.nomeItem.trim().toLowerCase()
     if (!chave) continue
     const cur = prodMap.get(chave)
@@ -139,6 +157,40 @@ async function montarSnapshot(
         tempoPreparoMin: p.tempoPreparoMin ?? undefined,
         taxaAceitacaoPct: p.taxaAceitacaoPct ?? undefined,
       })),
+    // Canal próprio (Cardápio Web). Só entra quando há dado: bloco vazio no
+    // prompt gasta contexto e convida a IA a comentar o que não existe.
+    canal_proprio: opCw.temDados
+      ? {
+          tipos_de_pedido: opCw.tipo.map((t) => ({
+            tipo: ROTULO_TIPO[t.valor] ?? t.valor,
+            pedidos: t.pedidos,
+            faturamento: round(t.valorTotal),
+          })),
+          horario_pico:
+            [...opCw.hora].sort((a, b) => b.pedidos - a.pedidos)[0]?.valor ??
+            null,
+          motivos_de_cancelamento: opCw.cancelamento.map((c) => ({
+            motivo: c.motivo,
+            pedidos: c.pedidos,
+            cestaPerdida: round(c.valorTotal),
+          })),
+          taxa_entrega_cobrada: round(opCw.taxas.entrega),
+          taxa_servico: round(opCw.taxas.servico),
+          // As sub-notas são o diferencial: dizem QUAL parte puxou a nota pra
+          // baixo, e vêm da pior pra melhor.
+          notas_por_dimensao: avalCw.temDados
+            ? avalCw.dimensoes.map((d) => ({
+                dimensao: d.dimensao,
+                media: d.media,
+                respostas: d.respostas,
+              }))
+            : undefined,
+          avaliacoes: avalCw.temDados
+            ? { total: avalCw.total, media: avalCw.media }
+            : undefined,
+        }
+      : undefined,
+
     // Métricas PROFUNDAS abaixo existem só no iFood (marketplace).
     detalhe_ifood: {
       visitas: periodo?.visitas ?? (funnel.diasComDado > 0 ? funnel.visitas : null),

@@ -24,6 +24,7 @@ import {
 } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
+import { getAvaliacoesCardapioWeb } from "@/lib/data/cardapioweb-avaliacoes"
 import {
   PLATAFORMAS,
   type PlatformId,
@@ -447,12 +448,19 @@ type Reputacao = {
     avaliacoes_1_2_estrelas: number
   }
   reclamacoes_recentes: Reclamacao[]
+  /** Só o Cardápio Web dá nota separada por dimensão. undefined = sem dado. */
+  canal_proprio?: {
+    nota_media: number | null
+    total_avaliacoes: number
+    notas_por_dimensao: { dimensao: string; media: number; respostas: number }[]
+    comentarios_recentes: { nota: number | null; comentario: string }[]
+  }
 }
 
 /**
- * Reputação da rede: nota por canal (iFood/99/Keeta) e distribuição por loja +
- * as reclamações reais (comentários 1-2★). Só 2 consultas (cada uma junta as 3
- * plataformas), pra não sobrecarregar o banco.
+ * Reputação da rede: nota por canal e distribuição por loja + as reclamações
+ * reais (comentários 1-2★), MAIS a avaliação do canal próprio, que vive em
+ * outra tabela e traz sub-nota por dimensão.
  */
 async function montarReputacao(
   units: { id: string; name: string }[],
@@ -461,9 +469,14 @@ async function montarReputacao(
 ): Promise<Reputacao> {
   const unitIds = units.map((u) => u.id)
   const nomePorId = new Map(units.map((u) => [u.id, u.name]))
-  const [rows, negativos] = await Promise.all([
+  const [rows, negativos, avalCw] = await Promise.all([
     getAvaliacoesByUnitForMonth(year, month, unitIds),
     getComentariosNegativos(year, month, unitIds, 2),
+    // As duas fontes acima são de marketplace. A avaliação do canal próprio
+    // vive noutra tabela e não chegava aqui — o Nino falava de reputação
+    // ignorando o Cardápio Web, que é onde o cliente avalia a LOJA e não a
+    // plataforma.
+    getAvaliacoesCardapioWeb(unitIds, year, month),
   ])
 
   const porLoja = new Map<string, ReputacaoLoja>()
@@ -501,6 +514,27 @@ async function montarReputacao(
       avaliacoes_1_2_estrelas: redeNeg,
     },
     reclamacoes_recentes,
+    // Canal próprio: só o Cardápio Web dá nota SEPARADA por dimensão, o que
+    // permite dizer QUAL parte puxou a reputação pra baixo em vez de só
+    // "a nota caiu". Vêm da pior pra melhor.
+    canal_proprio: avalCw.temDados
+      ? {
+          nota_media: avalCw.media,
+          total_avaliacoes: avalCw.total,
+          notas_por_dimensao: avalCw.dimensoes.map((d) => ({
+            dimensao: d.dimensao,
+            media: d.media,
+            respostas: d.respostas,
+          })),
+          comentarios_recentes: avalCw.comentarios.slice(0, 5).map((c) => ({
+            nota: c.nota,
+            comentario:
+              c.comentario.length > 160
+                ? `${c.comentario.slice(0, 160)}…`
+                : c.comentario,
+          })),
+        }
+      : undefined,
   }
 }
 
