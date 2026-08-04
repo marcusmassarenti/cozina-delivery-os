@@ -191,12 +191,16 @@ export default async function IfoodMerchantsPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+      {/* Volta pra Conexões de API, que é de onde se chega aqui hoje. Apontava
+          pra tela de homologação — que era o caminho quando a integração ainda
+          estava sendo homologada com o iFood, e virou um beco: quem clicava
+          caía numa bateria de testes de endpoint sem entender por quê. */}
       <Link
-        href="/integracao/ifood-homolog"
+        href="/clientes/conexoes"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" />
-        Voltar para homologação
+        Voltar para conexões
       </Link>
 
       <div className="flex items-end justify-between">

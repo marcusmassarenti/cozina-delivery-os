@@ -94,6 +94,25 @@ export async function installIdsDeProducao(): Promise<string[]> {
   return (data ?? []).map((r) => r.id as string)
 }
 
+/**
+ * Lojas com Cardápio Web conectado DE VERDADE (instalação ativa, de produção,
+ * já vinculada a uma unidade).
+ *
+ * Diferente de `unit_platforms`, que só diz que a loja *usa* o Cardápio Web —
+ * alguém pode ter marcado a plataforma sem nunca ter autorizado. Aqui é o
+ * equivalente ao "via API" do iFood: o dado entra sozinho.
+ */
+export async function unitIdsConectadosCw(): Promise<Set<string>> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("cardapioweb_installs")
+    .select("unit_id")
+    .eq("ambiente", "producao")
+    .eq("active", true)
+    .not("unit_id", "is", null)
+  return new Set((data ?? []).map((r) => r.unit_id as string))
+}
+
 function inicioDoDiaBRT(data: string): string {
   return `${data}T00:00:00-03:00`
 }
