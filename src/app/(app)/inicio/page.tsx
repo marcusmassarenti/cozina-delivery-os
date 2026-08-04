@@ -742,6 +742,11 @@ export default async function Home({
     avalNegativas += a.distribucao[1] + a.distribucao[2]
     avalPlatforms.push(plat)
   }
+  // O card aparece SEMPRE. Antes ele só era criado com avaliação no mês, e sem
+  // ela sumia da grade — deixando um retângulo vazio ao lado dos outros, que
+  // parece tela quebrada. "Custo de Entrega" logo ao lado já mostra "—" com a
+  // explicação; a nota agora faz igual. Ausência de avaliação é informação
+  // (ninguém avaliou), não motivo pra esconder o indicador.
   if (avalTotal > 0) {
     const avalNotaMedia = avalSomaNotas / avalTotal
     const negativasPct = (avalNegativas / avalTotal) * 100
@@ -752,6 +757,16 @@ export default async function Home({
       tone: avalNotaMedia >= 4.5 ? "positive" : "neutral",
       icon: Star,
       platforms: avalPlatforms,
+      href: `/avaliacoes${periodQ}`,
+    })
+  } else {
+    kpis.push({
+      label: "Nota Média",
+      value: "—",
+      trend: "sem avaliação no mês",
+      tone: "neutral",
+      icon: Star,
+      platforms: [],
       href: `/avaliacoes${periodQ}`,
     })
   }
