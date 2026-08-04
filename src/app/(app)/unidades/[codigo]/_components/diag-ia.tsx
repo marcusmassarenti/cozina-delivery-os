@@ -38,6 +38,7 @@ export function DiagIA({
   inicial,
   podeUsar,
   motivo,
+  somenteLeitura = false,
 }: {
   unitId: string
   unitName: string
@@ -46,6 +47,8 @@ export function DiagIA({
   inicial: PlanoIA | null
   podeUsar: boolean
   motivo: null | "ai" | "off"
+  /** Suporte vendo como o cliente: nada pode ser gerado. */
+  somenteLeitura?: boolean
 }) {
   const [plano, setPlano] = React.useState<PlanoIA | null>(inicial)
   const [erro, setErro] = React.useState<string | null>(null)
@@ -54,9 +57,19 @@ export function DiagIA({
   async function gerar() {
     setCarregando(true)
     setErro(null)
-    const r = await gerarPlanoIA(unitId, unitName, year, month)
-    if (r.ok) setPlano(r.plano)
-    else setErro(r.message)
+    try {
+      const r = await gerarPlanoIA(unitId, unitName, year, month)
+      if (r.ok) setPlano(r.plano)
+      else setErro(r.message)
+    } catch {
+      // A action LANÇA quando o servidor recusa (rede caiu, 500, ou a trava
+      // de somente-leitura do "ver como o cliente"). Sem este catch o
+      // `setCarregando(false)` nunca rodava e o botão girava pra sempre, sem
+      // dizer nada — foi exatamente assim que apareceu como "não funciona".
+      setErro(
+        "Não consegui gerar agora. Se você está vendo o sistema como um cliente, saia dessa visão: ela é somente leitura.",
+      )
+    }
     setCarregando(false)
   }
 
@@ -97,8 +110,21 @@ export function DiagIA({
         </p>
       )}
 
+      {/* Visão do cliente: gerar é escrita, e escrita está travada. Melhor
+          dizer isso do que oferecer um botão que morre em silêncio. */}
+      {somenteLeitura && !plano && (
+        <div className="mt-2 flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+          <Lock className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Você está vendo o sistema como um cliente — a visão é somente
+            leitura, então o plano não pode ser gerado daqui. Um plano que já
+            tenha sido gerado continua aparecendo.
+          </span>
+        </div>
+      )}
+
       {/* Bloqueado (não é Pro / IA desligada) e sem plano ainda */}
-      {!podeUsar && !plano && (
+      {!somenteLeitura && !podeUsar && !plano && (
         <div className="mt-2 flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
           <Lock className="mt-0.5 size-4 shrink-0" />
           <span>
@@ -125,7 +151,7 @@ export function DiagIA({
       )}
 
       {/* Pode usar, sem plano → botão gerar */}
-      {podeUsar && !plano && (
+      {!somenteLeitura && podeUsar && !plano && (
         <div className="mt-2">
           <button
             type="button"

@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
+import { installIdsDeProducao } from "@/lib/data/cardapioweb-imported"
 import type { PlatformId } from "@/components/platform-logo"
 
 export type ComentarioNegativo = {
@@ -13,12 +14,19 @@ export type ComentarioNegativo = {
 }
 
 /**
- * Comentários negativos (nota ≤ maxNota, com texto) do mês, nas 3 plataformas,
- * pras unidades pedidas. Ordenado do pior pro menos pior, depois mais recente.
+ * Comentários negativos (nota ≤ maxNota, com texto) do mês, nas QUATRO
+ * plataformas, pras unidades pedidas. Ordenado do pior pro menos pior, depois
+ * mais recente.
  *
- *  - iFood:  ifood_avaliacoes (nota, comentario, data_avaliacao DATE)
+ *  - iFood:   ifood_avaliacoes (nota, comentario, data_avaliacao DATE)
  *  - 99 Food: ninefood_pedidos (nivel_avaliacao, conteudo_avaliacao, ts)
- *  - Keeta:  keeta_pedidos (pontuacao_avaliacao, conteudo_avaliacao, DATE)
+ *  - Keeta:   keeta_pedidos (pontuacao_avaliacao, conteudo_avaliacao, DATE)
+ *  - Cardápio Web: cardapioweb_avaliacoes (nota, comentario, criado_em)
+ *
+ * O canal próprio entrou depois. Enquanto ficou de fora, a reclamação de um
+ * cliente que comprou direto da loja NUNCA aparecia nesta tela — que existe
+ * justamente pra agir rápido em cima de crítica. Numa loja sem marketplace, a
+ * tela ficava permanentemente vazia como se não houvesse reclamação nenhuma.
  */
 export async function getComentariosNegativos(
   year: number,
@@ -135,6 +143,47 @@ export async function getComentariosNegativos(
         comentario: c,
         data: (r.data_avaliacao as string | null) ?? null,
       })
+    }
+  }
+
+  // Cardápio Web (canal próprio). Só instalação de produção: sandbox tem
+  // avaliação fictícia e viraria reclamação falsa na tela de ação.
+  {
+    const installs = await installIdsDeProducao()
+    if (installs.length > 0) {
+      const data = await fetchAllRows<{
+        unit_id: string | null
+        nota: number | null
+        comentario: string | null
+        criado_em: string | null
+      }>((from, to) => {
+        let q = admin
+          .from("cardapioweb_avaliacoes")
+          .select("unit_id, nota, comentario, criado_em")
+          .in("install_id", installs)
+          .not("unit_id", "is", null)
+          .not("comentario", "is", null)
+          .lte("nota", maxNota)
+          .gte("criado_em", `${startIso}T00:00:00-03:00`)
+          .lt("criado_em", `${endExcl}T00:00:00-03:00`)
+          .order("id")
+          .range(from, to)
+        if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
+        return q
+      }, "negativos cardapioweb")
+      for (const r of data ?? []) {
+        const c = String(r.comentario ?? "").trim()
+        if (!c || !r.unit_id) continue
+        out.push({
+          unitId: r.unit_id,
+          plataforma: "cardapioweb",
+          nota: Number(r.nota),
+          comentario: c,
+          // As outras fontes guardam DATE; aqui é timestamp. Corta pra data
+          // pura senão a ordenação por string compara formatos diferentes.
+          data: r.criado_em ? r.criado_em.slice(0, 10) : null,
+        })
+      }
     }
   }
 

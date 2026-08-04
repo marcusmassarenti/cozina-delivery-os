@@ -1,5 +1,5 @@
 /**
- * Agregador de avaliações combinando iFood + 99 Food + Keeta, por unidade.
+ * Agregador de avaliações das QUATRO plataformas, por unidade.
  *
  * Usado pelo dashboard da tela /avaliacoes (visão de rede, quando nenhuma
  * unidade está selecionada). As funções por-plataforma já existem em
@@ -11,6 +11,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
+import { installIdsDeProducao } from "@/lib/data/cardapioweb-imported"
 
 type Dist = Record<1 | 2 | 3 | 4 | 5, number>
 
@@ -22,7 +23,7 @@ export type UnitAvaliacaoRow = {
   unitId: string
   unitCode: string
   unitName: string
-  /** Total combinado (iFood + 99 + Keeta) */
+  /** Total combinado das quatro plataformas */
   total: number
   /** Nota média combinada (ponderada pela contagem) */
   notaMedia: number
@@ -31,14 +32,22 @@ export type UnitAvaliacaoRow = {
   totalIfood: number
   total99: number
   totalKeeta: number
+  totalCw: number
   notaMediaIfood: number | null
   notaMedia99: number | null
   notaMediaKeeta: number | null
+  notaMediaCw: number | null
 }
 
 /**
- * Retorna avaliações por unidade no mês, combinando as 2 plataformas.
+ * Retorna avaliações por unidade no mês, combinando as quatro plataformas.
  * Já vem ordenado por total DESC (loja com mais avaliações primeiro).
+ *
+ * O Cardápio Web entrou depois. Enquanto ficou de fora, a nota da rede era
+ * calculada só sobre marketplace — e loja que só vende no canal próprio
+ * sumia do ranking mesmo tendo avaliação de verdade. O comentário antigo
+ * ("Cardápio Web não expõe avaliações pela API") deixou de valer quando a
+ * integração de avaliações foi construída.
  */
 export async function getAvaliacoesByUnitForMonth(
   year: number,
@@ -57,7 +66,10 @@ export async function getAvaliacoesByUnitForMonth(
   const lastDay = new Date(year, month, 0).getDate()
   const endIncl = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`
 
-  const [ifoodRows, ninefoodRows, keetaRows] = await Promise.all([
+  // Só instalações de produção contam: sandbox tem avaliação fictícia.
+  const cwInstalls = await installIdsDeProducao()
+
+  const [ifoodRows, ninefoodRows, keetaRows, cwRows] = await Promise.all([
     fetchAllRows<{ unit_id: string; nota: number | string | null }>(
       (from, to) => {
         let qIfood = admin
@@ -109,18 +121,40 @@ export async function getAvaliacoesByUnitForMonth(
       },
       "keeta_pedidos avaliacoes por unidade",
     ),
+    cwInstalls.length === 0
+      ? Promise.resolve([] as { unit_id: string | null; nota: number | null }[])
+      : fetchAllRows<{ unit_id: string | null; nota: number | null }>(
+          (from, to) => {
+            let qCw = admin
+              .from("cardapioweb_avaliacoes")
+              .select("unit_id, nota")
+              .not("nota", "is", null)
+              .not("unit_id", "is", null)
+              .in("install_id", cwInstalls)
+              .gte("criado_em", `${startIso}T00:00:00-03:00`)
+              .lt("criado_em", `${endExcl}T00:00:00-03:00`)
+              .order("id")
+              .range(from, to)
+            if (filterUnitIds) qCw = qCw.in("unit_id", filterUnitIds)
+            return qCw
+          },
+          "cardapioweb_avaliacoes por unidade",
+        ),
   ])
 
   type Agg = {
     distIfood: Dist
     dist99: Dist
     distKeeta: Dist
+    distCw: Dist
     somaIfood: number
     soma99: number
     somaKeeta: number
+    somaCw: number
     totalIfood: number
     total99: number
     totalKeeta: number
+    totalCw: number
   }
   const byUnit = new Map<string, Agg>()
   const ensure = (id: string): Agg => {
@@ -130,12 +164,15 @@ export async function getAvaliacoesByUnitForMonth(
         distIfood: emptyDist(),
         dist99: emptyDist(),
         distKeeta: emptyDist(),
+        distCw: emptyDist(),
         somaIfood: 0,
         soma99: 0,
         somaKeeta: 0,
+        somaCw: 0,
         totalIfood: 0,
         total99: 0,
         totalKeeta: 0,
+        totalCw: 0,
       }
       byUnit.set(id, a)
     }
@@ -167,6 +204,16 @@ export async function getAvaliacoesByUnitForMonth(
     a.totalKeeta += 1
   }
 
+  for (const r of cwRows) {
+    if (!r.unit_id) continue
+    const n = Number(r.nota) as 1 | 2 | 3 | 4 | 5
+    if (n < 1 || n > 5) continue
+    const a = ensure(r.unit_id)
+    a.distCw[n] += 1
+    a.somaCw += n
+    a.totalCw += 1
+  }
+
   const unitIds = Array.from(byUnit.keys())
   if (unitIds.length === 0) return []
 
@@ -181,14 +228,14 @@ export async function getAvaliacoesByUnitForMonth(
   const rows: UnitAvaliacaoRow[] = unitIds.map((id) => {
     const a = byUnit.get(id)!
     const dist: Dist = {
-      1: a.distIfood[1] + a.dist99[1] + a.distKeeta[1],
-      2: a.distIfood[2] + a.dist99[2] + a.distKeeta[2],
-      3: a.distIfood[3] + a.dist99[3] + a.distKeeta[3],
-      4: a.distIfood[4] + a.dist99[4] + a.distKeeta[4],
-      5: a.distIfood[5] + a.dist99[5] + a.distKeeta[5],
+      1: a.distIfood[1] + a.dist99[1] + a.distKeeta[1] + a.distCw[1],
+      2: a.distIfood[2] + a.dist99[2] + a.distKeeta[2] + a.distCw[2],
+      3: a.distIfood[3] + a.dist99[3] + a.distKeeta[3] + a.distCw[3],
+      4: a.distIfood[4] + a.dist99[4] + a.distKeeta[4] + a.distCw[4],
+      5: a.distIfood[5] + a.dist99[5] + a.distKeeta[5] + a.distCw[5],
     }
-    const total = a.totalIfood + a.total99 + a.totalKeeta
-    const soma = a.somaIfood + a.soma99 + a.somaKeeta
+    const total = a.totalIfood + a.total99 + a.totalKeeta + a.totalCw
+    const soma = a.somaIfood + a.soma99 + a.somaKeeta + a.somaCw
     return {
       unitId: id,
       unitCode: nameMap.get(id)?.code ?? "?",
@@ -199,6 +246,7 @@ export async function getAvaliacoesByUnitForMonth(
       totalIfood: a.totalIfood,
       total99: a.total99,
       totalKeeta: a.totalKeeta,
+      totalCw: a.totalCw,
       notaMediaIfood:
         a.totalIfood > 0
           ? Math.round((a.somaIfood / a.totalIfood) * 100) / 100
@@ -211,6 +259,8 @@ export async function getAvaliacoesByUnitForMonth(
         a.totalKeeta > 0
           ? Math.round((a.somaKeeta / a.totalKeeta) * 100) / 100
           : null,
+      notaMediaCw:
+        a.totalCw > 0 ? Math.round((a.somaCw / a.totalCw) * 100) / 100 : null,
     }
   })
 

@@ -34,6 +34,7 @@ import {
   type PlatformId,
 } from "@/components/platform-logo"
 import { getEnabledReports } from "@/lib/data/report-prefs"
+import { getVerComoHoldingId } from "@/lib/auth/permissions"
 import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
 import { getEvolucaoSeries } from "@/lib/data/comparativo"
 import { getDiagnosticoIA, getIaStatus } from "@/lib/data/diagnostico-ia"
@@ -90,6 +91,9 @@ export async function DiagnosticoTab({
   year: number
   month: number
 }) {
+  // Visão do cliente é somente leitura: o botão de gerar plano precisa saber,
+  // senão vira um botão que morre em silêncio na trava do middleware.
+  const verComo = await getVerComoHoldingId()
   const [funnel, periodo, operacao, promocoes, superAval, negociacoes, ifood] =
     await Promise.all([
       getFunnelForMonth(unitId, year, month),
@@ -459,6 +463,7 @@ export async function DiagnosticoTab({
               inicial={planoIA}
               podeUsar={iaStatus.podeUsar}
               motivo={iaStatus.motivo}
+              somenteLeitura={verComo !== null}
             />
           </div>
 
