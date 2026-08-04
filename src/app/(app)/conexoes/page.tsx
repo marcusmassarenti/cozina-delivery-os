@@ -153,7 +153,7 @@ export default async function ConexoesPage() {
         >
           <PlatformLogo platform="ifood" size="md" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Console da API do iFood</p>
+            <p className="text-sm font-semibold">Testar API do iFood</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Dispara chamadas na mão e mostra a resposta crua — token,
               merchants, conciliação.

@@ -69,11 +69,12 @@ export default async function IfoodHomologPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Shield className="size-6 text-orange-500" />
-            Homologação iFood (Merchant API)
+            Testar API do iFood
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Console interno pra disparar chamadas contra a Merchant API,
-            ver resposta crua e auditar logs. Usado na reunião de homologação.
+            Dispara chamadas na mão contra a API do iFood e mostra a resposta
+            crua. Serve pra descobrir qual chamada quebrou quando o financeiro
+            para de entrar — a homologação em si terminou em julho.
           </p>
         </div>
         <Link
