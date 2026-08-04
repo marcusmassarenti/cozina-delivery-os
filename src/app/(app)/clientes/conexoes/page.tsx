@@ -1,10 +1,17 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, ArrowUpRight, Plug, Store } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Plug,
+  Store,
+  UtensilsCrossed,
+} from "lucide-react"
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
 import { getSolicitacoesIfoodPendentes } from "@/lib/data/units"
+import { installIdsDeProducao } from "@/lib/data/cardapioweb-imported"
 import {
   ehMarketplace,
   type MarketplaceId,
@@ -14,9 +21,10 @@ import { ConexoesTable, type ConexaoRow } from "./_components/conexoes-table"
 
 export default async function ConexoesPage() {
   if (!(await isSuperadmin())) notFound()
-  const [{ clients }, solicitacoes] = await Promise.all([
+  const [{ clients }, solicitacoes, cwInstalls] = await Promise.all([
     getClientsOverview(),
     getSolicitacoesIfoodPendentes(),
+    installIdsDeProducao(),
   ])
 
   // Achata as lojas de todos os clientes numa lista só.
@@ -62,22 +70,37 @@ export default async function ConexoesPage() {
               Conexões de API
             </h1>
           </div>
-          {/* Atalho pra tela de gerenciar as conexões iFood (fila de
-              solicitações + vincular merchant à unidade), que não fica no
-              menu. Badge quando há cliente esperando. */}
-          <Link
-            href="/integracao/ifood-merchants"
-            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          >
-            <Store className="size-4" />
-            Gerenciar conexões iFood
-            {solicitacoes.total > 0 && (
-              <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#EA1D2C] px-1.5 text-[11px] font-semibold text-white">
-                {solicitacoes.total}
-              </span>
-            )}
-            <ArrowUpRight className="size-3.5 text-muted-foreground" />
-          </Link>
+          {/* Atalhos pras duas telas de integração que não ficam no menu.
+              Badge do iFood = cliente esperando na fila; o do Cardápio Web =
+              lojas já conectadas, que é o número que se quer saber lá. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/integracao/ifood-merchants"
+              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Store className="size-4" />
+              Gerenciar conexões iFood
+              {solicitacoes.total > 0 && (
+                <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#EA1D2C] px-1.5 text-[11px] font-semibold text-white">
+                  {solicitacoes.total}
+                </span>
+              )}
+              <ArrowUpRight className="size-3.5 text-muted-foreground" />
+            </Link>
+            <Link
+              href="/integracao/cardapioweb"
+              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <UtensilsCrossed className="size-4" />
+              Cardápio Web
+              {cwInstalls.length > 0 && (
+                <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold text-white">
+                  {cwInstalls.length}
+                </span>
+              )}
+              <ArrowUpRight className="size-3.5 text-muted-foreground" />
+            </Link>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           Todas as lojas dos clientes e o que cada uma tem conectado por API.

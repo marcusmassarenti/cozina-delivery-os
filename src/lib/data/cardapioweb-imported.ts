@@ -59,12 +59,21 @@ function ehCancelado(status: string | null): boolean {
  * Por isso o filtro é uma LISTA DE PERMISSÃO, não uma exclusão de "ifood":
  * quando eles adicionarem um marketplace novo, ele fica de fora por padrão em
  * vez de entrar silenciosamente no bruto.
+ *
+ * O contrapeso da lista de permissão é este: canal PRÓPRIO esquecido também
+ * fica de fora calado. Foi o que aconteceu com `totem` — o autoatendimento
+ * dentro da loja, que não tem marketplace nem comissão e é a venda mais
+ * própria que existe. Ficava classificado como marketplace na tela e sumia do
+ * dashboard e do DRE (R$ 253 só na primeira loja de produção, jun+jul/26).
+ * Ao adicionar canal aqui, a pergunta é uma só: tem intermediário levando
+ * comissão? Se não tem, é próprio.
  */
 export const CANAIS_PROPRIOS = [
   "catalog",
   "store_front_catalog",
   "portal",
   "whatsapp_extension",
+  "totem",
 ]
 
 /**

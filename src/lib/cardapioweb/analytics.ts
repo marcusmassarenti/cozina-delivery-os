@@ -13,20 +13,24 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { CANAIS_PROPRIOS as LISTA_CANAIS_PROPRIOS } from "@/lib/data/cardapioweb-imported"
 
-/** Canais próprios (sem comissão de marketplace). O resto é de terceiro. */
-const CANAIS_PROPRIOS = new Set([
-  "catalog",
-  "store_front_catalog",
-  "portal",
-  "whatsapp_extension",
-])
+/**
+ * Canais próprios (sem comissão de marketplace). O resto é de terceiro.
+ *
+ * Vem da MESMA lista que decide o que entra no dashboard e no DRE. Aqui já
+ * houve uma cópia da lista, e ela divergiu: o totem virou canal próprio lá e
+ * continuou pintado de laranja como "marketplace" nesta tela. Duas listas pra
+ * uma regra de negócio só sempre acabam assim.
+ */
+const CANAIS_PROPRIOS = new Set(LISTA_CANAIS_PROPRIOS)
 
 const ROTULO_CANAL: Record<string, string> = {
   catalog: "Catálogo digital",
   store_front_catalog: "Cardápio da loja",
   portal: "Portal",
   whatsapp_extension: "WhatsApp",
+  totem: "Totem da loja",
   ifood: "iFood",
 }
 

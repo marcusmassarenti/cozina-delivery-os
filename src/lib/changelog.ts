@@ -42,6 +42,45 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.13.0",
+    date: "2026-08-04",
+    tag: "Melhorias",
+    title: "Cardápio Web sincroniza sozinho, todo dia",
+    summary:
+      "A conexão com o Cardápio Web deixou de depender de alguém abrir a tela e clicar. E a venda feita no totem da loja voltou a contar como faturamento seu.",
+    areas: [
+      {
+        area: "Cardápio Web",
+        items: [
+          {
+            kind: "novo",
+            title: "Os pedidos entram sozinhos, sem ninguém clicar",
+            antes:
+              "A loja conectada só trazia pedido novo quando alguém abria a tela de integração e clicava em sincronizar. Ficar dois dias sem abrir era ficar dois dias sem dado.",
+            depois:
+              "Uma rotina automática roda todo dia de manhã e traz os pedidos novos de todas as lojas conectadas.",
+          },
+          {
+            kind: "melhoria",
+            title: "O histórico agora vem desde janeiro",
+            antes:
+              "Ao conectar, o sistema buscava os últimos 6 meses. Quem conectava em agosto ficava sem janeiro e fevereiro.",
+            depois:
+              "O histórico volta até 1º de janeiro do ano, e chega aos poucos ao longo de algumas noites. Quem conecta agora também já vê o faturamento em minutos, sem esperar o dia seguinte.",
+          },
+          {
+            kind: "correcao",
+            title: "Venda no totem estava fora do seu faturamento",
+            antes:
+              "O pedido feito no totem de autoatendimento da loja era tratado como se fosse de marketplace: não entrava no Dashboard nem no DRE, e derrubava o seu percentual de canal próprio.",
+            depois:
+              "Totem é venda sua, sem comissão de ninguém. Passa a contar no faturamento e como canal próprio.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.12.0",
     date: "2026-08-03",
     tag: "Melhorias",
