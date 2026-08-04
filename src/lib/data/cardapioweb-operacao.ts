@@ -246,3 +246,134 @@ export async function getOperacaoCardapioWeb(
     temDados: num(t.pedidos) > 0,
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export type ItemVendidoCw = {
+  nome: string
+  externalCode: string | null
+  /** O item apareceu como parte de um combo em algum pedido. */
+  emCombo: boolean
+  qtd: number
+  receita: number
+  pedidos: number
+}
+
+export type ComplementoCw = {
+  nome: string
+  grupo: string
+  qtd: number
+  receita: number
+  pedidos: number
+}
+
+export type VendasItensCw = {
+  total: {
+    itensDistintos: number
+    unidades: number
+    receita: number
+    pedidos: number
+  }
+  /** Mais vendidos, por receita. */
+  itens: ItemVendidoCw[]
+  /** Menos vendidos — entre os que VENDERAM ao menos uma vez. */
+  menos: ItemVendidoCw[]
+  complementos: ComplementoCw[]
+  temDados: boolean
+}
+
+export function vendasItensVazio(): VendasItensCw {
+  return {
+    total: { itensDistintos: 0, unidades: 0, receita: 0, pedidos: 0 },
+    itens: [],
+    menos: [],
+    complementos: [],
+    temDados: false,
+  }
+}
+
+/**
+ * Itens e complementos VENDIDOS no Cardápio Web.
+ *
+ * É o equivalente da aba Cardápio do iFood e da 99: o que saiu, quanto rendeu,
+ * o que menos sai. Sai dos PEDIDOS, não do catálogo — o catálogo é uma foto de
+ * hoje e não serve pra falar do passado (a API não guarda versões).
+ *
+ * "Menos vendidos" são os que venderam POUCO, nunca os que não venderam: item
+ * que não aparece em pedido nenhum pode nem existir mais no cardápio.
+ *
+ * Agregado no banco. Um mês de loja movimentada passa fácil das 1.000 linhas
+ * que o PostgREST devolve, e somar isso em JavaScript é a doença conhecida
+ * daqui.
+ */
+export async function getVendasItensCardapioWeb(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: DateRange,
+): Promise<VendasItensCw> {
+  if (unitIds.length === 0) return vendasItensVazio()
+
+  const inicio = dateRange
+    ? `${dateRange.start}T00:00:00-03:00`
+    : `${year}-${String(month).padStart(2, "0")}-01T00:00:00-03:00`
+  const fim = dateRange
+    ? new Date(`${dateRange.end}T00:00:00-03:00`)
+    : new Date(`${year}-${String(month).padStart(2, "0")}-01T00:00:00-03:00`)
+  if (dateRange) fim.setDate(fim.getDate() + 1)
+  else fim.setMonth(fim.getMonth() + 1)
+
+  const admin = createAdminClient()
+  const installs = await installIdsDeProducao()
+  if (installs.length === 0) return vendasItensVazio()
+
+  const { data, error } = await admin.rpc("cardapioweb_itens_vendidos", {
+    p_unit_ids: unitIds,
+    p_inicio: inicio,
+    p_fim: fim.toISOString(),
+    p_canais: CANAIS_PROPRIOS,
+    p_install_ids: installs,
+    p_limite: 60,
+  })
+  if (error) throw new Error(`cardapioweb_itens_vendidos: ${error.message}`)
+
+  const b = (data ?? {}) as {
+    total?: {
+      itens_distintos?: number
+      unidades?: number
+      receita?: number
+      pedidos?: number
+    }
+    itens?: ItemVendidoCw[]
+    menos?: ItemVendidoCw[]
+    complementos?: ComplementoCw[]
+  }
+  const t = b.total ?? {}
+  const item = (x: ItemVendidoCw): ItemVendidoCw => ({
+    nome: x.nome,
+    externalCode: x.externalCode ?? null,
+    emCombo: !!x.emCombo,
+    qtd: num(x.qtd),
+    receita: num(x.receita),
+    pedidos: num(x.pedidos),
+  })
+
+  return {
+    total: {
+      itensDistintos: num(t.itens_distintos),
+      unidades: num(t.unidades),
+      receita: num(t.receita),
+      pedidos: num(t.pedidos),
+    },
+    itens: (b.itens ?? []).map(item),
+    menos: (b.menos ?? []).map(item),
+    complementos: (b.complementos ?? []).map((c) => ({
+      nome: c.nome,
+      grupo: c.grupo,
+      qtd: num(c.qtd),
+      receita: num(c.receita),
+      pedidos: num(c.pedidos),
+    })),
+    temDados: num(t.itens_distintos) > 0,
+  }
+}

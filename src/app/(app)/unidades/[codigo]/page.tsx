@@ -640,7 +640,7 @@ function DetailTabs({
       empty: false,
       content: (
         <Suspense fallback={<TabSkeleton />}>
-          <CardapioCwTab unitId={unit.id} />
+          <CardapioCwTab unitId={unit.id} year={year} month={month} />
         </Suspense>
       ),
     },
