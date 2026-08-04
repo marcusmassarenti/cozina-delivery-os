@@ -59,7 +59,12 @@ export async function CardapioCwTab({
   const topItem = vendas.itens[0]
   // Numa loja com poucos itens distintos, o "menos vendido" repetiria alguém do
   // topo. Mostrar o mesmo item nas duas listas confunde.
-  const nomesTop = new Set(vendas.itens.slice(0, 10).map((i) => i.nome))
+  // A tabela mostra 10. Vinte linhas empurravam os dois cards de baixo pra
+  // fora da tela e faziam a dobra parecer desequilibrada — tabela gigante em
+  // cima, cartõezinhos embaixo. Dez é o que cabe junto com o resto.
+  const TOPO = 10
+  const topo = vendas.itens.slice(0, TOPO)
+  const nomesTop = new Set(topo.map((i) => i.nome))
   const menos = vendas.menos.filter((i) => !nomesTop.has(i.nome)).slice(0, 10)
 
   return (
@@ -98,7 +103,10 @@ export async function CardapioCwTab({
         <div className="flex items-baseline justify-between gap-2 border-b px-5 py-3">
           <h3 className="text-sm font-semibold">Top itens vendidos</h3>
           <span className="text-[11px] text-muted-foreground">
-            {vendas.itens.length} itens · ordenado por receita
+            {vendas.itens.length > TOPO
+              ? `${TOPO} de ${vendas.itens.length} itens`
+              : `${vendas.itens.length} itens`}{" "}
+            · ordenado por receita
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -116,7 +124,7 @@ export async function CardapioCwTab({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {vendas.itens.map((i, idx) => (
+              {topo.map((i, idx) => (
                 <tr key={`${i.nome}-${idx}`} className="hover:bg-muted/40">
                   <td className="px-5 py-2 tabular-nums text-xs text-muted-foreground">
                     {idx + 1}
@@ -154,7 +162,12 @@ export async function CardapioCwTab({
       <div className="grid gap-4 lg:grid-cols-2">
         {menos.length > 0 && (
           <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <h3 className="text-sm font-semibold">Os que menos saem</h3>
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold">Os que menos saem</h3>
+              <span className="text-[11px] text-muted-foreground">
+                {menos.length} itens
+              </span>
+            </div>
             <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
               Venderam, mas pouco. Vale olhar preço, foto e posição na
               categoria.
@@ -185,7 +198,12 @@ export async function CardapioCwTab({
 
         {vendas.complementos.length > 0 && (
           <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <h3 className="text-sm font-semibold">Top complementos</h3>
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold">Top complementos</h3>
+              <span className="text-[11px] text-muted-foreground">
+                {vendas.complementos.length} no período
+              </span>
+            </div>
             <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
               O que o cliente mais escolhe junto.
             </p>
