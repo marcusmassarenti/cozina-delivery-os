@@ -57,8 +57,9 @@ export async function CardapioCwTab({
 
   const t = vendas.total
   const topItem = vendas.itens[0]
-  // Numa loja com poucos itens distintos, o "menos vendido" repetiria alguém do
-  // topo. Mostrar o mesmo item nas duas listas confunde.
+  // Rede de segurança: com MENOS de 20 itens distintos, o topo (10) e o fundo
+  // (10) se encostam e um item cairia nas duas listas. O banco já usa a mesma
+  // régua nos dois extremos, então aqui basta tirar a sobreposição.
   // A tabela mostra 10. Vinte linhas empurravam os dois cards de baixo pra
   // fora da tela e faziam a dobra parecer desequilibrada — tabela gigante em
   // cima, cartõezinhos embaixo. Dez é o que cabe junto com o resto.
@@ -169,8 +170,8 @@ export async function CardapioCwTab({
               </span>
             </div>
             <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
-              Venderam, mas pouco. Vale olhar preço, foto e posição na
-              categoria.
+              Mesma régua do topo — receita, de baixo pra cima. Venderam, mas
+              renderam pouco: vale olhar preço, foto e posição na categoria.
             </p>
             <div className="space-y-1.5">
               {menos.map((i) => (
@@ -185,9 +186,9 @@ export async function CardapioCwTab({
                     {i.nome}
                   </span>
                   <span className="shrink-0 text-xs tabular-nums">
-                    <span className="font-semibold">{fmtNum(i.qtd)}</span>
+                    <span className="font-semibold">{fmtBRL(i.receita)}</span>
                     <span className="ml-1.5 text-[10px] text-muted-foreground">
-                      {fmtBRL(i.receita)}
+                      {fmtNum(i.qtd)} un
                     </span>
                   </span>
                 </div>

@@ -1,25 +1,20 @@
--- Itens e complementos VENDIDOS no Cardápio Web (mais e menos), agregados no
--- banco. É o equivalente da aba Cardápio do iFood e da 99.
+-- Corrige a ORDEM das listas de itens vendidos do Cardápio Web.
 --
--- POR QUE SAI DOS PEDIDOS E NÃO DO CATÁLOGO: o catálogo também está no banco,
--- mas a API devolve a versão de HOJE e não guarda como o cardápio era antes.
--- Cruzar os dois pra dizer "item que não vendeu" mente — medido na primeira
--- loja de produção: 22 itens no catálogo contra 111 nomes diferentes vendidos,
--- só 6 casando, porque o cardápio mudou no meio do caminho e nenhum item tem
--- `external_code` pra cruzar por id em vez de por nome.
+-- O QUE ESTAVA ERRADO: o topo ("mais vendidos") ordenava por RECEITA e o rodapé
+-- ("os que menos saem") ordenava por QUANTIDADE. Duas réguas diferentes pro
+-- mesmo conjunto. O resultado é que as listas se contradiziam: na primeira loja
+-- de produção, o "Combo 2 Central Park + 2 Coca-Cola lata" era o 4º item que
+-- MAIS faturava (R$ 340,50) e aparecia entre os que MENOS saem, porque só
+-- vendeu 3 unidades.
 --
--- Por isso 'menos' são os que venderam POUCO, nunca os que não venderam.
+-- Com poucos itens distintos — 20 nessa loja — as duas listas são a MESMA lista
+-- lida de pontas opostas. Misturar critérios é garantia de confusão: cada
+-- coluna parece fora de ordem porque está ordenada por outra coluna.
 --
--- ⚠️ SUPERSEDIDA PELA 0155: esta versão ordenava o topo por receita e o "menos
--- saem" por quantidade — duas réguas, listas que se contradiziam.
---
--- Agregado aqui porque os aggregates do PostgREST estão desligados neste
--- projeto e um mês de loja movimentada passa fácil das 1.000 linhas que ele
--- devolve — somar isso em JavaScript é a doença conhecida daqui.
---
--- `p_canais` e `p_install_ids` vêm de fora: as regras "o que é canal próprio" e
--- "o que é produção" moram no TypeScript, e reescrevê-las aqui criaria uma
--- segunda cópia que diverge (foi o que aconteceu com CANAIS_PROPRIOS).
+-- Agora as duas usam RECEITA, e `row_number()` sobre a mesma base garante que
+-- topo e fundo nunca se sobreponham. O `nome` no fim do ORDER BY desempata:
+-- sem ele, itens com o mesmo valor trocam de posição a cada carregamento e a
+-- tela parece instável.
 --
 -- Só LEITURA.
 
@@ -70,6 +65,12 @@ as $$
     from cardapioweb_pedido_opcoes o
     join pedidos p on p.id = o.pedido_id
     group by 1
+  ),
+  ranqueado as (
+    select *,
+           row_number() over (order by receita desc, qtd desc, nome) rank_topo,
+           row_number() over (order by receita asc, qtd asc, nome) rank_fundo
+    from itens
   )
   select jsonb_build_object(
     'total', (select jsonb_build_object(
@@ -78,37 +79,37 @@ as $$
         'receita', coalesce(sum(receita), 0),
         'pedidos', (select count(*) from pedidos)
       ) from itens),
-    'itens', (select coalesce(jsonb_agg(x order by (x->>'receita')::numeric desc), '[]'::jsonb) from (
-        select jsonb_build_object(
+    'itens', (select coalesce(jsonb_agg(x order by pos), '[]'::jsonb) from (
+        select rank_topo pos, jsonb_build_object(
           'nome', nome, 'externalCode', external_code, 'emCombo', em_combo,
           'qtd', qtd, 'receita', receita, 'pedidos', pedidos
         ) x
-        from itens order by receita desc limit p_limite
+        from ranqueado where rank_topo <= p_limite
       ) t),
-    'menos', (select coalesce(jsonb_agg(x order by (x->>'qtd')::numeric asc), '[]'::jsonb) from (
-        select jsonb_build_object(
+    'menos', (select coalesce(jsonb_agg(x order by pos), '[]'::jsonb) from (
+        select rank_fundo pos, jsonb_build_object(
           'nome', nome, 'externalCode', external_code, 'emCombo', em_combo,
           'qtd', qtd, 'receita', receita, 'pedidos', pedidos
         ) x
-        from itens order by qtd asc, receita asc limit 15
+        from ranqueado where rank_fundo <= 15
       ) t),
-    'complementos', (select coalesce(jsonb_agg(x order by (x->>'qtd')::numeric desc), '[]'::jsonb) from (
-        select jsonb_build_object(
-          'nome', nome, 'grupo', grupo, 'qtd', qtd,
-          'receita', receita, 'pedidos', pedidos
-        ) x
-        from opcoes order by qtd desc limit 20
-      ) t)
+    'complementos', (select coalesce(jsonb_agg(x order by pos), '[]'::jsonb) from (
+        select row_number() over (order by qtd desc, receita desc, nome) pos,
+               jsonb_build_object(
+                 'nome', nome, 'grupo', grupo, 'qtd', qtd,
+                 'receita', receita, 'pedidos', pedidos
+               ) x
+        from opcoes
+      ) t where pos <= 20)
   );
 $$;
 
 comment on function cardapioweb_itens_vendidos(uuid[], timestamptz, timestamptz, text[], uuid[], int) is
-  'Itens e complementos VENDIDOS no Cardapio Web (mais e menos). So leitura.';
+  'Itens e complementos VENDIDOS no Cardapio Web. Topo e fundo usam a MESMA regua (receita). So leitura.';
 
--- `security definer` IGNORA RLS, e o Postgres concede EXECUTE a PUBLIC por
--- padrão (o `anon` do Supabase herda). Sem isto, vira rota aberta pra internet
--- ler o cardápio vendido de qualquer cliente. Já aconteceu duas vezes aqui
--- (migrations 0083 e 0151).
+-- `create or replace` NÃO preserva os grants: sem repetir os revokes aqui, a
+-- função voltaria a ser executável por `anon`. É o P0 que já reincidiu duas
+-- vezes neste projeto (0083 e 0151).
 revoke all on function cardapioweb_itens_vendidos(uuid[], timestamptz, timestamptz, text[], uuid[], int) from public;
 revoke all on function cardapioweb_itens_vendidos(uuid[], timestamptz, timestamptz, text[], uuid[], int) from anon;
 revoke all on function cardapioweb_itens_vendidos(uuid[], timestamptz, timestamptz, text[], uuid[], int) from authenticated;
