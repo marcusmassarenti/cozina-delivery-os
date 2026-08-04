@@ -11,10 +11,21 @@
  * de virar coluna. Coluna nova a cada mudança deles seria migration a cada
  * mudança deles.
  *
- * A listagem NÃO aceita filtro por data — só paginação. Igual aos clientes, a
- * atualização é varredura do começo. Como avaliação não some nem muda depois
- * de escrita, o upsert por (install_id, review_id) faz a repetição ser barata:
- * a mesma avaliação simplesmente sobrescreve a si mesma.
+ * SOBRE O PERÍODO — não chamar sem data. O endpoint ACEITA `start_date` e
+ * `end_date` (retroage até 3 anos, janela máxima de 6 meses), e o
+ * comportamento SEM eles não é documentado. A primeira versão daqui não
+ * passava datas e devolveu 1 avaliação; conferindo por janelas explícitas, o
+ * total era mesmo 1 — mas por sorte. Numa loja com avaliações espalhadas, o
+ * padrão poderia devolver só um pedaço e ninguém perceberia, porque um número
+ * menor de avaliações não parece erro, parece loja pouco avaliada.
+ *
+ * Então a varredura é por JANELAS de 150 dias (folga sob o teto de 6 meses),
+ * andando pra trás. O padrão cobre pouco mais de um ano — o que interessa no
+ * dia a dia — e `janelas` maior serve pra puxar o histórico fundo uma vez.
+ *
+ * Como avaliação não some nem muda depois de escrita, o upsert por
+ * (install_id, review_id) faz repetir sair de graça: a mesma avaliação
+ * sobrescreve a si mesma.
  */
 import "server-only"
 
@@ -23,10 +34,22 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchCw } from "./client"
 import type { CwInstall } from "./pedidos"
 
-/** Teto da API. Igual ao de clientes. */
-const PER_PAGE = 50
-/** Páginas por execução — segura o tempo da function e o rate limit. */
-const PAGINAS_POR_RODADA = 6
+/** Teto da API: 100 por página em avaliações. */
+const PER_PAGE = 100
+/** Páginas por janela. 100 × 5 = 500 avaliações num recorte de 5 meses. */
+const PAGINAS_POR_JANELA = 5
+/** Tamanho da janela. O teto da API é 6 meses; 150 dias deixa folga. */
+const JANELA_DIAS = 150
+/** Janelas por execução — 3 × 150d ≈ 15 meses, com 3 a 15 chamadas. */
+const JANELAS_PADRAO = 3
+/** Janelas da PRIMEIRA varredura — cobre o teto de 3 anos da API. */
+const JANELAS_PRIMEIRA = 8
+/**
+ * Teto de retroatividade da API, em dias. Documentado como 3 anos, e
+ * confirmado na marra: pedir uma janela que começa antes disso devolve HTTP
+ * 400 e derruba a varredura inteira no meio.
+ */
+const RETROATIVIDADE_DIAS = 365 * 3 - 5
 
 type CwResposta = {
   question_id?: number | string
@@ -50,9 +73,13 @@ type Resposta = {
 }
 
 export type ResultadoAvaliacoes = {
+  /** Linhas gravadas (inclui as que já existiam e foram sobrescritas). */
   novas: number
   paginas: number
+  /** Quantas a API disse existir no período varrido. */
   total: number | null
+  /** Até onde a varredura voltou — pra tela poder dizer o alcance. */
+  ate: string | null
   erro?: string
 }
 
@@ -64,70 +91,108 @@ export type ResultadoAvaliacoes = {
  */
 export async function sincronizarAvaliacoes(
   install: CwInstall,
+  opts: { janelas?: number } = {},
 ): Promise<ResultadoAvaliacoes> {
   const admin = createAdminClient()
-  let novas = 0
-  let paginas = 0
-  let total: number | null = null
 
-  for (let pagina = 1; pagina <= PAGINAS_POR_RODADA; pagina++) {
-    const r = await fetchCw<Resposta>({
-      installId: install.id,
-      ambiente: install.ambiente,
-      path: `/api/partner/v1/merchant/reviews?page=${pagina}&per_page=${PER_PAGE}`,
-      tier: "lento",
-      endpointLabel: "GET /merchant/reviews",
-    })
-
-    if (!r.ok) {
-      return { novas, paginas, total, erro: `HTTP ${r.status}` }
-    }
-
-    const lista = r.data?.reviews ?? []
-    total = r.data?.pagination?.total_reviews ?? total
-    paginas++
-
-    if (lista.length === 0) break
-
-    const linhas = lista
-      .filter((a) => a.id != null)
-      .map((a) => {
-        // A data da avaliação é a régua do período. Sem ela o registro existe
-        // mas não aparece em mês nenhum — pior que não ter.
-        const quando = a.created_at ? new Date(a.created_at) : null
-        const valida = quando && !Number.isNaN(quando.getTime())
-        return {
-          install_id: install.id,
-          unit_id: install.unitId,
-          review_id: String(a.id),
-          order_id: a.order_id != null ? String(a.order_id) : null,
-          customer_cw_id: a.customer_id != null ? String(a.customer_id) : null,
-          nota: typeof a.rating === "number" ? a.rating : null,
-          comentario: a.comment?.trim() || null,
-          respostas: a.answers ?? null,
-          criado_em: valida ? quando.toISOString() : null,
-          // Mês de referência no fuso de Brasília: avaliação das 23h do dia 31
-          // é do mês que fecha, não do seguinte.
-          ref_year: valida ? Number(mesBR(quando).slice(0, 4)) : null,
-          ref_month: valida ? Number(mesBR(quando).slice(5, 7)) : null,
-          raw: a as unknown as Record<string, unknown>,
-          synced_at: new Date().toISOString(),
-        }
-      })
-
-    if (linhas.length > 0) {
-      const { error } = await admin
-        .from("cardapioweb_avaliacoes")
-        .upsert(linhas, { onConflict: "install_id,review_id" })
-      if (error) return { novas, paginas, total, erro: error.message }
-      novas += linhas.length
-    }
-
-    const totalPaginas = r.data?.pagination?.total_pages ?? 1
-    if (pagina >= totalPaginas) break
+  // Loja sem nenhuma avaliação guardada varre fundo UMA vez. Depois disso, o
+  // dia a dia só precisa do horizonte curto: avaliação não muda depois de
+  // escrita, então o que já veio não precisa vir de novo.
+  let janelas = opts.janelas
+  if (janelas === undefined) {
+    const { count } = await admin
+      .from("cardapioweb_avaliacoes")
+      .select("id", { count: "exact", head: true })
+      .eq("install_id", install.id)
+    janelas = (count ?? 0) === 0 ? JANELAS_PRIMEIRA : JANELAS_PADRAO
   }
 
-  return { novas, paginas, total }
+  const piso = new Date()
+  piso.setDate(piso.getDate() - RETROATIVIDADE_DIAS)
+
+  let novas = 0
+  let paginas = 0
+  let total = 0
+  let ate: string | null = null
+
+  let fim = new Date()
+  for (let j = 0; j < janelas; j++) {
+    // Passou do teto de 3 anos: não adianta insistir, a API recusa a janela
+    // inteira com 400 e a varredura morre no meio sem dizer por quê.
+    if (fim <= piso) break
+    const inicio = new Date(fim)
+    inicio.setDate(inicio.getDate() - JANELA_DIAS)
+    if (inicio < piso) inicio.setTime(piso.getTime())
+    ate = inicio.toISOString().slice(0, 10)
+
+    for (let pagina = 1; pagina <= PAGINAS_POR_JANELA; pagina++) {
+      const q = new URLSearchParams({
+        start_date: inicio.toISOString(),
+        end_date: fim.toISOString(),
+        page: String(pagina),
+        per_page: String(PER_PAGE),
+      })
+      const r = await fetchCw<Resposta>({
+        installId: install.id,
+        ambiente: install.ambiente,
+        path: `/api/partner/v1/merchant/reviews?${q.toString()}`,
+        tier: "lento",
+        endpointLabel: "GET /merchant/reviews",
+      })
+
+      if (!r.ok) {
+        // Falha vira erro reportado, não silêncio: uma janela que não veio é
+        // avaliação faltando, e faltar avaliação parece "loja pouco avaliada".
+        return { novas, paginas, total, ate, erro: `HTTP ${r.status}` }
+      }
+
+      const lista = r.data?.reviews ?? []
+      paginas++
+      if (pagina === 1) total += r.data?.pagination?.total_reviews ?? 0
+      if (lista.length === 0) break
+
+      const linhas = lista
+        .filter((a) => a.id != null)
+        .map((a) => {
+          // A data é a régua do período. Sem ela o registro existe mas não
+          // aparece em mês nenhum — pior que não ter.
+          const quando = a.created_at ? new Date(a.created_at) : null
+          const valida = quando && !Number.isNaN(quando.getTime())
+          return {
+            install_id: install.id,
+            unit_id: install.unitId,
+            review_id: String(a.id),
+            order_id: a.order_id != null ? String(a.order_id) : null,
+            customer_cw_id: a.customer_id != null ? String(a.customer_id) : null,
+            nota: typeof a.rating === "number" ? a.rating : null,
+            comentario: a.comment?.trim() || null,
+            respostas: a.answers ?? null,
+            criado_em: valida ? quando.toISOString() : null,
+            // Mês de referência no fuso de Brasília: avaliação das 23h do dia
+            // 31 é do mês que fecha, não do seguinte.
+            ref_year: valida ? Number(mesBR(quando).slice(0, 4)) : null,
+            ref_month: valida ? Number(mesBR(quando).slice(5, 7)) : null,
+            raw: a as unknown as Record<string, unknown>,
+            synced_at: new Date().toISOString(),
+          }
+        })
+
+      if (linhas.length > 0) {
+        const { error } = await admin
+          .from("cardapioweb_avaliacoes")
+          .upsert(linhas, { onConflict: "install_id,review_id" })
+        if (error) return { novas, paginas, total, ate, erro: error.message }
+        novas += linhas.length
+      }
+
+      const totalPaginas = r.data?.pagination?.total_pages ?? 1
+      if (pagina >= totalPaginas) break
+    }
+
+    fim = inicio
+  }
+
+  return { novas, paginas, total, ate }
 }
 
 /** "YYYY-MM" no fuso de São Paulo. */
