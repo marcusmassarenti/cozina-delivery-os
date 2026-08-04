@@ -19,6 +19,15 @@ import {
   getAntecipacaoFeeByUnits,
   getCancelamentoCestaForMonth,
 } from "@/lib/data/ifood-imported"
+import { getOperacaoCardapioWeb } from "@/lib/data/cardapioweb-operacao"
+import {
+  CardCancelamento,
+  CardDiaSemana,
+  CardHorario,
+  CardPagamento,
+  CardTaxas,
+  CardTipoPedido,
+} from "@/components/cardapioweb/operacao-cards"
 import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
@@ -117,6 +126,7 @@ export async function FinanceiroLojaTab({
     keetaFaturaTaxas,
     cancelCesta,
     quemPaga,
+    cwOp,
   ] = await Promise.all([
     // Estas SEGUEM o período escolhido — as tabelas têm data por pedido.
     getPagamentoResumoForMonth(unitId, year, month, dateRange),
@@ -137,6 +147,10 @@ export async function FinanceiroLojaTab({
     getKeetaFaturaTaxasForMonth(unitId, year, month),
     getCancelamentoCestaForMonth(unitId, year, month, dateRange),
     getQuemPagaEntrega([unitId], year, month, dateRange),
+    // Canal próprio: uma chamada devolve tipo de pedido, horário, pagamento,
+    // taxas e motivo de cancelamento — coisas que o hub da própria loja sabe
+    // e marketplace nenhum entrega.
+    getOperacaoCardapioWeb([unitId], year, month, dateRange),
   ])
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
@@ -541,6 +555,21 @@ export async function FinanceiroLojaTab({
               )} ped`}
             />
           </div>
+        </div>
+      )}
+
+      {/* Cardápio Web — o que só o canal próprio sabe. Mesmos cards da aba
+          Cardápio Web em /pedidos: um componente só, porque a mesma regra
+          escrita duas vezes é como o totem virou canal próprio numa tela e
+          marketplace na outra. */}
+      {cwOp.temDados && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CardTipoPedido op={cwOp} />
+          <CardHorario op={cwOp} />
+          <CardPagamento op={cwOp} />
+          <CardTaxas op={cwOp} />
+          <CardDiaSemana op={cwOp} />
+          <CardCancelamento op={cwOp} />
         </div>
       )}
 

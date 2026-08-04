@@ -27,6 +27,11 @@ import {
   getNetworkDrePlatforms,
   getNetworkResultadoForMonth,
 } from "@/lib/data/resultado"
+import { getOperacaoCardapioWeb } from "@/lib/data/cardapioweb-operacao"
+import {
+  CardTaxas,
+  CardTipoPedido,
+} from "@/components/cardapioweb/operacao-cards"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import { getNetworkPagamentoResumo } from "@/lib/data/ifood-pedidos"
 import { getCaixaCustosPorGrupo } from "@/lib/data/dre-gerencial"
@@ -86,6 +91,7 @@ export default async function ResultadoPage({
     dKeeta,
     dCw,
     availablePeriods,
+    cwOp,
   ] =
     await Promise.all([
       getNetworkResultadoForMonth(year, month, filterIds),
@@ -96,6 +102,13 @@ export default async function ResultadoPage({
       getDailyReportMatrix(year, month, "keeta", matrixUnits),
       getDailyReportMatrix(year, month, "cardapioweb", matrixUnits),
       getAvailablePeriods(),
+      // Taxas dentro do pedido do canal próprio. Ficavam somadas no total sem
+      // ninguém separar — e taxa de serviço é do garçom, não da loja.
+      getOperacaoCardapioWeb(
+        matrixUnits.map((u) => u.id),
+        year,
+        month,
+      ),
     ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
 
@@ -520,6 +533,12 @@ export default async function ResultadoPage({
             month={month}
             canEdit={canEditFin}
           />
+          {cwOp.temDados && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <CardTaxas op={cwOp} />
+              <CardTipoPedido op={cwOp} />
+            </div>
+          )}
         </>
       )}
     </div>
