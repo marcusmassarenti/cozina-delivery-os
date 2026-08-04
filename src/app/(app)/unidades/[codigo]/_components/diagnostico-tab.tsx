@@ -27,7 +27,12 @@ import {
   getPromocoesForMonth,
   getSuperForMonth,
 } from "@/lib/data/ifood-imported"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import {
+  PLATAFORMAS,
+  PlatformLogo,
+  rotuloPlataforma,
+  type PlatformId,
+} from "@/components/platform-logo"
 import { getEnabledReports } from "@/lib/data/report-prefs"
 import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
 import { getEvolucaoSeries } from "@/lib/data/comparativo"
@@ -152,6 +157,20 @@ export async function DiagnosticoTab({
   // Só monta o comparativo por plataforma com quem realmente tem dado.
   const platsComDados = consol.plataformas.filter((p) => p.temDados)
   const multiPlataforma = platsComDados.length > 1
+
+  // Quais plataformas a loja AINDA não tem. Antes o texto dizia "Ligue 99 Food
+  // e Keeta" fixo — deixava o iFood de fora e sugeria ligar plataforma que a
+  // loja já usava. Derivado, a frase é sempre verdadeira.
+  const comDados = new Set(platsComDados.map((p) => p.id))
+  const faltando = PLATAFORMAS.filter((p) => !comDados.has(p)).map(
+    (p) => rotuloPlataforma(p),
+  )
+  const faltamPlataformas =
+    faltando.length === 0
+      ? null
+      : faltando.length === 1
+        ? faltando[0]
+        : `${faltando.slice(0, -1).join(", ")} e ${faltando[faltando.length - 1]}`
 
   const mesLabel = `${MESES[month - 1]} de ${year}`
   const hojeStr = new Date().toLocaleDateString("pt-BR")
@@ -465,7 +484,11 @@ export async function DiagnosticoTab({
               <p className="mb-4 text-xs text-muted-foreground">
                 {multiPlataforma
                   ? "Suas plataformas somadas neste mês. Clique numa pra ver só ela."
-                  : "Sua operação neste mês. Ligue 99 Food e Keeta pra ver o total consolidado."}
+                  : `Sua operação neste mês.${
+                      faltamPlataformas
+                        ? ` Ligue ${faltamPlataformas} pra ver o total consolidado.`
+                        : ""
+                    }`}
               </p>
               {multiPlataforma ? (
                 <DiagShareChart
@@ -585,7 +608,13 @@ export async function DiagnosticoTab({
             </section>
           )}
 
-          {/* ── Saúde da operação ── */}
+          {/* ── Saúde da operação ──
+              Só aparece se a loja TEM iFood com dado. Estes indicadores são os
+              critérios de ranqueamento DO IFOOD e saem dos relatórios dele:
+              sem iFood, cancelamento e marketing vinham 0,0% e a nota vinha
+              vazia — tudo verde, "dentro da meta". Elogio nascido da ausência
+              de dado é pior que não mostrar nada, porque o lojista acredita. */}
+          {temIfood && (
           <section
             className="diag-in rounded-xl border bg-card p-5 shadow-sm"
             style={{ animationDelay: "0.24s" } as React.CSSProperties}
@@ -683,6 +712,7 @@ export async function DiagnosticoTab({
               </div>
             )}
           </section>
+          )}
 
           {/* ── Ver detalhes (colapsável — some do print, abre tudo) ── */}
           <details
