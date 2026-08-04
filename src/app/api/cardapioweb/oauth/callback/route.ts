@@ -17,6 +17,7 @@ import {
 } from "@/lib/cardapioweb/auth"
 import { fetchCw } from "@/lib/cardapioweb/client"
 import { avisarInstalacaoNova } from "@/lib/cardapioweb/avisar-instalacao"
+import { vincularSeObvio } from "@/lib/cardapioweb/vincular-automatico"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -204,6 +205,20 @@ export async function GET(req: Request) {
     .from("cardapioweb_sync_state")
     .upsert({ install_id: installId }, { onConflict: "install_id" })
 
+  // 5.5) Vincula à loja quando não há dúvida (empresa com uma loja só).
+  //
+  // Aqui, e não antes do insert, porque o nome do merchant só existe depois do
+  // passo 3 — sem ele o log não diz qual loja foi vinculada. E ANTES do aviso
+  // do passo 6, pra que o e-mail já mostre a unidade em vez de "sem unidade
+  // vinculada": foi exatamente o que o aviso da primeira conexão de produção
+  // (joao nilson, 04/ago/26) dizia, com a loja bem ali, óbvia.
+  const unitIdAuto = pendente.unit_id
+    ? null
+    : await vincularSeObvio(installId).catch((e: unknown) => {
+        console.error("cardapioweb: vínculo automático", e)
+        return null
+      })
+
   // 6) Avisa que entrou loja nova.
   //
   // Diferente do iFood, a conexão do Cardápio Web acontece INTEIRA do lado do
@@ -217,7 +232,7 @@ export async function GET(req: Request) {
     void avisarInstalacaoNova({
       merchantName: merchantName ?? merchantId,
       ambiente,
-      unitId: pendente.unit_id ?? null,
+      unitId: pendente.unit_id ?? unitIdAuto,
       holdingId: pendente.holding_id ?? null,
     }).catch((e: unknown) => console.error("cardapioweb: aviso de instalação", e))
   }
