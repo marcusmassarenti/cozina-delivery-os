@@ -21,6 +21,7 @@ import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 import { getVisibleUnits } from "@/lib/data/units"
 import { isSuperadmin } from "@/lib/auth/roles"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
 import { CatalogoButton } from "./_components/catalogo-button"
 import { ClientesButton } from "./_components/clientes-button"
@@ -42,6 +43,8 @@ type InstallRow = {
   inactive_reason: string | null
   scopes: string[] | null
   unit_id: string | null
+  /** Empresa DONA da instalação — define quais lojas podem ser vinculadas. */
+  holding_id: string | null
   units: { code: string; name: string } | null
 }
 
@@ -73,15 +76,24 @@ type Stats = {
  * uma dezena de lojas conectadas, buscar tudo de todas fazia a página abrir
  * lenta pra mostrar um monte de painel que ninguém ia ler.
  */
-async function carregar(lojaAberta: string | null) {
+async function carregar(
+  lojaAberta: string | null,
+  /** null = superadmin (vê a rede toda). Cliente SEMPRE recebe a própria. */
+  holdingId: string | null,
+) {
   const admin = createAdminClient()
 
   const [instRes, stRes] = await Promise.all([
-    admin
-      .from("cardapioweb_installs")
-      .select(
-        "id, ambiente, auth_mode, merchant_id, merchant_name, active, inactive_reason, scopes, unit_id, units(code, name)",
-      )
+    (() => {
+      const q = admin
+        .from("cardapioweb_installs")
+        .select(
+          "id, ambiente, auth_mode, merchant_id, merchant_name, active, inactive_reason, scopes, unit_id, holding_id, units(code, name)",
+        )
+      // Sem holding e sem ser superadmin = ninguém: prefiro devolver vazio a
+      // devolver tudo. Falha aqui não pode virar vazamento.
+      return holdingId ? q.eq("holding_id", holdingId) : q
+    })()
       // Mais recente primeiro: quem acabou de conectar uma loja precisa vê-la
       // no topo, não embaixo do card antigo cheio de análise.
       .order("created_at", { ascending: false }),
@@ -157,15 +169,63 @@ export default async function CardapioWebPage({
     const amb = referer.includes("sandbox") ? "sandbox" : "producao"
     redirect(`/api/cardapioweb/oauth/start?ambiente=${amb}`)
   }
-  const [{ installs, porInstall, porStats }, unidades, superadmin] =
-    await Promise.all([
-      carregar(sp.loja ?? null),
-      getVisibleUnits(),
-      isSuperadmin(),
-    ])
+  const [superadmin, minhaHolding] = await Promise.all([
+    isSuperadmin(),
+    getCurrentHoldingId(),
+  ])
+
+  // ESCOPO. A tela nasceu quando só existia a Cozina Foods, então buscava TODAS
+  // as instalações com o client admin (que ignora RLS) e sem filtro de cliente
+  // — qualquer cliente logado que abrisse aqui via a conexão dos outros. Ela
+  // não está no menu, mas o link "acompanhe aqui" da faixa de sucesso leva
+  // direto, e a URL é adivinhável.
+  const { installs, porInstall, porStats } = await carregar(
+    sp.loja ?? null,
+    superadmin ? null : minhaHolding,
+  )
+
+  const unidades = await getVisibleUnits()
+  // Opções do card "Conectar uma loja": são as MINHAS lojas, porque quem
+  // conecta está conectando a própria.
   const opcoesUnidade = unidades
     .filter((u) => u.active)
     .map((u) => ({ id: u.id, code: u.code, name: u.name }))
+
+  // Opções de VÍNCULO por instalação: saem da empresa DA INSTALAÇÃO, não de
+  // quem está olhando. Como superadmin, o seletor oferecia as lojas da Cozina
+  // Foods pra uma instalação do joao nilson.
+  //
+  // Gravar errado NÃO era possível — vincularUnidadeAction já recusa unidade de
+  // outra holding. Mas oferecer opção que a ação vai rejeitar é convidar pro
+  // erro, e tinha um efeito pior: como a loja DELE não estava na lista, o
+  // seletor não conseguia exibir o vínculo que já existia e mostrava "Sem
+  // unidade" com o banco correto. A tela mentia sobre o próprio estado.
+  const holdingsDasInstalls = [
+    ...new Set(installs.map((i) => i.holding_id).filter(Boolean)),
+  ] as string[]
+  const opcoesPorHolding = new Map<string, typeof opcoesUnidade>()
+  if (holdingsDasInstalls.length > 0) {
+    const { data: us } = await createAdminClient()
+      .from("units")
+      .select("id, code, name, brands!inner(holding_id)")
+      .in("brands.holding_id", holdingsDasInstalls)
+      .eq("active", true)
+    // O PostgREST tipa o join embutido como ARRAY, mesmo quando é 1-pra-1.
+    for (const u of (us ?? []) as unknown as {
+      id: string
+      code: string
+      name: string
+      brands: { holding_id: string } | { holding_id: string }[]
+    }[]) {
+      const b = Array.isArray(u.brands) ? u.brands[0] : u.brands
+      const h = b?.holding_id
+      if (!h) continue
+      opcoesPorHolding.set(h, [
+        ...(opcoesPorHolding.get(h) ?? []),
+        { id: u.id, code: u.code, name: u.name },
+      ])
+    }
+  }
   const lojaAberta = sp.loja ?? null
   // Sandbox é ferramenta de quem constrói a integração, não de quem usa o
   // sistema. Some pro cliente; pra mim aparece com ?sandbox=1.
@@ -258,7 +318,9 @@ export default async function CardapioWebPage({
                     )}
                     <VinculoUnidade
                       installId={i.id}
-                      unidades={opcoesUnidade}
+                      unidades={
+                        opcoesPorHolding.get(i.holding_id ?? "") ?? []
+                      }
                       unitIdAtual={i.unit_id}
                     />
                     {i.inactive_reason && (
