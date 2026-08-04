@@ -67,14 +67,6 @@ export default async function PedidosPage({
   const month = Number(periodRange.start.slice(5, 7))
   const queryRange = isFullMonth ? undefined : periodRange
   const periodoParam = sp.periodo
-  const plataforma: "ifood" | "99food" | "keeta" | "cardapioweb" =
-    sp.plataforma === "keeta"
-      ? "keeta"
-      : sp.plataforma === "99food"
-        ? "99food"
-        : sp.plataforma === "cardapioweb"
-          ? "cardapioweb"
-          : "ifood"
 
   const [allUnits, availablePeriods] = await Promise.all([
     getVisibleUnits(),
@@ -94,6 +86,19 @@ export default async function PedidosPage({
   const tenantPlats: PlatformId[] = (
     [...MARKETPLACES, "cardapioweb"] as PlatformId[]
   ).filter((p) => filteredUnits.some((u) => u.platforms.includes(p)))
+
+  // Plataforma da aba. Sem `?plataforma=` na URL, abre na PRIMEIRA que a rede
+  // realmente usa — não no iFood fixo. Loja de canal próprio abria numa aba de
+  // iFood vazia e parecia que o sistema não tinha dado nenhum.
+  const escolhida = sp.plataforma as PlatformId | undefined
+  const plataforma: "ifood" | "99food" | "keeta" | "cardapioweb" =
+    escolhida && tenantPlats.includes(escolhida)
+      ? (escolhida as "ifood" | "99food" | "keeta" | "cardapioweb")
+      : ((tenantPlats[0] ?? "ifood") as
+          | "ifood"
+          | "99food"
+          | "keeta"
+          | "cardapioweb")
 
   // Dados específicos da plataforma selecionada (sempre consolidado das lojas
   // escolhidas — ou todas, se nada filtrado).

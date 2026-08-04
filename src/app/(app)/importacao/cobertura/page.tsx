@@ -121,6 +121,31 @@ export default async function CoberturaPage() {
               <NinefoodCoverageView matrix={keetaMatrix} show={keetaShow} />
             ),
           },
+          {
+            // Cobertura mede PLANILHA SUBIDA, e o Cardápio Web não tem
+            // planilha — sincroniza pela API. Deixá-lo ausente, porém, fazia a
+            // tela mentir por omissão: loja 100% em dia via API aparecia como
+            // "0% completo · falta importar". Aqui ele aparece dizendo que não
+            // depende de ninguém subir nada.
+            platform: "cardapioweb" as const,
+            empty: false,
+            content: (
+              <div className="rounded-xl border border-dashed bg-card/50 p-8 text-center">
+                <p className="text-sm font-medium">
+                  O Cardápio Web sincroniza sozinho
+                </p>
+                <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                  Não existe planilha pra subir: pedidos, cardápio, clientes e
+                  avaliações entram pela API todo dia. Acompanhe o que já
+                  chegou em{" "}
+                  <a href="/integracao/cardapioweb" className="underline">
+                    Integração Cardápio Web
+                  </a>
+                  .
+                </p>
+              </div>
+            ),
+          },
         ].filter((s) => tenantPlats.includes(s.platform))}
       />
     </div>

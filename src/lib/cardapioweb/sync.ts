@@ -214,6 +214,31 @@ export async function sincronizarInstall(
     })
     .eq("install_id", installId)
 
+  // Registra no Histórico de Importações. Sem isto, a integração rodava todo
+  // dia e a tela dizia "Nenhuma importação ainda" — pro lojista, nada estava
+  // acontecendo. Só grava quando ALGO entrou: linha de "0 registros" todo dia
+  // vira ruído e enterra o que importa.
+  const entraram =
+    (inc.pedidos ?? 0) +
+    (resultado.backfill?.pedidos ?? 0) +
+    (aval.novas ?? 0)
+  if (inst.unit_id && entraram > 0) {
+    const agora = new Date()
+    await admin.from("platform_imports").insert({
+      unit_id: inst.unit_id,
+      platform: "cardapioweb",
+      report_type: "api",
+      cadencia: "mensal",
+      ref_year: agora.getFullYear(),
+      ref_month: agora.getMonth() + 1,
+      rows_imported: entraram,
+      status: inc.erro || aval.erro ? "error" : "success",
+      error_message: inc.erro ?? aval.erro ?? null,
+      source: "api",
+      source_filename: null,
+    })
+  }
+
   // "Concluído" = nada mais pra trás E fila vazia.
   resultado.concluido = backfillConcluido && det.restantes === 0
   return resultado

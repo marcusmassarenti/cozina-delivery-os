@@ -832,9 +832,20 @@ export default async function Home({
       { id: "cardapioweb", on: hasAvaliacoesCwData },
     ] as { id: PlatformId; on: boolean }[]
   ).filter((p) => tenantPlatforms.includes(p.id) && plataformaAtiva(p.id))
+  // Custo de entrega é conceito de MARKETPLACE: lá a taxa é custo cobrado da
+  // loja. No canal próprio a taxa de entrega é RECEITA (a loja cobra do
+  // cliente) e aparece em "Taxas dentro do pedido", não aqui. O selo do
+  // Cardápio Web neste card prometia um dado que ele nunca teria nesse
+  // conceito, e o KPI ficava eternamente em "—".
+  const entregaCobertura = finCobertura.filter((p) => p.id !== "cardapioweb")
+
   for (const k of kpis) {
     k.platformCoverage =
-      k.label === "Nota Média" ? avalCobertura : finCobertura
+      k.label === "Nota Média"
+        ? avalCobertura
+        : k.label === "Custo de Entrega"
+          ? entregaCobertura
+          : finCobertura
     // O card "Fica na loja" absorveu o antigo "% que fica na loja". A seta dele
     // acompanha o valor em R$, então a variação da PORCENTAGEM — que era a seta
     // do card removido — vai pro hover, em vez de sumir junto com o card.

@@ -46,8 +46,12 @@ const STEPS: {
   {
     key: "import",
     icon: Upload,
-    title: "Faça a 1ª importação",
-    desc: "Comece pelo iFood: baixe os relatórios (Cardápio, Financeiro e Avaliações) e suba em Importação — vira lucro real na hora.",
+    title: "Traga os dados da sua loja",
+    // O texto anterior mandava baixar planilha do iFood, e só. Hoje três
+    // plataformas conectam por API e trazem tudo sozinhas — empurrar planilha
+    // pra quem pode conectar é fazer o cliente trabalhar à toa no primeiro
+    // contato com o sistema.
+    desc: "O jeito mais rápido é conectar a loja por API (iFood, 99 Food ou Cardápio Web) — aí o dado entra sozinho, todo dia. Se preferir, dá pra subir os relatórios em planilha.",
     href: "/importacao?guia=1",
     cta: "Importar",
   },
