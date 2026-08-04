@@ -164,6 +164,15 @@ export default async function AvaliacoesComparativoPage({
                       <PlatformLogo platform="keeta" size="sm" /> Keeta
                     </span>
                   </th>
+                  {/* Quarta coluna. A tabela tinha só as três de marketplace,
+                      então mesmo com o dado do canal próprio corrigido não
+                      haveria onde mostrá-lo. */}
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <PlatformLogo platform="cardapioweb" size="sm" /> Cardápio
+                      Web
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -197,6 +206,9 @@ export default async function AvaliacoesComparativoPage({
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <Nota n={r.totalKeeta > 0 ? r.notaMediaKeeta : null} />
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <Nota n={r.totalCw > 0 ? r.notaMediaCw : null} />
                     </td>
                   </tr>
                 ))}
