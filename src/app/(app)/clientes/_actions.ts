@@ -1,9 +1,13 @@
 "use server"
 
 import { revalidatePath, revalidateTag } from "next/cache"
+import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
 
 import { guard, requireSuperadmin } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { COOKIE_VER_COMO, VER_COMO_DURACAO_S } from "@/lib/auth/ver-como"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
 import { auditar } from "@/lib/data/auditoria"
 import { quitarFaturaComPagamento } from "@/lib/data/faturas"
@@ -797,4 +801,44 @@ export async function enviarAvisoPush(
         ? "Ninguém tinha aparelho ativo — nada foi entregue."
         : `Entregue em ${r.enviados} aparelho(s).`,
   }
+}
+
+/**
+ * Entra na visão somente-leitura de um cliente ("ver como").
+ *
+ * Só superadmin: `requireSuperadmin` lança se não for, e o portão em
+ * permissions.ts confere de novo a cada leitura — o cookie não é a
+ * autorização, é só o alvo escolhido.
+ *
+ * A auditoria vem ANTES de redirecionar, e de propósito não é `void`: olhar o
+ * dado de um cliente é o ato que se quer poder provar depois. Se o log
+ * falhasse em silêncio, restaria uma visão sem registro nenhum.
+ */
+export async function entrarVerComoAction(formData: FormData) {
+  const { email } = await requireSuperadmin()
+  const holdingId = String(formData.get("holdingId") ?? "").trim()
+  if (!holdingId) return
+
+  const admin = createAdminClient()
+  const { data: cliente } = await admin
+    .from("holdings")
+    .select("name")
+    .eq("id", holdingId)
+    .maybeSingle()
+
+  await auditar("superadmin.ver_como", holdingId, {
+    cliente: cliente?.name ?? holdingId,
+    por: email,
+  })
+
+  const jar = await cookies()
+  jar.set(COOKIE_VER_COMO, holdingId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: VER_COMO_DURACAO_S,
+  })
+
+  redirect("/inicio")
 }

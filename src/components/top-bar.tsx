@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowUp, LogOut, Sparkles } from "lucide-react"
+import { ArrowUp, EyeOff, LogOut, Sparkles } from "lucide-react"
 
 import { CommandSearch } from "@/components/command-search"
 import { DashboardCustomizeButton } from "@/components/dashboard/dashboard-customize-button"
@@ -19,12 +19,15 @@ export function TopBar({
   planTier,
   billingStatus,
   isSuperadmin = false,
+  verComo = false,
 }: {
   userName: string
   userInitials: string
   planTier?: string | null
   billingStatus?: string
   isSuperadmin?: boolean
+  /** Está vendo o sistema como um cliente (somente leitura). */
+  verComo?: boolean
 }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4 print:hidden">
@@ -51,15 +54,31 @@ export function TopBar({
           <DashboardCustomizeButton />
           <HelpMenu />
           <ThemeToggle />
-          <form action={signOut}>
-            <button
-              type="submit"
-              aria-label="Sair"
-              className="relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+          {/* Durante o "ver como o cliente", sair da CONTA é um POST — e a
+              trava de somente-leitura recusa POST. Deixar o botão ali seria
+              dar um botão que não funciona: enquanto a visão estiver ativa ele
+              vira "sair da visão", que é o que a pessoa precisa fazer antes de
+              qualquer outra coisa. */}
+          {verComo ? (
+            <a
+              href="/api/ver-como/sair"
+              aria-label="Sair da visão do cliente"
+              title="Sair da visão do cliente"
+              className="relative flex size-9 items-center justify-center rounded-md text-rose-600 transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/30"
             >
-              <LogOut className="size-4" />
-            </button>
-          </form>
+              <EyeOff className="size-4" />
+            </a>
+          ) : (
+            <form action={signOut}>
+              <button
+                type="submit"
+                aria-label="Sair"
+                className="relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+              >
+                <LogOut className="size-4" />
+              </button>
+            </form>
+          )}
         </div>
       </div>
 

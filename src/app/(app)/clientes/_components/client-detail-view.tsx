@@ -22,6 +22,7 @@ import { ACAO_LABEL } from "@/lib/auditoria-labels"
 
 import { ConviteAsaasButton } from "./convite-asaas-button"
 import { AvisoPushDialog } from "./aviso-push-dialog"
+import { VerComoBotao } from "./ver-como-botao"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
 
@@ -183,6 +184,7 @@ export function ClientDetailView({
       {embedded && (
         <div className="flex flex-wrap items-center gap-2 border-b pb-3">
           <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
+          <VerComoBotao holdingId={c.id} holdingName={c.name} />
         </div>
       )}
       {!embedded && (

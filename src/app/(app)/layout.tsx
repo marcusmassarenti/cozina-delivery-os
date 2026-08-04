@@ -5,6 +5,7 @@ import { after } from "next/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { NavigationProgress } from "@/components/shared/navigation-progress"
 import { TopBar } from "@/components/top-bar"
+import { VerComoFaixa } from "@/components/ver-como-faixa"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
 import { WelcomeSubscribedModal } from "@/components/welcome-subscribed-modal"
 import { WhatsNewModal } from "@/components/whats-new-modal"
@@ -13,7 +14,13 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { getMfaStatus } from "@/lib/auth/mfa"
-import { MODULES, userCan, isSuperadmin, getCurrentHoldingId } from "@/lib/auth/permissions"
+import {
+  MODULES,
+  userCan,
+  isSuperadmin,
+  getCurrentHoldingId,
+  getVerComoHoldingId,
+} from "@/lib/auth/permissions"
 import { daysUntil, getCurrentHoldingBilling } from "@/lib/data/billing"
 import { enviarBoasVindasSePreciso } from "@/lib/email/boas-vindas"
 import { iniciarTrialSePrimeiroAcesso } from "@/lib/data/trial"
@@ -82,6 +89,7 @@ export default async function AppLayout({
   )
   const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
   const superadmin = await isSuperadmin()
+  const verComoId = await getVerComoHoldingId()
 
   // Cobrança: cliente sem pagar e passou da data de suspensão → bloqueia.
   // Super-admin (dono) nunca é bloqueado.
@@ -117,7 +125,11 @@ export default async function AppLayout({
             planTier={billing?.planTier ?? null}
             billingStatus={billing?.status}
             isSuperadmin={superadmin}
+            verComo={verComoId !== null}
           />
+          {/* Vem PRIMEIRO, acima de cobrança e trial: saber de quem é o dado
+              na tela precede qualquer outro aviso. */}
+          <VerComoFaixa />
           {overdue && (
             <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-6 py-2.5 text-xs font-medium text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
               <span className="text-base leading-none">⚠️</span>

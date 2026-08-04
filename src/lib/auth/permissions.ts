@@ -13,10 +13,12 @@ import "server-only"
 
 import { cache } from "react"
 import { unstable_cache } from "next/cache"
+import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { COOKIE_VER_COMO } from "@/lib/auth/ver-como"
 
 /**
  * Usuário autenticado, memoizado POR REQUEST (React cache). Várias funções
@@ -215,6 +217,40 @@ export const isSuperadmin = cache(async (): Promise<boolean> => {
 })
 
 /**
+ * Empresa que o suporte está "vendo como" — ou null (o caso normal).
+ *
+ * ESTE É O PORTÃO. O cookie carrega só o id da empresa e não vale nada por si:
+ * a permissão é conferida AQUI, no servidor, a cada leitura. Usuário comum que
+ * copie ou invente o cookie continua vendo exatamente o que via.
+ *
+ * Fica no mesmo arquivo que `getAccessibleUnitIds` de propósito: escopo de
+ * visão espalhado por vários arquivos é como se perde o controle de quem vê o
+ * quê. Quem quiser saber o que um usuário enxerga lê só este arquivo.
+ */
+export const getVerComoHoldingId = cache(async (): Promise<string | null> => {
+  const alvo = (await cookies()).get(COOKIE_VER_COMO)?.value
+  if (!alvo) return null
+  if (!(await isSuperadmin())) return null
+  return alvo
+})
+
+/** Lojas de uma empresa (holding → marcas → unidades). */
+async function unitIdsDaHolding(holdingId: string): Promise<string[]> {
+  const admin = createAdminClient()
+  const { data: marcas } = await admin
+    .from("brands")
+    .select("id")
+    .eq("holding_id", holdingId)
+  const brandIds = (marcas ?? []).map((b) => b.id as string)
+  if (brandIds.length === 0) return []
+  const { data: lojas } = await admin
+    .from("units")
+    .select("id")
+    .in("brand_id", brandIds)
+  return (lojas ?? []).map((u) => u.id as string)
+}
+
+/**
  * IDs das unidades visíveis pro usuário:
  *  - super-admin da plataforma → null (vê TODOS os clientes — o "ver tudo" mora
  *    SÓ aqui agora)
@@ -231,6 +267,12 @@ export const getAccessibleUnitIds = cache(
   async (): Promise<string[] | null> => {
     const user = await getAuthUser()
     if (!user) return []
+
+    // Suporte vendo como um cliente: as lojas passam a ser as DELE, e só elas.
+    // Devolver um array concreto (nunca null) é o que garante que se veja a
+    // empresa escolhida em vez de todas — mesmo sendo superadmin.
+    const verComo = await getVerComoHoldingId()
+    if (verComo) return unitIdsDaHolding(verComo)
 
     const admin = createAdminClient()
     const { data: accesses } = await admin
@@ -286,6 +328,12 @@ export const getAccessibleUnitIds = cache(
 export const getCurrentHoldingId = cache(async (): Promise<string | null> => {
   const user = await getAuthUser()
   if (!user) return null
+
+  // Vendo como um cliente, a "empresa atual" é a dele — senão as telas de
+  // admin mostrariam o cabeçalho de uma empresa e os dados de outra.
+  const verComo = await getVerComoHoldingId()
+  if (verComo) return verComo
+
   const admin = createAdminClient()
   const { data: accesses } = await admin
     .from("user_unit_access")

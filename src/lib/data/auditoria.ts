@@ -31,6 +31,9 @@ export type AcaoAuditada =
   /** Aviso por push disparado à mão pela tela de Clientes. Push não tem como
    *  despublicar, então saber o que foi dito e pra quantos é o que sobra. */
   | "push.aviso"
+  /** Suporte entrou na visão somente-leitura de um cliente. Ver o dado de um
+   *  cliente é justamente o ato que se precisa poder provar depois. */
+  | "superadmin.ver_como"
 
 /**
  * Grava uma entrada no log. Nunca lança: auditoria que quebra a operação é
