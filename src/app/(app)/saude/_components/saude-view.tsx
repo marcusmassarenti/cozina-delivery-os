@@ -4,7 +4,7 @@ import * as React from "react"
 
 import type { SaudeIntegracoes, Gravidade } from "@/lib/data/saude-integracoes"
 import { rotulo } from "@/lib/cron-labels"
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, rotuloPlataforma } from "@/components/platform-logo"
 
 const SELO: Record<Gravidade, { label: string; cls: string }> = {
   alerta: {
@@ -187,8 +187,14 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1.5">
                       <PlatformLogo platform={l.plataforma} className="size-4" />
+                      {/* Era um ternário binário: qualquer coisa que não fosse
+                          99 Food virava "iFood" no texto — inclusive Keeta e
+                          Cardápio Web, que já geram linha aqui desde a 0141.
+                          Logo certo ao lado do nome errado é o pior tipo de
+                          bug de tela: quem monitora vai investigar a
+                          plataforma que não quebrou. */}
                       <span className="text-xs">
-                        {l.plataforma === "99food" ? "99 Food" : "iFood"}
+                        {rotuloPlataforma(l.plataforma)}
                       </span>
                     </div>
                   </td>
@@ -203,9 +209,11 @@ export function SaudeView({ saude: s }: { saude: SaudeIntegracoes }) {
                   <td className="px-3 py-2.5 tabular-nums">{dataCurta(l.ultimoPedido)}</td>
                   <td className="px-3 py-2.5 tabular-nums">{dataCurta(l.ultimoFinanceiro)}</td>
                   <td className="px-3 py-2.5 tabular-nums">
-                    {l.plataforma === "99food" ? (
-                      // A 99 não expõe avaliação por API. Mostrar "—" aqui
-                      // pareceria dado atrasado; "n/d" diz que não existe.
+                    {l.plataforma === "99food" || l.plataforma === "keeta" ? (
+                      // Nem a 99 nem a Keeta expõem avaliação por API. Mostrar
+                      // "—" pareceria dado atrasado; "n/d" diz que não existe.
+                      // A Keeta caía no ramo do iFood e mostrava vazio como se
+                      // a integração tivesse parado.
                       <span className="text-xs text-muted-foreground">n/d</span>
                     ) : (
                       dataCurta(l.ultimaAvaliacao)

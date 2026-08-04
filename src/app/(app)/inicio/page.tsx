@@ -29,7 +29,11 @@ import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
 import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
-import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
+import {
+  getCardapioWebResumoByUnits,
+  getNetworkCardapioWebTopItemsForMonth,
+} from "@/lib/data/cardapioweb-imported"
+import { getNetworkCardapioWebAvaliacoesForMonth } from "@/lib/data/cardapioweb-avaliacoes"
 import { getVrValorByUnits } from "@/lib/data/ifood-pedidos"
 import { PlatformTabbedCard } from "@/components/dashboard/platform-tabbed-card"
 import { DashboardPdfButton } from "@/components/dashboard/dashboard-pdf-button"
@@ -351,6 +355,19 @@ export default async function Home({
       getNetworkKeetaCancelamentosForMonth(year, month, 5, scopeIds),
       getNetworkKeetaTopItemsForMonth(year, month, 500, scopeIds),
       getNetworkKeetaAvaliacoesForMonth(year, month, scopeIds),
+      // Canal próprio. As de cima são de marketplace; a avaliação e o top de
+      // itens do Cardápio Web vivem em outras tabelas e não chegavam aqui.
+      getNetworkCardapioWebAvaliacoesForMonth(
+        scopeIds ?? activeUnitIds,
+        year,
+        month,
+      ),
+      getNetworkCardapioWebTopItemsForMonth(
+        year,
+        month,
+        500,
+        scopeIds ?? activeUnitIds,
+      ),
     ])
 
   // Fase 2a: resumos por unidade + cobertura + entrega.
@@ -468,6 +485,8 @@ export default async function Home({
     networkCancelsKeeta,
     networkTopItemsKeeta,
     networkAvaliacoesKeeta,
+    networkAvaliacoesCw,
+    networkTopItemsCw,
   ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
   cron.marca("rede")
 
@@ -532,9 +551,6 @@ export default async function Home({
   const unitsWithKeeta = Array.from(keetaByUnit.values()).filter(
     (f) => f.hasData,
   ).length
-  const hasAnyImported =
-    unitsWithImported > 0 || unitsWith99 > 0 || unitsWithKeeta > 0
-
   const hasFunnelData = networkFunnel.totals.visitas > 0
   const hasCancelData = networkCancels.length > 0
   const hasTopItemsData = networkTopItems.length > 0
@@ -545,12 +561,21 @@ export default async function Home({
   const hasCancelKeetaData = networkCancelsKeeta.length > 0
   const hasTopItemsKeetaData = networkTopItemsKeeta.length > 0
   const hasAvaliacoesKeetaData = networkAvaliacoesKeeta.hasData
+  const hasAvaliacoesCwData = networkAvaliacoesCw.hasData
 
   // Plataformas que efetivamente alimentam os KPIs financeiros do topo.
   // Se filtro por plataforma estiver ativo, mostra só aquela.
   const unitsWithCw = Array.from(cwByUnit.values()).filter(
     (c) => c.hasData,
   ).length
+
+  // O canal próprio conta: sem ele, uma rede que só vende pelo Cardápio Web
+  // não via a fileira de chips de cobertura, como se não tivesse dado nenhum.
+  const hasAnyImported =
+    unitsWithImported > 0 ||
+    unitsWith99 > 0 ||
+    unitsWithKeeta > 0 ||
+    unitsWithCw > 0
   const finPlatforms: PlatformId[] = []
   if (filtrandoPlataforma) {
     finPlatforms.push(...plataformasFilter)
@@ -709,6 +734,7 @@ export default async function Home({
     ["ifood", networkAvaliacoes, hasAvaliacoesData],
     ["99food", networkAvaliacoes99, hasAvaliacoes99Data],
     ["keeta", networkAvaliacoesKeeta, hasAvaliacoesKeetaData],
+    ["cardapioweb", networkAvaliacoesCw, hasAvaliacoesCwData],
   ] as const) {
     if (!has || a.total <= 0) continue
     avalTotal += a.total
@@ -794,12 +820,16 @@ export default async function Home({
       { id: "cardapioweb", on: unitsWithCw > 0 },
     ] as { id: PlatformId; on: boolean }[]
   ).filter((p) => tenantPlatforms.includes(p.id) && plataformaAtiva(p.id))
-  // Cardápio Web fica de fora: ainda não expõe avaliações pela API.
+  // O Cardápio Web ENTRA: o comentário aqui dizia que ele não expunha
+  // avaliações pela API, e isso deixou de ser verdade quando a integração de
+  // avaliações foi construída. Comentário desatualizado é o que fez esta
+  // seção inteira ignorar o canal próprio.
   const avalCobertura: { id: PlatformId; on: boolean }[] = (
     [
       { id: "ifood", on: hasAvaliacoesData },
       { id: "99food", on: hasAvaliacoes99Data },
       { id: "keeta", on: hasAvaliacoesKeetaData },
+      { id: "cardapioweb", on: hasAvaliacoesCwData },
     ] as { id: PlatformId; on: boolean }[]
   ).filter((p) => tenantPlatforms.includes(p.id) && plataformaAtiva(p.id))
   for (const k of kpis) {
@@ -1058,6 +1088,12 @@ export default async function Home({
                     {unitsWithKeeta}/{activeCount} Keeta
                   </span>
                 )}
+                {unitsWithCw > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-400">
+                    <Sparkles className="size-3" />
+                    {unitsWithCw}/{activeCount} Cardápio Web
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -1137,7 +1173,10 @@ export default async function Home({
             number={2}
             label={`Visão Geral por Plataforma (${scopeLabel})`}
           />
-          <div data-tour="db-plataformas" className="grid gap-3 md:grid-cols-3">
+          <div
+            data-tour="db-plataformas"
+            className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          >
             {platforms
               .filter((p) => tenantPlatforms.includes(p.id))
               .map((p) => {
@@ -1455,6 +1494,22 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    // Canal próprio. A função já existia e já rodava em
+                    // /produtos — só não chegava ao Dashboard.
+                    ...(unitsWithCw > 0
+                      ? [
+                          {
+                            platform: "cardapioweb" as const,
+                            empty: networkTopItemsCw.length === 0,
+                            content:
+                              networkTopItemsCw.length > 0 ? (
+                                <TopItemsList items={networkTopItemsCw} />
+                              ) : (
+                                <EmptyMsg text="Sem itens do Cardápio Web neste mês" />
+                              ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
@@ -1463,7 +1518,8 @@ export default async function Home({
 
           {(hasAvaliacoesData ||
             hasAvaliacoes99Data ||
-            hasAvaliacoesKeetaData) && (
+            hasAvaliacoesKeetaData ||
+            hasAvaliacoesCwData) && (
             <DashboardSection id="satisfacao">
               <div data-slide-break />
               <SectionDivider
@@ -1515,6 +1571,22 @@ export default async function Home({
                               />
                             ) : (
                               <EmptyMsg text="Sem avaliações Keeta neste mês" />
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(hasAvaliacoesCwData
+                      ? [
+                          {
+                            platform: "cardapioweb" as const,
+                            empty: !hasAvaliacoesCwData,
+                            content: hasAvaliacoesCwData ? (
+                              <NotasDistribuicao
+                                total={networkAvaliacoesCw.total}
+                                distribucao={networkAvaliacoesCw.distribucao}
+                              />
+                            ) : (
+                              <EmptyMsg text="Sem avaliações do Cardápio Web neste mês" />
                             ),
                           },
                         ]
@@ -1574,6 +1646,28 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    // Canal próprio: o Cardápio Web não usa tags, usa NOTA POR
+                    // DIMENSÃO — atendimento, produto, embalagem, tempo,
+                    // custo/benefício. As bem avaliadas cabem aqui.
+                    ...(hasAvaliacoesCwData
+                      ? [
+                          {
+                            platform: "cardapioweb" as const,
+                            empty: !hasAvaliacoesCwData,
+                            content:
+                              networkAvaliacoesCw.topTagsPositivas.length > 0 ? (
+                                <TagsList
+                                  tags={networkAvaliacoesCw.topTagsPositivas}
+                                  total={networkAvaliacoesCw.total}
+                                  color="emerald"
+                                  emptyText="Nenhuma dimensão com nota alta"
+                                />
+                              ) : (
+                                <EmptyMsg text="Nenhuma dimensão com nota alta no Cardápio Web" />
+                              ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
 
@@ -1629,6 +1723,28 @@ export default async function Home({
                           },
                         ]
                       : []),
+                    // Canal próprio: a dimensão MAL avaliada é literalmente
+                    // "o que reclamam", e diz QUAL parte — coisa que tag
+                    // genérica de marketplace não entrega.
+                    ...(hasAvaliacoesCwData
+                      ? [
+                          {
+                            platform: "cardapioweb" as const,
+                            empty: !hasAvaliacoesCwData,
+                            content:
+                              networkAvaliacoesCw.topTagsNegativas.length > 0 ? (
+                                <TagsList
+                                  tags={networkAvaliacoesCw.topTagsNegativas}
+                                  total={networkAvaliacoesCw.total}
+                                  color="rose"
+                                  emptyText="🎉 Nenhuma dimensão fraca"
+                                />
+                              ) : (
+                                <EmptyMsg text="🎉 Nenhuma dimensão fraca no Cardápio Web" />
+                              ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
@@ -1676,6 +1792,18 @@ export default async function Home({
                     data: c.data,
                     pedidoIdCurto: c.pedidoIdCurto,
                   })),
+                  // Canal próprio. É onde o cliente avalia a LOJA, não a
+                  // plataforma — e era justamente o que não aparecia aqui.
+                  ...networkAvaliacoesCw.ultimosComentarios.map((c) => ({
+                    id: "cw-" + c.id,
+                    platform: "cardapioweb" as const,
+                    unitCode: c.unitCode,
+                    unitName: c.unitName,
+                    nota: c.nota,
+                    comentario: c.comentario,
+                    data: c.data ?? "",
+                    pedidoIdCurto: null,
+                  })),
                 ]
                   .sort((a, b) => (a.data > b.data ? -1 : 1))
                   .slice(0, 5)
@@ -1688,7 +1816,15 @@ export default async function Home({
                         Últimos comentários
                       </h3>
                       <span className="ml-auto text-[10px] text-muted-foreground">
-                        iFood + 99 Food + Keeta · ordenado por data
+                        {[
+                          hasAvaliacoesData && "iFood",
+                          hasAvaliacoes99Data && "99 Food",
+                          hasAvaliacoesKeetaData && "Keeta",
+                          hasAvaliacoesCwData && "Cardápio Web",
+                        ]
+                          .filter(Boolean)
+                          .join(" + ")}{" "}
+                        · ordenado por data
                       </span>
                     </div>
                     <div className="divide-y">

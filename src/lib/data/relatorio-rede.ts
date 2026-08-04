@@ -15,6 +15,7 @@ import {
 import { getNetworkAvaliacoesForMonth } from "@/lib/data/ifood-imported"
 import { getNetworkNinefoodAvaliacoesForMonth } from "@/lib/data/ninefood-imported"
 import { getNetworkKeetaAvaliacoesForMonth } from "@/lib/data/keeta-imported"
+import { getAvaliacoesCardapioWeb } from "@/lib/data/cardapioweb-avaliacoes"
 import { getNetworkDeliveryFee } from "@/lib/data/taxa-entrega"
 import {
   getImportCoverageForMonth,
@@ -46,12 +47,15 @@ export async function getNetworkReportForMonth(
   const activeUnitIds =
     filterUnitIds ? filterUnitIds : allActiveIds
 
-  const [resultado, avalIfood, avalNine, avalKeeta, entrega, coverage] =
+  const [resultado, avalIfood, avalNine, avalKeeta, avalCw, entrega, coverage] =
     await Promise.all([
       getNetworkResultadoForMonth(year, month, filterUnitIds),
       getNetworkAvaliacoesForMonth(year, month, filterUnitIds),
       getNetworkNinefoodAvaliacoesForMonth(year, month, filterUnitIds),
       getNetworkKeetaAvaliacoesForMonth(year, month, filterUnitIds),
+      // Canal próprio. As três acima são de marketplace; a avaliação do
+      // Cardápio Web vive em outra tabela e ficava de fora da média da rede.
+      getAvaliacoesCardapioWeb(activeUnitIds, year, month),
       getNetworkDeliveryFee(activeUnitIds, year, month),
       getImportCoverageForMonth(year, month, filterUnitIds),
     ])
@@ -70,8 +74,15 @@ export async function getNetworkReportForMonth(
   const mediaPedidosDia =
     diasConsiderados > 0 ? Math.round(totals.pedidos / diasConsiderados) : 0
 
-  // Nota média da rede: média ponderada pelas 3 plataformas (peso = nº de aval).
-  const avals = [avalIfood, avalNine, avalKeeta]
+  // Nota média da rede: média ponderada pelas QUATRO plataformas (peso = nº
+  // de avaliações). Ficou nas três de marketplace por um tempo e o comentário
+  // dizia "3 plataformas" — que era o próprio sintoma, não uma decisão.
+  const avals = [
+    avalIfood,
+    avalNine,
+    avalKeeta,
+    { total: avalCw.total, notaMedia: avalCw.media ?? 0 },
+  ]
   const totalAvaliacoes = avals.reduce((s, a) => s + a.total, 0)
   const notaMedia =
     totalAvaliacoes > 0
