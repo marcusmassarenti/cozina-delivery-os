@@ -13,6 +13,8 @@ import {
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
+import { getOperacaoCardapioWeb } from "@/lib/data/cardapioweb-operacao"
+import { CardCancelamento } from "@/components/cardapioweb/operacao-cards"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtNum, fmtPct } from "@/lib/format"
@@ -38,12 +40,15 @@ export default async function CancelamentosPage({
       : allUnits
   const ids = scoped.map((u) => u.id)
 
-  const [ifoodMap, nineMap, keetaMap, cwMap, availablePeriods] =
+  const [ifoodMap, nineMap, keetaMap, cwMap, cwOperacao, availablePeriods] =
     await Promise.all([
       getFinanceiroResumoByUnits(ids, year, month, queryRange),
       getNinefoodResumoByUnits(ids, year, month, queryRange),
       getKeetaResumoByUnits(ids, year, month, queryRange),
       getCardapioWebResumoByUnits(ids, year, month, queryRange),
+      // O POR QUÊ do cancelamento. Só o Cardápio Web devolve o motivo em
+      // texto; nos marketplaces a gente sabe quantos, nunca por quê.
+      getOperacaoCardapioWeb(ids, year, month, queryRange),
       getAvailablePeriods(),
     ])
 
@@ -260,6 +265,15 @@ export default async function CancelamentosPage({
               </tbody>
             </table>
           </div>
+
+          {/* Contar cancelamento diz que existe problema; o motivo diz QUAL.
+              "Sem entregador" e "horário cadastrado errado" se resolvem no
+              mesmo dia — se alguém souber. Só aparece quando há o que dizer. */}
+          {cwOperacao.cancelamento.length > 0 && (
+            <div className="max-w-xl">
+              <CardCancelamento op={cwOperacao} />
+            </div>
+          )}
         </>
       )}
     </div>
