@@ -16,7 +16,7 @@ import {
 
 const inicial: DesafioState = { ok: false }
 
-export function VerificacaoForm() {
+export function VerificacaoForm({ next }: { next?: string }) {
   const [state, action] = useActionState(verificarCodigo2FA, inicial)
   const [rec, recAction] = useActionState(usarCodigoDeRecuperacao, inicial)
   const [modoRecuperacao, setModo] = React.useState(false)
@@ -31,6 +31,8 @@ export function VerificacaoForm() {
   if (modoRecuperacao) {
     return (
       <form action={recAction} className="flex flex-col gap-4">
+        {/* Destino sobrevive ao 2FA — senão a intenção morre na 2ª etapa. */}
+        {next && <input type="hidden" name="next" value={next} />}
         <p className="text-sm text-muted-foreground">
           Digite um dos <b className="text-foreground">códigos de recuperação</b>{" "}
           que você guardou quando ativou a verificação em duas etapas.
@@ -86,6 +88,7 @@ export function VerificacaoForm() {
 
   return (
     <form action={action} className="flex flex-col gap-4">
+      {next && <input type="hidden" name="next" value={next} />}
       <p className="text-sm text-muted-foreground">
         Abra seu aplicativo autenticador e digite o código de 6 dígitos que
         aparece para o <b className="text-foreground">Delivery OS</b>.

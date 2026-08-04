@@ -14,7 +14,7 @@ import { TurnstileWidget, resetTurnstile } from "./turnstile-widget"
 
 const initial: SignInState = { ok: false }
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const [state, formAction] = useActionState(signIn, initial)
   const [remember, setRemember] = React.useState(false)
   const [showPassword, setShowPassword] = React.useState(false)
@@ -32,6 +32,10 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
+      {/* Destino depois do login. Vem de quem mandou o lojista pra cá (ex.: o
+          "Instalar" da CW App Store) — sem isto, ele entra e cai no dashboard
+          sem lembrança do que estava tentando fazer. */}
+      {next && <input type="hidden" name="next" value={next} />}
       <div className="flex flex-col gap-2">
         <Label htmlFor="email" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Email

@@ -15,7 +15,12 @@ export const metadata = { title: "Verificação em duas etapas — Delivery OS" 
  * passou pela senha (sessão aal1); quem não deve código nenhum é mandado
  * adiante para não ficar preso numa tela sem sentido.
  */
-export default async function VerificacaoPage() {
+export default async function VerificacaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
   if (!data.user) redirect("/login")
@@ -44,7 +49,7 @@ export default async function VerificacaoPage() {
             (app autenticador × código de recuperação). Quando morava aqui
             fora, pedia "código de 6 dígitos" com o campo de recuperação
             aberto logo abaixo. */}
-        <VerificacaoForm />
+        <VerificacaoForm next={sp.next} />
 
         {/* <div>, não <p>: o SairLink é um <form>, e form dentro de parágrafo
             é HTML inválido — o navegador fecha o <p> na marra e desalinha. */}

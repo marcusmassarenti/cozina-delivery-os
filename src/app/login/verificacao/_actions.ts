@@ -77,7 +77,9 @@ export async function verificarCodigo2FA(
   await confiarNesteAparelho(factorId)
 
   revalidatePath("/", "layout")
-  redirect("/inicio")
+  // Mesma regra do login: só caminho interno, senão vira redirect aberto.
+  const bruto = String(formData.get("next") ?? "")
+  redirect(bruto.startsWith("/") && !bruto.startsWith("//") ? bruto : "/inicio")
 }
 
 /**

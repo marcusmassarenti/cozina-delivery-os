@@ -65,12 +65,25 @@ export async function signIn(
   // Passa por `getMfaStatus` em vez de olhar o aal cru: é lá que mora a
   // exceção do aparelho confiável. Repetir a regra aqui faria as duas portas
   // (esta e a do layout) discordarem — e quem manda seria a mais burra.
+  // Pra onde ir depois. Só caminho INTERNO: `next` vem da URL, e aceitar
+  // qualquer valor viraria redirect aberto — bastaria mandar
+  // /login?next=https://site-falso.com pra usar nosso domínio como trampolim
+  // numa fraude. Barramos "//" também, que o navegador lê como outro host.
+  const bruto = String(formData.get("next") ?? "")
+  const destino =
+    bruto.startsWith("/") && !bruto.startsWith("//") ? bruto : "/inicio"
+
   const { precisaVerificar } = await getMfaStatus()
   if (precisaVerificar) {
-    redirect("/login/verificacao")
+    // O destino atravessa a segunda etapa, senão o 2FA come a intenção.
+    redirect(
+      destino === "/inicio"
+        ? "/login/verificacao"
+        : `/login/verificacao?next=${encodeURIComponent(destino)}`,
+    )
   }
 
-  redirect("/inicio")
+  redirect(destino)
 }
 
 export async function signOut() {

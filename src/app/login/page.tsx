@@ -12,7 +12,7 @@ import { LoginForm } from "./_components/login-form"
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ recuperado?: string }>
+  searchParams: Promise<{ recuperado?: string; next?: string }>
 }) {
   const sp = await searchParams
   const supabase = await createClient()
@@ -116,7 +116,7 @@ export default async function LoginPage({
               <h2 className="text-xl font-semibold">Acesso Administrativo</h2>
             </div>
 
-            <LoginForm />
+            <LoginForm next={sp.next} />
 
             {/* Caminho pro cadastro. O /cadastro sempre teve "Já tem conta?
                 Entrar", mas o login não tinha o inverso — e é aqui que a maioria
