@@ -174,22 +174,22 @@ export async function CardapioCwTab({
               renderam pouco: vale olhar preço, foto e posição na categoria.
             </p>
             <div className="space-y-1.5">
-              {menos.map((i) => (
-                <div
-                  key={i.nome}
-                  className="flex items-baseline justify-between gap-2"
-                >
+              {menos.map((i, idx) => (
+                <div key={i.nome} className="flex items-baseline gap-2">
+                  <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                    {idx + 1}
+                  </span>
                   <span
                     className="min-w-0 flex-1 truncate text-xs"
                     title={i.nome}
                   >
                     {i.nome}
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums">
-                    <span className="font-semibold">{fmtBRL(i.receita)}</span>
-                    <span className="ml-1.5 text-[10px] text-muted-foreground">
-                      {fmtNum(i.qtd)} un
-                    </span>
+                  <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums">
+                    {fmtBRL(i.receita)}
+                  </span>
+                  <span className="w-12 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                    {fmtNum(i.qtd)} un
                   </span>
                 </div>
               ))}
@@ -209,27 +209,32 @@ export async function CardapioCwTab({
               O que o cliente mais escolhe junto.
             </p>
             <div className="space-y-1.5">
-              {vendas.complementos.slice(0, 10).map((c) => (
+              {vendas.complementos.slice(0, 10).map((c, idx) => (
                 <div
                   key={`${c.grupo}-${c.nome}`}
-                  className="flex items-baseline justify-between gap-2"
+                  className="flex items-baseline gap-2"
                 >
+                  <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                    {idx + 1}
+                  </span>
                   <span
                     className="min-w-0 flex-1 truncate text-xs"
-                    title={c.nome}
+                    title={`${c.nome} · ${c.grupo}`}
                   >
                     {c.nome}
                     <span className="ml-1.5 text-[10px] text-muted-foreground">
                       {c.grupo}
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums">
-                    <span className="font-semibold">{fmtNum(c.qtd)}</span>
-                    {c.receita > 0 && (
-                      <span className="ml-1.5 text-[10px] text-muted-foreground">
-                        {fmtBRL(c.receita)}
-                      </span>
-                    )}
+                  <span className="w-12 shrink-0 text-right text-xs font-semibold tabular-nums">
+                    {fmtNum(c.qtd)}
+                  </span>
+                  {/* A coluna do valor aparece SEMPRE. Escondê-la quando o
+                      complemento é de graça fazia a lista ter linhas com duas
+                      colunas e linhas com três — parecia dado faltando, quando
+                      na verdade o adicional não custa nada. */}
+                  <span className="w-16 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                    {c.receita > 0 ? fmtBRL(c.receita) : "grátis"}
                   </span>
                 </div>
               ))}
