@@ -17,16 +17,22 @@ import {
 } from "@/lib/data/cardapioweb-imported"
 import { type PlatformId } from "@/components/platform-logo"
 
+import { createAdminClient } from "@/lib/supabase/admin"
+
 import { ConexoesTable, type ConexaoRow } from "./_components/conexoes-table"
 
 export default async function ConexoesPage() {
   if (!(await isSuperadmin())) notFound()
-  const [{ clients }, solicitacoes, cwInstalls, cwConectadas] =
+  const [{ clients }, solicitacoes, cwInstalls, cwConectadas, fila99] =
     await Promise.all([
       getClientsOverview(),
       getSolicitacoesIfoodPendentes(),
       installIdsDeProducao(),
       unitIdsConectadosCw(),
+      createAdminClient()
+        .from("ninefood_activation_requests")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["pendente", "solicitada"]),
     ])
 
   // Achata as lojas de todos os clientes numa lista só.
@@ -88,6 +94,19 @@ export default async function ConexoesPage() {
               {solicitacoes.total > 0 && (
                 <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#EA1D2C] px-1.5 text-[11px] font-semibold text-white">
                   {solicitacoes.total}
+                </span>
+              )}
+              <ArrowUpRight className="size-3.5 text-muted-foreground" />
+            </Link>
+            <Link
+              href="/integracao/99food"
+              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Store className="size-4" />
+              99 Food
+              {(fila99.count ?? 0) > 0 && (
+                <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#FF6B00] px-1.5 text-[11px] font-semibold text-white">
+                  {fila99.count}
                 </span>
               )}
               <ArrowUpRight className="size-3.5 text-muted-foreground" />
