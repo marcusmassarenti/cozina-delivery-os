@@ -53,6 +53,14 @@ export type IfoodFetchResult<T = unknown> = {
   retries: number
   durationMs: number
   error?: string
+  /**
+   * Quanto o iFood mandou esperar (do header `Retry-After`), em ms.
+   * Só vem preenchido num 429. Quem faz polling deve OBEDECER: insistir no
+   * mesmo ritmo depois de um 429 alimenta o congestionamento em vez de
+   * aliviá-lo — e o teto é por APLICATIVO, então quem insiste atrapalha as
+   * outras lojas do mesmo processo, não só a si mesmo.
+   */
+  retryAfterMs?: number
 }
 
 function buildUrl(path: string, query?: IfoodFetchOptions["query"]): string {
@@ -83,6 +91,7 @@ export async function fetchIfood<T = unknown>(
   const homolog = isAppHomologation(app)
 
   let retries = 0
+  let retryAfterMs: number | undefined
   let lastStatus = 0
   let lastBody = ""
   let lastError: string | undefined
@@ -142,12 +151,24 @@ export async function fetchIfood<T = unknown>(
       retries++
       continue
     }
-    // 429/5xx: backoff
+    // 429/5xx: backoff. Num 429 o iFood costuma dizer QUANTO esperar no header
+    // `Retry-After` (segundos). Obedecer é melhor que chutar: nosso backoff
+    // fixo pode ser curto demais e virar nova rajada.
     if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
       lastBody = await res.text().catch(() => "")
+      if (res.status === 429) {
+        const ra = Number(res.headers.get("retry-after"))
+        // Teto de 60s: header maluco não pode pendurar a function inteira.
+        if (Number.isFinite(ra) && ra > 0) {
+          retryAfterMs = Math.min(ra * 1000, 60_000)
+        }
+      }
       retries++
       if (retries <= MAX_RETRIES) {
-        await sleep(BACKOFF_MS[Math.min(retries - 1, BACKOFF_MS.length - 1)])
+        await sleep(
+          retryAfterMs ??
+            BACKOFF_MS[Math.min(retries - 1, BACKOFF_MS.length - 1)],
+        )
         continue
       }
       break
@@ -204,6 +225,7 @@ export async function fetchIfood<T = unknown>(
     retries,
     durationMs,
     error: ok ? undefined : (lastError ?? `HTTP ${lastStatus}`),
+    retryAfterMs,
   }
 }
 

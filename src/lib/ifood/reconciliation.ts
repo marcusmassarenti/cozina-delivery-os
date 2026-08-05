@@ -227,9 +227,17 @@ export async function downloadReconciliationRows(
   }
 
   // 2. Faz polling até o status virar "processed" (ou estourar o tempo).
+  //
+  // A espera CRESCE a cada tentativa (5s → 10 → 20 → 40, teto de 30s). Antes
+  // era intervalo fixo, e o relatório demora o que demora: perguntar a cada 5
+  // segundos não o entrega mais cedo, só gasta chamada. Medido em 05/ago/26:
+  // 395 relatórios pedidos consumiram ~3.400 consultas, e 252 delas voltaram
+  // 429. Como o teto do iFood é por APLICATIVO (confirmado por eles), essas
+  // chamadas desperdiçadas tiram vez das outras lojas do mesmo processo.
   let filePath: string | undefined
   let lastStatus = 0
   let lastRaw = ""
+  let espera = pollMs
   const deadline = Date.now() + maxWaitMs
   while (Date.now() < deadline) {
     const st = await getReconciliationRequest(merchantId, req.requestId)
@@ -250,7 +258,13 @@ export async function downloadReconciliationRows(
         durationMs: Date.now() - t0,
       }
     }
-    await sleep(pollMs)
+    // Se o iFood pediu pra esperar (429 com Retry-After), obedece — insistir
+    // no ritmo antigo depois de um 429 é o que transforma congestionamento em
+    // cascata.
+    const pedido = st.retryAfterMs
+    await sleep(pedido ?? espera)
+    // Teto de 30s: acima disso o ganho some e o risco é estourar o tempo total.
+    espera = Math.min(espera * 2, 30_000)
   }
   if (!filePath) {
     return {
