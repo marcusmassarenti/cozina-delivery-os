@@ -730,21 +730,36 @@ function marketingDaLoja(m: import("@/lib/mock-monthly").UnitMonthly) {
  * Retorno das promoções (ROAS) — do relatório de Promoções do iFood.
  *
  * ⚠️ RÉGUA DIFERENTE, de propósito exposta como tal. Todo o resto do contexto
- * é mês calendário; este relatório tem janela rolante de ~30 dias (hoje
- * 10/06→09/07). Somar o investimento daqui com o `promocoes` do mês daria
- * dois números de marketing brigando na mesma resposta.
+ * é mês calendário; aqui a janela é ESCOLHIDA NA EXPORTAÇÃO do relatório, tem
+ * qualquer tamanho e as janelas se SOBREPÕEM entre si (as duas primeiras
+ * subidas foram 10/06→09/07 e 06/06→04/08, uma quase dentro da outra).
  *
- * A saída por isso: o período vai DENTRO do bloco e o prompt obriga a citá-lo.
- * O que se usa daqui é o ROAS e a contagem de campanhas — que só existem aqui.
- * O quanto foi investido continua vindo do extrato, mês a mês.
+ * Isso tem duas consequências:
+ *  - somar o investimento daqui com o `promocoes` mensal daria dois números de
+ *    marketing brigando na mesma resposta;
+ *  - e duas importações NÃO formam série temporal. Por isso a busca devolve um
+ *    único snapshot por loja (o de fim mais recente), nunca uma lista: sem
+ *    isso, "o ROAS subiu ou caiu?" compararia períodos que se cobrem.
+ *
+ * A saída: o período vai DENTRO do bloco e o prompt obriga a citá-lo. O que se
+ * usa daqui é o ROAS e a contagem de campanhas — que só existem aqui. O quanto
+ * foi investido continua vindo do extrato, mês a mês.
  */
 function retornoDasPromocoes(p: PromocoesSnapshot | undefined) {
   if (!p) return null
+  const daLoja = round(p.investimentoLojas)
   return {
     periodo: `${br(p.periodStart)} a ${br(p.periodEnd)}`,
     roas_da_loja: p.roasLojas,
+    // ROAS null com investimento zero NÃO é dado faltando: é promoção que o
+    // iFood/a rede bancaram inteira. Dividir venda por zero não dá número, e
+    // sem esta marca o Nino leria a ausência como "não sei" — quando a
+    // resposta certa é "você não pôs dinheiro e vendeu assim mesmo".
+    sem_roas_porque: p.roasLojas == null && daLoja <= 0
+      ? "a loja não custeou nada no período — a promoção foi bancada pelo iFood/rede, então não há investimento da loja pra dividir"
+      : null,
     campanhas_ativas: p.nCampanhas,
-    investido_pela_loja_no_periodo: round(p.investimentoLojas),
+    investido_pela_loja_no_periodo: daLoja,
     investido_por_todos_no_periodo: round(p.investimentoTotal),
     venda_gerada_pelas_promocoes: round(p.valorItens),
     pedidos_com_promocao: p.pedidos,
@@ -1027,7 +1042,7 @@ O contexto tem:
 - Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
 - "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução". O "historico_mensal" de cada loja tem AINDA a última coluna "promocoes_marketing_custeado_pela_loja": é o investimento em marketing daquela loja MÊS A MÊS. É com ela que você responde qualquer pergunta comparativa sobre marketing ("essas lojas reduziram o investimento?", "quem cortou promoção?", "o marketing subiu ou caiu?") — compare os meses e diga em R$ e em %.
 - Em cada loja, "marketing": o que a LOJA investiu em promoção no mês (R$ e % do faturamento). ATENÇÃO ao vocabulário do dono: quando ele diz "marketing", "investimento", "mídia", "anúncio" ou "publicidade", ele quase sempre quer dizer PROMOÇÃO/DESCONTO CUSTEADO PELA LOJA — que é exatamente este campo. Responda com ele em vez de dizer que não tem o dado. Se vier null, a loja não bancou promoção no mês (o que é uma resposta: ela NÃO investiu). O que o sistema realmente não tem é gasto com Google Ads, influenciador ou mídia fora das plataformas — só diga isso se ele perguntar especificamente por esses.
-- Em cada loja, "retorno_das_promocoes": o RETORNO do marketing — roas_da_loja (quantos reais de venda cada real investido pela loja trouxe), campanhas_ativas, venda_gerada_pelas_promocoes e o investido no período. ROAS 6 quer dizer R$ 6 de venda por R$ 1 investido. Use pra "vale a pena a promoção", "qual meu ROAS", "a promoção tá dando retorno", "qual loja aproveita melhor". ATENÇÃO À RÉGUA: este bloco vem do relatório de Promoções, cuja janela é ROLANTE (~30 dias) e NÃO é o mês calendário — o campo "periodo" diz exatamente de quando é. SEMPRE cite o período ao dar o ROAS ("no período de X a Y, seu ROAS foi Z"), e NUNCA some nem compare o "investido_..._no_periodo" daqui com o valor mensal de promoção do "historico_mensal": são recortes diferentes e misturá-los produz dois números de marketing brigando. Pra QUANTO foi investido, use o mensal; pra RETORNO, use este. Se vier null, a loja não tem esse relatório importado — aí você tem o investimento (mensal) mas não o retorno, e deve dizer isso em vez de estimar ROAS.
+- Em cada loja, "retorno_das_promocoes": o RETORNO do marketing — roas_da_loja (quantos reais de venda cada real investido pela loja trouxe), campanhas_ativas, venda_gerada_pelas_promocoes e o investido no período. ROAS 6 quer dizer R$ 6 de venda por R$ 1 investido. Use pra "vale a pena a promoção", "qual meu ROAS", "a promoção tá dando retorno", "qual loja aproveita melhor". ATENÇÃO À RÉGUA: este bloco vem do relatório de Promoções, cuja janela é escolhida na exportação, tem qualquer tamanho e NÃO é o mês calendário — o campo "periodo" diz exatamente de quando é. SEMPRE cite o período ao dar o ROAS ("no período de X a Y, seu ROAS foi Z"), e NUNCA some nem compare o "investido_..._no_periodo" daqui com o valor mensal de promoção do "historico_mensal": são recortes diferentes e misturá-los produz dois números de marketing brigando. Pra QUANTO foi investido, use o mensal; pra RETORNO, use este. Se o bloco inteiro vier null, a loja não tem esse relatório importado — aí você tem o investimento (mensal) mas não o retorno, e deve dizer isso em vez de estimar ROAS. Se "roas_da_loja" vier null mas "sem_roas_porque" trouxer texto, NÃO diga que falta dado: leia o motivo e explique (loja que não custeou nada teve a promoção bancada pelo iFood/rede — ela vendeu sem pôr dinheiro, o que é excelente e não "sem informação").
 - Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos, em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
 - "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
 - "reputacao_rede" e, em cada loja, "reputacao": nota média por CANAL (nota_ifood, nota_99food, nota_keeta — null se a loja não tem avaliação naquele canal), a nota_geral (combinada), total_avaliacoes e avaliacoes_1_2_estrelas (quantas avaliações ruins de 1 ou 2 estrelas). Use pra "como está minha nota", "qual loja tem a pior/melhor nota", "nota por plataforma", "quantas avaliações ruins", "reputação da rede".
