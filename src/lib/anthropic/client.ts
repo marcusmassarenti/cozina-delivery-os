@@ -260,7 +260,16 @@ export async function askClaudeChat(opts: {
   }
 
   opts.onUso?.(uso)
-  const text = textos.join("").trim()
+  // Junta com linha em branco, não com "". Cada elemento é um bloco de texto
+  // separado — de antes e de depois de uma ferramenta ou de uma busca. Com
+  // join("") o fim de um grudava no começo do outro ("Deixa eu buscar
+  // isso:**Seu produto mais vendido é:**"). Vazios saem fora pra não virar
+  // linha em branco sobrando.
+  const text = textos
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .join("\n\n")
+    .trim()
   if (!text) throw new AnthropicError("Resposta do Claude sem texto.")
   return text
 }
@@ -476,6 +485,17 @@ export async function* streamClaudeChat(opts: {
       }),
     )
     apiMessages.push({ role: "user", content: resultados })
+
+    // Separador entre o que o modelo escreveu ANTES de chamar a ferramenta e o
+    // que ele escreve DEPOIS. Sem isto os dois trechos são concatenados sem
+    // nada no meio e saem colados na tela ("Deixa eu buscar isso:**Seu produto
+    // mais vendido é:**"). O ideal é o modelo nem narrar a consulta (o prompt
+    // pede isso e a interface já mostra "consultando"), mas quando ele narra,
+    // a emenda não pode virar palavra grudada.
+    if (full.trim() && !/\n\s*$/.test(full)) {
+      full += "\n\n"
+      yield { type: "text", text: "\n\n" }
+    }
   }
 
   opts.onUso?.(uso)
