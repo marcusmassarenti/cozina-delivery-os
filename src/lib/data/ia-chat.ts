@@ -543,7 +543,7 @@ async function montarReputacao(
 }
 
 function montarContexto(
-  units: { id: string; name: string; code: string }[],
+  units: { id: string; name: string; code: string; platforms?: string[] }[],
   numerosMap: Map<string, ReturnType<typeof numerosDaLoja>>,
   histMap: Map<string, MesLoja[]>,
   periodo: string,
@@ -564,6 +564,7 @@ function montarContexto(
       typeof coberturaDoMes
     >
   },
+  plataformasSemDadoMap: ReturnType<typeof plataformasSemDado>,
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -663,6 +664,9 @@ function montarContexto(
     // O que falta importar no mês — só relatórios de iFood (os que dependem
     // de planilha subida à mão).
     cobertura_de_importacao: cobertura,
+    // Presença por PLATAFORMA (todas as 4), diferente do bloco acima que é
+    // sobre os relatórios do iFood.
+    plataformas_sem_dado: plataformasSemDadoMap,
     por_loja,
   }
   return JSON.stringify(payload)
@@ -717,6 +721,70 @@ function coberturaDoMes(
       .sort((a, b) => b.faltando.length - a.faltando.length)
       .slice(0, 25),
   }
+}
+
+
+/**
+ * Plataformas HABILITADAS na loja que não têm faturamento no mês.
+ *
+ * Perguntado "das lojas do 99, quais faltam trazer planilha?", o Nino
+ * respondeu que não conseguia saber — e estava certo: a cobertura que eu tinha
+ * dado a ele é iFood-only (getCoverageMatrix cobre os RELATÓRIOS do iFood).
+ * Nada no contexto dizia quais lojas vendem no 99, na Keeta ou no canal
+ * próprio, nem quais delas estavam sem dado.
+ *
+ * Isto é outra pergunta que a de cima: lá é "qual relatório do iFood falta";
+ * aqui é "qual PLATAFORMA da loja está sem número nenhum no mês". As duas
+ * precisam existir, com nomes distintos, senão a IA mistura.
+ *
+ * Custo zero de consulta: `units` já traz o que está habilitado e o
+ * monthlyMap já traz o que faturou. É a diferença entre os dois conjuntos.
+ */
+function plataformasSemDado(
+  units: { id: string; name: string; platforms?: string[] }[],
+  monthlyMap: Map<string, import("@/lib/mock-monthly").UnitMonthly>,
+  /** Lojas cujo 99 entra por API — essas NUNCA precisam de planilha. */
+  noveNoveViaApi: Set<string>,
+) {
+  const NOME: Record<string, string> = {
+    ifood: "iFood",
+    "99food": "99 Food",
+    keeta: "Keeta",
+    cardapioweb: "Cardápio Web",
+  }
+  const porPlataforma: Record<string, { com_dado: string[]; sem_dado: string[] }> = {}
+  for (const u of units) {
+    const habilitadas = u.platforms ?? []
+    const m = monthlyMap.get(u.id)
+    for (const p of habilitadas) {
+      const rotulo = NOME[p] ?? p
+      if (!porPlataforma[rotulo])
+        porPlataforma[rotulo] = { com_dado: [], sem_dado: [] }
+      const temDado = (m?.platforms ?? []).some(
+        (b) => b.id === p && (b.bruto > 0 || b.liquido > 0),
+      )
+      // Loja com o 99 conectado por API entra sozinha e não deve aparecer numa
+      // lista de "falta subir planilha" — mandar o dono procurar um arquivo que
+      // o sistema puxa sozinho é pior que não responder.
+      const porApi = p === "99food" && noveNoveViaApi.has(u.id)
+      porPlataforma[rotulo][temDado || porApi ? "com_dado" : "sem_dado"].push(
+        porApi && !temDado ? `${u.name} (via API, sem venda no mês)` : u.name,
+      )
+    }
+  }
+  // Só interessa quem tem alguma pendência — plataforma 100% coberta vira
+  // ruído numa lista que já é longa.
+  return Object.fromEntries(
+    Object.entries(porPlataforma).map(([plat, v]) => [
+      plat,
+      {
+        lojas_que_vendem_nela: v.com_dado.length + v.sem_dado.length,
+        com_dado: v.com_dado.length,
+        // ESTA é a resposta de "quais lojas faltam trazer a planilha da X".
+        sem_dado_no_mes: v.sem_dado,
+      },
+    ]),
+  )
 }
 
 /** Extrai os números que importam de uma UnitMonthly (compacto, arredondado). */
@@ -1108,6 +1176,7 @@ O contexto tem:
 - "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
 - "reputacao_rede" e, em cada loja, "reputacao": nota média por CANAL (nota_ifood, nota_99food, nota_keeta — null se a loja não tem avaliação naquele canal), a nota_geral (combinada), total_avaliacoes e avaliacoes_1_2_estrelas (quantas avaliações ruins de 1 ou 2 estrelas). Use pra "como está minha nota", "qual loja tem a pior/melhor nota", "nota por plataforma", "quantas avaliações ruins", "reputação da rede".
 - "cobertura_de_importacao": o que AINDA FALTA IMPORTAR, em DOIS recortes. Use SEMPRE o "mes_fechado" como resposta principal: é o mês cujo prazo já passou, então pendência ali é problema de verdade. O "mes_corrente" tem em_andamento = true e quase sempre vem cheio de pendência — no começo do mês o lojista nem baixou os relatórios ainda; NÃO trate isso como atraso nem alarme, cite só se perguntarem do mês atual e sempre dizendo que o mês ainda está rodando. Cada recorte traz lojas_em_dia, lojas_com_pendencia e a lista "pendencias" (loja + quais relatórios faltam), ordenada de quem tem mais buracos pra quem tem menos. Use pra "todas as lojas importaram?", "está faltando alguma coisa?", "o que preciso subir", "por que a loja X está zerada". RESPONDA COM A LISTA — nunca mande o dono abrir a tela de Cobertura pra descobrir sozinho o que você já tem em mãos. Leitura: muitos relatórios faltando na mesma loja costuma ser loja que não importou nada no mês; um só faltando é esquecimento pontual. E ligue com o faturamento: loja zerada QUE ESTÁ na lista de pendências provavelmente não vendeu zero, só não importou — diga isso em vez de tratar o zero como queda de venda. Só cobre relatórios do iFood (99, Keeta e Cardápio Web entram por API/arquivo próprio e não têm pendência desse tipo) — deixe claro quando for relevante.
+- "plataformas_sem_dado": presença por PLATAFORMA (iFood, 99 Food, Keeta, Cardápio Web). Pra cada uma: quantas lojas VENDEM nela, quantas já têm número no mês, e "sem_dado_no_mes" com o NOME das que não têm. É ESTA a resposta de "quais lojas faltam trazer a planilha do 99/da Keeta", "quem não importou o 99", "quais lojas usam a Keeta". Liste os nomes — eles estão aí. NÃO confunda com "cobertura_de_importacao", que é outra coisa: aquele é sobre QUAIS RELATÓRIOS do iFood faltam; este é sobre QUAL PLATAFORMA está sem número nenhum. Loja que não aparece em nenhuma das duas listas de uma plataforma simplesmente não vende nela — e isso também é resposta ("a Keeta só é usada por 9 das 14").
 - "reclamacoes_recentes": os comentários NEGATIVOS reais (nota 1-2★) mais recentes/graves, com a loja, a plataforma, a nota e o texto do cliente. Use pra "o que os clientes reclamam", "quais as queixas", "o que tá gerando nota baixa". São falas reais — cite o teor (resuma), não invente. Se estiver vazio, diga que não há comentário negativo com texto no período.
 
 VOCÊ SABE DERIVAR (não precisa estar pronto no JSON):
@@ -1123,6 +1192,7 @@ MERCADO E DADO EXTERNO (você tem a ferramenta web_search):
 - Só use a busca web pra dado EXTERNO. Os números da própria operação já estão no contexto — não pesquise na web pra responder faturamento, CMV, cancelamento etc. da conta.
 
 REGRAS:
+- PROIBIDO DESCREVER NAVEGAÇÃO. Você NÃO enxerga o sistema e NÃO sabe onde ficam as telas. Nunca escreva "vá em X > Y", "abre a tela Z", "olhe na coluna tal", nem cite nome de menu, aba, botão ou caminho — mesmo que soe óbvio, mesmo como sugestão, mesmo no fim da resposta. Nomes que parecem certos costurados num caminho falso mandam o dono procurar o que não existe, e isso já aconteceu três vezes. Se falta um relatório, a ÚNICA frase permitida é: exporta-se no portal da plataforma (iFood/99/Keeta) escolhendo o período, e sobe-se na tela de Importação. Também não peça print da tela pro dono: os dados estão no seu contexto, procure lá antes de devolver a tarefa pra ele.
 - Os NÚMEROS DA CONTA (faturamento, CMV, ticket, cancelamento, taxas, nota das lojas) saem SOMENTE do JSON de contexto (inclusive derivando as contas acima) — NUNCA invente um número da operação que não dá pra calcular a partir do contexto. Isso NÃO impede análise de mercado: dado externo você traz da web ou do seu conhecimento, sempre rotulado como tal.
 - Se te perguntarem um número da conta que o contexto realmente não tem (anos anteriores, custo de um prato, motivo de cancelamento, dado de um dia isolado), NÃO diga um seco "não sei": explique em 1 linha o que você TEM sobre o tema e ofereça o recorte mais próximo (ex.: "não tenho por dia, mas na 1ª quinzena você fez R$ X"). O dono nunca deve sentir que a IA travou.
 - Seja CONCISO e direto: responda a pergunta, cite o número real que sustenta a resposta, e pare. Nada de relatório gigante quando cabe uma frase.
@@ -1242,6 +1312,7 @@ export async function perguntarConsultor(
       reputacao,
       cestaMap,
       promoMap,
+      links99,
       coverage,
     ] = await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
@@ -1253,6 +1324,12 @@ export async function perguntarConsultor(
         getCancelamentoCestaByUnits(unitIds, year, month),
         // Relatório de Promoções — é quem tem o ROAS.
         getPromocoesByUnits(unitIds, year, month),
+        // Lojas com o 99 por API: não precisam de planilha, e listá-las como
+        // pendência mandaria o dono caçar arquivo que entra sozinho.
+        createAdminClient()
+          .from("ninefood_store_links")
+          .select("unit_id")
+          .eq("active", true),
         // O que falta importar. Pede DOIS meses de uma vez (a função aceita
         // range): no dia 5 do mês corrente quase toda loja está "faltando"
         // porque o relatório nem foi baixado ainda — pendência ali é ruído. O
@@ -1297,7 +1374,7 @@ export async function perguntarConsultor(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))))
 
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
@@ -1434,6 +1511,7 @@ export async function* perguntarConsultorStream(
       reputacao,
       cestaMap,
       promoMap,
+      links99,
       coverage,
     ] = await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
@@ -1445,6 +1523,12 @@ export async function* perguntarConsultorStream(
         getCancelamentoCestaByUnits(unitIds, year, month),
         // Relatório de Promoções — é quem tem o ROAS.
         getPromocoesByUnits(unitIds, year, month),
+        // Lojas com o 99 por API: não precisam de planilha, e listá-las como
+        // pendência mandaria o dono caçar arquivo que entra sozinho.
+        createAdminClient()
+          .from("ninefood_store_links")
+          .select("unit_id")
+          .eq("active", true),
         // O que falta importar. Pede DOIS meses de uma vez (a função aceita
         // range): no dia 5 do mês corrente quase toda loja está "faltando"
         // porque o relatório nem foi baixado ainda — pendência ali é ruído. O
@@ -1489,7 +1573,7 @@ export async function* perguntarConsultorStream(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))))
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),
