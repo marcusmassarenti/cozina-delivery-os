@@ -64,6 +64,7 @@ import {
   getTenantPlatforms,
   isApiSyncEnabled,
 } from "@/lib/data/units"
+import { ultimoDiaComDado } from "@/lib/data/ultimo-dia-com-dado"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { getOnboardingProgress } from "@/lib/data/onboarding"
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist"
@@ -233,8 +234,21 @@ export default async function Home({
     day: "2-digit",
   }).format(new Date())
   const [hY, hM, hD] = hojeBR.split("-").map(Number)
-  const corte =
-    hY === year && hM === month ? hD : new Date(year, month, 0).getDate()
+  const mesCorrente = hY === year && hM === month
+  // O corte do mês corrente é o último dia COM DADO, não `hoje`.
+  //
+  // Em 05/08/26 o painel mostrou -30% no faturamento e -35% nos pedidos, e não
+  // tinha caído nada disso: o dia 05 ainda não havia entrado (importação e cron
+  // trabalham sobre o dia anterior), mas o corte era `hoje` — então 4 dias de
+  // venda eram comparados contra 5 do mês passado e divididos por 5 na média
+  // por dia. Medido: queda real de 12%, exibida como 30%. Dia vazio contado
+  // como dia de venda zero é a pior forma de errar, porque parece notícia.
+  const ultimoDia = mesCorrente
+    ? await ultimoDiaComDado(activeUnitIds, year, month)
+    : null
+  const corte = mesCorrente
+    ? (ultimoDia ?? hD) // sem dado nenhum no mês, mantém o comportamento antigo
+    : new Date(year, month, 0).getDate()
   const prevM = month === 1 ? 12 : month - 1
   const prevY = month === 1 ? year - 1 : year
   const cortePrev = Math.min(corte, new Date(prevY, prevM, 0).getDate())
@@ -533,6 +547,8 @@ export default async function Home({
     year,
     month,
     plataformasFilter,
+    // Mesmo corte das setinhas: dia sem dado não entra no divisor.
+    mesCorrente ? (ultimoDia ?? undefined) : undefined,
   )
   const platforms = platformTotalsMerged(
     unitsToShow,
@@ -661,6 +677,12 @@ export default async function Home({
     {
       label: "Média Pedidos/Dia",
       value: fmtNum(network.mediaDia),
+      // Diz sobre quantos dias a média foi feita. Sem isso, no dia 5 do mês o
+      // número parece "a rede caiu" quando na verdade é "só 4 dias entraram".
+      trend:
+        mesCorrente && ultimoDia
+          ? `${ultimoDia} dia${ultimoDia > 1 ? "s" : ""} com dado · até ${String(ultimoDia).padStart(2, "0")}/${p2(month)}`
+          : undefined,
       tone: "positive",
       icon: CalendarDays,
       platforms: finPlatforms,
@@ -1971,6 +1993,12 @@ function networkTotalsMerged(
   month: number,
   /** Vazio = todas as plataformas entram. */
   platformFilter: PlatformId[],
+  /**
+   * Divisor da média por dia. Vem de fora porque só quem carregou os dados
+   * sabe até que dia eles chegaram — usar "dias decorridos" contava o dia de
+   * hoje, que ainda não foi importado, e derrubava a média sem motivo.
+   */
+  diasComDado?: number,
 ) {
   const active = units.filter((u) => u.active)
   let pedidos = 0
@@ -2085,7 +2113,8 @@ function networkTotalsMerged(
   const mediaTicket = pedidos > 0 ? bruto / pedidos : 0
   // Denominador = dias do mês selecionado (mês corrente = dias decorridos),
   // não 30 fixo — senão fev e o mês corrente parcial saem errados.
-  const mediaDia = Math.round(pedidos / daysElapsedInMonth({ year, month }))
+  const divisor = diasComDado ?? daysElapsedInMonth({ year, month })
+  const mediaDia = Math.round(pedidos / Math.max(1, divisor))
   const taxaRepasse = bruto > 0 ? (liquido / bruto) * 100 : 0
   // "Líquido pra Você" = tudo que a loja recebeu: repasse + venda direta.
   // A TAXA real = bruto − repasse − venda direta (venda direta não é taxa).
