@@ -13,6 +13,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { SISTEMA_MANUAL } from "@/lib/data/sistema-manual"
+import { ferramentasDoNino } from "@/lib/data/ia-ferramentas"
 import { requireAuth } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -1168,6 +1169,7 @@ O contexto tem:
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
 - RÉGUA DO BRUTO (importante): "faturamento_bruto" é o total COM os pedidos cancelados — o mesmo número que o portal do iFood e todas as telas do sistema mostram. É esse que você usa ao falar de faturamento. Já "faturamento_valido" é a venda que não foi cancelada, e é sobre ELA que margem, CMV% e ticket médio são calculados (igual ao DRE). Por isso não estranhe se bruto ÷ pedidos não der exatamente o ticket médio: o ticket usa a base válida. Nunca recalcule margem ou CMV% dividindo pelo bruto.
 - "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena".
+- FERRAMENTAS: além do contexto acima, você pode BUSCAR dados que não vêm prontos. Elas existem porque carregar tudo em toda pergunta sairia caro e lento — então o que é pesado fica sob demanda. USE sem hesitar quando a pergunta pedir, e NUNCA diga "não tenho esse dado" antes de checar se alguma delas cobre o assunto: produtos_vendidos (item mais/menos vendido, o que caiu), financeiro_e_caixa (saldo, contas a pagar/receber, vencidos, projeção de caixa), dre_e_resultado (lucro, custos, margem por plataforma), funil_e_perfil_de_venda (conversão, horário de pico, forma de pagamento, entrega x retirada), programas_e_repasses (Super Restaurante, plano de comissão, repasse da Keeta), producao_e_insumos (quanto comprar) e status_das_integracoes (até quando cada plataforma trouxe dado). Se uma devolver "erro", responda o que der com o resto e diga com franqueza qual pedaço falhou.
 - Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
 - "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução". O "historico_mensal" de cada loja tem AINDA a última coluna "promocoes_marketing_custeado_pela_loja": é o investimento em marketing daquela loja MÊS A MÊS. É com ela que você responde qualquer pergunta comparativa sobre marketing ("essas lojas reduziram o investimento?", "quem cortou promoção?", "o marketing subiu ou caiu?") — compare os meses e diga em R$ e em %.
 - Em cada loja, "marketing": o que a LOJA investiu em promoção no mês (R$ e % do faturamento). ATENÇÃO ao vocabulário do dono: quando ele diz "marketing", "investimento", "mídia", "anúncio" ou "publicidade", ele quase sempre quer dizer PROMOÇÃO/DESCONTO CUSTEADO PELA LOJA — que é exatamente este campo. Responda com ele em vez de dizer que não tem o dado. Se vier null, a loja não bancou promoção no mês (o que é uma resposta: ela NÃO investiu). O que o sistema realmente não tem é gasto com Google Ads, influenciador ou mídia fora das plataformas — só diga isso se ele perguntar especificamente por esses.
@@ -1386,7 +1388,10 @@ export async function perguntarConsultor(
       // dispara. maxTokens maior pra caber a análise + o que veio da web.
       webSearch: true,
       // Recorte de data livre (semana, dia, fim de semana): o servidor soma.
-      ferramentas: [ferramentaPeriodo(units)],
+      ferramentas: [
+        ferramentaPeriodo(units),
+        ...ferramentasDoNino(units, { year, month }),
+      ],
       maxTokens: 1400,
       // Telemetria de custo por cliente (não bloqueia a resposta).
       onUso: (u) => void registrarUsoIa(holdingId, u, "nino"),
@@ -1581,7 +1586,10 @@ export async function* perguntarConsultorStream(
       messages: messages.slice(-8),
       webSearch: true,
       // Recorte de data livre (semana, dia, fim de semana): o servidor soma.
-      ferramentas: [ferramentaPeriodo(units)],
+      ferramentas: [
+        ferramentaPeriodo(units),
+        ...ferramentasDoNino(units, { year, month }),
+      ],
       maxTokens: 1400,
       // Telemetria de custo por cliente (não bloqueia a resposta).
       onUso: (u) => void registrarUsoIa(holdingId, u, "nino"),
