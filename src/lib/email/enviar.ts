@@ -45,6 +45,17 @@ export type TipoEmail =
   | "fechamento-mes"
   /** Loja nova conectou no Cardápio Web — interno, um por instalação. */
   | "cardapioweb-instalacao"
+  /**
+   * Cliente PEDIU a conexão do iFood (fila de ativação). Interno. Como o
+   * mesmo cliente pede uma vez por loja, quem dispara manda `forcar: true`:
+   * a trava padrão avisaria só da primeira loja e engoliria as outras seis.
+   */
+  | "ifood-solicitacao"
+  /**
+   * Cliente CONFIRMOU que aprovou a conexão no Portal do Parceiro dele — é o
+   * sinal de "agora é a nossa vez de vincular". Mesmo raciocínio: `forcar`.
+   */
+  | "ifood-aprovacao-confirmada"
 
 export type ResultadoEnvio = {
   ok: boolean

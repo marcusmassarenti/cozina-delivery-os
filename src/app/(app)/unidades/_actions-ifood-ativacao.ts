@@ -17,6 +17,7 @@ import {
   getAccessibleUnitIds,
   getCurrentHoldingId,
 } from "@/lib/auth/permissions"
+import { avisarSolicitacaoIfood } from "@/lib/ifood/avisar-solicitacao"
 
 export type SolicitacaoIfoodState = {
   ok: boolean
@@ -95,6 +96,9 @@ export async function solicitarAtivacaoIfood(
     return { ok: false, message: `Falha ao registrar: ${error.message}` }
   }
 
+  // Sem await: o cliente não espera o Resend pra ver que o pedido entrou.
+  void avisarSolicitacaoIfood(holdingId, { tipo: "pedido", cnpj, unitId })
+
   revalidatePath("/unidades")
   return {
     ok: true,
@@ -138,6 +142,8 @@ export async function confirmarAprovacaoIfood(
     .is("cliente_confirmou_at", null)
   if (error) return { ok: false, message: `Falha: ${error.message}` }
 
+  void avisarSolicitacaoIfood(holdingId, { tipo: "aprovacao", lojas: 1, unitId })
+
   revalidatePath("/inicio")
   revalidatePath("/unidades")
   return { ok: true, message: "Avisamos a equipe — falta pouco!" }
@@ -178,6 +184,14 @@ export async function confirmarTodasAprovacoesIfood(
   if (error) return { ok: false, message: `Falha: ${error.message}` }
 
   const n = (data ?? []).length
+  // Só avisa se alguma coisa mudou de fato — confirmar em lote sem nada
+  // pendente é clique inofensivo, e e-mail de "0 lojas" é ruído.
+  if (n > 0)
+    void avisarSolicitacaoIfood(holdingId, {
+      tipo: "aprovacao",
+      lojas: n,
+      unitId: null,
+    })
   revalidatePath("/inicio")
   revalidatePath("/unidades")
   return {
