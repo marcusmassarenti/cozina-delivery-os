@@ -72,6 +72,7 @@ function emptyResumo(): KeetaPedidoResumo {
 
 type Row = {
   status_pedido: string | null
+  tipo_cancelamento: string | null
   valor_pago_cliente: number | string | null
   preco_original: number | string | null
   ganhos: number | string | null
@@ -88,7 +89,7 @@ type Row = {
 }
 
 const SELECT =
-  "status_pedido, valor_pago_cliente, preco_original, ganhos, promo_keeta, promo_loja, desconto_keeta, comissao_basica, taxa_distancia, taxa_saque_antecipado, taxa_pagamento_online, tipo_campanha, quem_cancelou, turno"
+  "status_pedido, tipo_cancelamento, valor_pago_cliente, preco_original, ganhos, promo_keeta, promo_loja, desconto_keeta, comissao_basica, taxa_distancia, taxa_saque_antecipado, taxa_pagamento_online, tipo_campanha, quem_cancelou, turno"
 
 const num = (v: number | string | null) => Math.abs(Number(v) || 0)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -134,8 +135,8 @@ function aggregate(rows: Row[]): KeetaPedidoResumo {
   const turnos = new Map<string, { pedidos: number; valor: number }>()
 
   for (const row of rows) {
-    if (row.status_pedido === "Concluído") r.concluidos++
-    else if (row.status_pedido === "Cancelado") r.cancelados++
+    if (foiCancelado(row.status_pedido, row.tipo_cancelamento)) r.cancelados++
+    else r.concluidos++
 
     const pago = num(row.valor_pago_cliente)
     r.valorPagoCliente += pago
@@ -218,6 +219,29 @@ function aggregate(rows: Row[]): KeetaPedidoResumo {
 }
 
 /** Resumo de 1 unidade no mês. */
+/**
+ * O pedido foi cancelado?
+ *
+ * Não dá pra confiar só no rótulo de status: a Keeta usa pelo menos quatro
+ * grafias ("Cancelado", "Cancelado*", "Reembolso parcial", "Reembolso
+ * parcial*") e, em 279 pedidos de 31 mil, exporta o código NÃO TRADUZIDO —
+ * a string literal "shop_order_status_id" no lugar do status. Esses 279 caíam
+ * fora de concluídos E de cancelados: sumiam da separação, e a soma na tela
+ * não fechava com o total.
+ *
+ * O sinal confiável é o TIPO DE CANCELAMENTO: nos 279, todos têm um
+ * preenchido ("Cancelado pelo atendimento", "pelo cliente após aceito",
+ * "pela loja"). São cancelamentos em que a loja foi paga assim mesmo — por
+ * isso mantêm venda, comissão e ganho positivo, e por isso a receita deles
+ * continua entrando normalmente. O que estava errado era só a CONTAGEM.
+ */
+function foiCancelado(status: string | null, tipoCancelamento?: string | null): boolean {
+  if (status?.startsWith("Cancelado") || status?.startsWith("Reembolso")) return true
+  // Status irreconhecível + motivo de cancelamento preenchido = cancelado.
+  const conhecido = status === "Concluído"
+  return !conhecido && !!tipoCancelamento?.trim()
+}
+
 export async function getKeetaPedidoResumoForMonth(
   unitId: string,
   year: number,
@@ -286,6 +310,7 @@ export async function getKeetaPedidoPorLoja(
   type PorLojaRow = {
     unit_id: string
     status_pedido: string | null
+  tipo_cancelamento: string | null
     valor_pago_cliente: number | string | null
     preco_original: number | string | null
     promo_keeta: number | string | null
@@ -298,7 +323,7 @@ export async function getKeetaPedidoPorLoja(
     const { data, error } = await admin
       .from("keeta_pedidos_recentes")
       .select(
-        "unit_id, status_pedido, valor_pago_cliente, preco_original, promo_keeta, promo_loja",
+        "unit_id, status_pedido, tipo_cancelamento, valor_pago_cliente, preco_original, promo_keeta, promo_loja",
       )
       .in("unit_id", unitIds)
       .eq("ref_year", year)
@@ -335,7 +360,7 @@ export async function getKeetaPedidoPorLoja(
       byUnit.set(r.unit_id, u)
     }
     u.pedidos++
-    if (r.status_pedido === "Cancelado") u.cancelados++
+    if (foiCancelado(r.status_pedido, r.tipo_cancelamento)) u.cancelados++
     u.valorPago += num(r.valor_pago_cliente)
     u.precoOriginal += num(r.preco_original)
     u.promoKeeta += num(r.promo_keeta)
