@@ -23,6 +23,7 @@ import {
   getCancelamentoCestaByUnits,
   getFinanceiroResumoByUnits,
   getPromocoesByUnits,
+  getCoverageMatrix,
   type PromocoesSnapshot,
 } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
@@ -557,6 +558,12 @@ function montarContexto(
   cancelMap: Map<string, MotivoCancel[]>,
   reputacao: Reputacao,
   promoMap: Map<string, PromocoesSnapshot>,
+  cobertura: {
+    mes_fechado: { mes: string } & ReturnType<typeof coberturaDoMes>
+    mes_corrente: { mes: string; em_andamento: boolean } & ReturnType<
+      typeof coberturaDoMes
+    >
+  },
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -653,9 +660,63 @@ function montarContexto(
     // Reclamações reais mais recentes/graves (comentários 1-2★ das 3 plataformas).
     reclamacoes_recentes: reputacao.reclamacoes_recentes,
     historico_rede_mensal,
+    // O que falta importar no mês — só relatórios de iFood (os que dependem
+    // de planilha subida à mão).
+    cobertura_de_importacao: cobertura,
     por_loja,
   }
   return JSON.stringify(payload)
+}
+
+
+/**
+ * O que falta importar no mês, por loja.
+ *
+ * Perguntado "todas as lojas importaram os relatórios?", o Nino não tinha esse
+ * dado no contexto e fazia a única coisa possível: mandava o dono abrir a tela
+ * de Cobertura. Resposta de manual, não de consultor — ele tem os números da
+ * operação inteira mas não sabia dizer quais estavam faltando.
+ *
+ * Reusa getCoverageMatrix (a MESMA fonte da tela) em vez de recalcular a regra
+ * aqui. Cobertura calculada em dois lugares divergiria, e neste projeto isso já
+ * aconteceu — o número na tela e o número na resposta discordariam sem que
+ * ninguém soubesse qual acreditar.
+ *
+ * Só relatórios de iFood: são os que dependem de planilha subida à mão. 99,
+ * Keeta e Cardápio Web entram por API/arquivo próprio e não têm "pendência de
+ * importação" no mesmo sentido.
+ */
+function coberturaDoMes(
+  matrix: Awaited<ReturnType<typeof getCoverageMatrix>>,
+  chave: string,
+) {
+  const pendentes: { loja: string; faltando: string[] }[] = []
+  let completas = 0
+  for (const u of matrix.units) {
+    const c = u.cells[chave]
+    // Loja que não operou no mês (antes de inaugurar / já fechada) não tem o
+    // que importar — contá-la como pendência criaria alarme falso todo mês.
+    if (!c || !c.applicable) continue
+    const faltando: string[] = []
+    if (c.financeiro.status === "empty") faltando.push("financeiro")
+    else if (c.financeiro.status === "partial") faltando.push("financeiro (parcial)")
+    if (c.cardapio.status === "empty") faltando.push("cardápio")
+    if (c.pedidos.status === "empty") faltando.push("pedidos")
+    if (c.avaliacoes.status === "empty") faltando.push("avaliações")
+    if (c.qualidade.status === "empty") faltando.push("qualidade")
+    if (c.promocoes.status === "empty") faltando.push("promoções")
+    if (faltando.length === 0) completas++
+    else pendentes.push({ loja: u.name, faltando })
+  }
+  return {
+    lojas_em_dia: completas,
+    lojas_com_pendencia: pendentes.length,
+    // Ordenado pelo que falta MAIS: quem tem 6 buracos é problema de conexão,
+    // quem tem 1 é esquecimento. A ordem já separa os dois casos.
+    pendencias: pendentes
+      .sort((a, b) => b.faltando.length - a.faltando.length)
+      .slice(0, 25),
+  }
 }
 
 /** Extrai os números que importam de uma UnitMonthly (compacto, arredondado). */
@@ -1046,6 +1107,7 @@ O contexto tem:
 - Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos, em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
 - "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
 - "reputacao_rede" e, em cada loja, "reputacao": nota média por CANAL (nota_ifood, nota_99food, nota_keeta — null se a loja não tem avaliação naquele canal), a nota_geral (combinada), total_avaliacoes e avaliacoes_1_2_estrelas (quantas avaliações ruins de 1 ou 2 estrelas). Use pra "como está minha nota", "qual loja tem a pior/melhor nota", "nota por plataforma", "quantas avaliações ruins", "reputação da rede".
+- "cobertura_de_importacao": o que AINDA FALTA IMPORTAR, em DOIS recortes. Use SEMPRE o "mes_fechado" como resposta principal: é o mês cujo prazo já passou, então pendência ali é problema de verdade. O "mes_corrente" tem em_andamento = true e quase sempre vem cheio de pendência — no começo do mês o lojista nem baixou os relatórios ainda; NÃO trate isso como atraso nem alarme, cite só se perguntarem do mês atual e sempre dizendo que o mês ainda está rodando. Cada recorte traz lojas_em_dia, lojas_com_pendencia e a lista "pendencias" (loja + quais relatórios faltam), ordenada de quem tem mais buracos pra quem tem menos. Use pra "todas as lojas importaram?", "está faltando alguma coisa?", "o que preciso subir", "por que a loja X está zerada". RESPONDA COM A LISTA — nunca mande o dono abrir a tela de Cobertura pra descobrir sozinho o que você já tem em mãos. Leitura: muitos relatórios faltando na mesma loja costuma ser loja que não importou nada no mês; um só faltando é esquecimento pontual. E ligue com o faturamento: loja zerada QUE ESTÁ na lista de pendências provavelmente não vendeu zero, só não importou — diga isso em vez de tratar o zero como queda de venda. Só cobre relatórios do iFood (99, Keeta e Cardápio Web entram por API/arquivo próprio e não têm pendência desse tipo) — deixe claro quando for relevante.
 - "reclamacoes_recentes": os comentários NEGATIVOS reais (nota 1-2★) mais recentes/graves, com a loja, a plataforma, a nota e o texto do cliente. Use pra "o que os clientes reclamam", "quais as queixas", "o que tá gerando nota baixa". São falas reais — cite o teor (resuma), não invente. Se estiver vazio, diga que não há comentário negativo com texto no período.
 
 VOCÊ SABE DERIVAR (não precisa estar pronto no JSON):
@@ -1172,8 +1234,16 @@ export async function perguntarConsultor(
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
     // Mês corrente + histórico do ano + recortes de quinzena (tudo em paralelo).
-    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap, promoMap] =
-      await Promise.all([
+    const [
+      monthlyMap,
+      histMap,
+      recortes,
+      cancelMap,
+      reputacao,
+      cestaMap,
+      promoMap,
+      coverage,
+    ] = await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
         historicoMensalDoAno(unitIds, year, month),
         recortesDePeriodo(units, year, month),
@@ -1183,6 +1253,14 @@ export async function perguntarConsultor(
         getCancelamentoCestaByUnits(unitIds, year, month),
         // Relatório de Promoções — é quem tem o ROAS.
         getPromocoesByUnits(unitIds, year, month),
+        // O que falta importar. Pede DOIS meses de uma vez (a função aceita
+        // range): no dia 5 do mês corrente quase toda loja está "faltando"
+        // porque o relatório nem foi baixado ainda — pendência ali é ruído. O
+        // sinal de verdade está no mês FECHADO, onde o prazo já passou.
+        (() => {
+          const a = mesAnterior(year, month)
+          return getCoverageMatrix(a.year, a.month, year, month)
+        })(),
       ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
@@ -1200,7 +1278,26 @@ export async function perguntarConsultor(
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap)
+    const ant = mesAnterior(year, month)
+    const cobertura = {
+      // O que cobra ação HOJE: mês fechado, prazo vencido, ainda sem relatório.
+      mes_fechado: {
+        mes: `${String(ant.month).padStart(2, "0")}/${ant.year}`,
+        ...coberturaDoMes(
+          coverage,
+          `${ant.year}-${String(ant.month).padStart(2, "0")}`,
+        ),
+      },
+      mes_corrente: {
+        mes: periodo,
+        em_andamento: true,
+        ...coberturaDoMes(
+          coverage,
+          `${year}-${String(month).padStart(2, "0")}`,
+        ),
+      },
+    }
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura)
 
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
@@ -1329,8 +1426,16 @@ export async function* perguntarConsultorStream(
   try {
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
-    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap, promoMap] =
-      await Promise.all([
+    const [
+      monthlyMap,
+      histMap,
+      recortes,
+      cancelMap,
+      reputacao,
+      cestaMap,
+      promoMap,
+      coverage,
+    ] = await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
         historicoMensalDoAno(unitIds, year, month),
         recortesDePeriodo(units, year, month),
@@ -1340,6 +1445,14 @@ export async function* perguntarConsultorStream(
         getCancelamentoCestaByUnits(unitIds, year, month),
         // Relatório de Promoções — é quem tem o ROAS.
         getPromocoesByUnits(unitIds, year, month),
+        // O que falta importar. Pede DOIS meses de uma vez (a função aceita
+        // range): no dia 5 do mês corrente quase toda loja está "faltando"
+        // porque o relatório nem foi baixado ainda — pendência ali é ruído. O
+        // sinal de verdade está no mês FECHADO, onde o prazo já passou.
+        (() => {
+          const a = mesAnterior(year, month)
+          return getCoverageMatrix(a.year, a.month, year, month)
+        })(),
       ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
@@ -1357,7 +1470,26 @@ export async function* perguntarConsultorStream(
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap)
+    const ant = mesAnterior(year, month)
+    const cobertura = {
+      // O que cobra ação HOJE: mês fechado, prazo vencido, ainda sem relatório.
+      mes_fechado: {
+        mes: `${String(ant.month).padStart(2, "0")}/${ant.year}`,
+        ...coberturaDoMes(
+          coverage,
+          `${ant.year}-${String(ant.month).padStart(2, "0")}`,
+        ),
+      },
+      mes_corrente: {
+        mes: periodo,
+        em_andamento: true,
+        ...coberturaDoMes(
+          coverage,
+          `${year}-${String(month).padStart(2, "0")}`,
+        ),
+      },
+    }
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura)
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),
