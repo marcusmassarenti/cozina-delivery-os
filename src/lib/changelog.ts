@@ -42,6 +42,137 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.14.0",
+    date: "2026-08-05",
+    tag: "Grande novidade",
+    title: "O Nino aprendeu a operação inteira, e nasceu o Hub de Logística",
+    summary:
+      "O Nino AI passou a alcançar produtos, caixa, DRE, funil e integrações — antes ele só enxergava faturamento. E chegou um relatório novo: quantos pedidos saem em cada faixa de frete.",
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "novo",
+            title: "Ele agora busca o dado que a pergunta pedir",
+            antes:
+              "O Nino recebia um pacote fixo de números — faturamento, histórico, cancelamento e nota. Perguntas fora disso batiam em \"não tenho esse dado\", mesmo quando o sistema tinha.",
+            depois:
+              "Ele consulta sozinho sete fontes conforme a pergunta: produtos vendidos, caixa e contas a pagar, DRE e margem, funil e horário de pico, programas do iFood e repasses da Keeta, demanda de insumos e o status das integrações.",
+          },
+          {
+            kind: "novo",
+            title: "Marketing e retorno das promoções",
+            desc:
+              "Pergunte \"quanto investi em marketing\" ou \"qual meu ROAS\" e ele responde com o valor mês a mês e o retorno por real investido. O número existia, mas estava rotulado como taxa e ele não o reconhecia.",
+          },
+          {
+            kind: "novo",
+            title: "Ele sabe o que falta importar",
+            desc:
+              "\"Todas as lojas importaram?\" e \"quais lojas faltam trazer a planilha do 99?\" agora vêm respondidas com a lista de lojas, em vez de um convite a abrir outra tela.",
+          },
+          {
+            kind: "correcao",
+            title: "Respostas pararam de encolher quando a pergunta se repete",
+            antes:
+              "Perguntando a mesma coisa duas ou três vezes, a resposta ia ficando menor a cada vez — até virar uma linha só.",
+            depois:
+              "A mesma pergunta traz a mesma resposta completa. E ranking agora sempre vem com os cinco primeiros, não só o campeão.",
+          },
+          {
+            kind: "correcao",
+            title: "Os totais pararam de sair errados",
+            antes:
+              "Ele somava as listas de cabeça e escorregava — o mesmo top 5 chegou a aparecer com R$ 2 mil de diferença entre uma pergunta e outra.",
+            depois:
+              "As somas e percentuais vêm calculados do sistema. Onde antes vinha \"uma fatia significativa\", agora vem o percentual exato.",
+          },
+        ],
+      },
+      {
+        area: "Hub de Relatórios",
+        items: [
+          {
+            kind: "novo",
+            title: "Nova categoria: Logística & Entrega",
+            desc:
+              "Com o relatório Faixas de frete: quantos pedidos saem em cada valor de taxa, quantos de graça, e o ticket médio de cada faixa — mostra se quem paga frete mais caro compra mais. Entrega por bairro entra em breve.",
+          },
+          {
+            kind: "novo",
+            title: "A cobertura aparece antes dos números",
+            desc:
+              "O relatório diz quantas lojas de cada plataforma têm taxa registrada, e avisa que loja sem taxa não é loja que não cobra frete — é relatório ainda não importado.",
+          },
+        ],
+      },
+      {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "correcao",
+            title: "Dia sem dado não conta mais como dia de venda zero",
+            antes:
+              "No começo do mês o painel mostrava quedas assustadoras. Em 5 de agosto acusou -30% no faturamento e -35% nos pedidos.",
+            depois:
+              "A comparação e a média por dia usam o último dia COM dado. A queda real era de 12%. O card agora mostra sobre quantos dias a média foi feita.",
+          },
+          {
+            kind: "correcao",
+            title: "O selo de cobertura conta só as lojas que usam a plataforma",
+            antes:
+              "Aparecia \"8/14 no 99 Food\", sugerindo seis lojas atrasadas — quando seis simplesmente não vendem no 99.",
+            depois:
+              "Agora é 8/8. O denominador passou a ser quem realmente usa cada plataforma.",
+          },
+          {
+            kind: "melhoria",
+            title: "Custo de entrega do 99 entra sozinho",
+            desc:
+              "Antes o custo do 99 só aparecia depois que alguém subia a planilha do mês — até lá o card mostrava zero, como se não houvesse gasto com entrega.",
+          },
+        ],
+      },
+      {
+        area: "99 Food",
+        items: [
+          {
+            kind: "novo",
+            title: "Peça a conexão do 99 pela tela",
+            desc:
+              "A loja passa a pedir a conexão da API do 99 direto no cadastro da unidade, e acompanha o andamento — como já era no iFood.",
+          },
+        ],
+      },
+      {
+        area: "Correções",
+        items: [
+          {
+            kind: "correcao",
+            title: "Top itens do Cardápio não repete mais o mesmo produto",
+            antes:
+              "Quando a loja exportava o relatório mais de uma vez no mês, o mesmo produto aparecia duas ou três vezes e o Top 10 virava Top 3 repetido.",
+            depois:
+              "Vale a exportação mais recente. No ranking da rede o efeito era pior: alguns produtos apareciam com até quatro vezes o faturamento real.",
+          },
+          {
+            kind: "correcao",
+            title: "Contagem de cancelados da Keeta",
+            desc:
+              "279 pedidos não entravam nem como concluídos nem como cancelados, e a soma não fechava com o total. O faturamento sempre esteve certo — só a contagem.",
+          },
+          {
+            kind: "correcao",
+            title: "Excluir uma unidade voltou a funcionar",
+            desc:
+              "A exclusão falhava com erro técnico. As conexões de API agora são apenas desvinculadas, não apagadas — assim ninguém precisa autorizar tudo de novo no portal.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.13.0",
     date: "2026-08-04",
     tag: "Melhorias",
