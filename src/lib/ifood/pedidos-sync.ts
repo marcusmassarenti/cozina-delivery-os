@@ -153,12 +153,37 @@ function paraLinha(unitId: string, p: PedidoAgregado) {
     forma_grupo: grupo,
     bandeira: brandCru,
     bandeira_vr: ehVale ? bandeiraVrDoBrand(p.brandVoucher) : null,
-    source: "api",
     synced_at: new Date().toISOString(),
     // NÃO mandar: valor_itens, valor_liquido, turno, status_final, incentivo_*,
     // taxa_*, taxas_comissoes, tipo_entrega, produto_logistico, canal_venda,
     // pedido_id_curto — são da planilha; incluí-los apagaria o dado dela.
+    //
+    // `source` também NÃO entra, pelo mesmo motivo — e essa faltou na primeira
+    // versão. Pedido que veio da planilha e depois foi tocado por este sync
+    // virava source='api' mantendo a taxa, o valor dos itens e o tipo de
+    // entrega que SÓ a planilha traz. Resultado: uma linha que dizia ser da
+    // API exibindo dado que a API não tem. Chega a enganar quem investiga —
+    // olhando "% de linhas api com taxa" a conclusão foi "a API traz 31%",
+    // quando a resposta certa é ZERO. Ver marcarOrigemApi abaixo.
   }
+}
+
+/**
+ * Marca como 'api' só o que a API de fato originou.
+ *
+ * A coluna nasce com default 'report', então a linha nova inserida por este
+ * sync precisa ser corrigida logo depois. E a linha que TEM import_id veio de
+ * planilha — essa fica como está, senão a origem do dado vira ficção.
+ */
+async function marcarOrigemApi(unitId: string, pedidoIds: string[]) {
+  if (pedidoIds.length === 0) return
+  await createAdminClient()
+    .from("ifood_pedidos")
+    .update({ source: "api" })
+    .eq("unit_id", unitId)
+    .in("pedido_id", pedidoIds)
+    .is("import_id", null)
+    .neq("source", "api")
 }
 
 /** Primeiro e último dia de uma competência YYYY-MM. */
@@ -249,6 +274,7 @@ export async function syncPedidosDaLoja(
     const { error } = await admin
       .from("ifood_pedidos")
       .upsert(lote, { onConflict: "unit_id,pedido_id" })
+    if (!error) await marcarOrigemApi(unitId, lote.map((l) => l.pedido_id))
     if (error) {
       return {
         competencia,
