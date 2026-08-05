@@ -779,6 +779,55 @@ export async function getCardapioPeriodoForMonth(
 
 // ─── Top itens ───────────────────────────────────────────────────────
 
+/**
+ * Fica só com a EXPORTAÇÃO VIGENTE de cada loja dentro do mês.
+ *
+ * O relatório de Cardápio do iFood é um snapshot de um período escolhido na
+ * hora de exportar, e o lojista exporta quantas vezes quiser: a Yakisushi
+ * subiu 28/06→27/07, depois 01/07→27/07 (76 segundos depois, corrigindo a data
+ * de início) e por fim 01/07→31/07 com o mês fechado. As três têm period_end
+ * em julho, então quem lê "todas as linhas do mês" recebe o mesmo produto três
+ * vezes — e o Top 10 vira o Top 3 repetido, escondendo os outros sete.
+ *
+ * Somar as janelas seria pior: elas se SOBREPÕEM, e somar contaria a mesma
+ * venda de novo. A única leitura correta é escolher UMA — a mais recente.
+ *
+ * Isto é a mesma regra que o funil da rede já aplicava ("1 snapshot por loja,
+ * o mais recente"), e é justamente por isso que na tela da unidade o funil de
+ * cima mostrava um período e a lista de baixo mostrava três: metade da tela
+ * seguia a regra, a outra metade não.
+ *
+ * Critério: maior `period_end`; empatou, a importação mais nova (o lojista
+ * resubir a MESMA janela é correção, e correção mais nova vence).
+ */
+export function apenasJanelaVigente<
+  T extends {
+    unit_id?: string
+    period_end: string
+    imported_at?: string | null
+  },
+>(linhas: T[]): T[] {
+  const melhor = new Map<string, { fim: string; em: string }>()
+  for (const r of linhas) {
+    const chave = r.unit_id ?? ""
+    const atual = melhor.get(chave)
+    const em = r.imported_at ?? ""
+    if (
+      !atual ||
+      r.period_end > atual.fim ||
+      (r.period_end === atual.fim && em > atual.em)
+    ) {
+      melhor.set(chave, { fim: r.period_end, em })
+    }
+  }
+  return linhas.filter((r) => {
+    const v = melhor.get(r.unit_id ?? "")
+    return (
+      !!v && r.period_end === v.fim && (r.imported_at ?? "") === v.em
+    )
+  })
+}
+
 export async function getItemsRankingForMonth(
   unitId: string,
   year: number,
@@ -798,12 +847,14 @@ export async function getItemsRankingForMonth(
     qtd_vendida: number | null
     qtd_com_promocao: number | null
     valor_total: number | string | null
+    period_end: string
+    imported_at: string | null
   }>(
     (from, to) =>
       admin
         .from("ifood_cardapio_periodo_items")
         .select(
-          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total, period_end, imported_at",
         )
         .eq("unit_id", unitId)
         .gte("period_end", start)
@@ -813,8 +864,10 @@ export async function getItemsRankingForMonth(
     "ifood_cardapio_periodo_items unidade",
   )
 
-  if (periodoItems && periodoItems.length > 0) {
-    return periodoItems
+  // Só a exportação vigente — ver apenasJanelaVigente.
+  const itensVigentes = apenasJanelaVigente(periodoItems ?? [])
+  if (itensVigentes.length > 0) {
+    return itensVigentes
       .map((r) => ({
         nomeItem: r.nome_item,
         categoria: r.categoria,
@@ -908,12 +961,14 @@ export async function getComplementosRankingForMonth(
     pedidos: number | null
     qtd_vendida: number | null
     valor_total: number | string | null
+    period_end: string
+    imported_at: string | null
   }>(
     (from, to) =>
       admin
         .from("ifood_cardapio_periodo_complementos")
         .select(
-          "nome_complemento, classificacao, pedidos, qtd_vendida, valor_total",
+          "nome_complemento, classificacao, pedidos, qtd_vendida, valor_total, period_end, imported_at",
         )
         .eq("unit_id", unitId)
         .gte("period_end", start)
@@ -923,8 +978,10 @@ export async function getComplementosRankingForMonth(
     "ifood_cardapio_periodo_complementos unidade",
   )
 
-  if (periodoComps && periodoComps.length > 0) {
-    return periodoComps
+  // Só a exportação vigente — ver apenasJanelaVigente.
+  const compsVigentes = apenasJanelaVigente(periodoComps ?? [])
+  if (compsVigentes.length > 0) {
+    return compsVigentes
       .map((r) => ({
         nomeComplemento: r.nome_complemento,
         classificacao: r.classificacao,
@@ -1006,11 +1063,13 @@ export async function getNetworkTopItemsForMonth(
     qtd_vendida: number | null
     qtd_com_promocao: number | null
     valor_total: number | string | null
+    period_end: string
+    imported_at: string | null
   }>((from, to) => {
     let qPer = admin
       .from("ifood_cardapio_periodo_items")
       .select(
-        "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+        "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total, period_end, imported_at",
       )
       .gte("period_end", start)
       .lte("period_end", end)
@@ -1021,12 +1080,16 @@ export async function getNetworkTopItemsForMonth(
     return qPer
   }, "ifood_cardapio_periodo_items rede")
 
-  if (periodoItems && periodoItems.length > 0) {
+  // Aqui a janela repetida não só duplicava a LINHA — ela era SOMADA, porque
+  // a rede agrega por nome do item. Loja com 3 exportações sobrepostas entrava
+  // no ranking com até 3x o faturamento real do produto.
+  const itensRedeVigentes = apenasJanelaVigente(periodoItems ?? [])
+  if (itensRedeVigentes.length > 0) {
     const acc = new Map<
       string,
       ItemRanking & { _convSum: number; _convN: number }
     >()
-    for (const r of periodoItems) {
+    for (const r of itensRedeVigentes) {
       const cur = acc.get(r.nome_item) ?? {
         nomeItem: r.nome_item,
         categoria: r.categoria,

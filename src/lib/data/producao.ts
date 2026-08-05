@@ -14,6 +14,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
+import { apenasJanelaVigente } from "@/lib/data/ifood-imported"
 import { getUnits } from "@/lib/data/units"
 
 export type Platform = "ifood" | "99food" | "keeta"
@@ -116,10 +117,12 @@ async function getItemSalesByUnit(
     unit_id: string
     nome_item: string | null
     qtd_vendida: number | null
+    period_end: string
+    imported_at: string | null
   }>((from, to) => {
     let q = admin
       .from("ifood_cardapio_periodo_items")
-      .select("unit_id, nome_item, qtd_vendida")
+      .select("unit_id, nome_item, qtd_vendida, period_end, imported_at")
       .gte("period_end", start)
       .lte("period_end", end)
       .order("id")
@@ -127,7 +130,10 @@ async function getItemSalesByUnit(
     if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
     return q
   }, "producao ifood items")
-  for (const r of ifood ?? []) {
+  // Uma exportação por loja: o relatório de Cardápio é snapshot de um período
+  // escolhido na exportação, e janelas repetidas somariam a mesma venda —
+  // aqui isso viraria demanda de produção inflada. Ver apenasJanelaVigente.
+  for (const r of apenasJanelaVigente(ifood ?? [])) {
     if (!r.nome_item) continue
     out.push({
       unitId: r.unit_id,
