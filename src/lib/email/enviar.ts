@@ -56,6 +56,8 @@ export type TipoEmail =
    * sinal de "agora é a nossa vez de vincular". Mesmo raciocínio: `forcar`.
    */
   | "ifood-aprovacao-confirmada"
+  /** Cliente pediu a conexão do 99 Food. Interno, um por loja — `forcar`. */
+  | "ninefood-solicitacao"
 
 export type ResultadoEnvio = {
   ok: boolean

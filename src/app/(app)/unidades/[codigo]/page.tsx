@@ -101,7 +101,12 @@ export default async function UnidadeDetalhePage({
   // Situação da conexão iFood-via-API desta loja (faixa no cabeçalho):
   // vinculada (api_store_id) > última solicitação em aberto > nada.
   const adminDb = createAdminClient()
-  const [{ data: upIfood }, { data: ultimaSolicitacao }, { data: nineLink }] =
+  const [
+    { data: upIfood },
+    { data: ultimaSolicitacao },
+    { data: nineLink },
+    { data: nine99Req },
+  ] =
     await Promise.all([
     adminDb
       .from("unit_platforms")
@@ -123,8 +128,20 @@ export default async function UnidadeDetalhePage({
       .eq("active", true)
       .limit(1)
       .maybeSingle(),
+    adminDb
+      .from("ninefood_activation_requests")
+      .select("status")
+      .eq("unit_id", unit.id)
+      .in("status", ["pendente", "solicitada"])
+      .limit(1)
+      .maybeSingle(),
   ])
-  const nineApiConectada = Boolean(nineLink)
+  // Vinculada > pedido em aberto > disponível — mesma régua do iFood.
+  const nineApi: "conectada" | "andamento" | "disponivel" = nineLink
+    ? "conectada"
+    : nine99Req
+      ? "andamento"
+      : "disponivel"
   const ifoodApiEstado: IfoodApiEstado = upIfood?.api_store_id
     ? { tipo: "conectada" }
     : ultimaSolicitacao?.status === "pendente"
@@ -286,7 +303,7 @@ export default async function UnidadeDetalhePage({
           {canEditUnit && (
             <EditUnitDialog
               ifoodApi={ifoodApiCadastro}
-              nineApiConectada={nineApiConectada}
+              nineApi={nineApi}
               cadastroExigente={cadastroExigente}
               unit={{
                 unitId: unit.id,

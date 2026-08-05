@@ -46,6 +46,7 @@ import {
 import { validacaoPtBr } from "@/components/shared/form-validacao-ptbr"
 import { updateUnit, type CreateUnitState } from "../_actions"
 import { solicitarAtivacaoIfood } from "../_actions-ifood-ativacao"
+import { solicitarAtivacaoNinefood } from "../_actions-99-ativacao"
 import { UnitLogoUploader } from "./unit-logo-uploader"
 
 const UFs = [
@@ -141,7 +142,7 @@ export function EditUnitDialog({
   unit,
   inline,
   ifoodApi,
-  nineApiConectada,
+  nineApi,
   cadastroExigente,
 }: {
   unit: EditUnitInitial
@@ -149,7 +150,8 @@ export function EditUnitDialog({
   /** Omitido = loja sem iFood ativo (bloco não aparece). */
   ifoodApi?: IfoodApiCadastro
   /** true = a loja sincroniza financeiro+cardápio pela API do 99. */
-  nineApiConectada?: boolean
+  /** Mesma régua do iFood: conectada · andamento · disponivel. */
+  nineApi?: IfoodApiCadastro
   /** Cliente SaaS: CNPJ + inauguração + plataforma obrigatórios (o
    *  superadmin fica isento — casos legados da Cozina). */
   cadastroExigente?: boolean
@@ -159,6 +161,10 @@ export function EditUnitDialog({
   const [state, formAction] = useActionState(updateUnit, initial)
   const [solicitacaoState, solicitarAction] = useActionState(
     solicitarAtivacaoIfood,
+    { ok: false },
+  )
+const [solicitacao99State, solicitar99Action] = useActionState(
+    solicitarAtivacaoNinefood,
     { ok: false },
   )
   const [cnpj, setCnpj] = React.useState(unit.cnpj ? maskCnpj(unit.cnpj) : "")
@@ -348,14 +354,14 @@ export function EditUnitDialog({
               formAction pra disparar a action de solicitação SEM form
               aninhado (inválido em HTML) — os campos do cadastro vão juntos,
               e a action lê o cnpj_api. */}
-          {(ifoodApi === "conectada" || nineApiConectada) && (
+          {(ifoodApi === "conectada" || nineApi === "conectada") && (
             <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
               <CheckCircle2 className="size-3.5 shrink-0" />
               <span>
                 <b>
                   {[
                     ifoodApi === "conectada" ? "iFood" : null,
-                    nineApiConectada ? "99 Food" : null,
+                    nineApi === "conectada" ? "99 Food" : null,
                   ]
                     .filter(Boolean)
                     .join(" e ")}{" "}
@@ -423,6 +429,77 @@ export function EditUnitDialog({
                   {solicitacaoState.message}
                 </p>
               )}
+
+          {/* 99 Food — mesma anatomia do bloco do iFood acima. A conexão do 99
+              também não é self-service: o `app_shop_id` é definido no portal
+              deles, então a loja precisa ser autorizada ao nosso app antes de
+              qualquer sincronização. Até esta tela existir, as 7 lojas ligadas
+              tinham entrado por INSERT escrito à mão numa migration. */}
+          {nineApi === "andamento" && (
+            <div className="flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
+              <Clock className="size-3.5 shrink-0" />
+              <span>
+                <b>Conexão 99 Food via API em andamento</b> — estamos pedindo a
+                autorização da loja ao 99.
+              </span>
+            </div>
+          )}
+          {nineApi === "disponivel" && (
+            <div className="flex flex-col gap-2 rounded-md border bg-muted/30 px-3 py-2.5">
+              <p className="text-xs">
+                <b>Conectar 99 Food via API</b>{" "}
+                <span className="text-muted-foreground">
+                  — o financeiro e o cardápio passam a entrar sozinhos, sem
+                  importação manual.
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="unit_id" value={unit.unitId} />
+                {!cadastroExigente && (
+                  <input
+                    name="cnpj_api_99"
+                    inputMode="numeric"
+                    defaultValue={unit.cnpj ? maskCnpj(unit.cnpj) : ""}
+                    placeholder="CNPJ da loja no 99"
+                    className="h-8 w-44 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
+                  />
+                )}
+                {/* Opcional de propósito: nem todo lojista sabe o nome exato da
+                    loja no painel do 99, e o CNPJ já basta pra achar. Quando
+                    vem preenchido, poupa uma ida e volta com eles. */}
+                <input
+                  name="loja_99"
+                  placeholder="Nome da loja no 99 (opcional)"
+                  className="h-8 w-52 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  formAction={solicitar99Action}
+                  formNoValidate
+                >
+                  <Plug className="size-3.5" />
+                  Solicitar conexão
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Uma loja só pode estar ligada a um aplicativo no 99. Se ela já
+                usa outro integrador, avisamos antes de mexer.
+              </p>
+              {solicitacao99State.message && (
+                <p
+                  className={`text-[11px] ${
+                    solicitacao99State.ok
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-amber-700 dark:text-amber-400"
+                  }`}
+                >
+                  {solicitacao99State.message}
+                </p>
+              )}
+            </div>
+          )}
             </div>
           )}
 

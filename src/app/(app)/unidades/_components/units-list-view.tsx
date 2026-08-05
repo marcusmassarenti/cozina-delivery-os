@@ -50,6 +50,7 @@ export function UnitsListView({
   brandLogoUrl = null,
   cadastroExigente = false,
   ifoodApiPorUnidade = {},
+  nineApiPorUnidade = {},
 }: {
   units: Unit[]
   canEdit?: boolean
@@ -62,6 +63,7 @@ export function UnitsListView({
   cadastroExigente?: boolean
   /** Situação iFood-via-API por unidade (conectada/andamento). */
   ifoodApiPorUnidade?: Record<string, "conectada" | "andamento">
+  nineApiPorUnidade?: Record<string, "conectada" | "andamento">
 }) {
   const navigate = useNavigate()
   const [search, setSearch] = React.useState("")
@@ -283,7 +285,11 @@ export function UnitsListView({
                           ? (ifoodApiPorUnidade[unit.id] ?? "disponivel")
                           : undefined
                       }
-                      nineApiConectada={ninefoodSyncedIds.includes(unit.id)}
+                      nineApi={
+                        unit.platforms.includes("99food")
+                          ? (nineApiPorUnidade[unit.id] ?? "disponivel")
+                          : undefined
+                      }
                       unit={{
                         unitId: unit.id,
                         code: unit.code,

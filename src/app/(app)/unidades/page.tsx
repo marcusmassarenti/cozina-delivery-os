@@ -8,7 +8,7 @@ import { UnitsListView } from "./_components/units-list-view"
 export default async function UnidadesPage() {
   await assertCanView("unidades")
   const admin = createAdminClient()
-  const [units, canEdit, canDelete, links, ctx, superadmin, upIfood, reqs] =
+  const [units, canEdit, canDelete, links, ctx, superadmin, upIfood, reqs, reqs99] =
     await Promise.all([
       getVisibleUnits(),
       userCan("unidades", "edit"),
@@ -24,6 +24,11 @@ export default async function UnidadesPage() {
         .not("api_store_id", "is", null),
       admin
         .from("ifood_activation_requests")
+        .select("unit_id, status, created_at")
+        .in("status", ["pendente", "solicitada"])
+        .order("created_at", { ascending: false }),
+      admin
+        .from("ninefood_activation_requests")
         .select("unit_id, status, created_at")
         .in("status", ["pendente", "solicitada"])
         .order("created_at", { ascending: false }),
@@ -45,6 +50,15 @@ export default async function UnidadesPage() {
     ifoodApiPorUnidade[r.unit_id] = "conectada"
   }
 
+  // Mesma régua do iFood pro 99: vinculada > solicitação em aberto. O
+  // "disponivel" a view deriva sozinha (loja com 99 ativo e nada disso).
+  const nineApiPorUnidade: Record<string, "conectada" | "andamento"> = {}
+  for (const r of (reqs99.data ?? []) as { unit_id: string | null }[]) {
+    if (r.unit_id && !nineApiPorUnidade[r.unit_id])
+      nineApiPorUnidade[r.unit_id] = "andamento"
+  }
+  for (const id of ninefoodSyncedIds) nineApiPorUnidade[id] = "conectada"
+
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <AvisoSemCnpj
@@ -60,6 +74,7 @@ export default async function UnidadesPage() {
         brandLogoUrl={ctx.logoUrl}
         cadastroExigente={!superadmin}
         ifoodApiPorUnidade={ifoodApiPorUnidade}
+        nineApiPorUnidade={nineApiPorUnidade}
       />
     </div>
   )
