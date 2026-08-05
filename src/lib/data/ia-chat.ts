@@ -21,6 +21,7 @@ import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
 import {
   getCancelamentosPorMotivo,
   getCancelamentoCestaByUnits,
+  getFinanceiroResumoByUnits,
 } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
@@ -564,7 +565,7 @@ function montarContexto(
         ...(atual ?? { loja: u.name }),
         // Tabela — colunas em `legenda_das_tabelas.historico_mensal`.
         historico_mensal: historico.map((h) =>
-          linha(h.mes, h.bruto, h.liquido, h.pedidos, h.cancelados),
+          linha(h.mes, h.bruto, h.liquido, h.pedidos, h.cancelados, h.promocoes),
         ),
         // Motivos de cancelamento (iFood) da loja no mês, com perda em R$.
         cancelamentos: cancelMap.get(u.id) ?? null,
@@ -625,7 +626,8 @@ function montarContexto(
     // As listas grandes vêm como tabela "valor|valor|valor" pra não repetir o
     // nome do campo em toda linha. Esta é a legenda das colunas.
     legenda_das_tabelas: {
-      historico_mensal: "mes|bruto|liquido|pedidos|cancelados",
+      historico_mensal:
+        "mes|bruto|liquido|pedidos|cancelados|promocoes_marketing_custeado_pela_loja",
       historico_rede_mensal: "mes|faturamento_bruto|pedidos",
       por_plataforma: "plataforma|bruto|liquido|taxa_da_plataforma",
       periodos_por_loja: "loja|bruto|pedidos|cancelados",
@@ -694,7 +696,28 @@ function numerosDaLoja(
     ),
     // Quebra do que o iFood desconta (só iFood — as outras plataformas ainda
     // não trazem esse detalhamento). Ajuda a responder "pra onde vai minha taxa".
+    marketing: marketingDaLoja(m),
     quebra_taxas_ifood: quebraTaxasIfood(m),
+  }
+}
+
+/**
+ * Investimento em MARKETING da loja no mês.
+ *
+ * Pro lojista, "marketing" é promoção: o desconto que ELE bancou pra atrair
+ * pedido. O número já vinha no contexto, mas escondido dentro de
+ * `quebra_taxas_ifood` — rotulado como TAXA. Perguntado "essas lojas reduziram
+ * investimento em marketing?", o Nino respondia que não tinha o dado, porque
+ * de fato nada no contexto se chamava marketing. Dado certo com nome errado é
+ * o mesmo que dado ausente.
+ */
+function marketingDaLoja(m: import("@/lib/mock-monthly").UnitMonthly) {
+  const investido = round(m.promocoes)
+  if (investido <= 0) return null
+  const bruto = m.faturamentoBruto
+  return {
+    investimento_promocoes: investido,
+    pct_do_faturamento: bruto > 0 ? round((investido / bruto) * 100) : null,
   }
 }
 
@@ -744,6 +767,8 @@ type MesLoja = {
   liquido: number
   pedidos: number
   cancelados: number
+  /** Promoção custeada pela loja no mês — o "marketing" do lojista. */
+  promocoes: number
 }
 
 /**
@@ -761,17 +786,26 @@ async function historicoMensalDoAno(
   // Métrica e cesta de cancelados de cada mês, tudo em paralelo — o bruto da
   // série tem que seguir a MESMA régua do mês corrente (total com cancelados),
   // senão o histórico não fecha com o número que a tela mostra.
-  const [mapsPorMes, cestasPorMes] = await Promise.all([
+  //
+  // A promoção custeada pela loja vem junto: sem ela na SÉRIE, o Nino só
+  // enxergava marketing do mês corrente e respondia "não tenho esse dado" pra
+  // qualquer pergunta comparativa ("essas lojas reduziram o investimento?").
+  // O resumo do iFood já é buscado dentro de getUnitMetricsForMonth com os
+  // mesmos argumentos e é memoizado por mês fechado — pedir de novo aqui é
+  // acerto de cache, não consulta nova.
+  const [mapsPorMes, cestasPorMes, finPorMes] = await Promise.all([
     Promise.all(
       meses.map((m) => getUnitMetricsForMonth(unitIds, TODAS_PLATAFORMAS, year, m)),
     ),
     Promise.all(meses.map((m) => getCancelamentoCestaByUnits(unitIds, year, m))),
+    Promise.all(meses.map((m) => getFinanceiroResumoByUnits(unitIds, year, m))),
   ])
   const hist = new Map<string, MesLoja[]>()
   for (const id of unitIds) hist.set(id, [])
   meses.forEach((m, i) => {
     const map = mapsPorMes[i]
     const cestas = cestasPorMes[i]
+    const fin = finPorMes[i]
     for (const id of unitIds) {
       const mt = map.get(id)
       if (!mt || !mt.hasData) continue
@@ -781,6 +815,9 @@ async function historicoMensalDoAno(
         liquido: round(mt.liquido),
         pedidos: mt.pedidos,
         cancelados: mt.cancelados,
+        // Vem negativo do extrato (é dedução); o lojista pensa nele como
+        // valor investido, então entra positivo.
+        promocoes: round(Math.abs(fin.get(id)?.promocaoLoja ?? 0)),
       })
     }
   })
@@ -952,7 +989,8 @@ O contexto tem:
 - RÉGUA DO BRUTO (importante): "faturamento_bruto" é o total COM os pedidos cancelados — o mesmo número que o portal do iFood e todas as telas do sistema mostram. É esse que você usa ao falar de faturamento. Já "faturamento_valido" é a venda que não foi cancelada, e é sobre ELA que margem, CMV% e ticket médio são calculados (igual ao DRE). Por isso não estranhe se bruto ÷ pedidos não der exatamente o ticket médio: o ticket usa a base válida. Nunca recalcule margem ou CMV% dividindo pelo bruto.
 - "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena".
 - Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
-- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução".
+- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução". O "historico_mensal" de cada loja tem AINDA a última coluna "promocoes_marketing_custeado_pela_loja": é o investimento em marketing daquela loja MÊS A MÊS. É com ela que você responde qualquer pergunta comparativa sobre marketing ("essas lojas reduziram o investimento?", "quem cortou promoção?", "o marketing subiu ou caiu?") — compare os meses e diga em R$ e em %.
+- Em cada loja, "marketing": o que a LOJA investiu em promoção no mês (R$ e % do faturamento). ATENÇÃO ao vocabulário do dono: quando ele diz "marketing", "investimento", "mídia", "anúncio" ou "publicidade", ele quase sempre quer dizer PROMOÇÃO/DESCONTO CUSTEADO PELA LOJA — que é exatamente este campo. Responda com ele em vez de dizer que não tem o dado. Se vier null, a loja não bancou promoção no mês (o que é uma resposta: ela NÃO investiu). O que o sistema realmente não tem é gasto com Google Ads, influenciador ou mídia fora das plataformas — só diga isso se ele perguntar especificamente por esses.
 - Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos, em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
 - "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
 - "reputacao_rede" e, em cada loja, "reputacao": nota média por CANAL (nota_ifood, nota_99food, nota_keeta — null se a loja não tem avaliação naquele canal), a nota_geral (combinada), total_avaliacoes e avaliacoes_1_2_estrelas (quantas avaliações ruins de 1 ou 2 estrelas). Use pra "como está minha nota", "qual loja tem a pior/melhor nota", "nota por plataforma", "quantas avaliações ruins", "reputação da rede".
