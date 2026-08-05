@@ -151,10 +151,21 @@ export function ferramentasDoNino(
               v.valorAnt > 0 ? r2((v.valor / v.valorAnt - 1) * 100) : null,
           }))
           .sort((a, b) => b.faturamento - a.faturamento)
+        // Somas PRONTAS. O modelo somava de cabeça e errava: a mesma pergunta
+        // devolveu R$ 61.522,11 numa vez e R$ 59.522,85 na outra, quando o
+        // certo era R$ 59.522,91 — R$ 1.999 de erro no primeiro caso. Somar é
+        // trabalho de servidor; número que o dono leva pra decisão não pode
+        // depender de aritmética mental do modelo.
+        const somar = (n: number) =>
+          r2(linhas.slice(0, n).reduce((acc, l) => acc + l.faturamento, 0))
         return {
           periodo: `${String(month).padStart(2, "0")}/${year}`,
           plataformas: alvo,
           total_de_itens: linhas.length,
+          soma_top_5: somar(5),
+          soma_top_10: somar(10),
+          soma_top_20: somar(20),
+          faturamento_de_todos_os_itens: somar(linhas.length),
           top_20: linhas.slice(0, 20),
           // Quedas só valem com base de comparação; sem mês anterior a
           // variação é null e o item não deve aparecer como "caiu".
