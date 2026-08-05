@@ -7,6 +7,10 @@
  *  - Keeta : coluna taxa_entrega em keeta_pedidos (faixa de frete por pedido).
  *  - 99    : a taxa de entrega vem zerada no export atual, então usamos o
  *            custo logístico + o custo da loja com frete grátis (ninefood_pedidos).
+ *            O custo logístico tem DUAS origens (planilha e webhook orderNew);
+ *            a RPC faz coalesce entre elas — ver migration 0160. Sem o webhook,
+ *            o mês corrente aparecia com custo ZERO do 99 até alguém subir o
+ *            arquivo, e zero parecia "não gastou" em vez de "não importou".
  *
  * É um CUSTO de entrega da loja — serve pra análise de margem/operação.
  */
