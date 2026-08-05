@@ -303,6 +303,17 @@ export default async function Home({
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
   // nº de lojas filtradas.
   const activeCount = activeUnitIds.length
+  /**
+   * Lojas que VENDEM naquela plataforma — denominador dos selos de cobertura.
+   *
+   * Era `activeCount` (todas as lojas ativas), e isso fazia um número correto
+   * parecer alarme: "8/14 99 Food" dava a entender que 6 lojas estavam sem
+   * importar, quando 6 delas simplesmente não vendem no 99. Medido em 05/08/26
+   * na rede: só UMA lacuna real de importação existia (Brooklin no 99), e o
+   * selo sugeria seis.
+   */
+  const habilitadasEm = (p: PlatformId) =>
+    units.filter((u) => u.active && u.platforms.includes(p)).length
   const scopeLabel = unidadesFilter
     ? `${activeCount} loja${activeCount !== 1 ? "s" : ""}`
     : isScoped
@@ -1122,24 +1133,24 @@ export default async function Home({
               <div className="flex flex-wrap gap-1.5">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
                   <Sparkles className="size-3" />
-                  {unitsWithImported}/{activeCount} iFood
+                  {unitsWithImported}/{habilitadasEm("ifood")} iFood
                 </span>
                 {unitsWith99 > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
                     <Sparkles className="size-3" />
-                    {unitsWith99}/{activeCount} 99 Food
+                    {unitsWith99}/{habilitadasEm("99food")} 99 Food
                   </span>
                 )}
                 {unitsWithKeeta > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-100 px-2.5 py-1 text-[10px] font-semibold text-lime-800 dark:bg-lime-950/40 dark:text-lime-400">
                     <Sparkles className="size-3" />
-                    {unitsWithKeeta}/{activeCount} Keeta
+                    {unitsWithKeeta}/{habilitadasEm("keeta")} Keeta
                   </span>
                 )}
                 {unitsWithCw > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-400">
                     <Sparkles className="size-3" />
-                    {unitsWithCw}/{activeCount} Cardápio Web
+                    {unitsWithCw}/{habilitadasEm("cardapioweb")} Cardápio Web
                   </span>
                 )}
               </div>
