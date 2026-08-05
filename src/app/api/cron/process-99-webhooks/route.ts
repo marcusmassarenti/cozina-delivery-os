@@ -101,6 +101,19 @@ export async function GET(req: Request) {
   const finishes = events.filter((e) => e.event_type === "orderFinish")
   const cancels = events.filter((e) => e.event_type === "orderCancel")
 
+  /** Soma um campo da lista de promoções (centavos → reais). Lista ausente
+   *  ou quebrada vira null, não 0: "não veio" e "não teve promoção" são
+   *  coisas diferentes na hora de calcular média. */
+  const somaPromo = (lista: unknown, campo: string): number | null => {
+    if (!Array.isArray(lista)) return null
+    const t = lista.reduce((acc: number, p) => {
+      const v = (p as Record<string, unknown>)?.[campo]
+      const n = Number(v)
+      return acc + (Number.isFinite(n) ? n : 0)
+    }, 0)
+    return Math.round(t) / 100
+  }
+
   // 4) Upsert orderNew → ninefood_pedidos
   const newRows: Record<string, unknown>[] = []
   const skippedNew: { reason: string; storeId: string | null }[] = []
@@ -158,6 +171,22 @@ export async function GET(req: Request) {
           : null,
       metodo_entrega:
         info.delivery_type != null ? String(info.delivery_type) : null,
+      // Custo da PLATAFORMA cobrado do lojista quando quem entrega é a 99.
+      // Anunciado pela 99 em 05/ago/26 como novidade, mas já chegava desde
+      // 11/jun — vinha e era descartado. Não confundir com taxa_entrega_*:
+      // aquelas são o frete do lado do CLIENTE, este é o custo do lado da LOJA.
+      custo_logistica: cents(info.logistics_cost),
+      // Área de entrega. O bairro vem em 100% dos payloads e é o único recorte
+      // confiável: a coordenada (poi_lat/poi_lng) chega arredondada pra grau
+      // inteiro por privacidade — 1 latitude distinta em 4.914 pedidos —, então
+      // não é guardada. O CEP tem 1.889 valores distintos e serve melhor.
+      bairro: recv.district != null ? String(recv.district) : null,
+      cep: recv.postal_code != null ? String(recv.postal_code) : null,
+      // Promoção POR PEDIDO: quanto a loja bancou e o desconto total dado ao
+      // cliente. Mais granular que a planilha de Promoções, que é por período
+      // rolante e não deixa cruzar promoção com bairro, item ou horário.
+      promo_custeada_loja: somaPromo(info.promotions, "shop_subside_price"),
+      promo_desconto_total: somaPromo(info.promotions, "promo_discount"),
     })
   }
 
