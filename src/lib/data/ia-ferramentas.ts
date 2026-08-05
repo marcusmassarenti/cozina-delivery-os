@@ -142,11 +142,19 @@ export function ferramentasDoNino(
           cur.valorAnt += Number(rec.valorAnterior ?? 0)
           acc.set(chave, cur)
         })
+        const totalGeral = [...acc.values()].reduce((t, v) => t + v.valor, 0)
         const linhas = [...acc.entries()]
           .map(([nome, v]) => ({
             produto: nome,
             faturamento: r2(v.valor),
             unidades: v.qtd,
+            // Participação PRONTA. Sem ela o modelo dizia "representa uma
+            // fatia significativa das suas vendas" — adjetivo no lugar de
+            // número, justamente na frase de conclusão que o dono lê. Ele
+            // tinha como dividir, mas depois da regra de não somar ficou
+            // conservador demais. Melhor entregar o percentual do que torcer.
+            pct_do_faturamento_de_itens:
+              totalGeral > 0 ? r2((v.valor / totalGeral) * 100) : null,
             variacao_pct:
               v.valorAnt > 0 ? r2((v.valor / v.valorAnt - 1) * 100) : null,
           }))
