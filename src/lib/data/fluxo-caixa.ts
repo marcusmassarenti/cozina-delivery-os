@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
+import { fetchAllRows } from "@/lib/data/paginate"
 import {
   getAccountsWithBalance,
   getCaixaHoldingId,
@@ -13,7 +14,7 @@ import {
  * Fluxo de Caixa PROJETADO — saldo corrido do caixa hoje somado às entradas e
  * saídas previstas ao longo do horizonte. Junta os dois mundos que viviam
  * separados: as contas a pagar/receber do Caixa (fin_entries) E os repasses
- * previstos das plataformas de delivery (Keeta + iFood) — que são a maior fonte
+ * previstos das plataformas de delivery (Keeta, iFood e 99 Food) — que são a maior fonte
  * de receita e não apareciam no caixa.
  *
  * Regime de caixa: cada valor entra/sai no dia em que o dinheiro efetivamente
@@ -65,6 +66,10 @@ function addDaysISO(iso: string, n: number): string {
     day: "2-digit",
   }).format(d)
 }
+
+/** UUID que não existe — filtro "nenhuma loja" (evita `in` vazio, que o
+ *  PostgREST trata como "sem filtro" e traria a rede inteira). */
+const UNIT_INEXISTENTE = "00000000-0000-0000-0000-000000000000"
 
 /** Como escopar as tabelas de delivery (só têm unit_id) pelo filtro de loja. */
 function deliveryUnits(
@@ -196,6 +201,62 @@ export async function getFluxoCaixa(
     for (const r of (porDia ?? []) as { dia: string; total: number | string }[]) {
       const v = Number(r.total ?? 0)
       if (v > 0) at(r.dia).entDelivery += v
+    }
+
+    // 99 Food: `expect_settle_date` é a data que a própria 99 informa, então
+    // não é estimativa nossa — é o mesmo tipo de dado que o iFood e a Keeta já
+    // davam. Ficava de fora só porque a tabela guarda `app_shop_id` e não
+    // `unit_id`, e o filtro de loja não tinha por onde entrar. Com ~R$ 19 mil
+    // por rodada semanal, a projeção nascia apertada demais pra quem vende
+    // no 99.
+    const linkQ = admin.from("ninefood_store_links").select("unit_id, app_shop_id")
+    const { data: links, error: errLinks } = du.units
+      ? await linkQ.in("unit_id", du.units.length ? du.units : [UNIT_INEXISTENTE])
+      : await linkQ
+    if (errLinks)
+      throw new Error(`fluxo-caixa: lojas do 99 Food — ${errLinks.message}`)
+
+    const shopIds = (links ?? []).map((l) => l.app_shop_id as string).filter(Boolean)
+    if (shopIds.length > 0) {
+      const bills = await fetchAllRows<{
+        expect_settle_date: string | null
+        settlement_amount: number | string | null
+      }>(
+        (from, to) =>
+          admin
+            .from("ninefood_api_bill")
+            .select("expect_settle_date, settlement_amount")
+            .in("app_shop_id", shopIds)
+            .gte("expect_settle_date", today)
+            .lte("expect_settle_date", end)
+            .order("id")
+            .range(from, to),
+        "fluxo-caixa 99 Food",
+      )
+
+      // NÃO deduplicar por order_id. O resumo do mês deduplica — lá o objetivo
+      // é o faturamento, e a mesma venda não pode contar duas vezes. Aqui é
+      // dinheiro entrando e saindo: das 143 linhas repetidas, 141 são a venda
+      // (tipo 1) MAIS uma dedução (tipo 4, negativa) no mesmo pedido e no mesmo
+      // dia. Deduplicar apagaria o desconto e prometeria repasse maior do que
+      // a 99 vai depositar.
+      const netoPorDia = new Map<string, number>()
+      for (const b of bills) {
+        if (!b.expect_settle_date) continue
+        const v = Number(b.settlement_amount ?? 0)
+        if (!v) continue
+        netoPorDia.set(
+          b.expect_settle_date,
+          (netoPorDia.get(b.expect_settle_date) ?? 0) + v,
+        )
+      }
+      // O valor vem COM SINAL: positivo é repasse, negativo é a 99 descontando
+      // (taxa, pacote, estorno). Somo o líquido do dia e mando pro lado certo —
+      // jogar tudo em "entradas" mostraria saldo que não vai existir.
+      for (const [dia, v] of netoPorDia) {
+        if (v > 0) at(dia).entDelivery += v
+        else if (v < 0) at(dia).saidas += -v
+      }
     }
   }
 
