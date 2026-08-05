@@ -22,6 +22,8 @@ import {
   getCancelamentosPorMotivo,
   getCancelamentoCestaByUnits,
   getFinanceiroResumoByUnits,
+  getPromocoesByUnits,
+  type PromocoesSnapshot,
 } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
@@ -554,6 +556,7 @@ function montarContexto(
   recortes: Awaited<ReturnType<typeof recortesDePeriodo>>,
   cancelMap: Map<string, MotivoCancel[]>,
   reputacao: Reputacao,
+  promoMap: Map<string, PromocoesSnapshot>,
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -571,6 +574,8 @@ function montarContexto(
         cancelamentos: cancelMap.get(u.id) ?? null,
         // Nota por canal + quantas avaliações 1-2★ a loja teve no mês.
         reputacao: reputacao.porLoja.get(u.id) ?? null,
+        // Retorno das promoções (ROAS) — régua PRÓPRIA, ver função abaixo.
+        retorno_das_promocoes: retornoDasPromocoes(promoMap.get(u.id)),
       }
     })
     .filter((l) => l !== null)
@@ -719,6 +724,37 @@ function marketingDaLoja(m: import("@/lib/mock-monthly").UnitMonthly) {
     investimento_promocoes: investido,
     pct_do_faturamento: bruto > 0 ? round((investido / bruto) * 100) : null,
   }
+}
+
+/**
+ * Retorno das promoções (ROAS) — do relatório de Promoções do iFood.
+ *
+ * ⚠️ RÉGUA DIFERENTE, de propósito exposta como tal. Todo o resto do contexto
+ * é mês calendário; este relatório tem janela rolante de ~30 dias (hoje
+ * 10/06→09/07). Somar o investimento daqui com o `promocoes` do mês daria
+ * dois números de marketing brigando na mesma resposta.
+ *
+ * A saída por isso: o período vai DENTRO do bloco e o prompt obriga a citá-lo.
+ * O que se usa daqui é o ROAS e a contagem de campanhas — que só existem aqui.
+ * O quanto foi investido continua vindo do extrato, mês a mês.
+ */
+function retornoDasPromocoes(p: PromocoesSnapshot | undefined) {
+  if (!p) return null
+  return {
+    periodo: `${br(p.periodStart)} a ${br(p.periodEnd)}`,
+    roas_da_loja: p.roasLojas,
+    campanhas_ativas: p.nCampanhas,
+    investido_pela_loja_no_periodo: round(p.investimentoLojas),
+    investido_por_todos_no_periodo: round(p.investimentoTotal),
+    venda_gerada_pelas_promocoes: round(p.valorItens),
+    pedidos_com_promocao: p.pedidos,
+  }
+}
+
+/** "2026-07-09" → "09/07/2026". */
+function br(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-")
+  return `${d}/${m}/${y}`
 }
 
 /** Detalhe do que o iFood desconta no mês (comissão, entrega, serviços,
@@ -991,6 +1027,7 @@ O contexto tem:
 - Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
 - "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução". O "historico_mensal" de cada loja tem AINDA a última coluna "promocoes_marketing_custeado_pela_loja": é o investimento em marketing daquela loja MÊS A MÊS. É com ela que você responde qualquer pergunta comparativa sobre marketing ("essas lojas reduziram o investimento?", "quem cortou promoção?", "o marketing subiu ou caiu?") — compare os meses e diga em R$ e em %.
 - Em cada loja, "marketing": o que a LOJA investiu em promoção no mês (R$ e % do faturamento). ATENÇÃO ao vocabulário do dono: quando ele diz "marketing", "investimento", "mídia", "anúncio" ou "publicidade", ele quase sempre quer dizer PROMOÇÃO/DESCONTO CUSTEADO PELA LOJA — que é exatamente este campo. Responda com ele em vez de dizer que não tem o dado. Se vier null, a loja não bancou promoção no mês (o que é uma resposta: ela NÃO investiu). O que o sistema realmente não tem é gasto com Google Ads, influenciador ou mídia fora das plataformas — só diga isso se ele perguntar especificamente por esses.
+- Em cada loja, "retorno_das_promocoes": o RETORNO do marketing — roas_da_loja (quantos reais de venda cada real investido pela loja trouxe), campanhas_ativas, venda_gerada_pelas_promocoes e o investido no período. ROAS 6 quer dizer R$ 6 de venda por R$ 1 investido. Use pra "vale a pena a promoção", "qual meu ROAS", "a promoção tá dando retorno", "qual loja aproveita melhor". ATENÇÃO À RÉGUA: este bloco vem do relatório de Promoções, cuja janela é ROLANTE (~30 dias) e NÃO é o mês calendário — o campo "periodo" diz exatamente de quando é. SEMPRE cite o período ao dar o ROAS ("no período de X a Y, seu ROAS foi Z"), e NUNCA some nem compare o "investido_..._no_periodo" daqui com o valor mensal de promoção do "historico_mensal": são recortes diferentes e misturá-los produz dois números de marketing brigando. Pra QUANTO foi investido, use o mensal; pra RETORNO, use este. Se vier null, a loja não tem esse relatório importado — aí você tem o investimento (mensal) mas não o retorno, e deve dizer isso em vez de estimar ROAS.
 - Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos, em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
 - "cancelamentos_rede" e, em cada loja, "cancelamentos": os motivos de cancelamento (iFood) com quantos pedidos e a PERDA em R$ (perda = o que ficou no seu prejuízo). Use pra "por que cancelam", "qual motivo mais cancela", "quanto perdi com cancelamento", "onde tô perdendo dinheiro". É iFood-only. Só entra loja/motivo que teve cancelamento no mês.
 - "reputacao_rede" e, em cada loja, "reputacao": nota média por CANAL (nota_ifood, nota_99food, nota_keeta — null se a loja não tem avaliação naquele canal), a nota_geral (combinada), total_avaliacoes e avaliacoes_1_2_estrelas (quantas avaliações ruins de 1 ou 2 estrelas). Use pra "como está minha nota", "qual loja tem a pior/melhor nota", "nota por plataforma", "quantas avaliações ruins", "reputação da rede".
@@ -1118,7 +1155,7 @@ export async function perguntarConsultor(
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
     // Mês corrente + histórico do ano + recortes de quinzena (tudo em paralelo).
-    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap] =
+    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap, promoMap] =
       await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
         historicoMensalDoAno(unitIds, year, month),
@@ -1127,6 +1164,8 @@ export async function perguntarConsultor(
         montarReputacao(units, year, month),
         // Cesta dos cancelados: entra no BRUTO exibido (régua do portal).
         getCancelamentoCestaByUnits(unitIds, year, month),
+        // Relatório de Promoções — é quem tem o ROAS.
+        getPromocoesByUnits(unitIds, year, month),
       ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
@@ -1144,7 +1183,7 @@ export async function perguntarConsultor(
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap)
 
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
@@ -1273,7 +1312,7 @@ export async function* perguntarConsultorStream(
   try {
     const { year, month } = anoMesCorrente()
     const unitIds = units.map((u) => u.id)
-    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap] =
+    const [monthlyMap, histMap, recortes, cancelMap, reputacao, cestaMap, promoMap] =
       await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
         historicoMensalDoAno(unitIds, year, month),
@@ -1282,6 +1321,8 @@ export async function* perguntarConsultorStream(
         montarReputacao(units, year, month),
         // Cesta dos cancelados: entra no BRUTO exibido (régua do portal).
         getCancelamentoCestaByUnits(unitIds, year, month),
+        // Relatório de Promoções — é quem tem o ROAS.
+        getPromocoesByUnits(unitIds, year, month),
       ])
     const numeros = new Map<string, ReturnType<typeof numerosDaLoja>>()
     for (const u of units) {
@@ -1299,7 +1340,7 @@ export async function* perguntarConsultorStream(
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap)
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),

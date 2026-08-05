@@ -2163,6 +2163,68 @@ export async function getPromocoesForMonth(
   }
 }
 
+/**
+ * Mesma coisa, para VÁRIAS lojas de uma vez — 1 consulta em vez de N.
+ *
+ * Diferença importante em relação à versão por loja: aqui existe FALLBACK. Se
+ * nenhuma janela sobrepõe o mês pedido, devolve a mais recente que a loja tem.
+ *
+ * O motivo é que este relatório é planilha subida à mão e a janela dele é
+ * rolante (~30 dias, hoje 10/jun→09/jul). Amarrar ao mês faria o ROAS
+ * simplesmente sumir em agosto, e "não tenho esse dado" é pior que "seu ROAS
+ * no período tal foi 6,25" — desde que o período venha junto. Por isso o
+ * snapshot carrega `periodStart`/`periodEnd`: quem consome é obrigado a dizer
+ * de quando é o número.
+ */
+export async function getPromocoesByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, PromocoesSnapshot>> {
+  const out = new Map<string, PromocoesSnapshot>()
+  if (unitIds.length === 0) return out
+
+  const admin = createAdminClient()
+  const { end } = monthRange(year, month)
+  const { data, error } = await admin
+    .from("ifood_promocoes_periodo")
+    .select(
+      "unit_id, period_label, period_start, period_end, n_campanhas, pedidos, valor_itens, investimento_total, investimento_lojas, investimento_rede, investimento_ifood, investimento_industria, roas_lojas",
+    )
+    .in("unit_id", unitIds)
+    // Janela que começa DEPOIS do mês pedido é futuro em relação à pergunta —
+    // essa não serve nem como fallback.
+    .lte("period_start", end)
+    .order("period_end", { ascending: false })
+
+  if (error) {
+    console.error("getPromocoesByUnits:", error.message)
+    return out
+  }
+
+  const num = (v: number | string | null) => (v == null ? 0 : Number(v))
+  // Já vem da mais recente pra mais antiga, então a PRIMEIRA de cada loja é a
+  // que vale — seja ela sobreposta ao mês ou o fallback.
+  for (const r of data ?? []) {
+    if (out.has(r.unit_id)) continue
+    out.set(r.unit_id, {
+      periodLabel: r.period_label,
+      periodStart: r.period_start,
+      periodEnd: r.period_end,
+      nCampanhas: r.n_campanhas ?? 0,
+      pedidos: r.pedidos ?? 0,
+      valorItens: num(r.valor_itens),
+      investimentoTotal: num(r.investimento_total),
+      investimentoLojas: num(r.investimento_lojas),
+      investimentoRede: num(r.investimento_rede),
+      investimentoIfood: num(r.investimento_ifood),
+      investimentoIndustria: num(r.investimento_industria),
+      roasLojas: r.roas_lojas == null ? null : Number(r.roas_lojas),
+    })
+  }
+  return out
+}
+
 // ─── Super restaurante (avaliação mais recente) ──────────────────────
 
 export type SuperSnapshot = {
