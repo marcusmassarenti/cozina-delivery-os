@@ -18,6 +18,8 @@ import {
   TrendingUp,
   Trophy,
   Wallet,
+  Truck,
+  MapPin,
 } from "lucide-react"
 
 import { assertCanView } from "@/lib/auth/permissions"
@@ -160,6 +162,24 @@ const CATEGORIAS: Categoria[] = [
         desc: "Custo de cada promoção vs pedidos que ela trouxe — o custo por pedido mostra qual campanha vale a pena.",
         icon: Target,
         href: "/pedidos?plataforma=keeta",
+      },
+    ],
+  },
+  {
+    label: "Logística & Entrega",
+    icon: Truck,
+    reports: [
+      {
+        title: "Faixas de frete",
+        desc: "Quantos pedidos saem em cada valor de taxa (e quantos de graça), com o ticket médio de cada faixa — mostra se quem paga frete alto compra mais.",
+        icon: Truck,
+        href: "/relatorios/frete",
+      },
+      {
+        title: "Entrega por bairro",
+        desc: "Faturamento, custo de entrega e promoção por bairro, pra ver onde entregar compensa. Só 99 Food e Cardápio Web mandam endereço.",
+        icon: MapPin,
+        soon: true,
       },
     ],
   },
