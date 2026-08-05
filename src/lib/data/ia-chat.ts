@@ -788,6 +788,50 @@ function plataformasSemDado(
   )
 }
 
+
+/**
+ * Tira do histórico as vezes ANTERIORES em que a mesma pergunta foi feita.
+ *
+ * Por que existe: perguntando "e qual é meu produto mais vendido?" quatro
+ * vezes seguidas, as respostas degradaram — completa, depois só o campeão,
+ * depois uma linha, depois meia linha. Não era aleatório nem falta de regra:
+ * o modelo recebe as PRÓPRIAS respostas anteriores no histórico e trata
+ * repetir por extenso como redundância. Cada resposta curta vira exemplo pra
+ * próxima ser mais curta ainda — ele aprende com a própria degradação.
+ *
+ * Quatro regras de prompt não venceram isso, e não iam vencer: instrução
+ * compete com exemplo, e exemplo ganha. A saída é remover o exemplo.
+ *
+ * Some o par (pergunta + resposta) das ocorrências anteriores e mantém só a
+ * atual. O resto da conversa fica intacto — quem perguntou outra coisa no meio
+ * continua tendo contexto.
+ */
+function semRepeticoesDaPergunta(msgs: ChatTurn[]): ChatTurn[] {
+  const atual = msgs[msgs.length - 1]
+  if (!atual || atual.role !== "user") return msgs
+  const chave = (t: string) =>
+    t
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  const alvo = chave(atual.content)
+  if (alvo.length < 8) return msgs // "oi", "ok" — repetir ali não é problema
+
+  const fora = new Set<number>()
+  for (let i = 0; i < msgs.length - 1; i++) {
+    const m = msgs[i]
+    if (m.role === "user" && chave(m.content) === alvo) {
+      fora.add(i)
+      // A resposta que veio logo depois some junto: é ela o exemplo ruim.
+      if (msgs[i + 1]?.role === "assistant") fora.add(i + 1)
+    }
+  }
+  return fora.size === 0 ? msgs : msgs.filter((_, i) => !fora.has(i))
+}
+
 /** Extrai os números que importam de uma UnitMonthly (compacto, arredondado). */
 function numerosDaLoja(
   m: import("@/lib/mock-monthly").UnitMonthly,
@@ -1387,7 +1431,7 @@ export async function perguntarConsultor(
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
       // Mantém a conversa curta (últimos 8 turnos) — barato e suficiente.
-      messages: messages.slice(-8),
+      messages: semRepeticoesDaPergunta(messages).slice(-8),
       // Deixa o Nino pesquisar mercado/setor quando a pergunta for externa. O
       // modelo só busca quando precisa — pergunta sobre os próprios números não
       // dispara. maxTokens maior pra caber a análise + o que veio da web.
@@ -1588,7 +1632,7 @@ export async function* perguntarConsultorStream(
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),
-      messages: messages.slice(-8),
+      messages: semRepeticoesDaPergunta(messages).slice(-8),
       webSearch: true,
       // Recorte de data livre (semana, dia, fim de semana): o servidor soma.
       ferramentas: [
