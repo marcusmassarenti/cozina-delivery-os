@@ -42,6 +42,7 @@ import {
 import { ExperimenteDemo } from "./_demo"
 import { Reveal, useScrolled } from "./_motion"
 import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
+import { LOGOS_CLIENTES } from "@/lib/logos-clientes"
 import { reportsByPlatform } from "@/lib/reports-catalog"
 import { precoStr, valorMensalExibido } from "@/lib/pricing"
 
@@ -158,12 +159,6 @@ const TRUST = [
   { icon: Lock, t: "Conexão criptografada" },
   { icon: KeyRound, t: "Você não dá senha de nada" },
   { icon: Trash2, t: "Apague seus dados quando quiser" },
-]
-
-/* PLACEHOLDER: cliente real, não inventar */
-const DEPOIMENTOS = [
-  { nome: "[Nome do cliente]", loja: "[Loja / cidade]", texto: "[Depoimento real — a preencher]" },
-  { nome: "[Nome do cliente]", loja: "[Loja / cidade]", texto: "[Depoimento real — a preencher]" },
 ]
 
 const FAQ = [
@@ -838,6 +833,55 @@ function PrecoValor({
 /** Instância do Lenis compartilhada, pra rolagens programáticas (ex.: carrossel
  *  do Nino) usarem o mesmo scroll suave em vez de brigar com ele. */
 const lenisRef: { current: Lenis | null } = { current: null }
+
+
+/**
+ * Esteira de logos dos clientes que rodam no sistema.
+ *
+ * Rola sozinha, da direita pra esquerda, em loop contínuo. O truque é
+ * duplicar a lista e animar -50%: quando a primeira cópia sai de cena, a
+ * segunda está exatamente no lugar dela e a emenda não aparece.
+ *
+ * Sem biblioteca de carrossel: são 30 imagens estáticas, e um pacote de
+ * carrossel custaria mais KB que os próprios logos.
+ *
+ * `prefers-reduced-motion` para a animação: movimento infinito é gatilho de
+ * enjoo pra parte das pessoas, e a régua é a mesma do resto do sistema.
+ */
+function EsteiraClientes() {
+  const fila = [...LOGOS_CLIENTES, ...LOGOS_CLIENTES]
+  return (
+    <div className="relative overflow-hidden py-2" aria-label="Marcas que usam o Delivery OS">
+      {/* Degradê nas bordas: os logos entram e saem por baixo dele em vez de
+          serem cortados na régua da tela. */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-white to-transparent sm:w-28" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-white to-transparent sm:w-28" />
+      <div className="esteira flex w-max items-center gap-10 sm:gap-14">
+        {fila.map((l, i) => (
+          <img
+            key={`${l.src}-${i}`}
+            src={l.src}
+            alt={l.nome}
+            title={l.nome}
+            loading="lazy"
+            // Altura fixa e largura automática: os logos vêm em proporções
+            // diferentes e forçar um quadrado esmagaria os deitados.
+            className="h-11 w-auto shrink-0 object-contain opacity-70 grayscale transition duration-300 hover:opacity-100 hover:grayscale-0 sm:h-14"
+            // Metade da fila é cópia só pro loop — leitor de tela não deve
+            // anunciar cada marca duas vezes.
+            aria-hidden={i >= LOGOS_CLIENTES.length}
+          />
+        ))}
+      </div>
+      <style>{`
+        @keyframes esteira-rolar { from { transform: translate3d(0,0,0) } to { transform: translate3d(-50%,0,0) } }
+        .esteira { animation: esteira-rolar 60s linear infinite }
+        .esteira:hover { animation-play-state: paused }
+        @media (prefers-reduced-motion: reduce) { .esteira { animation: none } }
+      `}</style>
+    </div>
+  )
+}
 
 export function LandingV3({
   precos,
@@ -1679,31 +1723,84 @@ export function LandingV3({
         </div>
       </section>
 
-      {/* QUEM JÁ USA — depoimentos (placeholder) */}
-      <section className="border-b border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-12 sm:py-14">
-        <div className="mx-auto max-w-5xl px-5">
+      {/* QUEM JÁ USA — prova social real.
+          Substituiu dois cartões de depoimento em branco ("[Depoimento real —
+          a preencher]") que estavam PUBLICADOS. Placeholder visível é pior que
+          seção ausente: comunica que ninguém usa.
+
+          Usa a MESMA gramática visual da seção de cobertura (olho-de-boi em
+          brand + h2 grande com palavra destacada + subtítulo + cards com o
+          ícone saltando pra fora do topo). Antes era um h2 pequeno com três
+          caixas brancas chapadas, e destoava do resto da página. */}
+      <section className="border-b border-black/[0.06] bg-[oklch(0.975_0.02_55)] py-14 sm:py-20">
+        <div className="mx-auto max-w-6xl px-5">
           <Reveal>
-            <h2 className="text-center text-2xl font-medium tracking-tight sm:text-3xl">
-              Quem já <span className="text-[var(--brand)]">usa</span>
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
+                <Store className="size-3.5" strokeWidth={2.4} />
+                Quem já usa
+              </span>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <h2 className="mt-2 text-balance text-center text-3xl font-medium tracking-tight sm:text-4xl">
+              Não é promessa de tela bonita. É operação{" "}
+              <span className="text-[var(--brand)]">rodando</span>.
             </h2>
           </Reveal>
-          {/* PLACEHOLDER: cliente real, não inventar */}
-          <div className="mt-8 grid gap-5 sm:grid-cols-2">
-            {DEPOIMENTOS.map((d, i) => (
-              <Reveal key={i} delay={i * 100}>
-                <div className="h-full rounded-2xl border border-dashed border-black/[0.12] bg-white p-6">
-                  <p className="text-[oklch(0.4_0.02_45)]">“{d.texto}”</p>
-                  <div className="mt-5 flex items-center gap-3">
-                    <span className="size-10 shrink-0 rounded-full bg-[oklch(0.9_0.005_60)]" />
-                    <div>
-                      <p className="text-sm font-medium text-[oklch(0.45_0.01_48)]">{d.nome}</p>
-                      <p className="text-xs text-[oklch(0.55_0.01_48)]">{d.loja}</p>
-                    </div>
-                  </div>
+          <Reveal delay={120}>
+            <p className="mx-auto mt-4 max-w-2xl text-center text-[oklch(0.5_0.01_48)]">
+              Números do que já passou pelo sistema — de redes com dezenas de
+              lojas a operação de um ponto só.
+            </p>
+          </Reveal>
+
+          <div className="mt-16 grid gap-5 sm:grid-cols-3">
+            {[
+              { icon: Coins, valor: "R$ 9,4 mi", label: "em vendas já processados", sub: "iFood, 99 Food e Keeta somados" },
+              { icon: FileSpreadsheet, valor: "164 mil", label: "pedidos lidos e conferidos", sub: "taxa por taxa, sem digitação" },
+              { icon: Store, valor: "83", label: "lojas rodando no sistema", sub: "de rede grande a loja única" },
+            ].map((k, i) => (
+              <Reveal key={k.label} delay={i * 90}>
+                <div className="lift relative h-full rounded-2xl border border-black/[0.06] bg-white px-6 pb-7 pt-12 text-center">
+                  {/* ícone saltando pra fora do topo — mesmo tratamento dos
+                      logos de plataforma na seção de cobertura */}
+                  <span className="absolute left-1/2 top-0 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_14px_30px_-10px_oklch(0.65_0.21_35/.9)] ring-4 ring-white">
+                    <k.icon className="size-5" strokeWidth={1.9} />
+                  </span>
+                  <p className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-[2.75rem]">
+                    {k.valor}
+                  </p>
+                  <p className="mt-1.5 font-medium leading-tight">{k.label}</p>
+                  <p className="mt-1 text-xs text-[oklch(0.55_0.01_48)]">
+                    {k.sub}
+                  </p>
                 </div>
               </Reveal>
             ))}
           </div>
+
+          <Reveal delay={240}>
+            <div className="mt-14 rounded-2xl border border-black/[0.06] bg-white px-4 py-7 sm:px-8">
+              {/* A marca entra como LOGO, não como texto em caixa alta: escrita
+                  por extenso no meio da frase ela se perdia no cinza e parecia
+                  nome genérico. O lockup é o mesmo do topo da página. */}
+              <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs font-medium uppercase tracking-wider text-[oklch(0.55_0.01_48)]">
+                Marcas que já rodam no
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="flex size-5 items-center justify-center rounded-md bg-[var(--brand)] text-white shadow-[0_6px_14px_-7px_oklch(0.65_0.21_35/.9)]">
+                    <BarChart3 className="size-3" strokeWidth={2.4} />
+                  </span>
+                  <span className="text-[13px] font-semibold normal-case tracking-tight text-[var(--ink)]">
+                    Delivery OS
+                  </span>
+                </span>
+              </p>
+              <div className="mt-6">
+                <EsteiraClientes />
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 

@@ -146,6 +146,19 @@ export const CHANGELOG: Release[] = [
         ],
       },
       {
+        area: "Site (deliveryos.food)",
+        items: [
+          {
+            kind: "novo",
+            title: "A seção \"Quem já usa\" agora mostra quem já usa",
+            antes:
+              "Havia dois cartões de depoimento em branco, escritos \"[Depoimento real — a preencher]\", publicados no site.",
+            depois:
+              "No lugar deles entraram os números reais do que já passou pelo sistema — R$ 9,4 milhões em vendas, 164 mil pedidos, 83 lojas — e uma esteira com as marcas que rodam no Delivery OS.",
+          },
+        ],
+      },
+      {
         area: "Correções",
         items: [
           {
