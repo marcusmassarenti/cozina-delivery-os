@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "TZ=America/Sao_Paulo NODE_OPTIONS=\"--max-old-space-size=2048\" next dev",
+    "dev": "TZ=America/Sao_Paulo next dev",
     "build": "TZ=America/Sao_Paulo next build",
     "start": "TZ=America/Sao_Paulo next start",
     "lint": "eslint"
