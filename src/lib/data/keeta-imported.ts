@@ -392,12 +392,18 @@ export async function getNetworkKeetaCancelamentosForMonth(
   const admin = createAdminClient()
   const rows = await pageAll<{
     motivo_cancelamento: string | null
+    tipo_cancelamento: string | null
     vendas_itens: number | string | null
   }>((a, b) => {
     let q = admin
       .from("keeta_pedidos")
-      .select("motivo_cancelamento, vendas_itens")
-      .not("motivo_cancelamento", "is", null)
+      // `tipo_cancelamento` entra junto porque 188 cancelamentos só têm ELE.
+      // A Keeta preenche os dois campos de forma desencontrada: em 279 pedidos
+      // com status corrompido ("shop_order_status_id"), 279 têm tipo e só 91
+      // têm motivo. Filtrar apenas por motivo escondia 188 cancelamentos reais
+      // do relatório — não do faturamento, que nunca dependeu desse filtro.
+      .select("motivo_cancelamento, tipo_cancelamento, vendas_itens")
+      .or("motivo_cancelamento.not.is.null,tipo_cancelamento.not.is.null")
       .eq("ref_year", year)
       .eq("ref_month", month)
       .order("id")
@@ -409,8 +415,12 @@ export async function getNetworkKeetaCancelamentosForMonth(
 
   const acc = new Map<string, KeetaCancelamentoMotivo>()
   for (const r of rows) {
-    if (!r.motivo_cancelamento) continue
-    const tema = temaCancelamentoKeeta(r.motivo_cancelamento)
+    // Motivo é mais específico ("cliente desistiu"); o tipo diz QUEM cancelou
+    // ("Cancelado pelo atendimento"). Prefiro o motivo e caio no tipo — melhor
+    // um rótulo genérico que um cancelamento invisível.
+    const rotulo = r.motivo_cancelamento ?? r.tipo_cancelamento
+    if (!rotulo) continue
+    const tema = temaCancelamentoKeeta(rotulo)
     const cur = acc.get(tema) ?? { motivo: tema, pedidos: 0, perdaFinanceira: 0 }
     cur.pedidos += 1
     cur.perdaFinanceira += Number(r.vendas_itens) || 0
