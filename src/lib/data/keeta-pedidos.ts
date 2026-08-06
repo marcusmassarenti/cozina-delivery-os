@@ -72,7 +72,7 @@ function emptyResumo(): KeetaPedidoResumo {
 
 type Row = {
   status_pedido: string | null
-  tipo_cancelamento: string | null
+  motivo_cancelamento: string | null
   valor_pago_cliente: number | string | null
   preco_original: number | string | null
   ganhos: number | string | null
@@ -89,7 +89,7 @@ type Row = {
 }
 
 const SELECT =
-  "status_pedido, tipo_cancelamento, valor_pago_cliente, preco_original, ganhos, promo_keeta, promo_loja, desconto_keeta, comissao_basica, taxa_distancia, taxa_saque_antecipado, taxa_pagamento_online, tipo_campanha, quem_cancelou, turno"
+  "status_pedido, motivo_cancelamento, valor_pago_cliente, preco_original, ganhos, promo_keeta, promo_loja, desconto_keeta, comissao_basica, taxa_distancia, taxa_saque_antecipado, taxa_pagamento_online, tipo_campanha, quem_cancelou, turno"
 
 const num = (v: number | string | null) => Math.abs(Number(v) || 0)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -135,7 +135,7 @@ function aggregate(rows: Row[]): KeetaPedidoResumo {
   const turnos = new Map<string, { pedidos: number; valor: number }>()
 
   for (const row of rows) {
-    if (foiCancelado(row.status_pedido, row.tipo_cancelamento)) r.cancelados++
+    if (foiCancelado(row.status_pedido, row.motivo_cancelamento)) r.cancelados++
     else r.concluidos++
 
     const pago = num(row.valor_pago_cliente)
@@ -310,7 +310,7 @@ export async function getKeetaPedidoPorLoja(
   type PorLojaRow = {
     unit_id: string
     status_pedido: string | null
-  tipo_cancelamento: string | null
+    motivo_cancelamento: string | null
     valor_pago_cliente: number | string | null
     preco_original: number | string | null
     promo_keeta: number | string | null
@@ -323,7 +323,7 @@ export async function getKeetaPedidoPorLoja(
     const { data, error } = await admin
       .from("keeta_pedidos_recentes")
       .select(
-        "unit_id, status_pedido, tipo_cancelamento, valor_pago_cliente, preco_original, promo_keeta, promo_loja",
+        "unit_id, status_pedido, motivo_cancelamento, valor_pago_cliente, preco_original, promo_keeta, promo_loja",
       )
       .in("unit_id", unitIds)
       .eq("ref_year", year)
@@ -360,7 +360,15 @@ export async function getKeetaPedidoPorLoja(
       byUnit.set(r.unit_id, u)
     }
     u.pedidos++
-    if (foiCancelado(r.status_pedido, r.tipo_cancelamento)) u.cancelados++
+    // ⚠️ Esta consulta lê keeta_pedidos_RECENTES — outra tabela, outro
+    // relatório da Keeta, com colunas diferentes. Ela não tem
+    // `tipo_cancelamento`; o campo equivalente aqui é `motivo_cancelamento`.
+    // Selecionar a coluna errada quebrou a tela em produção por ~1h.
+    //
+    // O status desta tabela é limpo (só "Concluído" e "Cancelado", sem o
+    // código cru `shop_order_status_id`), então o fallback quase nunca é
+    // usado — fica como rede de segurança se a Keeta exportar mal aqui também.
+    if (foiCancelado(r.status_pedido, r.motivo_cancelamento)) u.cancelados++
     u.valorPago += num(r.valor_pago_cliente)
     u.precoOriginal += num(r.preco_original)
     u.promoKeeta += num(r.promo_keeta)
