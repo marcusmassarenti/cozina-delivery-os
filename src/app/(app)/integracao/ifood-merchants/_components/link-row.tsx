@@ -22,16 +22,26 @@ import {
   type RefreshMerchantsState,
 } from "../_actions"
 
-type UnitOption = { id: string; code: string; name: string }
+type UnitOption = {
+  id: string
+  code: string
+  name: string
+  /** Dono da loja. Sem ele o admin escolhia às cegas entre todas as unidades. */
+  holdingId?: string
+  holdingName?: string
+}
 
 export function LinkRow({
   merchantId,
   currentUnitId,
   units,
+  holdingSugerido,
 }: {
   merchantId: string
   currentUnitId: string | null
   units: UnitOption[]
+  /** Cliente deduzido pelo CNPJ do merchant (solicitação de conexão). */
+  holdingSugerido?: { id: string; name: string } | null
 }) {
   const [linkState, linkAction] = useActionState<LinkMerchantState, FormData>(
     linkMerchantToUnit,
@@ -44,6 +54,21 @@ export function LinkRow({
   const [selectedUnit, setSelectedUnit] = React.useState<string>(
     currentUnitId ?? "",
   )
+  /* Só as lojas DO CLIENTE do merchant.
+   *
+   * A lista trazia todas as unidades da base misturadas — o admin não sabia
+   * qual loja era de qual dono e vinculava no escuro. E vincular errado aqui
+   * mistura o faturamento de dois clientes, o pior erro possível nesta tela.
+   *
+   * O cliente sai do CNPJ do merchant casado com a solicitação de conexão.
+   * Sem dedução possível (merchant sem pedido), mostra todas — lista longa é
+   * melhor que seletor vazio. */
+  const [verTodas, setVerTodas] = React.useState(false)
+  const doCliente = holdingSugerido
+    ? units.filter((u) => u.holdingId === holdingSugerido.id)
+    : []
+  const filtrando = !!holdingSugerido && !verTodas && doCliente.length > 0
+  const opcoes = filtrando ? doCliente : units
 
   if (currentUnitId) {
     return (
@@ -74,14 +99,31 @@ export function LinkRow({
           <SelectValue placeholder="Escolher unidade…" />
         </SelectTrigger>
         <SelectContent>
-          {units.map((u) => (
+          {opcoes.map((u) => (
             <SelectItem key={u.id} value={u.id}>
               {u.code} — {u.name}
+              {/* Com a lista aberta pra todos, "01 — JK" não diz de quem é. */}
+              {!filtrando && u.holdingName ? (
+                <span className="ml-1 text-muted-foreground">
+                  · {u.holdingName}
+                </span>
+              ) : null}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
       <LinkBtn />
+      {holdingSugerido && doCliente.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setVerTodas((v) => !v)}
+          className="whitespace-nowrap text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+        >
+          {filtrando
+            ? `${doCliente.length} de ${holdingSugerido.name} · ver todas`
+            : `só ${holdingSugerido.name}`}
+        </button>
+      )}
       {linkState.error && (
         <span className="text-[10px] text-rose-600">{linkState.error}</span>
       )}

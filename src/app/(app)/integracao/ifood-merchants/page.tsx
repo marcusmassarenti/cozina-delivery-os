@@ -148,6 +148,38 @@ async function getData() {
   return { merchants, units, holdings, byMerchant }
 }
 
+/**
+ * CNPJ pedido → cliente que pediu.
+ *
+ * É o que permite o seletor de vínculo mostrar só as lojas DAQUELE cliente.
+ * Sem isso o admin escolhia entre as 63 unidades da base inteira, sem saber
+ * de quem era cada uma — e vincular errado aqui mistura o faturamento de dois
+ * clientes, que é o pior erro possível nesta tela.
+ *
+ * Vai SEM limite de status e sem `limit`: um merchant pode aparecer meses
+ * depois do pedido, e cortar a lista deixaria justamente os casos antigos sem
+ * sugestão.
+ */
+async function getDonoPorCnpj(): Promise<Record<string, { id: string; name: string }>> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ifood_activation_requests")
+    .select("cnpj, holding_id, holdings(name)")
+  const out: Record<string, { id: string; name: string }> = {}
+  for (const r of (data ?? []) as unknown as {
+    cnpj: string | null
+    holding_id: string | null
+    holdings: { name: string } | null
+  }[]) {
+    const cnpj = String(r.cnpj ?? "").replace(/\D/g, "")
+    if (!cnpj || !r.holding_id) continue
+    // Primeiro pedido ganha: se dois clientes pediram o mesmo CNPJ, é conflito
+    // pra humano resolver — e o seletor cai no "todas" de qualquer forma.
+    if (!out[cnpj]) out[cnpj] = { id: r.holding_id, name: r.holdings?.name ?? "—" }
+  }
+  return out
+}
+
 /** Fila de solicitações de conexão feitas pelos clientes (todas as holdings). */
 async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
   const admin = createAdminClient()
@@ -182,10 +214,11 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
 }
 
 export default async function IfoodMerchantsPage() {
-  const [{ merchants, units, holdings, byMerchant }, solicitacoes] =
+  const [{ merchants, units, holdings, byMerchant }, solicitacoes, donoPorCnpj] =
     await Promise.all([
     getData(),
     getSolicitacoes(),
+    getDonoPorCnpj(),
   ])
   const linkedCount = Object.keys(byMerchant).length
 
@@ -237,6 +270,7 @@ export default async function IfoodMerchantsPage() {
         units={units}
         holdings={holdings}
         byMerchant={byMerchant}
+        donoPorCnpj={donoPorCnpj}
       />
 
       <div className="rounded-lg border bg-card p-4 text-xs text-muted-foreground">
