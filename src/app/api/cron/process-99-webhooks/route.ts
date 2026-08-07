@@ -114,6 +114,19 @@ export async function GET(req: Request) {
     return Math.round(t) / 100
   }
 
+  /* Solicitações de conexão em aberto: base do fechamento automático abaixo.
+   * Uma consulta só, fora do laço — dentro dele seria uma por webhook. */
+  const { data: pend } = await admin
+    .from("ninefood_activation_requests")
+    .select("id, unit_id, loja_99")
+    .in("status", ["pendente", "solicitada"])
+  const pendentes99 = (pend ?? []) as {
+    id: string
+    unit_id: string | null
+    loja_99: string | null
+  }[]
+  const autoVinculadas: { appShopId: string; unitId: string }[] = []
+
   // 4) Upsert orderNew → ninefood_pedidos
   const newRows: Record<string, unknown>[] = []
   const skippedNew: { reason: string; storeId: string | null }[] = []
@@ -126,10 +139,50 @@ export async function GET(req: Request) {
     const recv = (info.receive_address ?? {}) as Record<string, unknown>
 
     const appShopId = String(shop.app_shop_id ?? e.payload?.app_shop_id ?? "")
-    const unitId = unitByAppShop.get(appShopId)
+    let unitId = unitByAppShop.get(appShopId)
     if (!unitId) {
-      skippedNew.push({ reason: "loja não vinculada", storeId: appShopId })
-      continue
+      /* FECHAMENTO AUTOMÁTICO DA CONEXÃO 99.
+       *
+       * A API do 99 não tem "liste minhas lojas": o `app_shop_id` só aparece
+       * quando o primeiro pedido da loja chega aqui. Então é ESTE o momento em
+       * que dá pra vincular — antes dele, ninguém do nosso lado conhece a
+       * chave, nem o Marcus.
+       *
+       * Casa pelo NOME que o 99 mandou (`shop_name`) contra as solicitações em
+       * aberto. Nome, e não CNPJ, porque o payload do pedido não traz CNPJ.
+       *
+       * Só fecha quando o nome bate com UMA solicitação. Empate não vincula:
+       * ligar a loja errada mistura o faturamento de dois lojistas, e isso é
+       * bem pior que esperar alguém fazer à mão. */
+      const nome99 = String(shop.shop_name ?? "").trim().toLowerCase()
+      const candidatas = nome99
+        ? pendentes99.filter(
+            (p) =>
+              p.loja_99 && String(p.loja_99).trim().toLowerCase() === nome99,
+          )
+        : []
+      const alvo = candidatas.length === 1 ? candidatas[0] : null
+      if (alvo?.unit_id) {
+        const alvoUnitId = alvo.unit_id
+        await admin.from("ninefood_store_links").upsert(
+          { unit_id: alvoUnitId, app_shop_id: appShopId, active: true },
+          { onConflict: "app_shop_id" },
+        )
+        await admin
+          .from("ninefood_activation_requests")
+          .update({
+            status: "ativa",
+            nota: `Vinculada automaticamente pelo 1º webhook (app_shop_id ${appShopId}).`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", alvo.id)
+        unitByAppShop.set(appShopId, alvoUnitId)
+        unitId = alvoUnitId
+        autoVinculadas.push({ appShopId, unitId: alvoUnitId })
+      } else {
+        skippedNew.push({ reason: "loja não vinculada", storeId: appShopId })
+        continue
+      }
     }
     const orderId = String(data.order_id ?? info.order_id ?? "")
     if (!orderId) {
@@ -285,6 +338,7 @@ export async function GET(req: Request) {
     processed: events.length,
     detalhe: {
       orderNew: news.length,
+      auto_vinculadas: autoVinculadas,
       orderNew_upserted: upsertedNew,
       orderNew_duplicados: duplicadosDescartados,
       orderNew_skipped: skippedNew.length,

@@ -26,6 +26,7 @@ export type SolicitacaoNinefoodState = {
   message?: string
 }
 
+
 export async function solicitarAtivacaoNinefood(
   _prev: SolicitacaoNinefoodState,
   formData: FormData,
@@ -105,5 +106,72 @@ export async function solicitarAtivacaoNinefood(
     ok: true,
     message:
       "Solicitação registrada! Vamos pedir a autorização ao 99 e você acompanha o status aqui.",
+  }
+}
+
+/**
+ * "Já autorizei no 99" — o lojista avisa que concluiu no portal deles.
+ *
+ * Sem este passo o processo dependia de ele mandar mensagem pro Marcus, e é
+ * exatamente aí que travava sem ninguém perceber: o cliente achava que tinha
+ * terminado, e do nosso lado nada acontecia.
+ *
+ * O que ele NÃO faz: descobrir o `app_shop_id`. A API do 99 não tem endpoint
+ * de "liste minhas lojas" — a chave só aparece quando o primeiro webhook da
+ * loja chega. Por isso o fechamento é do outro lado: o cron de webhooks casa
+ * o `shop_name` que chegou com esta solicitação e vincula sozinho
+ * (process-99-webhooks). Aqui a gente só carimba que o lojista fez a parte
+ * dele e avisa quem precisa saber.
+ */
+export async function confirmarAutorizacaoNinefood(
+  _prev: SolicitacaoNinefoodState,
+  formData: FormData,
+): Promise<SolicitacaoNinefoodState> {
+  const unitId = String(formData.get("unit_id") ?? "").trim()
+  if (!unitId) return { ok: false, message: "Loja não identificada." }
+
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Conta não identificada." }
+
+  // Mesma porta do solicitar: requireAdmin devolve o client de serviço já
+  // com a permissão verificada — o cliente comum não pode carimbar isso.
+  const { admin } = await requireAdmin()
+  const { data: aberta } = await admin
+    .from("ninefood_activation_requests")
+    .select("id")
+    .eq("holding_id", holdingId)
+    .eq("unit_id", unitId)
+    .in("status", ["pendente", "solicitada"])
+    .maybeSingle()
+
+  if (!aberta) {
+    return {
+      ok: false,
+      message:
+        "Não achei um pedido de conexão em aberto pra esta loja. Clique em Solicitar conexão primeiro.",
+    }
+  }
+
+  const { error } = await admin
+    .from("ninefood_activation_requests")
+    .update({
+      status: "solicitada",
+      nota: `Cliente confirmou a autorização no portal do 99 em ${new Date().toISOString()}.`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", (aberta as { id: string }).id)
+  if (error) return { ok: false, message: `Falha ao registrar: ${error.message}` }
+
+  void avisarSolicitacaoNinefood(holdingId, {
+    cnpj: "",
+    unitId,
+    loja99: "CLIENTE JÁ AUTORIZOU NO PORTAL — falta vincular do nosso lado",
+  })
+
+  revalidatePath("/unidades")
+  return {
+    ok: true,
+    message:
+      "Anotado! A loja entra sozinha assim que o 99 mandar o primeiro pedido dela. Se em 24h não aparecer, a gente te procura.",
   }
 }

@@ -46,7 +46,11 @@ import {
 import { validacaoPtBr } from "@/components/shared/form-validacao-ptbr"
 import { updateUnit, type CreateUnitState } from "../_actions"
 import { solicitarAtivacaoIfood } from "../_actions-ifood-ativacao"
-import { solicitarAtivacaoNinefood } from "../_actions-99-ativacao"
+import {
+  solicitarAtivacaoNinefood,
+  confirmarAutorizacaoNinefood,
+} from "../_actions-99-ativacao"
+import { LINK_AUTORIZACAO_99 } from "@/lib/ninefood/autorizacao"
 import { UnitLogoUploader } from "./unit-logo-uploader"
 
 const UFs = [
@@ -165,6 +169,10 @@ export function EditUnitDialog({
   )
 const [solicitacao99State, solicitar99Action] = useActionState(
     solicitarAtivacaoNinefood,
+    { ok: false },
+  )
+  const [confirmou99State, confirmar99Action] = useActionState(
+    confirmarAutorizacaoNinefood,
     { ok: false },
   )
   const [cnpj, setCnpj] = React.useState(unit.cnpj ? maskCnpj(unit.cnpj) : "")
@@ -436,12 +444,50 @@ const [solicitacao99State, solicitar99Action] = useActionState(
               qualquer sincronização. Até esta tela existir, as 7 lojas ligadas
               tinham entrado por INSERT escrito à mão numa migration. */}
           {nineApi === "andamento" && (
-            <div className="flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
-              <Clock className="size-3.5 shrink-0" />
-              <span>
-                <b>Conexão 99 Food via API em andamento</b> — estamos pedindo a
-                autorização da loja ao 99.
+            /* A autorização do 99 é FEITA PELO LOJISTA, no portal deles — não
+               por nós. Descoberto em 06/ago/26; antes esta faixa dizia
+               "estamos pedindo a autorização ao 99", o que deixava o cliente
+               esperando por uma etapa que era dele. */
+            <div className="flex flex-col gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
+              <span className="flex items-start gap-2">
+                <Clock className="mt-0.5 size-3.5 shrink-0" />
+                <span>
+                  <b>Falta você autorizar no portal do 99.</b> Abra o link,
+                  escolha esta loja, confirme e marque o estabelecimento. Você
+                  precisa estar logado no 99 com a conta dona da loja.
+                </span>
               </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={LINK_AUTORIZACAO_99}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-sky-600 px-3 text-[11px] font-medium text-white hover:bg-sky-700"
+                >
+                  Autorizar no portal do 99
+                </a>
+                <input type="hidden" name="unit_id" value={unit.unitId} />
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  formAction={confirmar99Action}
+                  formNoValidate
+                >
+                  Já autorizei
+                </Button>
+              </div>
+              {confirmou99State.message && (
+                <p
+                  className={`text-[11px] ${
+                    confirmou99State.ok
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-amber-700 dark:text-amber-400"
+                  }`}
+                >
+                  {confirmou99State.message}
+                </p>
+              )}
             </div>
           )}
           {nineApi === "disponivel" && (
