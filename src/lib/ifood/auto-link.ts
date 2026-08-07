@@ -299,6 +299,26 @@ export async function autoLinkIfoodMerchants(
   // 2) Unidades COM solicitação aberta (pendente/solicitada) e iFood ativo
   //    sem vínculo — só essas entram no casamento (o cliente pediu).
   //    O `cnpj` do pedido é a chave de VERIFICAÇÃO (ver validação abaixo).
+  /* Antes de casar: ADOTA os pedidos órfãos (unit_id nulo).
+   *
+   * Um pedido pode nascer sem loja vinculada — foi o caso da Vbfood em
+   * 07/ago/26, pedido feito com o CNPJ certo e `unit_id` nulo. A consulta
+   * abaixo usa `units!inner`, então esses pedidos eram DESCARTADOS pelo join:
+   * o Marcus apertava "conferir e vincular", a loja nem era testada, e a tela
+   * não dizia nada — nem sucesso, nem erro. Ficaria assim pra sempre.
+   *
+   * Aqui o pedido é adotado pela unidade de mesmo CNPJ, dentro da MESMA
+   * holding (nunca entre clientes). Sem CNPJ não adota: sem chave, adivinhar
+   * a loja seria pior que deixar pendente. */
+  await admin.rpc("ifood_adotar_solicitacoes_orfas").then(
+    () => undefined,
+    (e: unknown) => {
+      // Não derruba o auto-vínculo: no pior caso o pedido segue órfão, que é
+      // o comportamento de antes.
+      console.error("[auto-link] adoção de órfãs falhou:", e)
+    },
+  )
+
   let reqQ = admin
     .from("ifood_activation_requests")
     // razao_social vem junto: é uma das duas chaves de identidade pelo

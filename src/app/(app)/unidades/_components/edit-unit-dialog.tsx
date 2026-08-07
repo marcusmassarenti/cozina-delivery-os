@@ -510,12 +510,15 @@ const [solicitacao99State, solicitar99Action] = useActionState(
                     className="h-8 w-44 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
                   />
                 )}
-                {/* Opcional de propósito: nem todo lojista sabe o nome exato da
-                    loja no painel do 99, e o CNPJ já basta pra achar. Quando
-                    vem preenchido, poupa uma ida e volta com eles. */}
+                {/* OBRIGATÓRIO desde 06/ago/26. Era opcional quando eu achava
+                    que o CNPJ bastava — mas o payload do pedido do 99 NÃO traz
+                    CNPJ, e é pelo nome que o vínculo automático casa a loja
+                    quando o 1º webhook chega. Vazio aqui = conexão que nunca
+                    fecha sozinha. */}
                 <input
                   name="loja_99"
-                  placeholder="Nome da loja no 99 (opcional)"
+                  required
+                  placeholder="Nome da loja no 99 (igual ao painel)"
                   className="h-8 w-52 rounded-md border bg-background px-2 text-[11px] outline-none focus:ring-2 focus:ring-ring"
                 />
                 <Button

@@ -67,7 +67,16 @@ export async function solicitarAtivacaoNinefood(
   }
 
   // Opcional — ajuda o 99 a achar a loja mais rápido quando o cliente sabe.
-  const loja99 = String(formData.get("loja_99") ?? "").trim().slice(0, 120) || null
+  // Obrigatório no servidor também: o `required` do HTML cai fora se alguém
+  // mandar o form por fora, e sem o nome o vínculo automático não fecha.
+  const loja99 = String(formData.get("loja_99") ?? "").trim().slice(0, 120)
+  if (!loja99) {
+    return {
+      ok: false,
+      message:
+        "Informe o nome da loja como aparece no painel do 99 — é por ele que a conexão se fecha sozinha.",
+    }
+  }
 
   // Evita pedido duplicado do mesmo CNPJ ainda em andamento.
   const { data: aberta } = await admin
