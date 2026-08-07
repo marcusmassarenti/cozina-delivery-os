@@ -103,9 +103,27 @@ export function ImportCoverageBanner({
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
   const noData = withData.length === 0
   const anyBehind = platforms.some((p) => isBehind(p.cov))
-  const faltantes = platforms
-    .filter((p) => p.cov.lastDay === null)
+  /* Sem dado é uma coisa; sem dado E SEM CONEXÃO é outra.
+   *
+   * Loja recém-conectada por API não tem dado até o 1º sync rodar — e a faixa
+   * mandava o cliente "subir os relatórios em /importacao" numa loja que ia se
+   * preencher sozinha. Aconteceu com a Vbfood em 07/ago/26: conectada de
+   * manhã, e o painel dela pedindo planilha à tarde.
+   *
+   * `vinculos` já diz quais plataformas têm ≥1 loja ligada de verdade. */
+  const conectada = (id: MarketplaceId) =>
+    id === "ifood"
+      ? Boolean(vinculos?.ifood)
+      : id === "99food"
+        ? Boolean(vinculos?.ninefood)
+        : false
+  const semDadoNenhum = platforms.filter((p) => p.cov.lastDay === null)
+  const faltantes = semDadoNenhum
+    .filter((p) => !conectada(p.id))
     .map((p) => PLAT_LABEL[p.id])
+  // Plataforma conectada e sem dado NÃO vira aviso de texto: o botão
+  // "Sincronizar" logo abaixo é a ação certa — o cliente clica e puxa agora,
+  // em vez de ler que está esperando.
 
   const tone = noData
     ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400"
@@ -196,6 +214,7 @@ export function ImportCoverageBanner({
             Falta importar: {faltantes.join(", ")}
           </Link>
         ) : null}
+
 
         {/* Sync via API — cada botão só aparece se o tenant tem a integração
             habilitada E pelo menos 1 loja VINCULADA àquela plataforma. SaaS

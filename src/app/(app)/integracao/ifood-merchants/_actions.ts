@@ -240,6 +240,38 @@ export async function linkMerchantToUnit(
     )
     if (error) return { ok: false, error: error.message }
 
+    /* Vincular É habilitar o sync. Liga `api_sync_enabled` na holding.
+     *
+     * Sem isto a conexão ficava PELA METADE: o vínculo existia, a loja podia
+     * puxar dado, e o cliente não via botão de Sincronizar nenhum — porque o
+     * botão depende dessa flag. Pior: a faixa de cobertura dizia "falta
+     * importar iFood" numa loja já conectada, mandando ele subir planilha à
+     * toa.
+     *
+     * Achado em 07/ago/26 com a Vbfood, e não era caso isolado: a "Empreender
+     * com Delivery" estava no mesmo estado. Os dois corrigidos no banco.
+     *
+     * Falha "de leve": se não conseguir ligar a flag, o vínculo NÃO é
+     * desfeito — a loja conectada vale mais que o botão, e o estado antigo era
+     * exatamente esse. */
+    try {
+      const { data: u } = await admin
+        .from("units")
+        .select("brands(holding_id)")
+        .eq("id", unitId)
+        .maybeSingle()
+      const hId = (u as { brands?: { holding_id?: string } } | null)?.brands
+        ?.holding_id
+      if (hId) {
+        await admin
+          .from("holdings")
+          .update({ api_sync_enabled: true })
+          .eq("id", hId)
+      }
+    } catch (e) {
+      console.error("[link-merchant] falhou ao ligar api_sync_enabled:", e)
+    }
+
     // Vincular É conectar: a solicitação daquela loja fecha junto.
     //
     // Sem isto, a loja passava a puxar dado normalmente e mesmo assim seguia na
