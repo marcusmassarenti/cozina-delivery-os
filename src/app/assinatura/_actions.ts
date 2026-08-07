@@ -30,6 +30,7 @@ import {
   asaasSetSubscriptionInvoiceSettings,
   asaasUpdateSubscription,
 } from "@/lib/asaas/client"
+import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
 import { fiscalInvoiceSettings } from "@/lib/asaas/fiscal"
 
 export type AssinarState = {
@@ -157,6 +158,56 @@ export async function assinar(
 
   const admin = createAdminClient()
 
+  /* ── CUPOM DE INDICAÇÃO ────────────────────────────────────────────────
+   * O desconto já existia (`desconto_primeira_fatura_pct` na holding), mas só
+   * era aplicado na cobrança MANUAL — quem assina pelo Asaas pagava cheio.
+   * Duas portas alimentam o mesmo campo: o código digitado aqui e o que veio
+   * do /cadastro.
+   *
+   * ⚠️ POR QUE NÃO DÁ PRA SÓ BAIXAR O VALOR DA ASSINATURA: no Asaas a
+   * assinatura tem UM valor, repetido em todo ciclo. Baixar pra R$ 3.000 daria
+   * desconto pra sempre. O campo `discount` de lá também não serve — é
+   * desconto por pagamento antecipado, e vale em todos os meses.
+   *
+   * Então o 1º mês vira uma COBRANÇA AVULSA (com desconto) e a assinatura
+   * começa no ciclo seguinte, no valor cheio. É o mesmo mecanismo do pacote
+   * de créditos do Nino, que já roda em produção.
+   */
+  const cupomDigitado = String(formData.get("cupom") ?? "").trim()
+  const { data: hRow } = await admin
+    .from("holdings")
+    .select("desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id")
+    .eq("id", holdingId)
+    .maybeSingle()
+  const jaAssinou = !!(hRow as { asaas_subscription_id?: string } | null)
+    ?.asaas_subscription_id
+
+  let descontoPct = Number(
+    (hRow as { desconto_primeira_fatura_pct?: number } | null)
+      ?.desconto_primeira_fatura_pct ?? 0,
+  )
+  let indicadorId =
+    (hRow as { indicado_por?: string } | null)?.indicado_por ?? null
+
+  if (cupomDigitado && !jaAssinou) {
+    const ind = await acharIndicadorPorCodigo(cupomDigitado)
+    if (!ind)
+      return { ok: false, message: "Cupom inválido ou expirado. Confira o código." }
+    // Cupom digitado agora ganha do que veio do cadastro: é a intenção mais
+    // recente do cliente, e ele está olhando o valor na tela.
+    descontoPct = ind.descontoPct
+    indicadorId = ind.id
+  }
+
+  // Cupom não vale pra quem já tem assinatura: seria desconto de "primeira
+  // fatura" em cliente que já pagou várias.
+  if (jaAssinou) descontoPct = 0
+
+  const valorCheio = valor
+  const valorComDesconto =
+    descontoPct > 0 ? Math.round(valor * (100 - descontoPct)) / 100 : valor
+  const temDesconto = valorComDesconto < valorCheio
+
   try {
     // 1) Cliente no Asaas (só pede nome/documento na primeira vez).
     let customerId = plano.customerId
@@ -208,10 +259,35 @@ export async function assinar(
       const nextDueDate =
         plano.trialEndsAt && plano.trialEndsAt > hoje ? plano.trialEndsAt : hoje
       const base = await appBaseUrl()
+
+      /* Com desconto, o 1º mês vira cobrança AVULSA e a assinatura só começa
+       * no ciclo seguinte. Sem isso o desconto valeria pra sempre (assinatura
+       * no Asaas tem um valor só). O link devolvido ao cliente é o da avulsa —
+       * é o que ele precisa pagar AGORA. */
+      let linkPrimeiraCobranca: string | null = null
+      let primeiroVencimento = nextDueDate
+      if (temDesconto) {
+        const avulsa = await asaasCreatePayment({
+          customer: customerId,
+          value: valorComDesconto,
+          dueDate: nextDueDate,
+          description: `Delivery OS — 1ª mensalidade com desconto de ${descontoPct}% (de R$ ${valorCheio.toFixed(2)} por R$ ${valorComDesconto.toFixed(2)})`,
+          externalReference: holdingId,
+          ...(base
+            ? { callback: { successUrl: `${base}/?assinou=1`, autoRedirect: true } }
+            : {}),
+        })
+        linkPrimeiraCobranca = avulsa.invoiceUrl
+        // Assinatura começa um ciclo depois, no valor cheio.
+        const d = new Date(`${nextDueDate}T12:00:00Z`)
+        d.setUTCMonth(d.getUTCMonth() + (ciclo === "anual" ? 12 : 1))
+        primeiroVencimento = d.toISOString().slice(0, 10)
+      }
+
       const sub = await asaasCreateSubscription({
         customer: customerId,
         value: valor,
-        nextDueDate,
+        nextDueDate: primeiroVencimento,
         cycle: asaasCycle(ciclo),
         description: `Delivery OS — plano ${planId} (${plano.name}) · ${ciclo}`,
         externalReference: holdingId,
@@ -248,8 +324,23 @@ export async function assinar(
           // Grava só como PENDENTE. O plan_tier (que libera as features) só é
           // concedido pelo webhook quando o pagamento confirmar de verdade.
           ...(plano.precoCustom ? {} : { pending_plan_tier: planId }),
+          // Registra a indicação e QUEIMA o cupom. Consumir aqui e não no
+          // pagamento é proposital: se ficasse gravado, uma segunda tentativa
+          // de assinar geraria outra cobrança com desconto.
+          ...(indicadorId ? { indicado_por: indicadorId, indicado_em: new Date().toISOString() } : {}),
+          ...(temDesconto ? { desconto_primeira_fatura_pct: null } : {}),
         })
         .eq("id", holdingId)
+
+      // Com desconto, o que o cliente paga AGORA é a avulsa — devolver o link
+      // da assinatura mandaria ele pagar o valor cheio.
+      if (linkPrimeiraCobranca) {
+        return {
+          ok: true,
+          checkoutUrl: linkPrimeiraCobranca,
+          message: `Desconto de ${descontoPct}% aplicado na 1ª mensalidade: R$ ${valorComDesconto.toFixed(2)} em vez de R$ ${valorCheio.toFixed(2)}. A partir do próximo ciclo, o valor normal.`,
+        }
+      }
     }
 
     // 3) Link de pagamento da 1ª cobrança.

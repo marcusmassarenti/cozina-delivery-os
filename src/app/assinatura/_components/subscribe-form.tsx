@@ -205,6 +205,28 @@ export function SubscribeForm({
         </>
       )}
 
+      {/* Cupom de indicação. Fica RECOLHIDO por padrão: campo de cupom sempre
+          visível faz quem não tem um sair da tela pra procurar, e isso derruba
+          conversão. Quem tem, clica. */}
+      <details className="rounded-lg border bg-muted/30 px-3 py-2">
+        <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground hover:text-foreground">
+          Tenho um cupom de indicação
+        </summary>
+        <div className="mt-2.5">
+          <input
+            id="cupom"
+            name="cupom"
+            placeholder="Ex.: DGFOODS"
+            autoCapitalize="characters"
+            className={inputCls}
+          />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            O desconto vale só na primeira mensalidade. Da segunda em diante, o
+            valor normal do plano.
+          </p>
+        </div>
+      </details>
+
       {!jaTemCliente && (
         <>
           <div>
