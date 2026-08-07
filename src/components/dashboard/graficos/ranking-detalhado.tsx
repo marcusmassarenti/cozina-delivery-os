@@ -233,6 +233,15 @@ export function DetalheLoja({
               const pctRepasseP = p.bruto > 0 ? (p.liquido / p.bruto) * 100 : 0
               const pctDiretaP = p.bruto > 0 ? (recDir / p.bruto) * 100 : 0
               const hasP = p.bruto > 0
+              // Inteiro nesta caixa: são 4 percentuais competindo e a casa
+              // decimal só somava ruído — 62,7% e 63% levam à mesma decisão.
+              //
+              // ⚠️ A fatia da PLATAFORMA é derivada de 100 − loja, não
+              // arredondada por conta própria. Arredondar as duas separado
+              // deixaria "63% + 38% = 101%" na tela quando ambas caíssem em
+              // ,5 — erro que ninguém perdoa num painel de dinheiro.
+              const pctLojaInt = Math.round(pctLojaP)
+              const pctTaxasInt = Math.max(0, 100 - pctLojaInt)
               return (
                 <div key={p.id} className="rounded-md border bg-card p-2">
                   {/* Hierarquia: cada % desta caixa responde uma pergunta
@@ -278,13 +287,13 @@ export function DetalheLoja({
                       </div>
                       <div className="mt-1 flex items-baseline justify-between text-[10px] tabular-nums leading-tight">
                         <span className="text-emerald-700 dark:text-emerald-400">
-                          <span className="font-bold">{fmtPct(pctLojaP)}</span>{" "}
+                          <span className="font-bold">{pctLojaInt}%</span>{" "}
                           <span className="text-muted-foreground">
                             {fmtBRLShort(lojaValorP)}
                           </span>
                         </span>
                         <span className="text-slate-700 dark:text-slate-400">
-                          <span className="font-bold">{fmtPct(pctTaxas)}</span>{" "}
+                          <span className="font-bold">{pctTaxasInt}%</span>{" "}
                           <span className="text-muted-foreground">
                             {fmtBRLShort(pTaxas)}
                           </span>
@@ -292,7 +301,7 @@ export function DetalheLoja({
                       </div>
                       {recDir > 0 && (
                         <p className="mt-0.5 text-[10px] leading-tight tabular-nums text-teal-700 dark:text-teal-300">
-                          desses, {fmtPct(pctDiretaP)} ({fmtBRLShort(recDir)})
+                          desses, {Math.round(pctDiretaP)}% ({fmtBRLShort(recDir)})
                           o cliente pagou direto na loja
                         </p>
                       )}
