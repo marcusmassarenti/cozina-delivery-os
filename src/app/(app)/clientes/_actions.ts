@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
 import { auditar } from "@/lib/data/auditoria"
 import { quitarFaturaComPagamento } from "@/lib/data/faturas"
+import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
 import {
   asaasIsMock,
   asaasSetSubscriptionInvoiceSettings,
@@ -343,13 +344,41 @@ export async function convidarParaAsaas(
     if (!holdingId) return { ok: false, error: "Cliente não identificado." }
     const remover = String(formData.get("remover") ?? "") === "1"
 
+    /* Cupom junto do convite: assim o desconto JÁ CHEGA aplicado quando o
+     * cliente abre /assinatura, sem depender de ele digitar o código certo.
+     * Quem digita erra, esquece, ou pergunta — e aí a negociação que você
+     * fechou por WhatsApp não acontece na tela.
+     *
+     * O campo continua existindo na tela do cliente pra quem recebeu o código
+     * por fora (indicação de terceiro, sem convite seu). */
+    const cupom = String(formData.get("cupom") ?? "").trim()
+    let indicador: { id: string; descontoPct: number } | null = null
+    if (cupom && !remover) {
+      indicador = await acharIndicadorPorCodigo(cupom)
+      if (!indicador)
+        return { ok: false, error: `Cupom "${cupom}" não existe ou está inativo.` }
+    }
+
     const { error } = await admin
       .from("holdings")
-      .update({ convite_asaas_em: remover ? null : new Date().toISOString() })
+      .update({
+        convite_asaas_em: remover ? null : new Date().toISOString(),
+        // Retirar o convite limpa o desconto junto: convite retirado é
+        // negociação desfeita, e desconto órfão viraria surpresa depois.
+        ...(remover
+          ? { desconto_primeira_fatura_pct: null }
+          : indicador
+            ? {
+                desconto_primeira_fatura_pct: indicador.descontoPct,
+                indicado_por: indicador.id,
+                indicado_em: new Date().toISOString(),
+              }
+            : {}),
+      })
       .eq("id", holdingId)
     if (error) return { ok: false, error: error.message }
 
-    await auditar("convite_asaas.alterado", holdingId, { remover })
+    await auditar("convite_asaas.alterado", holdingId, { remover, cupom: cupom || null })
     revalidatePath("/clientes")
     if (remover)
       return { ok: true, removido: true, message: "Convite retirado." }

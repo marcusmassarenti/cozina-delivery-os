@@ -74,9 +74,22 @@ export function ConviteAsaasButton({
   return (
     <div className="space-y-2">
       {!ativo ? (
-        <form action={action}>
+        <form action={action} className="space-y-1.5">
           <input type="hidden" name="holdingId" value={holdingId} />
+          {/* Cupom opcional no convite: o desconto já chega aplicado quando o
+              cliente abre /assinatura, em vez de depender de ele digitar o
+              código certo. Negociação fechada no WhatsApp não pode depender de
+              o cliente lembrar de um código. */}
+          <input
+            name="cupom"
+            placeholder="Cupom (opcional) — ex.: DGFOODS"
+            autoCapitalize="characters"
+            className="w-full rounded-md border bg-background px-2 py-1.5 text-[11px] placeholder:text-muted-foreground/70"
+          />
           <SubmitConvite />
+          {state.error && (
+            <p className="text-[11px] text-rose-600">{state.error}</p>
+          )}
         </form>
       ) : (
         <div className="rounded-lg border border-sky-300 bg-sky-50/60 p-2.5 dark:border-sky-900/50 dark:bg-sky-950/25">
