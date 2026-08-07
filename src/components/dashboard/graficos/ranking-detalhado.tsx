@@ -209,6 +209,16 @@ export function DetalheLoja({
             {m.platforms
               .filter((p) => unit.platforms.includes(p.id))
               .map((p) => {
+              // Peso da plataforma no faturamento DA UNIDADE. Sem isso o
+              // lojista lê "iFood R$ 22,9 mil" e não sabe se é metade ou um
+              // décimo do que ele fatura — e é essa fração que decide onde
+              // vale brigar por taxa. Base = soma das plataformas que a loja
+              // usa, não o bruto do card: o bruto inclui cancelados (régua do
+              // portal) e as fatias não fechariam 100%.
+              const totalPlats = m.platforms
+                .filter((x) => unit.platforms.includes(x.id))
+                .reduce((t, x) => t + x.bruto, 0)
+              const pctDoTotal = totalPlats > 0 ? (p.bruto / totalPlats) * 100 : 0
               // Recebido direto (iFood) é da loja, não taxa: entra na fatia da
               // loja e sai da taxa — a barra fecha 100% e a taxa não infla.
               const recDir = p.recebidoDireto ?? 0
@@ -230,8 +240,13 @@ export function DetalheLoja({
                       <PlatformLogo platform={p.id} size="sm" />
                       <span className="text-xs font-semibold">{p.name}</span>
                     </div>
-                    <span className="text-[10px] tabular-nums text-muted-foreground">
-                      {fmtBRLShort(p.bruto)}
+                    <span className="flex items-baseline gap-1.5 tabular-nums">
+                      <span className="text-[10px] font-semibold text-foreground">
+                        {pctDoTotal.toFixed(1)}%
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {fmtBRLShort(p.bruto)}
+                      </span>
                     </span>
                   </div>
                   {hasP ? (
