@@ -235,18 +235,29 @@ export function DetalheLoja({
               const hasP = p.bruto > 0
               return (
                 <div key={p.id} className="rounded-md border bg-card p-2">
-                  <div className="flex items-center justify-between gap-2">
+                  {/* Hierarquia: cada % desta caixa responde uma pergunta
+                      diferente, e antes os quatro saíam do mesmo jeito — o
+                      peso da plataforma brigava com a margem na mesma linha.
+                      Agora o peso desce pra baixo do nome, rotulado e em
+                      cinza: é característica da plataforma, não resultado.
+                      Os % da barra ficam sozinhos na linha de baixo, cada um
+                      colado na cor da sua fatia. */}
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <PlatformLogo platform={p.id} size="sm" />
-                      <span className="text-xs font-semibold">{p.name}</span>
+                      <div className="leading-tight">
+                        <span className="block text-xs font-semibold">
+                          {p.name}
+                        </span>
+                        {hasP && (
+                          <span className="block text-[10px] text-muted-foreground">
+                            {pctDoTotal.toFixed(0)}% do faturamento
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span className="flex items-baseline gap-1.5 tabular-nums">
-                      <span className="text-[10px] font-semibold text-foreground">
-                        {pctDoTotal.toFixed(1)}%
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {fmtBRLShort(p.bruto)}
-                      </span>
+                    <span className="text-[11px] font-semibold tabular-nums">
+                      {fmtBRLShort(p.bruto)}
                     </span>
                   </div>
                   {hasP ? (
