@@ -187,44 +187,45 @@ function RefreshBtn() {
   )
 }
 
-type SyncRunResult = {
+
+/** Retorno de /api/integracao/sync-tudo (as 3 APIs, todos os clientes). */
+type SyncTudoResult = {
   ok: boolean
-  unitsProcessed?: number
-  results?: Array<{
-    unitCode: string
-    pedidos?: {
-      competencia: string
-      ok?: boolean
-      gravados?: number
-      pedidos?: number
-      skipped?: string
-      error?: string
-    }[]
-    unitName?: string
-    holdingName?: string
-    merchantId: string
-    reconciliation?: Array<{ competencia: string; ok?: boolean; status?: number; rowCount?: number; skipped?: string; error?: string }>
-    /** REMOVIDO: o sync não devolve mais `events` — virou `pedidos` por
-     *  competência. O tipo ficou pra trás e a tela imprimia "HTTP undefined". */
-  }>
+  duracaoSeg?: number
+  blocos?: Record<string, { ok: boolean; resumo: string; erro?: string }>
   error?: string
 }
 
 /**
- * Dispara o sync manualmente (mesma lógica do cron). Mostra o resultado
- * inline pra cada unidade vinculada.
+ * Dispara o sync de TODAS as integrações por API, de TODOS os clientes.
+ *
+ * Antes era só o iFood. Com 4 plataformas e vários clientes, rodar uma de cada
+ * vez pelo painel de cada empresa não escalava — o cron de madrugada era o
+ * único lugar onde as três rodavam juntas.
  */
 export function RunSyncButton() {
   const [pending, setPending] = React.useState(false)
-  const [result, setResult] = React.useState<SyncRunResult | null>(null)
+  const [result, setResult] = React.useState<SyncTudoResult | null>(null)
 
   async function run() {
     setPending(true)
     setResult(null)
     try {
-      const r = await fetch("/api/integracao/ifood-sync-run", { method: "POST" })
-      const j = (await r.json()) as SyncRunResult
-      setResult(j)
+      const r = await fetch("/api/integracao/sync-tudo", { method: "POST" })
+      // Timeout vem como HTML/texto, não JSON — ler cru antes de parsear
+      // evita "Unexpected token '<'" na cara de quem clicou.
+      const txt = await r.text()
+      try {
+        setResult(JSON.parse(txt) as SyncTudoResult)
+      } catch {
+        setResult({
+          ok: false,
+          error:
+            r.status === 504 || r.status === 500
+              ? "A sincronização passou do tempo e foi interrompida. O que já rodou está salvo."
+              : `Não foi possível concluir (erro ${r.status}).`,
+        })
+      }
     } catch (e) {
       setResult({
         ok: false,
@@ -246,10 +247,16 @@ export function RunSyncButton() {
         onClick={run}
       >
         <PlayCircle className={`size-3.5 ${pending ? "animate-pulse" : ""}`} />
-        {pending ? "Rodando sync..." : "Rodar sync agora"}
+        {pending
+          ? "Sincronizando todas as APIs…"
+          : "Sincronizar todas as APIs"}
       </Button>
 
       {result && (
+        /* Antes: coluna estreita com uma linha por LOJA, texto quebrando em 3
+           linhas e a lista descendo a tela inteira. Agora é um resumo por
+           PLATAFORMA — que é o que interessa numa ação que roda pra base toda.
+           Detalhe por loja continua no painel de cada cliente. */
         <div
           className={`rounded-md border p-3 text-xs ${
             result.ok
@@ -259,58 +266,48 @@ export function RunSyncButton() {
         >
           {result.error ? (
             <p className="font-medium text-rose-700 dark:text-rose-400">
-              Erro: {result.error}
+              {result.error}
             </p>
           ) : (
             <>
               <p className="font-medium">
-                {result.unitsProcessed ?? 0} unidade(s) processada(s)
+                {result.ok ? "Sincronizado" : "Concluído com falhas"}
+                {result.duracaoSeg != null ? (
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    · {result.duracaoSeg}s
+                  </span>
+                ) : null}
               </p>
-              {(result.results ?? []).map((u, i) => (
-                <div key={i} className="mt-1.5 border-t pt-1.5 text-[11px]">
-                  {/* Nome do CLIENTE e da LOJA. Antes era só o código e um
-                      pedaço do UUID do merchant — o resultado virava uma
-                      lista de códigos que não dizia de quem era cada linha,
-                      justamente numa tela que roda pra rede inteira. */}
-                  <p className="font-semibold">
-                    {u.unitCode} · {u.unitName ?? "—"}
-                    {u.holdingName ? (
-                      <span className="ml-1 font-normal text-muted-foreground">
-                        · {u.holdingName}
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+                {Object.entries(result.blocos ?? {}).map(([nome, b]) => (
+                  <div
+                    key={nome}
+                    className="rounded-md border bg-card px-2.5 py-2"
+                  >
+                    <p className="flex items-center gap-1.5 font-semibold">
+                      <span
+                        className={
+                          b.ok
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-rose-600 dark:text-rose-400"
+                        }
+                      >
+                        {b.ok ? "✓" : "✗"}
                       </span>
+                      {nome}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {b.resumo}
+                    </p>
+                    {b.erro ? (
+                      <p className="mt-0.5 break-words text-[11px] text-rose-600 dark:text-rose-400">
+                        {b.erro}
+                      </p>
                     ) : null}
-                  </p>
-                  <ul className="mt-0.5 space-y-0.5 pl-3 text-muted-foreground">
-                    {(u.reconciliation ?? []).map((r, j) => (
-                      <li key={j}>
-                        Reconciliation {r.competencia}:{" "}
-                        {r.skipped
-                          ? `pulado (${r.skipped})`
-                          : r.ok
-                            ? `✓ ${r.rowCount ?? 0} linhas`
-                            : `✗ ${r.error ?? "HTTP " + r.status}`}
-                      </li>
-                    ))}
-                    {/* Pedidos/pagamento por COMPETÊNCIA.
-                        Antes esta linha lia `u.events`, campo que o sync
-                        deixou de devolver quando os Financial Events viraram
-                        `pedidos` por mês. Sem o objeto, `error` e `status`
-                        saíam indefinidos e a tela imprimia "✗ HTTP undefined"
-                        nas 14 lojas — parecia integração quebrada, e o banco
-                        mostrava 6.564 pedidos gravados na mesma hora. */}
-                    {(u.pedidos ?? []).map((pd, k) => (
-                      <li key={`p${k}`}>
-                        Pedidos {pd.competencia}:{" "}
-                        {pd.skipped
-                          ? `pulado (${pd.skipped})`
-                          : pd.ok
-                            ? `✓ ${pd.gravados ?? 0} de ${pd.pedidos ?? 0}`
-                            : `✗ ${pd.error ?? "falhou"}`}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </>
           )}
         </div>
