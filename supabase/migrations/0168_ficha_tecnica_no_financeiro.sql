@@ -1,0 +1,19 @@
+-- A ficha técnica sai de "Integrações · Ficha Técnica ERP" (super-admin) e
+-- vira tela do Financeiro, no plano Pro.
+--
+-- Não é renomeação: muda quem ela serve. Nasceu como de-para interno pra
+-- alimentar a demanda de produção do ERP industrial. Mas é a MESMA receita que
+-- responde "quanto custa este prato" -- e essa pergunta é do dono da loja, não
+-- do super-admin da plataforma.
+--
+-- Sem DDL: o cadastro (producao_prato, producao_prato_nome, producao_ficha,
+-- producao_insumo, migration 0038) continua igual. O que mudou é a porta.
+--
+-- Fica registrado o que a próxima etapa precisa resolver:
+--   1. producao_* NÃO TEM holding_id. Hoje o cadastro é global da rede, o que
+--      funcionava enquanto a tela era interna da Cozina. No SaaS, dois
+--      clientes dividiriam os mesmos pratos e insumos.
+--   2. A ficha é única pra rede. Precisa aceitar variação POR LOJA (padrão da
+--      rede + exceção da unidade).
+--   3. producao_insumo e a tabela `insumos` (que a NF alimenta) usam O MESMO
+--      código CNP -- CNP070 está nas duas. Unificar dá custo à ficha de graça.

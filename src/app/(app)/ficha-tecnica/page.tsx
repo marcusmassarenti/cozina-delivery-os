@@ -1,8 +1,9 @@
-import { notFound, redirect } from "next/navigation"
-import { Factory, Info } from "lucide-react"
+import { redirect } from "next/navigation"
+import Link from "next/link"
+import { ChefHat, Info, Wallet } from "lucide-react"
 
 import { requireAdmin } from "@/lib/auth/guards"
-import { isSuperadmin } from "@/lib/auth/permissions"
+import { isProPlan } from "@/lib/data/billing"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getInsumos, getItensVendidos } from "@/lib/data/producao"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -23,8 +24,29 @@ export default async function FichaTecnicaPage({
 }: {
   searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string }>
 }) {
-  // Interno da Cozina (de-para pro ERP industrial) — só super-admin.
-  if (!(await isSuperadmin())) notFound()
+  // Deixou de ser interno da Cozina: a ficha técnica é o que dá custo por
+  // prato, então virou tela do Financeiro (plano Pro) e não mais um de-para
+  // escondido em Integrações, visível só pro super-admin.
+  if (!(await isProPlan())) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-muted/30 p-10 text-center">
+        <Wallet className="size-8 text-muted-foreground" />
+        <p className="text-sm font-semibold">
+          Ficha técnica é um recurso do plano Pro
+        </p>
+        <p className="max-w-md text-sm text-muted-foreground">
+          É ela que transforma a nota do fornecedor em custo por prato — e a
+          venda do dia em demanda de insumo.
+        </p>
+        <Link
+          href="/minha-conta/assinatura"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          Ver o plano Pro
+        </Link>
+      </div>
+    )
+  }
 
   let ok = false
   try {
@@ -49,7 +71,7 @@ export default async function FichaTecnicaPage({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Factory className="size-5 text-muted-foreground" />
+            <ChefHat className="size-5 text-muted-foreground" />
             <h1 className="text-2xl font-semibold tracking-tight">
               Ficha Técnica
             </h1>

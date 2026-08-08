@@ -7,7 +7,7 @@ import {
   ClipboardList,
   Coins,
   CreditCard,
-  Factory,
+  ChefHat,
   FileText,
   FileUp,
   LayoutDashboard,
@@ -140,6 +140,13 @@ export const NAV_GROUPS: NavGroup[] = [
         proOnly: true,
       },
       {
+        label: "Ficha técnica",
+        href: "/ficha-tecnica",
+        icon: ChefHat,
+        module: "financeiro",
+        proOnly: true,
+      },
+      {
         label: "A pagar & receber",
         href: "/financeiro/a-pagar-receber",
         icon: Scale,
@@ -197,13 +204,6 @@ export const NAV_GROUPS: NavGroup[] = [
       // plataforma em Conexões, junto com iFood, 99 e Keeta. Conexão de
       // plataforma morava em três endereços diferentes e cada um respondia um
       // pedaço da mesma pergunta — a porta passa a ser uma só.
-      {
-        label: "Ficha Técnica ERP",
-        href: "/ficha-tecnica",
-        icon: Factory,
-        module: "conexoes",
-        superadminOnly: true,
-      },
     ],
   },
   {
