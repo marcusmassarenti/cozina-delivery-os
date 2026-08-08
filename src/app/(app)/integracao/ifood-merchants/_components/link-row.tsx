@@ -188,35 +188,45 @@ function RefreshBtn() {
 }
 
 
-/** Retorno de /api/integracao/sync-tudo (as 3 APIs, todos os clientes). */
-type SyncTudoResult = {
+/** Retorno de /api/integracao/ifood-sync-run. */
+type SyncRunResult = {
   ok: boolean
-  duracaoSeg?: number
-  blocos?: Record<string, { ok: boolean; resumo: string; erro?: string }>
+  unitsProcessed?: number
+  results?: {
+    unitCode: string
+    unitName?: string
+    holdingName?: string
+    pedidos?: { competencia: string; ok?: boolean; gravados?: number }[]
+    reconciliation?: { competencia: string; ok?: boolean; rowCount?: number }[]
+  }[]
+  diagnostico?: string
   error?: string
 }
 
 /**
- * Dispara o sync de TODAS as integrações por API, de TODOS os clientes.
+ * Dispara o sync do iFood — só iFood, porque esta é a tela DAS LOJAS DO IFOOD.
  *
- * Antes era só o iFood. Com 4 plataformas e vários clientes, rodar uma de cada
- * vez pelo painel de cada empresa não escalava — o cron de madrugada era o
- * único lugar onde as três rodavam juntas.
+ * Cheguei a transformar num "sincroniza tudo" (as 3 APIs), e o Marcus corrigiu:
+ * botão que roda 99 e Cardápio Web numa tela de merchants do iFood é contexto
+ * errado — quem está aqui veio resolver iFood.
+ *
+ * O alcance é de TODOS os clientes: a tela é de dono, e o escopo vem do
+ * getAccessibleUnitIds da rota (superadmin sem empresa = base inteira).
  */
 export function RunSyncButton() {
   const [pending, setPending] = React.useState(false)
-  const [result, setResult] = React.useState<SyncTudoResult | null>(null)
+  const [result, setResult] = React.useState<SyncRunResult | null>(null)
 
   async function run() {
     setPending(true)
     setResult(null)
     try {
-      const r = await fetch("/api/integracao/sync-tudo", { method: "POST" })
+      const r = await fetch("/api/integracao/ifood-sync-run", { method: "POST" })
       // Timeout vem como HTML/texto, não JSON — ler cru antes de parsear
       // evita "Unexpected token '<'" na cara de quem clicou.
       const txt = await r.text()
       try {
-        setResult(JSON.parse(txt) as SyncTudoResult)
+        setResult(JSON.parse(txt) as SyncRunResult)
       } catch {
         setResult({
           ok: false,
@@ -247,9 +257,7 @@ export function RunSyncButton() {
         onClick={run}
       >
         <PlayCircle className={`size-3.5 ${pending ? "animate-pulse" : ""}`} />
-        {pending
-          ? "Sincronizando todas as APIs…"
-          : "Sincronizar todas as APIs"}
+        {pending ? "Sincronizando iFood…" : "Sincronizar iFood (todos)"}
       </Button>
 
       {result && (
@@ -270,44 +278,54 @@ export function RunSyncButton() {
             </p>
           ) : (
             <>
+              {/* Resumo compacto. A versão anterior listava UMA LINHA POR
+                  LOJA numa coluna estreita: com 60+ lojas, texto quebrando em
+                  três linhas e a lista descendo a tela toda. O que interessa
+                  numa ação que roda pra base inteira é quantas passaram e
+                  QUAIS falharam — o detalhe fica no painel de cada cliente. */}
               <p className="font-medium">
-                {result.ok ? "Sincronizado" : "Concluído com falhas"}
-                {result.duracaoSeg != null ? (
-                  <span className="font-normal text-muted-foreground">
-                    {" "}
-                    · {result.duracaoSeg}s
-                  </span>
-                ) : null}
+                {result.unitsProcessed ?? 0} loja(s) sincronizada(s)
               </p>
-              <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
-                {Object.entries(result.blocos ?? {}).map(([nome, b]) => (
-                  <div
-                    key={nome}
-                    className="rounded-md border bg-card px-2.5 py-2"
-                  >
-                    <p className="flex items-center gap-1.5 font-semibold">
-                      <span
-                        className={
-                          b.ok
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-rose-600 dark:text-rose-400"
-                        }
-                      >
-                        {b.ok ? "✓" : "✗"}
-                      </span>
-                      {nome}
-                    </p>
+              {(() => {
+                const comFalha = (result.results ?? []).filter((u) =>
+                  [
+                    ...(u.reconciliation ?? []),
+                    ...(u.pedidos ?? []),
+                  ].some((c) => c.ok === false),
+                )
+                const linhas = (result.results ?? []).reduce(
+                  (t, u) =>
+                    t +
+                    (u.reconciliation ?? []).reduce(
+                      (x, c) => x + (c.rowCount ?? 0),
+                      0,
+                    ),
+                  0,
+                )
+                return (
+                  <>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {b.resumo}
+                      {linhas.toLocaleString("pt-BR")} linha(s) de conciliação
+                      gravadas
                     </p>
-                    {b.erro ? (
-                      <p className="mt-0.5 break-words text-[11px] text-rose-600 dark:text-rose-400">
-                        {b.erro}
-                      </p>
+                    {comFalha.length > 0 ? (
+                      <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900/40 dark:bg-amber-950/30">
+                        <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-400">
+                          {comFalha.length} loja(s) com erro:
+                        </p>
+                        <ul className="mt-0.5 space-y-0.5 text-[11px] text-amber-800 dark:text-amber-400">
+                          {comFalha.slice(0, 8).map((u, i) => (
+                            <li key={i}>
+                              {u.unitCode} · {u.unitName ?? "—"}
+                              {u.holdingName ? ` · ${u.holdingName}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ) : null}
-                  </div>
-                ))}
-              </div>
+                  </>
+                )
+              })()}
             </>
           )}
         </div>
