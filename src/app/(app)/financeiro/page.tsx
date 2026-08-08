@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { fmtBRL } from "@/lib/format"
+import { semCaps } from "@/lib/sem-caps"
 import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -294,11 +295,14 @@ export default async function VisaoGeralPage({
             {dash.ultimosLancamentos.map((e) => {
               const cat = e.categoryId ? catById.get(e.categoryId) : null
               const isDespesa = e.kind === "despesa"
+              const texto = e.titular || e.description || cat?.name || "Lançamento"
               return (
                 <div key={e.id} className="flex items-center gap-3 py-2">
                   <FinIcon name={cat?.icon ?? null} className="size-4 text-muted-foreground" />
-                  <span className="flex-1 truncate text-sm">
-                    {e.titular || e.description || cat?.name || "Lançamento"}
+                  {/* title = texto original: o histórico do extrato é
+                      documento, `semCaps` só arruma a exibição. */}
+                  <span className="flex-1 truncate text-sm" title={texto}>
+                    {semCaps(texto)}
                   </span>
                   <span
                     className={`text-sm font-semibold tabular-nums ${

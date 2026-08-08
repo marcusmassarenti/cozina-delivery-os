@@ -75,6 +75,22 @@ export const CHANGELOG: Release[] = [
               "Agrupado por dia (com o saldo do dia), a linha inteira verde quando entra e vermelha quando sai, e fonte maior. A joia confirma o lançamento — verde e cheia quando confirmado. Nos três pontinhos: editar, duplicar para hoje, converter em transferência e excluir.",
           },
           {
+            kind: "correcao",
+            title: "Fluxo de Caixa não conta mais repasse que já caiu",
+            antes:
+              "O filtro que separa o repasse pendente do já pago comparava o status letra por letra, e o relatório da Keeta escreve “Liquidado” com inicial maiúscula. Nenhum repasse era reconhecido como pago: tudo que a Keeta já tinha depositado voltava para a projeção como entrada de hoje.",
+            depois:
+              "Só entra o que ainda está para receber. Na rede Churrasco no Pote a previsão de 30 dias saiu de R$ 755 mil para R$ 269 mil — os R$ 486 mil de diferença já estavam na conta desde junho.",
+          },
+          {
+            kind: "correcao",
+            title: "O aviso do Fluxo de Caixa parou de se contradizer",
+            antes:
+              "Dava para ler “caixa positivo em todo o horizonte” e, na mesma frase, um menor saldo negativo — porque o mínimo considerava o saldo de agora, antes das entradas do próprio dia.",
+            depois:
+              "O mínimo é o menor saldo de fim de dia, o mesmo que o gráfico desenha. Caixa negativo hoje vira alerta de verdade, com a data.",
+          },
+          {
             kind: "melhoria",
             title: "O título do Financeiro diz de qual loja é o número",
             antes:
