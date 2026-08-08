@@ -654,6 +654,19 @@ export default async function Home({
     (a, b) => b[1] - a[1],
   )[0]
 
+  /* Pedido existe, faturamento não: o extrato do iFood ainda não chegou.
+   *
+   * As duas coisas vêm de portas DIFERENTES da API: os pedidos saem dos
+   * eventos financeiros (chegam na hora), o faturamento sai do extrato
+   * (gerado sob demanda, e num mês em aberto pode levar horas). No meio disso
+   * o painel mostrava "R$ 0,00" de ticket médio — e zero, pro dono, lê como
+   * queda de venda, não como dado que ainda não chegou.
+   *
+   * Marcus, 07/ago/26, sobre a Le Petit Pastéis: "não entra na minha cabeça
+   * como você puxa pedidos e faturamento e não alimenta o ticket médio". */
+  const aguardandoExtrato =
+    network.pedidos > 0 && network.faturamentoBruto <= 0
+
   const periodQ = sp.periodo ? `?periodo=${sp.periodo}` : ""
   const cancelQ = sp.periodo
     ? `?metrica=cancelamentos&periodo=${sp.periodo}`
@@ -701,7 +714,10 @@ export default async function Home({
     },
     {
       label: "Ticket Médio",
-      value: fmtBRL(network.mediaTicket || 0),
+      // Sem faturamento não há ticket — mostrar R$ 0,00 seria inventar uma
+      // média que não existe.
+      value: aguardandoExtrato ? "—" : fmtBRL(network.mediaTicket || 0),
+      trend: aguardandoExtrato ? "aguardando o extrato do iFood" : undefined,
       tone: "positive",
       icon: Receipt,
       platforms: finPlatforms,
@@ -711,7 +727,14 @@ export default async function Home({
       // Bruto TOTAL (com os cancelados do iFood) = "Valor das vendas" do
       // portal. Ticket/repasse continuam na base válida.
       label: "Faturamento Bruto",
-      value: fmtBRLShort(network.faturamentoBruto + cancelCestaTotal),
+      value: aguardandoExtrato
+        ? "—"
+        : fmtBRLShort(network.faturamentoBruto + cancelCestaTotal),
+      // Diz POR QUE está vazio. Sem isso o dono lê ausência de dado como
+      // queda de venda — e liga pra perguntar o que aconteceu com a loja.
+      trend: aguardandoExtrato
+        ? `${fmtNum(network.pedidos)} pedido${network.pedidos === 1 ? "" : "s"} já registrado${network.pedidos === 1 ? "" : "s"} · aguardando o extrato do iFood`
+        : undefined,
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
@@ -749,7 +772,12 @@ export default async function Home({
       trend:
         taxaEntregaValor > 0
           ? `${fmtPct(taxaEntregaPctBruto)} do faturamento bruto`
-          : "sem dado de entrega no mês",
+          : aguardandoExtrato
+            // "Sem dado de entrega" era meia-verdade: o dado existe no iFood,
+            // só não chegou ainda. Frase que soa definitiva num estado
+            // temporário faz o dono parar de esperar.
+            ? "aguardando o extrato do iFood"
+            : "sem dado de entrega no mês",
       tone: "neutral",
       icon: Bike,
       platforms: finPlatforms,
