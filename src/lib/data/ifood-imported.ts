@@ -72,6 +72,14 @@ export type FinanceiroResumo = {
   promocaoLoja: number
   promocaoIfood: number
   pacoteAnuncios: number
+  /**
+   * Mensalidade do plano iFood — cobrança de PERÍODO, não de pedido.
+   *
+   * Sempre esteve embutida no `liquido`; o que faltava era existir na quebra.
+   * Medido em 07/ago/26: 57 lojas pagam, de R$ 55 a R$ 150/mês conforme o
+   * plano. Na Tatuapé são 7% de tudo que ela paga ao iFood — e ela não via.
+   */
+  mensalidade: number
   ressarcimentos: number
   cancelamentoTotalQtd: number
   cancelamentoParcialQtd: number
@@ -1303,6 +1311,7 @@ export async function getFinanceiroResumoByUnits(
     perda_cancelamento: number | string
     liquido: number | string
     recebido_direto: number | string
+    mensalidade: number | string
   }>) {
     out.set(row.unit_id, {
       pedidosUnicos: row.pedidos_unicos,
@@ -1320,6 +1329,10 @@ export async function getFinanceiroResumoByUnits(
       perdaCancelamento: Number(row.perda_cancelamento),
       liquido: Number(row.liquido),
       recebidoDireto: Number(row.recebido_direto),
+      // Mensalidade do iFood (cobrança de PERÍODO, não de pedido). Sempre
+      // esteve no líquido; o que faltava era aparecer na quebra — o lojista
+      // via comissão/entrega/transação/serviço e não via os R$ 150 do mês.
+      mensalidade: Number(row.mensalidade ?? 0),
       hasData: row.pedidos_unicos > 0 || Number(row.bruto) > 0,
     })
   }
@@ -1351,6 +1364,7 @@ export async function getFinanceiroResumoForMonth(
       perdaCancelamento: 0,
       liquido: 0,
       recebidoDireto: 0,
+      mensalidade: 0,
       hasData: false,
     }
   )

@@ -26,6 +26,12 @@ export function mergeMonthly(
       Math.abs(fin.comissaoIfood) +
       Math.abs(fin.taxaTransacao) +
       Math.abs(fin.taxaServicoCliente),
-    outrosDescontosIfood: Math.abs(fin.pacoteAnuncios),
+    // Pacote de anúncios + MENSALIDADE do plano. As duas são cobranças de
+    // período (não de pedido) e por isso escapavam de todas as outras linhas.
+    // A mensalidade já saía do bolso do lojista via `liquido` — só não
+    // aparecia em lugar nenhum que ele pudesse ver. 57 lojas pagam, de R$ 55 a
+    // R$ 150/mês (medido em 07/ago/26).
+    outrosDescontosIfood:
+      Math.abs(fin.pacoteAnuncios) + Math.abs(fin.mensalidade),
   }
 }

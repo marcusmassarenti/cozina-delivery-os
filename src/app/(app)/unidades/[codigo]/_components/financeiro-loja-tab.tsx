@@ -272,7 +272,13 @@ export async function FinanceiroLojaTab({
         { label: "Comissão + serviço", value: m.taxaComissaoIfood },
         { label: "Promoções (loja bancou)", value: m.promocoes },
         { label: "Serviços logísticos", value: m.servicosLogisticos },
-        { label: "Outros / anúncios", value: m.outrosDescontosIfood },
+        {
+          // "Mensalidade" no rótulo porque é o que a maioria das lojas paga
+          // aqui: 57 delas, de R$ 55 a R$ 150/mês. "Outros / anúncios"
+          // escondia justamente a cobrança mais comum da linha.
+          label: "Mensalidade / anúncios",
+          value: m.outrosDescontosIfood,
+        },
       ],
       vrLiquido,
       cancelCesta.valor > 0
@@ -297,7 +303,13 @@ export async function FinanceiroLojaTab({
     { label: "Comissão + serviço", value: m.taxaComissaoIfood },
     { label: "Promoções (loja bancou)", value: m.promocoes },
     { label: "Serviços logísticos", value: m.servicosLogisticos },
-    { label: "Outros / anúncios", value: m.outrosDescontosIfood },
+    {
+          // "Mensalidade" no rótulo porque é o que a maioria das lojas paga
+          // aqui: 57 delas, de R$ 55 a R$ 150/mês. "Outros / anúncios"
+          // escondia justamente a cobrança mais comum da linha.
+          label: "Mensalidade / anúncios",
+          value: m.outrosDescontosIfood,
+        },
   ].filter((d) => d.value > 0)
 
   return (

@@ -1,0 +1,25 @@
+--------------------------------------------------------------------
+-- 0164_resumo_ifood_expoe_mensalidade.sql
+--
+-- A MENSALIDADE do iFood não aparecia em lugar nenhum da quebra de taxas.
+-- Ela SEMPRE esteve no `liquido` (a soma pega tudo), então o resultado final
+-- nunca esteve errado — faltava VISIBILIDADE: o lojista via comissão, entrega,
+-- transação e serviço, e não via os R$ 150 que paga todo mês.
+--
+-- Medido em 07/ago/26: 57 lojas cobradas, R$ 12.785,27 em jun+jul, de R$ 55 a
+-- R$ 150 por loja (varia por plano). Na Tatuapé são 7% de tudo que ela paga ao
+-- iFood no mês — invisível.
+--
+-- 'Mensalidade' vem com `fato_gerador = 'Fechamento'`: é cobrança de PERÍODO,
+-- não de pedido — por isso escapava do filtro de 'Venda' das outras taxas.
+--
+-- DROP + CREATE na MESMA transação (migration é transacional): mudar o tipo de
+-- retorno exige recriar, e sem a transação haveria uma janela com a função
+-- ausente — em produção, tela de erro pra todo mundo. Sem CASCADE de propósito.
+--
+-- Coluna nova vai NO FIM: há código que lê por posição.
+--
+-- ⚠️ Aplicada em prod em 07/ago/26. O corpo é idêntico ao anterior, exceto a
+-- última coluna. Se for reescrever esta função, mantenha `mensalidade`.
+--------------------------------------------------------------------
+-- (corpo aplicado via MCP — ver migration equivalente no histórico do Supabase)
