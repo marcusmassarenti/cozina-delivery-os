@@ -9,6 +9,7 @@ import { VerComoFaixa } from "@/components/ver-como-faixa"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
 import { WelcomeSubscribedModal } from "@/components/welcome-subscribed-modal"
 import { WhatsNewModal } from "@/components/whats-new-modal"
+import { SaudeSemanalModal } from "@/components/saude-semanal-modal"
 import { NinoCortesiaModal } from "@/components/nino-cortesia-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -21,6 +22,11 @@ import {
   getCurrentHoldingId,
   getVerComoHoldingId,
 } from "@/lib/auth/permissions"
+import {
+  getAvisoSemanalSaude,
+  semanaIso,
+  semanaVistaPeloUsuario,
+} from "@/lib/data/aviso-semanal-saude"
 import { daysUntil, getCurrentHoldingBilling } from "@/lib/data/billing"
 import { enviarBoasVindasSePreciso } from "@/lib/email/boas-vindas"
 import { iniciarTrialSePrimeiroAcesso } from "@/lib/data/trial"
@@ -90,6 +96,22 @@ export default async function AppLayout({
   const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
   const superadmin = await isSuperadmin()
   const verComoId = await getVerComoHoldingId()
+
+  /* Aviso semanal de saúde das lojas — 1x por semana, a partir da segunda.
+   *
+   * ⚠️ A ORDEM AQUI É O QUE IMPORTA. `getAvisoSemanalSaude()` roda o
+   * diagnóstico inteiro das integrações; se ficasse solto, rodaria em TODO
+   * carregamento de TODA tela do app. Então primeiro vem a consulta barata
+   * ("que semana este usuário já viu?") e só quando ela diz que falta é que o
+   * diagnóstico acontece — ou seja, uma vez por semana por pessoa.
+   *
+   * Durante o "ver como o cliente" não aparece: aquele modo é somente-leitura,
+   * a ação de marcar como visto seria bloqueada, e o pop-up voltaria a cada
+   * clique sem jeito de fechar. */
+  const semanaAtual = semanaIso()
+  const jaViu =
+    verComoId !== null || (await semanaVistaPeloUsuario(data.user.id)) === semanaAtual
+  const avisoSaude = jaViu ? null : await getAvisoSemanalSaude()
 
   // Cobrança: cliente sem pagar e passou da data de suspensão → bloqueia.
   // Super-admin (dono) nunca é bloqueado.
@@ -182,6 +204,7 @@ export default async function AppLayout({
           ate={billing?.ninoTrialEndsAt ?? null}
         />
         <WelcomeSubscribedModal userName={userContext.fullName} />
+        <SaudeSemanalModal aviso={avisoSaude} />
       </SidebarProvider>
     </TooltipProvider>
   )

@@ -42,6 +42,35 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.15.0",
+    date: "2026-08-08",
+    tag: "Melhorias",
+    title: "Um aviso por semana quando alguma loja para de mandar dados",
+    summary:
+      "Toda segunda, ao entrar, você vê quantas lojas precisam de atenção e quantas plataformas do cadastro nunca trouxeram dado — com a pergunta que só você sabe responder.",
+    areas: [
+      {
+        area: "Painel",
+        items: [
+          {
+            kind: "novo",
+            title: "Aviso semanal de saúde das lojas",
+            antes:
+              "O aviso de loja sem dado existia discreto, em cinza, dentro da faixa de cobertura. Fácil de não ver — e semanas passavam com o faturamento de uma loja fora dos relatórios sem ninguém notar.",
+            depois:
+              "Uma vez por semana, na segunda, um aviso mostra quantas lojas pararam de mandar dado e desde quando. Fechou, só volta na semana seguinte.",
+          },
+          {
+            kind: "novo",
+            title: "Separação entre “falta importar” e “cadastro errado”",
+            desc:
+              "Plataforma marcada no cadastro que nunca trouxe dado pode ser relatório que falta subir, ou plataforma em que a loja nunca vendeu. O sistema não tem como saber — então ele pergunta, em vez de chutar, e o botão “não vendo nessa plataforma” resolve num clique.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.14.1",
     date: "2026-08-08",
     tag: "Correções",
