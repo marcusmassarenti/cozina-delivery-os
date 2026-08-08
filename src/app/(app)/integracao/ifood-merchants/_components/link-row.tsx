@@ -208,6 +208,8 @@ type SyncRunResult = {
       rowCount?: number
       error?: string
       status?: number
+      /** Extrato ainda gerando: aguardando, não falhou. */
+      pendente?: boolean
     }[]
   }[]
   diagnostico?: string
@@ -304,11 +306,22 @@ export function RunSyncButton() {
                 {result.unitsProcessed ?? 0} loja(s) sincronizada(s)
               </p>
               {(() => {
+                /* "Aguardando o iFood gerar" NÃO é falha — não pode entrar
+                   na contagem de erro. Alarme que inclui espera normal treina
+                   a pessoa a ignorar o alarme, e a loja recém-conectada cai
+                   nesse caso todo dia até o extrato existir. */
+                // Aceita linha de conciliação OU de pedidos: só a primeira
+                // tem `pendente`, e checar por presença evita duplicar o tipo.
+                const pendente = (c: unknown) =>
+                  (c as { pendente?: boolean }).pendente === true
                 const comFalha = (result.results ?? []).filter((u) =>
                   [
                     ...(u.reconciliation ?? []),
                     ...(u.pedidos ?? []),
-                  ].some((c) => c.ok === false),
+                  ].some((c) => c.ok === false && !pendente(c)),
+                )
+                const aguardando = (result.results ?? []).filter((u) =>
+                  (u.reconciliation ?? []).some(pendente),
                 )
                 const linhas = (result.results ?? []).reduce(
                   (t, u) =>
@@ -325,6 +338,12 @@ export function RunSyncButton() {
                       {linhas.toLocaleString("pt-BR")} linha(s) de conciliação
                       gravadas
                     </p>
+                    {aguardando.length > 0 ? (
+                      <p className="mt-1.5 text-[11px] text-sky-700 dark:text-sky-400">
+                        {aguardando.length} loja(s) com extrato ainda sendo
+                        gerado pelo iFood — entram na próxima sincronização.
+                      </p>
+                    ) : null}
                     {comFalha.length > 0 ? (
                       <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900/40 dark:bg-amber-950/30">
                         <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-400">
@@ -346,7 +365,7 @@ export function RunSyncButton() {
                                 o: "pedidos",
                                 ...c,
                               })),
-                            ].filter((c) => c.ok === false)
+                            ].filter((c) => c.ok === false && !pendente(c))
                             const okCount =
                               (u.reconciliation ?? []).filter(
                                 (c) => c.ok !== false,

@@ -53,6 +53,8 @@ export type UnitSyncResult = {
     /** Variação líquida de linhas vs a sync anterior (persisted − jaExistia, ≥0). */
     novas?: number
     error?: string
+    /** Extrato ainda gerando no iFood — retomar na próxima rodada, não é falha. */
+    pendente?: boolean
   }[]
   /**
    * Pedidos/pagamento via Financial Events (substitui o "Relatório de pedidos").
@@ -156,11 +158,35 @@ async function syncReconciliationCompetencia(
     const recon = await downloadReconciliationRows(u.merchantId, competencia)
     await recordCall(u.merchantId, ep, recon.linkStatus)
     if (!recon.ok) {
+      /* EXTRATO AINDA GERANDO ≠ EXTRATO QUE FALHOU.
+       *
+       * O iFood gera sob demanda: o pedido entra na fila e o arquivo fica
+       * pronto em ~30-60s. Quem pede e não espera o suficiente recebe
+       * "enqueued"/"processing" — e o sync tratava isso como ERRO, desistia, e
+       * NUNCA voltava pra buscar o que ficou pronto depois.
+       *
+       * Quem paga a conta é a loja NOVA. Nas antigas o arquivo já está lá de
+       * pedidos anteriores; na recém-conectada todo pedido é o primeiro, e ela
+       * fica sem faturamento no painel exatamente no dia em que o cliente
+       * entra. Aconteceu com a Le Petit Pastéis (Vbfood) em 07/ago/26: maio e
+       * junho existiam no iFood e o sync marcou como falha — baixei à mão 40
+       * minutos depois e vieram os 522 lançamentos inteiros.
+       *
+       * Marcar como `pendente` faz o cron seguinte (e o próximo clique)
+       * retomarem, em vez de precisar de alguém percebendo. NÃO gravamos o
+       * throttle nesse caso: pedido em andamento não é chamada consumida.
+       */
+      const aindaGerando = /enqueued|processing|created|not ready|202/i.test(
+        `${recon.linkError ?? ""} ${recon.linkStatus ?? ""}`,
+      )
       return {
         competencia,
         ok: false,
         status: recon.linkStatus,
-        error: recon.linkError,
+        error: aindaGerando
+          ? "extrato ainda sendo gerado pelo iFood — entra na próxima sincronização"
+          : recon.linkError,
+        pendente: aindaGerando,
       }
     }
     // Mês sem operação devolve CSV vazio (só cabeçalho) — sucesso, 0 linhas.
