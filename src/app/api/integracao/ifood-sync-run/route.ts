@@ -35,13 +35,44 @@ export async function POST() {
 
   // null = admin de plataforma sem empresa (vê tudo) — mantém global.
   const unitIds = await getAccessibleUnitIds()
+
+  /* Diagnóstico do ZERO.
+   *
+   * "0 loja(s)" sem motivo é o pior retorno possível: o cliente vê a conexão
+   * ativa na tela e o sync dizendo que não há nada, e ninguém sabe se é
+   * escopo, vínculo ou permissão. Aconteceu com a Vbfood em 07/ago — banco
+   * impecável (holding com api_sync_enabled, loja ativa, api_store_id
+   * preenchido) e o botão devolvendo zero, sem pista pra investigar.
+   *
+   * Custa uma contagem, e só quando o resultado é vazio. */
   if (unitIds !== null && unitIds.length === 0) {
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
       unitsProcessed: 0,
       results: [],
+      diagnostico:
+        "Nenhuma loja no seu acesso. Se você está vendo como um cliente, a visão pode não ter alcançado esta ação.",
     })
+  }
+  if (unitIds !== null) {
+    const admin = createAdminClient()
+    const { count: comMerchant } = await admin
+      .from("unit_platforms")
+      .select("unit_id", { count: "exact", head: true })
+      .eq("platform", "ifood")
+      .eq("active", true)
+      .not("api_store_id", "is", null)
+      .in("unit_id", unitIds)
+    if (!comMerchant) {
+      return Response.json({
+        ok: true,
+        ranAt: new Date().toISOString(),
+        unitsProcessed: 0,
+        results: [],
+        diagnostico: `${unitIds.length} loja(s) no seu acesso, nenhuma com merchant do iFood vinculado. Vincule em Integrações › Conexões.`,
+      })
+    }
   }
 
   try {

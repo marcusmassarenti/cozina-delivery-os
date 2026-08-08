@@ -22,6 +22,8 @@ import {
 import { PlatformLogo } from "@/components/platform-logo"
 
 /** Espelha o retorno de /api/integracao/ifood-sync-run (syncIfoodAll). */
+// `diagnostico` explica um resultado VAZIO — sem ele, "0 loja(s)" não diz se
+// foi escopo, vínculo ou permissão, e não dá nem por onde começar a olhar.
 type ReconLine = {
   competencia: string
   ok?: boolean
@@ -65,6 +67,9 @@ type UnitResult = {
 type SyncRunResult = {
   ok: boolean
   unitsProcessed?: number
+  /** Explica um resultado VAZIO. Sem isto, "0 loja(s)" não diz se foi escopo,
+   *  vínculo ou permissão — e não dá nem por onde começar a olhar. */
+  diagnostico?: string
   results?: UnitResult[]
   /** Lojas do usuário com iFood ativo mas SEM vínculo com a API — não
    *  entram no sync; o dialog explica em vez de parecer que "faltou". */
@@ -436,6 +441,13 @@ export function SyncIfoodButton() {
             {result?.error ? (
               <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
                 {result.error}
+              </div>
+            ) : result?.diagnostico ? (
+              /* Zero com explicação. Antes a tela dizia "0 loja(s)" e
+                 "Nenhuma loja atualizada agora" — verdade que não ajuda: o
+                 cliente vê a conexão ativa e o sync dizendo que não há nada. */
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+                {result.diagnostico}
               </div>
             ) : (
               <div className="flex flex-col gap-4">
