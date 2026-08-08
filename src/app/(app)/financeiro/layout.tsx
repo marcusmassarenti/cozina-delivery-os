@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Coins, Wallet } from "lucide-react"
+import { Wallet } from "lucide-react"
 
 import { isProPlan } from "@/lib/data/billing"
 import {
@@ -12,6 +12,7 @@ import {
 
 import { LancamentoDialog } from "./_components/lancamento-dialog"
 import { LojaSelector } from "./_components/loja-selector"
+import { TituloFinanceiro } from "./_components/titulo-financeiro"
 
 export default async function CaixaLayout({ children }: { children: React.ReactNode }) {
   const holdingId = await getCaixaHoldingId()
@@ -59,10 +60,7 @@ export default async function CaixaLayout({ children }: { children: React.ReactN
   return (
     <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <Coins className="size-6 text-muted-foreground" />
-          Financeiro
-        </h1>
+        <TituloFinanceiro units={units} />
         {/* flex-wrap: no mobile o seletor de loja + o botão não cabem lado a
             lado e cortavam o "Novo lançamento" — como isto é o layout, o corte
             acontecia nas 6 telas do Financeiro. */}

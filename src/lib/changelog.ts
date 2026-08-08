@@ -75,6 +75,14 @@ export const CHANGELOG: Release[] = [
               "Agrupado por dia (com o saldo do dia), a linha inteira verde quando entra e vermelha quando sai, e fonte maior. A joia confirma o lançamento — verde e cheia quando confirmado. Nos três pontinhos: editar, duplicar para hoje, converter em transferência e excluir.",
           },
           {
+            kind: "melhoria",
+            title: "O título do Financeiro diz de qual loja é o número",
+            antes:
+              "O nome da loja só aparecia no seletor, na outra ponta da tela. Num print, num PDF ou com duas abas abertas, o número ficava sem dono.",
+            depois:
+              "Escolheu a loja, o título vira “Financeiro — Hortolândia”. No consolidado continua só “Financeiro”.",
+          },
+          {
             kind: "correcao",
             title: "Contas e despesas da empresa voltaram a aparecer",
             antes:
