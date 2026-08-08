@@ -15,6 +15,7 @@
 import {
   getAccessibleUnitIds,
   getVerComoHoldingId,
+  isSuperadmin,
   userCan,
 } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -26,9 +27,29 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
-export async function POST() {
+export async function POST(req: Request) {
   if (!(await userCan("dashboard", "view"))) {
     return new Response("Unauthorized", { status: 401 })
+  }
+
+  /* `todos: true` → base INTEIRA, ignorando o escopo do usuário.
+   *
+   * É o botão da tela de merchants (dono). Sem isto ele rodava só as 14 lojas
+   * da empresa do Marcus — ele é superadmin COM empresa, então o escopo normal
+   * o prende ao próprio tenant, que é justamente o isolamento que a gente quer
+   * em toda tela de operação.
+   *
+   * Só superadmin: qualquer outro pedindo `todos` é ignorado e cai no escopo
+   * dele. Nunca dá erro — só não amplia.
+   *
+   * Vale pras lojas que ele vincular DEPOIS também: o alcance é "todas com
+   * merchant", resolvido a cada chamada, não uma lista fixa. */
+  let todos = false
+  try {
+    const body = (await req.json()) as { todos?: boolean } | null
+    todos = Boolean(body?.todos) && (await isSuperadmin())
+  } catch {
+    todos = false
   }
   if (!(await isApiSyncEnabled())) {
     return Response.json(
@@ -37,8 +58,9 @@ export async function POST() {
     )
   }
 
-  // null = admin de plataforma sem empresa (vê tudo) — mantém global.
-  const unitIds = await getAccessibleUnitIds()
+  // null = base inteira. Ou porque o dono pediu `todos`, ou porque é admin de
+  // plataforma sem empresa nenhuma.
+  const unitIds = todos ? null : await getAccessibleUnitIds()
 
   /* Diagnóstico do ZERO.
    *

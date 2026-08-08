@@ -221,7 +221,13 @@ export function RunSyncButton() {
     setPending(true)
     setResult(null)
     try {
-      const r = await fetch("/api/integracao/ifood-sync-run", { method: "POST" })
+      // `todos` = base inteira, não só as lojas da minha empresa. Esta tela é
+      // de dono; o escopo por tenant vale nas telas de operação.
+      const r = await fetch("/api/integracao/ifood-sync-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ todos: true }),
+      })
       // Timeout vem como HTML/texto, não JSON — ler cru antes de parsear
       // evita "Unexpected token '<'" na cara de quem clicou.
       const txt = await r.text()
