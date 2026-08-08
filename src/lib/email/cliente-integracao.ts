@@ -56,10 +56,28 @@ function logos(plats: PlatformId[]): string {
     .join("")
 }
 
+/**
+ * Marcações de plataforma que NUNCA trouxeram dado.
+ *
+ * Não é a mesma coisa que "parou": aqui nunca começou. E a causa o sistema não
+ * consegue deduzir — pode ser relatório que falta subir na primeira vez, ou
+ * plataforma marcada no cadastro em que a loja nunca vendeu. Só o dono sabe,
+ * então o texto pergunta em vez de acusar.
+ */
+export type NuncaTrouxe = {
+  /** Marcações sem conexão nenhuma — dependem de uma ação do cliente. */
+  semConexao: number
+  /** Em quantas lojas distintas elas estão. */
+  lojas: number
+  /** Conectadas por API, primeira carga ainda vindo — não pedem nada. */
+  aguardando: number
+}
+
 export function emailClienteIntegracao(
   grupo: GrupoCliente,
   /** Quando presente, o e-mail sai com a tarja de prévia interna. */
   previaPara?: string,
+  nunca?: NuncaTrouxe,
 ): { assunto: string; html: string } {
   const n = grupo.lojas.length
   const assunto =
@@ -139,6 +157,40 @@ export function emailClienteIntegracao(
                E mais <strong>${resto}</strong> ${resto === 1 ? "loja" : "lojas"} na mesma situação —
                a lista completa está no painel.
              </p>`
+          : ""
+      }
+
+      ${
+        nunca && nunca.semConexao > 0
+          ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0 0;">
+        <tr><td style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:16px 18px;">
+          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#075985;">
+            E ${nunca.semConexao} ${nunca.semConexao === 1 ? "plataforma marcada" : "plataformas marcadas"} que nunca trouxe${nunca.semConexao === 1 ? "" : "ram"} dado
+          </p>
+          <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#0c4a6e;">
+            Em ${nunca.lojas} ${nunca.lojas === 1 ? "loja" : "lojas"} do seu cadastro. Isso costuma ser
+            uma de duas coisas, e só você sabe qual:
+          </p>
+          <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:#0c4a6e;">
+            <strong>1. Falta puxar pela primeira vez.</strong> Suba o relatório dessa plataforma em
+            <strong>Importação</strong> e o histórico entra de uma vez.
+          </p>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#0c4a6e;">
+            <strong>2. A loja nunca vendeu por ali.</strong> Aí é o cadastro que está a mais — no
+            painel, cada uma tem o botão <em>“não vendo nessa plataforma”</em>. Um clique tira a
+            marcação e o aviso para de aparecer.
+          </p>
+          ${
+            nunca.aguardando > 0
+              ? `<p style="margin:10px 0 0;padding-top:8px;border-top:1px solid #bae6fd;font-size:13px;color:#0369a1;">
+                   Outras ${nunca.aguardando} já estão conectadas e a primeira carga ainda está vindo —
+                   essas não precisam de nada da sua parte.
+                 </p>`
+              : ""
+          }
+        </td></tr>
+      </table>`
           : ""
       }
 

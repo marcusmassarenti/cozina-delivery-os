@@ -33,10 +33,33 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
   const s = await diagnosticarIntegracoes()
   const g = agruparSaude(s.lojas)
 
-  // O cliente é avisado do que a operação dele pode resolver: loja que parou
-  // de mandar dado. "Nunca conectou" fica de fora — aquilo é fila de conexão,
-  // e já tem régua própria; misturar viraria cobrança de coisa que ele talvez
-  // nem queira conectar.
+  /* "Nunca trouxe dado" entra como CONTEXTO, não como gatilho.
+   *
+   * Ele conta no e-mail (o Marcus pediu, e é acionável: ou falta puxar a
+   * primeira vez, ou o cadastro tem uma plataforma a mais), mas não faz um
+   * e-mail existir sozinho. É estado permanente, e a régua da casa é que
+   * e-mail é pra coisa que MUDOU — senão o cliente de conta em teste, com uma
+   * marcação solta, receberia a mesma cobrança toda segunda pra sempre.
+   * Medido em 08/ago: seriam 3 clientes nessa situação, todos com 1 marcação.
+   * No painel ele aparece do mesmo jeito, no aviso semanal. */
+  const nuncaPorCliente = new Map<string, { semConexao: number; lojas: Set<string>; aguardando: number }>()
+  for (const l of s.lojas) {
+    if (l.gravidade === "ok" || l.ultimoPedido || l.ultimoFinanceiro) continue
+    const cur = nuncaPorCliente.get(l.cliente) ?? {
+      semConexao: 0,
+      lojas: new Set<string>(),
+      aguardando: 0,
+    }
+    if (l.conectada) cur.aguardando += 1
+    else {
+      cur.semConexao += 1
+      cur.lojas.add(l.unitId)
+    }
+    nuncaPorCliente.set(l.cliente, cur)
+  }
+
+  // O gatilho continua sendo o que a operação dele pode resolver hoje: loja
+  // que mandava dado e parou.
   const porCliente = new Map<string, GrupoCliente>()
   for (const grupo of [...g.pararamHoje, ...g.seguemParadas]) {
     const cur = porCliente.get(grupo.cliente)
@@ -68,7 +91,18 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
     const previaPara = LIBERADO ? undefined : (destinoReal ?? `${cliente} (sem admin cadastrado)`)
 
     // A ordenação e o corte de volume moram no template — aqui só o conteúdo.
-    const msg = emailClienteIntegracao(grupo, previaPara)
+    const nunca = nuncaPorCliente.get(cliente)
+    const msg = emailClienteIntegracao(
+      grupo,
+      previaPara,
+      nunca
+        ? {
+            semConexao: nunca.semConexao,
+            lojas: nunca.lojas.size,
+            aguardando: nunca.aguardando,
+          }
+        : undefined,
+    )
 
     const r = await enviarEmail({
       holdingId,
