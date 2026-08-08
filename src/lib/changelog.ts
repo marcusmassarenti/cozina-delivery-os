@@ -67,6 +67,22 @@ export const CHANGELOG: Release[] = [
               "Plataforma marcada no cadastro que nunca trouxe dado pode ser relatório que falta subir, ou plataforma em que a loja nunca vendeu. O sistema não tem como saber — então ele pergunta, em vez de chutar, e o botão “não vendo nessa plataforma” resolve num clique.",
           },
           {
+            kind: "novo",
+            title: "Lançamentos com cara de extrato",
+            antes:
+              "Uma lista corrida, com a data repetida em letra miúda em cada linha e a cor só no valor. Num extrato de dezenas de linhas quase todas positivas, achar as saídas exigia ler o sinal de uma por uma.",
+            depois:
+              "Agrupado por dia (com o saldo do dia), a linha inteira verde quando entra e vermelha quando sai, e fonte maior. A joia confirma o lançamento — verde e cheia quando confirmado. Nos três pontinhos: editar, duplicar para hoje, converter em transferência e excluir.",
+          },
+          {
+            kind: "correcao",
+            title: "Contas e despesas da empresa voltaram a aparecer",
+            antes:
+              "Conta bancária ou despesa sem loja escolhida (as “da empresa”) sumia da tela e não aceitava lançamento nem importação de extrato — parecia que o financeiro estava vazio.",
+            depois:
+              "Aparecem normalmente para quem responde pela empresa. Franqueado ligado a lojas específicas continua vendo só o que é dele.",
+          },
+          {
             kind: "correcao",
             title: "Loja desativada não é mais sincronizada",
             antes:

@@ -275,21 +275,21 @@ export function EntriesList({
           Nenhum lançamento {entries.length ? "com esses filtros" : "neste período"}.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <label className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+        <div className="space-y-5">
+          <label className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
             <input type="checkbox" checked={allSelected} onChange={toggleAll} className="size-4 accent-primary" />
             Selecionar todos ({filtered.length})
           </label>
           {grupos.map(([dia, doDia]) => (
-          <div key={dia}>
+          <div key={dia} className="space-y-1.5">
             {/* Cabeçalho do dia: a data sai de cada linha e aparece uma vez,
                 com o total do bloco — é a pergunta que se faz olhando um dia
                 ("quanto entrou/saiu nesse dia?") e que antes exigia somar. */}
-            <div className="flex items-baseline justify-between gap-2 border-b bg-muted/40 px-4 py-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {dia === "sem-data" ? "Sem data" : fmtDiaLongo(dia)}
+            <div className="flex items-baseline justify-between gap-2 px-1">
+              <span className="text-sm text-muted-foreground">
+                {dia === "sem-data" ? "Sem data" : fmtDiaCurto(dia)}
               </span>
-              <span className="text-[11px] tabular-nums text-muted-foreground">
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {totalDoDia(doDia) >= 0 ? "+" : "−"}
                 {fmtBRL(Math.abs(totalDoDia(doDia)))}
               </span>
@@ -301,7 +301,21 @@ export function EntriesList({
             const isDespesa = e.kind === "despesa"
             const isTransfer = e.kind === "transferencia"
             return (
-              <div key={e.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-0 hover:bg-muted/40">
+              <div
+                key={e.id}
+                /* A LINHA INTEIRA carrega a cor do tipo — verde entra, vermelho
+                   sai. Antes só o valor e o ícone eram coloridos, e num extrato
+                   de 43 linhas quase todas positivas o olho tinha que ler o
+                   sinal de cada uma pra achar as três saídas. Tom bem fraco de
+                   propósito: o que precisa saltar é a exceção, não o padrão. */
+                className={`flex items-center gap-3 rounded-xl border-l-[3px] px-4 py-3 transition-colors ${
+                  isTransfer
+                    ? "border-l-sky-400 bg-sky-50/60 hover:bg-sky-50 dark:bg-sky-950/20 dark:hover:bg-sky-950/30"
+                    : isDespesa
+                      ? "border-l-rose-400 bg-rose-50/60 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
+                      : "border-l-emerald-400 bg-emerald-50/60 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30"
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={selected.has(e.id)}
@@ -309,22 +323,16 @@ export function EntriesList({
                   className="size-4 shrink-0 accent-primary"
                 />
                 <button type="button" onClick={() => setEditing(e)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  <div
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                      isTransfer
-                        ? "bg-sky-100 text-sky-600 dark:bg-sky-950/40"
-                        : isDespesa
-                          ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40"
-                          : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40"
-                    }`}
-                  >
-                    <FinIcon name={cat?.icon ?? null} className="size-4" />
+                  {/* Ícone em círculo neutro: a cor do tipo já está na linha,
+                      e repeti-la aqui deixava três vermelhos empilhados. */}
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-background/70 text-muted-foreground">
+                    <FinIcon name={cat?.icon ?? null} className="size-[18px]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">
+                    <div className="truncate text-[15px] font-medium leading-tight">
                       {e.titular || e.description || cat?.name || "Lançamento"}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-1.5 truncate text-[11px] text-muted-foreground">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 truncate text-[13px] text-muted-foreground">
                       <span>{cat?.name ?? (isTransfer ? "Transferência" : "Sem categoria")}</span>
                       {acc && <span>· {acc.name}</span>}
                       {e.installmentTotal && e.installmentTotal > 1 && (
@@ -337,14 +345,18 @@ export function EntriesList({
                   </div>
                 </button>
 
-                <span className={`hidden items-center gap-1 text-[11px] font-semibold sm:flex ${st.cls}`}>
-                  <st.Icon className="size-3.5" />
-                  {st.label}
-                </span>
-
-                <div className={`shrink-0 text-sm font-semibold tabular-nums ${valueColor(e)}`}>
-                  {isDespesa ? "−" : isTransfer ? "" : "+"}
-                  {fmtBRL(e.value)}
+                {/* Valor e situação empilhados, como no ERP: são a mesma
+                    pergunta ("quanto, e já saiu do caixa?") e ficavam separados
+                    por toda a largura da linha. */}
+                <div className="shrink-0 text-right">
+                  <div className={`text-[15px] font-semibold tabular-nums ${valueColor(e)}`}>
+                    {isDespesa ? "−" : isTransfer ? "" : "+"}
+                    {fmtBRL(e.value)}
+                  </div>
+                  <div className={`flex items-center justify-end gap-1 text-xs ${st.cls}`}>
+                    <st.Icon className="size-3.5" />
+                    {st.label}
+                  </div>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -417,11 +429,9 @@ export function EntriesList({
 const chip =
   "h-9 rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
 
-/** "sexta, 08/08" — o dia da semana ajuda a achar o fim de semana no extrato. */
-function fmtDiaLongo(iso: string): string {
-  const d = new Date(`${iso}T12:00:00`)
-  const semana = d.toLocaleDateString("pt-BR", { weekday: "long" })
-  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+/** "08/08/26" — mesmo formato do ERP do Marcus, curto e discreto. */
+function fmtDiaCurto(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`
 }
 
 /** Saldo do dia: entra positivo, sai negativo. Transferência não conta —
