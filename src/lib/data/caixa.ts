@@ -6,7 +6,11 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+  temEscopoDaEmpresa,
+} from "@/lib/auth/roles"
 import { todayISO } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 
@@ -31,11 +35,32 @@ function lojaMatch(unitId: string | null, loja: Loja): boolean {
   return unitId === loja
 }
 
-/** Restringe a query às lojas que o usuário enxerga (RBAC do franqueado).
- * `allowed === null` = admin/franqueador → vê tudo (sem restrição). */
+/**
+ * Restringe a query às lojas que o usuário enxerga (RBAC do franqueado).
+ *
+ * `allowed === null` = admin de plataforma → vê tudo, sem restrição.
+ *
+ * ⚠️ O `in` DO POSTGREST NÃO PEGA NULL, e isso escondia meio financeiro.
+ * `unit_id = null` significa "da EMPRESA toda" — a conta bancária da holding,
+ * a despesa administrativa. Com `.in("unit_id", [...])` puro, toda linha assim
+ * ficava invisível pra qualquer usuário real (só o superadmin sem empresa
+ * recebe `allowed === null`). Das quatro contas cadastradas, três sumiam da
+ * tela; a quarta só aparecia porque tinha uma loja escolhida.
+ *
+ * O sintoma enganava: parecia financeiro vazio, "ninguém usou ainda". Era
+ * dado gravado e escondido. Descoberto em 08/ago/26, quando o menu de
+ * transferência apareceu sem contas de destino.
+ *
+ * `incluiEmpresa` diz se as linhas sem loja entram. Quem responde pela empresa
+ * (holding/marca) vê; franqueado preso a lojas, não — pra ele o caixa da
+ * empresa não existe mesmo.
+ */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function scopeUnits(q: any, allowed: string[] | null): any {
-  return allowed === null ? q : q.in("unit_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"])
+function scopeUnits(q: any, allowed: string[] | null, incluiEmpresa = false): any {
+  if (allowed === null) return q
+  const ids = allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"]
+  if (!incluiEmpresa) return q.in("unit_id", ids)
+  return q.or(`unit_id.in.(${ids.join(",")}),unit_id.is.null`)
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -196,9 +221,11 @@ const ACCOUNT_COLS =
 export async function getAccounts(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
+  const empresa = await temEscopoDaEmpresa()
   const { data } = await scopeUnits(
     lojaWhere(admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId), loja),
     allowed,
+    empresa,
   )
     .order("sort_order")
     .order("created_at")
@@ -209,10 +236,12 @@ export async function getAccounts(holdingId: string, loja?: Loja): Promise<FinAc
 export async function getAccountsWithBalance(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
+  const empresa = await temEscopoDaEmpresa()
   const [{ data: accs }, { data: entries }] = await Promise.all([
     scopeUnits(
       lojaWhere(admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId), loja),
       allowed,
+      empresa,
     ).order("sort_order"),
     scopeUnits(
       admin
@@ -221,6 +250,7 @@ export async function getAccountsWithBalance(holdingId: string, loja?: Loja): Pr
         .eq("holding_id", holdingId)
         .not("paid_date", "is", null),
       allowed,
+      empresa,
     ),
   ])
   const bal = new Map<string, number>()
@@ -244,10 +274,12 @@ export async function getAccountsWithBalance(holdingId: string, loja?: Loja): Pr
 export async function getAccountsWithStats(holdingId: string, loja?: Loja): Promise<FinAccount[]> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
+  const empresa = await temEscopoDaEmpresa()
   const [{ data: accs }, { data: entries }] = await Promise.all([
     scopeUnits(
       lojaWhere(admin.from("fin_accounts").select(ACCOUNT_COLS).eq("holding_id", holdingId), loja),
       allowed,
+      empresa,
     ).order("sort_order"),
     scopeUnits(
       admin
@@ -255,6 +287,7 @@ export async function getAccountsWithStats(holdingId: string, loja?: Loja): Prom
         .select("kind, value, account_id, to_account_id, paid_date")
         .eq("holding_id", holdingId),
       allowed,
+      empresa,
     ),
   ])
   type S = { pagas: number; aPagar: number; recebidas: number; aReceber: number; count: number }
@@ -366,7 +399,7 @@ export async function getEntries(
   const admin = createAdminClient()
   let q = admin.from("fin_entries").select(ENTRY_COLS).eq("holding_id", holdingId)
   q = lojaWhere(q, filters.loja)
-  q = scopeUnits(q, await getAccessibleUnitIds())
+  q = scopeUnits(q, await getAccessibleUnitIds(), await temEscopoDaEmpresa())
   if (filters.year) q = q.eq("ref_year", filters.year)
   if (filters.month) q = q.eq("ref_month", filters.month)
   if (filters.kind) q = q.eq("kind", filters.kind)
@@ -439,6 +472,7 @@ export async function getCaixaSummary(
 ): Promise<CaixaSummary> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
+  const empresa = await temEscopoDaEmpresa()
   const [{ data: accs }, { data: rows }, { data: efetAll }] = await Promise.all([
     scopeUnits(
       lojaWhere(
@@ -446,6 +480,7 @@ export async function getCaixaSummary(
         loja,
       ),
       allowed,
+      empresa,
     ),
     // Movimentação DO PERÍODO (competência) → alimenta receita/despesa/a pagar/a receber.
     scopeUnits(
@@ -459,6 +494,7 @@ export async function getCaixaSummary(
         loja,
       ),
       allowed,
+      empresa,
     ),
     // Saldo é regime de CAIXA e acumulado — todos os efetivados, sem filtro de mês.
     // (Antes só somava o mês corrente e divergia das telas de Contas/Dashboard.)
@@ -472,6 +508,7 @@ export async function getCaixaSummary(
         loja,
       ),
       allowed,
+      empresa,
     ),
   ])
 
@@ -592,6 +629,7 @@ export async function getCaixaDashboard(
       loja,
     ),
     await getAccessibleUnitIds(),
+    await temEscopoDaEmpresa(),
   )
   const pendAll: FinEntry[] = ((pendRows ?? []) as Record<string, unknown>[])
     .map(mapEntry)
@@ -787,6 +825,7 @@ export async function getCaixaPorLoja(
 ): Promise<LojaResumo[]> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
+  const empresa = await temEscopoDaEmpresa()
   const [units, accsRes, efetRes, mesRes, cardIds] = await Promise.all([
     getCaixaUnits(),
     scopeUnits(
@@ -795,6 +834,7 @@ export async function getCaixaPorLoja(
         .select("id, kind, initial_balance, unit_id, exclude_from_total")
         .eq("holding_id", holdingId),
       allowed,
+      empresa,
     ),
     scopeUnits(
       admin
@@ -803,6 +843,7 @@ export async function getCaixaPorLoja(
         .eq("holding_id", holdingId)
         .not("paid_date", "is", null),
       allowed,
+      empresa,
     ),
     scopeUnits(
       admin
@@ -812,6 +853,7 @@ export async function getCaixaPorLoja(
         .eq("ref_year", year)
         .eq("ref_month", month),
       allowed,
+      empresa,
     ),
     getCardAccountIds(holdingId),
   ])
@@ -921,6 +963,7 @@ export async function getEvolucaoCaixa(
   if (!holdingId) return []
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
+  const empresa = await temEscopoDaEmpresa()
 
   const now = new Date()
   const wins: { year: number; month: number }[] = []
@@ -937,7 +980,7 @@ export async function getEvolucaoCaixa(
     .gte("ref_year", startYear)
     .neq("kind", "transferencia")
   q = lojaWhere(q, loja)
-  q = scopeUnits(q, allowed)
+  q = scopeUnits(q, allowed, empresa)
   const { data } = await q
 
   const map = new Map<string, { receita: number; despesa: number }>()

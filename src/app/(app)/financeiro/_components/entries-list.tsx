@@ -3,10 +3,15 @@
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
+  ArrowLeftRight,
   CheckCircle2,
   ChevronDown,
+  Copy,
   Hourglass,
+  MoreHorizontal,
+  Pencil,
   Search,
+  ThumbsUp,
   Trash2,
   TriangleAlert,
 } from "lucide-react"
@@ -18,7 +23,9 @@ import {
   bulkCategorize,
   bulkDelete,
   bulkMarkPaid,
+  convertToTransfer,
   deleteEntry,
+  duplicateEntryToday,
   toggleEntryPaid,
 } from "../_actions"
 import { FinIcon } from "./fin-icon"
@@ -97,6 +104,31 @@ export function EntriesList({
       return true
     })
   }, [entries, search, tipo, contaId, categoriaId, tag, valorMin, catById])
+
+  /* Agrupa por DIA, na ordem do extrato (mais recente primeiro).
+   *
+   * Uma lista corrida de 338 lançamentos não tem onde a vista descansar: sem a
+   * quebra por data, "vence 06/08" vira texto miúdo repetido em toda linha e a
+   * pessoa lê a data de cada uma pra saber onde está. Com o cabeçalho, a data
+   * é lida uma vez por bloco.
+   *
+   * A chave é `dueDate` (a data que a tela promete), com quem não tem data num
+   * grupo próprio no fim — em vez de sumir ou fingir que é hoje.
+   */
+  const grupos = useMemo(() => {
+    const porDia = new Map<string, FinEntry[]>()
+    for (const e of filtered) {
+      const dia = e.dueDate ?? "sem-data"
+      const arr = porDia.get(dia) ?? []
+      arr.push(e)
+      porDia.set(dia, arr)
+    }
+    return [...porDia.entries()].sort((a, b) => {
+      if (a[0] === "sem-data") return 1
+      if (b[0] === "sem-data") return -1
+      return b[0].localeCompare(a[0])
+    })
+  }, [filtered])
 
   const selEntries = entries.filter((e) => selected.has(e.id))
   const totals = useMemo(() => {
@@ -248,7 +280,21 @@ export function EntriesList({
             <input type="checkbox" checked={allSelected} onChange={toggleAll} className="size-4 accent-primary" />
             Selecionar todos ({filtered.length})
           </label>
-          {filtered.map((e) => {
+          {grupos.map(([dia, doDia]) => (
+          <div key={dia}>
+            {/* Cabeçalho do dia: a data sai de cada linha e aparece uma vez,
+                com o total do bloco — é a pergunta que se faz olhando um dia
+                ("quanto entrou/saiu nesse dia?") e que antes exigia somar. */}
+            <div className="flex items-baseline justify-between gap-2 border-b bg-muted/40 px-4 py-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {dia === "sem-data" ? "Sem data" : fmtDiaLongo(dia)}
+              </span>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {totalDoDia(doDia) >= 0 ? "+" : "−"}
+                {fmtBRL(Math.abs(totalDoDia(doDia)))}
+              </span>
+            </div>
+          {doDia.map((e) => {
             const cat = e.categoryId ? catById.get(e.categoryId) : null
             const acc = e.accountId ? accById.get(e.accountId) : null
             const st = STATUS[e.status]
@@ -302,32 +348,51 @@ export function EntriesList({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-0.5">
+                  {/* Joia: confirma o lançamento. Cheia e verde = confirmado,
+                      vazada e cinza = pendente — o estado é o próprio botão,
+                      então clicar e desfazer é o mesmo gesto. */}
                   <button
                     type="button"
                     disabled={pending}
-                    title={e.status === "efetivado" ? "Marcar como pendente" : "Marcar como pago"}
+                    title={
+                      e.status === "efetivado"
+                        ? "Confirmado — clique para voltar a pendente"
+                        : "Confirmar"
+                    }
+                    aria-pressed={e.status === "efetivado"}
                     onClick={() => act(() => toggleEntryPaid(e.id, e.status !== "efetivado"))}
-                    className={`rounded-md p-1.5 hover:bg-accent disabled:opacity-50 ${
-                      e.status === "efetivado" ? "text-emerald-600" : "text-gray-400"
+                    className={`rounded-md p-1.5 transition-colors hover:bg-accent disabled:opacity-50 ${
+                      e.status === "efetivado"
+                        ? "text-emerald-600"
+                        : "text-muted-foreground"
                     }`}
                   >
-                    <CheckCircle2 className="size-4" />
+                    <ThumbsUp
+                      className="size-4"
+                      fill={e.status === "efetivado" ? "currentColor" : "none"}
+                    />
                   </button>
-                  <button
-                    type="button"
+                  <MenuLinha
                     disabled={pending}
-                    title="Excluir"
-                    onClick={() => {
+                    onEditar={() => setEditing(e)}
+                    onDuplicar={() => act(() => duplicateEntryToday(e.id))}
+                    onTransferir={
+                      // Só faz sentido com outra conta pra onde mandar.
+                      accounts.length > 1
+                        ? (destino) => act(() => convertToTransfer(e.id, destino))
+                        : undefined
+                    }
+                    contasDestino={accounts.filter((a) => a.id !== e.accountId)}
+                    onExcluir={() => {
                       if (confirm("Excluir este lançamento?")) act(() => deleteEntry(e.id))
                     }}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  />
                 </div>
               </div>
             )
           })}
+          </div>
+          ))}
         </div>
       )}
 
@@ -351,6 +416,118 @@ export function EntriesList({
 
 const chip =
   "h-9 rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+
+/** "sexta, 08/08" — o dia da semana ajuda a achar o fim de semana no extrato. */
+function fmtDiaLongo(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`)
+  const semana = d.toLocaleDateString("pt-BR", { weekday: "long" })
+  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+}
+
+/** Saldo do dia: entra positivo, sai negativo. Transferência não conta —
+ *  é dinheiro trocando de bolso, não resultado. */
+function totalDoDia(es: FinEntry[]): number {
+  return es.reduce((s, e) => {
+    if (e.kind === "transferencia") return s
+    return e.kind === "despesa" ? s - e.value : s + e.value
+  }, 0)
+}
+
+/**
+ * Menu de três pontos da linha.
+ *
+ * "Converter em transferência" abre um segundo nível com as contas: sem saber
+ * o DESTINO a conversão não tem como acontecer, e um modal só pra escolher uma
+ * conta seria pesado pra uma ação que se usa conciliando dezenas de linhas.
+ */
+function MenuLinha({
+  disabled,
+  onEditar,
+  onDuplicar,
+  onTransferir,
+  contasDestino,
+  onExcluir,
+}: {
+  disabled?: boolean
+  onEditar: () => void
+  onDuplicar: () => void
+  onTransferir?: (destinoId: string) => void
+  contasDestino: FinAccount[]
+  onExcluir: () => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const [escolhendoConta, setEscolhendoConta] = useState(false)
+
+  function fechar() {
+    setAberto(false)
+    setEscolhendoConta(false)
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        title="Mais ações"
+        onClick={() => setAberto((v) => !v)}
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+
+      {aberto && (
+        <>
+          {/* Camada invisível que fecha ao clicar fora — sem ela o menu fica
+              preso aberto e o usuário clica em outra linha achando que fechou. */}
+          <div className="fixed inset-0 z-40" onClick={fechar} />
+          <div className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-lg border bg-popover py-1 shadow-lg">
+            {escolhendoConta && onTransferir ? (
+              <>
+                <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Transferir para
+                </p>
+                {contasDestino.map((c) => (
+                  <MenuItem
+                    key={c.id}
+                    onClick={() => {
+                      onTransferir(c.id)
+                      fechar()
+                    }}
+                  >
+                    <ArrowLeftRight className="size-4 text-muted-foreground" />
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </>
+            ) : (
+              <>
+                <MenuItem onClick={() => { onEditar(); fechar() }}>
+                  <Pencil className="size-4 text-muted-foreground" />
+                  Editar
+                </MenuItem>
+                <MenuItem onClick={() => { onDuplicar(); fechar() }}>
+                  <Copy className="size-4 text-muted-foreground" />
+                  Duplicar para hoje
+                </MenuItem>
+                {onTransferir && contasDestino.length > 0 && (
+                  <MenuItem onClick={() => setEscolhendoConta(true)}>
+                    <ArrowLeftRight className="size-4 text-muted-foreground" />
+                    Converter em transferência
+                  </MenuItem>
+                )}
+                <div className="my-1 border-t" />
+                <MenuItem onClick={() => { onExcluir(); fechar() }}>
+                  <Trash2 className="size-4 text-rose-600" />
+                  <span className="text-rose-600">Excluir</span>
+                </MenuItem>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 function MenuItem({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (

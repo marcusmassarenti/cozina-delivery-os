@@ -441,6 +441,100 @@ export async function deleteEntry(id: string): Promise<ActionState> {
   }
 }
 
+/**
+ * Repete um lançamento com a data de HOJE.
+ *
+ * É o atalho da despesa que se repete sem ser recorrente de verdade — a compra
+ * no mesmo fornecedor, o mesmo frete. Sai PENDENTE de propósito, mesmo que o
+ * original estivesse pago: a cópia é uma conta nova, e nascer confirmada faria
+ * o saldo mentir até alguém reparar.
+ */
+export async function duplicateEntryToday(id: string): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    const { data: orig } = await admin
+      .from("fin_entries")
+      .select("*")
+      .eq("id", id)
+      .eq("holding_id", holdingId)
+      .maybeSingle()
+    if (!orig) return { ok: false, message: "Lançamento não encontrado." }
+    await assertUnitAllowed((orig.unit_id as string) ?? null)
+
+    const hoje = new Date().toISOString().slice(0, 10)
+    const row = { ...(orig as Record<string, unknown>) }
+    // Campos que NÃO podem ser copiados: identidade, conciliação e a marca da
+    // origem. `fit_id` em especial — ele é a chave de dedupe do OFX, e copiar
+    // faria a próxima importação do extrato pular a transação de verdade.
+    delete row.id
+    delete row.created_at
+    delete row.updated_at
+    delete row.fit_id
+    delete row.recurrence_group
+    delete row.installment_no
+    delete row.installment_total
+
+    const { error } = await admin.from("fin_entries").insert({
+      ...row,
+      due_date: hoje,
+      paid_date: null,
+      reconciled: false,
+      ref_year: Number(hoje.slice(0, 4)),
+      ref_month: Number(hoje.slice(5, 7)),
+      source: "manual",
+    })
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/financeiro", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
+/**
+ * Vira um lançamento em transferência entre contas.
+ *
+ * Serve pro caso comum de conciliação: o que entrou como "despesa" era dinheiro
+ * indo pra outra conta sua. Transferência não é resultado — some do DRE e para
+ * de contar como gasto, que é o ponto.
+ */
+export async function convertToTransfer(
+  id: string,
+  toAccountId: string,
+): Promise<ActionState> {
+  try {
+    const { holdingId, admin } = await ctx()
+    if (!toAccountId) return { ok: false, message: "Escolha a conta de destino." }
+    const { data: e } = await admin
+      .from("fin_entries")
+      .select("id, unit_id, account_id")
+      .eq("id", id)
+      .eq("holding_id", holdingId)
+      .maybeSingle()
+    if (!e) return { ok: false, message: "Lançamento não encontrado." }
+    await assertUnitAllowed((e.unit_id as string) ?? null)
+    if (e.account_id === toAccountId) {
+      return { ok: false, message: "A conta de destino tem que ser diferente da origem." }
+    }
+    const { error } = await admin
+      .from("fin_entries")
+      .update({
+        kind: "transferencia",
+        to_account_id: toAccountId,
+        // Transferência não tem categoria: ela não é receita nem despesa, e
+        // manter a antiga faria o dinheiro continuar aparecendo no DRE.
+        category_id: null,
+      })
+      .eq("id", id)
+      .eq("holding_id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/financeiro", "layout")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro." }
+  }
+}
+
 // ─────────────────────────── Ações em lote ──────────────────────────────────
 export async function bulkMarkPaid(ids: string[], paid: boolean): Promise<ActionState> {
   try {
