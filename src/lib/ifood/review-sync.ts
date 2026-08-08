@@ -15,6 +15,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isAppHomologation } from "./auth"
 import { fetchAllReviews, getReview, type IfoodReview } from "./review"
+import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
 
 /** Tags de ELOGIO padrão do iFood (mesmas que o import gravava). Chave =
  *  minúsculo pra casar sem se importar com a caixa da API ("Comida Saborosa"
@@ -165,15 +166,20 @@ export async function syncIfoodReviews(
       }
     q = q.in("unit_id", unitIds)
   }
-  const { data: vinculos, error } = await q
+  const [{ data: vinculos, error }, inativas] = await Promise.all([
+    q,
+    idsDeUnidadesInativas(),
+  ])
   if (error) throw new Error(`Falha ao listar lojas vinculadas: ${error.message}`)
 
   const resultados: ReviewSyncUnitResult[] = []
-  for (const v of (vinculos ?? []) as unknown as {
+  for (const v of ((vinculos ?? []) as unknown as {
     unit_id: string
     api_store_id: string
     units: { code: string; name: string } | null
-  }[]) {
+  }[])
+    // Loja fechada não busca avaliação nova. O filtro acima é o da PLATAFORMA.
+    .filter((v) => !inativas.has(v.unit_id))) {
     const merchantId = v.api_store_id
     const unitCode = v.units?.code ?? "?"
     const unitName = v.units?.name ?? "(loja)"

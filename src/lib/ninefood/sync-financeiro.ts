@@ -13,6 +13,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAllShopBillDetail, type NinefoodBillRow } from "./financeiro"
+import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
 
 const cents = (v: number | null | undefined) => Math.round(Number(v ?? 0)) / 100
 
@@ -145,10 +146,16 @@ export async function syncNinefoodFinanceiro(opts: {
     .select("app_shop_id, unit_id, id_loja, name, active")
     .eq("active", true)
   if (opts.appShopIds?.length) q = q.in("app_shop_id", opts.appShopIds)
-  const { data: links } = await q
+  const [{ data: links }, inativas] = await Promise.all([
+    q,
+    idsDeUnidadesInativas(),
+  ])
 
   const results: ShopSyncResult[] = []
-  for (const link of ((links as any[]) ?? []) as StoreLink[]) {
+  for (const link of (((links as any[]) ?? []) as StoreLink[])
+    // Loja fechada não sincroniza. Link SEM unidade continua entrando: é
+    // assim que a loja nova é descoberta e vinculada na primeira rodada.
+    .filter((l) => !l.unit_id || !inativas.has(l.unit_id))) {
     const res: ShopSyncResult = {
       appShopId: link.app_shop_id,
       name: link.name,

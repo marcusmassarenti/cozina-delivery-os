@@ -27,6 +27,7 @@ import { getAnticipations, summarizeAnticipations } from "./anticipations"
 import { logPedidosSync, syncPedidosDaLoja } from "./pedidos-sync"
 import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
+import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
 
 export type UnitSyncResult = {
   unitId: string
@@ -106,10 +107,17 @@ async function listIfoodUnits(unitIds?: string[] | null) {
     .eq("active", true)
     .not("api_store_id", "is", null)
   if (unitIds) q = q.in("unit_id", unitIds)
-  const { data, error } = await q
+  const [{ data, error }, inativas] = await Promise.all([
+    q,
+    idsDeUnidadesInativas(),
+  ])
 
   if (error) throw new Error(`Falha ao listar unidades: ${error.message}`)
   return (data ?? [])
+    // Loja fechada não se sincroniza. O `active` filtrado acima é o da
+    // PLATAFORMA — a conexão com o iFood continua válida depois que a loja
+    // encerra, porque ninguém desvincula o merchant ao fechar as portas.
+    .filter((r) => !inativas.has((r.units as unknown as { id: string }).id))
     .map((r) => ({
       unitId: (r.units as unknown as { id: string }).id,
       unitCode: (r.units as unknown as { code: string }).code,

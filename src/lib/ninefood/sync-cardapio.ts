@@ -7,6 +7,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getNinefoodStoreMenu, type NinefoodMenuItem } from "./cardapio"
+import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
 
 export type CardapioSyncResult = {
   appShopId: string
@@ -24,13 +25,23 @@ export async function syncNinefoodCardapio(opts?: {
   const admin = createAdminClient()
   let q = admin
     .from("ninefood_store_links")
-    .select("app_shop_id, name, active")
+    .select("app_shop_id, name, active, unit_id")
     .eq("active", true)
   if (opts?.appShopIds?.length) q = q.in("app_shop_id", opts.appShopIds)
-  const { data: links } = await q
+  const [{ data: links }, inativas] = await Promise.all([
+    q,
+    idsDeUnidadesInativas(),
+  ])
 
   const results: CardapioSyncResult[] = []
-  for (const link of (links as { app_shop_id: string; name: string | null }[]) ?? []) {
+  for (const link of ((links as {
+    app_shop_id: string
+    name: string | null
+    unit_id: string | null
+  }[]) ?? [])
+    // Loja fechada não puxa cardápio. Link sem unidade segue entrando — é
+    // como a loja nova aparece antes de ser vinculada.
+    .filter((l) => !l.unit_id || !inativas.has(l.unit_id))) {
     const res: CardapioSyncResult = {
       appShopId: link.app_shop_id,
       name: link.name,
