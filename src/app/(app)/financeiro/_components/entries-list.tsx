@@ -294,6 +294,11 @@ export function EntriesList({
                 {fmtBRL(Math.abs(totalDoDia(doDia)))}
               </span>
             </div>
+            {/* AS LINHAS DO DIA SÃO UM CARTÃO SÓ, com divisória fina entre
+                elas — não cartões soltos. É o que dá a leitura de bloco do
+                ERP: o dia é a unidade visual, e a barra colorida da esquerda
+                corre contínua enquanto o tipo não muda. */}
+            <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           {doDia.map((e) => {
             const cat = e.categoryId ? catById.get(e.categoryId) : null
             const acc = e.accountId ? accById.get(e.accountId) : null
@@ -308,12 +313,12 @@ export function EntriesList({
                    de 43 linhas quase todas positivas o olho tinha que ler o
                    sinal de cada uma pra achar as três saídas. Tom bem fraco de
                    propósito: o que precisa saltar é a exceção, não o padrão. */
-                className={`flex items-center gap-3 rounded-xl border-l-[3px] px-4 py-2.5 transition-colors ${
+                className={`flex items-center gap-3 border-b border-l-[3px] px-4 py-2.5 transition-colors last:border-b-0 ${
                   isTransfer
-                    ? "border-l-sky-400 bg-sky-50/60 hover:bg-sky-50 dark:bg-sky-950/20 dark:hover:bg-sky-950/30"
+                    ? "border-l-sky-400 bg-sky-50/30 hover:bg-sky-50/70 dark:bg-sky-950/10 dark:hover:bg-sky-950/20"
                     : isDespesa
-                      ? "border-l-rose-400 bg-rose-50/60 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
-                      : "border-l-emerald-400 bg-emerald-50/60 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30"
+                      ? "border-l-rose-400 bg-rose-50/30 hover:bg-rose-50/70 dark:bg-rose-950/10 dark:hover:bg-rose-950/20"
+                      : "border-l-emerald-400 bg-emerald-50/30 hover:bg-emerald-50/70 dark:bg-emerald-950/10 dark:hover:bg-emerald-950/20"
                 }`}
               >
                 <input
@@ -325,7 +330,7 @@ export function EntriesList({
                 <button type="button" onClick={() => setEditing(e)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                   {/* Ícone em círculo neutro: a cor do tipo já está na linha,
                       e repeti-la aqui deixava três vermelhos empilhados. */}
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-background/70 text-muted-foreground">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <FinIcon name={cat?.icon ?? null} className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -403,6 +408,7 @@ export function EntriesList({
               </div>
             )
           })}
+            </div>
           </div>
           ))}
         </div>
