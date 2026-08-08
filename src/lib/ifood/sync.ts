@@ -32,6 +32,8 @@ export type UnitSyncResult = {
   unitId: string
   unitCode: string
   unitName: string
+  /** Cliente dono da loja — o resultado do sync mistura várias holdings. */
+  holdingName?: string
   merchantId: string
   /** true = a loja não tinha NENHUM lançamento iFood antes desta sync —
    *  estreia na integração (vira o aviso "loja nova conectada"). */
@@ -95,7 +97,9 @@ async function listIfoodUnits(unitIds?: string[] | null) {
   const admin = createAdminClient()
   let q = admin
     .from("unit_platforms")
-    .select("unit_id, api_store_id, units!inner(id, code, name)")
+    // brands→holdings junto: sem o nome do CLIENTE, o resultado do sync vira
+    // uma lista de UUIDs que não diz de quem é cada loja (Marcus, 07/ago).
+    .select("unit_id, api_store_id, units!inner(id, code, name, brands!inner(holdings!inner(name)))")
     .eq("platform", "ifood")
     .eq("active", true)
     .not("api_store_id", "is", null)
@@ -108,6 +112,10 @@ async function listIfoodUnits(unitIds?: string[] | null) {
       unitId: (r.units as unknown as { id: string }).id,
       unitCode: (r.units as unknown as { code: string }).code,
       unitName: (r.units as unknown as { name: string }).name,
+      holdingName:
+        (r.units as unknown as {
+          brands?: { holdings?: { name?: string } }
+        }).brands?.holdings?.name ?? "—",
       merchantId: r.api_store_id as string,
     }))
     .filter((r) => !!r.merchantId)
@@ -118,6 +126,8 @@ type UnitLite = {
   unitId: string
   unitCode: string
   unitName: string
+  /** Cliente dono da loja — o resultado do sync mistura várias holdings. */
+  holdingName?: string
   merchantId: string
 }
 type Admin = ReturnType<typeof createAdminClient>
@@ -267,6 +277,7 @@ async function syncOneUnit(
     unitId: u.unitId,
     unitCode: u.unitCode,
     unitName: u.unitName,
+    holdingName: u.holdingName,
     merchantId: u.merchantId,
     reconciliation: [],
   }

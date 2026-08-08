@@ -192,6 +192,8 @@ type SyncRunResult = {
   unitsProcessed?: number
   results?: Array<{
     unitCode: string
+    unitName?: string
+    holdingName?: string
     merchantId: string
     reconciliation?: Array<{ competencia: string; ok?: boolean; status?: number; rowCount?: number; skipped?: string; error?: string }>
     events?: { ok?: boolean; status?: number; totalEvents?: number; pagesFetched?: number; skipped?: string; error?: string }
@@ -257,8 +259,17 @@ export function RunSyncButton() {
               </p>
               {(result.results ?? []).map((u, i) => (
                 <div key={i} className="mt-1.5 border-t pt-1.5 text-[11px]">
-                  <p className="font-mono font-semibold">
-                    {u.unitCode} · {u.merchantId.slice(0, 12)}…
+                  {/* Nome do CLIENTE e da LOJA. Antes era só o código e um
+                      pedaço do UUID do merchant — o resultado virava uma
+                      lista de códigos que não dizia de quem era cada linha,
+                      justamente numa tela que roda pra rede inteira. */}
+                  <p className="font-semibold">
+                    {u.unitCode} · {u.unitName ?? "—"}
+                    {u.holdingName ? (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        · {u.holdingName}
+                      </span>
+                    ) : null}
                   </p>
                   <ul className="mt-0.5 space-y-0.5 pl-3 text-muted-foreground">
                     {(u.reconciliation ?? []).map((r, j) => (
