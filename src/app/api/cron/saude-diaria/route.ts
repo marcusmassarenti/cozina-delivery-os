@@ -14,6 +14,8 @@
  */
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
 import { emailSaude, type ConferenciaResumo } from "@/lib/email/saude"
+import { resumoDaRodada, type RodadaDiaria } from "@/lib/data/rodada-diaria"
+import { agruparSaude } from "@/lib/data/saude-agrupada"
 import { conferirFontes } from "@/lib/data/conferencia-fontes"
 import { enviarEmail } from "@/lib/email/enviar"
 import { registrarCron } from "@/lib/cron/registrar"
@@ -63,7 +65,21 @@ export async function GET(req: Request) {
       console.error("saude-diaria: conferência de fontes falhou:", e)
     }
 
-    const msg = emailSaude(s, conferencia)
+    // Volume que as rotinas trouxeram. Mesmo tratamento da conferência: se
+    // falhar, o e-mail sai sem o bloco em vez de não sair.
+    let rodada: RodadaDiaria | undefined
+    try {
+      rodada = await resumoDaRodada()
+    } catch (e) {
+      console.error("saude-diaria: resumo da rodada falhou:", e)
+    }
+
+    // Uma linha por LOJA (não por loja × plataforma), separando o que parou
+    // hoje do que já estava parado. É o que segura o tamanho do e-mail quando
+    // a base crescer: com 75 lojas já seriam 158 linhas.
+    const g = agruparSaude(s.lojas)
+
+    const msg = emailSaude(s, conferencia, rodada, g)
 
     // holdingId null + forcar: este e-mail não pertence a cliente nenhum e
     // precisa sair TODO dia — a trava de "já enviei este tipo" mataria o
@@ -84,9 +100,20 @@ export async function GET(req: Request) {
       email: envio.ok ? "enviado" : `falhou: ${envio.erro}`,
       resumo: s.resumo,
       conferencia: conferencia.length,
+      rodada: rodada
+        ? {
+            linhas: rodada.totalLinhas,
+            lojas: rodada.totalLojas,
+            extrato: `${rodada.extrato.fecharamHoje}/${rodada.extrato.conectadas}`,
+            gravidade: rodada.gravidade,
+          }
+        : "falhou",
       alertas: [
         ...s.lojas.filter((l) => l.gravidade === "alerta").map((l) => `${l.cliente}/${l.loja}: ${l.motivo}`),
         ...s.crons.filter((c) => c.gravidade === "alerta").map((c) => `${c.nome}: ${c.motivo}`),
+        ...(rodada?.extrato.atrasadas ?? [])
+          .filter((a) => a.gravidade === "alerta")
+          .map((a) => `${a.cliente}/${a.loja}: extrato do mês há ${a.dias ?? "?"} dias`),
       ],
     })
   })

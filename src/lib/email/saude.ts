@@ -11,6 +11,9 @@
 import "server-only"
 
 import type { SaudeIntegracoes } from "@/lib/data/saude-integracoes"
+import type { RodadaDiaria } from "@/lib/data/rodada-diaria"
+import type { LojaAgrupada, SaudeAgrupada } from "@/lib/data/saude-agrupada"
+import type { PlatformId } from "@/components/platform-logo"
 import { rotulo } from "@/lib/cron-labels"
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
@@ -29,7 +32,6 @@ const NOMES: Record<string, string> = {
   keeta: "Keeta",
   cardapioweb: "Cardápio Web",
 }
-const nomePlat = (p: string) => NOMES[p] ?? p
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", {
@@ -67,6 +69,216 @@ function placar(r: SaudeIntegracoes["resumo"]): string {
     .join(", ")
 }
 
+const num = (n: number) => n.toLocaleString("pt-BR")
+
+/** dd/mm a partir de "YYYY-MM-DD". */
+const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+/**
+ * Logos das plataformas afetadas, lado a lado.
+ *
+ * Os arquivos são os mesmos que o app usa (`/platforms/{id}.png`), servidos do
+ * site — cliente de e-mail não resolve caminho relativo. `alt` carrega o nome
+ * porque boa parte dos clientes bloqueia imagem por padrão: sem ele a linha
+ * perderia justamente a informação de QUAL plataforma caiu.
+ */
+function logos(plats: PlatformId[]): string {
+  return plats
+    .map(
+      (p) =>
+        `<img src="${SITE}/platforms/${p}.png" width="16" height="16" alt="${NOMES[p] ?? p}" title="${NOMES[p] ?? p}" style="display:inline-block;width:16px;height:16px;border-radius:4px;vertical-align:-3px;margin-right:3px;" />`,
+    )
+    .join("")
+}
+
+/**
+ * "desde 26/07 · último pedido 26/07" — a forma que o Marcus pediu.
+ *
+ * O texto muda com o TIPO porque as duas situações pedem reações diferentes:
+ * loja que parou de vender é operação; loja vendendo com o financeiro atrasado
+ * é integração. Escrever "parou" nas duas fazia o e-mail dizer que uma loja
+ * que faturou hoje de manhã estava morta.
+ */
+function quando(l: LojaAgrupada): string {
+  if (l.tipo === "nunca" || l.dias === null) return "sem nenhum dado ainda"
+  if (l.tipo === "financeiro") {
+    return `vendendo, mas o financeiro parou em ${l.ultimoFinanceiro ? dm(l.ultimoFinanceiro) : "?"}${
+      l.ultimoPedido ? ` · vendeu até ${dm(l.ultimoPedido)}` : ""
+    }`
+  }
+  const desde = l.desde ? `sem dado desde ${dm(l.desde)}` : ""
+  const ult = l.ultimoPedido ? ` · último pedido ${dm(l.ultimoPedido)}` : ""
+  return `${desde}${ult}`
+}
+
+/**
+ * "PAROU HOJE" — a única seção que sai sempre aberta, com nome e logo.
+ *
+ * É a notícia do dia. Tudo que já estava parado ontem desce pro bloco
+ * agrupado: repetir as mesmas 15 lojas todo dia é o caminho mais curto pra
+ * este e-mail deixar de ser lido.
+ */
+function blocoPararamHoje(g: SaudeAgrupada): string {
+  if (!g.pararamHoje.length) return ""
+  const c = COR.alerta
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:${c.fundo};border-left:4px solid ${c.borda};border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:${c.texto};">
+        Começou hoje (${g.totalPararamHoje})
+      </p>
+      ${g.pararamHoje
+        .map(
+          (grupo) => `
+      <p style="margin:0 0 4px;font-size:12px;font-weight:700;letter-spacing:.4px;color:#71717a;text-transform:uppercase;">${grupo.cliente}</p>
+      ${grupo.lojas
+        .map(
+          (l) => `
+      <p style="margin:0 0 8px;padding-left:2px;font-size:14px;line-height:1.5;color:#3f3f46;">
+        ${logos(l.plataformas)} <strong>${l.loja}</strong>
+        <span style="color:#71717a;font-size:13px;">— ${quando(l)}</span>
+      </p>`,
+        )
+        .join("")}`,
+        )
+        .join("")}
+    </td></tr>
+  </table>`
+}
+
+/** Quantas lojas de cada cliente aparecem com nome antes de virar contagem. */
+const TETO_POR_CLIENTE = 3
+
+/**
+ * "SEGUE PARADO" — o inventário, comprimido.
+ *
+ * Uma linha por cliente com a contagem, e só as três mais antigas com nome. É
+ * o que mantém o e-mail do mesmo tamanho com 75 ou com 500 lojas: o que cresce
+ * é o número dentro da linha, não a quantidade de linhas.
+ */
+function blocoSeguemParadas(g: SaudeAgrupada): string {
+  if (!g.seguemParadas.length) return ""
+  const c = COR.atencao
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:${c.fundo};border-left:4px solid ${c.borda};border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:${c.texto};">
+        Já vinha de antes (${g.totalSeguemParadas})
+      </p>
+      <p style="margin:0 0 12px;font-size:12px;color:#71717a;">Estas já apareceram em relatórios anteriores.</p>
+      ${g.seguemParadas
+        .map((grupo) => {
+          const mostra = grupo.lojas.slice(0, TETO_POR_CLIENTE)
+          const resto = grupo.lojas.length - mostra.length
+          return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 10px;">
+        <tr><td style="padding:0 0 3px;font-size:13px;color:#3f3f46;">
+          <strong>${grupo.cliente}</strong>
+          <span style="color:#71717a;">· ${grupo.lojas.length} loja${grupo.lojas.length === 1 ? "" : "s"}${
+            grupo.piorDias !== null
+              ? ` · a mais antiga há ${grupo.piorDias} dia${grupo.piorDias === 1 ? "" : "s"}`
+              : ""
+          }</span>
+        </td></tr>
+        <tr><td style="font-size:13px;line-height:1.7;color:#71717a;">
+          ${mostra
+            .map(
+              (l) =>
+                `${logos(l.plataformas)}${l.loja}${l.dias !== null ? ` <span style="color:#a1a1aa;">${l.dias}d</span>` : ""}`,
+            )
+            .join(" &nbsp;·&nbsp; ")}${
+              resto > 0
+                ? ` &nbsp;·&nbsp; <a href="${SITE}/saude" style="color:${LARANJA};text-decoration:none;font-weight:700;">+${resto} outra${resto === 1 ? "" : "s"} →</a>`
+                : ""
+            }
+        </td></tr>
+      </table>`
+        })
+        .join("")}
+    </td></tr>
+  </table>`
+}
+
+/**
+ * "NUNCA CONECTOU" — uma linha, sempre.
+ *
+ * São 87 de 158 sinais hoje: mais da metade do relatório era isto, repetido em
+ * linha própria por loja e por plataforma. Não é defeito de integração — é
+ * loja que marcou a plataforma no cadastro e nunca autorizou. Vira contagem
+ * com link, e o e-mail volta a ser sobre o que quebrou.
+ */
+function blocoNuncaConectou(g: SaudeAgrupada): string {
+  const n = g.nuncaConectou
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:#fafafa;border-left:4px solid #d4d4d8;border-radius:0 8px 8px 0;padding:14px 18px;">
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#52525b;">
+        <strong>${n.total} marcaç${n.total === 1 ? "ão" : "ões"} de plataforma sem integração ligada</strong>,
+        em ${n.clientes} cliente${n.clientes === 1 ? "" : "s"}.
+        Não é falha do sistema — é loja que nunca autorizou a conexão.
+        <a href="${SITE}/saude" style="color:${LARANJA};text-decoration:none;font-weight:700;">Ver a fila →</a>
+      </p>
+    </td></tr>
+  </table>`
+}
+
+/**
+ * "O que entrou hoje" — o volume que as rotinas trouxeram nas últimas 24h.
+ *
+ * Fica ANTES dos blocos de problema de propósito. É a confirmação positiva que
+ * o Marcus pediu: num dia normal ele lê esta tabela, vê números onde esperava
+ * números, e fecha o e-mail. O bloco só fica vermelho quando o dado não veio.
+ */
+function blocoRodada(rd: RodadaDiaria): string {
+  const c = rd.gravidade === "alerta" ? COR.alerta : rd.gravidade === "atencao" ? COR.atencao : COR.ok
+  const mesLabel = (() => {
+    const [a, m] = rd.competencia.split("-")
+    return `${m}/${a.slice(2)}`
+  })()
+  const linhas = rd.fontes
+    .map(
+      (f) => `
+      <tr>
+        <td style="padding:7px 0;font-size:13px;color:#3f3f46;">${f.rotulo}</td>
+        <td style="padding:7px 0;font-size:13px;color:#71717a;text-align:right;white-space:nowrap;">${f.lojas} loja${f.lojas === 1 ? "" : "s"}</td>
+        <td style="padding:7px 0 7px 14px;font-size:13px;font-weight:700;color:#18181b;text-align:right;white-space:nowrap;">${num(f.linhas)}</td>
+      </tr>`,
+    )
+    .join("")
+
+  // A linha do extrato é a que mais importa e por isso vem destacada: é o
+  // dado que chega ASSÍNCRONO, e é o único que pode faltar sem nada quebrar.
+  const extratoOk = rd.extrato.fecharamHoje === rd.extrato.conectadas
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:${c.fundo};border-left:4px solid ${c.borda};border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:${c.texto};">O que entrou nas últimas 24h</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#3f3f46;">${rd.motivo}</p>
+      ${
+        rd.fontes.length
+          ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid rgba(0,0,0,.07);">${linhas}</table>`
+          : `<p style="margin:0;font-size:13px;color:${COR.alerta.texto};font-weight:700;">Nenhuma linha entrou. As rotinas podem ter rodado sem trazer dado.</p>`
+      }
+      <p style="margin:12px 0 0;padding-top:10px;border-top:1px solid rgba(0,0,0,.07);font-size:13px;color:#3f3f46;">
+        <strong>Extrato de ${mesLabel}:</strong> fechou em
+        <strong style="color:${extratoOk ? COR.ok.texto : COR.atencao.texto};">${rd.extrato.fecharamHoje}/${rd.extrato.conectadas}</strong>
+        lojas hoje.
+        ${
+          extratoOk
+            ? "Todas as conectadas em dia."
+            : rd.extrato.atrasadas.length === 0
+              ? // Fechar em poucas lojas num dia é normal: o iFood gera o
+                // extrato numa fila e o que não sai a tempo entra na rodada
+                // seguinte. Só vira problema quando passa dias — e aí a loja
+                // aparece com nome nos blocos acima.
+                "As demais fecharam nas rodadas anteriores; nenhuma passou de 2 dias."
+              : `<strong style="color:${COR.atencao.texto};">${rd.extrato.atrasadas.length}</strong> com atraso de 2+ dias (listadas acima).`
+        }
+      </p>
+    </td></tr>
+  </table>`
+}
+
 /** Uma linha da conferência API × planilha (só as que divergem em dia). */
 export type ConferenciaResumo = {
   clienteNome: string
@@ -90,10 +302,22 @@ export function emailSaude(
    * calibrar o alarme por palpite.
    */
   conferencia: ConferenciaResumo[] = [],
+  /**
+   * O que as rotinas TROUXERAM nas últimas 24h.
+   *
+   * Sem isto o relatório respondia "rodou?" mas não "chegou dado?" — e as duas
+   * respostas divergem. Em 08/ago/26 a rodada das 06h executou nas 64 lojas e
+   * o extrato do mês fechou em 14: tudo verde, 46 lojas sem o dado do dia.
+   */
+  rodada?: RodadaDiaria,
+  /**
+   * Lojas com problema já agrupadas e separadas entre "parou hoje" e "segue
+   * parado". Sem isto o e-mail volta ao formato de uma linha por
+   * (loja × plataforma), que a 500 lojas passa de mil linhas.
+   */
+  g?: SaudeAgrupada,
 ): { assunto: string; html: string } {
   const r = s.resumo
-  const problemas = s.lojas.filter((l) => l.gravidade === "alerta")
-  const atencoes = s.lojas.filter((l) => l.gravidade === "atencao")
   const cronsRuins = s.crons.filter((c) => c.gravidade === "alerta")
   const cronsAviso = s.crons.filter((c) => c.gravidade === "atencao")
   // Loja parada na fila de conexão não é "integração com defeito" — é conexão
@@ -104,25 +328,49 @@ export function emailSaude(
   const linhaFila = (f: (typeof s.filaIfood)[number]) =>
     `<strong>${f.cliente} · ${f.loja}</strong> <span style="font-size:12px;color:#71717a;">(conexão iFood)</span><br/>${f.motivo}`
 
-  // O assunto carrega o veredito inteiro. É a única linha que você é obrigado
-  // a ler, então ela precisa bastar.
-  const emObservacao = atencoes.length + cronsAviso.length + filaAviso.length
-  const assunto = !s.tudoCerto
-    ? `⚠️ ${r.lojasAlerta + cronsRuins.length + filaRuim.length} ${
-        r.lojasAlerta + cronsRuins.length + filaRuim.length === 1 ? "problema" : "problemas"
-      }${
-        // Diz logo no assunto ONDE está o problema: iFood e 99 são integrações
-        // independentes, e saber qual delas caiu já muda o que você vai abrir.
-        r.ifood.alerta && r.noveNove.alerta
-          ? " no iFood e na 99 Food"
-          : r.ifood.alerta
-            ? " no iFood"
-            : r.noveNove.alerta
-              ? " na 99 Food"
-              : " nas rotinas"
-      }`
+  // A rodada entra no veredito com o mesmo peso das lojas e dos crons: "o dado
+  // não chegou" é problema, mesmo com tudo o resto verde.
+  const rodadaAlerta = rodada?.gravidade === "alerta"
+  const rodadaAtencao = rodada?.gravidade === "atencao"
+  const extratoRuins =
+    rodada?.extrato.atrasadas.filter((a) => a.gravidade === "alerta") ?? []
+  const extratoAviso =
+    rodada?.extrato.atrasadas.filter((a) => a.gravidade === "atencao") ?? []
+  const linhaExtrato = (a: NonNullable<typeof rodada>["extrato"]["atrasadas"][number]) =>
+    `<strong>${a.cliente} · ${a.loja}</strong> <span style="font-size:12px;color:#71717a;">(extrato do mês)</span><br/>${
+      a.dias === null
+        ? "nunca fechou o extrato deste mês"
+        : `sem fechar há ${a.dias} dia${a.dias === 1 ? "" : "s"}`
+    }`
+
+  /* O assunto carrega o veredito inteiro. É a única linha que você é obrigado
+   * a ler, então ela precisa bastar.
+   *
+   * Ele passou a falar em DELTA — "2 pararam hoje" em vez de "17 problemas".
+   * O total não muda de um dia pro outro quando ninguém age, então repetido
+   * por 12 dias ele vira paisagem; a novidade, não. Os nomes dos clientes
+   * afetados entram porque dizem, sem abrir, se é problema seu ou de cliente.
+   */
+  const tudoCerto = s.tudoCerto && !rodadaAlerta && (g?.totalPararamHoje ?? 0) === 0
+  const emObservacao =
+    (g?.totalSeguemParadas ?? 0) +
+    cronsAviso.length +
+    filaAviso.length +
+    (rodadaAtencao ? 1 : 0)
+  const novas = g?.totalPararamHoje ?? 0
+  const clientesNovos = (g?.pararamHoje ?? []).map((x) => x.cliente)
+  const assunto = !tudoCerto
+    ? novas > 0
+      ? // "parou" seria mentira em metade dos casos: boa parte destas lojas
+        // está vendendo e o que atrasou foi o financeiro. "Com dado faltando"
+        // cobre as duas sem dramatizar nenhuma.
+        `⚠️ ${novas} ${novas === 1 ? "loja" : "lojas"} com dado faltando hoje${
+          g && g.totalSeguemParadas > 0 ? ` · ${g.totalSeguemParadas} de antes` : ""
+        }${clientesNovos.length ? ` — ${clientesNovos.slice(0, 3).join(", ")}` : ""}`
+      : // Sem novidade em loja, mas algo em rotina/conexão/extrato caiu.
+        `⚠️ ${cronsRuins.length + filaRuim.length + extratoRuins.length + (rodadaAlerta ? 1 : 0)} nas rotinas — ${placar(r)}`
     : emObservacao > 0
-      ? `✅ Sem alertas — ${placar(r)}, ${emObservacao} em observação`
+      ? `✅ Nada novo hoje — ${placar(r)}, ${emObservacao} em observação`
       : `✅ Tudo certo — ${placar(r)}`
 
   const html = `
@@ -141,7 +389,7 @@ export function emailSaude(
       </table>
 
       <h1 style="margin:0 0 6px;font-size:24px;line-height:1.3;color:#18181b;font-weight:700;">
-        ${!s.tudoCerto ? "Tem coisa pra olhar" : s.temObservacao ? "Sem alertas hoje" : "Tudo sincronizando"}
+        ${!tudoCerto ? "Tem coisa pra olhar" : emObservacao > 0 ? "Sem alertas hoje" : "Tudo sincronizando"}
       </h1>
       <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Checado em ${hora(s.geradoEm)}</p>
 
@@ -169,38 +417,32 @@ export function emailSaude(
         </tr>
       </table>
 
-      ${bloco(
-        "alerta",
-        "Precisa de ação",
-        [
-          ...problemas.map(
-            (l) =>
-              `<strong>${l.cliente} · ${l.loja}</strong> <span style="font-size:12px;color:#71717a;">(${nomePlat(l.plataforma)})</span><br/>${l.motivo}`,
-          ),
-          ...cronsRuins.map(
-            (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
-          ),
-          ...filaRuim.map(linhaFila),
-        ],
-      )}
+      ${rodada ? blocoRodada(rodada) : ""}
 
-      ${bloco(
-        "atencao",
-        "De olho",
-        [
-          ...atencoes.map(
-            (l) =>
-              `<strong>${l.cliente} · ${l.loja}</strong> <span style="font-size:12px;color:#71717a;">(${nomePlat(l.plataforma)})</span><br/>${l.motivo}`,
-          ),
-          ...cronsAviso.map(
-            (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
-          ),
-          ...filaAviso.map(linhaFila),
-        ],
-      )}
+      ${g ? blocoPararamHoje(g) : ""}
+
+      ${g ? blocoSeguemParadas(g) : ""}
+
+      ${bloco("alerta", "Rotinas e conexões", [
+        ...cronsRuins.map(
+          (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
+        ),
+        ...filaRuim.map(linhaFila),
+        ...extratoRuins.map(linhaExtrato),
+      ])}
+
+      ${bloco("atencao", "De olho", [
+        ...cronsAviso.map(
+          (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
+        ),
+        ...filaAviso.map(linhaFila),
+        ...extratoAviso.map(linhaExtrato),
+      ])}
+
+      ${g && g.nuncaConectou.total > 0 ? blocoNuncaConectou(g) : ""}
 
       ${
-        s.tudoCerto && !s.temObservacao
+        tudoCerto && emObservacao === 0
           ? bloco("ok", "Nada a fazer", [
               `Placar de hoje: ${placar(r)} — todas com o dado em dia com as próprias vendas. E as ${r.cronsOk} rotinas rodaram nas últimas 24h.`,
             ])

@@ -2,12 +2,20 @@ import "server-only"
 
 import { registrarCron } from "@/lib/cron/registrar"
 import { enviarResumoSemanal } from "@/lib/push/resumo-semanal"
+import { avisarClientesSemDado } from "@/lib/email/avisar-sem-dado"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
 
-/** Resumo da semana por push. Segunda de manhã, semana anterior fechada. */
+/**
+ * Segunda de manhã: push com o resumo da semana + aviso de loja sem dado.
+ *
+ * As duas coisas moram no MESMO cron de propósito. A conta Vercel é Hobby, que
+ * limita cron a 1x/dia e derruba o build se passar disso — cada rota nova de
+ * cron é orçamento gasto. E as duas são a mesma cadência (semanal, segunda de
+ * manhã) pro mesmo público.
+ */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
@@ -15,6 +23,17 @@ export async function GET(req: Request) {
   }
   return registrarCron("resumo-semanal", async () => {
     const r = await enviarResumoSemanal()
-    return Response.json({ ok: true, ranAt: new Date().toISOString(), ...r })
+
+    // Nunca derruba o push: se o diagnóstico falhar, o resumo da semana sai
+    // do mesmo jeito e só o aviso fica de fora.
+    let avisos: Awaited<ReturnType<typeof avisarClientesSemDado>> | { erro: string }
+    try {
+      avisos = await avisarClientesSemDado()
+    } catch (e) {
+      console.error("resumo-semanal: aviso de loja sem dado falhou:", e)
+      avisos = { erro: String(e) }
+    }
+
+    return Response.json({ ok: true, ranAt: new Date().toISOString(), ...r, avisos })
   })
 }

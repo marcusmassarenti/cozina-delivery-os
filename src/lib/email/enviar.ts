@@ -38,6 +38,13 @@ export type TipoEmail =
    */
   | "conexao-recusada"
   /**
+   * Aviso semanal ao cliente de que uma loja parou de mandar dado. Também NÃO
+   * é régua: a mesma loja pode parar em semanas diferentes, então quem dispara
+   * manda `forcar: true` — senão a trava engoliria a segunda vez em diante,
+   * que é justamente quando o problema virou recorrente.
+   */
+  | "loja-sem-dado"
+  /**
    * Fechamento do mês com dias faltando. Mensal, então quem dispara manda
    * `forcar: true` e faz a própria trava por janela de dias — a trava padrão
    * é "uma vez e nunca mais", que aqui significaria avisar só no primeiro mês.
