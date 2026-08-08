@@ -75,6 +75,14 @@ export const CHANGELOG: Release[] = [
               "Agrupado por dia (com o saldo do dia), a linha inteira verde quando entra e vermelha quando sai, e fonte maior. A joia confirma o lançamento — verde e cheia quando confirmado. Nos três pontinhos: editar, duplicar para hoje, converter em transferência e excluir.",
           },
           {
+            kind: "melhoria",
+            title: "Comparativo por loja abre e fecha",
+            antes:
+              "A tabela das 16 lojas vinha sempre aberta e empurrava o resto da Visão Geral pra fora da tela. E só o nome da loja abria o detalhe — clicar na linha não fazia nada, apesar do “clique para abrir”.",
+            depois:
+              "Fechado, mostra só o total da rede. “Ver por loja” abre a lista, agora com o logo de cada unidade ao lado do nome, e a linha inteira é clicável.",
+          },
+          {
             kind: "novo",
             title: "“A receber” passa a contar o repasse das plataformas",
             antes:

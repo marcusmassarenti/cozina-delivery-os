@@ -66,9 +66,11 @@ function scopeUnits(q: any, allowed: string[] | null, incluiEmpresa = false): an
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** Lojas visíveis pro usuário (admin → todas; franqueado → as dele). */
-export async function getCaixaUnits(): Promise<{ id: string; name: string }[]> {
+export async function getCaixaUnits(): Promise<
+  { id: string; name: string; logoUrl: string | null }[]
+> {
   const units = await getVisibleUnits()
-  return units.map((u) => ({ id: u.id, name: u.name }))
+  return units.map((u) => ({ id: u.id, name: u.name, logoUrl: u.logoUrl }))
 }
 
 export type AccountKind = "conta_corrente" | "cartao" | "dinheiro" | "outro"
@@ -810,6 +812,9 @@ export function countContacts(contacts: FinContact[]): ContactCounts {
 export type LojaResumo = {
   unitId: string | null
   name: string
+  /** Logo da loja (white-label por unidade). A rede tem 3 marcas, então o logo
+   *  é o que separa "Jardins" de "Churrasco no Pão — Jardins" de relance. */
+  logoUrl: string | null
   saldo: number
   recebido: number
   pago: number
@@ -877,6 +882,7 @@ export async function getCaixaPorLoja(
   const empty = (): LojaResumo => ({
     unitId: null,
     name: "",
+    logoUrl: null,
     saldo: 0,
     recebido: 0,
     pago: 0,
@@ -885,7 +891,8 @@ export async function getCaixaPorLoja(
     resultado: 0,
   })
   const map = new Map<string, LojaResumo>()
-  for (const u of units) map.set(u.id, { ...empty(), unitId: u.id, name: u.name })
+  for (const u of units)
+    map.set(u.id, { ...empty(), unitId: u.id, name: u.name, logoUrl: u.logoUrl })
   if (allowed === null) map.set(REDE, { ...empty(), unitId: null, name: "Rede (geral)" })
   const bucket = (u: string | null) => map.get(k(u))
 
