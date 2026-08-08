@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth/roles"
 import { todayISO } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
+import { getAReceberDelivery } from "@/lib/data/a-receber-delivery"
 
 /** Filtro de loja: "todas" (consolidado) | "rede" (sem loja) | <unitId>. */
 export type Loja = string | undefined
@@ -826,7 +827,7 @@ export async function getCaixaPorLoja(
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
   const empresa = await temEscopoDaEmpresa()
-  const [units, accsRes, efetRes, mesRes, cardIds] = await Promise.all([
+  const [units, accsRes, efetRes, mesRes, cardIds, delivery] = await Promise.all([
     getCaixaUnits(),
     scopeUnits(
       admin
@@ -856,6 +857,7 @@ export async function getCaixaPorLoja(
       empresa,
     ),
     getCardAccountIds(holdingId),
+    getAReceberDelivery(),
   ])
 
   type Acc = {
@@ -909,6 +911,17 @@ export async function getCaixaPorLoja(
     const v = Number(e.value ?? 0)
     if (e.kind === "receita") e.paid_date ? (b.recebido += v) : (b.aReceber += v)
     else if (e.kind === "despesa") e.paid_date ? (b.pago += v) : (b.aPagar += v)
+  }
+  // "A receber" também é o repasse de delivery que ainda não caiu. Sem isto a
+  // coluna ficava zerada em todas as lojas: extrato bancário é dinheiro que já
+  // mexeu, então toda linha importada nasce paga, e o repasse -- a maior fonte
+  // de receita da operação -- morava só na projeção do Fluxo de Caixa.
+  //
+  // NÃO entra em `resultado`: resultado é recebido menos pago, regime de caixa.
+  // Somar o que ainda vai cair misturaria previsão com realizado.
+  for (const [unitId, d] of delivery) {
+    const b = map.get(unitId)
+    if (b) b.aReceber += d.total
   }
   for (const b of map.values()) b.resultado = b.recebido - b.pago
 

@@ -14,6 +14,12 @@ import {
   getEntries,
 } from "@/lib/data/caixa"
 
+import {
+  getAReceberDelivery,
+  somarPlataformas,
+} from "@/lib/data/a-receber-delivery"
+import { PlatformLogo } from "@/components/platform-logo"
+
 import { EntriesList } from "../_components/entries-list"
 import { OfxImport } from "../_components/ofx-import"
 
@@ -29,14 +35,17 @@ export default async function LancamentosPage({
   const loja = sp.loja
   const { range: periodRange, year, month, isFullMonth } = readPeriod(sp)
 
-  const [accounts, categories, cardIds, contacts, units, summary] = await Promise.all([
-    getAccounts(holdingId),
-    getCategoriesFlat(holdingId),
-    getCardAccountIds(holdingId),
-    getContacts(holdingId),
-    getCaixaUnits(),
-    getCaixaSummary(holdingId, year, month, loja),
-  ])
+  const [accounts, categories, cardIds, contacts, units, summary, porLoja] =
+    await Promise.all([
+      getAccounts(holdingId),
+      getCategoriesFlat(holdingId),
+      getCardAccountIds(holdingId),
+      getContacts(holdingId),
+      getCaixaUnits(),
+      getCaixaSummary(holdingId, year, month, loja),
+      getAReceberDelivery(loja),
+    ])
+  const delivery = somarPlataformas(porLoja)
   // Compras de cartão ficam na aba Cartões (não na lista do caixa).
   const entries = await getEntries(holdingId, { year, month, excludeAccountIds: cardIds, loja })
   // Contas vencidas e não pagas de QUALQUER mês — senão uma conta em atraso de
@@ -57,10 +66,26 @@ export default async function LancamentosPage({
     periods.push({ year: d.getFullYear(), month: d.getMonth() + 1 })
   }
 
+  // Repasse de delivery que ainda não caiu. Aqui, ao contrário do comparativo
+  // da Visão Geral (que é consolidado), a quebra por plataforma aparece: é a
+  // tela da loja, e quem cobra repasse cobra de um marketplace por vez.
+  const plataformas = (
+    [
+      { id: "ifood", nome: "iFood", valor: delivery.ifood },
+      { id: "99food", nome: "99 Food", valor: delivery.ninefood },
+      { id: "keeta", nome: "Keeta", valor: delivery.keeta },
+    ] as const
+  ).filter((p) => p.valor > 0)
+
   const chips = [
     { label: "Recebido", value: summary.receitaEfetivada, cls: "text-emerald-600" },
     { label: "Pago", value: summary.despesaEfetivada, cls: "text-rose-600" },
-    { label: "A receber", value: summary.aReceber, cls: "text-emerald-500" },
+    {
+      label: "A receber",
+      value: summary.aReceber + delivery.total,
+      cls: "text-emerald-500",
+      plataformas,
+    },
     { label: "A pagar", value: summary.aPagar, cls: "text-amber-600" },
   ]
 
@@ -92,6 +117,22 @@ export default async function LancamentosPage({
             <div className={`mt-0.5 text-lg font-semibold tabular-nums ${c.cls}`}>
               {fmtBRL(c.value)}
             </div>
+            {c.plataformas && c.plataformas.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1 border-t pt-2">
+                {c.plataformas.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <PlatformLogo platform={p.id} className="size-3.5 rounded-[3px]" />
+                      {p.nome}
+                    </span>
+                    <span className="tabular-nums">{fmtBRL(p.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -75,6 +75,14 @@ export const CHANGELOG: Release[] = [
               "Agrupado por dia (com o saldo do dia), a linha inteira verde quando entra e vermelha quando sai, e fonte maior. A joia confirma o lançamento — verde e cheia quando confirmado. Nos três pontinhos: editar, duplicar para hoje, converter em transferência e excluir.",
           },
           {
+            kind: "novo",
+            title: "“A receber” passa a contar o repasse das plataformas",
+            antes:
+              "A coluna lia só o que foi digitado no Caixa ou importado do extrato. Como extrato bancário é dinheiro que já mexeu, toda linha nascia paga — e a loja aparecia com R$ 0,00 a receber mesmo tendo repasse de delivery a caminho.",
+            depois:
+              "Cada loja mostra o que o iFood, a 99 e a Keeta ainda vão depositar. No comparativo o valor é consolidado; dentro da loja, o card “A receber” abre por plataforma. O total agora fecha com o Fluxo de Caixa.",
+          },
+          {
             kind: "correcao",
             title: "Fluxo de Caixa não conta mais repasse que já caiu",
             antes:
