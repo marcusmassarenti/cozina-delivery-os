@@ -66,6 +66,8 @@ function escopo(
 
 export async function getAReceberDelivery(
   loja?: Loja,
+  /** Período da tela. Sem ele, devolve o pendente de hoje sem restrição. */
+  periodo?: { start: string; end: string },
 ): Promise<Map<string, AReceberPlataformas>> {
   const porLoja = new Map<string, AReceberPlataformas>()
   const allowed = await getAccessibleUnitIds()
@@ -74,6 +76,17 @@ export async function getAReceberDelivery(
 
   const admin = createAdminClient()
   const hoje = hojeISO()
+
+  // "A receber" é uma foto de AGORA, não uma métrica de competência: é o que
+  // as plataformas ainda devem neste instante. As colunas vizinhas (recebido,
+  // pago, resultado) são do período escolhido.
+  //
+  // Sem esta guarda, abrir Julho mostrava "recebido R$ 0,00, pago R$ 0,00, a
+  // receber R$ 269.002,47" -- dinheiro que só cai a partir de 12/08 aparecendo
+  // como se fosse de julho. Num período que não contém hoje, a pergunta "o que
+  // ainda vou receber" não tem resposta: o certo é não responder.
+  if (periodo && (hoje < periodo.start || hoje > periodo.end)) return porLoja
+
   const unitsFiltro = e.units
     ? e.units.length
       ? e.units

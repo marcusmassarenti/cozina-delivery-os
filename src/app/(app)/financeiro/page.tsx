@@ -72,7 +72,7 @@ export default async function VisaoGeralPage({
   const pCategories = getCategoriesFlat(holdingId)
   const pTop = getTopTitulares(holdingId, year, month, loja)
   const pLojas = consolidado
-    ? getCaixaPorLoja(holdingId, year, month)
+    ? getCaixaPorLoja(holdingId, year, month, periodRange)
     : Promise.resolve([])
   // Resumo do fluxo de caixa projetado (30 dias) pro topo.
   const pFluxo = getFluxoCaixa(30, loja)

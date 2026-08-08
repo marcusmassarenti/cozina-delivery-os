@@ -43,7 +43,7 @@ export default async function LancamentosPage({
       getContacts(holdingId),
       getCaixaUnits(),
       getCaixaSummary(holdingId, year, month, loja),
-      getAReceberDelivery(loja),
+      getAReceberDelivery(loja, periodRange),
     ])
   const delivery = somarPlataformas(porLoja)
   // Compras de cartão ficam na aba Cartões (não na lista do caixa).

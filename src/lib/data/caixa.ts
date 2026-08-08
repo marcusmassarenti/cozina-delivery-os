@@ -828,6 +828,8 @@ export async function getCaixaPorLoja(
   holdingId: string,
   year: number,
   month: number,
+  /** Período da tela — o "a receber" de delivery só entra se contiver hoje. */
+  periodo?: { start: string; end: string },
 ): Promise<LojaResumo[]> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
@@ -862,7 +864,7 @@ export async function getCaixaPorLoja(
       empresa,
     ),
     getCardAccountIds(holdingId),
-    getAReceberDelivery(),
+    getAReceberDelivery(undefined, periodo),
   ])
 
   type Acc = {
