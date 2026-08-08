@@ -126,6 +126,9 @@ export function NewUnitDialog({
                 erroCnpj={state.fieldErrors?.cnpj}
                 cidade={cidade}
                 onCidade={setCidade}
+                // Mesma ligação do Editar: sem ela a UF fica no padrão mesmo
+                // com a Receita tendo respondido o estado certo.
+                onUf={setUf}
               />
               <input type="hidden" name="state" value={uf} />
               <div className="mt-3 w-32">

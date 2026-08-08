@@ -66,12 +66,19 @@ export function DadosDaUnidade({
   erroCnpj,
   cidade,
   onCidade,
+  onUf,
   nome,
 }: {
   perfil?: PerfilUnidade
   erroCnpj?: string
   cidade: string
   onCidade: (v: string) => void
+  /**
+   * A UF vive no componente PAI (é ela que monta o <select>), então a consulta
+   * ao CNPJ não conseguia preenchê-la — cidade vinha da Receita e o estado
+   * ficava no padrão. Foi assim que a Le Petit Pastéis ficou "GOIANIA / SP".
+   */
+  onUf?: (v: string) => void
   nome?: string | null
 }) {
   // Controlados porque a consulta ao CNPJ os preenche. Com defaultValue eles
@@ -125,6 +132,7 @@ export function DadosDaUnidade({
             // complemento, não apaga o que a pessoa já tinha digitado.
             setRazao(d.razaoSocial)
             if (d.cidade) onCidade(d.cidade)
+            if (d.uf) onUf?.(d.uf)
             if (d.logradouro) setLogradouro(d.logradouro)
             if (d.numero) setNumero(d.numero)
             if (d.complemento) setComplemento(d.complemento)

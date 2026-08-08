@@ -260,6 +260,9 @@ const [solicitacao99State, solicitar99Action] = useActionState(
                 erroCnpj={state.fieldErrors?.cnpj}
                 cidade={cidade}
                 onCidade={setCidade}
+                // Sem isto a consulta trazia a cidade e deixava o estado no
+                // padrão — "GOIANIA / SP" na Le Petit Pastéis.
+                onUf={setUf}
                 perfil={{
                   cnpj: unit.cnpj ? maskCnpj(unit.cnpj) : "",
                   razaoSocial: unit.razaoSocial,
