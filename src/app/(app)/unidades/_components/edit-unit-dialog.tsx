@@ -126,6 +126,7 @@ export type EditUnitInitial = {
   razaoSocial?: string | null
   tipoCozinha?: string | null
   tipoOperacao?: string | null
+  regimeFiscal?: string | null
   tipoEntrega?: string | null
   logradouro?: string | null
   numero?: string | null
@@ -268,6 +269,7 @@ const [solicitacao99State, solicitar99Action] = useActionState(
                   razaoSocial: unit.razaoSocial,
                   tipoCozinha: unit.tipoCozinha,
                   tipoOperacao: unit.tipoOperacao,
+                  regimeFiscal: unit.regimeFiscal,
                   tipoEntrega: unit.tipoEntrega,
                   logradouro: unit.logradouro,
                   numero: unit.numero,
@@ -304,6 +306,7 @@ const [solicitacao99State, solicitar99Action] = useActionState(
               <OperacaoDaUnidade
                 perfil={{
                   tipoOperacao: unit.tipoOperacao,
+                  regimeFiscal: unit.regimeFiscal,
                   tipoEntrega: unit.tipoEntrega,
                 }}
               >

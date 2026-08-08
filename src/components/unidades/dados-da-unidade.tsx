@@ -17,6 +17,7 @@ export type PerfilUnidade = {
   tipoCozinha?: string | null
   tipoOperacao?: string | null
   tipoEntrega?: string | null
+  regimeFiscal?: string | null
   logradouro?: string | null
   numero?: string | null
   complemento?: string | null
@@ -303,6 +304,20 @@ export function OperacaoDaUnidade({
                 {t.label}
               </option>
             ))}
+          </select>
+        </Campo>
+        {/* Regime fiscal decide se o imposto da NF de compra é custo ou
+            crédito. Fica no cadastro da LOJA porque dentro de uma rede uma
+            unidade pode ter estourado o teto do Simples enquanto as outras
+            não — e no SaaS cada cliente tem o seu. */}
+        <Campo label="Regime fiscal" span={6}>
+          <select
+            name="regime_fiscal"
+            defaultValue={perfil?.regimeFiscal ?? "simples"}
+            className={inputCls}
+          >
+            <option value="simples">Simples Nacional</option>
+            <option value="normal">Regime Normal (credita imposto)</option>
           </select>
         </Campo>
         <Campo label="Quem entrega" span={6}>

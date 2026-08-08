@@ -144,6 +144,7 @@ export async function createUnit(
   const perfil = {
     tipo_cozinha: txt("tipo_cozinha"),
     tipo_operacao: txt("tipo_operacao"),
+    regime_fiscal: txt("regime_fiscal") ?? "simples",
     tipo_entrega: txt("tipo_entrega"),
     razao_social: txt("razao_social"),
     nome_fantasia: txt("nome_fantasia"),
@@ -386,6 +387,7 @@ export async function updateUnit(
   const perfil = {
     tipo_cozinha: txt("tipo_cozinha"),
     tipo_operacao: txt("tipo_operacao"),
+    regime_fiscal: txt("regime_fiscal") ?? "simples",
     tipo_entrega: txt("tipo_entrega"),
     razao_social: txt("razao_social"),
     nome_fantasia: txt("nome_fantasia"),

@@ -42,6 +42,49 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.16.0",
+    date: "2026-08-08",
+    tag: "Grande novidade",
+    title: "Suba a nota do fornecedor e o custo do insumo se atualiza sozinho",
+    summary:
+      "Notas & insumos: o XML da NF-e vira catálogo de insumos com custo real, atualizado a cada compra. É o primeiro passo do CMV por produto.",
+    areas: [
+      {
+        area: "Financeiro",
+        items: [
+          {
+            kind: "novo",
+            title: "Importação de nota fiscal (XML)",
+            antes:
+              "O custo dos insumos vivia em planilha, atualizado à mão quando alguém lembrava. Descobrir que a carne subiu 8% dependia de conferir nota por nota.",
+            depois:
+              "Suba o XML da NF-e e pronto: a nota é conferida, os itens entram e o custo de cada insumo se atualiza. A mesma nota não entra duas vezes — a chave de acesso barra.",
+          },
+          {
+            kind: "novo",
+            title: "A nota descobre sozinha de qual loja é",
+            desc:
+              "Pelo CNPJ do destinatário. Na primeira nota de uma loja sem CNPJ cadastrado, o sistema pergunta uma vez e grava — da segunda em diante entra sozinha.",
+          },
+          {
+            kind: "novo",
+            title: "Fator de conversão: da caixa para a unidade",
+            antes:
+              "A nota diz “1 caixa de potes: R$ 614,40”. A ficha técnica precisa saber quanto custa UM pote — e essa conta ninguém fazia.",
+            depois:
+              "Você diz uma vez que a caixa tem 480 unidades e o sistema mostra R$ 1,28 por pote, recalculando a cada nota nova.",
+          },
+          {
+            kind: "novo",
+            title: "Regime fiscal por loja",
+            desc:
+              "No cadastro da unidade. No Simples o imposto da nota é custo; no Regime Normal ele vira crédito e sai do custo. Numa nota real de R$ 18.895,86 a diferença entre os dois foi de R$ 3.474 — 18%. O cálculo é item a item, porque a alíquota varia dentro da mesma nota.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.15.0",
     date: "2026-08-08",
     tag: "Melhorias",

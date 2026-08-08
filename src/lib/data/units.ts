@@ -31,6 +31,7 @@ export type Unit = {
   nome_fantasia?: string | null
   tipo_cozinha?: string | null
   tipo_operacao?: string | null
+  regime_fiscal?: string | null
   tipo_entrega?: string | null
   logradouro?: string | null
   numero?: string | null
@@ -69,6 +70,7 @@ type DbUnit = {
   nome_fantasia?: string | null
   tipo_cozinha?: string | null
   tipo_operacao?: string | null
+  regime_fiscal?: string | null
   tipo_entrega?: string | null
   logradouro?: string | null
   numero?: string | null
@@ -115,7 +117,7 @@ async function getUnitsUncached(): Promise<Unit[]> {
     supabase
       .from("units")
       .select(
-        "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento, razao_social, nome_fantasia, tipo_cozinha, tipo_operacao, tipo_entrega, logradouro, numero, complemento, bairro, cep, telefone, responsavel_nome, responsavel_email, cnae_descricao, situacao_cadastral",
+        "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento, razao_social, nome_fantasia, tipo_cozinha, tipo_operacao, regime_fiscal, tipo_entrega, logradouro, numero, complemento, bairro, cep, telefone, responsavel_nome, responsavel_email, cnae_descricao, situacao_cadastral",
       )
       .order("code"),
     supabase
@@ -230,7 +232,7 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   let q = supabase
     .from("units")
     .select(
-      "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento, razao_social, nome_fantasia, tipo_cozinha, tipo_operacao, tipo_entrega, logradouro, numero, complemento, bairro, cep, telefone, responsavel_nome, responsavel_email, cnae_descricao, situacao_cadastral",
+      "id, code, name, city, state, cnpj, active, brand_id, data_inauguracao, data_encerramento, razao_social, nome_fantasia, tipo_cozinha, tipo_operacao, regime_fiscal, tipo_entrega, logradouro, numero, complemento, bairro, cep, telefone, responsavel_nome, responsavel_email, cnae_descricao, situacao_cadastral",
     )
     .eq("code", code)
     .order("id")

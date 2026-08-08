@@ -303,6 +303,7 @@ export function UnitsListView({
                         razaoSocial: unit.razao_social ?? null,
                         tipoCozinha: unit.tipo_cozinha ?? null,
                         tipoOperacao: unit.tipo_operacao ?? null,
+                        regimeFiscal: unit.regime_fiscal ?? null,
                         tipoEntrega: unit.tipo_entrega ?? null,
                         logradouro: unit.logradouro ?? null,
                         numero: unit.numero ?? null,
