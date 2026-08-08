@@ -16,6 +16,24 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { apenasJanelaVigente } from "@/lib/data/ifood-imported"
 import { getUnits } from "@/lib/data/units"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
+
+/**
+ * Empresa dona do cadastro.
+ *
+ * Desde a migration 0169 as producao_* são escopadas por holding: a ficha
+ * técnica deixou de ser cadastro interno da Cozina e virou tela de cliente.
+ * Sem o filtro, a DG FOODS enxergaria a receita do Churrasco no Pote.
+ *
+ * O parâmetro existe porque nem todo chamador tem sessão: a rota
+ * /api/v1/demanda-insumos é autenticada por chave de API e passa a holding
+ * explicitamente. UUID inexistente quando não há dono — fail-closed, devolve
+ * vazio em vez de devolver tudo.
+ */
+const SEM_DONO = "00000000-0000-0000-0000-000000000000"
+async function escopo(holdingId?: string | null): Promise<string> {
+  return holdingId ?? (await getCurrentHoldingId()) ?? SEM_DONO
+}
 
 export type Platform = "ifood" | "99food" | "keeta"
 
@@ -198,8 +216,9 @@ async function getItemSalesByUnit(
 
 // ─── Cadastro (catálogo / pratos / de-para / ficha) ──────────────────
 
-export async function getInsumos(): Promise<Insumo[]> {
+export async function getInsumos(holdingId?: string | null): Promise<Insumo[]> {
   const admin = createAdminClient()
+  const hid = await escopo(holdingId)
   const [rows, fichaRows] = await Promise.all([
     fetchAllRows<{
       codigo: string
@@ -211,6 +230,7 @@ export async function getInsumos(): Promise<Insumo[]> {
         admin
           .from("producao_insumo")
           .select("codigo, nome, unidade, ativo")
+          .eq("holding_id", hid)
           .order("codigo")
           .range(from, to),
       "producao_insumo",
@@ -220,6 +240,7 @@ export async function getInsumos(): Promise<Insumo[]> {
         admin
           .from("producao_ficha")
           .select("insumo_codigo")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_ficha (uso)",
@@ -239,16 +260,18 @@ export async function getInsumos(): Promise<Insumo[]> {
 }
 
 /** Mapa de-para: "platform|nome_item" → { pratoId, pratoNome }. */
-async function getDeParaMap(): Promise<
+async function getDeParaMap(holdingId?: string | null): Promise<
   Map<string, { pratoId: string; pratoNome: string }>
 > {
   const admin = createAdminClient()
+  const hid = await escopo(holdingId)
   const [nomes, pratos] = await Promise.all([
     fetchAllRows<{ platform: Platform; nome_item: string; prato_id: string }>(
       (from, to) =>
         admin
           .from("producao_prato_nome")
           .select("platform, nome_item, prato_id")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_prato_nome",
@@ -258,6 +281,7 @@ async function getDeParaMap(): Promise<
         admin
           .from("producao_prato")
           .select("id, nome")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_prato (map)",
@@ -275,19 +299,21 @@ async function getDeParaMap(): Promise<
 }
 
 /** prato_id → linhas da ficha (com nome/unidade do insumo resolvidos). */
-async function getFichaByPrato(): Promise<Map<string, FichaLinha[]>> {
+async function getFichaByPrato(holdingId?: string | null): Promise<Map<string, FichaLinha[]>> {
   const admin = createAdminClient()
+  const hid = await escopo(holdingId)
   const [ficha, insumos] = await Promise.all([
     fetchAllRows<{ prato_id: string; insumo_codigo: string; qtd: number | string }>(
       (from, to) =>
         admin
           .from("producao_ficha")
           .select("prato_id, insumo_codigo, qtd")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_ficha (byPrato)",
     ),
-    getInsumos(),
+    getInsumos(hid),
   ])
   const insumoById = new Map(insumos.map((i) => [i.codigo, i]))
   const map = new Map<string, FichaLinha[]>()
@@ -305,14 +331,16 @@ async function getFichaByPrato(): Promise<Map<string, FichaLinha[]>> {
   return map
 }
 
-export async function getPratosComFicha(): Promise<Prato[]> {
+export async function getPratosComFicha(holdingId?: string | null): Promise<Prato[]> {
   const admin = createAdminClient()
+  const hid = await escopo(holdingId)
   const [pratos, nomes, ficha, insumos] = await Promise.all([
     fetchAllRows<{ id: string; nome: string; ativo: boolean }>(
       (from, to) =>
         admin
           .from("producao_prato")
           .select("id, nome, ativo")
+          .eq("holding_id", hid)
           .order("nome")
           .range(from, to),
       "producao_prato",
@@ -327,6 +355,7 @@ export async function getPratosComFicha(): Promise<Prato[]> {
         admin
           .from("producao_prato_nome")
           .select("id, prato_id, platform, nome_item")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_prato_nome (full)",
@@ -340,6 +369,7 @@ export async function getPratosComFicha(): Promise<Prato[]> {
         admin
           .from("producao_ficha")
           .select("prato_id, insumo_codigo, qtd")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_ficha",
@@ -384,11 +414,13 @@ export async function getPratosComFicha(): Promise<Prato[]> {
 export async function getItensVendidos(
   year: number,
   month: number,
+  holdingId?: string | null,
 ): Promise<ItemVendido[]> {
+  const hid = await escopo(holdingId)
   const [sales, dePara, fichaByPrato] = await Promise.all([
     getItemSalesByUnit(year, month),
-    getDeParaMap(),
-    getFichaByPrato(),
+    getDeParaMap(hid),
+    getFichaByPrato(hid),
   ])
   const acc = new Map<string, ItemVendido>()
   for (const s of sales) {
@@ -422,21 +454,24 @@ export async function getDemandaInsumos(
   year: number,
   month: number,
   filterUnitIds?: string[],
+  holdingId?: string | null,
 ): Promise<DemandaInsumos> {
   const admin = createAdminClient()
+  const hid = await escopo(holdingId)
   const [sales, dePara, fichaRows, insumos, units] = await Promise.all([
     getItemSalesByUnit(year, month, filterUnitIds),
-    getDeParaMap(),
+    getDeParaMap(hid),
     fetchAllRows<{ prato_id: string; insumo_codigo: string; qtd: number | string }>(
       (from, to) =>
         admin
           .from("producao_ficha")
           .select("prato_id, insumo_codigo, qtd")
+          .eq("holding_id", hid)
           .order("id")
           .range(from, to),
       "producao_ficha (demanda)",
     ),
-    getInsumos(),
+    getInsumos(hid),
     getUnits(),
   ])
 

@@ -3,8 +3,19 @@
 import { revalidatePath } from "next/cache"
 
 import { requireAdmin } from "@/lib/auth/guards"
+import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
 export type ActionState = { ok: boolean; message?: string }
+
+/**
+ * Empresa dona do cadastro. TUDO aqui é escopado por ela desde a migration
+ * 0169: a ficha técnica deixou de ser cadastro interno da Cozina e virou tela
+ * de cliente, então gravar sem dono criaria linha órfã — invisível pela RLS e
+ * fora da chave única (holding_id, codigo).
+ */
+async function holdingAtual(): Promise<string | null> {
+  return getCurrentHoldingId()
+}
 
 type Platform = "ifood" | "99food" | "keeta"
 
@@ -52,9 +63,15 @@ export async function importInsumos(text: string): Promise<ActionState> {
   }
   if (rows.length === 0) return fail("Nada pra importar.")
 
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
+
   const { error } = await admin
     .from("producao_insumo")
-    .upsert(rows, { onConflict: "codigo" })
+    .upsert(
+      rows.map((r) => ({ ...r, holding_id: holdingId })),
+      { onConflict: "holding_id,codigo" },
+    )
   if (error) return fail(`Erro ao salvar: ${error.message}`)
   revalidatePath("/ficha-tecnica")
   return { ok: true, message: `${rows.length} insumo(s) salvos.` }
@@ -80,9 +97,14 @@ export async function upsertInsumosRows(
     }))
     .filter((r) => r.codigo && r.nome)
   if (clean.length === 0) return fail("Preencha pelo menos Código e Nome.")
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
   const { error } = await admin
     .from("producao_insumo")
-    .upsert(clean, { onConflict: "codigo" })
+    .upsert(
+      clean.map((r) => ({ ...r, holding_id: holdingId })),
+      { onConflict: "holding_id,codigo" },
+    )
   if (error) return fail(`Erro ao salvar: ${error.message}`)
   revalidatePath("/ficha-tecnica")
   return { ok: true, message: `${clean.length} insumo(s) salvos.` }
@@ -101,10 +123,13 @@ export async function deleteInsumo(
   }
   const cod = (codigo ?? "").trim().toUpperCase()
   if (!cod) return fail("Código inválido.")
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
 
   const { count } = await admin
     .from("producao_ficha")
     .select("id", { count: "exact", head: true })
+    .eq("holding_id", holdingId)
     .eq("insumo_codigo", cod)
   if (count && count > 0) {
     return {
@@ -116,6 +141,7 @@ export async function deleteInsumo(
   const { error } = await admin
     .from("producao_insumo")
     .delete()
+    .eq("holding_id", holdingId)
     .eq("codigo", cod)
   if (error) return fail(`Erro: ${error.message}`)
   revalidatePath("/ficha-tecnica")
@@ -135,10 +161,17 @@ export async function forceDeleteInsumo(
   }
   const cod = (codigo ?? "").trim().toUpperCase()
   if (!cod) return fail("Código inválido.")
-  await admin.from("producao_ficha").delete().eq("insumo_codigo", cod)
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
+  await admin
+    .from("producao_ficha")
+    .delete()
+    .eq("holding_id", holdingId)
+    .eq("insumo_codigo", cod)
   const { error } = await admin
     .from("producao_insumo")
     .delete()
+    .eq("holding_id", holdingId)
     .eq("codigo", cod)
   if (error) return fail(`Erro: ${error.message}`)
   revalidatePath("/ficha-tecnica")
@@ -160,10 +193,13 @@ export async function replaceInsumoAndDelete(input: {
   const from = (input.fromCodigo ?? "").trim().toUpperCase()
   const to = (input.toCodigo ?? "").trim().toUpperCase()
   if (!from || !to || from === to) return fail("Escolha um insumo diferente.")
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
 
   const { data: toIns } = await admin
     .from("producao_insumo")
     .select("codigo")
+    .eq("holding_id", holdingId)
     .eq("codigo", to)
     .maybeSingle()
   if (!toIns) return fail("Insumo substituto não existe.")
@@ -171,11 +207,13 @@ export async function replaceInsumoAndDelete(input: {
   const { data: rows } = await admin
     .from("producao_ficha")
     .select("id, prato_id, qtd")
+    .eq("holding_id", holdingId)
     .eq("insumo_codigo", from)
   for (const r of rows ?? []) {
     const { data: dup } = await admin
       .from("producao_ficha")
       .select("id, qtd")
+      .eq("holding_id", holdingId)
       .eq("prato_id", r.prato_id)
       .eq("insumo_codigo", to)
       .maybeSingle()
@@ -192,7 +230,11 @@ export async function replaceInsumoAndDelete(input: {
         .eq("id", r.id)
     }
   }
-  await admin.from("producao_insumo").delete().eq("codigo", from)
+  await admin
+    .from("producao_insumo")
+    .delete()
+    .eq("holding_id", holdingId)
+    .eq("codigo", from)
   revalidatePath("/ficha-tecnica")
   return { ok: true, message: `Substituído por ${to} e excluído.` }
 }
@@ -214,6 +256,8 @@ export async function setItemFicha(input: {
     return fail("Apenas administradores.")
   }
   if (!input.nomeItem) return fail("Item inválido.")
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
 
   // Normaliza + soma repetidos.
   const merged = new Map<string, number>()
@@ -228,6 +272,7 @@ export async function setItemFicha(input: {
   const { data: existing } = await admin
     .from("producao_prato_nome")
     .select("prato_id")
+    .eq("holding_id", holdingId)
     .eq("platform", input.platform)
     .eq("nome_item", input.nomeItem)
     .maybeSingle()
@@ -236,7 +281,7 @@ export async function setItemFicha(input: {
     if (merged.size === 0) return { ok: true }
     const { data: created, error: e1 } = await admin
       .from("producao_prato")
-      .insert({ nome: input.nomeItem })
+      .insert({ nome: input.nomeItem, holding_id: holdingId })
       .select("id")
       .single()
     if (e1 || !created) return fail(`Erro ao criar: ${e1?.message ?? ""}`)
@@ -245,6 +290,7 @@ export async function setItemFicha(input: {
       platform: input.platform,
       nome_item: input.nomeItem,
       prato_id: pratoId,
+      holding_id: holdingId,
     })
     if (e2) return fail(`Erro ao mapear: ${e2.message}`)
   }
@@ -254,6 +300,7 @@ export async function setItemFicha(input: {
   const { data: insumos } = await admin
     .from("producao_insumo")
     .select("codigo")
+    .eq("holding_id", holdingId)
   const validos = new Set((insumos ?? []).map((i) => i.codigo as string))
   const aplicar: { codigo: string; qtd: number }[] = []
   const invalidos: string[] = []
@@ -265,6 +312,7 @@ export async function setItemFicha(input: {
   const { error: eDel } = await admin
     .from("producao_ficha")
     .delete()
+    .eq("holding_id", holdingId)
     .eq("prato_id", pid)
   if (eDel) return fail(`Erro ao limpar ficha: ${eDel.message}`)
   if (aplicar.length > 0) {
@@ -273,6 +321,7 @@ export async function setItemFicha(input: {
         prato_id: pid,
         insumo_codigo: p.codigo,
         qtd: p.qtd,
+        holding_id: holdingId,
       })),
     )
     if (eIns) return fail(`Erro ao salvar ficha: ${eIns.message}`)
@@ -308,9 +357,12 @@ export async function bulkSetFichas(
   if (!targets || targets.length === 0) {
     return fail("Nenhum produto selecionado.")
   }
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
   const { data: insumos } = await admin
     .from("producao_insumo")
     .select("codigo")
+    .eq("holding_id", holdingId)
   const validos = new Set((insumos ?? []).map((i) => i.codigo as string))
 
   let okCount = 0
@@ -328,6 +380,7 @@ export async function bulkSetFichas(
     const { data: existing } = await admin
       .from("producao_prato_nome")
       .select("prato_id")
+      .eq("holding_id", holdingId)
       .eq("platform", t.platform)
       .eq("nome_item", t.nomeItem)
       .maybeSingle()
@@ -335,7 +388,7 @@ export async function bulkSetFichas(
     if (!pratoId) {
       const { data: created } = await admin
         .from("producao_prato")
-        .insert({ nome: t.nomeItem })
+        .insert({ nome: t.nomeItem, holding_id: holdingId })
         .select("id")
         .single()
       if (!created) continue
@@ -344,15 +397,21 @@ export async function bulkSetFichas(
         platform: t.platform,
         nome_item: t.nomeItem,
         prato_id: pratoId,
+        holding_id: holdingId,
       })
     }
     const pid: string = pratoId!
-    await admin.from("producao_ficha").delete().eq("prato_id", pid)
+    await admin
+      .from("producao_ficha")
+      .delete()
+      .eq("holding_id", holdingId)
+      .eq("prato_id", pid)
     await admin.from("producao_ficha").insert(
       Array.from(merged.entries()).map(([codigo, qtd]) => ({
         prato_id: pid,
         insumo_codigo: codigo,
         qtd,
+        holding_id: holdingId,
       })),
     )
     okCount++
@@ -373,15 +432,19 @@ export async function removeItemFicha(input: {
   } catch {
     return fail("Apenas administradores.")
   }
+  const holdingId = await holdingAtual()
+  if (!holdingId) return fail("Sem empresa no contexto.")
   const { data: map } = await admin
     .from("producao_prato_nome")
     .select("prato_id")
+    .eq("holding_id", holdingId)
     .eq("platform", input.platform)
     .eq("nome_item", input.nomeItem)
     .maybeSingle()
   await admin
     .from("producao_prato_nome")
     .delete()
+    .eq("holding_id", holdingId)
     .eq("platform", input.platform)
     .eq("nome_item", input.nomeItem)
   if (map?.prato_id) {
@@ -390,7 +453,12 @@ export async function removeItemFicha(input: {
       .select("id", { count: "exact", head: true })
       .eq("prato_id", map.prato_id)
     if (!count) {
-      await admin.from("producao_prato").delete().eq("id", map.prato_id)
+      // A ficha some junto por ON DELETE CASCADE do prato.
+      await admin
+        .from("producao_prato")
+        .delete()
+        .eq("holding_id", holdingId)
+        .eq("id", map.prato_id)
     }
   }
   revalidatePath("/ficha-tecnica")

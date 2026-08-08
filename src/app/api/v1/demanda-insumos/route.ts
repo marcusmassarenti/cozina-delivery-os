@@ -41,7 +41,14 @@ export async function GET(req: Request) {
     return apiError(400, "Parâmetro 'year' inválido.")
   }
 
-  const d = await getDemandaInsumos(year, month, scope.unitIds)
+  // A holding vem da CHAVE, não de sessão: este endpoint é o ERP puxando, sem
+  // usuário logado. Sem passar explicitamente, a ficha técnica sairia vazia.
+  const d = await getDemandaInsumos(
+    year,
+    month,
+    scope.unitIds,
+    auth.client.holdingId,
+  )
 
   return Response.json({
     period: { year, month },

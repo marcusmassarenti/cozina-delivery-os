@@ -350,7 +350,7 @@ export function ferramentasDoNino(
       },
       run: seguro("a produção", async (input) => {
         const { year, month } = periodo(input, mesAtual)
-        const d = await getDemandaInsumos(year, month, unitIds)
+        const d = await getDemandaInsumos(year, month, unitIds)  // holding vem da sessão do chat
         return { periodo: `${String(month).padStart(2, "0")}/${year}`, ...d }
       }),
     },
