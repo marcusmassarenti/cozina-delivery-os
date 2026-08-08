@@ -145,6 +145,11 @@ export function DreDetalhado({
   // cliente comparou com o portal e viu "31%" onde a taxa real era menor.
   // Agora cada linha bate 1-a-1 com o Portal do Parceiro.
   const taxas = Math.max(0, bruto - liquido - recebidoDireto)
+  // Faturou e o repasse não existe: é dado que falta (loja de API antes do
+  // extrato do iFood), não taxa de 100%. Deriva do próprio número em vez de
+  // vir por prop — assim vale na unidade, no DRE Grupo e no Resultado de uma
+  // vez só, sem depender de cada tela lembrar de avisar.
+  const semRepasse = bruto > 0 && liquido <= 0 && recebidoDireto <= 0
   // Cancelados (só o iFood traz o valor, da Conciliação). Mostrados ANTES do
   // bruto: a conta começa do número que o lojista vê no portal ("Valor das
   // vendas", que inclui cancelados) e o desconto acontece na frente dele.
@@ -274,160 +279,176 @@ export function DreDetalhado({
         pct={100}
       />
 
-      {/* Taxas: em "Todas" agrupa por plataforma (clicável); por plataforma
-          mostra a abertura direto. */}
-      <Row
-        label="(−) Taxas das plataformas"
-        value={`− ${fmtBRL(taxas)}`}
-        muted
-        pct={pctOf(taxas)}
-      />
-      <div className="mb-1 space-y-0.5 pl-1">
-        {isTodas
-          ? platforms.map((p) => <PlatTaxa key={p.id} plat={p} base={bruto} />)
-          : plat && (
-              <ItemList
-                itens={plat.itens}
-                total={plat.taxaTotal}
-                base={bruto}
-              />
-            )}
-      </div>
-
-      {/* O iFood NÃO repassa o que o cliente pagou direto na entrega (PIX/
-          dinheiro/maquininha) — a loja já recebeu. Sai aqui e volta como
-          ganho à parte lá embaixo; sem esta linha o leitor não fecha a
-          conta bruto → repasse com o Portal. */}
-      {recebidoDireto > 0.005 && (
-        <Row
-          label="(−) Recebido direto na entrega (não repassado — você já recebeu)"
-          value={`− ${fmtBRL(recebidoDireto)}`}
-          muted
-          pct={pctOf(recebidoDireto)}
-        />
-      )}
-
-      <Divider />
-      <Row
-        label="= Líquido das plataformas"
-        value={fmtBRL(liquido)}
-        bold
-        pct={pctOf(liquido)}
-      />
-
-      {/* A venda direta precisa aparecer AQUI, entre o repasse e a margem —
-          ela entra na margem agora, e uma conta que salta um degrau é uma
-          conta que o lojista não consegue conferir. */}
-      {recebidoDireto > 0 && (
+      {/* Faturou e não há repasse: o extrato do iFood ainda não chegou.
+          Sem ele, "taxa = bruto − repasse" vira o faturamento inteiro e a DRE
+          diz que a plataforma levou 100% — com margem R$ 0,00 logo abaixo,
+          como se fosse resultado apurado. Nada disso existe ainda. */}
+      {semRepasse ? (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-400">
+          <b>Taxas, repasse e margem ainda não dá pra calcular.</b> O
+          faturamento acima é a soma do que os clientes pagaram nos pedidos que
+          a API do iFood já entregou. As taxas vêm no extrato do mês, que o
+          iFood gera à parte e ainda não chegou — quando chegar, esta DRE se
+          completa sozinha.
+        </div>
+      ) : (
         <>
+        {/* Taxas: em "Todas" agrupa por plataforma (clicável); por plataforma
+            mostra a abertura direto. */}
+        <Row
+          label="(−) Taxas das plataformas"
+          value={`− ${fmtBRL(taxas)}`}
+          muted
+          pct={pctOf(taxas)}
+        />
+        <div className="mb-1 space-y-0.5 pl-1">
+          {isTodas
+            ? platforms.map((p) => <PlatTaxa key={p.id} plat={p} base={bruto} />)
+            : plat && (
+                <ItemList
+                  itens={plat.itens}
+                  total={plat.taxaTotal}
+                  base={bruto}
+                />
+              )}
+        </div>
+
+        {/* O iFood NÃO repassa o que o cliente pagou direto na entrega (PIX/
+            dinheiro/maquininha) — a loja já recebeu. Sai aqui e volta como
+            ganho à parte lá embaixo; sem esta linha o leitor não fecha a
+            conta bruto → repasse com o Portal. */}
+        {recebidoDireto > 0.005 && (
           <Row
-            label="(+) Venda direta (dinheiro / PIX / maquininha na loja)"
-            value={`+ ${fmtBRL(recebidoDireto)}`}
-            tone="pos"
+            label="(−) Recebido direto na entrega (não repassado — você já recebeu)"
+            value={`− ${fmtBRL(recebidoDireto)}`}
+            muted
             pct={pctOf(recebidoDireto)}
           />
-          <Row
-            label="= Fica na loja"
-            value={fmtBRL(ficaNaLoja)}
-            bold
-            pct={pctOf(ficaNaLoja)}
-          />
+        )}
+
+        <Divider />
+        <Row
+          label="= Líquido das plataformas"
+          value={fmtBRL(liquido)}
+          bold
+          pct={pctOf(liquido)}
+        />
+
+        {/* A venda direta precisa aparecer AQUI, entre o repasse e a margem —
+            ela entra na margem agora, e uma conta que salta um degrau é uma
+            conta que o lojista não consegue conferir. */}
+        {recebidoDireto > 0 && (
+          <>
+            <Row
+              label="(+) Venda direta (dinheiro / PIX / maquininha na loja)"
+              value={`+ ${fmtBRL(recebidoDireto)}`}
+              tone="pos"
+              pct={pctOf(recebidoDireto)}
+            />
+            <Row
+              label="= Fica na loja"
+              value={fmtBRL(ficaNaLoja)}
+              bold
+              pct={pctOf(ficaNaLoja)}
+            />
+          </>
+        )}
+
+        {antecip > 0 && (
+          <div className="my-1 ml-1 rounded-md border-l-2 border-amber-300 bg-amber-50/60 py-0.5 pl-3 pr-2 dark:border-amber-800 dark:bg-amber-950/20">
+            <Row
+              label="(−) Taxa de antecipação iFood"
+              value={`− ${fmtBRL(antecip)}`}
+              muted
+              pct={pctOf(antecip)}
+            />
+            <Row
+              label="= Recebido real no caixa"
+              value={fmtBRL(liquido - antecip)}
+              bold
+            />
+            <p className="pb-1 text-[10px] leading-snug text-muted-foreground">
+              Juro por receber o repasse adiantado (antecipação automática do
+              iFood). É custo financeiro — <b>não entra na margem abaixo</b>, que
+              usa o líquido do repasse.
+            </p>
+          </div>
+        )}
+
+        <CostRow
+          label="(−) CMV"
+          scopeTotal={cmvScope}
+          cats={cmvCats}
+          share={share}
+          base={bruto}
+        />
+        <Divider />
+        <Row
+          label="= Margem líquida"
+          value={
+            <span className="flex items-baseline gap-2">
+              {fmtBRL(margem)}
+              {cmvScope > 0 && (
+                <span
+                  className={`text-xs font-semibold ${
+                    margem >= 0
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-rose-700 dark:text-rose-400"
+                  }`}
+                >
+                  ({fmtPct(margemPct)})
+                </span>
+              )}
+            </span>
+          }
+          bold
+          negative={margem < 0}
+        />
+
+        {/* Custos operacionais (aluguel, folha, etc.) — sempre visível; subtrai da
+            margem pra chegar no resultado operacional. Clica pra abrir as
+            categorias. */}
+        <CostRow
+          label="(−) Custos operacionais"
+          scopeTotal={opScope}
+          cats={operacaoCats}
+          share={share}
+          base={bruto}
+        />
+        <Divider />
+        <Row
+          label={`= ${totalLabel}`}
+          value={
+            <span className="flex items-baseline gap-2">
+              {fmtBRL(resultadoOperacional)}
+              {(cmvScope > 0 || opScope > 0) && (
+                <span
+                  className={`text-xs font-semibold ${
+                    resultadoOperacional >= 0
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-rose-700 dark:text-rose-400"
+                  }`}
+                >
+                  ({fmtPct(resultadoOpPct)})
+                </span>
+              )}
+            </span>
+          }
+          bold
+          highlight
+          negative={resultadoOperacional < 0}
+        />
+        {vr > 0 && <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />}
+
+        <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
+          A <b>margem</b> parte do que fica na loja: o repasse da plataforma mais
+          a <b>venda direta</b> (dinheiro, PIX ou maquininha pagos na porta), que
+          é dinheiro seu e não passa pelo repasse. O <b>vale-refeição</b> aparece
+          só como informação: ele já vem dentro do repasse, então somá-lo
+          contaria o mesmo dinheiro duas vezes.
+        </p>
         </>
       )}
-
-      {antecip > 0 && (
-        <div className="my-1 ml-1 rounded-md border-l-2 border-amber-300 bg-amber-50/60 py-0.5 pl-3 pr-2 dark:border-amber-800 dark:bg-amber-950/20">
-          <Row
-            label="(−) Taxa de antecipação iFood"
-            value={`− ${fmtBRL(antecip)}`}
-            muted
-            pct={pctOf(antecip)}
-          />
-          <Row
-            label="= Recebido real no caixa"
-            value={fmtBRL(liquido - antecip)}
-            bold
-          />
-          <p className="pb-1 text-[10px] leading-snug text-muted-foreground">
-            Juro por receber o repasse adiantado (antecipação automática do
-            iFood). É custo financeiro — <b>não entra na margem abaixo</b>, que
-            usa o líquido do repasse.
-          </p>
-        </div>
-      )}
-
-      <CostRow
-        label="(−) CMV"
-        scopeTotal={cmvScope}
-        cats={cmvCats}
-        share={share}
-        base={bruto}
-      />
-      <Divider />
-      <Row
-        label="= Margem líquida"
-        value={
-          <span className="flex items-baseline gap-2">
-            {fmtBRL(margem)}
-            {cmvScope > 0 && (
-              <span
-                className={`text-xs font-semibold ${
-                  margem >= 0
-                    ? "text-emerald-700 dark:text-emerald-400"
-                    : "text-rose-700 dark:text-rose-400"
-                }`}
-              >
-                ({fmtPct(margemPct)})
-              </span>
-            )}
-          </span>
-        }
-        bold
-        negative={margem < 0}
-      />
-
-      {/* Custos operacionais (aluguel, folha, etc.) — sempre visível; subtrai da
-          margem pra chegar no resultado operacional. Clica pra abrir as
-          categorias. */}
-      <CostRow
-        label="(−) Custos operacionais"
-        scopeTotal={opScope}
-        cats={operacaoCats}
-        share={share}
-        base={bruto}
-      />
-      <Divider />
-      <Row
-        label={`= ${totalLabel}`}
-        value={
-          <span className="flex items-baseline gap-2">
-            {fmtBRL(resultadoOperacional)}
-            {(cmvScope > 0 || opScope > 0) && (
-              <span
-                className={`text-xs font-semibold ${
-                  resultadoOperacional >= 0
-                    ? "text-emerald-700 dark:text-emerald-400"
-                    : "text-rose-700 dark:text-rose-400"
-                }`}
-              >
-                ({fmtPct(resultadoOpPct)})
-              </span>
-            )}
-          </span>
-        }
-        bold
-        highlight
-        negative={resultadoOperacional < 0}
-      />
-      {vr > 0 && <VrLine vrLiquido={vr} info={vrInfo} pct={pctOf(vr)} />}
-
-      <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-        A <b>margem</b> parte do que fica na loja: o repasse da plataforma mais
-        a <b>venda direta</b> (dinheiro, PIX ou maquininha pagos na porta), que
-        é dinheiro seu e não passa pelo repasse. O <b>vale-refeição</b> aparece
-        só como informação: ele já vem dentro do repasse, então somá-lo
-        contaria o mesmo dinheiro duas vezes.
-      </p>
     </div>
   )
 }

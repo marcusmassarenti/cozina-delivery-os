@@ -53,6 +53,21 @@ export type UnitMonthly = {
   notaMedia: number
   observacoes: string
   platforms: PlatformBreakdown[]
+  /**
+   * True quando o faturamento do iFood NÃO veio do extrato (Conciliação) e sim
+   * do "pago pelo cliente" dos pedidos (Financial Events).
+   *
+   * O número é real — é a Entrada Financeira de cada pedido, o que o cliente
+   * de fato pagou — mas fica ABAIXO da cesta que o extrato traz, porque as
+   * promoções não entram nele. Medido em 07/ago/26 em 100 loja-mês com as duas
+   * fontes: mediana 85% da cesta, e de 28% a 108% conforme o quanto a loja
+   * promove. Loja sem promoção nenhuma bate ~100% (Cardeal 101,7%, Yakisushi
+   * 98,5%); loja que promove pesado despenca (Nosso Brownie 40,7%).
+   *
+   * Por isso a tela PRECISA dizer de onde veio: senão o valor sobe sozinho no
+   * dia em que o extrato chega, e quem olha lê como venda que apareceu do nada.
+   */
+  ifoodBrutoDePedidos?: boolean
 }
 
 export const emptyMonthly: UnitMonthly = {

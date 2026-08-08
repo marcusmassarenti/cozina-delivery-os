@@ -42,6 +42,37 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.14.1",
+    date: "2026-08-08",
+    tag: "Correções",
+    title: "Loja recém-conectada não mostra mais R$ 0,00 esperando o iFood",
+    summary:
+      "Quem conecta a API do iFood passa a ver faturamento já no primeiro dia, com o aviso de que o extrato do mês ainda está a caminho.",
+    areas: [
+      {
+        area: "Painel",
+        items: [
+          {
+            kind: "correcao",
+            title: "Faturamento aparece assim que os pedidos entram",
+            antes:
+              "O iFood entrega pedido e extrato por portas diferentes, e o extrato de uma loja nova pode demorar dias. Nesse meio-tempo o painel mostrava os pedidos e R$ 0,00 de faturamento — que se lê como loja que não vendeu.",
+            depois:
+              "Sem o extrato, o faturamento passa a ser a soma do que os clientes pagaram nos pedidos, com a etiqueta \"valor pago pelo cliente\". Quando o extrato chega, o número sobe: a cesta do extrato é contada antes das promoções, e por isso o aviso diz que elas ficam de fora.",
+          },
+          {
+            kind: "correcao",
+            title: "Taxa não é mais exibida como 100% quando falta o extrato",
+            antes:
+              "Sem repasse conhecido, a conta \"bruto menos repasse\" dava o faturamento inteiro, e a tela dizia que a plataforma tinha ficado com tudo — com margem R$ 0,00 logo abaixo, como se fosse resultado apurado.",
+            depois:
+              "Taxa, repasse, margem e resultado aparecem como “—” até o extrato chegar, dizendo por que estão vazios.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.14.0",
     date: "2026-08-05",
     tag: "Grande novidade",

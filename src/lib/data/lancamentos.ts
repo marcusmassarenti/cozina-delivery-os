@@ -385,6 +385,9 @@ export async function getRealMonthlyForUnits(
         valorLiquido: v.valorLiquido,
         pedidos: v.totalPedidos,
         vrValor: v.vrValor,
+        // Soma do "pago pelo cliente" (Entrada Financeira de cada pedido).
+        // Último degrau de fallback do faturamento — ver abaixo.
+        totalPago: v.totalValor,
       },
     ]),
   )
@@ -404,7 +407,30 @@ export async function getRealMonthlyForUnits(
     // iFood: Conciliação, fallback no VALOR DOS ITENS do Pedidos
     const ifoodHas = fin?.hasData ?? false
     const ifFb = ifoodFb.get(unitId)
-    const ifoodBruto = ifoodHas ? fin!.bruto : ifFb?.valorItens ?? 0
+
+    /* 3º degrau: o "pago pelo cliente" dos Financial Events.
+     *
+     * Loja conectada por API e sem planilha não tinha NENHUM dos dois degraus
+     * anteriores — o extrato é assíncrono (pode levar dias numa loja nova) e
+     * `valor_itens` só existe no relatório de Pedidos, que a API não entrega.
+     * Resultado: a Le Petit Pastéis mostrava 41 pedidos e R$ 0,00 de
+     * faturamento. Marcus, 07/ago/26: "eu tenho certeza que, se puxou 41
+     * pedidos, puxa o resto das informações". Puxa mesmo — o dinheiro estava
+     * em `total_pago_cliente`, preenchido em 41 de 41 pedidos.
+     *
+     * ⚠️ NÃO é a mesma régua do extrato, e a diferença é grande o bastante pra
+     * ter que aparecer na tela. `total_pago_cliente` = Entrada Financeira = o
+     * que o cliente pagou DEPOIS dos descontos; o `bruto` do extrato é a cesta
+     * ANTES deles. Conferido pedido a pedido: cesta 37,90 − 5,00 (promoção da
+     * loja) − 6,37 (promoção do iFood) + 0,99 (taxa de serviço) = 27,52, que é
+     * exatamente o valor da API. Por isso o flag viaja junto até a tela. */
+    const ifoodBrutoDePedidos =
+      !ifoodHas && (ifFb?.valorItens ?? 0) <= 0 && (ifFb?.totalPago ?? 0) > 0
+    const ifoodBruto = ifoodHas
+      ? fin!.bruto
+      : ifoodBrutoDePedidos
+        ? ifFb!.totalPago
+        : ifFb?.valorItens ?? 0
     // Fallback de líquido = VALOR LIQUIDO do relatório de pedidos (≤ bruto).
     const ifoodLiquido = ifoodHas
       ? fin!.liquido
@@ -518,6 +544,7 @@ export async function getRealMonthlyForUnits(
       notaMedia: m ? Number(m.nota_media) : 0,
       observacoes: m ? m.observacoes : "",
       platforms,
+      ifoodBrutoDePedidos,
     })
   }
 

@@ -418,6 +418,14 @@ function HeroKpis({
   const cancelPct =
     m.pedidos > 0 ? (m.pedidosCancelados / m.pedidos) * 100 : 0
 
+  /* Loja conectada por API cujo extrato ainda não chegou: o faturamento aqui é
+   * a soma do "pago pelo cliente" de cada pedido (ver `ifoodBrutoDePedidos`).
+   * Vale dizer na tela porque a régua é outra — este valor é DEPOIS das
+   * promoções, a cesta do extrato é antes — e porque taxa e repasse, que só o
+   * extrato traz, continuam sem existir. */
+  const dePedidos = m.ifoodBrutoDePedidos === true
+  const repasseDesconhecido = dePedidos && m.totalLiquido <= 0
+
   // Régua única (src/lib/financeiro/regua.ts). Este cabeçalho tinha conta
   // própria e por isso mostrava um "% repasse" MENOR que o "% que fica na
   // loja" do dashboard pra mesma loja: aqui não somava a venda direta e lá
@@ -448,21 +456,27 @@ function HeroKpis({
       // continuam calculados na base v\u00E1lida (ap\u00F3s cancelamentos), como o DRE.
       label: "Bruto",
       value: fmtBRL(fin.brutoTotal),
-      title:
-        cancelCesta && cancelCesta.valor > 0
+      title: dePedidos
+        ? "Soma do que os clientes pagaram nos pedidos que a API do iFood j\u00E1 entregou. O extrato do m\u00EAs ainda n\u00E3o chegou \u2014 quando chegar este valor sobe, porque a cesta do extrato \u00E9 contada ANTES das promo\u00E7\u00F5es."
+        : cancelCesta && cancelCesta.valor > 0
           ? "Vendas totais, igual ao \u201CValor das vendas\u201D do portal iFood (inclui os pedidos cancelados). O DRE desconta os cancelados antes de calcular taxas e margem."
           : "Vendas menos cancelamentos.",
-      sub: `${fmtNum(m.pedidos)} pedidos${
-        cancelCesta && cancelCesta.qtd > 0
-          ? ` \u00B7 ${fmtNum(cancelCesta.qtd)} cancelados`
-          : ""
-      }`,
+      sub: dePedidos
+        ? `${fmtNum(m.pedidos)} pedidos \u00B7 pago pelo cliente`
+        : `${fmtNum(m.pedidos)} pedidos${
+            cancelCesta && cancelCesta.qtd > 0
+              ? ` \u00B7 ${fmtNum(cancelCesta.qtd)} cancelados`
+              : ""
+          }`,
     },
     {
       label: ROTULOS.ficaNaLoja,
-      value: fmtBRL(fin.ficaNaLoja),
-      sub:
-        fin.vendaDireta > 0
+      // Sem extrato não há taxa nem repasse — mostrar R$ 0,00 e 0% diria que o
+      // iFood ficou com o faturamento inteiro da loja.
+      value: repasseDesconhecido ? "—" : fmtBRL(fin.ficaNaLoja),
+      sub: repasseDesconhecido
+        ? "as taxas só vêm no extrato"
+        : fin.vendaDireta > 0
           ? `${fmtPct(fin.pctFicaNaLoja)} · ${DEFINICOES.ficaNaLoja.curto}`
           : `${fmtPct(fin.pctFicaNaLoja)} do válido`,
       // Aqui dá pra mostrar os valores de verdade, então o hover é mais útil
@@ -475,14 +489,25 @@ function HeroKpis({
     },
     {
       label: "Resultado",
-      value: fmtBRL(fin.resultado),
-      sub:
-        m.custoProdutosCozina > 0
+      // Resultado nasce do que fica na loja. Sem repasse conhecido ele seria
+      // só "menos o CMV", que não é resultado nenhum.
+      value: repasseDesconhecido ? "—" : fmtBRL(fin.resultado),
+      sub: repasseDesconhecido
+        ? "depende do extrato"
+        : m.custoProdutosCozina > 0
           ? fmtPct(fin.pctResultado)
           : "lance o CMV",
-      tone: fin.resultado >= 0 ? "pos" : "neg",
+      tone: repasseDesconhecido
+        ? undefined
+        : fin.resultado >= 0
+          ? "pos"
+          : "neg",
     },
-    { label: "Ticket médio", value: fmtBRL(m.ticketMedio) },
+    {
+      label: "Ticket médio",
+      value: fmtBRL(m.ticketMedio),
+      sub: dePedidos ? "sobre o pago pelo cliente" : undefined,
+    },
     {
       label: "Cancelamento",
       value: fmtPct(cancelPct),

@@ -80,6 +80,11 @@ export function BrutoBreakdown({
   const taxaReal = descontadoTotal - promoCap
   const margem = liquidoLoja - cmvScope
   const resultado = margem - opScope
+  // Faturou e o repasse não existe: dado que falta, não taxa de 100%. É o
+  // estado da loja de API antes de o extrato do iFood chegar — sem esta
+  // guarda, a barra ficava inteira vermelha dizendo que a plataforma levou
+  // tudo e o líquido da loja foi zero.
+  const semRepasse = bruto > 0 && liquidoLoja <= 0
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -123,54 +128,63 @@ export function BrutoBreakdown({
         </div>
       </div>
 
-      <CompBar
-        label="Líquido pra loja"
-        value={liquidoLoja}
-        base={bruto}
-        color="bg-emerald-500"
-      />
-      <CompBar
-        label="Taxa da plataforma"
-        sublabel="comissão, entrega, serviço"
-        value={taxaReal}
-        base={bruto}
-        color="bg-rose-500"
-      />
-      {promoCap > 0 && (
+      {semRepasse ? (
+        <p className="py-6 text-center text-[11px] leading-snug text-muted-foreground">
+          Quanto fica com a loja e quanto vai em taxa só dá pra dividir com o
+          extrato do iFood, que ainda não chegou neste mês.
+        </p>
+      ) : (
+        <>
         <CompBar
-          label="Promoções da loja"
-          sublabel="cupons/descontos que a loja bancou"
-          value={promoCap}
+          label="Líquido pra loja"
+          value={liquidoLoja}
           base={bruto}
-          color="bg-fuchsia-500"
+          color="bg-emerald-500"
         />
-      )}
-      {cmvScope > 0 && (
         <CompBar
-          label="CMV (produtos)"
-          value={cmvScope}
+          label="Taxa da plataforma"
+          sublabel="comissão, entrega, serviço"
+          value={taxaReal}
           base={bruto}
-          color="bg-amber-500"
+          color="bg-rose-500"
         />
-      )}
-      {opScope > 0 && (
-        <CompBar
-          label="Custo da operação"
-          value={opScope}
-          base={bruto}
-          color="bg-orange-500"
-        />
-      )}
-      {cmvScope > 0 && (
-        <CompBar
-          label={opScope > 0 ? "Resultado operacional" : "Margem líquida"}
-          value={Math.max(0, opScope > 0 ? resultado : margem)}
-          base={bruto}
-          color="bg-blue-500"
-          emphasis
-        />
-      )}
+        {promoCap > 0 && (
+          <CompBar
+            label="Promoções da loja"
+            sublabel="cupons/descontos que a loja bancou"
+            value={promoCap}
+            base={bruto}
+            color="bg-fuchsia-500"
+          />
+        )}
+        {cmvScope > 0 && (
+          <CompBar
+            label="CMV (produtos)"
+            value={cmvScope}
+            base={bruto}
+            color="bg-amber-500"
+          />
+        )}
+        {opScope > 0 && (
+          <CompBar
+            label="Custo da operação"
+            value={opScope}
+            base={bruto}
+            color="bg-orange-500"
+          />
+        )}
+        {cmvScope > 0 && (
+          <CompBar
+            label={opScope > 0 ? "Resultado operacional" : "Margem líquida"}
+            value={Math.max(0, opScope > 0 ? resultado : margem)}
+            base={bruto}
+            color="bg-blue-500"
+            emphasis
+          />
+        )}
 
+        </>
+      )}
       {sel !== "todas" && cmv > 0 && (
         <p className="mt-2 text-[10px] text-muted-foreground">
           CMV e operação rateados pela fatia do bruto desta plataforma (a loja

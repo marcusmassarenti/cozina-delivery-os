@@ -667,6 +667,19 @@ export default async function Home({
   const aguardandoExtrato =
     network.pedidos > 0 && network.faturamentoBruto <= 0
 
+  /* Faturamento que veio dos PEDIDOS e não do extrato.
+   *
+   * Desde 07/ago/26 o painel não espera mais o extrato pra mostrar dinheiro:
+   * na falta dele soma o "pago pelo cliente" de cada pedido. É valor real,
+   * mas é uma régua diferente — a cesta do extrato é ANTES das promoções e
+   * este valor é DEPOIS. Numa loja que promove pesado a diferença passa de
+   * 50%. Sem dizer isso na tela, o faturamento "sobe sozinho" no dia em que o
+   * extrato entra, e ninguém entende de onde veio a venda nova. */
+  const brutoDePedidos = unitsDisplay.some((u) => u.monthly.ifoodBrutoDePedidos)
+  // Sem extrato não existe taxa nem repasse: exibir "0% fica na loja" diria
+  // que o iFood ficou com tudo — pior mentira que não mostrar número nenhum.
+  const repasseDesconhecido = brutoDePedidos && network.liquidoPraVoce <= 0
+
   const periodQ = sp.periodo ? `?periodo=${sp.periodo}` : ""
   const cancelQ = sp.periodo
     ? `?metrica=cancelamentos&periodo=${sp.periodo}`
@@ -717,7 +730,11 @@ export default async function Home({
       // Sem faturamento não há ticket — mostrar R$ 0,00 seria inventar uma
       // média que não existe.
       value: aguardandoExtrato ? "—" : fmtBRL(network.mediaTicket || 0),
-      trend: aguardandoExtrato ? "aguardando o extrato do iFood" : undefined,
+      trend: aguardandoExtrato
+        ? "aguardando o extrato do iFood"
+        : brutoDePedidos
+          ? "sobre o valor pago pelo cliente"
+          : undefined,
       tone: "positive",
       icon: Receipt,
       platforms: finPlatforms,
@@ -734,7 +751,9 @@ export default async function Home({
       // queda de venda — e liga pra perguntar o que aconteceu com a loja.
       trend: aguardandoExtrato
         ? `${fmtNum(network.pedidos)} pedido${network.pedidos === 1 ? "" : "s"} já registrado${network.pedidos === 1 ? "" : "s"} · aguardando o extrato do iFood`
-        : undefined,
+        : brutoDePedidos
+          ? "valor pago pelo cliente · o extrato do iFood ainda não chegou (promoções ficam de fora)"
+          : undefined,
       tone: "positive",
       icon: DollarSign,
       platforms: finPlatforms,
@@ -756,8 +775,13 @@ export default async function Home({
       // A variação da PORCENTAGEM (que era a seta do card removido) não some:
       // vai pro hover, porque a seta do card acompanha o valor em R$.
       label: ROTULOS.ficaNaLoja,
-      value: fmtBRLShort(network.liquidoPraVoce),
-      trend: `${fmtPct(pctFicaNaLoja)} do bruto · ${DEFINICOES.ficaNaLoja.curto}`,
+      // Repasse e taxa só existem no extrato. Com o faturamento vindo dos
+      // pedidos, "R$ 0,00 · 0% do bruto" seria ler ausência de dado como se o
+      // iFood tivesse ficado com o valor inteiro.
+      value: repasseDesconhecido ? "—" : fmtBRLShort(network.liquidoPraVoce),
+      trend: repasseDesconhecido
+        ? "as taxas só vêm no extrato do iFood"
+        : `${fmtPct(pctFicaNaLoja)} do bruto · ${DEFINICOES.ficaNaLoja.curto}`,
       // A variação da PORCENTAGEM é acrescentada mais abaixo, quando
       // `heroDeltas` já existe (ele é calculado depois deste array).
       title: DEFINICOES.ficaNaLoja.completo,
@@ -772,7 +796,7 @@ export default async function Home({
       trend:
         taxaEntregaValor > 0
           ? `${fmtPct(taxaEntregaPctBruto)} do faturamento bruto`
-          : aguardandoExtrato
+          : aguardandoExtrato || brutoDePedidos
             // "Sem dado de entrega" era meia-verdade: o dado existe no iFood,
             // só não chegou ainda. Frase que soa definitiva num estado
             // temporário faz o dono parar de esperar.
@@ -968,7 +992,9 @@ export default async function Home({
   const manchete: HeroMetric[] = kpisOrdenados.map((k) => ({
     label: k.label,
     value: k.value,
-    delta: DELTA_MANCHETE[k.label],
+    // Card sem valor não leva seta. "— ↘100%" dizia, na mesma linha, que o
+    // número é desconhecido e que ele caiu cem por cento.
+    delta: k.value === "—" ? undefined : DELTA_MANCHETE[k.label],
     sub: SUB_MANCHETE[k.label] ?? k.trend,
     // Sem isto o `title` do KPI morre aqui: a faixa não usa o KpiCard.
     title: k.title,
@@ -995,7 +1021,10 @@ export default async function Home({
   )
   const composicaoSegmentos = [
     { nome: "Líquido pra você", valor: liquidoRede + recebidoRede, cor: "#16A34A" },
-    ...platforms
+    // Sem repasse conhecido, `taxaReal` = bruto − 0 = o faturamento inteiro, e
+    // o card diria "o iFood ficou com 100% do que você vendeu". A taxa existe;
+    // ela só não chegou ainda.
+    ...(repasseDesconhecido ? [] : platforms)
       .filter((p) => taxaReal(p) > 0)
       .map((p) => ({
         nome: `Taxas ${p.name}`,
@@ -1208,6 +1237,11 @@ export default async function Home({
           <ComposicaoBruto
             bruto={network.totalDinheiro}
             segmentos={composicaoSegmentos}
+            mensagemVazio={
+              repasseDesconhecido
+                ? "As taxas do mês vêm no extrato do iFood, que ainda não chegou."
+                : undefined
+            }
           />
         </div>
       )}
@@ -1278,6 +1312,10 @@ export default async function Home({
               // seguem na base válida.
               const brutoShow =
                 p.id === "ifood" ? p.bruto + cancelCestaTotal : p.bruto
+              // Faturou e não há repasse: é dado que falta, não taxa de 100%.
+              // Acontece na loja de API antes do extrato do iFood chegar — e a
+              // barra cheia de cinza dizia que a plataforma levou tudo.
+              const semRepasse = p.bruto > 0 && liquidoLoja <= 0
               return (
                 <div
                   key={p.id}
@@ -1297,7 +1335,13 @@ export default async function Home({
                       </span>
                     </div>
                   </div>
-                  {p.bruto > 0 ? (
+                  {semRepasse ? (
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      {p.id === "ifood"
+                        ? "as taxas só vêm no extrato do iFood"
+                        : "taxas ainda não informadas pela plataforma"}
+                    </p>
+                  ) : p.bruto > 0 ? (
                     <>
                       <div className="mt-2.5 flex h-2 overflow-hidden rounded-full bg-muted">
                         <div

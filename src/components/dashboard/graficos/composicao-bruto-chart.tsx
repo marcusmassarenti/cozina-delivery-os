@@ -21,9 +21,17 @@ export type Segmento = {
 export function ComposicaoBruto({
   bruto,
   segmentos,
+  mensagemVazio = "Sem taxas no período.",
 }: {
   bruto: number
   segmentos: Segmento[]
+  /**
+   * Texto do estado vazio. Existe porque "sem taxas" tem dois significados
+   * opostos: a loja não pagou taxa nenhuma, ou a taxa ainda não chegou (loja
+   * de API esperando o extrato do iFood). Dizer a primeira frase no segundo
+   * caso é prometer ao lojista um custo zero que não existe.
+   */
+  mensagemVazio?: string
 }) {
   const taxas = segmentos.filter((s) => s.plat && s.valor > 0)
   const taxasTotal = taxas.reduce((s, x) => s + x.valor, 0)
@@ -46,7 +54,7 @@ export function ComposicaoBruto({
 
       {taxasTotal <= 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">
-          Sem taxas no período.
+          {mensagemVazio}
         </p>
       ) : (
         <>
