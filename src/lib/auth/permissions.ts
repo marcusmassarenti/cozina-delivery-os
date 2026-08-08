@@ -263,6 +263,33 @@ async function unitIdsDaHolding(holdingId: string): Promise<string[]> {
  * super-admin EXPLÍCITO recebe null; um admin de cliente fica preso à própria
  * empresa, mesmo que o código esqueça de filtrar em algum lugar.
  */
+/**
+ * O usuário responde pela EMPRESA inteira, não por lojas específicas?
+ *
+ * Existe por causa de uma ambiguidade que quebrou o financeiro: `unit_id = null`
+ * quer dizer "da empresa toda" (uma conta bancária da holding, uma despesa
+ * administrativa), e não "esqueceram de escolher a loja". Quem checava permissão
+ * lia o null como ausência e negava — então conta sem loja não recebia
+ * lançamento nem importação de extrato, para NINGUÉM. As quatro contas
+ * cadastradas eram todas assim.
+ *
+ * A resposta certa não é "deixa passar": franqueado preso a uma loja não pode
+ * lançar no caixa da empresa. É perguntar se o escopo dele é a empresa —
+ * acesso de holding ou de marca — em vez de uma lista de lojas.
+ */
+export const temEscopoDaEmpresa = cache(async (): Promise<boolean> => {
+  if (await isSuperadmin()) return true
+  const user = await getAuthUser()
+  if (!user) return false
+  const { data } = await createAdminClient()
+    .from("user_unit_access")
+    .select("scope_type")
+    .eq("user_id", user.id)
+  return (data ?? []).some(
+    (a) => a.scope_type === "holding" || a.scope_type === "brand",
+  )
+})
+
 export const getAccessibleUnitIds = cache(
   async (): Promise<string[] | null> => {
     const user = await getAuthUser()

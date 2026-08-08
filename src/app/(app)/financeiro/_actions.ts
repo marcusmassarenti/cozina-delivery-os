@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache"
 
 import { requireAuth } from "@/lib/auth/guards"
-import { getAccessibleUnitIds, getCurrentHoldingId } from "@/lib/auth/roles"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+  temEscopoDaEmpresa,
+} from "@/lib/auth/roles"
 import { isProPlan } from "@/lib/data/billing"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { validateImageUpload } from "@/lib/upload/image"
@@ -27,11 +31,39 @@ async function ctx(): Promise<{
 }
 
 /** Franqueado só grava na(s) loja(s) dele. Admin/franqueador (null) grava em qualquer. */
+/**
+ * Pode lançar nesta loja — ou na empresa, quando não há loja.
+ *
+ * ⚠️ `unitId = null` significa "da EMPRESA toda" (conta bancária da holding,
+ * despesa administrativa), não "esqueceram de escolher". A versão anterior
+ * lia o null como ausência e negava sempre: `!unitId || !allowed.includes(...)`.
+ *
+ * O efeito era grande e invisível. `getAccessibleUnitIds()` só devolve null
+ * pro super-admin SEM empresa nenhuma — todo usuário real recebe um array. Ou
+ * seja: nenhum cliente conseguia lançar, criar conta ou importar extrato numa
+ * conta da empresa. E as quatro contas cadastradas no sistema são todas assim.
+ * Descoberto em 08/ago/26 tentando importar o OFX do BTG, que voltou "Sem
+ * permissão para lançar nesta loja" numa conta que acabara de ser criada.
+ *
+ * A correção não é liberar o null: franqueado presa a uma loja continua sem
+ * poder mexer no caixa da empresa. É checar o escopo certo pra cada caso.
+ */
 async function assertUnitAllowed(unitId: string | null): Promise<void> {
   const allowed = await getAccessibleUnitIds()
-  if (allowed === null) return // admin / franqueador → sem restrição
-  if (!unitId || !allowed.includes(unitId)) {
-    throw new Error("Sem permissão para lançar nesta loja.")
+  if (allowed === null) return // admin de plataforma → sem restrição
+
+  if (unitId) {
+    if (!allowed.includes(unitId)) {
+      throw new Error("Sem permissão para lançar nesta loja.")
+    }
+    return
+  }
+
+  // Sem loja = da empresa toda. Só quem responde pela empresa.
+  if (!(await temEscopoDaEmpresa())) {
+    throw new Error(
+      "Sem permissão para lançar no caixa da empresa. Escolha uma das suas lojas.",
+    )
   }
 }
 

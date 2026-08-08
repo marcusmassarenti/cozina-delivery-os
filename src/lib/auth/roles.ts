@@ -7,6 +7,7 @@ import "server-only"
 
 export {
   getAccessibleUnitIds,
+  temEscopoDaEmpresa,
   getCurrentHoldingId,
   isSuperadmin,
   getCurrentRole,
