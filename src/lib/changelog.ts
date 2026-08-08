@@ -66,6 +66,14 @@ export const CHANGELOG: Release[] = [
             desc:
               "Plataforma marcada no cadastro que nunca trouxe dado pode ser relatório que falta subir, ou plataforma em que a loja nunca vendeu. O sistema não tem como saber — então ele pergunta, em vez de chutar, e o botão “não vendo nessa plataforma” resolve num clique.",
           },
+          {
+            kind: "correcao",
+            title: "Loja desativada não é mais sincronizada",
+            antes:
+              "Ao desativar uma loja no cadastro, a conexão com a plataforma continuava valendo — ninguém desvincula a loja no iFood ao fechar as portas. O sistema seguia buscando dados dela todo dia e ela aparecia como “sem dados há X dias”, como se fosse problema.",
+            depois:
+              "Loja desativada sai das rotinas automáticas na hora. Se reabrir, é só reativar no cadastro: a conexão continua guardada e o dado volta a entrar sozinho.",
+          },
         ],
       },
     ],
