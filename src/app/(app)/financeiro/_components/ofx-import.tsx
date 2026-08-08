@@ -8,6 +8,34 @@ import type { FinAccount } from "@/lib/data/caixa"
 
 import { importOfx } from "../_actions"
 
+/**
+ * Decide a codificação do arquivo OLHANDO os bytes, em vez de assumir.
+ *
+ * Não dá pra escolher uma e pronto: Itaú e Banco do Brasil exportam OFX em
+ * latin-1 (o cabeçalho diz `CHARSET:1252`), e Nubank e Inter exportam em
+ * UTF-8. Ler latin-1 como UTF-8 devolve "MANUTEN��O"; ler UTF-8 como
+ * latin-1 devolve "MANUTENÃ‡ÃƒO". Nos dois casos o histórico do lançamento
+ * chega torto no banco de dados, e ninguém percebe até ler o extrato na tela.
+ *
+ * A ordem importa: UTF-8 estrito PRIMEIRO. Todo arquivo latin-1 com acento é
+ * inválido em UTF-8 e o decoder acusa; já o contrário não vale — latin-1
+ * aceita qualquer byte e nunca falha, então testá-lo antes daria sempre
+ * "sucesso", inclusive no arquivo UTF-8 que ele acabou de corromper.
+ */
+function decodificar(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes)
+  }
+}
+
+/** O arquivo é de CARTÃO de crédito, não de conta corrente? */
+function ehDeCartao(texto: string): boolean {
+  return /<CREDITCARDMSGSRSV1|<CCSTMTRS/i.test(texto)
+}
+
 export function OfxImport({ accounts }: { accounts: FinAccount[] }) {
   const contas = accounts.filter((a) => a.kind !== "cartao")
   const [open, setOpen] = useState(false)
@@ -30,8 +58,27 @@ export function OfxImport({ accounts }: { accounts: FinAccount[] }) {
     setFileName(f.name)
     setResult(null)
     const reader = new FileReader()
-    reader.onload = () => setConteudo(String(reader.result ?? ""))
-    reader.readAsText(f, "latin1") // extratos BR costumam vir em latin1
+    reader.onload = () => {
+      const texto = decodificar(reader.result as ArrayBuffer)
+      setConteudo(texto)
+      /* Arquivo de cartão numa conta corrente entraria como despesa do banco,
+       * dobrando o gasto: a fatura do cartão já vira UM lançamento quando é
+       * paga. A guarda do servidor só olha o tipo da CONTA escolhida, não o
+       * tipo do ARQUIVO — e o cliente que exporta do app do banco não
+       * distingue os dois. */
+      if (ehDeCartao(texto)) {
+        setResult({
+          ok: false,
+          imported: 0,
+          skipped: 0,
+          message:
+            "Este arquivo é da fatura do cartão, não do extrato da conta. Importar aqui contaria o gasto duas vezes — a fatura já entra como um lançamento quando você paga.",
+        })
+      }
+    }
+    // Lê os BYTES, não texto: a codificação é decidida abaixo, olhando o
+    // conteúdo. Ver `decodificar`.
+    reader.readAsArrayBuffer(f)
   }
 
   function importar() {
