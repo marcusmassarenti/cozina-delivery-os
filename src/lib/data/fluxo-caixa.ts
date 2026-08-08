@@ -155,12 +155,20 @@ export async function getFluxoCaixa(
   if (!du.skip) {
     // Keeta: tem status; inclui os não liquidados até o fim do horizonte
     // (inclusive atrasados, que a Keeta ainda deve).
+    //
+    // ⚠️ `ilike` e NÃO `neq`: o relatório da Keeta grava o status com inicial
+    // maiúscula ("Liquidado"), e `neq("status","liquidado")` compara caractere
+    // a caractere — nunca batia. Resultado: as 517 linhas JÁ LIQUIDADAS (de
+    // 10/06 a 05/08, R$ 486.481,07) passavam pelo filtro e, como a data delas é
+    // anterior a hoje, o `at()` jogava todas em "hoje". A tela prometia como
+    // entrada futura um dinheiro que a Keeta já tinha depositado — 64% das
+    // "entradas previstas" eram passado repetido.
     let qK = admin
       .from("keeta_repasses")
       .select("data_liquidacao, valor_repasse, status, unit_id")
       .not("data_liquidacao", "is", null)
       .lte("data_liquidacao", end)
-      .neq("status", "liquidado")
+      .not("status", "ilike", "liquidado")
     if (du.units) qK = qK.in("unit_id", du.units.length ? du.units : ["00000000-0000-0000-0000-000000000000"])
     const { data: keeta } = await qK
     for (const r of keeta ?? []) {
@@ -263,7 +271,14 @@ export async function getFluxoCaixa(
   // 4) Série diária com saldo corrido.
   const dias: FluxoDia[] = []
   let saldo = saldoAtual
-  let saldoMinimo = saldoAtual
+  // Começa em Infinity, não em `saldoAtual`: o mínimo tem que ser um saldo de
+  // FIM DE DIA, igual ao que o gráfico desenha e igual ao que
+  // `primeiroDiaNegativo` avalia. Semeando com o saldo de agora, um caixa
+  // negativo hoje que se resolve ainda hoje virava "menor saldo projetado"
+  // negativo ao lado de "caixa positivo em todo o horizonte" — a mesma faixa
+  // afirmando as duas coisas. O saldo de agora já tem o card "Saldo hoje".
+  // O laço abaixo cobre i=0, então o dia de hoje continua entrando na conta.
+  let saldoMinimo = Infinity
   let primeiroDiaNegativo: string | null = null
   let totalEntradasManual = 0
   let totalEntradasDelivery = 0
