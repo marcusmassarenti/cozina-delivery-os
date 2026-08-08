@@ -196,8 +196,19 @@ type SyncRunResult = {
     unitCode: string
     unitName?: string
     holdingName?: string
-    pedidos?: { competencia: string; ok?: boolean; gravados?: number }[]
-    reconciliation?: { competencia: string; ok?: boolean; rowCount?: number }[]
+    pedidos?: {
+      competencia: string
+      ok?: boolean
+      gravados?: number
+      error?: string
+    }[]
+    reconciliation?: {
+      competencia: string
+      ok?: boolean
+      rowCount?: number
+      error?: string
+      status?: number
+    }[]
   }[]
   diagnostico?: string
   error?: string
@@ -319,13 +330,52 @@ export function RunSyncButton() {
                         <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-400">
                           {comFalha.length} loja(s) com erro:
                         </p>
-                        <ul className="mt-0.5 space-y-0.5 text-[11px] text-amber-800 dark:text-amber-400">
-                          {comFalha.slice(0, 8).map((u, i) => (
-                            <li key={i}>
-                              {u.unitCode} · {u.unitName ?? "—"}
-                              {u.holdingName ? ` · ${u.holdingName}` : ""}
-                            </li>
-                          ))}
+                        {/* COM O MOTIVO, e dizendo o que ainda assim entrou.
+                            Só o nome da loja fazia parecer que ela não puxou
+                            nada — quando basta UMA competência falhar pra
+                            marcar a loja inteira. A Le Petit apareceu aqui no
+                            mesmo sync em que gravou 2.240 lançamentos. */}
+                        <ul className="mt-1 space-y-1 text-[11px] text-amber-800 dark:text-amber-400">
+                          {comFalha.slice(0, 8).map((u, i) => {
+                            const ruins = [
+                              ...(u.reconciliation ?? []).map((c) => ({
+                                o: "conciliação",
+                                ...c,
+                              })),
+                              ...(u.pedidos ?? []).map((c) => ({
+                                o: "pedidos",
+                                ...c,
+                              })),
+                            ].filter((c) => c.ok === false)
+                            const okCount =
+                              (u.reconciliation ?? []).filter(
+                                (c) => c.ok !== false,
+                              ).length +
+                              (u.pedidos ?? []).filter((c) => c.ok !== false)
+                                .length
+                            return (
+                              <li key={i}>
+                                <span className="font-medium">
+                                  {u.unitCode} · {u.unitName ?? "—"}
+                                  {u.holdingName ? ` · ${u.holdingName}` : ""}
+                                </span>
+                                {ruins.map((c, k) => (
+                                  <span key={k} className="block pl-3 opacity-90">
+                                    {c.o} {c.competencia}:{" "}
+                                    {c.error ??
+                                      ("status" in c && c.status
+                                        ? `HTTP ${c.status}`
+                                        : "falhou sem mensagem")}
+                                  </span>
+                                ))}
+                                {okCount > 0 ? (
+                                  <span className="block pl-3 opacity-70">
+                                    o resto do período entrou normalmente
+                                  </span>
+                                ) : null}
+                              </li>
+                            )
+                          })}
                         </ul>
                       </div>
                     ) : null}
