@@ -192,11 +192,20 @@ type SyncRunResult = {
   unitsProcessed?: number
   results?: Array<{
     unitCode: string
+    pedidos?: {
+      competencia: string
+      ok?: boolean
+      gravados?: number
+      pedidos?: number
+      skipped?: string
+      error?: string
+    }[]
     unitName?: string
     holdingName?: string
     merchantId: string
     reconciliation?: Array<{ competencia: string; ok?: boolean; status?: number; rowCount?: number; skipped?: string; error?: string }>
-    events?: { ok?: boolean; status?: number; totalEvents?: number; pagesFetched?: number; skipped?: string; error?: string }
+    /** REMOVIDO: o sync não devolve mais `events` — virou `pedidos` por
+     *  competência. O tipo ficou pra trás e a tela imprimia "HTTP undefined". */
   }>
   error?: string
 }
@@ -282,14 +291,23 @@ export function RunSyncButton() {
                             : `✗ ${r.error ?? "HTTP " + r.status}`}
                       </li>
                     ))}
-                    <li>
-                      Events:{" "}
-                      {u.events?.skipped
-                        ? `pulado (${u.events.skipped})`
-                        : u.events?.ok
-                          ? `✓ ${u.events.totalEvents ?? 0} eventos em ${u.events.pagesFetched ?? 0} pág.`
-                          : `✗ ${u.events?.error ?? "HTTP " + u.events?.status}`}
-                    </li>
+                    {/* Pedidos/pagamento por COMPETÊNCIA.
+                        Antes esta linha lia `u.events`, campo que o sync
+                        deixou de devolver quando os Financial Events viraram
+                        `pedidos` por mês. Sem o objeto, `error` e `status`
+                        saíam indefinidos e a tela imprimia "✗ HTTP undefined"
+                        nas 14 lojas — parecia integração quebrada, e o banco
+                        mostrava 6.564 pedidos gravados na mesma hora. */}
+                    {(u.pedidos ?? []).map((pd, k) => (
+                      <li key={`p${k}`}>
+                        Pedidos {pd.competencia}:{" "}
+                        {pd.skipped
+                          ? `pulado (${pd.skipped})`
+                          : pd.ok
+                            ? `✓ ${pd.gravados ?? 0} de ${pd.pedidos ?? 0}`
+                            : `✗ ${pd.error ?? "falhou"}`}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               ))}
