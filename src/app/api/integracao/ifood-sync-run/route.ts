@@ -12,7 +12,11 @@
  *  2. holding com `api_sync_enabled` (a mesma flag que mostra o botão)
  *  3. unidades restritas às do usuário
  */
-import { getAccessibleUnitIds, userCan } from "@/lib/auth/permissions"
+import {
+  getAccessibleUnitIds,
+  getVerComoHoldingId,
+  userCan,
+} from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isApiSyncEnabled } from "@/lib/data/units"
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
@@ -51,8 +55,27 @@ export async function POST() {
       ranAt: new Date().toISOString(),
       unitsProcessed: 0,
       results: [],
-      diagnostico:
-        "Nenhuma loja no seu acesso. Se você está vendo como um cliente, a visão pode não ter alcançado esta ação.",
+      /* Diagnóstico COM OS VALORES. A frase genérica não bastou: o banco
+       * estava certo e o escopo voltava vazio mesmo assim. Sem saber QUAL
+       * holding o "ver como" resolveu e quantas marcas/lojas ela tem, a
+       * investigação vira chute — foram três rodadas até aqui. */
+      diagnostico: await (async () => {
+        const verComo = await getVerComoHoldingId()
+        if (!verComo) {
+          return "Nenhuma loja no seu acesso, e não há visão-como-cliente ativa nesta requisição. Se a faixa vermelha está na tela, o cookie não chegou nesta rota."
+        }
+        const admin = createAdminClient()
+        const { data: h } = await admin
+          .from("holdings")
+          .select("name")
+          .eq("id", verComo)
+          .maybeSingle()
+        const { count: marcas } = await admin
+          .from("brands")
+          .select("id", { count: "exact", head: true })
+          .eq("holding_id", verComo)
+        return `Vendo como "${(h as { name?: string } | null)?.name ?? "(empresa não encontrada)"}" (id ${verComo.slice(0, 8)}…): ${marcas ?? 0} marca(s), 0 loja(s) no escopo.`
+      })(),
     })
   }
   if (unitIds !== null) {
