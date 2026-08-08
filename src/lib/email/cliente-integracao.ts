@@ -36,6 +36,17 @@ const NOMES: Record<string, string> = {
 
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
+/**
+ * Quantas lojas aparecem com nome antes de virar contagem.
+ *
+ * A DG FOODS tem 37 lojas na lista. Trinta e sete cartões num e-mail não é
+ * relatório, é paredão — e a primeira reação a um paredão é marcar como spam,
+ * o que mata o canal justamente antes da semana em que ele importaria. Cinco
+ * nomes bastam pra pessoa reconhecer o problema; o resto vira um número e um
+ * botão. É a mesma régua que resolveu o relatório interno.
+ */
+const TETO = 5
+
 function logos(plats: PlatformId[]): string {
   return plats
     .map(
@@ -56,7 +67,12 @@ export function emailClienteIntegracao(
       ? `Sua loja ${grupo.lojas[0].loja} está sem dados no Delivery OS`
       : `${n} das suas lojas estão sem dados no Delivery OS`
 
-  const linhas = grupo.lojas
+  // As mais antigas primeiro: parada há 12 dias é pior que parada há 2.
+  const ordenadas = [...grupo.lojas].sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0))
+  const mostra = ordenadas.slice(0, TETO)
+  const resto = ordenadas.length - mostra.length
+
+  const linhas = mostra
     .map(
       (l) => `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 10px;background:#fafafa;border-radius:10px;">
@@ -117,6 +133,14 @@ export function emailClienteIntegracao(
       </p>
 
       ${linhas}
+      ${
+        resto > 0
+          ? `<p style="margin:2px 0 0;font-size:13px;color:#71717a;">
+               E mais <strong>${resto}</strong> ${resto === 1 ? "loja" : "lojas"} na mesma situação —
+               a lista completa está no painel.
+             </p>`
+          : ""
+      }
 
       <p style="margin:22px 0 8px;font-size:15px;font-weight:700;color:#18181b;">Como resolver</p>
       <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#3f3f46;">

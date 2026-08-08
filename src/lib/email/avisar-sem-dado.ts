@@ -67,10 +67,8 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
     const para = LIBERADO ? (destinoReal ?? INTERNO) : INTERNO
     const previaPara = LIBERADO ? undefined : (destinoReal ?? `${cliente} (sem admin cadastrado)`)
 
-    const msg = emailClienteIntegracao(
-      { ...grupo, lojas: grupo.lojas.sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0)) },
-      previaPara,
-    )
+    // A ordenação e o corte de volume moram no template — aqui só o conteúdo.
+    const msg = emailClienteIntegracao(grupo, previaPara)
 
     const r = await enviarEmail({
       holdingId,
