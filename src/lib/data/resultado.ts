@@ -386,7 +386,7 @@ export async function getNetworkDrePlatforms(
       // dinheiro que a loja embolsou fora do repasse. O DRE por unidade já
       // devolve isso no "Resultado total"; a rede esquecia, subestimando o
       // consolidado. Só iFood tem.
-      recDireto: 0,
+      recDireto: 0, mensalidade: 0,
     },
     ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
     ke: { bruto: 0, liq: 0, promo: 0 },
@@ -443,6 +443,10 @@ export async function getNetworkDrePlatforms(
       a.if.comissao += Math.abs(fin!.comissaoIfood)
       a.if.promo += Math.abs(fin!.promocaoLoja)
       a.if.recDireto += fin!.recebidoDireto
+      // Mensalidade do plano + pacote de anúncios: cobranças de PERÍODO.
+      // Sem linha própria elas caíam no resíduo e apareciam como "Créditos /
+      // estornos da plataforma" — nome que diz o oposto do que são.
+      a.if.mensalidade += Math.abs(fin!.mensalidade) + Math.abs(fin!.pacoteAnuncios)
     }
     a.ni.bruto += niBruto
     a.ni.liq += niLiq
@@ -516,6 +520,7 @@ export async function getNetworkDrePlatforms(
         { label: "Taxa de entrega", value: a.if.entrega },
         { label: "Comissão + serviço", value: a.if.comissao },
         { label: "Promoções (loja bancou)", value: a.if.promo },
+        { label: "Mensalidade / anúncios", value: a.if.mensalidade },
       ],
       a.vr,
       a.if.promo,
