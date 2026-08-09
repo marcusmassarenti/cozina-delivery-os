@@ -38,6 +38,13 @@ export type TipoEmail =
    */
   | "conexao-recusada"
   /**
+   * "Pedi a conexão no iFood, falta você aprovar no Portal do Parceiro".
+   * Também vai com `forcar: true`: um cliente tem várias lojas e cada uma tem
+   * a sua solicitação — sem forçar, o segundo CNPJ seria engolido como
+   * repetido e o dono nunca saberia que tem outra loja esperando.
+   */
+  | "conexao-solicitada"
+  /**
    * Aviso semanal ao cliente de que uma loja parou de mandar dado. Também NÃO
    * é régua: a mesma loja pode parar em semanas diferentes, então quem dispara
    * manda `forcar: true` — senão a trava engoliria a segunda vez em diante,

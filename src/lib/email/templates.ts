@@ -468,6 +468,54 @@ export function conexaoRecusada(d: {
 }
 
 /**
+ * "Pedi a conexão no iFood — agora falta você aprovar".
+ *
+ * A solicitação de verdade é feita à mão no Portal do Desenvolvedor do iFood,
+ * um CNPJ por vez. Depois disso a bola é do cliente: ele precisa aceitar o app
+ * Delivery OS no Portal do Parceiro DELE, e enquanto não aceitar não entra
+ * nada — nem faturamento, nem avaliação.
+ *
+ * Sem este e-mail, ele só descobre que tem algo pra fazer se entrar no sistema
+ * e ler a faixa. Quem está esperando a conexão funcionar não entra: fica
+ * achando que estamos processando. Foi assim que uma solicitação ficou parada
+ * em 'solicitada' por dias.
+ *
+ * O CTA aponta pro PORTAL DO IFOOD e não pro nosso painel: o clique que
+ * resolve é lá. O link do nosso painel vai no rodapé, pra quem quiser conferir
+ * o estado — inverter a ordem faria a pessoa passear pelo nosso sistema sem
+ * chegar no botão que importa.
+ */
+export function conexaoSolicitada(d: {
+  nome: string | null
+  loja: string | null
+  cnpj: string
+}) {
+  const cnpjFmt =
+    d.cnpj.length === 14
+      ? `${d.cnpj.slice(0, 2)}.${d.cnpj.slice(2, 5)}.${d.cnpj.slice(5, 8)}/${d.cnpj.slice(8, 12)}-${d.cnpj.slice(12)}`
+      : d.cnpj
+  const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
+  return {
+    assunto: `Falta você aprovar no iFood${d.loja ? ` — ${d.loja}` : ""}`,
+    html: layout({
+      titulo: "Pedi a conexão no iFood. Agora falta você aprovar.",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Solicitei ao iFood a conexão${daLoja} com o CNPJ <strong style="white-space:nowrap;">${cnpjFmt}</strong>. O último passo é seu — e leva menos de um minuto.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+          <tr><td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+            No <strong>Portal do Parceiro do iFood</strong>, vá em <strong>Aplicativos</strong> e autorize o <strong>Delivery OS</strong>.<br>
+            Precisa estar logado com o usuário <strong>Proprietário</strong> da loja — outros perfis não enxergam essa tela.
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;">Assim que você aprovar, o faturamento e as avaliações passam a entrar sozinhos, todo dia, sem planilha. O histórico vem junto.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Não apareceu nada pra aprovar? Me responde aqui que eu confiro o CNPJ e solicito de novo.</p>`,
+      cta: { texto: "Abrir o Portal do Parceiro", url: "https://portal.ifood.com.br/apps" },
+      ps: `Depois de aprovar, acompanhe por aqui: ${SITE}/unidades`,
+    }),
+  }
+}
+
+/**
  * Fechamento do mês com dias faltando (só planilha).
  *
  * O assunto e a primeira linha falam de DINHEIRO, não de tarefa. "Faltam 4
