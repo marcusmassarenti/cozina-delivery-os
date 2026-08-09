@@ -15,8 +15,11 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { apenasJanelaVigente } from "@/lib/data/ifood-imported"
-import { getUnits } from "@/lib/data/units"
-import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { getHoldingUnitIds, getUnits } from "@/lib/data/units"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+} from "@/lib/auth/permissions"
 
 /**
  * Empresa dona do cadastro.
@@ -33,6 +36,30 @@ import { getCurrentHoldingId } from "@/lib/auth/permissions"
 const SEM_DONO = "00000000-0000-0000-0000-000000000000"
 async function escopo(holdingId?: string | null): Promise<string> {
   return holdingId ?? (await getCurrentHoldingId()) ?? SEM_DONO
+}
+
+/**
+ * Lojas que podem entrar na lista de itens vendidos.
+ *
+ * As tabelas de venda (ifood_cardapio_periodo_items, ninefood_daily_item,
+ * keeta_daily_item) são do sistema inteiro e não têm holding_id — o vínculo
+ * com o cliente passa pela unidade. Sem este filtro, a tela listava o item
+ * vendido de TODOS os clientes: o Churrasco no Pote via "Shari" e "Pizza
+ * Lombo Família", que são de outra empresa.
+ *
+ * Devolve SEMPRE um array, nunca undefined: `undefined` significaria "sem
+ * filtro" pra quem chama, que é exatamente o defeito. Empresa sem loja
+ * devolve um UUID que não existe — fail-closed.
+ */
+async function lojasDoEscopo(holdingId: string): Promise<string[]> {
+  const daEmpresa = await getHoldingUnitIds(holdingId)
+  const permitidas = await getAccessibleUnitIds()
+  // Franqueado enxerga só as lojas dele -- inclusive aqui.
+  const ids =
+    permitidas === null
+      ? daEmpresa
+      : daEmpresa.filter((id) => permitidas.includes(id))
+  return ids.length ? ids : [SEM_DONO]
 }
 
 export type Platform = "ifood" | "99food" | "keeta"
@@ -418,7 +445,7 @@ export async function getItensVendidos(
 ): Promise<ItemVendido[]> {
   const hid = await escopo(holdingId)
   const [sales, dePara, fichaByPrato] = await Promise.all([
-    getItemSalesByUnit(year, month),
+    getItemSalesByUnit(year, month, await lojasDoEscopo(hid)),
     getDeParaMap(hid),
     getFichaByPrato(hid),
   ])
