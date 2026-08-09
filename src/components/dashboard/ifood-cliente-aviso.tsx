@@ -51,9 +51,15 @@ export function IfoodClienteAviso({
       {recusadas.map((s) => (
         <RecusadaCard key={s.id} s={s} />
       ))}
-      {ativas.map((s) => (
-        <AtivaCard key={s.id} s={s} />
-      ))}
+      {/* Mesmo tratamento das solicitadas, que já tinha sido resolvido aqui em
+          cima e não chegou nas ativas: a DG FOODS abriu a home com 47 avisos
+          de "loja conectada", um por loja, empurrando o faturamento do dia pra
+          fora da tela. Comemorar 47 vezes não é comemorar — é entulho. */}
+      {ativas.length > 2 ? (
+        <VariasAtivasCard lojas={ativas} />
+      ) : (
+        ativas.map((s) => <AtivaCard key={s.id} s={s} />)
+      )}
       {/* Com mais de uma loja esperando, um card só: eram 7 avisos idênticos
           na home, cada um pedindo a mesma ação e cobrando um clique. */}
       {pendentesAprovacao.length > 1 ? (
@@ -325,6 +331,74 @@ function RecusadaCard({ s }: { s: MinhaSolicitacao }) {
       >
         Corrigir e pedir de novo
       </Link>
+    </div>
+  )
+}
+
+
+/**
+ * "N lojas foram conectadas" — um card no lugar de N.
+ *
+ * O individual (AtivaCard) continua valendo pra uma ou duas: ali o nome da
+ * loja é a informação, e ver "Le Petit Pastéis conectada" é a confirmação que
+ * a pessoa esperava. A partir de três o nome deixa de informar e vira lista —
+ * então o que importa passa a ser o número e o "pode parar de subir planilha".
+ *
+ * Um "fechar" só, e ele vale por todas: dispensar 47 avisos um a um é uma
+ * tarefa que ninguém faz, e aviso que não se consegue dispensar vira parte do
+ * cenário — deixa de ser lido justamente quando algo importante aparecer nele.
+ */
+function VariasAtivasCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
+  // A chave inclui a contagem: conectou mais uma, o aviso volta com o número
+  // novo. Sem isso, quem fechou com 47 nunca mais saberia da 48ª.
+  const chave = `ifood_ativou_lote_${lojas.length}`
+  const [visto, setVisto] = React.useState(true)
+  React.useEffect(() => {
+    try {
+      setVisto(localStorage.getItem(chave) === "1")
+    } catch {
+      setVisto(false)
+    }
+  }, [chave])
+  if (visto) return null
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/40 dark:bg-emerald-950/25">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+        <PartyPopper className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-foreground">
+          <b>{lojas.length} lojas</b> foram conectadas ao iFood! 🎉
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Financeiro e avaliações entram sozinhos pela API — histórico e dados
+          novos, sem planilha.{" "}
+          <span
+            title={lojas
+              .map((l) => `${l.unitCode ? `${l.unitCode} · ` : ""}${l.unitName}`)
+              .join("\n")}
+            className="underline decoration-dotted underline-offset-2"
+          >
+            Ver quais
+          </span>
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setVisto(true)
+          try {
+            localStorage.setItem(chave, "1")
+          } catch {
+            /* ignora */
+          }
+        }}
+        className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+        aria-label="Fechar"
+      >
+        <X className="size-4" />
+      </button>
     </div>
   )
 }
