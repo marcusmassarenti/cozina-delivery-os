@@ -267,15 +267,61 @@ export async function varrerConexoesNovas(): Promise<{
   const admin = createAdminClient()
   const { data } = await admin
     .from("unit_platforms")
-    .select("unit_id, platform")
+    .select("unit_id, platform, api_store_id")
     .is("email_conectado_at", null)
     .eq("active", true)
     .in("platform", ["ifood", "99food", "cardapioweb"])
 
-  const alvos = (data ?? []) as {
+  const candidatos = (data ?? []) as {
     unit_id: string
     platform: PlataformaConexao
+    api_store_id: string | null
   }[]
+
+  // ⚠️ SÓ CONEXÃO DE API DE VERDADE.
+  //
+  // `unit_platforms` diz que a loja VENDE naquela plataforma — não que ela
+  // esteja conectada. A maioria das lojas está lá porque alguém marcou o
+  // canal no cadastro e o dado entra por planilha.
+  //
+  // Errei exatamente isso em 09/08/26: a varredura mandou "o iFood está
+  // conectado, já está trazendo os dados sozinho" pra 3 clientes cujas lojas
+  // nunca tiveram API — os números eram reais (vinham de importação), a frase
+  // é que era falsa. E restavam 62 na fila pra repetir no dia seguinte.
+  //
+  // O sinal de conexão é diferente em cada plataforma, e é por isso que o
+  // guarda da migration falhou: ele usou `api_store_id`, que só o iFood tem.
+  const [links99, installsCw] = await Promise.all([
+    admin.from("ninefood_store_links").select("unit_id"),
+    admin.from("cardapioweb_installs").select("unit_id").eq("active", true),
+  ])
+  const com99 = new Set(
+    (links99.data ?? []).map((l) => l.unit_id as string).filter(Boolean),
+  )
+  const comCw = new Set(
+    (installsCw.data ?? []).map((i) => i.unit_id as string).filter(Boolean),
+  )
+
+  const conectada = (c: (typeof candidatos)[number]) =>
+    c.platform === "ifood"
+      ? Boolean(c.api_store_id)
+      : c.platform === "99food"
+        ? com99.has(c.unit_id)
+        : comCw.has(c.unit_id)
+
+  // Quem não é conexão de API sai da fila de vez: sem isto, cada varredura
+  // reavaliaria as mesmas ~160 linhas todo dia pra sempre.
+  const foraDeEscopo = candidatos.filter((c) => !conectada(c))
+  for (const c of foraDeEscopo) {
+    await admin
+      .from("unit_platforms")
+      .update({ email_conectado_at: new Date().toISOString() })
+      .eq("unit_id", c.unit_id)
+      .eq("platform", c.platform)
+      .is("email_conectado_at", null)
+  }
+
+  const alvos = candidatos.filter(conectada)
 
   let enviados = 0
   for (const a of alvos) {
