@@ -227,8 +227,17 @@ export type MinhaSolicitacao = {
  * a explicação existia, mas só aparecia se ele entrasse na página daquela loja.
  */
 export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> {
-  const { isSuperadmin } = await import("@/lib/auth/permissions")
-  if (await isSuperadmin()) return []
+  const { isSuperadmin, getVerComoHoldingId } = await import(
+    "@/lib/auth/permissions"
+  )
+  // Superadmin não vê o aviso do cliente -- ele tem o painel. MAS o "ver como
+  // o cliente" precisa mostrar: era exatamente por aqui que a faixa sumia.
+  // Quem é dono da plataforma continua sendo superadmin dentro do modo, então
+  // `isSuperadmin()` sozinho escondia o aviso justamente no único caminho que
+  // existe pra conferir a conta de um cliente. A pergunta certa não é "sou
+  // superadmin?", é "estou agindo como a plataforma agora?".
+  const verComo = await getVerComoHoldingId()
+  if (!verComo && (await isSuperadmin())) return []
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return []
   const acessiveis = await getAccessibleUnitIds()

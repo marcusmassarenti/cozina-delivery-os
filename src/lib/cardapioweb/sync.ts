@@ -26,6 +26,8 @@ import {
   type CwInstall,
 } from "./pedidos"
 import { sincronizarAvaliacoes } from "./avaliacoes"
+import { sincronizarCatalogo } from "./catalogo"
+import { sincronizarClientes } from "./clientes"
 
 /** Janela do backfill. O /orders/history aceita no máximo 6 meses por
  *  consulta; 30 dias por rodada mantém cada execução curta. */
@@ -40,6 +42,8 @@ export type ResultadoSync = {
   backfill?: { de: string; ate: string; pedidos: number; erro?: string }
   detalhe?: { processados: number; erros: number; restantes: number }
   avaliacoes?: { gravadas: number; total: number | null; erro?: string }
+  catalogo?: { itens: number; erro?: string }
+  clientes?: { gravados: number; erro?: string }
   concluido: boolean
   erro?: string
 }
@@ -195,6 +199,38 @@ export async function sincronizarInstall(
     gravadas: aval.novas,
     total: aval.total,
     erro: aval.erro,
+  }
+
+  // ── 3b) Catálogo e clientes ───────────────────────────────────────────
+  //
+  // Ficavam de fora do cron e só atualizavam quando alguém abria a tela e
+  // clicava — o catálogo do primeiro cliente real passou 4 dias congelado.
+  // Catálogo desatualizado é produto ou preço novo que o sistema não conhece,
+  // e é dele que a ficha técnica depende pra saber o que a loja vende.
+  //
+  // Nenhum dos dois derruba a rodada: são acessórios, e pedido é o que não
+  // pode faltar. Erro vira campo no resultado, não exceção.
+  try {
+    const cat = await sincronizarCatalogo(install.id)
+    resultado.catalogo = { itens: cat.itens, erro: cat.erro }
+  } catch (e) {
+    resultado.catalogo = {
+      itens: 0,
+      erro: e instanceof Error ? e.message : "falhou",
+    }
+  }
+
+  // Clientes tem cursor de página próprio (clientes_pagina): cada rodada
+  // avança um pedaço e volta ao começo ao terminar a volta, então não adianta
+  // pedir tudo de uma vez.
+  try {
+    const cli = await sincronizarClientes(install)
+    resultado.clientes = { gravados: cli.clientes, erro: cli.erro }
+  } catch (e) {
+    resultado.clientes = {
+      gravados: 0,
+      erro: e instanceof Error ? e.message : "falhou",
+    }
   }
 
   // ── 4) Detalhe: consome a fila ────────────────────────────────────────
