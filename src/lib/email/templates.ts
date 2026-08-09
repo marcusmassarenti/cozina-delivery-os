@@ -468,6 +468,38 @@ export function conexaoRecusada(d: {
 }
 
 /**
+ * Recuperação de senha.
+ *
+ * Sai por AQUI e não pelo template do Supabase. O deles chegava em inglês
+ * ("Reset your password"), sem logo e sem nenhuma marca — parecia phishing
+ * justamente no e-mail em que a pessoa está prestes a digitar uma senha nova.
+ *
+ * Trocar o template no painel do Supabase resolveria a aparência, mas o HTML
+ * ficaria fora do repositório: ninguém saberia que existe, e mudar a marca aqui
+ * deixaria aquele para trás. Gerando o link com `generateLink` e mandando pelo
+ * nosso `enviarEmail`, o e-mail vira igual aos outros e fica versionado junto.
+ * O padrão já existia: a régua faz isso com o magic link.
+ *
+ * SEM NOME, de propósito. A tela de "esqueci a senha" responde "enviado" mesmo
+ * pra e-mail que não existe, pra não revelar quem tem conta — e um "Oi,
+ * Fulano!" aqui entregaria pelo lado de dentro o que a tela esconde.
+ */
+export function recuperarSenha(d: { link: string }) {
+  return {
+    assunto: "Redefinir sua senha — Delivery OS",
+    html: layout({
+      titulo: "Vamos redefinir sua senha",
+      corpo: `
+        <p style="margin:0 0 14px;">Você pediu para trocar a senha do Delivery OS. É só clicar no botão abaixo e escolher uma nova.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:${SUAVE};">O link vale por <strong>1 hora</strong> e só pode ser usado uma vez.</p>
+        <p style="margin:0 0 14px;">Se não foi você que pediu, pode ignorar este e-mail — sua senha continua a mesma, e ninguém consegue trocá-la sem este link.</p>`,
+      cta: { texto: "Escolher nova senha", url: d.link },
+      ps: "Se o botão não abrir, copie e cole no navegador: " + d.link,
+    }),
+  }
+}
+
+/**
  * "Está conectado — olha o que já entrou." Serve as três plataformas.
  *
  * Fecha o ciclo COM NÚMERO, não com "tudo certo!". Quem autorizou no portal

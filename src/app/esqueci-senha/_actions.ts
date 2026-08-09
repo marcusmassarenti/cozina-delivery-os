@@ -2,7 +2,6 @@
 
 import { headers } from "next/headers"
 
-import { createClient } from "@/lib/supabase/server"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 
 export type ResetState = { ok: boolean; message?: string; sent?: boolean }
@@ -33,8 +32,46 @@ export async function requestReset(
     h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https")
   const redirectTo = `${proto}://${host}/redefinir-senha`
 
-  const supabase = await createClient()
-  await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+  // O e-mail sai pelo NOSSO layout, não pelo template do Supabase.
+  //
+  // O deles chegava em inglês ("Reset your password"), sem logo e sem marca
+  // nenhuma — parecendo phishing justamente no e-mail em que a pessoa vai
+  // digitar uma senha nova. Aqui a gente gera o link com `generateLink` e
+  // manda pelo mesmo caminho dos outros avisos; a régua já fazia isso com o
+  // magic link.
+  //
+  // NUNCA MUDA A RESPOSTA. Toda falha daqui pra frente é engolida de
+  // propósito: "não achei esse e-mail", "o Resend recusou", qualquer coisa.
+  // A tela responde "enviado" mesmo pra e-mail que não existe, e é isso que
+  // impede alguém de descobrir quem tem conta testando endereços. Um erro
+  // diferente aqui entregaria a resposta pelo tempo ou pela mensagem.
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const { recuperarSenha } = await import("@/lib/email/templates")
+    const { enviarEmail } = await import("@/lib/email/enviar")
+
+    const { data: g } = await createAdminClient().auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo },
+    })
+    const link = g?.properties?.action_link
+    if (link) {
+      const { assunto, html } = recuperarSenha({ link })
+      await enviarEmail({
+        holdingId: null,
+        tipo: "recuperar-senha",
+        para: email,
+        assunto,
+        html,
+        // Pedir de novo é normal (o link expira em 1h). Recusar o segundo
+        // pedido trancaria a pessoa do lado de fora.
+        forcar: true,
+      })
+    }
+  } catch (e) {
+    console.error("requestReset:", e)
+  }
 
   return { ok: true, sent: true }
 }

@@ -52,6 +52,13 @@ export type TipoEmail =
    */
   | "conexao-ativada"
   /**
+   * Recuperação de senha. Sai pelo nosso layout em vez do template do
+   * Supabase — ver a nota em templates.ts. `forcar: true` porque a pessoa pode
+   * pedir de novo se o link expirar, e recusar o segundo pedido a deixaria
+   * trancada do lado de fora.
+   */
+  | "recuperar-senha"
+  /**
    * Aviso semanal ao cliente de que uma loja parou de mandar dado. Também NÃO
    * é régua: a mesma loja pode parar em semanas diferentes, então quem dispara
    * manda `forcar: true` — senão a trava engoliria a segunda vez em diante,
