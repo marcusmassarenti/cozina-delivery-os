@@ -30,7 +30,24 @@ export function IfoodClienteAviso({
 }: {
   solicitacoes: MinhaSolicitacao[]
 }) {
-  const ativas = solicitacoes.filter((s) => s.status === "ativa")
+  // "Foi conectada!" tem PRAZO DE VALIDADE. Passada a primeira semana o
+  // cliente já sabe que está conectado — o aviso deixa de ser notícia e vira
+  // entulho fixo na home, ocupando o lugar do faturamento do dia.
+  //
+  // Isto substitui o "fechar" como mecanismo principal, e de propósito: o
+  // fechar mora no localStorage, então some ao trocar de navegador ou de
+  // celular, e a DG FOODS tinha 47 avisos que voltavam a cada aparelho novo.
+  // Prazo é servidor: vale igual em todo lugar, sem ninguém precisar clicar.
+  const VALIDADE_DIAS = 7
+  const corte = Date.now() - VALIDADE_DIAS * 24 * 60 * 60 * 1000
+  const ativas = solicitacoes.filter(
+    (s) =>
+      s.status === "ativa" &&
+      // Sem data legível, mostra: errar pro lado de avisar é melhor que
+      // engolir a confirmação que a pessoa está esperando.
+      (Number.isNaN(Date.parse(s.atualizadaEm)) ||
+        Date.parse(s.atualizadaEm) >= corte),
+  )
   const pendentesAprovacao = solicitacoes.filter(
     (s) => s.status === "solicitada",
   )
