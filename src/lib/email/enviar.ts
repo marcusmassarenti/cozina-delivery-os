@@ -45,6 +45,13 @@ export type TipoEmail =
    */
   | "conexao-solicitada"
   /**
+   * "Conectado — olha o que já entrou", com o primeiro resultado. Uma vez por
+   * loja × plataforma (o carimbo mora em unit_platforms.email_conectado_at).
+   * `forcar: true` porque um cliente com 16 lojas conectando no mesmo dia
+   * dispara 16 e-mails legítimos.
+   */
+  | "conexao-ativada"
+  /**
    * Aviso semanal ao cliente de que uma loja parou de mandar dado. Também NÃO
    * é régua: a mesma loja pode parar em semanas diferentes, então quem dispara
    * manda `forcar: true` — senão a trava engoliria a segunda vez em diante,

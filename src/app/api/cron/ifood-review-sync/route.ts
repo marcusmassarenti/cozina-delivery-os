@@ -26,7 +26,31 @@ export async function GET(req: Request) {
 
   try {
     const r = await syncIfoodReviews(null)
-    return Response.json({ ok: true, ranAt: new Date().toISOString(), ...r })
+
+    // Varredura dos e-mails de "conectado — olha o que já entrou", das TRÊS
+    // plataformas, pendurada aqui de propósito.
+    //
+    // Este é o último cron da manhã: 99 Food às 5h, iFood às 6h, Cardápio Web
+    // às 6h05, avaliações às 7h. Rodando junto do sync do financeiro (6h) o
+    // e-mail diria "as avaliações ainda não estão entrando -- falta autorizar
+    // o segundo app" pra quem autorizou os dois certinho, porque elas só
+    // chegam uma hora depois.
+    //
+    // Não derruba o cron: o sync de avaliações é o que não pode faltar.
+    let conexoes: { avaliadas: number; enviados: number } | null = null
+    try {
+      const { varrerConexoesNovas } = await import("@/lib/email/conexao-ativada")
+      conexoes = await varrerConexoesNovas()
+    } catch (e) {
+      console.error("varrerConexoesNovas:", e)
+    }
+
+    return Response.json({
+      ok: true,
+      ranAt: new Date().toISOString(),
+      ...r,
+      conexoes,
+    })
   } catch (e) {
     console.error("/api/cron/ifood-review-sync:", e)
     return Response.json(

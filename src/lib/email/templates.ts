@@ -468,6 +468,63 @@ export function conexaoRecusada(d: {
 }
 
 /**
+ * "Está conectado — olha o que já entrou." Serve as três plataformas.
+ *
+ * Fecha o ciclo COM NÚMERO, não com "tudo certo!". Quem autorizou no portal
+ * voltou pro seu dia sem confirmação nenhuma de que funcionou, e o primeiro
+ * dado só aparece na madrugada seguinte. Mostrar faturamento, período e
+ * pedidos é o que transforma "acho que deu certo" em "deu".
+ *
+ * O bloco de pendências existe porque a conexão do iFood nasce pela metade com
+ * facilidade: são dois apps no Portal do Parceiro e nada avisa quando só um
+ * foi aprovado. Dizer "as avaliações ainda não estão entrando, falta autorizar
+ * o segundo app" é a única chance do cliente perceber sozinho.
+ *
+ * É o ÚLTIMO e-mail de integração. Depois dele o cliente só recebe o aviso
+ * semanal de saúde — e-mail que continua chegando vira ruído, e ruído faz
+ * parar de ler o aviso que importa.
+ */
+export function conexaoAtivada(d: {
+  nome: string | null
+  loja: string | null
+  plataforma: string
+  linhas: { rotulo: string; valor: string }[]
+  pendencias: string[]
+}) {
+  const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
+  const tabela = d.linhas
+    .map(
+      (l) =>
+        `<tr><td style="padding:6px 16px 6px 0;color:${SUAVE};font-size:15px;">${l.rotulo}</td><td style="padding:6px 0;font-size:17px;font-weight:700;">${l.valor}</td></tr>`,
+    )
+    .join("")
+  const avisos = d.pendencias.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+         <tr><td style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+           ${d.pendencias.map((p) => `<p style="margin:0 0 8px;">${p}</p>`).join("")}
+         </td></tr>
+       </table>`
+    : ""
+  return {
+    assunto: `${d.plataforma} conectado${d.loja ? ` — ${d.loja}` : ""}`,
+    html: layout({
+      titulo: `Pronto: o ${d.plataforma} está conectado.`,
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Deu certo. O ${d.plataforma}${daLoja} já está trazendo os dados sozinho — e o histórico veio junto:</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">${tabela}</table>
+        ${avisos}
+        <p style="margin:0 0 14px;">Daqui pra frente entra sozinho, todo dia, sem planilha.${
+          d.pendencias.length
+            ? " Resolvendo o ponto acima, fica completo."
+            : " Você não precisa fazer mais nada."
+        }</p>`,
+      cta: { texto: "Ver no painel", url: `${SITE}/inicio` },
+      ps: "Esse é o último e-mail sobre a conexão. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal.",
+    }),
+  }
+}
+
+/**
  * "Pedi a conexão no iFood — agora falta você aprovar".
  *
  * A solicitação de verdade é feita à mão no Portal do Desenvolvedor do iFood,
