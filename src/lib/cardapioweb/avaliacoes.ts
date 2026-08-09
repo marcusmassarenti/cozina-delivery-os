@@ -95,16 +95,26 @@ export async function sincronizarAvaliacoes(
 ): Promise<ResultadoAvaliacoes> {
   const admin = createAdminClient()
 
-  // Loja sem nenhuma avaliação guardada varre fundo UMA vez. Depois disso, o
-  // dia a dia só precisa do horizonte curto: avaliação não muda depois de
-  // escrita, então o que já veio não precisa vir de novo.
+  // Varre fundo UMA vez; depois disso o dia a dia só precisa do horizonte
+  // curto, porque avaliação não muda depois de escrita.
+  //
+  // ⚠️ O gatilho é "JÁ VARRI?", carimbado em cardapioweb_sync_state, e não
+  // "tenho avaliação guardada?". Era assim antes, e loja que genuinamente não
+  // tem avaliação nenhuma nunca saía do estado zero: refazia a varredura de 3
+  // anos todo dia, para sempre. Medido em 08/08/26 numa instalação real: 24
+  // chamadas em 3 dias, todas devolvendo total_reviews 0. "Não tenho dado" não
+  // é o mesmo que "nunca procurei".
   let janelas = opts.janelas
+  let carimbarVarredura = false
   if (janelas === undefined) {
-    const { count } = await admin
-      .from("cardapioweb_avaliacoes")
-      .select("id", { count: "exact", head: true })
+    const { data: st } = await admin
+      .from("cardapioweb_sync_state")
+      .select("avaliacoes_varredura_em")
       .eq("install_id", install.id)
-    janelas = (count ?? 0) === 0 ? JANELAS_PRIMEIRA : JANELAS_PADRAO
+      .maybeSingle()
+    const nuncaVarreu = !st?.avaliacoes_varredura_em
+    janelas = nuncaVarreu ? JANELAS_PRIMEIRA : JANELAS_PADRAO
+    carimbarVarredura = nuncaVarreu
   }
 
   const piso = new Date()
@@ -190,6 +200,16 @@ export async function sincronizarAvaliacoes(
     }
 
     fim = inicio
+  }
+
+  // Carimba só no fim e só se nada falhou: varredura interrompida no meio não
+  // vale como varredura, e marcar assim mesmo deixaria um buraco permanente.
+  // (Toda falha acima sai por `return` com `erro`, então chegar aqui é sucesso.)
+  if (carimbarVarredura) {
+    await admin
+      .from("cardapioweb_sync_state")
+      .update({ avaliacoes_varredura_em: new Date().toISOString() })
+      .eq("install_id", install.id)
   }
 
   return { novas, paginas, total, ate }
