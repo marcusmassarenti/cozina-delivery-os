@@ -582,18 +582,34 @@ export type AvailablePeriod = {
  */
 export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
   const admin = createAdminClient()
+
+  // Escopado por loja: platform_imports tem unit_id e não holding_id, então
+  // sem filtro este seletor era montado com a importação de TODOS os clientes.
+  // O efeito é sutil e por isso pior -- a pessoa escolhe um mês que aparece no
+  // dropdown, a tela vem vazia, e ela lê "não vendi nada" em vez de "não há
+  // nada aqui". Aparece em 8 telas (Início, DRE, Pedidos, Avaliações,
+  // Unidade, Ficha técnica...), sempre como o seletor de período.
+  const allowed = await getAccessibleUnitIds()
+  const lojas =
+    allowed === null
+      ? null
+      : allowed.length
+        ? allowed
+        : ["00000000-0000-0000-0000-000000000000"]
+
   const data = await fetchAllRows<{
     report_type: string
     ref_year: number | null
     ref_month: number | null
     ref_date: string | null
   }>(
-    (from, to) =>
-      admin
+    (from, to) => {
+      let q = admin
         .from("platform_imports")
         .select("report_type, ref_year, ref_month, ref_date")
-        .order("id")
-        .range(from, to),
+      if (lojas) q = q.in("unit_id", lojas)
+      return q.order("id").range(from, to)
+    },
     "platform_imports periodos",
   )
 

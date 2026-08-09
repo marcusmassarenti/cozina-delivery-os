@@ -268,6 +268,13 @@ export async function autoLinkIfoodMerchants(
   }
 
   // Merchants ainda NÃO vinculados a nenhuma unidade (candidatos).
+  //
+  // ⚠️ Esta leitura é DE PROPÓSITO sem filtro de empresa, e é a única do
+  // sistema que deve ser assim: a pergunta aqui é "este merchant do iFood já
+  // pertence a alguém?", e a resposta tem que valer para o sistema inteiro.
+  // Escopar por cliente faria a mesma loja do iFood ser vinculada a duas
+  // empresas diferentes. Só o `api_store_id` sai daqui -- nenhum dado de
+  // operação, nenhum valor.
   const { data: linkedRows } = await admin
     .from("unit_platforms")
     .select("api_store_id")
