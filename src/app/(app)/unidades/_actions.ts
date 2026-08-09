@@ -106,6 +106,8 @@ async function aplicarCadastroExigente(
     cnpjRaw: string
     dataInauguracao: string | null
     platformsCount: number
+    /** Campos do perfil — quando ausente, só as regras antigas valem. */
+    perfil?: Record<string, string | null> | null
   },
 ): Promise<void> {
   // ⚠️ O CNPJ é cobrado ANTES da isenção do superadmin, de propósito.
@@ -115,11 +117,43 @@ async function aplicarCadastroExigente(
   // em 30/07), nem comparar loja com loja. A isenção existia pra caso legado —
   // e o caso legado virou 18 unidades sem CNPJ, 12 delas da própria Cozina.
   if (!dados.cnpjRaw) fieldErrors.cnpj = "CNPJ obrigatório"
-  if (await isSuperadmin()) return
+
+  // ⚠️ A partir de 09/08/26 a exigência vale pra TODO MUNDO, inclusive o
+  // super-admin (decisão do Marcus). A isenção existia pra caso legado, e o
+  // caso legado virou a regra: das 76 lojas ativas, 74 sem e-mail do
+  // responsável, 70 sem "quem entrega", 68 sem modelo da unidade.
+  //
+  // Trava só a EDIÇÃO — nada impede o dado das plataformas de continuar
+  // entrando. Loja incompleta segue sincronizando; o que não dá mais é
+  // salvar uma alteração deixando o cadastro pela metade.
   if (!dados.dataInauguracao)
     fieldErrors.data_inauguracao = "Inauguração obrigatória"
   if (dados.platformsCount === 0)
     fieldErrors.platforms = "Selecione ao menos uma plataforma"
+
+  const perfil = dados.perfil
+  if (!perfil) return
+  const exigir: [keyof typeof perfil, string, string][] = [
+    ["razao_social", "razao_social", "Razão social obrigatória"],
+    ["tipo_cozinha", "tipo_cozinha", "Tipo de cozinha obrigatório"],
+    ["logradouro", "logradouro", "Endereço obrigatório"],
+    ["numero", "numero", "Número obrigatório"],
+    ["bairro", "bairro", "Bairro obrigatório"],
+    ["cep", "cep", "CEP obrigatório"],
+    ["telefone", "telefone", "Telefone obrigatório"],
+    ["responsavel_nome", "responsavel_nome", "Responsável obrigatório"],
+    ["responsavel_email", "responsavel_email", "E-mail do responsável obrigatório"],
+    ["tipo_operacao", "tipo_operacao", "Modelo da unidade obrigatório"],
+    ["regime_fiscal", "regime_fiscal", "Regime fiscal obrigatório"],
+    ["tipo_entrega", "tipo_entrega", "Informe quem entrega"],
+  ]
+  for (const [chave, campo, msg] of exigir) {
+    if (!perfil[chave]) fieldErrors[campo] = msg
+  }
+
+  // COMPLEMENTO fica de fora de propósito: muito endereço não tem, e campo
+  // obrigatório sem valor real vira "-" ou "N/A" — pior que vazio, porque
+  // parece preenchido e ninguém volta pra corrigir.
 }
 
 export async function createUnit(
@@ -179,6 +213,7 @@ export async function createUnit(
     cnpjRaw,
     dataInauguracao,
     platformsCount: platforms.length,
+    perfil,
   })
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -438,6 +473,7 @@ export async function updateUnit(
     cnpjRaw,
     dataInauguracao,
     platformsCount: platforms.length,
+    perfil,
   })
 
   if (Object.keys(fieldErrors).length > 0) {

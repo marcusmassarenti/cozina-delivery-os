@@ -26,6 +26,8 @@ import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
 import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
 import { AvisosConvite } from "@/components/dashboard/avisos-convite"
 import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
+import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
+import { CadastroIncompletoAviso } from "@/app/(app)/unidades/_components/cadastro-incompleto-aviso"
 import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
@@ -281,6 +283,7 @@ export default async function Home({
     consumoIaPlataforma,
     lojasSemDado,
     panoramaConexao,
+    cadastroIncompleto,
   ] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
     isApiSyncEnabled(),
@@ -297,6 +300,9 @@ export default async function Home({
     getLojasSemDado(activeUnitIds),
     // Lojas do iFood que nunca pediram conexão — faixa "conectar".
     getPanoramaConexaoIfood(),
+    // Cadastro pela metade: desde 09/08/26 salvar edição exige tudo preenchido,
+    // e descobrir isso no meio de outra tarefa é o pior momento.
+    getCadastroIncompleto(),
 ])
   cron.marca("avisos")
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
@@ -1103,6 +1109,12 @@ export default async function Home({
       {/* Cliente: falta aprovar no iFood / loja conectada. */}
       <IfoodClienteAviso
           solicitacoes={minhasSolicitacoesIfood} />
+
+      {/* Dispensável aqui: quem abre a inicial veio ver o faturamento do dia,
+          e prender um aviso de cadastro no caminho seria sequestrar a tela por
+          uma tarefa que não é a dela agora. Em /unidades a mesma faixa é
+          permanente — lá é onde se resolve. */}
+      <CadastroIncompletoAviso dados={cadastroIncompleto} />
 
       {/* Cliente: lojas que nunca pediram conexão nenhuma. */}
       <IfoodConectarAviso

@@ -3,12 +3,14 @@ import { assertCanView, isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { AvisoSemCnpj } from "@/components/unidades/aviso-sem-cnpj"
+import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
+import { CadastroIncompletoAviso } from "./_components/cadastro-incompleto-aviso"
 import { UnitsListView } from "./_components/units-list-view"
 
 export default async function UnidadesPage() {
   await assertCanView("unidades")
   const admin = createAdminClient()
-  const [units, canEdit, canDelete, links, ctx, superadmin, upIfood, reqs, reqs99] =
+  const [units, canEdit, canDelete, links, ctx, superadmin, upIfood, reqs, reqs99, incompleto] =
     await Promise.all([
       getVisibleUnits(),
       userCan("unidades", "edit"),
@@ -32,6 +34,7 @@ export default async function UnidadesPage() {
         .select("unit_id, status, created_at")
         .in("status", ["pendente", "solicitada"])
         .order("created_at", { ascending: false }),
+      getCadastroIncompleto()
     ])
   // unidades que sincronizam financeiro/cardápio pela API do 99
   const ninefoodSyncedIds = ((links.data ?? []) as { unit_id: string | null }[])
@@ -61,6 +64,9 @@ export default async function UnidadesPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+      {/* Permanente aqui: é a tela onde o problema se resolve, e aviso que se
+          fecha some justamente de quem tinha como agir. */}
+      <CadastroIncompletoAviso dados={incompleto} permanente />
       <AvisoSemCnpj
         unidades={units
           .filter((u) => !u.cnpj || u.cnpj.replace(/\D/g, "").length !== 14)
