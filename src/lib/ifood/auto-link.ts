@@ -696,10 +696,19 @@ export async function backfillPendentes(
       const meses = (u?.reconciliation ?? []).filter(
         (x) => (x.persisted ?? 0) > 0,
       ).length
-      // Carimba só quando o histórico VEIO. Backfill que falhou continua na
-      // fila; carimbar mesmo assim deixaria a loja com 2 meses pra sempre, que
-      // é exatamente o defeito que este carimbo existe pra evitar.
-      if (meses > 0) {
+      // ⚠️ O sinal é "A API RESPONDEU", não "achou dado".
+      //
+      // Era `meses > 0`, e isso trata "não existe nada antes" como fracasso:
+      // loja que abriu em maio nunca teria janeiro, ficaria sem carimbo e
+      // seria tentada de novo todo dia, pra sempre — 8 competências, ~2,7 min,
+      // sem fim. Aconteceu com 4 lojas em 09/08/26 (Forno a Lenha, Ipiranga,
+      // Ki Delicia, Nagay).
+      //
+      // `ok` distingue as duas coisas: veio 200 e a competência estava vazia
+      // (pergunta respondida, nada a puxar) versus não consegui falar com a
+      // API (aí não carimba e volta pra fila mesmo).
+      const respondeu = (u?.reconciliation ?? []).some((x) => x.ok === true)
+      if (respondeu) {
         await createAdminClient()
           .from("unit_platforms")
           .update({ historico_backfill_at: new Date().toISOString() })

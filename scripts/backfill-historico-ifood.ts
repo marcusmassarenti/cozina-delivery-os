@@ -71,7 +71,11 @@ async function main() {
       const u = res.results[0]
       const linhas = (u?.reconciliation ?? []).reduce((s, x) => s + (x.persisted ?? 0), 0)
       const meses = (u?.reconciliation ?? []).filter((x) => (x.persisted ?? 0) > 0).length
-      if (meses > 0) {
+      // Sinal = "a API respondeu", não "achou dado" — ver a nota em
+      // auto-link.ts. Loja que abriu depois de janeiro volta vazia e mesmo
+      // assim sai da fila: a pergunta foi feita e respondida.
+      const respondeu = (u?.reconciliation ?? []).some((x) => x.ok === true)
+      if (respondeu) {
         await admin.from("unit_platforms")
           .update({ historico_backfill_at: new Date().toISOString() })
           .eq("unit_id", r.unit_id).eq("platform", "ifood")
