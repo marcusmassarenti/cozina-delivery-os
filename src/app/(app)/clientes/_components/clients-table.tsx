@@ -282,6 +282,8 @@ export function ClientsTable({
         </div>
       )}
 
+      <ProspeccaoEmTeste clientes={clients} />
+
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -358,11 +360,40 @@ export function ClientsTable({
                         // incluso. Escrever "sem plano" aqui dava a impressão
                         // oposta — de conta capada — justo em quem ainda está
                         // decidindo se fica.
-                        <span
-                          title="Durante o teste grátis todas as funções estão liberadas, inclusive o Nino AI"
-                          className="text-[11px] font-medium text-violet-600 dark:text-violet-400"
-                        >
-                          teste · tudo liberado
+                        // Diz QUAL plano, e quanto essa conta valeria.
+                        //
+                        // "teste · tudo liberado" não respondia a pergunta que
+                        // o dono faz olhando esta tela: quanto tem em jogo.
+                        // A régua é o PRO (decisão do Marcus): é o que ele
+                        // espera vender. O teste na prática libera mais que
+                        // isso — o Nino AI entra junto —, e por isso o título
+                        // continua dizendo a verdade ao passar o mouse.
+                        //
+                        // Conta sem loja mostra "—" em vez de R$ 99: ela não
+                        // usou o sistema, e somá-la infla a prospecção com
+                        // quem cadastrou e sumiu.
+                        <span className="flex flex-wrap items-baseline gap-1.5">
+                          <span
+                            title="Durante o teste grátis todas as funções estão liberadas, inclusive o Nino AI — que no plano pago é exclusivo do DeliveryOS AI."
+                            className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+                          >
+                            teste · plano Pro
+                          </span>
+                          {c.activeUnits > 0 ? (
+                            <span
+                              className="text-[11px] font-semibold tabular-nums text-violet-700 dark:text-violet-300"
+                              title={`${c.activeUnits} loja${c.activeUnits !== 1 ? "s" : ""} × plano Pro (R$ 99 a primeira + R$ 39 cada adicional)`}
+                            >
+                              {fmtBRL(99 + 39 * (c.activeUnits - 1))}/mês
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[11px] text-muted-foreground"
+                              title="Sem loja cadastrada — fora do potencial somado, porque a conta ainda não usou o sistema."
+                            >
+                              — sem loja
+                            </span>
+                          )}
                         </span>
                       ) : (
                         <span className="text-[11px] text-amber-600 dark:text-amber-400">
@@ -585,6 +616,79 @@ export function ClientsTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+
+/**
+ * Quanto há em jogo nos testes em andamento.
+ *
+ * A tela listava quem estava testando, mas não respondia a pergunta que o
+ * dono faz olhando pra ela: quanto isso vira de receita se converter. Somar
+ * conta por conta na cabeça, com preço que muda conforme o número de lojas,
+ * é justamente o tipo de conta que ninguém faz — então a informação existia e
+ * não era usada.
+ *
+ * Régua: plano PRO (R$ 99 a primeira loja + R$ 39 cada adicional). Decisão do
+ * Marcus — é o que ele espera vender. Vale registrar que o teste na prática
+ * libera MAIS que o Pro: o Nino AI entra junto, e ele é exclusivo do plano AI
+ * no pago. Quem converter pro Pro perde o Nino.
+ *
+ * CONTA SEM LOJA FICA FORA DO TOTAL e aparece contada à parte: ela não usou o
+ * sistema, e somá-la infla a prospecção com quem cadastrou e sumiu.
+ */
+function ProspeccaoEmTeste({ clientes }: { clientes: ClientOverview[] }) {
+  const emTeste = clientes.filter((c) => c.billingStatus === "trial")
+  if (emTeste.length === 0) return null
+
+  const comLoja = emTeste.filter((c) => c.activeUnits > 0)
+  const semLoja = emTeste.length - comLoja.length
+  const total = comLoja.reduce(
+    (s, c) => s + 99 + 39 * (c.activeUnits - 1),
+    0,
+  )
+  // Teste que vence nos próximos 3 dias: é onde a conversa precisa acontecer
+  // antes de virar churn silencioso.
+  const limite = new Date()
+  limite.setDate(limite.getDate() + 3)
+  const vencendo = comLoja.filter(
+    (c) => c.trialEndsAt && new Date(c.trialEndsAt) <= limite,
+  ).length
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-900/40 dark:bg-violet-950/30">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+          Em teste agora
+        </p>
+        <p className="text-lg font-semibold tabular-nums text-violet-900 dark:text-violet-100">
+          {fmtBRL(total)}
+          <span className="ml-1 text-xs font-normal text-violet-700/80 dark:text-violet-300/80">
+            /mês se converter
+          </span>
+        </p>
+      </div>
+      <p className="text-xs text-violet-800/90 dark:text-violet-300/90">
+        {comLoja.length} {comLoja.length === 1 ? "conta" : "contas"} com loja
+        cadastrada, no plano Pro.
+        {semLoja > 0 && (
+          <>
+            {" "}
+            <span title="Sem loja cadastrada, então não entra no total — a conta ainda não usou o sistema.">
+              {semLoja} sem loja {semLoja === 1 ? "ficou" : "ficaram"} de fora.
+            </span>
+          </>
+        )}
+        {vencendo > 0 && (
+          <>
+            {" "}
+            <strong className="text-violet-900 dark:text-violet-100">
+              {vencendo} {vencendo === 1 ? "vence" : "vencem"} em até 3 dias.
+            </strong>
+          </>
+        )}
+      </p>
     </div>
   )
 }
