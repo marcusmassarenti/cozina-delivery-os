@@ -503,11 +503,16 @@ export function conexaoSolicitada(d: {
         <p style="margin:0 0 14px;">${oi(d.nome)} Solicitei ao iFood a conexão${daLoja} com o CNPJ <strong style="white-space:nowrap;">${cnpjFmt}</strong>. O último passo é seu — e leva menos de um minuto.</p>
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
           <tr><td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
-            No <strong>Portal do Parceiro do iFood</strong>, vá em <strong>Aplicativos</strong> e autorize o <strong>Delivery OS</strong>.<br>
-            Precisa estar logado com o usuário <strong>Proprietário</strong> da loja — outros perfis não enxergam essa tela.
+            No <strong>Portal do Parceiro do iFood</strong>, vá em <strong>Aplicativos</strong> e autorize <strong>os dois</strong>:
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;font-size:15px;line-height:1.7;">
+              <tr><td style="padding-right:8px;">1.</td><td><strong>Financial</strong> — traz o faturamento</td></tr>
+              <tr><td style="padding-right:8px;">2.</td><td><strong>Avaliações</strong> — traz as notas e os comentários</td></tr>
+            </table>
+            <p style="margin:10px 0 0;font-size:14px;">São aplicativos separados no iFood. Aprovar só um deixa a outra metade de fora.</p>
+            <p style="margin:10px 0 0;font-size:14px;">Precisa estar logado com o usuário <strong>Proprietário</strong> da loja — outros perfis não enxergam essa tela.</p>
           </td></tr>
         </table>
-        <p style="margin:0 0 14px;">Assim que você aprovar, o faturamento e as avaliações passam a entrar sozinhos, todo dia, sem planilha. O histórico vem junto.</p>
+        <p style="margin:0 0 14px;">Depois de aprovado, entra tudo sozinho, todo dia: o <strong>faturamento por volta das 6h</strong> e as <strong>avaliações por volta das 7h</strong>. O histórico vem junto na primeira vez — não é só daqui pra frente.</p>
         <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Não apareceu nada pra aprovar? Me responde aqui que eu confiro o CNPJ e solicito de novo.</p>`,
       cta: { texto: "Abrir o Portal do Parceiro", url: "https://portal.ifood.com.br/apps" },
       ps: `Depois de aprovar, acompanhe por aqui: ${SITE}/unidades`,

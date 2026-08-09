@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/ifood-review-sync",
-      "schedule": "0 11 * * *"
+      "schedule": "0 10 * * *"
     },
     {
       "path": "/api/cron/billing-vencimentos",
