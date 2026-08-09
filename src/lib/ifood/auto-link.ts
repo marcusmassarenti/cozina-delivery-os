@@ -580,13 +580,34 @@ export async function autoLinkIfoodMerchants(
   }
 }
 
-/** Competências de 2026-01 até o mês corrente (backfill de loja nova). */
-export function competenciasDoAno(now = new Date()): string[] {
-  const ano = now.getFullYear()
-  const mesAtual = now.getMonth() + 1
+/**
+ * Competências de JANEIRO DE 2026 até o mês corrente.
+ *
+ * O início é fixo em 2026-01 de propósito, e não "janeiro do ano corrente".
+ * Era assim antes e passaria despercebido até a virada: em janeiro de 2027,
+ * loja nova nasceria só com 2027-01 e nenhum mês de 2026 — sem comparativo
+ * ano contra ano justamente pra quem acabou de entrar. Decisão do Marcus:
+ * sempre desde janeiro de 2026.
+ *
+ * 2026-01 é o piso porque é quando a operação começou a ter dado no iFood;
+ * pedir mês anterior a isso é gastar chamada pra receber vazio.
+ */
+export const INICIO_HISTORICO = { ano: 2026, mes: 1 }
+
+export function competenciasDesdeInicio(now = new Date()): string[] {
   const out: string[] = []
-  for (let m = 1; m <= mesAtual; m++)
-    out.push(`${ano}-${String(m).padStart(2, "0")}`)
+  let ano = INICIO_HISTORICO.ano
+  let mes = INICIO_HISTORICO.mes
+  const anoFim = now.getFullYear()
+  const mesFim = now.getMonth() + 1
+  while (ano < anoFim || (ano === anoFim && mes <= mesFim)) {
+    out.push(`${ano}-${String(mes).padStart(2, "0")}`)
+    mes++
+    if (mes > 12) {
+      mes = 1
+      ano++
+    }
+  }
   return out
 }
 
@@ -620,12 +641,47 @@ export async function autoLinkAndBackfill(
   const backfillAdiado: AutoLinkBackfillResult["backfillAdiado"] = []
   if (!link.ok) return { ...link, backfill, backfillAdiado }
 
-  const comps = competenciasDoAno()
-  const aBackfillar = link.vinculadas.slice(0, MAX_BACKFILL_POR_RODADA)
-  for (const v of link.vinculadas.slice(MAX_BACKFILL_POR_RODADA))
+  const hist = await backfillPendentes()
+  return { ...link, backfill: hist.backfill, backfillAdiado: hist.backfillAdiado }
+}
+
+/**
+ * Puxa o histórico completo das lojas conectadas que ainda não o têm.
+ *
+ * Separada do auto-vínculo de propósito: quem vincula e quem puxa histórico
+ * são perguntas diferentes, e o cron de 15 minutos precisa das duas — ele é
+ * quem DETECTA a autorização do cliente, e parar no vínculo deixava a loja com
+ * dois meses de dado até alguém notar.
+ *
+ * Sequencial por loja: dentro da loja o syncIfoodAll já paraleliza as
+ * competências, e N lojas × N meses em paralelo já apagou mês neste projeto.
+ */
+export async function backfillPendentes(
+  opts: { deadlineMs?: number } = {},
+): Promise<{
+  backfill: AutoLinkBackfillResult["backfill"]
+  backfillAdiado: AutoLinkBackfillResult["backfillAdiado"]
+}> {
+  const backfill: AutoLinkBackfillResult["backfill"] = []
+  const backfillAdiado: AutoLinkBackfillResult["backfillAdiado"] = []
+  const comps = competenciasDesdeInicio()
+  const t0 = Date.now()
+  const limite = opts.deadlineMs ?? Number.POSITIVE_INFINITY
+
+  const pendentes = await lojasSemHistorico()
+  const aBackfillar = pendentes.slice(0, MAX_BACKFILL_POR_RODADA)
+  for (const v of pendentes.slice(MAX_BACKFILL_POR_RODADA))
     backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
 
   for (const v of aBackfillar) {
+    // Uma loja leva ~2,7 min (medido na Pizzaria Quero Mais, 8 competências).
+    // Começar uma que não vai caber é gastar chamada de API pra ser cortado no
+    // meio — e meio backfill não carimba, então voltaria pra fila do mesmo
+    // jeito, tendo queimado o tempo.
+    if (Date.now() - t0 > limite - 180_000) {
+      backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
+      continue
+    }
     try {
       const res = await syncIfoodAll({
         unitIds: [v.unitId],
@@ -640,11 +696,54 @@ export async function autoLinkAndBackfill(
       const meses = (u?.reconciliation ?? []).filter(
         (x) => (x.persisted ?? 0) > 0,
       ).length
+      // Carimba só quando o histórico VEIO. Backfill que falhou continua na
+      // fila; carimbar mesmo assim deixaria a loja com 2 meses pra sempre, que
+      // é exatamente o defeito que este carimbo existe pra evitar.
+      if (meses > 0) {
+        await createAdminClient()
+          .from("unit_platforms")
+          .update({ historico_backfill_at: new Date().toISOString() })
+          .eq("unit_id", v.unitId)
+          .eq("platform", "ifood")
+      }
       backfill.push({ unitCode: v.unitCode, unitName: v.unitName, linhas, meses })
     } catch {
       backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
     }
   }
 
-  return { ...link, backfill, backfillAdiado }
+  return { backfill, backfillAdiado }
+}
+
+/**
+ * Lojas do iFood conectadas e sem histórico completo — a fila do backfill.
+ *
+ * Independe de quem vinculou e de quando: basta ter `api_store_id` e não ter
+ * o carimbo. É o que faz a fila sobreviver a reinício, a deploy e a loja
+ * vinculada por um caminho que não é o cron.
+ */
+async function lojasSemHistorico(): Promise<
+  { unitId: string; unitCode: string; unitName: string }[]
+> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("unit_platforms")
+    .select("unit_id, units(code, name, active)")
+    .eq("platform", "ifood")
+    .eq("active", true)
+    .not("api_store_id", "is", null)
+    .is("historico_backfill_at", null)
+
+  return ((data ?? []) as unknown as {
+    unit_id: string
+    units: { code: string; name: string; active: boolean } | null
+  }[])
+    // Loja desativada não entra: puxar o ano de quem fechou as portas é gastar
+    // chamada de API à toa — a mesma razão que tirou as inativas do sync.
+    .filter((r) => r.units?.active)
+    .map((r) => ({
+      unitId: r.unit_id,
+      unitCode: r.units?.code ?? "—",
+      unitName: r.units?.name ?? "—",
+    }))
 }

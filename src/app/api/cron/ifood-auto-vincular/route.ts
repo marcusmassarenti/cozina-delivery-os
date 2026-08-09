@@ -24,7 +24,10 @@
  * autorizei — conferir e vincular" na tela de merchants, que faz o mesmo na
  * hora. Se a conta virar Pro, dá pra voltar a rodar de 15 em 15 minutos.
  */
-import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
+import {
+  autoLinkIfoodMerchants,
+  backfillPendentes,
+} from "@/lib/ifood/auto-link"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { registrarCron } from "@/lib/cron/registrar"
 
@@ -57,13 +60,39 @@ export async function GET(req: Request) {
     .map((r) => r.unit_id)
     .filter((v): v is string => Boolean(v))
 
+  // Nada esperando vínculo NÃO significa nada a fazer: pode haver loja já
+  // vinculada e sem histórico (a fila do backfill é por estado, não por
+  // evento). Só sai cedo quando as duas filas estão vazias.
   if (unitIds.length === 0) {
-    return Response.json({ ok: true, esperando: 0, vinculadas: [] })
+    const so = await backfillPendentes({ deadlineMs: 240_000 })
+    return Response.json({
+      ok: true,
+      esperando: 0,
+      vinculadas: [],
+      historico: so.backfill.map(
+        (b) => `${b.unitCode} ${b.unitName}: ${b.meses} meses, ${b.linhas} linhas`,
+      ),
+      historicoNaFila: so.backfillAdiado.length,
+    })
   }
 
   // Teto abaixo do maxDuration pra sobrar margem de resposta. O que não couber
   // fica pra próxima rodada — e o CNPJ descoberto agora deixa a próxima rápida.
-  const r = await autoLinkIfoodMerchants(unitIds, { deadlineMs: 240_000 })
+  // Vincular primeiro (é rápido e é o que o cliente está esperando), depois
+  // puxar o histórico com o tempo que sobrar.
+  //
+  // ⚠️ Este cron é quem DETECTA a autorização do cliente — de 15 em 15
+  // minutos, sem ninguém avisar nada. Antes ele vinculava e parava aí: a loja
+  // ficava com "mês corrente + anterior" até o cron das 6h alcançá-la, e se
+  // não alcançasse (teto de 2 por rodada), ficava assim pra sempre. Puxar o
+  // histórico aqui é o que fecha o ciclo "cliente aprovou → dado na tela".
+  const t0 = Date.now()
+  const r = await autoLinkIfoodMerchants(unitIds, { deadlineMs: 150_000 })
+  const restante = 240_000 - (Date.now() - t0)
+  const hist =
+    restante > 60_000
+      ? await backfillPendentes({ deadlineMs: restante })
+      : { backfill: [], backfillAdiado: [] }
 
   return Response.json({
     ok: r.ok,
@@ -72,6 +101,10 @@ export async function GET(req: Request) {
     vinculadas: r.vinculadas.map((v) => `${v.unitCode} ${v.unitName}`),
     naoResolvidas: r.ambiguas.map((a) => `${a.unitName}: ${a.motivo}`),
     restantes: r.restantes,
+    historico: hist.backfill.map(
+      (b) => `${b.unitCode} ${b.unitName}: ${b.meses} meses, ${b.linhas} linhas`,
+    ),
+    historicoNaFila: hist.backfillAdiado.length,
     error: r.error,
   })
   })
