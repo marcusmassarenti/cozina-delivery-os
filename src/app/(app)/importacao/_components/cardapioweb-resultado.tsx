@@ -44,6 +44,14 @@ const MOTIVOS: Record<string, { titulo: string; acao: string }> = {
     titulo: "Autorizamos, mas o Cardápio Web não informou qual loja foi conectada.",
     acao: "A conexão existe. Tente sincronizar — se falhar, conecte de novo.",
   },
+  loja_ja_conectada: {
+    titulo: "Esta loja já está conectada a outro cardápio.",
+    acao:
+      "Você autorizou um cardápio diferente do que já estava ligado aqui. " +
+      "Nada foi trocado — o cardápio antigo continua trazendo os pedidos. " +
+      "Se a intenção era mudar, desconecte o antigo primeiro; se foi engano, " +
+      "não precisa fazer nada.",
+  },
 }
 
 export function CardapiowebResultado({

@@ -195,6 +195,58 @@ export async function GET(req: Request) {
     await admin.from("cardapioweb_installs").delete().eq("id", installId)
     installId = existente.id as string
   } else {
+    // 4b) Merchant NOVO numa loja que já tem outro conectado.
+    //
+    // O passo 4 acima só junta instalação do MESMO merchant — e está certo:
+    // do lado do Cardápio Web são lojas distintas. Mas nada impedia dois
+    // cardápios diferentes ficarem ativos sobre a MESMA unidade daqui.
+    //
+    // Aconteceu de verdade em 05/08/26: a loja do João Nilson já estava no
+    // merchant 10569 e alguém autorizou o 4608, chamado "Nil cardapio Não
+    // apagar ou modificar" -- um modelo, não a loja. A segunda instalação
+    // rodou no cron por 3 dias, gastou chamada e nunca trouxe um pedido,
+    // porque o cardápio-modelo não tem venda. Ninguém percebeu: nenhuma tela
+    // dizia que havia duas.
+    //
+    // Não dá pra escolher sozinho qual vale -- trocar de cardápio é operação
+    // legítima, e adivinhar errado apagaria o histórico bom. Então a nova
+    // nasce INATIVA (fora do cron, sem gastar nada) e a tela explica.
+    if (pendente.unit_id) {
+      const { data: jaConectada } = await admin
+        .from("cardapioweb_installs")
+        .select("merchant_name, merchant_id")
+        .eq("unit_id", pendente.unit_id)
+        .eq("ambiente", ambiente)
+        .eq("active", true)
+        .not("merchant_id", "is", null)
+        .neq("id", installId)
+        // limit(1) e não maybeSingle() puro: se por qualquer motivo já
+        // existirem duas ativas, maybeSingle() estoura -- justamente no caso
+        // que esta trava existe pra tratar. Qualquer uma serve pra mensagem.
+        .order("created_at")
+        .limit(1)
+        .maybeSingle()
+
+      if (jaConectada) {
+        await admin
+          .from("cardapioweb_installs")
+          .update({
+            merchant_id: merchantId,
+            merchant_name: merchantName,
+            merchant_slug: merchant.data.slug ?? null,
+            active: false,
+            inactive_reason: `Esta loja já está conectada ao cardápio "${jaConectada.merchant_name ?? jaConectada.merchant_id}". Desconecte o antigo antes de trocar.`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", installId)
+        return voltar(req, {
+          cw: "erro",
+          motivo: "loja_ja_conectada",
+          detalhe: jaConectada.merchant_name ?? String(jaConectada.merchant_id),
+        })
+      }
+    }
+
     await admin
       .from("cardapioweb_installs")
       .update({
