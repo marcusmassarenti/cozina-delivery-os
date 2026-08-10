@@ -70,6 +70,21 @@ export type FinanceiroResumo = {
   taxaTransacao: number
   taxaServicoCliente: number
   promocaoLoja: number
+  /**
+   * Promoção devolvida quando o pedido foi cancelado (valor POSITIVO).
+   *
+   * `promocaoLoja` conta o que saiu nos pedidos que aconteceram — lançamento
+   * de `fato_gerador = 'Venda'`. Quando o pedido cai, o iFood devolve a
+   * promoção num lançamento de cancelamento, e ele entra no `liquido` e na
+   * `perdaCancelamento`, não aqui.
+   *
+   * ⚠️ Existe porque o PORTAL do iFood mostra a promoção LÍQUIDA. Sem separar,
+   * a tela ficava R$ 32,98 acima do portal na Pátria Pizza Matão (jun/26) e o
+   * lojista não tinha como conciliar. `promocaoLoja + promocaoLojaEstorno` é o
+   * número que ele encontra lá. Medido em 2026: R$ 18.250,42 em 55 das 60
+   * lojas, ~1,8% da promoção.
+   */
+  promocaoLojaEstorno: number
   promocaoIfood: number
   pacoteAnuncios: number
   /**
@@ -1319,6 +1334,7 @@ export async function getFinanceiroResumoByUnits(
     taxa_transacao: number | string
     taxa_servico_cliente: number | string
     promocao_loja: number | string
+    promocao_loja_estorno: number | string | null
     promocao_ifood: number | string
     pacote_anuncios: number | string
     ressarcimentos: number | string
@@ -1337,6 +1353,7 @@ export async function getFinanceiroResumoByUnits(
       taxaTransacao: Number(row.taxa_transacao),
       taxaServicoCliente: Number(row.taxa_servico_cliente),
       promocaoLoja: Number(row.promocao_loja),
+      promocaoLojaEstorno: Number(row.promocao_loja_estorno ?? 0),
       promocaoIfood: Number(row.promocao_ifood),
       pacoteAnuncios: Number(row.pacote_anuncios),
       ressarcimentos: Number(row.ressarcimentos),
@@ -1372,6 +1389,7 @@ export async function getFinanceiroResumoForMonth(
       taxaTransacao: 0,
       taxaServicoCliente: 0,
       promocaoLoja: 0,
+      promocaoLojaEstorno: 0,
       promocaoIfood: 0,
       pacoteAnuncios: 0,
       ressarcimentos: 0,

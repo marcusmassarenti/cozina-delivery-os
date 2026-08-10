@@ -10,12 +10,18 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
  */
 export function PedidosIfoodView({
   resumo,
+  promo,
   vrByUnit,
   selectedUnit,
   activeUnitsCount,
   periodoParam,
 }: {
   resumo: PagamentoResumo
+  /**
+   * Promoção pelo EXTRATO (valores absolutos). Opcional só pra não quebrar
+   * quem renderiza esta view sem ele — quando falta, cai na planilha.
+   */
+  promo?: { loja: number; estorno: number; ifood: number }
   vrByUnit: VrPorUnidade[]
   selectedUnit: { code: string; name: string } | null
   activeUnitsCount: number
@@ -213,21 +219,58 @@ export function PedidosIfoodView({
               <div className="space-y-1.5">
                 <LinhaInfo
                   label="Custeado pelo iFood"
-                  value={fmtBRL(resumo.incentivoIfood)}
+                  value={fmtBRL(promo ? promo.ifood : resumo.incentivoIfood)}
                   tone="emerald"
                 />
                 <LinhaInfo
                   label="Custeado pela loja"
-                  value={fmtBRL(resumo.incentivoLoja)}
-                  tone={resumo.incentivoLoja > 0 ? "rose" : undefined}
+                  value={fmtBRL(promo ? promo.loja : resumo.incentivoLoja)}
+                  tone={
+                    (promo ? promo.loja : resumo.incentivoLoja) > 0
+                      ? "rose"
+                      : undefined
+                  }
                 />
-                <LinhaInfo
-                  label="Custeado pela rede"
-                  value={fmtBRL(resumo.incentivoRede)}
-                />
+                {/* As duas linhas que fazem o número bater com o portal.
+                    Só aparecem quando houve estorno — numa loja sem pedido
+                    cancelado elas seriam duas linhas repetindo a de cima. */}
+                {promo && promo.estorno > 0 && (
+                  <>
+                    <LinhaInfo
+                      label="Devolvido em cancelamentos"
+                      value={`− ${fmtBRL(promo.estorno)}`}
+                      tone="emerald"
+                    />
+                    <LinhaInfo
+                      label="Custo real da loja"
+                      value={fmtBRL(promo.loja - promo.estorno)}
+                      tone="rose"
+                    />
+                  </>
+                )}
+                {!promo && (
+                  <LinhaInfo
+                    label="Custeado pela rede"
+                    value={fmtBRL(resumo.incentivoRede)}
+                  />
+                )}
               </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                O da loja é custo seu; o do iFood/rede é subsídio da plataforma.
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                O da loja é custo seu; o do iFood é subsídio da plataforma.
+                {promo && promo.estorno > 0 ? (
+                  <>
+                    {" "}
+                    <strong>Custo real</strong> é o que o Portal do iFood mostra
+                    em &quot;Promoções incentivadas pela loja&quot; — as de cima
+                    são o total dos pedidos vendidos, antes de descontar o que
+                    voltou nos cancelados.
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    Vem da conciliação, igual ao Portal do iFood.
+                  </>
+                )}
               </p>
             </div>
 

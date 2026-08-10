@@ -116,7 +116,27 @@ export default async function PedidosPage({
               faturamento: fatMap?.get(u.unitId)?.bruto || u.valorItens,
             }))
             .sort((a, b) => b.faturamento - a.faturamento)
-          return { vrByUnit: enriched, resumo }
+
+          // Promoção vem do EXTRATO, não da planilha de Pedidos.
+          //
+          // Dois motivos, os dois medidos em 10/08/26: a planilha não existe
+          // nas lojas que só têm API (0 de 147.134 pedidos com incentivo
+          // preenchido), e ela mostra só o bruto — o portal do iFood mostra o
+          // líquido, e a diferença fazia o lojista achar que o sistema estava
+          // errado. O extrato responde às duas coisas com o mesmo dado.
+          const promo = ids.reduce(
+            (acc, id) => {
+              const f = fatMap?.get(id)
+              if (!f) return acc
+              return {
+                loja: acc.loja + Math.abs(f.promocaoLoja),
+                estorno: acc.estorno + Math.abs(f.promocaoLojaEstorno),
+                ifood: acc.ifood + Math.abs(f.promocaoIfood),
+              }
+            },
+            { loja: 0, estorno: 0, ifood: 0 },
+          )
+          return { vrByUnit: enriched, resumo, promo }
         })()
       : null
   const keeta =
@@ -246,6 +266,7 @@ export default async function PedidosPage({
       ) : (
         <PedidosIfoodView
           resumo={ifood!.resumo}
+          promo={ifood!.promo}
           vrByUnit={ifood!.vrByUnit}
           selectedUnit={null}
           activeUnitsCount={filteredUnits.length}
