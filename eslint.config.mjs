@@ -34,6 +34,12 @@ const eslintConfig = defineConfig([
 
   // Override default ignores of eslint-config-next.
   globalIgnores([
+    // ⚠️ Sessões isoladas de agente deixam uma CÓPIA INTEIRA do projeto em
+    // `.claude/worktrees/<nome>/`. Está no .gitignore, então `git status` fica
+    // limpo — mas o ESLint não lê .gitignore, e passava a contar tudo duas
+    // vezes. Foi assim que uma medição local deu 129 erros onde o CI (que faz
+    // checkout limpo) via 64, e o diagnóstico saiu errado por causa disso.
+    ".claude/**",
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
