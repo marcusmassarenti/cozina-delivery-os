@@ -74,6 +74,9 @@ import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
 import { getFechamentos, type Fechamento } from "@/lib/data/fechamentos"
+import { getSuperCriterios } from "@/lib/data/super"
+import { SuperBadge } from "@/components/shared/super-badge"
+import { SuperCriteriosCard } from "@/components/shared/super-criterios-card"
 
 export default async function UnidadeDetalhePage({
   params,
@@ -94,6 +97,10 @@ export default async function UnidadeDetalhePage({
   // admin/gerente (vê tudo). Loja fora do escopo → 404 (não revela que existe).
   const accessibleIds = await getAccessibleUnitIds()
   if (accessibleIds !== null && !accessibleIds.includes(unit.id)) notFound()
+
+  // Selo Super: só existe se o relatório do iFood tiver sido importado pra
+  // essa loja. Sem ele o Map vem vazio e nada é renderizado.
+  const superLoja = (await getSuperCriterios([unit.id])).get(unit.id) ?? null
 
   const canEditUnit = await userCan("unidades", "edit")
   const cadastroExigente = !(await isSuperadmin())
@@ -278,6 +285,21 @@ export default async function UnidadeDetalhePage({
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                     Inativa
                   </span>
+                )}
+                {/* Selo do iFood ao lado do nome, como no app deles. Loja sem
+                    relatório importado não renderiza nada — ver SuperBadge. */}
+                {superLoja && (
+                  <SuperBadge
+                    nivel={superLoja.nivel}
+                    eSuper={superLoja.eSuper}
+                    eElegivel={superLoja.eElegivel}
+                    tamanho="sm"
+                    titulo={
+                      superLoja.periodoOficial
+                        ? `Super Restaurante · ${superLoja.periodoOficial}`
+                        : "Super Restaurante"
+                    }
+                  />
                 )}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
