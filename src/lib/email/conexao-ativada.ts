@@ -57,7 +57,7 @@ function periodo(de: string | null, ate: string | null): string | null {
  * "o que existe, no total", não "quanto foi em agosto" — e o histórico
  * importado costuma cobrir meses, que é justamente a boa notícia a dar.
  */
-async function resumoDaLoja(
+export async function resumoDaLoja(
   unitId: string,
   plataforma: PlataformaConexao,
 ): Promise<Resumo> {
