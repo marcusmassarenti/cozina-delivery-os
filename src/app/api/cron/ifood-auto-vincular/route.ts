@@ -15,10 +15,14 @@
  * Barato quando não há nada: a primeira query é um count; sem loja confirmada
  * esperando, sai antes de falar com o iFood.
  *
- * ⏰ Roda de 15 em 15 minutos (`*/15 * * * *` no vercel.json). Quem aprova no
- * Portal do Parceiro espera minutos, não o dia seguinte. Quem não quer nem
- * isso usa o botão "Já autorizei — conferir e vincular" na tela de merchants,
- * que faz o mesmo na hora.
+ * ⏰ Roda de 15 em 15 minutos — a expressão está no vercel.json, e NÃO pode
+ * ser copiada pra cá: ela contém a sequência que FECHA este comentário, e o
+ * arquivo inteiro vira código inválido (foi o que derrubou o build em
+ * 09/08/26).
+ *
+ * Quem aprova no Portal do Parceiro espera minutos, não o dia seguinte. Quem
+ * não quer nem isso usa o botão "Já autorizei — conferir e vincular" na tela
+ * de merchants, que faz o mesmo na hora.
  *
  * ⚠️ HISTÓRICO, não regra atual: enquanto a conta Vercel era HOBBY, cron mais
  * frequente que diário FALHAVA O DEPLOY — não era aviso, o build quebrava, e
