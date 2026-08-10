@@ -38,4 +38,20 @@ export const fmtBRLShort = (n: number) => {
 
 export const fmtNum = (n: number) => new Intl.NumberFormat("pt-BR").format(n)
 
-export const fmtPct = (n: number) => `${n.toFixed(1)}%`
+/**
+ * Porcentagem em pt-BR: 24,8% — com VÍRGULA.
+ *
+ * Era `n.toFixed(1)`, que é independente de locale e sempre imprime ponto:
+ * a interface inteira mostrava "24.8%" em português. `toFixed` também
+ * arredonda meio-para-cima em binário; o Intl faz o arredondamento correto.
+ *
+ * A decimal aparece SÓ quando existe: 24,8% mas 25% (não "25,0%"). Foi o
+ * pedido do Marcus — "em vez de 25%, colocar o real caso for 24,8%" — e evita
+ * encher de ",0" as telas onde metade dos números é zero.
+ *
+ * `casas` sobe a precisão em quem precisa (ex.: taxa de 2 casas).
+ */
+export const fmtPct = (n: number, casas = 1) =>
+  `${new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: casas,
+  }).format(n)}%`

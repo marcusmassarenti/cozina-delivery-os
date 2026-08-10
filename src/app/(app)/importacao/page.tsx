@@ -1,6 +1,14 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, LayoutGrid, Store, Upload } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  LayoutGrid,
+  Store,
+  Upload,
+} from "lucide-react"
 
 import {
   PlatformLogo,
@@ -319,26 +327,29 @@ function HistoricoPaginacao({
   total: number
   periodo: string | undefined
 }) {
-  const prevQuery = new URLSearchParams()
-  const nextQuery = new URLSearchParams()
-  if (periodo) {
-    prevQuery.set("periodo", periodo)
-    nextQuery.set("periodo", periodo)
+  // Ir para uma página qualquer: com 12 mil importações são ~620 páginas, e
+  // chegar na última exigia 620 cliques em "Próxima".
+  const href = (p: number) => {
+    const q = new URLSearchParams()
+    if (periodo) q.set("periodo", periodo)
+    // Página 1 não vai na URL: é o padrão, e sujar a barra de endereço com o
+    // valor default atrapalha quem copia o link.
+    if (p > 1) q.set("historico", String(p))
+    return `/importacao${q.toString() ? `?${q.toString()}` : ""}#historico`
   }
-  if (page > 2) prevQuery.set("historico", String(page - 1))
-  if (page < totalPages) nextQuery.set("historico", String(page + 1))
 
-  const prevHref =
-    page > 1
-      ? `/importacao${prevQuery.toString() ? `?${prevQuery.toString()}` : ""}#historico`
-      : null
-  const nextHref =
-    page < totalPages
-      ? `/importacao?${nextQuery.toString()}#historico`
-      : null
+  const prevHref = page > 1 ? href(page - 1) : null
+  const nextHref = page < totalPages ? href(page + 1) : null
+  const firstHref = page > 1 ? href(1) : null
+  const lastHref = page < totalPages ? href(totalPages) : null
 
   const from = (page - 1) * 20 + 1
   const to = Math.min(page * 20, total)
+
+  const botao =
+    "inline-flex h-7 items-center gap-1 rounded-md border bg-card px-2 font-medium hover:bg-muted"
+  const desativado =
+    "inline-flex h-7 items-center gap-1 rounded-md border bg-muted/40 px-2 font-medium text-muted-foreground/60"
 
   return (
     <div className="flex items-center justify-between gap-2 border-t bg-muted/20 px-4 py-2.5 text-xs">
@@ -346,35 +357,64 @@ function HistoricoPaginacao({
         {from}–{to} de {total}
       </span>
       <div className="flex items-center gap-1.5">
-        {prevHref ? (
-          <Link
-            href={prevHref}
-            className="inline-flex h-7 items-center gap-1 rounded-md border bg-card px-2 font-medium hover:bg-muted"
-          >
-            <ChevronLeft className="size-3.5" />
-            Anterior
+        {firstHref ? (
+          <Link href={firstHref} className={botao} title="Primeira página">
+            <ChevronsLeft className="size-3.5" />
           </Link>
         ) : (
-          <span className="inline-flex h-7 items-center gap-1 rounded-md border bg-muted/40 px-2 font-medium text-muted-foreground/60">
-            <ChevronLeft className="size-3.5" />
-            Anterior
+          <span className={desativado}>
+            <ChevronsLeft className="size-3.5" />
           </span>
         )}
-        <span className="px-2 font-medium tabular-nums">
-          {page} / {totalPages}
-        </span>
+        {prevHref ? (
+          <Link href={prevHref} className={botao}>
+            <ChevronLeft className="size-3.5" />
+            <span className="hidden sm:inline">Anterior</span>
+          </Link>
+        ) : (
+          <span className={desativado}>
+            <ChevronLeft className="size-3.5" />
+            <span className="hidden sm:inline">Anterior</span>
+          </span>
+        )}
+
+        {/* Formulário GET puro: navega pelo próprio submit do navegador, sem
+            "use client" e sem JavaScript. A URL já aceitava ?historico=N — só
+            faltava um jeito de digitar o número. */}
+        <form action="/importacao" method="get" className="flex items-center">
+          {periodo && <input type="hidden" name="periodo" value={periodo} />}
+          <input
+            type="number"
+            name="historico"
+            min={1}
+            max={totalPages}
+            defaultValue={page}
+            aria-label="Ir para a página"
+            className="h-7 w-14 rounded-md border bg-card px-1.5 text-center font-medium tabular-nums"
+          />
+          <span className="px-1.5 font-medium tabular-nums text-muted-foreground">
+            / {totalPages}
+          </span>
+        </form>
+
         {nextHref ? (
-          <Link
-            href={nextHref}
-            className="inline-flex h-7 items-center gap-1 rounded-md border bg-card px-2 font-medium hover:bg-muted"
-          >
-            Próxima
+          <Link href={nextHref} className={botao}>
+            <span className="hidden sm:inline">Próxima</span>
             <ChevronRight className="size-3.5" />
           </Link>
         ) : (
-          <span className="inline-flex h-7 items-center gap-1 rounded-md border bg-muted/40 px-2 font-medium text-muted-foreground/60">
-            Próxima
+          <span className={desativado}>
+            <span className="hidden sm:inline">Próxima</span>
             <ChevronRight className="size-3.5" />
+          </span>
+        )}
+        {lastHref ? (
+          <Link href={lastHref} className={botao} title="Última página">
+            <ChevronsRight className="size-3.5" />
+          </Link>
+        ) : (
+          <span className={desativado}>
+            <ChevronsRight className="size-3.5" />
           </span>
         )}
       </div>

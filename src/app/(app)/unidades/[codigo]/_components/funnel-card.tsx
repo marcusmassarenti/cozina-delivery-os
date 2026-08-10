@@ -3,6 +3,8 @@
  * Cardápio. O preenchimento sobe SÓ na metade de baixo (nunca cobre o texto do
  * topo, que fica sempre legível); o % em branco fica sobre a cor.
  */
+import { fmtPct } from "@/lib/format"
+
 export function FunnelCard({
   label,
   value,
@@ -65,7 +67,10 @@ export function FunnelCard({
           className="text-lg font-bold tabular-nums text-white"
           style={{ textShadow: "0 1px 3px rgb(0 0 0 / 0.3)" }}
         >
-          {pct.toFixed(0)}%
+          {/* 1 casa, não inteiro: com `toFixed(0)` uma etapa de 24,8% e outra
+              de 25,4% viravam ambas "25%", e o funil existe justamente pra
+              comparar etapa com etapa. */}
+          {fmtPct(pct)}
         </p>
       </div>
     </div>
