@@ -2377,6 +2377,11 @@ export async function getSuperForMonth(
       "period_label, period_start, period_end, status, e_super, e_elegivel, total_pedidos, pedidos_avaliados, media_avaliacoes, pct_cancelamento, pct_chamados, total_chamados, chamados_atraso, chamados_pos_entrega, chamados_item_errado, plano_de_acao, tags_pos, tags_neg",
     )
     .eq("unit_id", unitId)
+    // ⚠️ SEM este filtro a função devolve o PARCIAL como se fosse o selo.
+    // Desde a migration 0175 a tabela guarda também as linhas da aba "Próxima
+    // Avaliação", cujo period_end é o dia de hoje — logo, sempre "mais
+    // recente" que a janela oficial, que fecha no último dia do trimestre.
+    .eq("tipo", "atual")
     .lte("period_end", end)
     .order("period_end", { ascending: false })
     .limit(1)

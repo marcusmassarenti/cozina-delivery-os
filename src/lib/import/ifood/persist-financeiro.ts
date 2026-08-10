@@ -168,6 +168,16 @@ export async function persistFinanceiro(
   // Restos de uma carga que morreu no meio (log "partial") não podem contar
   // como dado. Somem antes de qualquer coisa — inclusive antes da nova carga,
   // pra que o mês nunca fique somado duas vezes.
+  //
+  // ⚠️ SÓ NAS COMPETÊNCIAS QUE ESTA EXECUÇÃO VAI REESCREVER. Sem esse recorte
+  // a limpeza apaga resto de mês que ninguém pediu — e como a carga nova
+  // desse mês não vem, o dado some de vez.
+  //
+  // Foi exatamente o que aconteceu em 09/08/26 na Hortolândia: um sync manual
+  // morreu no meio da troca de julho, e no dia seguinte o backfill das
+  // competências 02 a 06 apagou os restos de JULHO, que aquela execução nem
+  // estava tocando. Resultado: 17 dias de julho perdidos, com o log da
+  // importação dizendo `success` e nenhum erro em lugar nenhum.
   const { data: incompletos } = await admin
     .from("platform_imports")
     .select("id")
@@ -185,6 +195,7 @@ export async function persistFinanceiro(
       .from("ifood_financeiro_lancamentos")
       .delete()
       .eq("unit_id", unit.unitId)
+      .in("competencia", competencias)
       .in("import_id", idsIncompletos)
   }
 
@@ -292,6 +303,29 @@ export async function persistFinanceiro(
   // Lote menor que o do insert porque aqui o limite é OUTRO: os ids viajam na
   // URL do PostgREST. Com 1000 UUIDs a requisição passa de 35 KB e volta "Bad
   // Request" antes de chegar no banco.
+  // TRAVA: não apaga a carga antiga sem a nova estar inteira na tabela.
+  //
+  // O laço abaixo não é transacional — morreu no meio, fica metade apagada e
+  // sem rastro. Em 08/08/26 isso custou 17 dias de julho na Hortolândia: a
+  // exclusão rodou UMA página de 200 e o processo caiu.
+  //
+  // Conferir antes não impede a queda no meio do laço, mas impede o caso
+  // pior, que é apagar tendo gravado só parte — aí a antiga vai embora e a
+  // nova não existe pra substituir. É barato: um count.
+  {
+    const { count: novasNaTabela } = await admin
+      .from("ifood_financeiro_lancamentos")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", unit.unitId)
+      .eq("import_id", importLog.id)
+    if ((novasNaTabela ?? 0) < rows.length) {
+      await abortar(
+        `Carga nova incompleta (${novasNaTabela ?? 0} de ${rows.length}) — ` +
+          `a antiga fica no lugar. Rode de novo.`,
+      )
+    }
+  }
+
   {
     const DELETE_CHUNK = 200
     for (;;) {
