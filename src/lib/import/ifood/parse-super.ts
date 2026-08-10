@@ -20,11 +20,17 @@ import type { ParsedSuper, ParsedSuperLoja } from "./types"
 import { toNumber } from "./utils"
 
 const SHEET = "Nível Atual"
+const SHEET_PROXIMA = "Próxima Avaliação"
+
+function acharAba(workbook: XLSX.WorkBook, nome: string, regex: RegExp) {
+  return (
+    workbook.Sheets[nome] ??
+    workbook.Sheets[workbook.SheetNames.find((n) => regex.test(n)) ?? ""]
+  )
+}
 
 export function parseIfoodSuper(workbook: XLSX.WorkBook): ParsedSuper {
-  const sheet =
-    workbook.Sheets[SHEET] ??
-    workbook.Sheets[workbook.SheetNames.find((n) => /Nível Atual/i.test(n)) ?? ""]
+  const sheet = acharAba(workbook, SHEET, /Nível Atual/i)
   if (!sheet) {
     throw new Error("Aba 'Nível Atual' não encontrada no relatório Super")
   }
@@ -35,27 +41,62 @@ export function parseIfoodSuper(workbook: XLSX.WorkBook): ParsedSuper {
   for (const row of rows) {
     const storeId = str(row["id_da_loja"])
     if (!storeId) continue
-    porLoja.push(parseRow(storeId, row))
+    porLoja.push(parseRow(storeId, row, "atual"))
   }
   if (porLoja.length === 0) {
     throw new Error("Nenhuma loja válida no relatório Super")
   }
+
+  // Aba "Próxima Avaliação": como a loja está indo rumo ao próximo dia 10.
+  //
+  // É a parte acionável do relatório — a "Nível Atual" é um veredito já
+  // fechado, sobre o qual não há mais o que fazer. Ficou anos sendo ignorada.
+  //
+  // NÃO é obrigatória: relatório de loja recém-aberta pode vir só com a
+  // primeira aba, e não é motivo pra recusar o arquivo inteiro.
+  const sheetProx = acharAba(workbook, SHEET_PROXIMA, /Pr[óo]xima Avalia/i)
+  if (sheetProx) {
+    for (const row of XLSX.utils.sheet_to_json<Row>(sheetProx, {
+      defval: null,
+    })) {
+      const storeId = str(row["id_da_loja"])
+      if (!storeId) continue
+      porLoja.push(parseRow(storeId, row, "proxima"))
+    }
+  }
+
   return { reportType: "super", porLoja }
 }
 
-function parseRow(storeId: string, row: Row): ParsedSuperLoja {
-  const [start, end] = parseDuracao(str(row["duracao"]))
+function parseRow(
+  storeId: string,
+  row: Row,
+  tipo: "atual" | "proxima",
+): ParsedSuperLoja {
+  // A aba "Próxima Avaliação" não tem `duracao` — tem `dia`, a data em que o
+  // parcial foi tirado. As duas pontas recebem esse dia, o que também evita
+  // colidir com a chave (unit_id, period_start, period_end) das janelas reais.
+  const [start, end] =
+    tipo === "proxima"
+      ? (() => {
+          const d = isoDate(str(row["dia"])) ?? "1970-01-01"
+          return [d, d] as [string, string]
+        })()
+      : parseDuracao(str(row["duracao"]))
   const { pos, neg } = collectTags(row)
   return {
     storeId,
     storeName: strOrNull(row["nome_da_loja"]),
+    tipo,
     periodStart: start,
     periodEnd: end,
-    periodLabel: `${br(start)} - ${br(end)}`,
+    periodLabel:
+      tipo === "proxima" ? `parcial até ${br(start)}` : `${br(start)} - ${br(end)}`,
     status: strOrNull(row["status"]),
     eSuper: simNao(row["e_super"]),
     eElegivel: simNao(row["e_elegivel"]),
     totalPedidos: toNumber(row["total_de_pedidos"]),
+    pedidosConcluidos: toNumber(row["pedidos_concluidos"]),
     pedidosAvaliados: toNumber(row["pedidos_avaliados"]),
     mediaAvaliacoes: numOrNull(row["media_de_avaliacoes"]),
     pctCancelamento: pctOrNull(row["percentual_cancelamento"]),

@@ -307,6 +307,14 @@ export type ParsedPromocoes = {
 export type ParsedSuperLoja = {
   storeId: string
   storeName: string | null
+  /**
+   * `atual` = o selo que está valendo, sobre uma janela fechada.
+   * `proxima` = parcial rumo ao próximo dia 10 (aba "Próxima Avaliação").
+   *
+   * Em `proxima` não existe janela: a planilha traz só a coluna `dia`, então
+   * periodStart e periodEnd recebem esse mesmo dia.
+   */
+  tipo: "atual" | "proxima"
   periodStart: string // YYYY-MM-DD
   periodEnd: string // YYYY-MM-DD
   periodLabel: string
@@ -314,6 +322,8 @@ export type ParsedSuperLoja = {
   eSuper: boolean | null
   eElegivel: boolean | null
   totalPedidos: number
+  /** Critério do Super (mínimo 180). `totalPedidos` inclui cancelado; este não. */
+  pedidosConcluidos: number
   pedidosAvaliados: number
   mediaAvaliacoes: number | null
   pctCancelamento: number | null
