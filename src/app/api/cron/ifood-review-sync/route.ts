@@ -45,11 +45,24 @@ export async function GET(req: Request) {
       console.error("varrerConexoesNovas:", e)
     }
 
+    // Expurgo dos logs de API, pendurado aqui pelo mesmo motivo da varredura:
+    // é o último cron da manhã, então todo mundo já escreveu o log do dia.
+    // Também não derruba o cron — perder uma faxina é irrelevante perto de
+    // perder o sync das avaliações.
+    let expurgo: { apagados: number; corte: string } | null = null
+    try {
+      const { expurgarLogsApi } = await import("@/lib/manutencao/expurgo-logs")
+      expurgo = await expurgarLogsApi()
+    } catch (e) {
+      console.error("expurgarLogsApi:", e)
+    }
+
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
       ...r,
       conexoes,
+      expurgo,
     })
   } catch (e) {
     console.error("/api/cron/ifood-review-sync:", e)
