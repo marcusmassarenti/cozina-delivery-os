@@ -254,24 +254,47 @@ export function PedidosIfoodView({
             </div>
           </div>
 
-          {/* Logística de entrega */}
-          {resumo.porEntrega.length > 0 && (
-            <div className="rounded-xl border bg-card p-5">
-              <h3 className="mb-3 text-sm font-semibold">
-                Logística de entrega
-              </h3>
-              <div className="space-y-2">
-                {resumo.porEntrega.map((e) => (
-                  <BarrinhaInfo
-                    key={e.chave}
-                    label={e.chave}
-                    pedidos={e.pedidos}
-                    total={resumo.totalPedidos}
-                  />
-                ))}
+          {/* Logística de entrega
+              ⚠️ A API não traz `produto_logistico` — medido em 10/08/26: ZERO
+              em 147.134 pedidos vindos dos Financial Events, contra 63.729 de
+              64.363 nos que vieram de planilha. Loja 100% API cai aqui com uma
+              barra só, "—" a 100%, que parece dado e não é.
+              Uma barra cheia de nada é pior que bloco nenhum: ela ocupa o lugar
+              da informação e não avisa que está vazia. */}
+          {resumo.porEntrega.length > 0 &&
+            (resumo.porEntrega.every((e) => e.chave === "—") ? (
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="mb-2 text-sm font-semibold">
+                  Logística de entrega
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Não disponível para este período: a integração automática do
+                  iFood não informa quem levou o pedido — se foi entregador da
+                  plataforma ou da própria loja.
+                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Esse detalhe só vem no relatório de Pedidos baixado do portal.
+                  Enquanto a loja roda só por API, a quebra fica em branco; o
+                  faturamento, as taxas e o pagamento não são afetados.
+                </p>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="mb-3 text-sm font-semibold">
+                  Logística de entrega
+                </h3>
+                <div className="space-y-2">
+                  {resumo.porEntrega.map((e) => (
+                    <BarrinhaInfo
+                      key={e.chave}
+                      label={e.chave}
+                      pedidos={e.pedidos}
+                      total={resumo.totalPedidos}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
 
           {/* Vendas por loja (só no consolidado) */}
           {showVrByUnit && (

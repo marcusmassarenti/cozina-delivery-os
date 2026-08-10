@@ -319,6 +319,56 @@ export async function getNetworkDeliveryFee(
 // ─── Quem paga a entrega ──────────────────────────────────────────────
 
 /**
+ * A loja entrega com equipe própria?
+ *
+ * POR QUE EXISTE: sem isto, o card de entrega simplesmente SUMIA nessas lojas,
+ * e some do jeito errado — o Marcus abriu o Restaurante Cardeal em 10/08/26
+ * achando que faltava dado. Não faltava: a loja entrega sozinha, e aí o iFood
+ * não cobra taxa de entrega dela. Não há custo porque não há serviço, não
+ * porque a integração falhou. Card ausente não conta essa diferença.
+ *
+ * O sinal é o próprio extrato: o iFood usa uma descrição SEPARADA de comissão
+ * quando a entrega é da loja. Medido no Cardeal (ago/26): 1.273 lançamentos de
+ * "Comissão do iFood (entrega própria da loja)", R$ 7.283,72, e ZERO de "Taxa
+ * entrega iFood" — enquanto a Pátria Pizza Matão, que usa entregador do iFood,
+ * tem 241 da segunda.
+ */
+export type EntregaPropria = {
+  pedidos: number
+  comissao: number
+}
+
+export async function getEntregaPropria(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<EntregaPropria | null> {
+  if (!unitIds.length) return null
+  const admin = createAdminClient()
+
+  let q = admin
+    .from("ifood_financeiro_lancamentos")
+    .select("valor")
+    .in("unit_id", unitIds)
+    .eq("ref_year", year)
+    .eq("ref_month", month)
+    .eq("descricao_lancamento", "Comissão do iFood (entrega própria da loja)")
+  if (dateRange) {
+    q = q
+      .gte("data_fato_gerador", dateRange.start)
+      .lte("data_fato_gerador", `${dateRange.end}T23:59:59`)
+  }
+
+  const { data, error } = await q
+  if (error || !data?.length) return null
+  return {
+    pedidos: data.length,
+    comissao: data.reduce((s, r) => s + Math.abs(Number(r.valor) || 0), 0),
+  }
+}
+
+/**
  * Quem BANCOU a entrega de cada pedido.
  *
  * ⚠️ A primeira versão disto perguntava "o cliente foi cobrado?" (coluna

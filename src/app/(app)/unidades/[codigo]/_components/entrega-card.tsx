@@ -2,7 +2,11 @@ import { Bike } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { fmtBRL, fmtPct } from "@/lib/format"
-import type { DeliveryFee, QuemPagaEntrega } from "@/lib/data/taxa-entrega"
+import type {
+  DeliveryFee,
+  EntregaPropria,
+  QuemPagaEntrega,
+} from "@/lib/data/taxa-entrega"
 
 /**
  * Entrega da loja: quanto custou e quem bancou — em uma linha por plataforma.
@@ -21,13 +25,43 @@ export function EntregaCard({
   deliveryFee,
   quemPaga,
   bruto,
+  entregaPropria,
 }: {
   deliveryFee: DeliveryFee
   quemPaga: QuemPagaEntrega[]
   bruto: number
+  entregaPropria?: EntregaPropria | null
 }) {
   const linhas = quemPaga.filter((q) => q.pedidos > 0)
-  if (!linhas.length) return null
+
+  // Loja que entrega sozinha não tem custo de entrega no iFood — e isso é uma
+  // RESPOSTA, não a ausência de uma. Antes o card sumia aqui e as duas coisas
+  // ficavam idênticas na tela: "entrega própria" e "não puxou o dado".
+  if (!linhas.length) {
+    if (!entregaPropria) return null
+    return (
+      <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="mb-2 flex items-center gap-2">
+          <Bike className="size-4 text-emerald-600" />
+          <h3 className="text-sm font-semibold">Entrega — quem bancou</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Esta loja faz <strong>entrega própria</strong>: quem leva o pedido é a
+          equipe dela, então o iFood não cobra taxa de entrega — não há custo de
+          entrega a mostrar aqui.
+        </p>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          O iFood cobra uma comissão diferente nesse modelo:{" "}
+          <strong className="text-rose-700 dark:text-rose-400">
+            {fmtBRL(entregaPropria.comissao)}
+          </strong>{" "}
+          em {entregaPropria.pedidos.toLocaleString("pt-BR")} pedidos, já dentro
+          das taxas no DRE acima. O custo dos seus entregadores não passa pela
+          plataforma — ele entra pelos custos da operação.
+        </p>
+      </div>
+    )
+  }
 
   // ⚠️ Na Keeta, deliveryFee.keeta é o frete que o CLIENTE pagou, não custo da
   // loja. O custo real dela é a taxa de distância (custoExtra).

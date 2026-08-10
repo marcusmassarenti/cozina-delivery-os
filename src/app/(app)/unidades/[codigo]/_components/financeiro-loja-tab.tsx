@@ -33,7 +33,7 @@ import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
-import { getDeliveryFeeForMonth } from "@/lib/data/taxa-entrega"
+import { getDeliveryFeeForMonth, getEntregaPropria } from "@/lib/data/taxa-entrega"
 import { getUnitCostBreakdown } from "@/lib/data/unit-costs"
 import type { UnitMonthly } from "@/lib/mock-monthly"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
@@ -126,6 +126,7 @@ export async function FinanceiroLojaTab({
     keetaFaturaTaxas,
     cancelCesta,
     quemPaga,
+    entregaPropria,
     cwOp,
   ] = await Promise.all([
     // Estas SEGUEM o período escolhido — as tabelas têm data por pedido.
@@ -147,6 +148,9 @@ export async function FinanceiroLojaTab({
     getKeetaFaturaTaxasForMonth(unitId, year, month),
     getCancelamentoCestaForMonth(unitId, year, month, dateRange),
     getQuemPagaEntrega([unitId], year, month, dateRange),
+    // Loja de entrega própria não tem taxa de entrega — sem isto o card some e
+    // fica igual a "faltou dado".
+    getEntregaPropria([unitId], year, month, dateRange),
     // Canal próprio: uma chamada devolve tipo de pedido, horário, pagamento,
     // taxas e motivo de cancelamento — coisas que o hub da própria loja sabe
     // e marketplace nenhum entrega.
@@ -380,11 +384,14 @@ export async function FinanceiroLojaTab({
           Antes eram dois lugares: o custo aqui e "quem banca" na tela da rede.
           Separados, cada um respondia metade da pergunta — o custo não dizia
           quem pagou, e quem pagou não dizia quanto custou. */}
-      {(deliveryFee.total > 0 || quemPaga.some((q) => q.pedidos > 0)) && (
+      {(deliveryFee.total > 0 ||
+        quemPaga.some((q) => q.pedidos > 0) ||
+        entregaPropria) && (
         <EntregaCard
           deliveryFee={deliveryFee}
           quemPaga={quemPaga}
           bruto={bruto}
+          entregaPropria={entregaPropria}
         />
       )}
 
