@@ -620,6 +620,8 @@ const MAX_BACKFILL_POR_RODADA = 2
 
 export type AutoLinkBackfillResult = AutoLinkResult & {
   backfill: {
+    /** Necessário pra avisar o cliente logo depois — não é só rótulo. */
+    unitId: string
     unitCode: string
     unitName: string
     linhas: number
@@ -715,7 +717,13 @@ export async function backfillPendentes(
           .eq("unit_id", v.unitId)
           .eq("platform", "ifood")
       }
-      backfill.push({ unitCode: v.unitCode, unitName: v.unitName, linhas, meses })
+      backfill.push({
+        unitId: v.unitId,
+        unitCode: v.unitCode,
+        unitName: v.unitName,
+        linhas,
+        meses,
+      })
     } catch {
       backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
     }

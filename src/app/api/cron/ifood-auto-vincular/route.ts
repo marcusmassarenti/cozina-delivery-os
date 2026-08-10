@@ -36,6 +36,7 @@ import {
 } from "@/lib/ifood/auto-link"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { registrarCron } from "@/lib/cron/registrar"
+import { avisarConexaoAtivada } from "@/lib/email/conexao-ativada"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -53,6 +54,54 @@ export async function GET(req: Request) {
   return registrarCron("ifood-auto-vincular", async () => {
 
   const admin = createAdminClient()
+
+  /**
+   * Avisa o cliente na hora, sem esperar a varredura das 7h.
+   *
+   * Só para quem ACABOU de completar o backfill: avisar uma loja recém
+   * vinculada e ainda sem histórico mostraria dois meses no lugar do ano
+   * inteiro — e o e-mail sai uma vez só, então essa primeira impressão seria
+   * a definitiva.
+   *
+   * `soSeCompleto` segura o envio quando falta uma das pontas do iFood. Quem
+   * autorizou só um dos dois apps continua sendo avisado pela varredura das
+   * 7h, depois que o cron de avaliações rodar — ali a frase "faltam as
+   * avaliações" é verdade, e às 6h não seria.
+   *
+   * Sequencial de propósito: são poucas lojas por rodada (teto de 2 no
+   * backfill) e o carimbo já protege contra envio duplo; disparar em paralelo
+   * só adicionaria concorrência sem ganho de tempo perceptível.
+   *
+   * NÃO fica dentro de `backfillPendentes`: `scripts/backfill-historico-ifood.ts`
+   * chama aquela função, e e-mail pra cliente saindo de execução manual de
+   * script é surpresa que ninguém quer.
+   */
+  async function avisarBackfillados(
+    feitas: { unitId: string; unitName: string }[],
+  ): Promise<string[]> {
+    const avisadas: string[] = []
+    for (const b of feitas) {
+      const antes = await admin
+        .from("unit_platforms")
+        .select("email_conectado_at")
+        .eq("unit_id", b.unitId)
+        .eq("platform", "ifood")
+        .maybeSingle()
+      if (antes.data?.email_conectado_at) continue
+
+      // Nunca lança (ver a função) — o dado já entrou, que é o que importa.
+      await avisarConexaoAtivada(b.unitId, "ifood", { soSeCompleto: true })
+
+      const depois = await admin
+        .from("unit_platforms")
+        .select("email_conectado_at")
+        .eq("unit_id", b.unitId)
+        .eq("platform", "ifood")
+        .maybeSingle()
+      if (depois.data?.email_conectado_at) avisadas.push(b.unitName)
+    }
+    return avisadas
+  }
 
   // Só as que o cliente CONFIRMOU: são as únicas em que faz sentido procurar
   // o merchant agora. As demais seguem no cron diário completo.
@@ -79,6 +128,7 @@ export async function GET(req: Request) {
         (b) => `${b.unitCode} ${b.unitName}: ${b.meses} meses, ${b.linhas} linhas`,
       ),
       historicoNaFila: so.backfillAdiado.length,
+      avisados: await avisarBackfillados(so.backfill),
     })
   }
 
@@ -111,6 +161,7 @@ export async function GET(req: Request) {
       (b) => `${b.unitCode} ${b.unitName}: ${b.meses} meses, ${b.linhas} linhas`,
     ),
     historicoNaFila: hist.backfillAdiado.length,
+    avisados: await avisarBackfillados(hist.backfill),
     error: r.error,
   })
   })

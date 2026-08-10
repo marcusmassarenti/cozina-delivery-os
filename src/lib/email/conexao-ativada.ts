@@ -170,9 +170,29 @@ export async function resumoDaLoja(
 export async function avisarConexaoAtivada(
   unitId: string,
   plataforma: PlataformaConexao,
+  opts: { soSeCompleto?: boolean } = {},
 ): Promise<void> {
   try {
     const admin = createAdminClient()
+
+    // `soSeCompleto` existe pro aviso IMEDIATO, logo depois do backfill.
+    //
+    // O e-mail sai uma vez só, então mandá-lo cedo demais custa caro: quem
+    // autorizou os DOIS apps do iFood receberia "as avaliações ainda não estão
+    // entrando" só porque o cron delas roda uma hora depois do financeiro — um
+    // pedido de providência para quem já fez tudo certo. Não haveria segunda
+    // mensagem pra desmentir.
+    //
+    // `pendencias` vazio é exatamente "veio inteiro", e é a mesma conta que o
+    // corpo do e-mail usa. Quem tem pendência não perde o aviso: cai na
+    // varredura das 7h, quando as duas pontas já rodaram e a frase é verdade.
+    //
+    // Custa uma leitura a mais, e ela é de propósito: conferir ANTES de
+    // carimbar evita marcar como avisada uma loja que não vai receber nada.
+    if (opts.soSeCompleto) {
+      const previa = await resumoDaLoja(unitId, plataforma)
+      if (!previa.temDado || previa.pendencias.length > 0) return
+    }
 
     // Carimba ANTES de enviar, e só segue se a marcação for minha.
     //
