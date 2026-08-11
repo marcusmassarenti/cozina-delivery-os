@@ -21,10 +21,17 @@ export function DiaSemanaCard({
   dados: VendasPorDiaSemana
   titulo?: string
 }) {
-  const { dias, melhor, pior, plataformasValor, plataformasPedidos } = dados
+  const { dias, melhor, pior, base, plataformasValor, plataformasPedidos } =
+    dados
+  // Quando o filtro deixa só plataforma sem preço, o card inteiro passa a
+  // falar em pedidos — barras, rótulos e o resumo.
+  const val = (d: { valor: number; pedidos: number }) =>
+    base === "valor" ? d.valor : d.pedidos
+  const fmtVal = (d: { valor: number; pedidos: number }) =>
+    base === "valor" ? fmtBRLShort(d.valor) : `${fmtNum(d.pedidos)}`
   if (!melhor) return null
 
-  const max = Math.max(...dias.map((d) => d.valor), 1)
+  const max = Math.max(...dias.map(val), 1)
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -44,7 +51,8 @@ export function DiaSemanaCard({
           </p>
           <p className="text-lg font-bold leading-tight">{melhor.rotulo}</p>
           <p className="text-xs tabular-nums text-muted-foreground">
-            {fmtBRL(melhor.valor)} · {fmtNum(melhor.pedidos)} pedidos
+            {base === "valor" ? `${fmtBRL(melhor.valor)} · ` : ""}
+            {fmtNum(melhor.pedidos)} pedidos
           </p>
           {pior && pior.dow !== melhor.dow && (
             <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
@@ -52,8 +60,7 @@ export function DiaSemanaCard({
                 {pior.rotulo}
               </strong>{" "}
               é o mais fraco —{" "}
-              {Math.round(((melhor.valor - pior.valor) / pior.valor) * 100)}%
-              abaixo
+              {Math.round(((val(melhor) - val(pior)) / val(pior)) * 100)}% abaixo
             </p>
           )}
         </div>
@@ -65,7 +72,7 @@ export function DiaSemanaCard({
           zero e o gráfico aparecia vazio, só com os números. */}
       <div className="flex items-end gap-1.5">
         {dias.map((d) => {
-          const alturaPct = (d.valor / max) * 100
+          const alturaPct = (val(d) / max) * 100
           const ehMelhor = d.dow === melhor.dow
           const ehPior = pior != null && d.dow === pior.dow && !ehMelhor
           return (
@@ -83,7 +90,7 @@ export function DiaSemanaCard({
                       : "text-muted-foreground"
                 }`}
               >
-                {fmtBRLShort(d.valor)}
+                {fmtVal(d)}
               </span>
               <div className="flex h-20 w-full items-end">
                 <div
@@ -97,7 +104,7 @@ export function DiaSemanaCard({
                   // Mínimo pra o dia sem venda ainda desenhar um traço —
                   // barra de altura zero some e parece dado faltando.
                   style={{
-                    height: `${Math.max(alturaPct, d.valor > 0 ? 8 : 3)}%`,
+                    height: `${Math.max(alturaPct, val(d) > 0 ? 8 : 3)}%`,
                   }}
                 />
               </div>
@@ -115,9 +122,15 @@ export function DiaSemanaCard({
           e dava a entender que 99 e Keeta estavam fora de tudo — elas entram
           na contagem de pedidos, que é metade do que o card mostra. */}
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        <strong>Valor</strong>: {plataformasValor.join(" e ")}.{" "}
-        <strong>Pedidos</strong>: {plataformasPedidos.join(", ")} — 99 Food e
-        Keeta guardam a data do pedido, mas não o valor.
+        {plataformasValor.length > 0 ? (
+          <>
+            <strong>Valor</strong>: {plataformasValor.join(" e ")}.{" "}
+          </>
+        ) : null}
+        <strong>Pedidos</strong>: {plataformasPedidos.join(", ")}
+        {plataformasValor.length < plataformasPedidos.length
+          ? " — 99 Food e Keeta guardam a data do pedido, mas não o valor."
+          : "."}
       </p>
     </div>
   )

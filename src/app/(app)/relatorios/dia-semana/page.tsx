@@ -9,6 +9,8 @@ import {
   getVendasPorDiaSemanaPorLoja,
 } from "@/lib/data/dia-semana"
 import { BrandLogo } from "@/components/brand-logo"
+import type { PlatformId } from "@/lib/data/dia-semana"
+import { PlataformaSelector } from "./_components/plataforma-selector"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
@@ -27,7 +29,7 @@ import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
 export default async function RelatorioDiaSemanaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ de?: string; ate?: string }>
+  searchParams: Promise<{ de?: string; ate?: string; plataforma?: string }>
 }) {
   await assertCanView("relatorios")
   const sp = await searchParams
@@ -57,8 +59,16 @@ export default async function RelatorioDiaSemanaPage({
   const lojas = units ?? []
   const ids = lojas.map((u) => u.id)
 
-  const rede = await getVendasPorDiaSemana(ids, de, ate)
-  if (!rede.melhor) return <Vazio />
+  // Plataforma vinda da URL, validada contra a lista — querystring é entrada
+  // do usuário e vai direto pro filtro do RPC.
+  const VALIDAS: PlatformId[] = ["ifood", "cardapioweb", "99food", "keeta"]
+  const plataforma = VALIDAS.includes(sp.plataforma as PlatformId)
+    ? (sp.plataforma as PlatformId)
+    : null
+  const filtro = plataforma ? [plataforma] : null
+
+  const rede = await getVendasPorDiaSemana(ids, de, ate, filtro)
+  if (!rede.melhor) return <Vazio plataforma={plataforma} />
 
   // Participação de cada dia no faturamento da REDE — é a régua contra a qual
   // cada loja é comparada.
@@ -68,7 +78,13 @@ export default async function RelatorioDiaSemanaPage({
       shareRede.set(d.dow, (d.valor / rede.total) * 100)
     }
   }
-  const porLoja = await getVendasPorDiaSemanaPorLoja(ids, de, ate, shareRede)
+  const porLoja = await getVendasPorDiaSemanaPorLoja(
+    ids,
+    de,
+    ate,
+    shareRede,
+    filtro,
+  )
 
   const linhas = lojas
     .map((u) => ({ unit: u, d: porLoja.get(u.id) }))
@@ -95,6 +111,19 @@ export default async function RelatorioDiaSemanaPage({
           <ExportPdfButton />
         </div>
       </div>
+
+      <div data-print="hide">
+        <PlataformaSelector atual={plataforma} />
+      </div>
+
+      {/* 99 e Keeta não guardam preço: sozinhas, o relatório inteiro passa a
+          medir por pedido. Dizer isso é melhor do que mostrar R$ 0 em tudo. */}
+      {rede.total === 0 && rede.totalPedidos > 0 && (
+        <p className="rounded-lg border-l-4 border-sky-500 bg-sky-50 px-3 py-2 text-[12px] leading-relaxed text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+          Essa plataforma não devolve o valor do pedido — aqui o relatório mede
+          por <strong>quantidade de pedidos</strong>.
+        </p>
+      )}
 
       <DiaSemanaCard dados={rede} titulo="A rede toda" />
 
@@ -261,7 +290,7 @@ export default async function RelatorioDiaSemanaPage({
   )
 }
 
-function Vazio() {
+function Vazio({ plataforma }: { plataforma?: string | null }) {
   return (
     <div className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
       <div className="flex items-center gap-2">
@@ -271,7 +300,10 @@ function Vazio() {
         </h1>
       </div>
       <div className="rounded-xl border border-dashed bg-card p-10 text-center">
-        <p className="text-sm font-medium">Sem venda no período</p>
+        <p className="text-sm font-medium">
+          Sem venda no período
+          {plataforma ? " nessa plataforma" : ""}
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">
           O relatório soma iFood e Cardápio Web — as outras plataformas guardam
           a data do pedido, mas não o valor.

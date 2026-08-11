@@ -21,8 +21,28 @@ import { createAdminClient } from "@/lib/supabase/admin"
  * contagem e ficam de fora do faturamento. Dizer "soma as 4" no valor seria
  * mentira; deixá-las de fora da contagem seria jogar dado no lixo.
  */
-const PLATAFORMAS_VALOR = ["iFood", "Cardápio Web"]
-const PLATAFORMAS_PEDIDOS = ["iFood", "Cardápio Web", "99 Food", "Keeta"]
+export type PlatformId = "ifood" | "cardapioweb" | "99food" | "keeta"
+
+const ROTULO: Record<PlatformId, string> = {
+  ifood: "iFood",
+  cardapioweb: "Cardápio Web",
+  "99food": "99 Food",
+  keeta: "Keeta",
+}
+/** Só estas guardam o preço do pedido. */
+const TEM_VALOR: PlatformId[] = ["ifood", "cardapioweb"]
+
+function rotulos(
+  plataformas: PlatformId[] | null | undefined,
+  apenasComValor: boolean,
+): string[] {
+  const base = plataformas?.length
+    ? plataformas
+    : (Object.keys(ROTULO) as PlatformId[])
+  return base
+    .filter((p) => !apenasComValor || TEM_VALOR.includes(p))
+    .map((p) => ROTULO[p])
+}
 
 export type DiaSemana = {
   /** 0 = domingo (padrão do Postgres). */
@@ -39,6 +59,12 @@ export type VendasPorDiaSemana = {
   pior: DiaSemana | null
   total: number
   totalPedidos: number
+  /**
+   * Em que métrica melhor/pior foram calculados. Vira `pedidos` quando o
+   * filtro deixa só plataforma sem preço — sem isso a tela ficava vazia com
+   * dado na mão.
+   */
+  base: "valor" | "pedidos"
   /** Plataformas que entram no VALOR — só as que guardam preço por pedido. */
   plataformasValor: string[]
   /** Plataformas que entram na contagem de PEDIDOS — todas. */
@@ -109,13 +135,20 @@ export async function getVendasPorDiaSemanaPorLoja(
   fim: string,
   /** Participação de cada dia no faturamento da REDE (dow → %). */
   shareRede: Map<number, number> | null,
+  /** null = todas. */
+  plataformas?: PlatformId[] | null,
 ): Promise<Map<string, DiaSemanaLoja>> {
   const out = new Map<string, DiaSemanaLoja>()
   if (!unitIds.length) return out
 
   const { data, error } = await createAdminClient().rpc(
     "vendas_dia_semana_por_loja",
-    { p_unit_ids: unitIds, p_start: inicio, p_end: fim },
+    {
+      p_unit_ids: unitIds,
+      p_start: inicio,
+      p_end: fim,
+      p_plataformas: plataformas?.length ? plataformas : null,
+    },
   )
   if (error) {
     console.error("getVendasPorDiaSemanaPorLoja:", error.message)
@@ -225,6 +258,8 @@ export async function getVendasPorDiaSemana(
   unitIds: string[],
   inicio: string,
   fim: string,
+  /** null = todas. */
+  plataformas?: PlatformId[] | null,
 ): Promise<VendasPorDiaSemana> {
   const vazio: VendasPorDiaSemana = {
     dias: [],
@@ -232,14 +267,20 @@ export async function getVendasPorDiaSemana(
     pior: null,
     total: 0,
     totalPedidos: 0,
-    plataformasValor: PLATAFORMAS_VALOR,
-    plataformasPedidos: PLATAFORMAS_PEDIDOS,
+    base: "valor",
+    plataformasValor: rotulos(plataformas, true),
+    plataformasPedidos: rotulos(plataformas, false),
   }
   if (!unitIds.length) return vazio
 
   const { data, error } = await createAdminClient().rpc(
     "vendas_por_dia_semana",
-    { p_unit_ids: unitIds, p_start: inicio, p_end: fim },
+    {
+      p_unit_ids: unitIds,
+      p_start: inicio,
+      p_end: fim,
+      p_plataformas: plataformas?.length ? plataformas : null,
+    },
   )
   if (error) {
     console.error("getVendasPorDiaSemana:", error.message)
@@ -270,18 +311,25 @@ export async function getVendasPorDiaSemana(
     valor: porDow.get(dow)?.valor ?? 0,
   }))
 
+  // Filtrando só 99 Food ou Keeta, TODO valor é zero — elas não guardam preço.
+  // Ranquear por valor deixaria a tela vazia com 15 mil pedidos na mão.
+  const totalValor = dias.reduce((s, d) => s + d.valor, 0)
+  const base: "valor" | "pedidos" = totalValor > 0 ? "valor" : "pedidos"
+  const metrica = (d: DiaSemana) => (base === "valor" ? d.valor : d.pedidos)
+
   // Dia sem venda nenhuma fica FORA do melhor/pior: numa loja que não abre
   // segunda, "o pior dia é segunda com R$ 0" é obvio e inútil.
-  const comVenda = dias.filter((d) => d.valor > 0)
-  const porValor = [...comVenda].sort((a, b) => b.valor - a.valor)
+  const comVenda = dias.filter((d) => metrica(d) > 0)
+  const porValor = [...comVenda].sort((a, b) => metrica(b) - metrica(a))
 
   return {
     dias,
     melhor: porValor[0] ?? null,
     pior: porValor[porValor.length - 1] ?? null,
-    total: dias.reduce((s, d) => s + d.valor, 0),
+    total: totalValor,
     totalPedidos: dias.reduce((s, d) => s + d.pedidos, 0),
-    plataformasValor: PLATAFORMAS_VALOR,
-    plataformasPedidos: PLATAFORMAS_PEDIDOS,
+    base,
+    plataformasValor: rotulos(plataformas, true),
+    plataformasPedidos: rotulos(plataformas, false),
   }
 }
