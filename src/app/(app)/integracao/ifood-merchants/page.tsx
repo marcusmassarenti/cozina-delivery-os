@@ -186,7 +186,7 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
   const { data } = await admin
     .from("ifood_activation_requests")
     .select(
-      "id, cnpj, status, status_anterior, nota, created_at, cliente_confirmou_at, lancado_no_portal_at, holdings(name), units(code, name)",
+      "id, cnpj, status, status_anterior, nota, created_at, cliente_confirmou_at, lancado_no_portal_at, holding_id, holdings(name), units(code, name)",
     )
     // Arquivadas saem da FILA (o histórico continua no banco). Sem isso, uma
     // recusa antiga ficava aqui pra sempre e o painel virava um cemitério
@@ -204,6 +204,7 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
       nota: (s.nota as string | null) ?? null,
       lancadoNoPortal: Boolean(s.lancado_no_portal_at),
       holdingName: h?.name ?? "(sem empresa)",
+      holdingId: (s.holding_id as string | null) ?? null,
       unitLabel: u ? `${u.code} · ${u.name}` : null,
       createdAt: s.created_at as string,
       clienteConfirmouAt:
@@ -254,7 +255,7 @@ export default async function IfoodMerchantsPage() {
         </div>
       </div>
 
-      <SolicitacoesPanel solicitacoes={solicitacoes} />
+      <SolicitacoesPanel solicitacoes={solicitacoes} lojasDaRede={units} />
 
       <div className="grid gap-3 md:grid-cols-3">
         <StatCard label="Merchants no cache" value={String(merchants.length)} />

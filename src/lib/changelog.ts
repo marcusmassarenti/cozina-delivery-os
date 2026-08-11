@@ -116,6 +116,17 @@ export const CHANGELOG: Release[] = [
         ],
       },
       {
+        area: "Sua conta",
+        items: [
+          {
+            kind: "novo",
+            title: "Loja compartilhada entre empresas",
+            desc:
+              "Uma loja que já está conectada em outra conta pode ser compartilhada com você em modo acompanhamento: você vê tudo — faturamento, taxas, avaliações, Super — e quem edita continua sendo a empresa dona dela.",
+          },
+        ],
+      },
+      {
         area: "Operação",
         items: [
           {

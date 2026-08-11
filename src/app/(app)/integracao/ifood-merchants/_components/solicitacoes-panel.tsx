@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 
 import {
   atualizarSolicitacaoIfood,
+  compartilharLojaExistente,
   conferirLojasAutorizadas,
   desfazerStatusIfood,
   marcarLancadoNoPortal,
@@ -23,6 +24,9 @@ export type SolicitacaoAdmin = {
   status: "pendente" | "solicitada" | "ativa" | "recusada" | "arquivada"
   nota: string | null
   holdingName: string
+  /** Id da empresa que pediu — usado pra não oferecer loja dela mesma no
+   *  compartilhamento. */
+  holdingId: string | null
   unitLabel: string | null
   createdAt: string
   /** Quando o cliente apertou "Já aprovei no iFood" (sinal pra vincular). */
@@ -68,7 +72,13 @@ function CopiarCnpj({ cnpj }: { cnpj: string }) {
 }
 
 /** Uma linha da fila com as transições de status possíveis. */
-function Linha({ s }: { s: SolicitacaoAdmin }) {
+function Linha({
+  s,
+  lojasDaRede,
+}: {
+  s: SolicitacaoAdmin
+  lojasDaRede: LojaDaRede[]
+}) {
   const [state, action] = useActionState<SolicitacaoUpdateState, FormData>(
     atualizarSolicitacaoIfood,
     { ok: false },
@@ -197,6 +207,14 @@ function Linha({ s }: { s: SolicitacaoAdmin }) {
                 {jaRecusada ? "Editar aviso" : "Recusar"}
               </Button>
             ))}
+
+          {podeRecusar && lojasDaRede.length > 0 && (
+            <CompartilharLoja
+              solicitacaoId={s.id}
+              holdingId={s.holdingId ?? null}
+              lojas={lojasDaRede}
+            />
+          )}
           {/* Recusada sempre pode voltar; sem histórico, volta pro início. */}
           {podeDesfazer && (
             <BotaoDesfazer id={s.id} para={s.statusAnterior ?? "pendente"} />
@@ -375,10 +393,21 @@ function BotaoConferirSubmit() {
   )
 }
 
+export type LojaDaRede = {
+  id: string
+  code: string
+  name: string
+  holdingId: string
+  holdingName: string
+}
+
 export function SolicitacoesPanel({
   solicitacoes,
+  lojasDaRede = [],
 }: {
   solicitacoes: SolicitacaoAdmin[]
+  /** Todas as lojas da plataforma — pro caso "essa loja já está na rede". */
+  lojasDaRede?: LojaDaRede[]
 }) {
   // Loja já ativa = jornada concluída → sai da fila (continua visível como
   // "Vinculado" na tabela de merchants abaixo). A fila mostra só o que ainda
@@ -412,8 +441,8 @@ export function SolicitacoesPanel({
           Portal do Desenvolvedor uma vez e despacha o lote dele inteiro. Solto,
           um lote de 14 lojas ficava intercalado com o de outro cliente e era
           impossível saber onde você tinha parado. */}
-      <Grupo titulo="Aguardando" itens={abertas} />
-      <Grupo titulo="Recusadas" itens={recusadas} />
+      <Grupo titulo="Aguardando" itens={abertas} lojasDaRede={lojasDaRede} />
+      <Grupo titulo="Recusadas" itens={recusadas} lojasDaRede={lojasDaRede} />
     </div>
   )
 }
@@ -426,9 +455,11 @@ export function SolicitacoesPanel({
 function Grupo({
   titulo,
   itens,
+  lojasDaRede,
 }: {
   titulo: string
   itens: SolicitacaoAdmin[]
+  lojasDaRede: LojaDaRede[]
 }) {
   if (itens.length === 0) return null
   const aguardando = titulo === "Aguardando"
@@ -472,7 +503,7 @@ function Grupo({
                   )}
                 <div className="space-y-2">
                   {doCliente.map((s) => (
-                    <Linha key={s.id} s={s} />
+                    <Linha key={s.id} s={s} lojasDaRede={lojasDaRede} />
                   ))}
                 </div>
               </div>
@@ -546,5 +577,110 @@ function CopiarLote({ cnpjs }: { cnpjs: string[] }) {
       {copiado ? <Check className="size-3" /> : <Copy className="size-3" />}
       {copiado ? "copiados" : `copiar os ${cnpjs.length} que faltam`}
     </button>
+  )
+}
+
+/**
+ * "Essa loja já está na rede" — o terceiro caminho da fila.
+ *
+ * Fica escondido atrás de um clique porque é o caso RARO: a fila normal é
+ * aprovar ou recusar. Aberto o tempo todo, um seletor com todas as lojas da
+ * plataforma em cada linha viraria ruído — e um seletor grande e fácil de
+ * clicar por engano numa ação que dá acesso de uma empresa a outra é
+ * exatamente o que não se quer.
+ *
+ * Lista só lojas de OUTRAS empresas: compartilhar com a dona não existe.
+ */
+function CompartilharLoja({
+  solicitacaoId,
+  holdingId,
+  lojas,
+}: {
+  solicitacaoId: string
+  holdingId: string | null
+  lojas: LojaDaRede[]
+}) {
+  const [aberto, setAberto] = React.useState(false)
+  const [unitId, setUnitId] = React.useState("")
+  const [msg, setMsg] = React.useState<string | null>(null)
+  const [erro, setErro] = React.useState<string | null>(null)
+  const [pendente, startTransition] = React.useTransition()
+
+  const opcoes = React.useMemo(
+    () =>
+      lojas
+        .filter((l) => l.holdingId !== holdingId)
+        .sort(
+          (a, b) =>
+            a.holdingName.localeCompare(b.holdingName, "pt-BR") ||
+            a.code.localeCompare(b.code, "pt-BR"),
+        ),
+    [lojas, holdingId],
+  )
+
+  if (!aberto)
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 text-[11px]"
+        onClick={() => setAberto(true)}
+        title="Quando o CNPJ pedido já é uma loja conectada em outra conta"
+      >
+        Já está na rede
+      </Button>
+    )
+
+  return (
+    <div className="flex flex-1 basis-full flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={unitId}
+          onChange={(e) => setUnitId(e.target.value)}
+          className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1 text-[11px]"
+        >
+          <option value="">Qual loja já conectada é esta?</option>
+          {opcoes.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.holdingName} · #{l.code} {l.name}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          size="sm"
+          className="h-7 text-[11px]"
+          disabled={!unitId || pendente}
+          onClick={() => {
+            setErro(null)
+            setMsg(null)
+            startTransition(async () => {
+              const r = await compartilharLojaExistente(solicitacaoId, unitId)
+              if (r.ok) {
+                setMsg(r.message ?? "Compartilhada.")
+                setAberto(false)
+              } else setErro(r.error ?? "Não deu.")
+            })
+          }}
+        >
+          {pendente ? "Compartilhando…" : "Compartilhar (leitura)"}
+        </Button>
+        <button
+          type="button"
+          onClick={() => setAberto(false)}
+          className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+        >
+          cancelar
+        </button>
+      </div>
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        O cliente passa a VER essa loja, sem poder editar nada nela. A
+        solicitação é arquivada (não recusada) e nenhum e-mail é enviado —
+        avise por mensagem.
+      </p>
+      {erro && <p className="text-[10px] text-rose-600">{erro}</p>}
+      {msg && <p className="text-[10px] text-emerald-700">{msg}</p>}
+    </div>
   )
 }

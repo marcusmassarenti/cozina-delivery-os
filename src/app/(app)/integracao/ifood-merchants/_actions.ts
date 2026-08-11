@@ -746,3 +746,125 @@ export async function marcarLancadoNoPortal(
   revalidatePath("/integracao/ifood-merchants")
   return { ok: true, message: marcar ? "Marcada como lançada." : "Desmarcada." }
 }
+
+export type CompartilharState = {
+  ok: boolean
+  message?: string
+  error?: string
+}
+
+/**
+ * "Essa loja já está na rede — compartilhar em vez de duplicar."
+ *
+ * O terceiro caminho que faltava na fila de solicitações. Ela só tinha
+ * APROVAR e RECUSAR, e o caso real não é nenhum dos dois: um licenciado que
+ * opera loja da rede pediu conexão de um CNPJ que JÁ está conectado na conta
+ * de quem licencia. Aprovar criaria dois tenants gravando o mesmo faturamento
+ * — mesmo merchant puxado duas vezes, dois extratos por dia, duas verdades que
+ * divergem no primeiro import manual. Recusar manda e-mail de "recusada" e
+ * conta pro cliente que deu errado, quando na verdade ele vai receber MAIS do
+ * que pediu: a loja com o histórico inteiro, sem esperar autorização.
+ *
+ * O que faz, em uma passada:
+ *  1. dá acesso de LEITURA da unidade que já existe ao usuário do cliente;
+ *  2. arquiva a solicitação com a nota explicando (não recusa — não manda
+ *     e-mail de recusa);
+ *
+ * Quem avisa o cliente é uma pessoa. Um e-mail automático dizendo "sua loja
+ * foi compartilhada" numa situação que envolve dois donos diferentes pede
+ * conversa, não template.
+ */
+export async function compartilharLojaExistente(
+  solicitacaoId: string,
+  unitId: string,
+): Promise<CompartilharState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Apenas o admin da plataforma." }
+  }
+  if (!solicitacaoId || !unitId)
+    return { ok: false, error: "Solicitação ou loja ausente." }
+
+  const admin = createAdminClient()
+
+  const { data: req } = await admin
+    .from("ifood_activation_requests")
+    .select("id, holding_id, cnpj, status")
+    .eq("id", solicitacaoId)
+    .maybeSingle()
+  if (!req) return { ok: false, error: "Solicitação não encontrada." }
+  const holdingId = (req as { holding_id: string | null }).holding_id
+  if (!holdingId)
+    return { ok: false, error: "Solicitação sem empresa — não dá pra compartilhar." }
+
+  const { data: unidade } = await admin
+    .from("units")
+    .select("id, code, name, brands!inner(holding_id)")
+    .eq("id", unitId)
+    .maybeSingle()
+  if (!unidade) return { ok: false, error: "Loja não encontrada." }
+
+  const donaDaLoja = (
+    unidade as unknown as { brands: { holding_id: string } }
+  ).brands.holding_id
+
+  // Compartilhar loja com a PRÓPRIA empresa não faz sentido: ali o acesso já
+  // vem do escopo de holding, e criar a linha de leitura só serviria pra tirar
+  // direito de quem já tinha.
+  if (donaDaLoja === holdingId)
+    return {
+      ok: false,
+      error: "Essa loja já é da mesma empresa — não há o que compartilhar.",
+    }
+
+  // Todo mundo da empresa que pediu. É a empresa que ganha o acompanhamento,
+  // não uma pessoa — se o dono trocar de mão amanhã, o acesso continua com
+  // quem ficou.
+  const { data: pessoas } = await admin
+    .from("user_unit_access")
+    .select("user_id")
+    .eq("scope_type", "holding")
+    .eq("scope_id", holdingId)
+  const userIds = [
+    ...new Set(((pessoas ?? []) as { user_id: string }[]).map((p) => p.user_id)),
+  ]
+  if (userIds.length === 0)
+    return { ok: false, error: "A empresa não tem nenhum usuário pra receber o acesso." }
+
+  const { error: erroAcesso } = await admin.from("user_unit_access").upsert(
+    userIds.map((user_id) => ({
+      user_id,
+      scope_type: "unit",
+      scope_id: unitId,
+      // 'viewer' é o que a 0186 transformou em "vê e não escreve". Sem isto,
+      // o cliente entraria como administrador na loja emprestada e poderia
+      // apagá-la — a unidade tem 44 tabelas em cascata.
+      role: "viewer" as const,
+    })),
+    { onConflict: "user_id,scope_type,scope_id" },
+  )
+  if (erroAcesso) return { ok: false, error: erroAcesso.message }
+
+  const u = unidade as unknown as { code: string; name: string }
+  await admin
+    .from("ifood_activation_requests")
+    .update({
+      status: "arquivada",
+      status_anterior: (req as { status: string }).status,
+      nota:
+        `Loja já conectada na rede (#${u.code} ${u.name}). Em vez de duplicar a ` +
+        `conexão, o acesso de leitura foi compartilhado com a empresa do cliente.`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", solicitacaoId)
+
+  revalidatePath("/integracao/ifood-merchants")
+  return {
+    ok: true,
+    message:
+      `#${u.code} ${u.name} compartilhada com ${userIds.length} usuário` +
+      `${userIds.length === 1 ? "" : "s"} do cliente, em modo leitura. ` +
+      `Avise por mensagem — este botão não manda e-mail.`,
+  }
+}
