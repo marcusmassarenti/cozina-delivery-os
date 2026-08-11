@@ -12,6 +12,7 @@ import { BrandLogo } from "@/components/brand-logo"
 import type { PlatformId } from "@/lib/data/dia-semana"
 import { PlataformaSelector } from "./_components/plataforma-selector"
 import { MapaCalor } from "./_components/mapa-calor"
+import { PeriodoSelector } from "./_components/periodo-selector"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
@@ -30,20 +31,39 @@ import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
 export default async function RelatorioDiaSemanaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ de?: string; ate?: string; plataforma?: string }>
+  searchParams: Promise<{ periodo?: string; plataforma?: string }>
 }) {
   await assertCanView("relatorios")
   const sp = await searchParams
 
-  // Padrão: últimos 90 dias. Menos que isso e cada dia da semana tem 4
+  // Padrão: últimos 90 dias. Menos que isso e cada dia da semana tem ~4
   // amostras — uma chuva de sábado já vira "padrão".
   const hoje = new Date()
-  const ate = sp.ate ?? hoje.toISOString().slice(0, 10)
-  const de =
-    sp.de ??
-    new Date(hoje.getTime() - 90 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10)
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const periodo = sp.periodo ?? "90d"
+
+  // Últimos 6 meses FECHADOS (o corrente fica de fora: meio mês não fecha
+  // semana e a comparação sairia torta).
+  const mesesFechados = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - 1 - i, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  })
+
+  const mDias = periodo.match(/^(\d+)d$/)
+  const mMes = periodo.match(/^(\d{4})-(\d{2})$/)
+  let de: string
+  let ate: string
+  if (mMes) {
+    const ano = Number(mMes[1])
+    const mes = Number(mMes[2])
+    de = `${mMes[1]}-${mMes[2]}-01`
+    ate = iso(new Date(ano, mes, 0))
+  } else {
+    const n = mDias ? Number(mDias[1]) : 90
+    ate = iso(hoje)
+    de = iso(new Date(hoje.getTime() - n * 24 * 60 * 60 * 1000))
+  }
+  const poucaAmostra = !!mMes
 
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
@@ -113,9 +133,20 @@ export default async function RelatorioDiaSemanaPage({
         </div>
       </div>
 
-      <div data-print="hide">
+      <div className="flex flex-col gap-2" data-print="hide">
+        <PeriodoSelector atual={periodo} mesesFechados={mesesFechados} />
         <PlataformaSelector atual={plataforma} />
       </div>
+
+      {/* Um mês tem ~4 de cada dia da semana. Um feriado numa terça já move a
+          média, e quem lê precisa saber disso antes de agir. */}
+      {poucaAmostra && (
+        <p className="rounded-lg border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          Mês fechado tem só <strong>4 de cada dia da semana</strong> — um
+          feriado ou uma chuva já mexe na média. Pra decidir escala, a janela
+          de 90 dias é mais firme.
+        </p>
+      )}
 
       {/* 99 e Keeta não guardam preço: sozinhas, o relatório inteiro passa a
           medir por pedido. Dizer isso é melhor do que mostrar R$ 0 em tudo. */}
@@ -174,7 +205,7 @@ export default async function RelatorioDiaSemanaPage({
         </section>
       )}
 
-      <MapaCalor linhas={linhas} shareRede={shareRede} />
+      <MapaCalor linhas={linhas} />
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="mb-1 text-sm font-semibold">Loja a loja</h2>
