@@ -20,6 +20,7 @@ import {
   Wallet,
   Truck,
   MapPin,
+  Award,
 } from "lucide-react"
 
 import { assertCanView } from "@/lib/auth/permissions"
@@ -126,6 +127,12 @@ const CATEGORIAS: Categoria[] = [
         desc: "Avaliações ruins por loja, pra agir rápido.",
         icon: MessageSquare,
         href: "/relatorios/avaliacoes-negativos",
+      },
+      {
+        title: "Super Restaurante",
+        desc: "Quem é Super, quem está no limite e o que falta em cada loja.",
+        icon: Award,
+        href: "/relatorios/super",
       },
     ],
   },

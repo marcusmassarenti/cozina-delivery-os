@@ -65,11 +65,47 @@ export type SuperCriterios = {
   emRisco: CriterioSuper[]
   /** Dias até o recálculo (dia 10 de cada mês). */
   diasAteRecalculo: number
+  /** Recomendação do próprio iFood ("Manter os indicadores", etc.). */
+  planoDeAcao: string | null
+  /**
+   * Dimensões que o cliente elogiou / reclamou, com a contagem. É o que diz
+   * POR QUE a nota é o que é: "aparência" e "embalagem" são problemas
+   * diferentes, com donos diferentes na operação.
+   */
+  tagsPos: Record<string, number>
+  tagsNeg: Record<string, number>
+  /** Chamados por natureza: atraso é entrega, item errado é cozinha. */
+  chamados: {
+    total: number
+    atraso: number
+    posEntrega: number
+    itemErrado: number
+  }
 }
+
+/** `{ "bem temperada": 37 }` — jsonb solto do banco vira mapa tipado. */
+function mapaTags(v: unknown): Record<string, number> {
+  if (!v || typeof v !== "object") return {}
+  const out: Record<string, number> = {}
+  for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+    const q = Number(n)
+    if (Number.isFinite(q) && q > 0) out[k] = q
+  }
+  return out
+}
+const tagsDe = (l: Linha) => mapaTags(l.tags_pos)
+const tagsDeNeg = (l: Linha) => mapaTags(l.tags_neg)
 
 type Linha = {
   unit_id: string
   tipo: string
+  plano_de_acao: string | null
+  tags_pos: unknown
+  tags_neg: unknown
+  total_chamados: number | null
+  chamados_atraso: number | null
+  chamados_pos_entrega: number | null
+  chamados_item_errado: number | null
   status: string | null
   e_super: boolean | null
   e_elegivel: boolean | null
@@ -183,7 +219,7 @@ export async function getSuperCriterios(
   const { data, error } = await admin
     .from("ifood_super_avaliacao")
     .select(
-      "unit_id, tipo, status, e_super, e_elegivel, period_label, period_end, pedidos_concluidos, total_pedidos, pedidos_avaliados, media_avaliacoes, pct_cancelamento, pct_chamados",
+      "unit_id, tipo, status, e_super, e_elegivel, period_label, period_end, pedidos_concluidos, total_pedidos, pedidos_avaliados, media_avaliacoes, pct_cancelamento, pct_chamados, plano_de_acao, tags_pos, tags_neg, total_chamados, chamados_atraso, chamados_pos_entrega, chamados_item_errado",
     )
     .in("unit_id", unitIds)
     .order("period_end", { ascending: false })
@@ -215,6 +251,15 @@ export async function getSuperCriterios(
     const selo = atual ?? proxima!
 
     out.set(unitId, {
+      planoDeAcao: base.plano_de_acao,
+      tagsPos: tagsDe(base),
+      tagsNeg: tagsDeNeg(base),
+      chamados: {
+        total: base.total_chamados ?? 0,
+        atraso: base.chamados_atraso ?? 0,
+        posEntrega: base.chamados_pos_entrega ?? 0,
+        itemErrado: base.chamados_item_errado ?? 0,
+      },
       unitId,
       status: selo.status,
       eSuper: selo.e_super === true,
