@@ -324,6 +324,8 @@ export type ParsedSuperLoja = {
   totalPedidos: number
   /** Critério do Super (mínimo 180). `totalPedidos` inclui cancelado; este não. */
   pedidosConcluidos: number
+  /** Cancelamentos de responsabilidade DA LOJA — é o que conta pro selo. */
+  cancelamentosDaLoja: number
   pedidosAvaliados: number
   mediaAvaliacoes: number | null
   pctCancelamento: number | null

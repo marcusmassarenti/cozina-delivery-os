@@ -97,6 +97,9 @@ function parseRow(
     eElegivel: simNao(row["e_elegivel"]),
     totalPedidos: toNumber(row["total_de_pedidos"]),
     pedidosConcluidos: toNumber(row["pedidos_concluidos"]),
+    cancelamentosDaLoja: toNumber(
+      row["cancelamentos_de_responsabilidade_da_loja"],
+    ),
     pedidosAvaliados: toNumber(row["pedidos_avaliados"]),
     mediaAvaliacoes: numOrNull(row["media_de_avaliacoes"]),
     pctCancelamento: pctOrNull(row["percentual_cancelamento"]),

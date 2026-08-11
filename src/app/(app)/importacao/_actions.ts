@@ -1505,6 +1505,7 @@ async function saveSuper(
     e_elegivel: loja.eElegivel,
     total_pedidos: loja.totalPedidos,
     pedidos_concluidos: loja.pedidosConcluidos,
+    cancelamentos_da_loja: loja.cancelamentosDaLoja,
     pedidos_avaliados: loja.pedidosAvaliados,
     media_avaliacoes: loja.mediaAvaliacoes,
     pct_cancelamento: loja.pctCancelamento,

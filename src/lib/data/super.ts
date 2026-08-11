@@ -32,6 +32,30 @@ export const METAS_SUPER = {
   chamados: 2.5,
 } as const
 
+/**
+ * Quanto de folga ainda conta como "no limite", POR CRITÉRIO.
+ *
+ * ⚠️ Era 10% da meta pra todos, e isso quebrava na nota: 10% de 4,7 é 0,47,
+ * então tudo até 5,17 entrava — e como a nota máxima é 5, TODA loja aparecia
+ * como em risco. Marcus viu na tela: Brooklin com 4,9 e JK com 4,8 listadas
+ * como "prestes a perder", que é o oposto da verdade.
+ *
+ * Escala limitada (nota 0–5) pede margem absoluta; contagem sem teto (pedidos)
+ * aceita margem proporcional. Não dá pra usar a mesma régua nos dois.
+ */
+const FOLGA_RISCO = {
+  /** 10% acima do mínimo: 180–198 pedidos. */
+  pedidos: 18,
+  /** 40–44 avaliações. */
+  avaliacoes: 4,
+  /** 4,70–4,74. Meio décimo já é uma nota ruim de diferença. */
+  nota: 0.05,
+  /** 0,90%–1,00%. */
+  cancelamento: 0.1,
+  /** 2,25%–2,50%. */
+  chamados: 0.25,
+} as const
+
 export type CriterioSuper = {
   chave: "pedidos" | "avaliacoes" | "nota" | "cancelamento" | "chamados"
   rotulo: string
@@ -48,6 +72,26 @@ export type CriterioSuper = {
    */
   emRisco: boolean
   formato: "numero" | "nota" | "pct"
+}
+
+/**
+ * Valor de um critério em pt-BR. Vive junto do tipo porque tela nenhuma
+ * deveria reimplementar isso — foi assim que "4.7" com ponto apareceu numa
+ * etiqueta enquanto a tabela ao lado mostrava "4,7".
+ */
+export function fmtCriterio(
+  valor: number | null,
+  formato: CriterioSuper["formato"],
+): string {
+  if (valor == null) return "—"
+  if (formato === "pct")
+    return `${valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`
+  if (formato === "nota")
+    return valor.toLocaleString("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })
+  return valor.toLocaleString("pt-BR")
 }
 
 export type SuperCriterios = {
@@ -81,6 +125,16 @@ export type SuperCriterios = {
     posEntrega: number
     itemErrado: number
   }
+  /**
+   * Colunas do relatório que não são critério, mas explicam o critério.
+   *
+   * `totalPedidos` inclui cancelado e `pedidosConcluidos` não — a diferença
+   * entre os dois É o volume cancelado. E `cancelamentosDaLoja` separa o que
+   * foi responsabilidade da loja do cancelamento total: só o primeiro conta
+   * contra o selo.
+   */
+  totalPedidos: number
+  cancelamentosDaLoja: number
 }
 
 /** `{ "bem temperada": 37 }` — jsonb solto do banco vira mapa tipado. */
@@ -103,6 +157,7 @@ type Linha = {
   tags_pos: unknown
   tags_neg: unknown
   total_chamados: number | null
+  cancelamentos_da_loja: number | null
   chamados_atraso: number | null
   chamados_pos_entrega: number | null
   chamados_item_errado: number | null
@@ -194,9 +249,7 @@ function montarCriterios(l: Linha): CriterioSuper[] {
       return { ...c, atingido: false, emRisco: false }
     }
     const atingido = c.menorMelhor ? c.valor <= c.meta : c.valor >= c.meta
-    // Folga de 10% da meta. Em cancelamento (limite 1%) isso é 0,9% — pega a
-    // loja a um centésimo de estourar, que é exatamente o caso real.
-    const folga = c.meta * 0.1
+    const folga = FOLGA_RISCO[c.chave]
     const emRisco =
       atingido &&
       (c.menorMelhor ? c.valor >= c.meta - folga : c.valor <= c.meta + folga)
@@ -219,7 +272,7 @@ export async function getSuperCriterios(
   const { data, error } = await admin
     .from("ifood_super_avaliacao")
     .select(
-      "unit_id, tipo, status, e_super, e_elegivel, period_label, period_end, pedidos_concluidos, total_pedidos, pedidos_avaliados, media_avaliacoes, pct_cancelamento, pct_chamados, plano_de_acao, tags_pos, tags_neg, total_chamados, chamados_atraso, chamados_pos_entrega, chamados_item_errado",
+      "unit_id, tipo, status, e_super, e_elegivel, period_label, period_end, pedidos_concluidos, total_pedidos, pedidos_avaliados, media_avaliacoes, pct_cancelamento, pct_chamados, cancelamentos_da_loja, plano_de_acao, tags_pos, tags_neg, total_chamados, chamados_atraso, chamados_pos_entrega, chamados_item_errado",
     )
     .in("unit_id", unitIds)
     .order("period_end", { ascending: false })
@@ -260,6 +313,8 @@ export async function getSuperCriterios(
         posEntrega: base.chamados_pos_entrega ?? 0,
         itemErrado: base.chamados_item_errado ?? 0,
       },
+      totalPedidos: base.total_pedidos ?? 0,
+      cancelamentosDaLoja: base.cancelamentos_da_loja ?? 0,
       unitId,
       status: selo.status,
       eSuper: selo.e_super === true,
