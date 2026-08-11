@@ -45,6 +45,24 @@ export async function GET(req: Request) {
       console.error("varrerConexoesNovas:", e)
     }
 
+    // Aviso de último dia pra responder avaliação. Fica DEPOIS do sync de
+    // propósito: é ele que acabou de atualizar o status, e avisar antes usaria
+    // a foto de ontem — anunciando como pendente o que a loja já respondeu
+    // pelo portal. Também não derruba o cron.
+    let prazoAvaliacoes: { avisados: number; avaliacoes: number } | null = null
+    try {
+      const { avisarAvaliacoesNoPrazoFinal } = await import(
+        "@/lib/push/avaliacoes-prazo"
+      )
+      const av = await avisarAvaliacoesNoPrazoFinal()
+      prazoAvaliacoes = {
+        avisados: av.avisados.length,
+        avaliacoes: av.avisados.reduce((a, b) => a + b.avaliacoes, 0),
+      }
+    } catch (e) {
+      console.error("avisarAvaliacoesNoPrazoFinal:", e)
+    }
+
     // Expurgo dos logs de API, pendurado aqui pelo mesmo motivo da varredura:
     // é o último cron da manhã, então todo mundo já escreveu o log do dia.
     // Também não derruba o cron — perder uma faxina é irrelevante perto de
@@ -63,6 +81,7 @@ export async function GET(req: Request) {
       ...r,
       conexoes,
       expurgo,
+      prazoAvaliacoes,
     })
   } catch (e) {
     console.error("/api/cron/ifood-review-sync:", e)

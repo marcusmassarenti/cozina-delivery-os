@@ -85,7 +85,13 @@ export const CHANGELOG: Release[] = [
             antes:
               "Numa rede, ninguém abre loja por loja todo dia. A reclamação passava dos 5 dias e o iFood publicava sem a resposta — o cliente nunca lia.",
             depois:
-              "Um bloco no topo de Avaliações junta tudo que ainda dá pra responder, da rede inteira, ordenado por quem vence primeiro. Fora do filtro de mês, porque o prazo não liga pra virada do mês.",
+              "Uma linha no topo de Avaliações diz quantas faltam, em quantas lojas e quantas estão no último dia. Clicou, abre a lista inteira da rede, ordenada por quem vence primeiro. Fora do filtro de mês, porque o prazo não liga pra virada do mês.",
+          },
+          {
+            kind: "novo",
+            title: "Aviso no celular quando o prazo está acabando",
+            desc:
+              "Todo dia de manhã, quem tem avaliação com 1 dia ou menos pra responder recebe um push. Um só por conta, com o total — não um por avaliação.",
           },
           {
             kind: "novo",

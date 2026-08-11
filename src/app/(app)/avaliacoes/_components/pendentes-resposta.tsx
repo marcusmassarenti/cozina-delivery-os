@@ -1,8 +1,6 @@
 import Link from "next/link"
-import { Clock, MessageSquareWarning } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { PlatformLogo } from "@/components/platform-logo"
 import { userCan } from "@/lib/auth/permissions"
 import { getIaStatus } from "@/lib/data/diagnostico-ia"
 import {
@@ -11,6 +9,7 @@ import {
 } from "@/lib/data/avaliacoes-pendentes"
 import { getVisibleUnits } from "@/lib/data/units"
 import { ResponderAvaliacao } from "./responder-avaliacao"
+import { PendentesPainel } from "./pendentes-painel"
 
 /**
  * "Esperando resposta" — o que ainda dá pra responder, em toda a rede.
@@ -44,22 +43,12 @@ export async function PendentesResposta() {
   const lojas = new Set(ordenadas.map((p) => p.unitId)).size
 
   return (
-    <section className="rounded-xl border bg-card shadow-sm" data-print="hide">
-      <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
-        <MessageSquareWarning className="size-4 text-amber-600" />
-        <h2 className="text-sm font-semibold">Esperando resposta</h2>
-        <PlatformLogo platform="ifood" size="sm" />
-        <span className="text-[11px] text-muted-foreground">
-          {ordenadas.length} avaliaç{ordenadas.length === 1 ? "ão" : "ões"} em{" "}
-          {lojas} loja{lojas === 1 ? "" : "s"}
-          {vencendoHoje > 0 ? ` · ${vencendoHoje} no último dia` : ""}
-        </span>
-        <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock className="size-3" />
-          {PRAZO_RESPOSTA_DIAS} dias de prazo
-        </span>
-      </div>
-
+    <PendentesPainel
+      total={ordenadas.length}
+      lojas={lojas}
+      vencendoHoje={vencendoHoje}
+      prazoDias={PRAZO_RESPOSTA_DIAS}
+    >
       <div className="divide-y">
         {ordenadas.map((p) => {
           const u = unitById.get(p.unitId)
@@ -106,12 +95,12 @@ export async function PendentesResposta() {
       </div>
 
       <p className="border-t px-5 py-2 text-[11px] leading-relaxed text-muted-foreground">
-        O iFood aceita resposta por {PRAZO_RESPOSTA_DIAS} dias. Passado o prazo,
-        a avaliação é publicada sem a sua resposta e o cliente nunca a vê. Só
-        entram aqui as que a plataforma ainda aceita — 5★ e notas sem comentário
-        já nascem publicadas.
+        Só do iFood, e só o que a plataforma ainda aceita responder — 5★ e notas
+        sem comentário já nascem publicadas. Passado o prazo de{" "}
+        {PRAZO_RESPOSTA_DIAS} dias, a avaliação é publicada sem a sua resposta e
+        o cliente nunca a vê.
       </p>
-    </section>
+    </PendentesPainel>
   )
 }
 
