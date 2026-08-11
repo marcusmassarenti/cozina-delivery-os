@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { textoOuNull } from "@/lib/format"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { installIdsDeProducao } from "@/lib/data/cardapioweb-imported"
 import type { PlatformId } from "@/components/platform-logo"
@@ -11,6 +12,15 @@ export type ComentarioNegativo = {
   nota: number
   comentario: string
   data: string | null
+  /** O que a LOJA respondeu. Null = ninguém respondeu esse cliente ainda. */
+  resposta: string | null
+  /**
+   * id da linha em ifood_avaliacoes + id da avaliação no iFood. Só vem no
+   * iFood, e só nas que entraram depois da 0182 — é o que habilita o botão
+   * "Responder". Sem os dois, a tela só exibe.
+   */
+  avaliacaoId?: string
+  reviewId?: string | null
 }
 
 /**
@@ -48,14 +58,19 @@ export async function getComentariosNegativos(
   // iFood
   {
     const data = await fetchAllRows<{
+      id: string
       unit_id: string
       nota: number
       comentario: string | null
       data_avaliacao: string | null
+      resposta_texto: string | null
+      review_id: string | null
     }>((from, to) => {
       let q = admin
         .from("ifood_avaliacoes")
-        .select("unit_id, nota, comentario, data_avaliacao")
+        .select(
+          "id, unit_id, nota, comentario, data_avaliacao, resposta_texto, review_id",
+        )
         .lte("nota", maxNota)
         .not("comentario", "is", null)
         .gte("data_avaliacao", startIso)
@@ -74,6 +89,9 @@ export async function getComentariosNegativos(
         nota: Number(r.nota),
         comentario: c,
         data: (r.data_avaliacao as string | null) ?? null,
+        resposta: textoOuNull(r.resposta_texto),
+        avaliacaoId: r.id as string,
+        reviewId: (r.review_id as string | null) ?? null,
       })
     }
   }
@@ -107,6 +125,8 @@ export async function getComentariosNegativos(
         nota: Number(r.nivel_avaliacao),
         comentario: c,
         data: (r.data_avaliacao as string | null) ?? null,
+        // A planilha da 99 não traz a resposta da loja em coluna nenhuma.
+        resposta: null,
       })
     }
   }
@@ -118,11 +138,12 @@ export async function getComentariosNegativos(
       pontuacao_avaliacao: number
       conteudo_avaliacao: string | null
       data_avaliacao: string | null
+      resposta_avaliacao: string | null
     }>((from, to) => {
       let q = admin
         .from("keeta_pedidos")
         .select(
-          "unit_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao",
+          "unit_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao, resposta_avaliacao",
         )
         .lte("pontuacao_avaliacao", maxNota)
         .not("conteudo_avaliacao", "is", null)
@@ -142,6 +163,9 @@ export async function getComentariosNegativos(
         nota: Number(r.pontuacao_avaliacao),
         comentario: c,
         data: (r.data_avaliacao as string | null) ?? null,
+        // A Keeta já vinha com a resposta gravada desde o primeiro import —
+        // 165 respostas que nenhuma tela lia.
+        resposta: textoOuNull(r.resposta_avaliacao),
       })
     }
   }
@@ -178,6 +202,11 @@ export async function getComentariosNegativos(
           unitId: r.unit_id,
           plataforma: "cardapioweb",
           nota: Number(r.nota),
+          // ⚠️ cardapioweb_avaliacoes.respostas NÃO é a loja respondendo: é o
+          // CLIENTE respondendo as sub-perguntas (Atendimento, Embalagem…).
+          // Usar aquele campo aqui mostraria "5" como se fosse a resposta do
+          // restaurante.
+          resposta: null,
           comentario: c,
           // As outras fontes guardam DATE; aqui é timestamp. Corta pra data
           // pura senão a ordenação por string compara formatos diferentes.

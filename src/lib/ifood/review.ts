@@ -27,6 +27,9 @@ const BASE = "/review/v2.0/merchants"
 export type IfoodReviewReply = {
   text?: string
   addedAt?: string
+  /** MERCHANT quando é a loja respondendo. Pode vir ausente. */
+  from?: string
+  createdAt?: string
 }
 
 /** Uma avaliação do iFood (campos opcionais — o layout varia por versão). */

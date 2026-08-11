@@ -55,3 +55,15 @@ export const fmtPct = (n: number, casas = 1) =>
   `${new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: casas,
   }).format(n)}%`
+
+/**
+ * Texto vindo do banco, ou null quando é só espaço em branco.
+ *
+ * Existe porque "sem resposta" e "resposta em branco" precisam ser a MESMA
+ * coisa na tela: a Keeta grava string vazia em vez de NULL quando a loja não
+ * respondeu, e sem isso a interface abriria um balão de resposta vazio.
+ */
+export const textoOuNull = (s: string | null | undefined): string | null => {
+  const t = String(s ?? "").trim()
+  return t.length > 0 ? t : null
+}

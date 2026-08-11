@@ -16,6 +16,7 @@ import { TAG_FINANCEIRO_IFOOD } from "@/lib/cache-tags"
 import { cache as reactCache } from "react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { textoOuNull } from "@/lib/format"
 import { currentPeriod } from "@/lib/period"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
@@ -1821,6 +1822,10 @@ export type AvaliacaoListItem = {
   tagsPositivas: string[]
   tagsNegativas: string[]
   statusAvaliacao: string | null
+  /** O que a loja respondeu (null = pendente). */
+  resposta: string | null
+  /** Habilita responder pelo painel. Null nas avaliações anteriores à API. */
+  reviewId: string | null
 }
 
 export async function getAvaliacoesResumoForMonth(
@@ -1904,7 +1909,7 @@ export async function listAvaliacoesForMonth(
   let query = admin
     .from("ifood_avaliacoes")
     .select(
-      "id, pedido_id_curto, data_avaliacao, data_pedido, nota, comentario, tags_positivas, tags_negativas, status_avaliacao",
+      "id, pedido_id_curto, data_avaliacao, data_pedido, nota, comentario, tags_positivas, tags_negativas, status_avaliacao, resposta_texto, review_id",
     )
     .eq("unit_id", unitId)
     .gte("data_avaliacao", start)
@@ -1930,6 +1935,8 @@ export async function listAvaliacoesForMonth(
     tagsPositivas: (r.tags_positivas as string[]) ?? [],
     tagsNegativas: (r.tags_negativas as string[]) ?? [],
     statusAvaliacao: r.status_avaliacao,
+    resposta: textoOuNull(r.resposta_texto),
+    reviewId: (r.review_id as string | null) ?? null,
   }))
 }
 
@@ -1949,6 +1956,8 @@ export type NetworkAvaliacoes = {
     comentario: string
     data: string
     pedidoIdCurto: string | null
+    /** O que a loja respondeu, se respondeu. */
+    resposta: string | null
   }>
   hasData: boolean
 }
@@ -1969,11 +1978,12 @@ export async function getNetworkAvaliacoesForMonth(
     tags_negativas: string[] | null
     data_avaliacao: string
     pedido_id_curto: string | null
+    resposta_texto: string | null
   }>((from, to) => {
     let q = admin
       .from("ifood_avaliacoes")
       .select(
-        "id, unit_id, nota, comentario, tags_positivas, tags_negativas, data_avaliacao, pedido_id_curto",
+        "id, unit_id, nota, comentario, tags_positivas, tags_negativas, data_avaliacao, pedido_id_curto, resposta_texto",
       )
       .gte("data_avaliacao", start)
       .lte("data_avaliacao", end)
@@ -2045,6 +2055,7 @@ export async function getNetworkAvaliacoesForMonth(
     comentario: r.comentario as string,
     data: r.data_avaliacao,
     pedidoIdCurto: r.pedido_id_curto,
+    resposta: textoOuNull(r.resposta_texto),
   }))
 
   return {

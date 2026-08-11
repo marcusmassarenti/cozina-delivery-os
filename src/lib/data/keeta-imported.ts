@@ -11,6 +11,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { textoOuNull } from "@/lib/format"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { currentPeriod } from "@/lib/period"
@@ -223,6 +224,8 @@ export type NetworkKeetaAvaliacoes = {
     comentario: string
     data: string
     pedidoIdCurto: string | null
+    /** Resposta da loja — a Keeta já mandava e nada lia. */
+    resposta: string | null
   }>
   hasData: boolean
 }
@@ -245,11 +248,12 @@ export async function getNetworkKeetaAvaliacoesForMonth(
     pontuacao_avaliacao: number | string | null
     conteudo_avaliacao: string | null
     data_avaliacao: string | null
+    resposta_avaliacao: string | null
   }>((f, t) => {
     let q = admin
       .from("keeta_pedidos")
       .select(
-        "id, unit_id, pedido_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao",
+        "id, unit_id, pedido_id, pontuacao_avaliacao, conteudo_avaliacao, data_avaliacao, resposta_avaliacao",
       )
       .not("pontuacao_avaliacao", "is", null)
       .gte("data_avaliacao", startIso)
@@ -317,6 +321,7 @@ export async function getNetworkKeetaAvaliacoesForMonth(
       comentario: String(r.conteudo_avaliacao),
       data: String(r.data_avaliacao),
       pedidoIdCurto: pid.length > 6 ? "…" + pid.slice(-6) : pid || null,
+      resposta: textoOuNull(r.resposta_avaliacao as string | null),
     }
   })
 
@@ -470,6 +475,8 @@ export type KeetaAvaliacaoListItem = {
   dataPedido: string | null
   nota: number
   comentario: string | null
+  /** Resposta da loja. Só de leitura: a Keeta não tem API pra responder. */
+  resposta: string | null
 }
 
 /**
@@ -554,7 +561,7 @@ export async function listKeetaAvaliacoesForMonth(
   const { data } = await admin
     .from("keeta_pedidos")
     .select(
-      "id, pedido_id, data_avaliacao, horario_pedido, pontuacao_avaliacao, conteudo_avaliacao",
+      "id, pedido_id, data_avaliacao, horario_pedido, pontuacao_avaliacao, conteudo_avaliacao, resposta_avaliacao",
     )
     .eq("unit_id", unitId)
     .not("pontuacao_avaliacao", "is", null)
@@ -575,6 +582,7 @@ export async function listKeetaAvaliacoesForMonth(
         : null,
       nota: Number(r.pontuacao_avaliacao ?? 0),
       comentario: r.conteudo_avaliacao ? String(r.conteudo_avaliacao) : null,
+      resposta: textoOuNull(r.resposta_avaliacao as string | null),
     }
   })
 }

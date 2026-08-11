@@ -1,6 +1,7 @@
 import Link from "next/link"
 import {
   ChevronRight,
+  CornerDownRight,
   MessageCircle,
   Star,
   ThumbsDown,
@@ -136,6 +137,8 @@ export async function AvaliacoesNetworkDashboard({
     nota: number
     comentario: string
     data: string
+    /** Resposta da loja. iFood e Keeta têm; 99 Food não manda no arquivo. */
+    resposta: string | null
   }
   const comentarios: Coment[] = (
     active && plataforma
@@ -147,6 +150,7 @@ export async function AvaliacoesNetworkDashboard({
           nota: c.nota,
           comentario: c.comentario,
           data: c.data,
+          resposta: "resposta" in c ? (c.resposta as string | null) : null,
         }))
       : [
           ...ifood.ultimosComentarios.map((c) => ({
@@ -157,6 +161,7 @@ export async function AvaliacoesNetworkDashboard({
             nota: c.nota,
             comentario: c.comentario,
             data: c.data,
+            resposta: c.resposta,
           })),
           ...nine.ultimosComentarios.map((c) => ({
             id: "99food-" + c.id,
@@ -166,6 +171,8 @@ export async function AvaliacoesNetworkDashboard({
             nota: c.nota,
             comentario: c.comentario,
             data: c.data,
+            // A planilha da 99 Food não traz a resposta da loja.
+            resposta: null,
           })),
           ...keeta.ultimosComentarios.map((c) => ({
             id: c.id,
@@ -175,6 +182,7 @@ export async function AvaliacoesNetworkDashboard({
             nota: c.nota,
             comentario: c.comentario,
             data: c.data,
+            resposta: c.resposta,
           })),
         ]
   )
@@ -446,6 +454,12 @@ export async function AvaliacoesNetworkDashboard({
                 <p className="mt-1 text-sm italic text-foreground/90 line-clamp-2">
                   &ldquo;{c.comentario}&rdquo;
                 </p>
+                {c.resposta && (
+                  <p className="mt-1.5 flex gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                    <CornerDownRight className="mt-px size-3 shrink-0" />
+                    <span className="line-clamp-2">{c.resposta}</span>
+                  </p>
+                )}
               </div>
             ))}
           </div>

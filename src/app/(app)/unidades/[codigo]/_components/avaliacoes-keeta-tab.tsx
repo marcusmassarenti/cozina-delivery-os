@@ -3,7 +3,7 @@
  * Dados vêm de keeta_pedidos (pontuacao_avaliacao, conteudo_avaliacao,
  * data_avaliacao). Só nota (1-5) + comentário livre.
  */
-import { MessageCircle, Star } from "lucide-react"
+import { CornerDownRight, MessageCircle, Star } from "lucide-react"
 
 import {
   getKeetaAvaliacoesResumoForMonth,
@@ -194,6 +194,14 @@ export async function AvaliacoesKeetaTab({
                 {a.comentario && (
                   <p className="mt-1 text-sm italic text-foreground/90 line-clamp-3">
                     &ldquo;{a.comentario}&rdquo;
+                  </p>
+                )}
+                {/* Só leitura: a Keeta manda a resposta na planilha, mas não
+                    tem endpoint pra responder — quem responde é o portal. */}
+                {a.resposta && (
+                  <p className="mt-1.5 flex gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                    <CornerDownRight className="mt-px size-3 shrink-0" />
+                    <span>{a.resposta}</span>
                   </p>
                 )}
               </li>

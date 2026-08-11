@@ -1,4 +1,10 @@
-import { MessageCircle, Star, ThumbsDown, ThumbsUp } from "lucide-react"
+import {
+  CornerDownRight,
+  MessageCircle,
+  Star,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react"
 
 import {
   getAvaliacoesResumoForMonth,
@@ -6,6 +12,8 @@ import {
 } from "@/lib/data/ifood-imported"
 import { fmtNum, fmtPct } from "@/lib/format"
 import { PaginatedList } from "@/components/shared/paginated-list"
+import { userCan } from "@/lib/auth/permissions"
+import { ResponderAvaliacao } from "@/app/(app)/avaliacoes/_components/responder-avaliacao"
 
 export async function AvaliacoesTab({
   unitId,
@@ -19,12 +27,13 @@ export async function AvaliacoesTab({
   /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
   notasFiltro?: number[]
 }) {
-  const [resumo, lista] = await Promise.all([
+  const [resumo, lista, podeResponder] = await Promise.all([
     getAvaliacoesResumoForMonth(unitId, year, month),
     // Limite alto = mês inteiro da loja (cabe bem abaixo do cap de 1000). Antes
     // era 50: o header "Comentários (N)" e o filtro de nota rodavam só sobre os
     // 50 mais recentes e subestimavam vs o KPI "Com comentário" (mês todo).
     listAvaliacoesForMonth(unitId, year, month, { limit: 1000 }),
+    userCan("avaliacoes", "edit"),
   ])
   const listaFiltrada =
     notasFiltro.length > 0
@@ -174,7 +183,11 @@ export async function AvaliacoesTab({
         ) : (
           <PaginatedList
             items={listaFiltrada.map((a) => (
-              <AvaliacaoCard key={a.id} avaliacao={a} />
+              <AvaliacaoCard
+                key={a.id}
+                avaliacao={a}
+                podeResponder={podeResponder}
+              />
             ))}
             pageSize={10}
             className="divide-y"
@@ -276,8 +289,10 @@ function TagRow({
 
 function AvaliacaoCard({
   avaliacao,
+  podeResponder,
 }: {
   avaliacao: {
+    id: string
     pedidoIdCurto: string | null
     dataAvaliacao: string
     nota: number
@@ -285,7 +300,10 @@ function AvaliacaoCard({
     tagsPositivas: string[]
     tagsNegativas: string[]
     statusAvaliacao: string | null
+    resposta: string | null
+    reviewId: string | null
   }
+  podeResponder: boolean
 }) {
   const stars = []
   for (let i = 1; i <= 5; i++) {
@@ -323,6 +341,24 @@ function AvaliacaoCard({
           &ldquo;{avaliacao.comentario}&rdquo;
         </p>
       )}
+      {avaliacao.resposta ? (
+        <div className="mt-2 flex gap-2 rounded-lg bg-muted/50 p-2.5">
+          <CornerDownRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          <div>
+            <p className="text-[11px] font-medium text-muted-foreground">
+              Resposta da loja
+            </p>
+            <p className="text-sm text-foreground/80">{avaliacao.resposta}</p>
+          </div>
+        </div>
+      ) : podeResponder && avaliacao.reviewId && avaliacao.comentario ? (
+        // Duas condições, cada uma por um motivo:
+        //  • sem reviewId a avaliação é anterior à conexão com a API e a
+        //    resposta seria recusada;
+        //  • sem comentário não há o que responder — a maioria das avaliações
+        //    é só nota, e o botão em todas virava ruído na lista.
+        <ResponderAvaliacao avaliacaoId={avaliacao.id} />
+      ) : null}
       {(avaliacao.tagsPositivas.length > 0 ||
         avaliacao.tagsNegativas.length > 0) && (
         <div className="mt-2 flex flex-wrap gap-1">

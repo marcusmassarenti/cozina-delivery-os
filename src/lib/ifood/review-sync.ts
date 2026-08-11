@@ -87,6 +87,23 @@ export type ReviewSyncResult = {
 }
 
 /** Dia (YYYY-MM-DD) de uma data ISO; null se não der pra parsear. */
+/**
+ * A resposta da LOJA dentro de `replies[]`.
+ *
+ * O array pode ter mais de uma entrada e nem toda é da loja — `from` diz quem
+ * escreveu. Pegar a primeira sem olhar traria eventualmente a fala do cliente
+ * como se fosse resposta do restaurante.
+ */
+function respostaDaLoja(r: IfoodReview) {
+  const rs = r.replies ?? []
+  return (
+    rs.find((x) => (x.from ?? "").toUpperCase() === "MERCHANT") ??
+    // Sem `from`, a API antiga mandava só a resposta do parceiro — aí a única
+    // entrada é dela mesma.
+    (rs.length === 1 && !rs[0]?.from ? rs[0] : undefined)
+  )
+}
+
 function diaDe(iso: string | undefined): string | null {
   if (!iso) return null
   const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso)
@@ -107,6 +124,7 @@ function paraLinha(unitId: string, r: IfoodReview) {
   }
   return {
     unit_id: unitId,
+    review_id: r.id,
     pedido_id_curto: r.order?.shortId ?? null,
     pedido_id_longo: pedidoLongo,
     data_pedido: r.order?.createdAt ?? null,
@@ -114,6 +132,12 @@ function paraLinha(unitId: string, r: IfoodReview) {
     nota,
     comentario: r.comment ?? null,
     status_avaliacao: r.status ?? null,
+    // Resposta da LOJA, não do cliente. `replies[]` pode ter mais de uma —
+    // pegamos a do MERCHANT, que é a que interessa. Quando não há resposta a
+    // API manda array vazio, e mandar null aqui limpa o campo de propósito:
+    // resposta apagada no portal tem que sumir daqui também.
+    resposta_texto: respostaDaLoja(r)?.text ?? null,
+    respondida_em: respostaDaLoja(r)?.createdAt ?? null,
     // NÃO enviamos tags_positivas/tags_negativas/status_pedido/servico_logistico
     // /import_id de propósito: a API de Review NÃO traz esses campos. Se a gente
     // mandasse (ex.: tags vazias), o upsert ZERAVA os dados ricos do import nas

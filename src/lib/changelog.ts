@@ -42,6 +42,84 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.17.0",
+    date: "2026-08-10",
+    tag: "Grande novidade",
+    title: "O caminho para o Super, o mapa da semana e a resposta ao cliente",
+    summary:
+      "Dois relatórios novos no Hub — quanto falta pra cada loja virar Super Restaurante e em que dia da semana ela ganha ou perde dinheiro — mais dados que já estavam guardados e nenhuma tela mostrava.",
+    areas: [
+      {
+        area: "Relatórios",
+        items: [
+          {
+            kind: "novo",
+            title: "Super Restaurante: quanto falta pra chegar lá",
+            antes:
+              "Pra saber se a loja ia manter o selo, alguém entrava no portal do iFood loja por loja — e só descobria que tinha perdido depois do dia 10.",
+            depois:
+              "O relatório mostra os cinco critérios de cada loja, o que falta em cada um e quem está prestes a perder o selo. Com filtro por loja, plano de ação e exportação em PDF.",
+          },
+          {
+            kind: "novo",
+            title: "Desempenho por dia da semana",
+            antes:
+              "O mês fechava em “vendeu tanto”. Que a sexta faz um terço a mais que a terça ninguém via — e a escala era montada no achismo.",
+            depois:
+              "Melhor e pior dia de cada loja, mapa da semana e quem foge do padrão da rede. Dá pra filtrar por plataforma; na 99 Food e na Keeta a leitura é por pedidos, porque elas não mandam o valor.",
+          },
+          {
+            kind: "melhoria",
+            title: "Comentários negativos: quem ainda não foi respondido",
+            desc:
+              "Um card novo conta quantos clientes reclamaram e ficaram sem resposta.",
+          },
+        ],
+      },
+      {
+        area: "Avaliações",
+        items: [
+          {
+            kind: "novo",
+            title: "Responder a avaliação do iFood pelo painel",
+            antes:
+              "Responder um cliente exigia abrir o Portal do Parceiro, achar a avaliação e escrever por lá.",
+            depois:
+              "O botão Responder está na própria avaliação, na loja e no relatório de negativos. Vale pras avaliações que chegam pela API daqui pra frente.",
+          },
+          {
+            kind: "novo",
+            title: "A resposta da loja agora aparece",
+            desc:
+              "iFood e Keeta mandam o texto do que a loja respondeu — a Keeta manda desde sempre, e nenhuma tela mostrava. Agora vem logo abaixo do comentário do cliente.",
+          },
+        ],
+      },
+      {
+        area: "Operação",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Cancelamento de item errado separado do pedido inteiro",
+            desc:
+              "No painel e no relatório de cancelamentos, dá pra ver quantos foram cancelamento parcial — cliente que recebeu o pedido, só com item errado.",
+          },
+          {
+            kind: "melhoria",
+            title: "Tempo do entregador até o cliente (99 Food)",
+            desc: "Mais um tempo na régua da 99, que já vinha no arquivo.",
+          },
+          {
+            kind: "melhoria",
+            title: "Tempo de loja aberta (Keeta)",
+            desc:
+              "Quantas horas por dia a loja ficou aberta, em média — dado que a Keeta manda e ninguém via.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.16.0",
     date: "2026-08-08",
     tag: "Grande novidade",

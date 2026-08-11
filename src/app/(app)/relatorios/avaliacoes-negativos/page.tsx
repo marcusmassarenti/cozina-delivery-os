@@ -1,5 +1,10 @@
 import Link from "next/link"
-import { ArrowLeft, AlertTriangle, MessageSquare } from "lucide-react"
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CornerDownRight,
+  MessageSquare,
+} from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -9,7 +14,8 @@ import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import { getVisibleUnits } from "@/lib/data/units"
-import { assertCanView } from "@/lib/auth/permissions"
+import { assertCanView, userCan } from "@/lib/auth/permissions"
+import { ResponderAvaliacao } from "@/app/(app)/avaliacoes/_components/responder-avaliacao"
 import { fmtNum } from "@/lib/format"
 import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
@@ -51,10 +57,13 @@ export default async function AvaliacoesNegativosPage({
   const ids = scoped.map((u) => u.id)
   const unitById = new Map(scoped.map((u) => [u.id, u]))
 
-  const [comentarios, availablePeriods] = await Promise.all([
+  const [comentarios, availablePeriods, podeResponder] = await Promise.all([
     getComentariosNegativos(year, month, ids),
     getAvailablePeriods(),
+    userCan("avaliacoes", "edit"),
   ])
+
+  const semResposta = comentarios.filter((c) => !c.resposta).length
 
   // Quantos por loja (pra um resumo rápido)
   const porLoja = new Map<string, number>()
@@ -128,6 +137,15 @@ export default async function AvaliacoesNegativosPage({
                 {fmtNum(comentarios.length)}
               </div>
             </div>
+            <div className="rounded-xl border bg-card px-5 py-4 shadow-sm">
+              <div className="text-xs text-muted-foreground">Sem resposta</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums">
+                {fmtNum(semResposta)}
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                cliente reclamou e ninguém respondeu
+              </div>
+            </div>
             {piorLoja && unitById.get(piorLoja[0]) && (
               <div className="rounded-xl border bg-card px-5 py-4 shadow-sm">
                 <div className="text-xs text-muted-foreground">
@@ -174,6 +192,25 @@ export default async function AvaliacoesNegativosPage({
                   <p className="text-sm text-foreground/90">
                     &ldquo;{c.comentario}&rdquo;
                   </p>
+
+                  {c.resposta ? (
+                    <div className="mt-2 flex gap-2 rounded-lg bg-muted/50 p-2.5">
+                      <CornerDownRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                      <div>
+                        <p className="text-[11px] font-medium text-muted-foreground">
+                          Resposta da loja
+                        </p>
+                        <p className="text-sm text-foreground/80">
+                          {c.resposta}
+                        </p>
+                      </div>
+                    </div>
+                  ) : podeResponder &&
+                    c.plataforma === "ifood" &&
+                    c.avaliacaoId &&
+                    c.reviewId ? (
+                    <ResponderAvaliacao avaliacaoId={c.avaliacaoId} />
+                  ) : null}
                 </div>
               )
             })}
