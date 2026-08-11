@@ -391,12 +391,13 @@ export async function FinanceiroLojaTab({
         </div>
       </div>
 
-      <DiaSemanaCard dados={diaSemana} />
-
-      {/* Caminho para o Super, acima dos dois cards de dinheiro: é o único
-          bloco da tela que fala do PRÓXIMO ciclo, e o que ainda dá pra mudar
-          antes do recálculo do dia 10. */}
-      {superCriterios && <SuperCriteriosCard dados={superCriterios} />}
+      {/* Super e dia da semana lado a lado: os dois falam do que ainda dá pra
+          mudar — o selo antes do dia 10, e a escala da semana que vem. Um por
+          linha deixava a aba longa demais. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {superCriterios && <SuperCriteriosCard dados={superCriterios} />}
+        <DiaSemanaCard dados={diaSemana} />
+      </div>
 
       {/* Entrega e recebíveis lado a lado: os dois falam de dinheiro que
           ainda vai mexer — o que a loja bancou de frete e o que está pra

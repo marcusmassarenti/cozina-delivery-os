@@ -1256,26 +1256,25 @@ export default async function Home({
               escopo={daEscopo}
             />
           </Suspense>
-          <ComposicaoBruto
-            bruto={network.totalDinheiro}
-            segmentos={composicaoSegmentos}
-            mensagemVazio={
-              repasseDesconhecido
-                ? "As taxas do mês vêm no extrato do iFood, que ainda não chegou."
-                : undefined
-            }
-          />
+          {/* Coluna direita: composição do bruto + dias da semana empilhados.
+              A evolução ao lado é MENSAL — o dia da semana some dentro dela, e
+              é ele que decide escala de equipe e alvo de promoção. */}
+          <div className="flex flex-col gap-4">
+            <ComposicaoBruto
+              bruto={network.totalDinheiro}
+              segmentos={composicaoSegmentos}
+              mensagemVazio={
+                repasseDesconhecido
+                  ? "As taxas do mês vêm no extrato do iFood, que ainda não chegou."
+                  : undefined
+              }
+            />
+            <DiaSemanaCard
+              dados={diaSemanaRede}
+              titulo="Dias com mais vendas · rede"
+            />
+          </div>
         </div>
-      )}
-
-      {/* Dia da semana da REDE: a evolução acima é mensal e esconde o dia.
-          Em jul/26 a rede fez R$ 298 mil numa sexta contra R$ 197 mil numa
-          terça — 34%, e isso é escala de equipe e alvo de promoção. */}
-      {status.ok && activeUnitIds.length > 0 && (
-        <DiaSemanaCard
-          dados={diaSemanaRede}
-          titulo="Dias com mais vendas · rede"
-        />
       )}
 
       {status.ok && units.length > 0 && (

@@ -43,9 +43,11 @@ export function DiaSemanaCard({
         </span>
       </div>
 
-      {/* h-32 fixo com as barras alinhadas embaixo: altura proporcional só
-          funciona se todas partirem da mesma linha de base. */}
-      <div className="flex h-36 items-end gap-2">
+      {/* ⚠️ A ÁREA DA BARRA precisa de altura DEFINIDA (h-20 aqui).
+          Antes a coluna era um flex-col sem altura e a barra usava height em
+          %, que não tem base nenhuma nesse caso — o navegador resolvia pra
+          zero e o gráfico aparecia vazio, só com os números. */}
+      <div className="flex items-end gap-1.5">
         {dias.map((d) => {
           const alturaPct = (d.valor / max) * 100
           const ehMelhor = d.dow === melhor.dow
@@ -53,11 +55,11 @@ export function DiaSemanaCard({
           return (
             <div
               key={d.dow}
-              className="flex flex-1 flex-col items-center justify-end gap-1"
+              className="flex flex-1 flex-col items-center gap-1"
               title={`${d.rotulo}: ${fmtBRL(d.valor)} · ${fmtNum(d.pedidos)} pedidos`}
             >
               <span
-                className={`text-[11px] font-bold tabular-nums ${
+                className={`text-[10px] font-bold tabular-nums ${
                   ehMelhor
                     ? "text-emerald-700 dark:text-emerald-400"
                     : ehPior
@@ -67,19 +69,23 @@ export function DiaSemanaCard({
               >
                 {fmtBRLShort(d.valor)}
               </span>
-              <div
-                className={`w-full rounded-t-md ${
-                  ehMelhor
-                    ? "bg-emerald-500"
-                    : ehPior
-                      ? "bg-rose-400"
-                      : "bg-muted-foreground/25"
-                }`}
-                // Mínimo de 4% pra o dia sem venda ainda desenhar um traço —
-                // barra de altura zero some e parece dado faltando.
-                style={{ height: `${Math.max(alturaPct, d.valor > 0 ? 6 : 2)}%` }}
-              />
-              <span className="text-[11px] text-muted-foreground">
+              <div className="flex h-20 w-full items-end">
+                <div
+                  className={`w-full rounded-t ${
+                    ehMelhor
+                      ? "bg-emerald-500"
+                      : ehPior
+                        ? "bg-rose-400"
+                        : "bg-muted-foreground/25"
+                  }`}
+                  // Mínimo pra o dia sem venda ainda desenhar um traço —
+                  // barra de altura zero some e parece dado faltando.
+                  style={{
+                    height: `${Math.max(alturaPct, d.valor > 0 ? 8 : 3)}%`,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground">
                 {d.rotuloCurto}
               </span>
             </div>
