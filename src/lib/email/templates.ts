@@ -881,7 +881,6 @@ export function lojaCompartilhada(d: {
                <p style="margin:10px 0 0;font-size:13px;line-height:1.55;color:${SUAVE};">O painel soma as três num lugar só — e continua somando conforme os relatórios entram.</p>`
             : ""
         }
-        <p style="margin:22px 0 14px;">Você acompanha essa loja em <strong>modo leitura</strong> — vê faturamento, taxas, repasses, avaliações, cardápio e o Super Restaurante, e os lançamentos e ajustes dela seguem com ${d.dona}. Suas próprias marcas você administra normalmente.</p>
         ${instalarNoCelular()}`,
       cta: { texto: "Ver a loja no painel", url: `${SITE}/unidades` },
       ps: "Qualquer dúvida sobre os números dessa loja, é só responder este e-mail.",
