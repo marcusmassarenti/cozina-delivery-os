@@ -1256,25 +1256,27 @@ export default async function Home({
               escopo={daEscopo}
             />
           </Suspense>
-          {/* Coluna direita: composição do bruto + dias da semana empilhados.
-              A evolução ao lado é MENSAL — o dia da semana some dentro dela, e
-              é ele que decide escala de equipe e alvo de promoção. */}
-          <div className="flex flex-col gap-4">
-            <ComposicaoBruto
-              bruto={network.totalDinheiro}
-              segmentos={composicaoSegmentos}
-              mensagemVazio={
-                repasseDesconhecido
-                  ? "As taxas do mês vêm no extrato do iFood, que ainda não chegou."
-                  : undefined
-              }
-            />
-            <DiaSemanaCard
-              dados={diaSemanaRede}
-              titulo="Dias com mais vendas · rede"
-            />
-          </div>
+          <ComposicaoBruto
+            bruto={network.totalDinheiro}
+            segmentos={composicaoSegmentos}
+            mensagemVazio={
+              repasseDesconhecido
+                ? "As taxas do mês vêm no extrato do iFood, que ainda não chegou."
+                : undefined
+            }
+          />
         </div>
+      )}
+
+      {/* Linha própria, NÃO empilhado na coluna da direita.
+          Empilhar deixava aquela coluna mais alta que o gráfico de evolução, e
+          como a grade estica os itens, sobrava um vazio embaixo da evolução —
+          parecia gráfico quebrado. */}
+      {status.ok && activeUnitIds.length > 0 && (
+        <DiaSemanaCard
+          dados={diaSemanaRede}
+          titulo="Dias com mais vendas · rede"
+        />
       )}
 
       {status.ok && units.length > 0 && (

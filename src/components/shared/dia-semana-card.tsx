@@ -33,15 +33,31 @@ export function DiaSemanaCard({
         <h3 className="text-sm font-semibold">{titulo}</h3>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          Melhor dia
-        </span>
-        <span className="text-lg font-bold">{melhor.rotulo}</span>
-        <span className="text-sm text-muted-foreground tabular-nums">
-          {fmtBRL(melhor.valor)} · {fmtNum(melhor.pedidos)} pedidos
-        </span>
-      </div>
+      {/* Resumo à ESQUERDA e barras à direita, não empilhados.
+          Em largura cheia, 7 barras ocupando tudo viravam blocos gordos e o
+          card ficava alto à toa. Lado a lado, a mesma informação cabe em
+          metade da altura. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="shrink-0 sm:w-52">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Melhor dia
+          </p>
+          <p className="text-lg font-bold leading-tight">{melhor.rotulo}</p>
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {fmtBRL(melhor.valor)} · {fmtNum(melhor.pedidos)} pedidos
+          </p>
+          {pior && pior.dow !== melhor.dow && (
+            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+              <strong className="text-rose-700 dark:text-rose-400">
+                {pior.rotulo}
+              </strong>{" "}
+              é o mais fraco —{" "}
+              {Math.round(((melhor.valor - pior.valor) / pior.valor) * 100)}%
+              abaixo
+            </p>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
 
       {/* ⚠️ A ÁREA DA BARRA precisa de altura DEFINIDA (h-20 aqui).
           Antes a coluna era um flex-col sem altura e a barra usava height em
@@ -91,17 +107,11 @@ export function DiaSemanaCard({
             </div>
           )
         })}
+          </div>
+        </div>
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        {pior && pior.dow !== melhor.dow && (
-          <>
-            <strong>{pior.rotulo}</strong> é o mais fraco, com{" "}
-            {fmtBRL(pior.valor)} —{" "}
-            {Math.round(((melhor.valor - pior.valor) / pior.valor) * 100)}% abaixo
-            da {melhor.rotulo.toLowerCase()}.{" "}
-          </>
-        )}
         Soma {plataformas.join(" e ")} — as outras plataformas guardam a data do
         pedido, mas não o valor.
       </p>
