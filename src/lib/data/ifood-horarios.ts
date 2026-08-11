@@ -161,6 +161,22 @@ export type HorariosDaRede = {
   /** Média do % de tempo online, das lojas que têm o relatório de Qualidade. */
   pctOnlineMedio: number | null
   lojasComOnline: number
+  /**
+   * Tempos que a LOJA controla, do relatório de Qualidade.
+   *
+   * Não é o tempo de entrega ponta a ponta — essa perna só existe no módulo
+   * Order, ao vivo. É a parte que dá pra melhorar: preparo se resolve na
+   * cozinha, atraso aponta onde a promessa ao cliente está furando.
+   */
+  preparoMedioMin: number | null
+  atrasoMedioMin: number | null
+  /** A loja com o pior atraso — é ela que puxa a média e merece nome. */
+  piorAtraso: { code: string; name: string; min: number } | null
+  /**
+   * Até quando vai o relatório mais recente. O de Qualidade entra por
+   * PLANILHA: sem a data, um número de junho passa por número de hoje.
+   */
+  qualidadeAte: string | null
 }
 
 /**
@@ -218,20 +234,54 @@ export async function getHorariosDaRede(
 
   const { data: ops } = await admin
     .from("ifood_operacao_periodo")
-    .select("unit_id, pct_tempo_online")
+    .select(
+      "unit_id, pct_tempo_online, tempo_medio_preparo_min, tempo_medio_atraso_min, period_end",
+    )
     .in("unit_id", [...porLoja.keys()])
-    .not("pct_tempo_online", "is", null)
-  const pcts = ((ops ?? []) as { pct_tempo_online: number }[]).map((o) =>
-    Number(o.pct_tempo_online),
-  )
+  const operacao = (ops ?? []) as {
+    unit_id: string
+    pct_tempo_online: number | null
+    tempo_medio_preparo_min: number | null
+    tempo_medio_atraso_min: number | null
+    period_end: string | null
+  }[]
+
+  const pcts = operacao
+    .filter((o) => o.pct_tempo_online != null)
+    .map((o) => Number(o.pct_tempo_online))
+  const media = (ns: number[]) =>
+    ns.length > 0 ? ns.reduce((a, b) => a + b, 0) / ns.length : null
+
+  const preparos = operacao
+    .filter((o) => o.tempo_medio_preparo_min != null)
+    .map((o) => Number(o.tempo_medio_preparo_min))
+  const atrasos = operacao.filter((o) => o.tempo_medio_atraso_min != null)
+
+  const pior = [...atrasos].sort(
+    (a, b) => Number(b.tempo_medio_atraso_min) - Number(a.tempo_medio_atraso_min),
+  )[0]
+  const qualidadeAte = operacao
+    .map((o) => o.period_end)
+    .filter((d): d is string => !!d)
+    .sort()
+    .at(-1) ?? null
 
   const minutosTotais = [...porLoja.values()].reduce((a, v) => a + v.min, 0)
   return {
     lojas: porLoja.size,
     horasSemanaMedia: minutosTotais / 60 / porLoja.size,
     fechamJunto,
-    pctOnlineMedio:
-      pcts.length > 0 ? pcts.reduce((a, b) => a + b, 0) / pcts.length : null,
+    pctOnlineMedio: media(pcts),
     lojasComOnline: pcts.length,
+    preparoMedioMin: media(preparos),
+    atrasoMedioMin: media(atrasos.map((o) => Number(o.tempo_medio_atraso_min))),
+    piorAtraso: pior
+      ? {
+          code: unidade.get(pior.unit_id)?.code ?? "?",
+          name: unidade.get(pior.unit_id)?.name ?? "(loja)",
+          min: Number(pior.tempo_medio_atraso_min),
+        }
+      : null,
+    qualidadeAte,
   }
 }

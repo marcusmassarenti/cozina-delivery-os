@@ -543,6 +543,14 @@ function BarrinhaInfo({
  * no papel e passa metade do turno pausada — que não aparece em faturamento
  * nenhum até o mês fechar.
  */
+/** dd/mm — pra a data do relatório de Qualidade não passar por dado de hoje. */
+function fmtDia(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  })
+}
+
 function CardHorarios({ h }: { h: HorariosDaRede }) {
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -584,6 +592,49 @@ function CardHorarios({ h }: { h: HorariosDaRede }) {
             </p>
           </div>
         )}
+
+        {h.preparoMedioMin != null && (
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Preparo
+            </p>
+            <p className="text-2xl font-bold tabular-nums">
+              {h.preparoMedioMin.toFixed(1)}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                min
+              </span>
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              da aceitação até sair da loja
+            </p>
+          </div>
+        )}
+
+        {h.atrasoMedioMin != null && (
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Atraso médio
+            </p>
+            <p className="text-2xl font-bold tabular-nums">
+              {h.atrasoMedioMin.toFixed(1)}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                min
+              </span>
+            </p>
+            {/* A média engana quando uma loja destoa: 17 min numa e 2 min em
+                dez vira 3,4 e some. Por isso o pior vem com nome ao lado. */}
+            {h.piorAtraso && h.piorAtraso.min >= 10 ? (
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-500">
+                #{h.piorAtraso.code} {h.piorAtraso.name} está em{" "}
+                {h.piorAtraso.min.toFixed(1)} min
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                além do prometido ao cliente
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {h.fechamJunto.length > 0 && (
@@ -609,8 +660,19 @@ function CardHorarios({ h }: { h: HorariosDaRede }) {
       )}
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        O horário vem da API do iFood e se atualiza sozinho todo dia. Mudou no
-        Portal do Parceiro, muda aqui.
+        O <strong>horário</strong> vem da API do iFood e se atualiza sozinho
+        todo dia — mudou no Portal do Parceiro, muda aqui.
+        {(h.pctOnlineMedio != null ||
+          h.preparoMedioMin != null ||
+          h.atrasoMedioMin != null) && (
+          <>
+            {" "}
+            <strong>Online, preparo e atraso</strong> vêm do relatório de
+            Qualidade, que entra por planilha
+            {h.qualidadeAte ? ` — último importado até ${fmtDia(h.qualidadeAte)}` : ""}
+            .
+          </>
+        )}
       </p>
     </div>
   )

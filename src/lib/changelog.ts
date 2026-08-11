@@ -135,7 +135,7 @@ export const CHANGELOG: Release[] = [
             antes:
               "A gente sabia quanto a loja vendeu, nunca quanto tempo ela ficou aberta pra vender.",
             depois:
-              "Horas programadas por semana, quanto desse tempo a loja esteve mesmo online, e quais lojas não abrem todo dia. Vem da API do iFood e se atualiza sozinho — mudou no Portal do Parceiro, mudou aqui.",
+              "Horas programadas por semana, quanto desse tempo a loja esteve mesmo online, tempo de preparo e atraso médio, e quais lojas não abrem todo dia. O horário vem da API e se atualiza sozinho — mudou no Portal do Parceiro, mudou aqui.",
           },
           {
             kind: "melhoria",
