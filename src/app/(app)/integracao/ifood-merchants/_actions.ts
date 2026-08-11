@@ -286,6 +286,31 @@ export async function linkMerchantToUnit(
       .in("status", ["pendente", "solicitada"])
       .select("id")
 
+    /* Avisa o cliente que a loja está conectada, com o que já entrou.
+     *
+     * O caminho AUTOMÁTICO (cron de auto-vínculo) já mandava esse e-mail; o
+     * manual, não. Então a loja vinculada aqui na mão conectava em silêncio: o
+     * dado começava a entrar e o cliente só descobria se abrisse o painel por
+     * conta própria — justo no momento em que ele está esperando notícia.
+     *
+     * `soSeCompleto` segura o envio enquanto não há dado. O e-mail sai UMA vez
+     * por (loja, plataforma) e leva os números dentro; mandá-lo vazio queimaria
+     * a única chance pra dizer "conectado" sem mostrar nada. Se ainda não
+     * entrou nada, a varredura das 7h manda quando entrar.
+     *
+     * Não derruba o vínculo se falhar: a loja conectada vale mais que o aviso.
+     */
+    let aviso = ""
+    try {
+      const { avisarConexaoAtivada } = await import(
+        "@/lib/email/conexao-ativada"
+      )
+      await avisarConexaoAtivada(unitId, "ifood", { soSeCompleto: true })
+      aviso = " O cliente foi avisado por e-mail (ou será, quando o primeiro dado entrar)."
+    } catch (e) {
+      console.error("[link-merchant] aviso de conexão:", e)
+    }
+
     revalidatePath("/integracao/ifood-merchants")
     revalidatePath("/importacao")
     revalidatePath("/inicio")
@@ -293,7 +318,7 @@ export async function linkMerchantToUnit(
       ok: true,
       message: `Vinculado — financeiro e avaliações ligados.${
         (fechadas ?? []).length > 0 ? " Solicitação encerrada." : ""
-      }`,
+      }${aviso}`,
     }
   } catch (e) {
     return {

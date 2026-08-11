@@ -239,6 +239,23 @@ export async function vincularUnidadeAction(
       )
   }
 
+  // Mesmo aviso do iFood: vincular é conectar, e o cliente merece saber com
+  // os números na mão. `soSeCompleto` segura enquanto não há dado — o e-mail
+  // sai uma vez só por (loja, plataforma) e mandá-lo vazio queima a chance.
+  //
+  // Só no VÍNCULO, nunca no desvínculo: unitId vazio é a pessoa desfazendo, e
+  // "sua loja foi conectada" ali seria o oposto do que aconteceu.
+  if (unitId) {
+    try {
+      const { avisarConexaoAtivada } = await import(
+        "@/lib/email/conexao-ativada"
+      )
+      await avisarConexaoAtivada(unitId, "cardapioweb", { soSeCompleto: true })
+    } catch (e) {
+      console.error("[cardapioweb] aviso de conexão:", e)
+    }
+  }
+
   revalidatePath("/integracao/cardapioweb")
   revalidatePath("/unidades")
   return { ok: true, reassociados }
