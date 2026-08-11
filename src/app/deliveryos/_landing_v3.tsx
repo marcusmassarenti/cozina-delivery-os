@@ -25,6 +25,7 @@ import {
   Mail,
   Network,
   CalendarClock,
+  CornerDownRight,
   Scale,
   ShieldCheck,
   Sparkles,
@@ -250,6 +251,12 @@ const PORDENTRO_TABS: {
   sparkle?: boolean
   /** Aba com render customizado (o painel do Nino), sem o layout padrão. */
   nino?: boolean
+  /**
+   * Troca o print por um mock desenhado. Existe pro Super: o relatório é novo
+   * e a conta demo dos prints é anterior a ele — e print de cliente real
+   * vazaria número de terceiro.
+   */
+  mock?: "super"
   img: string
   url: string
   callout: string
@@ -257,6 +264,15 @@ const PORDENTRO_TABS: {
   titulo: string
   texto: string
   bullets: string[]
+  /**
+   * O que acabou de chegar nesta tela.
+   *
+   * Mora DENTRO da aba, não numa seção própria: uma faixa de novidades no meio
+   * da página aumenta a rolagem pra contar o que a aba já ia contar de
+   * qualquer jeito. Aqui a pessoa lê a novidade no contexto da tela que ela
+   * escolheu ver.
+   */
+  novidade?: { titulo: string; texto: string }[]
 }[] = [
   {
     key: "ia",
@@ -267,6 +283,13 @@ const PORDENTRO_TABS: {
     url: "app.deliveryos.food/unidade/diagnostico",
     callout: "as 3 ações do mês",
     tag: "Nino AI",
+    novidade: [
+      {
+        titulo: "Agora ele também escreve a resposta da avaliação",
+        texto:
+          "O Nino lê a nota, o comentário e as tags e propõe um texto pra aquele cliente. Você revisa e envia — ele nunca publica sozinho.",
+      },
+    ],
     titulo: "A IA lê a sua loja e diz o que fazer",
     texto:
       "Todo mês cruza tudo e aponta as 3 ações que mais mexem no resultado. E o Nino, seu consultor de IA, responde na hora qualquer pergunta sobre a operação, com os seus números reais.",
@@ -286,6 +309,13 @@ const PORDENTRO_TABS: {
     url: "app.deliveryos.food/unidade/resultado",
     callout: "a margem real, aberta",
     tag: "Cada loja por dentro",
+    novidade: [
+      {
+        titulo: "Desempenho por dia da semana",
+        texto:
+          "Qual dia cada loja fatura mais e qual afunda, com o mapa da semana da rede — o que o fechamento mensal esconde.",
+      },
+    ],
     titulo: "O raio-x da sua loja, num lugar só",
     texto:
       "Tudo consolidado das 3 plataformas — e o que cada uma representa de verdade no seu bolso.",
@@ -301,15 +331,54 @@ const PORDENTRO_TABS: {
     label: "Avaliações",
     img: "/landing/avaliacoes.png",
     url: "app.deliveryos.food/unidade/avaliacoes",
+    // O callout é uma setinha APONTANDO PRO PRINT, e o print é da conta demo,
+    // anterior ao botão de responder. Prometer "responda aqui" em cima de uma
+    // imagem que não tem o botão é a propaganda que o visitante desmente
+    // sozinho ao olhar. Volta a apontar o que a imagem mostra de verdade; o
+    // texto ao lado é quem conta a novidade.
     callout: "nota das 3 plataformas",
     tag: "Reputação",
-    titulo: "Saiba o que falam — e o que melhorar",
+    novidade: [
+      {
+        titulo: "Responda o cliente pelo painel — o iFood dá 5 dias",
+        texto:
+          "Passou o prazo, ele publica a avaliação sem a sua resposta. O painel mostra o que está pra vencer e avisa no seu celular no último dia.",
+      },
+    ],
+    titulo: "Saiba o que falam — e responda sem sair daqui",
     texto:
-      "Nota média, distribuição de estrelas e o que mais elogiam (e reclamam), das 3 plataformas juntas.",
+      "Nota, estrelas e o que mais elogiam (e reclamam), das 3 plataformas juntas. E, no iFood, você responde o cliente aqui mesmo — sem abrir o Portal do Parceiro.",
     bullets: [
+      "Responda a avaliação do iFood pelo painel",
+      "O Nino escreve o rascunho da resposta",
       "Nota e distribuição consolidadas",
       "O que elogiam e o que reclamam",
       "Comentários reais dos clientes",
+    ],
+  },
+  {
+    key: "super",
+    label: "Super Restaurante",
+    mock: "super",
+    img: "",
+    url: "app.deliveryos.food/relatorios/super",
+    callout: "",
+    tag: "Selo do iFood",
+    novidade: [
+      {
+        titulo: "O caminho para o Super, loja por loja",
+        texto:
+          "Antes isso só existia entrando no portal do iFood, uma loja de cada vez — e quem tem rede não faz isso toda semana.",
+      },
+    ],
+    titulo: "Quanto falta pra sua loja ser Super",
+    texto:
+      "São cinco critérios e basta falhar em um pra perder o selo. O relatório mostra onde cada loja está em cada um deles, e quem está prestes a cair.",
+    bullets: [
+      "Os 5 critérios com o número atual e a meta",
+      "Quem está prestes a perder o selo",
+      "Plano de ação e chamados por natureza",
+      "Exporta em PDF, com filtro por loja",
     ],
   },
   {
@@ -358,6 +427,129 @@ const MAIS_MODULOS = [
   "Unidades",
   "Importação",
 ]
+
+/**
+ * Mock do "Caminho para o Super".
+ *
+ * Desenhado, não capturado: o relatório é novo e a conta demo dos prints da
+ * landing é anterior a ele. Preferi um mock declarado como exemplo a um print
+ * de cliente real — que vazaria número de terceiro — ou a um print velho que
+ * não mostra a tela que o texto promete.
+ *
+ * A loja do exemplo está no NÍVEL 4, não no 5. Uma loja já Super não tem nada
+ * a mostrar: o que vende o relatório é justamente ver o que falta.
+ *
+ * Os números respeitam as metas reais do programa (lib/data/super.ts): 180
+ * pedidos, 40 avaliações, nota 4,7, cancelamento até 1% e chamados até 2,5%.
+ */
+function SuperMock() {
+  const CRITERIOS = [
+    { nome: "Pedidos concluídos", atual: "214", meta: "mín. 180", ok: true, pct: 100 },
+    { nome: "Avaliações", atual: "47", meta: "mín. 40", ok: true, pct: 100 },
+    { nome: "Nota média", atual: "4,68", meta: "mín. 4,70", ok: false, pct: 92, falta: "falta 0,02" },
+    { nome: "Cancelamento", atual: "1,4%", meta: "máx. 1,0%", ok: false, pct: 62, falta: "falta 0,4 pp" },
+    { nome: "Chamados por erro", atual: "1,9%", meta: "máx. 2,5%", ok: true, pct: 100 },
+  ]
+
+  return (
+    <div className="rounded-2xl border border-black/[0.07] bg-white p-5 shadow-[0_24px_60px_-30px_rgba(0,0,0,.35)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.06] pb-3">
+        <div className="flex items-center gap-2">
+          <PlatLogo id="ifood" size={26} className="rounded-lg" />
+          <span className="font-medium">Caminho para o Super</span>
+        </div>
+        {/* Mesmo selo do sistema: pílula âmbar com estrela, como no app do
+            iFood. Nível 4 = elegível e subindo. */}
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">
+          <Star className="size-3.5" strokeWidth={2.4} />
+          Nível 4
+        </span>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {CRITERIOS.map((c) => (
+          <div key={c.nome}>
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="text-[oklch(0.35_0.01_48)]">{c.nome}</span>
+              <span className="tabular-nums">
+                <span
+                  className={`font-semibold ${
+                    c.ok ? "text-emerald-600" : "text-[var(--brand-strong)]"
+                  }`}
+                >
+                  {c.atual}
+                </span>
+                <span className="ml-1.5 text-xs text-[oklch(0.6_0.01_48)]">
+                  {c.meta}
+                </span>
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[oklch(0.93_0.005_48)]">
+              <div
+                className={`h-full rounded-full ${
+                  c.ok ? "bg-emerald-500" : "bg-[var(--brand)]"
+                }`}
+                style={{ width: `${c.pct}%` }}
+              />
+            </div>
+            {c.falta && (
+              <p className="mt-1 text-[11px] font-medium text-[var(--brand-strong)]">
+                {c.falta}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-black/[0.06] pt-3 text-xs text-[oklch(0.5_0.01_48)]">
+        <span className="font-medium text-[oklch(0.28_0.01_48)]">
+          Faltam 2 critérios
+        </span>
+        <span>·</span>
+        <span>próxima avaliação em 12 dias</span>
+      </div>
+
+      <p className="mt-3 text-center text-[11px] text-[oklch(0.62_0.01_48)]">
+        Exemplo ilustrativo · os números vêm do relatório do iFood da sua loja
+      </p>
+    </div>
+  )
+}
+
+/**
+ * A novidade da aba, em destaque acima dos bullets.
+ *
+ * Uma caixa, não um bullet a mais: se virasse item da lista, sumiria no meio
+ * de outros seis e ninguém saberia o que mudou.
+ */
+function NovidadeDaAba({
+  itens,
+}: {
+  itens: { titulo: string; texto: string }[]
+}) {
+  return (
+    <div className="mt-4 rounded-xl border border-[oklch(0.65_0.21_35/.25)] bg-[var(--brand-soft)] p-4">
+      <span className="inline-block rounded-full bg-[var(--brand)] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+        Novo
+      </span>
+      {/* Selo UMA vez pra a lista inteira: repetir "NOVO" em cada item faria a
+          segunda novidade parecer menos nova que a primeira. As duas são da
+          mesma leva. */}
+      <div className="mt-2 space-y-3">
+        {itens.map((n) => (
+          <div key={n.titulo}>
+            <p className="font-medium leading-snug text-[oklch(0.28_0.01_48)]">
+              {n.titulo}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-[oklch(0.45_0.01_48)]">
+              {n.texto}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function PorDentroTabs() {
   const [tab, setTab] = useState(0)
@@ -410,6 +602,14 @@ function PorDentroTabs() {
                 {x.badge}
               </span>
             )}
+            {x.novidade && !x.badge && (
+              <span
+                className={`size-1.5 rounded-full ${
+                  i === tab ? "bg-white" : "bg-[var(--brand)]"
+                }`}
+                title="Tem novidade aqui"
+              />
+            )}
           </button>
         ))}
       </div>
@@ -425,12 +625,16 @@ function PorDentroTabs() {
           className="rx-tab-in mt-8 grid items-center gap-8 lg:grid-cols-2 lg:gap-14"
         >
           <div className="order-2 lg:order-1">
-            <ShotBrowser
-              src={t.img}
-              alt={t.titulo}
-              url={t.url}
-              callout={t.callout}
-            />
+            {t.mock === "super" ? (
+              <SuperMock />
+            ) : (
+              <ShotBrowser
+                src={t.img}
+                alt={t.titulo}
+                url={t.url}
+                callout={t.callout}
+              />
+            )}
           </div>
           <div className="order-1 lg:order-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3.5 py-1.5 text-xs font-medium text-[var(--brand-strong)]">
@@ -440,6 +644,7 @@ function PorDentroTabs() {
               {t.titulo}
             </h3>
             <p className="mt-2 text-[oklch(0.45_0.01_48)]">{t.texto}</p>
+            {t.novidade && <NovidadeDaAba itens={t.novidade} />}
             <ul className="mt-4 space-y-2">
               {t.bullets.map((b) => (
                 <li key={b} className="flex items-start gap-2 text-sm">
@@ -689,6 +894,7 @@ function NinoTabPanel({ tab }: { tab: (typeof PORDENTRO_TABS)[number] }) {
                   problema, o que está em jogo e como resolver. Você exporta em
                   PDF.
                 </p>
+                {tab.novidade && <NovidadeDaAba itens={tab.novidade} />}
                 <ul className="mt-4 space-y-2">
                   {tab.bullets.slice(1).map((b) => (
                     <li key={b} className="flex items-start gap-2 text-sm">
@@ -1310,6 +1516,7 @@ export function LandingV3({
           </Reveal>
         </div>
       </section>
+
 
       {/* POR DENTRO DO SISTEMA â 1 seÃ§Ã£o com abas (Financeiro / IA / Caixa Pro).
           Funde as antigas "Veja por dentro" + IA + Pro num bloco sÃ³: menos
