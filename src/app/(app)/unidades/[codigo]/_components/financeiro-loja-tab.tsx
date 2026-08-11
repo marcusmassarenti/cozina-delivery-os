@@ -43,6 +43,8 @@ import { BrutoBreakdown } from "./bruto-breakdown"
 import { DreDetalhado, type DrePlat } from "./dre-detalhado"
 import { getQuemPagaEntrega } from "@/lib/data/taxa-entrega"
 import { EntregaCard } from "./entrega-card"
+import { getSuperCriterios } from "@/lib/data/super"
+import { SuperCriteriosCard } from "@/components/shared/super-criterios-card"
 
 const MESES_PT = [
   "Janeiro",
@@ -156,6 +158,9 @@ export async function FinanceiroLojaTab({
     // e marketplace nenhum entrega.
     getOperacaoCardapioWeb([unitId], year, month, dateRange),
   ])
+  // Fora do Promise.all de propósito: é leitura pequena e opcional — loja sem
+  // relatório Super importado devolve vazio e o card some.
+  const superCriterios = (await getSuperCriterios([unitId])).get(unitId) ?? null
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
 
@@ -375,25 +380,35 @@ export async function FinanceiroLojaTab({
         </div>
       </div>
 
-      {/* Recebíveis — quando o dinheiro cai (repasse da Fatura da Keeta) */}
-      {keetaRepasse.ciclos.length > 0 && (
-        <RecebiveisPlataforma keeta={keetaRepasse} />
-      )}
+      {/* Caminho para o Super, acima dos dois cards de dinheiro: é o único
+          bloco da tela que fala do PRÓXIMO ciclo, e o que ainda dá pra mudar
+          antes do recálculo do dia 10. */}
+      {superCriterios && <SuperCriteriosCard dados={superCriterios} />}
 
-      {/* Custo de entrega — quanto custou E quem bancou, no mesmo card.
-          Antes eram dois lugares: o custo aqui e "quem banca" na tela da rede.
-          Separados, cada um respondia metade da pergunta — o custo não dizia
-          quem pagou, e quem pagou não dizia quanto custou. */}
-      {(deliveryFee.total > 0 ||
-        quemPaga.some((q) => q.pedidos > 0) ||
-        entregaPropria) && (
-        <EntregaCard
-          deliveryFee={deliveryFee}
-          quemPaga={quemPaga}
-          bruto={bruto}
-          entregaPropria={entregaPropria}
-        />
-      )}
+      {/* Entrega e recebíveis lado a lado: os dois falam de dinheiro que
+          ainda vai mexer — o que a loja bancou de frete e o que está pra
+          cair. Empilhados, o segundo ficava longe demais do primeiro. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Custo de entrega — quanto custou E quem bancou, no mesmo card.
+            Antes eram dois lugares: o custo aqui e "quem banca" na tela da
+            rede. Separados, cada um respondia metade da pergunta — o custo
+            não dizia quem pagou, e quem pagou não dizia quanto custou. */}
+        {(deliveryFee.total > 0 ||
+          quemPaga.some((q) => q.pedidos > 0) ||
+          entregaPropria) && (
+          <EntregaCard
+            deliveryFee={deliveryFee}
+            quemPaga={quemPaga}
+            bruto={bruto}
+            entregaPropria={entregaPropria}
+          />
+        )}
+
+        {/* Recebíveis — quando o dinheiro cai (repasse da Fatura da Keeta) */}
+        {keetaRepasse.ciclos.length > 0 && (
+          <RecebiveisPlataforma keeta={keetaRepasse} />
+        )}
+      </div>
 
       {/* Gráficos: composição do bruto (por plataforma) + faturamento dia-a-dia */}
       <div className="grid gap-4 lg:grid-cols-2">

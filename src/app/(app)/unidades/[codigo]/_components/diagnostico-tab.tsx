@@ -27,8 +27,6 @@ import {
   getPromocoesForMonth,
   getSuperForMonth,
 } from "@/lib/data/ifood-imported"
-import { getSuperCriterios } from "@/lib/data/super"
-import { SuperCriteriosCard } from "@/components/shared/super-criterios-card"
 import {
   PLATAFORMAS,
   PlatformLogo,
@@ -106,10 +104,6 @@ export async function DiagnosticoTab({
       getNegociacoesForMonth(unitId, year, month),
       getFinanceiroResumoForMonth(unitId, year, month),
     ])
-  // Critérios do Super com o PARCIAL (aba "Próxima Avaliação"), que é o que
-  // ainda dá pra mudar antes do recálculo do dia 10. O `superAval` acima
-  // continua sendo o oficial, usado no resto do diagnóstico.
-  const superCriterios = (await getSuperCriterios([unitId])).get(unitId) ?? null
   const enabled = await getEnabledReports()
   // Últimos 6 meses pra o gráfico de evolução (todas as plataformas somadas).
   const periodos6 = Array.from({ length: 6 }, (_, i) => {
@@ -427,10 +421,6 @@ export async function DiagnosticoTab({
           <DiagPdfButton />
         </div>
       </div>
-
-      {/* Caminho para o Super, logo abaixo do cabeçalho: é o único bloco que
-          fala do PRÓXIMO ciclo. Todo o resto do diagnóstico olha pra trás. */}
-      {superCriterios && <SuperCriteriosCard dados={superCriterios} />}
 
       {semDadosNenhum && (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">

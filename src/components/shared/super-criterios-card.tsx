@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, X } from "lucide-react"
 
+import { PlatformLogo } from "@/components/platform-logo"
 import { fmtNum, fmtPct } from "@/lib/format"
 import type { CriterioSuper, SuperCriterios } from "@/lib/data/super"
 import { SuperBadge } from "./super-badge"
@@ -23,6 +24,9 @@ export function SuperCriteriosCard({ dados }: { dados: SuperCriterios }) {
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="mb-1 flex flex-wrap items-center gap-2">
+        {/* Logo do iFood na frente: o Super é programa DELES, e a tela mistura
+            plataformas. Sem a marca, o card parece critério nosso. */}
+        <PlatformLogo platform="ifood" className="size-4 rounded-[4px]" />
         <h3 className="text-sm font-semibold">Caminho para o Super</h3>
         <SuperBadge
           nivel={dados.nivel}
