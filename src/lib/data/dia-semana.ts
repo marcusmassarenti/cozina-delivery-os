@@ -41,6 +41,98 @@ const NOMES = [
   ["Sábado", "Sáb"],
 ] as const
 
+export type DiaSemanaLoja = {
+  unitId: string
+  dias: DiaSemana[]
+  melhor: DiaSemana | null
+  pior: DiaSemana | null
+  total: number
+  /**
+   * Diferença entre o melhor e o pior dia, em % do pior. Alta demais indica
+   * dia problemático; baixa indica semana equilibrada.
+   */
+  amplitudePct: number
+  /**
+   * true quando o pior dia DESTA loja não é o pior dia da REDE. É o sinal que
+   * o relatório existe pra dar: quando todo mundo cai na terça é mercado;
+   * quando só uma cai no sábado é operação dela.
+   */
+  foraDoPadrao: boolean
+}
+
+/** Ordena a semana começando na segunda — ver `getVendasPorDiaSemana`. */
+const ORDEM_SEMANA = [1, 2, 3, 4, 5, 6, 0]
+
+function montarDias(
+  porDow: Map<number, { pedidos: number; valor: number }>,
+): DiaSemana[] {
+  return ORDEM_SEMANA.map((dow) => ({
+    dow,
+    rotulo: NOMES[dow]![0],
+    rotuloCurto: NOMES[dow]![1],
+    pedidos: porDow.get(dow)?.pedidos ?? 0,
+    valor: porDow.get(dow)?.valor ?? 0,
+  }))
+}
+
+/** Loja a loja, pro relatório da rede. */
+export async function getVendasPorDiaSemanaPorLoja(
+  unitIds: string[],
+  inicio: string,
+  fim: string,
+  piorDaRede: number | null,
+): Promise<Map<string, DiaSemanaLoja>> {
+  const out = new Map<string, DiaSemanaLoja>()
+  if (!unitIds.length) return out
+
+  const { data, error } = await createAdminClient().rpc(
+    "vendas_dia_semana_por_loja",
+    { p_unit_ids: unitIds, p_start: inicio, p_end: fim },
+  )
+  if (error) {
+    console.error("getVendasPorDiaSemanaPorLoja:", error.message)
+    return out
+  }
+
+  const porLoja = new Map<string, Map<number, { pedidos: number; valor: number }>>()
+  for (const r of (data ?? []) as Array<{
+    unit_id: string
+    dia_semana: number
+    pedidos: number | string
+    valor: number | string
+  }>) {
+    if (!porLoja.has(r.unit_id)) porLoja.set(r.unit_id, new Map())
+    porLoja.get(r.unit_id)!.set(r.dia_semana, {
+      pedidos: Number(r.pedidos),
+      valor: Number(r.valor),
+    })
+  }
+
+  for (const [unitId, mapa] of porLoja) {
+    const dias = montarDias(mapa)
+    const comVenda = dias.filter((d) => d.valor > 0)
+    // Menos de 3 dias com venda não dá pra falar em "padrão da semana" — é
+    // loja nova, fechada ou recém-conectada. Fica sem melhor/pior.
+    if (comVenda.length < 3) continue
+    const porValor = [...comVenda].sort((a, b) => b.valor - a.valor)
+    const melhor = porValor[0]!
+    const pior = porValor[porValor.length - 1]!
+    out.set(unitId, {
+      unitId,
+      dias,
+      melhor,
+      pior,
+      total: dias.reduce((s, d) => s + d.valor, 0),
+      amplitudePct:
+        pior.valor > 0
+          ? ((melhor.valor - pior.valor) / pior.valor) * 100
+          : 0,
+      foraDoPadrao: piorDaRede != null && pior.dow !== piorDaRede,
+    })
+  }
+  return out
+}
+
 export async function getVendasPorDiaSemana(
   unitIds: string[],
   inicio: string,

@@ -21,6 +21,7 @@ import {
   Truck,
   MapPin,
   Award,
+  CalendarDays,
 } from "lucide-react"
 
 import { assertCanView } from "@/lib/auth/permissions"
@@ -151,6 +152,12 @@ const CATEGORIAS: Categoria[] = [
         desc: "Ticket médio entre lojas e plataformas.",
         icon: Receipt,
         href: "/relatorios/ticket-medio",
+      },
+      {
+        title: "Desempenho por dia da semana",
+        desc: "Qual dia vende menos, na rede e loja a loja — e quem foge do padrão.",
+        icon: CalendarDays,
+        href: "/relatorios/dia-semana",
       },
       {
         title: "Cobertura de importação",
