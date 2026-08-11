@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, Shield, Store } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhadas"
 
 import { RefreshButton, RunSyncButton } from "./_components/link-row"
 import { MerchantsTable } from "./_components/merchants-table"
@@ -223,6 +224,26 @@ export default async function IfoodMerchantsPage() {
   ])
   const linkedCount = Object.keys(byMerchant).length
 
+  // Lojas que cada cliente ACOMPANHA (de outra empresa), indexadas pelo NOME —
+  // que é a chave por onde a tabela agrupa. Cliente que só acompanha não tem
+  // merchant e, sem isto, não aparecia nesta tela: existia, pagava e era
+  // invisível pra quem administra as conexões.
+  const compartilhadasPorId = await getLojasCompartilhadasPorHolding()
+  const nomePorHoldingId = new Map(holdings.map((h) => [h.id, h.name]))
+  const compartilhadas: Record<
+    string,
+    { code: string; name: string; donaNome: string }[]
+  > = {}
+  for (const [holdingId, lojas] of compartilhadasPorId) {
+    const nome = nomePorHoldingId.get(holdingId)
+    if (!nome) continue
+    compartilhadas[nome] = lojas.map((l) => ({
+      code: l.code,
+      name: l.name,
+      donaNome: l.donaNome,
+    }))
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       {/* Volta pra Conexões de API, que é de onde se chega aqui hoje. Apontava
@@ -272,6 +293,7 @@ export default async function IfoodMerchantsPage() {
         holdings={holdings}
         byMerchant={byMerchant}
         donoPorCnpj={donoPorCnpj}
+        compartilhadas={compartilhadas}
       />
 
       <div className="rounded-lg border bg-card p-4 text-xs text-muted-foreground">

@@ -15,6 +15,7 @@ import "server-only"
 
 import { asaasUpdateSubscription } from "@/lib/asaas/client"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { contarLojasCompartilhadas } from "@/lib/data/lojas-compartilhadas"
 import {
   getDefaultPlan,
   precoDoPlano,
@@ -70,6 +71,16 @@ export async function sincronizarValorAssinatura(
         .eq("active", true)
       ativas = count ?? 0
     }
+
+    // Lojas de OUTRA empresa que este cliente acompanha. Contam igual: uma
+    // loja compartilhada consome as mesmas telas, relatórios e IA que uma
+    // própria, e o preço do plano é por loja — não por titularidade.
+    //
+    // ⚠️ Se um dia a política mudar ("acompanhar é de graça"), o lugar de
+    // mudar é aqui, e não removendo a marcação de compartilhada — ela também
+    // é o que trava a escrita na loja emprestada.
+    const compartilhadas = await contarLojasCompartilhadas(holdingId)
+    ativas += compartilhadas
 
     const plano = (h.plan_tier as PlanId | null) ?? null
     let valor: number
