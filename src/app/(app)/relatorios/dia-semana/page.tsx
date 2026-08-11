@@ -11,6 +11,7 @@ import {
 import { BrandLogo } from "@/components/brand-logo"
 import type { PlatformId } from "@/lib/data/dia-semana"
 import { PlataformaSelector } from "./_components/plataforma-selector"
+import { MapaCalor } from "./_components/mapa-calor"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
@@ -172,6 +173,8 @@ export default async function RelatorioDiaSemanaPage({
           </div>
         </section>
       )}
+
+      <MapaCalor linhas={linhas} shareRede={shareRede} />
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="mb-1 text-sm font-semibold">Loja a loja</h2>

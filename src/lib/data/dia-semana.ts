@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import type { PlatformId } from "@/components/platform-logo"
 
 /**
  * Faturamento e pedidos por dia da semana.
@@ -21,7 +22,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
  * contagem e ficam de fora do faturamento. Dizer "soma as 4" no valor seria
  * mentira; deixá-las de fora da contagem seria jogar dado no lixo.
  */
-export type PlatformId = "ifood" | "cardapioweb" | "99food" | "keeta"
+// Reusa o tipo canônico em vez de redeclarar: união duplicada é o jeito mais
+// silencioso de as duas listas divergirem quando entrar uma plataforma nova.
+export type { PlatformId }
 
 const ROTULO: Record<PlatformId, string> = {
   ifood: "iFood",

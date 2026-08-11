@@ -409,10 +409,13 @@ export default async function Home({
   // Nota: "Precisa de atenção" virou Suspense próprio (AttentionSection).
   // Fora do Promise.all: é um RPC pequeno e independente, e o card some
   // sozinho quando não há venda no período.
+  // Respeita o filtro de plataforma que o dashboard já tem no topo — sem
+  // isso o card ficaria somando as 4 enquanto o resto da tela mostra uma.
   const diaSemanaRede = await getVendasPorDiaSemana(
     activeUnitIds,
     periodRange.start,
     periodRange.end,
+    plataformasFilter.length ? plataformasFilter : null,
   )
 
   const fase2aP = Promise.all([
