@@ -19,6 +19,7 @@ import { agruparSaude } from "@/lib/data/saude-agrupada"
 import { conferirFontes } from "@/lib/data/conferencia-fontes"
 import { enviarEmail } from "@/lib/email/enviar"
 import { registrarCron } from "@/lib/cron/registrar"
+import { medirInfra, type InfraMetricas } from "@/lib/data/infra-metricas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -79,7 +80,16 @@ export async function GET(req: Request) {
     // a base crescer: com 75 lojas já seriam 158 linhas.
     const g = agruparSaude(s.lojas)
 
-    const msg = emailSaude(s, conferencia, rodada, g)
+    // Peso do banco/storage. Nunca derruba o relatório: um erro aqui tira o
+    // bloco, não o e-mail.
+    let infra: InfraMetricas | null = null
+    try {
+      infra = await medirInfra()
+    } catch (e) {
+      console.error("medirInfra:", e)
+    }
+
+    const msg = emailSaude(s, conferencia, rodada, g, infra)
 
     // holdingId null + forcar: este e-mail não pertence a cliente nenhum e
     // precisa sair TODO dia — a trava de "já enviei este tipo" mataria o

@@ -14,6 +14,7 @@ import type { SaudeIntegracoes } from "@/lib/data/saude-integracoes"
 import type { RodadaDiaria } from "@/lib/data/rodada-diaria"
 import type { LojaAgrupada, SaudeAgrupada } from "@/lib/data/saude-agrupada"
 import type { PlatformId } from "@/components/platform-logo"
+import { fmtBytes, type InfraMetricas } from "@/lib/data/infra-metricas"
 import { rotulo } from "@/lib/cron-labels"
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
@@ -290,6 +291,73 @@ export type ConferenciaResumo = {
   provavelMotivo: string
 }
 
+
+/**
+ * Peso do sistema: banco, storage e quem cresceu.
+ *
+ * Vai DEPOIS do "o que entrou": a pergunta natural depois de ver 12 mil linhas
+ * novas é "isso custa quanto?". Linha e byte não andam juntos — 200 mil linhas
+ * de log pesam mais que 200 mil lançamentos — e é o byte que aparece na fatura.
+ *
+ * Sem cor de alerta de propósito. Crescer é o esperado num sistema que importa
+ * dado todo dia; pintar de vermelho o normal treina a pessoa a ignorar
+ * vermelho. Quem julga se 40 MB/dia é muito é quem lê, olhando a inclinação.
+ */
+function blocoInfra(m: InfraMetricas): string {
+  const delta = (v: number | null) =>
+    v == null
+      ? '<span style="color:#a1a1aa;">primeira medição</span>'
+      : v === 0
+        ? '<span style="color:#71717a;">sem mudança</span>'
+        : `<span style="color:${v > 0 ? "#b45309" : "#166534"};font-weight:700;">${v > 0 ? "+" : "−"}${fmtBytes(Math.abs(v))}</span>`
+
+  const janela =
+    m.diasDesdeAnterior && m.diasDesdeAnterior > 1
+      ? ` <span style="font-size:12px;color:#a1a1aa;">(${m.diasDesdeAnterior} dias sem medir)</span>`
+      : ""
+
+  const linha = (rot: string, valor: string, extra: string) => `
+      <tr>
+        <td style="padding:7px 0;font-size:13px;color:#3f3f46;">${rot}</td>
+        <td style="padding:7px 0;font-size:13px;font-weight:700;color:#18181b;text-align:right;white-space:nowrap;">${valor}</td>
+        <td style="padding:7px 0 7px 14px;font-size:13px;text-align:right;white-space:nowrap;">${extra}</td>
+      </tr>`
+
+  // Sem medição anterior não dá pra falar de crescimento — mas dá pra mostrar
+  // QUEM pesa. Dizer "nenhuma tabela cresceu" na primeira vez seria afirmar
+  // algo que não foi medido.
+  const primeiraVez = m.dbDelta == null
+  const lista = primeiraVez ? m.maiores : m.cresceram
+  const listaHtml = lista
+    .map(
+      (t) => `
+      <tr>
+        <td style="padding:5px 0;font-size:12px;color:#52525b;font-family:ui-monospace,Menlo,monospace;">${t.tabela}</td>
+        <td style="padding:5px 0;font-size:12px;color:#71717a;text-align:right;white-space:nowrap;">${fmtBytes(t.bytes)}</td>
+        <td style="padding:5px 0 5px 14px;font-size:12px;font-weight:700;color:#b45309;text-align:right;white-space:nowrap;">${t.delta == null ? "" : `+${fmtBytes(t.delta)}`}</td>
+      </tr>`,
+    )
+    .join("")
+
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:#fafafa;border-left:4px solid #a1a1aa;border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#52525b;">Quanto o sistema pesa${janela}</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid rgba(0,0,0,.07);">
+        ${linha("Banco de dados", fmtBytes(m.dbBytes), delta(m.dbDelta))}
+        ${linha(`Storage (${m.storageArquivos} arquivos)`, fmtBytes(m.storageBytes), delta(m.storageDelta))}
+      </table>
+      ${
+        listaHtml
+          ? `<p style="margin:14px 0 6px;font-size:12px;font-weight:700;color:#52525b;">${primeiraVez ? "As maiores tabelas" : "O que cresceu"}</p>
+             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${listaHtml}</table>
+             ${primeiraVez ? `<p style="margin:8px 0 0;font-size:12px;color:#71717a;">Primeira medição: o crescimento por tabela aparece a partir do próximo relatório.</p>` : ""}`
+          : `<p style="margin:14px 0 0;font-size:12px;color:#71717a;">Nenhuma tabela cresceu mais de 1 MB — abaixo disso é vacuum e índice respirando, não dado novo.</p>`
+      }
+    </td></tr>
+  </table>`
+}
+
 export function emailSaude(
   s: SaudeIntegracoes,
   /**
@@ -316,6 +384,11 @@ export function emailSaude(
    * (loja × plataforma), que a 500 lojas passa de mil linhas.
    */
   g?: SaudeAgrupada,
+  /**
+   * Peso do banco e do storage, com o delta do dia. Opcional: se a medição
+   * falhar, o relatório sai sem o bloco — nunca deixa de sair por causa dele.
+   */
+  infra?: InfraMetricas | null,
 ): { assunto: string; html: string } {
   const r = s.resumo
   const cronsRuins = s.crons.filter((c) => c.gravidade === "alerta")
@@ -418,6 +491,7 @@ export function emailSaude(
       </table>
 
       ${rodada ? blocoRodada(rodada) : ""}
+      ${infra ? blocoInfra(infra) : ""}
 
       ${g ? blocoPararamHoje(g) : ""}
 
