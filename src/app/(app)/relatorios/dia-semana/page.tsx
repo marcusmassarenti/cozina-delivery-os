@@ -60,12 +60,15 @@ export default async function RelatorioDiaSemanaPage({
   const rede = await getVendasPorDiaSemana(ids, de, ate)
   if (!rede.melhor) return <Vazio />
 
-  const porLoja = await getVendasPorDiaSemanaPorLoja(
-    ids,
-    de,
-    ate,
-    rede.pior?.dow ?? null,
-  )
+  // Participação de cada dia no faturamento da REDE — é a régua contra a qual
+  // cada loja é comparada.
+  const shareRede = new Map<number, number>()
+  if (rede.total > 0) {
+    for (const d of rede.dias) {
+      shareRede.set(d.dow, (d.valor / rede.total) * 100)
+    }
+  }
+  const porLoja = await getVendasPorDiaSemanaPorLoja(ids, de, ate, shareRede)
 
   const linhas = lojas
     .map((u) => ({ unit: u, d: porLoja.get(u.id) }))
@@ -102,10 +105,10 @@ export default async function RelatorioDiaSemanaPage({
             Fogem do padrão da rede
           </h2>
           <p className="mb-3 text-[12px] leading-relaxed text-amber-800/90 dark:text-amber-300/90">
-            O pior dia da rede é <strong>{rede.pior?.rotulo}</strong> — nessas
-            lojas é outro. Quando todo mundo cai no mesmo dia é mercado; quando
-            só uma cai, costuma ser operação: fechou, faltou gente ou ficou sem
-            entregador naquele dia.
+            Nesses dias a loja vende uma fatia bem menor da própria semana do
+            que a rede vende no mesmo dia. Quando todo mundo cai junto é
+            mercado; quando só uma cai, costuma ser operação — fechou mais
+            cedo, faltou gente ou ficou sem entregador.
           </p>
           <div className="space-y-1.5">
             {foraDoPadrao.map(({ unit, d }) => (
@@ -124,13 +127,16 @@ export default async function RelatorioDiaSemanaPage({
                   #{unit.code}
                 </span>
                 <span className="ml-auto text-[11px] text-muted-foreground">
-                  pior dia:
+                  fraco na
                 </span>
                 <span className="font-semibold text-rose-700 dark:text-rose-400">
-                  {d.pior?.rotulo}
+                  {d.diaFraco?.rotulo}
                 </span>
-                <span className="tabular-nums text-muted-foreground">
-                  {fmtBRLShort(d.pior?.valor ?? 0)}
+                <span
+                  className="tabular-nums text-muted-foreground"
+                  title="Pontos percentuais abaixo da participação que esse dia tem na rede"
+                >
+                  {Math.round(d.desvioPp)} pp abaixo da rede
                 </span>
               </div>
             ))}
