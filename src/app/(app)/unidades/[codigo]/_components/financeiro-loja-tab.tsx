@@ -44,6 +44,8 @@ import { DreDetalhado, type DrePlat } from "./dre-detalhado"
 import { getQuemPagaEntrega } from "@/lib/data/taxa-entrega"
 import { EntregaCard } from "./entrega-card"
 import { getSuperCriterios } from "@/lib/data/super"
+import { getVendasPorDiaSemana } from "@/lib/data/dia-semana"
+import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { SuperCriteriosCard } from "@/components/shared/super-criterios-card"
 
 const MESES_PT = [
@@ -161,6 +163,15 @@ export async function FinanceiroLojaTab({
   // Fora do Promise.all de propósito: é leitura pequena e opcional — loja sem
   // relatório Super importado devolve vazio e o card some.
   const superCriterios = (await getSuperCriterios([unitId])).get(unitId) ?? null
+  // Dia da semana respeita o recorte de datas do filtro: sem isso o card
+  // mostraria o mês inteiro enquanto o resto da tela mostra 7 dias.
+  const fimMes = new Date(year, month, 0).getDate()
+  const diaSemana = await getVendasPorDiaSemana(
+    [unitId],
+    dateRange?.start ?? `${year}-${String(month).padStart(2, "0")}-01`,
+    dateRange?.end ??
+      `${year}-${String(month).padStart(2, "0")}-${String(fimMes).padStart(2, "0")}`,
+  )
   const antecipFee = antecipMap.get(unitId) ?? 0
   const dailyFat = daily.units[0]?.faturamento ?? {}
 
@@ -379,6 +390,8 @@ export async function FinanceiroLojaTab({
           </p>
         </div>
       </div>
+
+      <DiaSemanaCard dados={diaSemana} />
 
       {/* Caminho para o Super, acima dos dois cards de dinheiro: é o único
           bloco da tela que fala do PRÓXIMO ciclo, e o que ainda dá pra mudar

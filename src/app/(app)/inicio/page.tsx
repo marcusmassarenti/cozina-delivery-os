@@ -118,6 +118,8 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { createClient } from "@/lib/supabase/server"
 import { criarCronometro } from "@/lib/perf"
 import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
+import { getVendasPorDiaSemana } from "@/lib/data/dia-semana"
+import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 
 async function checkSupabase() {
   try {
@@ -405,6 +407,14 @@ export default async function Home({
   // Mês inteiro → caminho legado (1 chamada por plataforma).
   // Range custom → wrappers ForRange que decompõem cross-month e agregam.
   // Nota: "Precisa de atenção" virou Suspense próprio (AttentionSection).
+  // Fora do Promise.all: é um RPC pequeno e independente, e o card some
+  // sozinho quando não há venda no período.
+  const diaSemanaRede = await getVendasPorDiaSemana(
+    activeUnitIds,
+    periodRange.start,
+    periodRange.end,
+  )
+
   const fase2aP = Promise.all([
     isFullMonth
       ? getFinanceiroResumoByUnits(activeUnitIds, year, month)
@@ -1256,6 +1266,16 @@ export default async function Home({
             }
           />
         </div>
+      )}
+
+      {/* Dia da semana da REDE: a evolução acima é mensal e esconde o dia.
+          Em jul/26 a rede fez R$ 298 mil numa sexta contra R$ 197 mil numa
+          terça — 34%, e isso é escala de equipe e alvo de promoção. */}
+      {status.ok && activeUnitIds.length > 0 && (
+        <DiaSemanaCard
+          dados={diaSemanaRede}
+          titulo="Dias com mais vendas · rede"
+        />
       )}
 
       {status.ok && units.length > 0 && (
