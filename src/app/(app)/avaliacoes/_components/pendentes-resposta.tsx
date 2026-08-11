@@ -1,7 +1,10 @@
 import Link from "next/link"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { userCan } from "@/lib/auth/permissions"
+import {
+  getUnidadesSomenteLeitura,
+  userCan,
+} from "@/lib/auth/permissions"
 import { getIaStatus } from "@/lib/data/diagnostico-ia"
 import {
   getAvaliacoesPendentesResposta,
@@ -26,9 +29,13 @@ import { PendentesPainel } from "./pendentes-painel"
  * urgente que uma 1★ com quatro dias pela frente.
  */
 export async function PendentesResposta() {
-  const [podeResponder, ia] = await Promise.all([
+  const [podeResponder, ia, somenteLeitura] = await Promise.all([
     userCan("avaliacoes", "edit"),
     getIaStatus(),
+    // Loja emprestada por outra empresa: aparece na lista (é pra isso que foi
+    // compartilhada) mas sem o botão. Mostrar e recusar no clique seria pior
+    // do que não mostrar.
+    getUnidadesSomenteLeitura(),
   ])
 
   const units = await getVisibleUnits()
@@ -82,7 +89,7 @@ export async function PendentesResposta() {
                   &ldquo;{p.comentario}&rdquo;
                 </p>
               )}
-              {podeResponder ? (
+              {podeResponder && !somenteLeitura.has(p.unitId) ? (
                 <ResponderAvaliacao
                   avaliacaoId={p.avaliacaoId}
                   podeIa={ia.podeUsar}

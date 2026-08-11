@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireModulePermission, requireUnitAccess } from "@/lib/auth/guards"
+import { requireModulePermission, requireUnitWrite } from "@/lib/auth/guards"
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -308,7 +308,7 @@ export async function deleteUnit(unitId: string): Promise<CreateUnitState> {
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
   try {
     await requireModulePermission("unidades", "delete")
-    await requireUnitAccess(unitId) // anti cross-tenant: só apaga loja do próprio escopo
+    await requireUnitWrite(unitId) // anti cross-tenant: só apaga loja do próprio escopo
     const supabase = createAdminClient()
     // Descobre a holding ANTES do delete — depois a unidade não existe mais.
     const { data: uAntes } = await supabase
@@ -349,7 +349,7 @@ export async function saveUnitLogo(formData: FormData): Promise<CreateUnitState>
   if (!img.ok) return { ok: false, message: img.message }
   try {
     await requireModulePermission("unidades", "edit")
-    await requireUnitAccess(unitId) // anti cross-tenant: só a própria loja
+    await requireUnitWrite(unitId) // anti cross-tenant: só a própria loja
     const supabase = createAdminClient()
     const path = `units/${unitId}.${img.ext}`
     const { error: upErr } = await supabase.storage
@@ -380,7 +380,7 @@ export async function removeUnitLogo(unitId: string): Promise<CreateUnitState> {
   if (!unitId) return { ok: false, message: "ID da unidade ausente." }
   try {
     await requireModulePermission("unidades", "edit")
-    await requireUnitAccess(unitId)
+    await requireUnitWrite(unitId)
     const supabase = createAdminClient()
     const { error } = await supabase
       .from("units")
@@ -482,7 +482,7 @@ export async function updateUnit(
 
   try {
     await requireModulePermission("unidades", "edit")
-    await requireUnitAccess(unitId) // anti cross-tenant: só edita loja do próprio escopo
+    await requireUnitWrite(unitId) // anti cross-tenant: só edita loja do próprio escopo
     const supabase = createAdminClient()
 
     const { error: updErr } = await supabase

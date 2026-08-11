@@ -16,6 +16,7 @@ import {
   getAccessibleUnitIds,
   getAuthUser,
   isSuperadmin,
+  podeEscreverNaUnidade,
   userCan,
   type ModuleKey,
   type PermAction,
@@ -179,6 +180,34 @@ export async function requireUnitAccess(unitId: string): Promise<{
     throw new ForbiddenError("Você não tem acesso a esta unidade.")
   }
   return { userId, email, admin: createAdminClient() }
+}
+
+/**
+ * Exige acesso de ESCRITA na unidade — o gate de tudo que altera a loja.
+ *
+ * `requireUnitAccess` responde "esta loja está no meu escopo?", que é a
+ * pergunta certa pra LER. Pra escrever falta a segunda: "esta loja é minha ou
+ * está emprestada?". Sem essa distinção, emprestar uma loja a outro cliente
+ * entregava junto o direito de apagá-la — a unidade tem 44 tabelas em cascata.
+ *
+ * Use em TODA action que grava algo de uma loja específica: cadastro,
+ * lançamento, importação, conexão, resposta de avaliação.
+ *
+ * @throws ForbiddenError se a loja for compartilhada em modo leitura
+ */
+export async function requireUnitWrite(unitId: string): Promise<{
+  userId: string
+  email: string | null
+  admin: ReturnType<typeof createAdminClient>
+}> {
+  const ctx = await requireUnitAccess(unitId)
+  if (!(await podeEscreverNaUnidade(unitId))) {
+    throw new ForbiddenError(
+      "Esta loja foi compartilhada com você apenas para acompanhamento. " +
+        "Quem edita é a empresa dona da loja.",
+    )
+  }
+  return ctx
 }
 
 /**

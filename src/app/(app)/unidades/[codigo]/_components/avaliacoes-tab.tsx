@@ -12,7 +12,10 @@ import {
 } from "@/lib/data/ifood-imported"
 import { fmtNum, fmtPct } from "@/lib/format"
 import { PaginatedList } from "@/components/shared/paginated-list"
-import { userCan } from "@/lib/auth/permissions"
+import {
+  podeEscreverNaUnidade,
+  userCan,
+} from "@/lib/auth/permissions"
 import { getIaStatus } from "@/lib/data/diagnostico-ia"
 import { PRAZO_RESPOSTA_DIAS } from "@/lib/data/avaliacoes-pendentes"
 import { ResponderAvaliacao } from "@/app/(app)/avaliacoes/_components/responder-avaliacao"
@@ -29,7 +32,7 @@ export async function AvaliacoesTab({
   /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
   notasFiltro?: number[]
 }) {
-  const [resumo, lista, podeResponder, ia] = await Promise.all([
+  const [resumo, lista, podeResponder, ia, podeEscrever] = await Promise.all([
     getAvaliacoesResumoForMonth(unitId, year, month),
     // Limite alto = mês inteiro da loja (cabe bem abaixo do cap de 1000). Antes
     // era 50: o header "Comentários (N)" e o filtro de nota rodavam só sobre os
@@ -37,6 +40,7 @@ export async function AvaliacoesTab({
     listAvaliacoesForMonth(unitId, year, month, { limit: 1000 }),
     userCan("avaliacoes", "edit"),
     getIaStatus(),
+    podeEscreverNaUnidade(unitId),
   ])
   const listaFiltrada =
     notasFiltro.length > 0
@@ -189,7 +193,7 @@ export async function AvaliacoesTab({
               <AvaliacaoCard
                 key={a.id}
                 avaliacao={a}
-                podeResponder={podeResponder}
+                podeResponder={podeResponder && podeEscrever}
                 podeIa={ia.podeUsar}
               />
             ))}

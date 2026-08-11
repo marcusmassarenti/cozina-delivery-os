@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
-import { userCan } from "@/lib/auth/permissions"
+import { podeEscreverNaUnidade, userCan } from "@/lib/auth/permissions"
 import { replyToReview } from "@/lib/ifood/review"
 import { askClaude } from "@/lib/anthropic/client"
 import { consumirCotaIA, getIaStatus } from "@/lib/data/diagnostico-ia"
@@ -74,6 +74,17 @@ export async function responderAvaliacaoIfood(
   const visiveis = await getVisibleUnits()
   if (!visiveis.some((u) => u.id === av.unit_id))
     return { ok: false, message: "Você não tem acesso a essa loja." }
+
+  // Loja emprestada é só pra acompanhar. Responder publica texto no perfil do
+  // iFood ASSINADO PELA LOJA — e o iFood só deixa editar por 10 minutos. É a
+  // escrita mais irreversível do sistema inteiro.
+  if (!(await podeEscreverNaUnidade(av.unit_id)))
+    return {
+      ok: false,
+      message:
+        "Esta loja foi compartilhada com você apenas para acompanhamento. " +
+        "Quem responde as avaliações é a empresa dona da loja.",
+    }
 
   const { data: vinc } = await admin
     .from("unit_platforms")

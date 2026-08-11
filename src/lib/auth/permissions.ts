@@ -290,6 +290,55 @@ export const temEscopoDaEmpresa = cache(async (): Promise<boolean> => {
   )
 })
 
+
+/**
+ * Lojas em que o usuário SÓ OLHA — as compartilhadas por outra empresa.
+ *
+ * Existe porque o papel do usuário é global (`profiles.perfil`) e o escopo é
+ * uma lista de lojas. Sem isto, emprestar uma loja a um cliente entregava
+ * junto o direito de apagá-la: as ações checam "esta loja está no meu
+ * escopo?", nunca "esta loja é da minha empresa?".
+ *
+ * O gatilho é `role='viewer'` NA LINHA de acesso, não o formato do escopo. As
+ * linhas de unidade que já existiam são franqueados cuidando da própria loja
+ * (role='manager') e continuam podendo tudo que podiam.
+ *
+ * ⚠️ Superadmin NÃO é exceção aqui. Loja emprestada é emprestada; se um dia o
+ * dono da plataforma precisar escrever nela, ele entra pela empresa dona.
+ */
+export const getUnidadesSomenteLeitura = cache(
+  async (): Promise<Set<string>> => {
+    const user = await getAuthUser()
+    if (!user) return new Set()
+
+    const { data } = await createAdminClient()
+      .from("user_unit_access")
+      .select("scope_id, role")
+      .eq("user_id", user.id)
+      .eq("scope_type", "unit")
+      .eq("role", "viewer")
+
+    return new Set(
+      ((data ?? []) as { scope_id: string | null }[])
+        .map((a) => a.scope_id)
+        .filter((id): id is string => !!id),
+    )
+  },
+)
+
+/**
+ * Pode ESCREVER nesta loja? (editar cadastro, lançar, apagar, responder
+ * avaliação em nome dela)
+ *
+ * Ler continua valendo pelo escopo de sempre — quem chega aqui já passou pelo
+ * `requireUnitAccess`. Esta pergunta é a segunda camada, e ela só tira direito;
+ * nunca dá.
+ */
+export async function podeEscreverNaUnidade(unitId: string): Promise<boolean> {
+  const somenteLeitura = await getUnidadesSomenteLeitura()
+  return !somenteLeitura.has(unitId)
+}
+
 export const getAccessibleUnitIds = cache(
   async (): Promise<string[] | null> => {
     const user = await getAuthUser()

@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 
-import { requireUnitAccess } from "@/lib/auth/guards"
+import { requireUnitWrite } from "@/lib/auth/guards"
 
 export type SaveCostsState = {
   ok: boolean
@@ -41,7 +41,7 @@ export async function saveUnitCosts(input: {
     // Escopo por UNIDADE (não financeiro:edit global): o franqueado gerencia o
     // custo da própria loja; admin/holding gerencia qualquer uma. Também fecha
     // o buraco cross-tenant (antes não checava a unidade).
-    const { admin: supabase } = await requireUnitAccess(unitId)
+    const { admin: supabase } = await requireUnitWrite(unitId)
     const { error } = await supabase.from("monthly_entries").upsert(
       {
         unit_id: unitId,
@@ -70,7 +70,7 @@ export async function saveUnitCosts(input: {
 
 /* ───────────── Custos por CATEGORIA (por unidade / mês) ───────────── */
 
-type Admin = Awaited<ReturnType<typeof requireUnitAccess>>["admin"]
+type Admin = Awaited<ReturnType<typeof requireUnitWrite>>["admin"]
 type CostTipo = "cmv" | "operacao"
 
 /**
@@ -153,7 +153,7 @@ export async function addCostCategory(input: {
   if (input.tipo !== "cmv" && input.tipo !== "operacao")
     return { ok: false, message: "Tipo inválido." }
   try {
-    const { admin } = await requireUnitAccess(input.unitId)
+    const { admin } = await requireUnitWrite(input.unitId)
     const { data: existing } = await admin
       .from("unit_cost_categories")
       .select("id")
@@ -216,7 +216,7 @@ export async function renameCostCategory(input: {
   const nome = input.nome.trim()
   if (!nome) return { ok: false, message: "Nome vazio." }
   try {
-    const { admin } = await requireUnitAccess(input.unitId)
+    const { admin } = await requireUnitWrite(input.unitId)
     const { error } = await admin
       .from("unit_cost_categories")
       .update({ nome })
@@ -238,7 +238,7 @@ export async function deleteCostCategory(input: {
   month: number
 }): Promise<{ ok: boolean; message?: string }> {
   try {
-    const { admin } = await requireUnitAccess(input.unitId)
+    const { admin } = await requireUnitWrite(input.unitId)
     // Descobre o tipo antes de remover pra forçar o recálculo desse campo (pode
     // cair a 0 se era a última categoria do tipo).
     const { data: cat } = await admin
@@ -274,7 +274,7 @@ export async function saveCostValue(input: {
 }): Promise<{ ok: boolean; message?: string }> {
   const valor = Number.isFinite(input.valor) ? Math.max(0, input.valor) : 0
   try {
-    const { admin } = await requireUnitAccess(input.unitId)
+    const { admin } = await requireUnitWrite(input.unitId)
     const { error } = await admin.from("unit_cost_values").upsert(
       {
         category_id: input.categoryId,
