@@ -4,8 +4,15 @@ import Link from "next/link"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { fmtCriterio, getSuperCriterios, METAS_SUPER } from "@/lib/data/super"
+import {
+  fmtCriterio,
+  getSuperCriterios,
+  METAS_SUPER,
+  type CriterioSuper,
+  type SuperCriterios,
+} from "@/lib/data/super"
 import { PlatformLogo } from "@/components/platform-logo"
+import { BrandLogo } from "@/components/brand-logo"
 import { SuperBadge } from "@/components/shared/super-badge"
 import { fmtNum, fmtPct } from "@/lib/format"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
@@ -37,7 +44,7 @@ export default async function RelatorioSuperPage({
   const allowed = await getAccessibleUnitIds()
   let q = admin
     .from("units")
-    .select("id, code, name")
+    .select("id, code, name, logo_url")
     .eq("active", true)
     .order("name")
   if (allowed !== null) {
@@ -81,6 +88,26 @@ export default async function RelatorioSuperPage({
   const topTags = [...tagsRede.entries()]
     .sort((a, b) => b[1].total - a[1].total)
     .slice(0, 8)
+
+  // Elogio também é informação: sem ele a tela só mostra o que está ruim, e a
+  // rede parece pior do que é. É o mesmo dado, do outro lado.
+  const tagsPosRede = new Map<string, { total: number; lojas: number }>()
+  for (const l of linhas) {
+    for (const [tag, n] of Object.entries(l.s.tagsPos)) {
+      const at = tagsPosRede.get(tag) ?? { total: 0, lojas: 0 }
+      tagsPosRede.set(tag, { total: at.total + n, lojas: at.lojas + 1 })
+    }
+  }
+  const topTagsPos = [...tagsPosRede.entries()]
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 8)
+
+  // Quem está mais perto do Nível 5, medido em "quantos critérios faltam".
+  // Ordena o esforço: a Pinheiros precisa de 10 avaliações, a Alphaville de
+  // quatro frentes ao mesmo tempo.
+  const quaseLa = todas
+    .filter((l) => !l.s.eSuper && l.s.faltando.length > 0)
+    .sort((a, b) => a.s.faltando.length - b.s.faltando.length)
 
   const chamados = linhas.reduce(
     (a, l) => ({
@@ -223,7 +250,11 @@ export default async function RelatorioSuperPage({
                 <th className="pb-2 pr-3 text-right font-medium">Cancel.</th>
                 <th className="pb-2 pr-3 text-right font-medium">Chamados</th>
                 <th className="pb-2 pr-3 text-right font-medium">Cancel. loja</th>
-                <th className="pb-2 text-right font-medium">Chamados val.</th>
+                <th className="pb-2 pr-3 text-right font-medium">Chamados val.</th>
+                <th className="pb-2 pr-3 text-right font-medium">Atraso</th>
+                <th className="pb-2 pr-3 text-right font-medium">Item errado</th>
+                <th className="pb-2 pr-3 text-right font-medium">Pós-entrega</th>
+                <th className="pb-2 font-medium">Falta pro Super</th>
               </tr>
             </thead>
             <tbody>
@@ -232,9 +263,17 @@ export default async function RelatorioSuperPage({
                   <td className="py-2 pr-3">
                     <Link
                       href={`/unidades/${unit.code}`}
-                      className="font-medium hover:underline"
+                      className="flex items-center gap-2 hover:underline"
                     >
-                      {unit.name}
+                      <BrandLogo
+                        size="sm"
+                        logoUrl={unit.logo_url}
+                        name={unit.name}
+                      />
+                      <span className="font-medium">{unit.name}</span>
+                      <span className="rounded bg-muted px-1 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                        #{unit.code}
+                      </span>
                     </Link>
                   </td>
                   <td className="py-2 pr-3">
@@ -265,8 +304,20 @@ export default async function RelatorioSuperPage({
                   <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
                     {fmtNum(s.cancelamentosDaLoja)}
                   </td>
-                  <td className="py-2 text-right tabular-nums text-muted-foreground">
+                  <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
                     {fmtNum(s.chamados.total)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                    {fmtNum(s.chamados.atraso)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                    {fmtNum(s.chamados.itemErrado)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                    {fmtNum(s.chamados.posEntrega)}
+                  </td>
+                  <td className="py-2">
+                    <Falta s={s} />
                   </td>
                 </tr>
               ))}
@@ -281,7 +332,121 @@ export default async function RelatorioSuperPage({
         </p>
       </section>
 
+      {/* Plano e sentimento de TODAS as lojas.
+          Antes isso só existia escolhendo uma loja no seletor — e é
+          justamente o texto que explica o número da tabela acima. Esconder
+          atrás de um filtro fazia parecer que o dado não tinha sido lido. */}
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <h2 className="mb-1 text-sm font-semibold">
+          Plano de ação e sentimento, por loja
+        </h2>
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          O que o iFood recomenda e o que o cliente falou de cada uma.
+        </p>
+        {/* Tabela compacta, não um card por loja: com 12 lojas, o card empurrava
+            o resto da página pra baixo e virava scroll. Aqui é uma linha cada,
+            com as 3 tags mais fortes de cada lado — o resto sai no hover. */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 pr-3 font-medium">Loja</th>
+                <th className="pb-2 pr-3 font-medium">Plano do iFood</th>
+                <th className="pb-2 pr-3 font-medium">Mais elogiado</th>
+                <th className="pb-2 font-medium">Mais reclamado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map(({ unit, s }) => (
+                <tr key={unit.id} className="border-b last:border-0 align-top">
+                  <td className="py-2 pr-3">
+                    <span className="flex items-center gap-1.5">
+                      <BrandLogo
+                        size="sm"
+                        logoUrl={unit.logo_url}
+                        name={unit.name}
+                      />
+                      <span className="font-medium">{unit.name}</span>
+                      <span className="rounded bg-muted px-1 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                        #{unit.code}
+                      </span>
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3 text-muted-foreground">
+                    {s.planoDeAcao ?? "—"}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <TopTags tags={s.tagsPos} tom="emerald" />
+                  </td>
+                  <td className="py-2">
+                    <TopTags tags={s.tagsNeg} tom="rose" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {quaseLa.length > 0 && !foco && (
+        <section className="rounded-xl border bg-card p-5 shadow-sm">
+          <h2 className="mb-1 text-sm font-semibold">Mais perto do Nível 5</h2>
+          <p className="mb-3 text-[11px] text-muted-foreground">
+            Ordenado por quantos critérios faltam — quem precisa de uma coisa
+            só está no topo, e costuma ser onde o esforço rende mais.
+          </p>
+          <div className="space-y-1.5">
+            {quaseLa.map(({ unit, s }) => (
+              <div
+                key={unit.id}
+                className="flex flex-wrap items-center gap-2 text-xs"
+              >
+                <BrandLogo size="sm" logoUrl={unit.logo_url} name={unit.name} />
+                <Link
+                  href={`/unidades/${unit.code}`}
+                  className="font-medium hover:underline"
+                >
+                  {unit.name}
+                </Link>
+                <span className="rounded bg-muted px-1 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                  #{unit.code}
+                </span>
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  {s.faltando.length}{" "}
+                  {s.faltando.length === 1 ? "critério" : "critérios"}
+                </span>
+                <Falta s={s} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
+        {topTagsPos.length > 0 && (
+          <section className="rounded-xl border bg-card p-5 shadow-sm">
+            <h2 className="mb-1 text-sm font-semibold">
+              {foco ? "O que o cliente elogia" : "O que o cliente elogia, na rede"}
+            </h2>
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              O outro lado do mesmo dado — é o que a rede já faz bem.
+            </p>
+            <div className="space-y-1.5">
+              {topTagsPos.map(([tag, { total, lojas: n }]) => (
+                <div key={tag} className="flex items-center gap-2 text-xs">
+                  <span className="capitalize text-muted-foreground">{tag}</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground/70">
+                    {n} {n === 1 ? "loja" : "lojas"}
+                  </span>
+                  <span className="w-12 text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                    {fmtNum(total)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {topTags.length > 0 && (
           <section className="rounded-xl border bg-card p-5 shadow-sm">
             <h2 className="mb-1 text-sm font-semibold">
@@ -321,6 +486,91 @@ export default async function RelatorioSuperPage({
         </section>
       </div>
     </div>
+  )
+}
+
+/**
+ * O que falta pro Nível 5, em número — não em "não atingiu".
+ *
+ * "Faltam 68 pedidos" é acionável; "pedidos abaixo da meta" não é. E quem já
+ * está dentro do critério não aparece: a coluna só lista o que impede.
+ */
+function Falta({ s }: { s: SuperCriterios }) {
+  if (s.eSuper) {
+    return (
+      <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
+        nada — é Super
+      </span>
+    )
+  }
+  if (s.faltando.length === 0) {
+    // Cumpre os 5 e mesmo assim não é Super: o iFood ainda não recalculou, ou
+    // a loja não é elegível por outro motivo. Não inventar explicação.
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        cumpre os critérios · aguarda o dia 10
+      </span>
+    )
+  }
+  // UMA linha, não uma etiqueta por critério: em pilha, a Alphaville (4 itens)
+  // ficava com o triplo da altura das outras e a tabela perdia o alinhamento.
+  // O texto completo fica no `title` pra nada se perder no truncamento.
+  const itens = s.faltando.map((c) => {
+    const v = c.valor ?? 0
+    const falta = c.menorMelhor
+      ? `−${fmtCriterio(Math.max(0, v - c.meta), c.formato)}`
+      : `+${fmtCriterio(Math.max(0, c.meta - v), c.formato)}`
+    return `${falta} ${ABREV[c.chave]}`
+  })
+  return (
+    <span
+      title={`Falta pro Nível 5: ${itens.join(", ")}`}
+      className="block max-w-[190px] truncate text-[11px] text-rose-700 dark:text-rose-400"
+    >
+      {itens.join(" · ")}
+    </span>
+  )
+}
+
+/** Rótulo curto — a coluna é estreita e "pedidos concluídos" não cabe. */
+const ABREV: Record<CriterioSuper["chave"], string> = {
+  pedidos: "ped.",
+  avaliacoes: "aval.",
+  nota: "nota",
+  cancelamento: "cancel.",
+  chamados: "chamados",
+}
+
+/** As 3 tags mais fortes, em linha. O resto vai no `title`. */
+function TopTags({
+  tags,
+  tom,
+}: {
+  tags: Record<string, number>
+  tom: "emerald" | "rose"
+}) {
+  const itens = Object.entries(tags).sort((a, b) => b[1] - a[1])
+  if (itens.length === 0)
+    return <span className="text-muted-foreground/60">—</span>
+  const cor =
+    tom === "emerald"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : "text-rose-700 dark:text-rose-400"
+  return (
+    <span
+      title={itens.map(([t, n]) => `${t}: ${n}`).join(" · ")}
+      className={`capitalize ${cor}`}
+    >
+      {itens
+        .slice(0, 3)
+        .map(([t, n]) => `${t} ${n}`)
+        .join(" · ")}
+      {itens.length > 3 && (
+        <span className="ml-1 text-muted-foreground/70">
+          +{itens.length - 3}
+        </span>
+      )}
+    </span>
   )
 }
 
