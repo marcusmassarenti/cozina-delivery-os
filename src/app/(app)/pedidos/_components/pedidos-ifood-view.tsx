@@ -1,7 +1,15 @@
 import Link from "next/link"
-import { ChevronRight, CreditCard, Receipt, Ticket, Wallet } from "lucide-react"
+import {
+  ChevronRight,
+  Clock,
+  CreditCard,
+  Receipt,
+  Ticket,
+  Wallet,
+} from "lucide-react"
 
 import type { PagamentoResumo, VrPorUnidade } from "@/lib/data/ifood-pedidos"
+import type { HorariosDaRede } from "@/lib/data/ifood-horarios"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 /**
@@ -15,6 +23,7 @@ export function PedidosIfoodView({
   selectedUnit,
   activeUnitsCount,
   periodoParam,
+  horarios,
 }: {
   resumo: PagamentoResumo
   /**
@@ -26,6 +35,8 @@ export function PedidosIfoodView({
   selectedUnit: { code: string; name: string } | null
   activeUnitsCount: number
   periodoParam?: string
+  /** Horário PROGRAMADO no iFood + % de tempo online. Null se não sincronizou. */
+  horarios?: HorariosDaRede | null
 }) {
   const dataCodes = new Set(vrByUnit.map((u) => u.unitCode))
   const showVrByUnit = !selectedUnit && vrByUnit.length > 0
@@ -34,6 +45,8 @@ export function PedidosIfoodView({
 
   return (
     <>
+      {horarios && <CardHorarios h={horarios} />}
+
       {/* Cobertura — deixa claro que o "geral" só cobre as lojas importadas */}
       {!selectedUnit && dataCodes.size > 0 && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
@@ -514,6 +527,91 @@ function BarrinhaInfo({
           ({pct.toFixed(0)}%)
         </span>
       </span>
+    </div>
+  )
+}
+
+/**
+ * Tempo de loja aberta no iFood.
+ *
+ * Duas grandezas diferentes lado a lado, e a distinção é o conteúdo do card:
+ *  • PROGRAMADO — o horário que a loja cadastrou (vem da API, atualiza sozinho).
+ *  • ONLINE — quanto desse tempo ela esteve de fato disponível (vem do
+ *    relatório de Qualidade, que entra por planilha).
+ *
+ * Loja fechada não vende, e o segundo número é o que pega a loja que "abre"
+ * no papel e passa metade do turno pausada — que não aparece em faturamento
+ * nenhum até o mês fechar.
+ */
+function CardHorarios({ h }: { h: HorariosDaRede }) {
+  return (
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <Clock className="size-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Tempo de loja aberta</h3>
+        <span className="text-[11px] text-muted-foreground">
+          {h.lojas} loja{h.lojas === 1 ? "" : "s"} com horário no iFood
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-start gap-x-10 gap-y-4">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Programado
+          </p>
+          <p className="text-2xl font-bold tabular-nums">
+            {h.horasSemanaMedia.toFixed(1)}
+            <span className="ml-1 text-sm font-normal text-muted-foreground">
+              h por semana
+            </span>
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            média por loja · {(h.horasSemanaMedia / 7).toFixed(1)} h/dia
+          </p>
+        </div>
+
+        {h.pctOnlineMedio != null && (
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Esteve online
+            </p>
+            <p className="text-2xl font-bold tabular-nums">
+              {fmtPct(h.pctOnlineMedio)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              do tempo programado · {h.lojasComOnline} loja
+              {h.lojasComOnline === 1 ? "" : "s"} com o relatório de Qualidade
+            </p>
+          </div>
+        )}
+      </div>
+
+      {h.fechamJunto.length > 0 && (
+        <div className="mt-4 border-t pt-3">
+          <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+            Não abrem todos os dias
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {h.fechamJunto.map((l) => (
+              <span
+                key={l.code}
+                className="rounded-full border px-2.5 py-1 text-[11px]"
+                title={`${l.name} não abre: ${l.dias.join(", ")}`}
+              >
+                <span className="font-semibold">#{l.code}</span> {l.name}
+                <span className="ml-1.5 text-muted-foreground">
+                  fecha {l.dias.join(", ")}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        O horário vem da API do iFood e se atualiza sozinho todo dia. Mudou no
+        Portal do Parceiro, muda aqui.
+      </p>
     </div>
   )
 }

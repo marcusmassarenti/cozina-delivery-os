@@ -130,6 +130,14 @@ export const CHANGELOG: Release[] = [
             desc: "Mais um tempo na régua da 99, que já vinha no arquivo.",
           },
           {
+            kind: "novo",
+            title: "Tempo de loja aberta no iFood",
+            antes:
+              "A gente sabia quanto a loja vendeu, nunca quanto tempo ela ficou aberta pra vender.",
+            depois:
+              "Horas programadas por semana, quanto desse tempo a loja esteve mesmo online, e quais lojas não abrem todo dia. Vem da API do iFood e se atualiza sozinho — mudou no Portal do Parceiro, mudou aqui.",
+          },
+          {
             kind: "melhoria",
             title: "Tempo de loja aberta (Keeta)",
             desc:

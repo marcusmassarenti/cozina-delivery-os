@@ -45,6 +45,18 @@ export async function GET(req: Request) {
       console.error("varrerConexoesNovas:", e)
     }
 
+    // Horário de funcionamento das lojas. Pendurado aqui pelo mesmo motivo da
+    // varredura de conexões: é o último cron da manhã e a Vercel Hobby não
+    // deixa criar mais um. Horário muda raramente — uma vez por dia sobra.
+    let horarios: { lojas: number; turnos: number } | null = null
+    try {
+      const { syncIfoodHorarios } = await import("@/lib/ifood/horarios")
+      const r2 = await syncIfoodHorarios(null)
+      horarios = { lojas: r2.lojas, turnos: r2.turnos }
+    } catch (e) {
+      console.error("syncIfoodHorarios:", e)
+    }
+
     // Aviso de último dia pra responder avaliação. Fica DEPOIS do sync de
     // propósito: é ele que acabou de atualizar o status, e avisar antes usaria
     // a foto de ontem — anunciando como pendente o que a loja já respondeu
@@ -82,6 +94,7 @@ export async function GET(req: Request) {
       conexoes,
       expurgo,
       prazoAvaliacoes,
+      horarios,
     })
   } catch (e) {
     console.error("/api/cron/ifood-review-sync:", e)

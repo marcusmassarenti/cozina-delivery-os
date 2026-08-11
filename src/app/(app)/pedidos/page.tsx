@@ -36,6 +36,7 @@ import {
 import { AlertTriangle } from "lucide-react"
 
 import { PedidosIfoodView } from "./_components/pedidos-ifood-view"
+import { getHorariosDaRede } from "@/lib/data/ifood-horarios"
 import { PedidosKeetaView } from "./_components/pedidos-keeta-view"
 import { PedidosNinefoodView } from "./_components/pedidos-ninefood-view"
 import { PedidosPlataformaSwitcher } from "./_components/pedidos-plataforma-switcher"
@@ -79,6 +80,11 @@ export default async function PedidosPage({
       ? activeUnits.filter((u) => lojaCodes.includes(u.code))
       : activeUnits
   const ids = filteredUnits.map((u) => u.id)
+
+  // Horário programado no iFood — mesmo escopo de lojas do resto da tela.
+  // Falha aqui não pode derrubar a página de Pedidos: sem horário o card
+  // simplesmente não aparece.
+  const horariosIfood = await getHorariosDaRede(ids).catch(() => null)
   // Marketplaces + Cardápio Web. Antes só marketplace, porque a tela inteira
   // era sobre VR, subsídio e comissão — que não existem em canal próprio. A
   // aba do Cardápio Web mostra OUTRA coisa (tipo de pedido, horário, forma de
@@ -288,6 +294,7 @@ export default async function PedidosPage({
         />
       ) : (
         <PedidosIfoodView
+          horarios={horariosIfood}
           resumo={ifood!.resumo}
           promo={ifood!.promo}
           vrByUnit={ifood!.vrByUnit}
