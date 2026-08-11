@@ -66,6 +66,12 @@ export type TipoEmail =
    */
   | "loja-sem-dado"
   /**
+   * Campanha avulsa de novidades (ago/26). Sem `forcar`: a trava de
+   * duplicidade é justamente o que garante um por cliente, mesmo se o disparo
+   * for repetido por engano.
+   */
+  | "novidades-ago26"
+  /**
    * Fechamento do mês com dias faltando. Mensal, então quem dispara manda
    * `forcar: true` e faz a própria trava por janela de dias — a trava padrão
    * é "uma vez e nunca mais", que aqui significaria avisar só no primeiro mês.

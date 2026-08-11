@@ -673,3 +673,76 @@ export function fechamentoIncompleto(d: {
     }),
   }
 }
+
+/** Bloco de novidade: título curto + o que mudou. */
+function novidade(titulo: string, texto: string, etiqueta?: string): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px;">
+    <tr>
+      <td style="border-left:3px solid ${LINHA};padding:2px 0 2px 16px;">
+        <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:${TINTA};">${titulo}${
+          etiqueta
+            ? ` <span style="display:inline-block;background:#fff7ed;color:${LARANJA};font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;vertical-align:middle;">${etiqueta}</span>`
+            : ""
+        }</p>
+        <p style="margin:0;font-size:15px;line-height:1.6;color:${TEXTO};">${texto}</p>
+      </td>
+    </tr>
+  </table>`
+}
+
+/**
+ * Novidades de agosto/26 — campanha avulsa, não faz parte da régua.
+ *
+ * Uma novidade tem PRAZO (a resposta à avaliação morre em 5 dias), então ela
+ * abre o e-mail e leva o CTA. As outras três entram como lista curta: e-mail
+ * de novidade que vira release notes não é lido até o fim.
+ *
+ * Sem print de tela de propósito: os que temos são da conta demo, anterior a
+ * essas telas, e print de cliente real vazaria número de terceiro.
+ */
+export function novidadesAgosto26(d: { nome: string | null }) {
+  return {
+    assunto: "Agora dá pra responder as avaliações do iFood pelo DeliveryOS",
+    html: layout({
+      titulo: "Quatro novidades no seu painel — uma delas tem prazo",
+      corpo: `
+        <p style="margin:0 0 20px;">${oi(d.nome)} Foi uma semana grande por aqui. Resumo do que entrou:</p>
+
+        ${novidade(
+          "Responder avaliação do iFood sem sair do painel",
+          "Você lê a crítica e responde ali mesmo — não precisa mais abrir o Portal do Parceiro. A resposta da loja também passa a aparecer junto do comentário, no iFood e na Keeta.",
+        )}
+
+        ${destaque(
+          "5 dias",
+          "é o prazo que o iFood dá pra responder. Depois disso a avaliação é publicada sem a sua resposta e o cliente nunca a vê. Por isso o painel agora mostra o que está pra vencer — e avisa no seu celular quando estiver no último dia.",
+        )}
+
+        ${novidade(
+          "O Nino escreve o rascunho da resposta",
+          "Ele lê a nota, o comentário e as tags e propõe um texto específico pra aquele cliente. Você lê, ajusta e envia — ele nunca publica sozinho.",
+          "plano AI",
+        )}
+
+        ${novidade(
+          "O caminho para o Super Restaurante",
+          "Relatório novo no Hub: os cinco critérios de cada loja, quanto falta em cada um pra bater a meta, e quem está prestes a perder o selo. Antes isso só existia entrando no portal do iFood, loja por loja.",
+        )}
+
+        ${novidade(
+          "Desempenho por dia da semana",
+          "Qual dia cada loja fatura mais e qual afunda, com o mapa da semana e quem foge do padrão da rede. É o que decide escala de equipe e onde colocar promoção — o fechamento mensal esconde isso.",
+        )}
+
+        ${novidade(
+          "Três dados que já estavam lá e nenhuma tela mostrava",
+          "Cancelamento parcial separado do cancelamento total (o pedido chegou, só veio item errado), o tempo do entregador até o cliente na 99 Food, e quantas horas por dia a loja ficou aberta na Keeta.",
+        )}
+
+        <p style="margin:26px 0 0;">Tudo isso já está no ar na sua conta. Não precisa fazer nada.</p>`,
+      cta: { texto: "Ver o que está esperando resposta", url: `${SITE}/avaliacoes` },
+      ps: "Responder avaliação vale pras lojas com o iFood conectado por API. Se a sua ainda não está, me responde que eu conecto.",
+    }),
+  }
+}
