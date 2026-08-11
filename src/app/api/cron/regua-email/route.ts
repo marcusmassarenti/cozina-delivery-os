@@ -7,6 +7,7 @@
  * A trava contra e-mail repetido é o índice único de email_enviados, não a
  * data — rodar duas vezes no mesmo dia não manda nada duas vezes.
  */
+import { avisarLojasCompartilhadas } from "@/lib/email/loja-compartilhada"
 import { enviarNovidades } from "@/lib/email/novidades"
 import { rodarReguaEmail } from "@/lib/data/regua-email"
 import { rodarReguaFechamento } from "@/lib/data/regua-fechamento"
@@ -45,6 +46,18 @@ export async function GET(req: Request) {
   // uma consulta e nada mais.
   //
   // REMOVER depois de confirmar que os 6 clientes receberam.
+  // Avisa quem recebeu loja emprestada. Mesma carona e mesmo motivo do bloco
+  // acima: a chave do Resend só existe na Vercel. A trava de duplicidade do
+  // enviarEmail faz isto virar consulta a partir do segundo dia.
+  let compartilhadas: Awaited<
+    ReturnType<typeof avisarLojasCompartilhadas>
+  > | null = null
+  try {
+    compartilhadas = await avisarLojasCompartilhadas()
+  } catch (e) {
+    console.error("avisarLojasCompartilhadas:", e)
+  }
+
   let novidades: Awaited<ReturnType<typeof enviarNovidades>> | null = null
   try {
     novidades = await enviarNovidades({ confirmar: true })
@@ -59,6 +72,7 @@ export async function GET(req: Request) {
     ...r,
     fechamento,
     novidades,
+    compartilhadas,
   })
   })
 }

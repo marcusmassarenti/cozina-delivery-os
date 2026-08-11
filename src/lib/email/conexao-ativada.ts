@@ -66,64 +66,64 @@ export async function resumoDaLoja(
   const pendencias: string[] = []
 
   if (plataforma === "ifood") {
-    const [fin, ped, aval, plat] = await Promise.all([
-      admin.rpc("resumo_conexao_ifood_financeiro", { p_unit_id: unitId }),
-      admin
-        .from("ifood_pedidos")
-        .select("id", { count: "exact", head: true })
-        .eq("unit_id", unitId),
+    /* ⚠️ ESTE BLOCO JÁ MENTIU. A versão anterior chamava um RPC que somava só
+     * `impacto_no_repasse` — ou seja, o REPASSE — e mandava com o rótulo
+     * "Faturamento". Na Jardins, isso era R$ 442 mil no lugar de R$ 844 mil.
+     *
+     * Agora sai da mesma fonte da tela: resumo financeiro + cesta dos
+     * cancelados. Se a régua do bruto mudar, muda nos dois juntos. */
+    const { resumoDoAnoIfood } = await import("@/lib/email/resumo-da-loja")
+    const r = await resumoDoAnoIfood(unitId)
+    linhas.push(...r.linhas)
+
+    const { data: plat } = await admin
+      .from("unit_platforms")
+      .select("fin_enabled_at, review_enabled_at")
+      .eq("unit_id", unitId)
+      .eq("platform", "ifood")
+      .maybeSingle()
+
+    const [aval] = await Promise.all([
       admin
         .from("ifood_avaliacoes")
         .select("nota")
         .eq("unit_id", unitId)
         .not("nota", "is", null),
-      admin
-        .from("unit_platforms")
-        .select("fin_enabled_at, review_enabled_at")
-        .eq("unit_id", unitId)
-        .eq("platform", "ifood")
-        .maybeSingle(),
     ])
-
-    const f = (fin.data as { total: number; de: string; ate: string }[] | null)?.[0]
-    if (f?.total) {
-      linhas.push({ rotulo: "Faturamento", valor: fmtBRL(Number(f.total)) })
-      const p = periodo(f.de, f.ate)
-      if (p) linhas.push({ rotulo: "Período", valor: p })
-    }
-    if (ped.count) linhas.push({ rotulo: "Pedidos", valor: String(ped.count) })
-
-    const notas = (aval.data ?? []).map((a) => Number(a.nota))
-    if (notas.length) {
-      const media = notas.reduce((s, n) => s + n, 0) / notas.length
+    const notas = (aval.data ?? []) as { nota: number }[]
+    if (notas.length > 0) {
+      const media = notas.reduce((s, n) => s + Number(n.nota), 0) / notas.length
       linhas.push({
         rotulo: "Avaliações",
         valor: `${notas.length} · nota ${media.toFixed(1).replace(".", ",")}`,
       })
-    } else {
-      // A conexão do iFood nasce pela metade com facilidade: são DOIS apps no
-      // Portal do Parceiro e nada avisa quando só um foi aprovado. Chamar isso
-      // pelo nome aqui é a única chance do cliente perceber.
-      pendencias.push(
-        "As <strong>avaliações</strong> ainda não estão entrando. No Portal do Parceiro do iFood, confira se o app <strong>Avaliações</strong> também foi autorizado — ele é separado do Financial.",
-      )
     }
-    if (!f?.total && plat.data) {
+
+    const p = plat as
+      | { fin_enabled_at: string | null; review_enabled_at: string | null }
+      | null
+    if (p && !p.fin_enabled_at)
       pendencias.push(
-        "O <strong>faturamento</strong> ainda não apareceu. Se você autorizou só o app de Avaliações, falta o <strong>Financial</strong>.",
+        "O app de Financeiro ainda não foi autorizado — o extrato não entra até isso acontecer.",
       )
-    }
+    if (p && !p.review_enabled_at)
+      pendencias.push(
+        "O app de Avaliações ainda não foi autorizado — as notas e comentários não entram até isso acontecer.",
+      )
   }
 
   if (plataforma === "99food") {
     const { data } = await admin
       .from("ninefood_daily_loja")
-      .select("data, faturamento_bruto, pedidos")
+      // ⚠️ Era `faturamento_bruto`, coluna que NUNCA existiu nesta tabela: o
+      // select falhava calado e o e-mail da 99 saía sem número nenhum desde
+      // sempre. O nome certo é `bruto`.
+      .select("data, bruto, pedidos")
       .eq("unit_id", unitId)
       .order("data")
     const rows = data ?? []
     if (rows.length) {
-      const bruto = rows.reduce((s, r) => s + Number(r.faturamento_bruto ?? 0), 0)
+      const bruto = rows.reduce((s, r) => s + Number(r.bruto ?? 0), 0)
       const pedidos = rows.reduce((s, r) => s + Number(r.pedidos ?? 0), 0)
       if (bruto) linhas.push({ rotulo: "Faturamento", valor: fmtBRL(bruto) })
       const p = periodo(

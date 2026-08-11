@@ -43,6 +43,83 @@ function figura(img: Imagem): string {
   </div>`
 }
 
+
+/**
+ * Passo a passo de começo — numerado, curto, com verbo no começo.
+ *
+ * Lista numerada e não parágrafo: quem abre um e-mail de boas-vindas está
+ * decidindo se vale gastar dez minutos, e uma parede de texto responde "não".
+ */
+function passoAPasso(): string {
+  const passos = [
+    [
+      "Cadastre sua loja",
+      "Nome, cidade e as plataformas em que ela vende. Um minuto.",
+    ],
+    [
+      "Traga os números",
+      "Conecte o iFood pela API (o dado entra sozinho, todo dia) ou suba os relatórios do iFood, 99 Food e Keeta em .xlsx.",
+    ],
+    [
+      "Veja o que sobra",
+      "O painel abre com faturamento, taxas e o que de fato entra na sua conta — por loja e por plataforma.",
+    ],
+    [
+      "Lance seu CMV",
+      "Sem o custo da mercadoria a margem fica pela metade. É um campo por loja, por mês.",
+    ],
+  ]
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0 4px;">
+    ${passos
+      .map(
+        ([titulo, texto], i) => `
+      <tr>
+        <td width="30" valign="top" style="padding:0 0 16px;">
+          <div style="width:24px;height:24px;border-radius:999px;background:${LARANJA};color:#fff;font-size:13px;font-weight:700;text-align:center;line-height:24px;">${i + 1}</div>
+        </td>
+        <td valign="top" style="padding:0 0 16px 12px;">
+          <p style="margin:0 0 2px;font-size:15px;font-weight:700;color:${TINTA};">${titulo}</p>
+          <p style="margin:0;font-size:14px;line-height:1.55;color:${TEXTO};">${texto}</p>
+        </td>
+      </tr>`,
+      )
+      .join("")}
+  </table>`
+}
+
+/**
+ * Como deixar o sistema como app no celular.
+ *
+ * Não existe app na loja: é o próprio site que instala (PWA). Sem explicar
+ * isso, quem procura "DeliveryOS" na App Store não acha nada e conclui que não
+ * tem app — quando na verdade tem, e é o que faz o aviso de prazo de avaliação
+ * chegar como notificação.
+ *
+ * O passo é DIFERENTE nos dois sistemas, e no iPhone só funciona no Safari.
+ * Descrever "adicione à tela de início" sem dizer isso gera o suporte que este
+ * bloco existe pra evitar.
+ */
+function instalarNoCelular(): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0 0;">
+    <tr>
+      <td style="background:#fafafa;border:1px solid ${LINHA};border-radius:12px;padding:20px 22px;">
+        <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${TINTA};">Deixe no celular como app</p>
+        <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:${TEXTO};">
+          Não precisa baixar nada de loja nenhuma — o próprio site vira app, com ícone na tela de início. É assim que os avisos chegam como notificação (o prazo pra responder avaliação, por exemplo).
+        </p>
+        <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:${TEXTO};">
+          <strong>Android</strong> — abra o site no Chrome, toque nos três pontinhos e escolha <strong>“Instalar app”</strong> (ou “Adicionar à tela inicial”).
+        </p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:${TEXTO};">
+          <strong>iPhone</strong> — abra <strong>no Safari</strong> (no Chrome não aparece), toque no botão de compartilhar e escolha <strong>“Adicionar à Tela de Início”</strong>.
+        </p>
+      </td>
+    </tr>
+  </table>`
+}
+
 /** Caixa de número forte — o "olha o tamanho disso" dos e-mails de retomada. */
 export function destaque(numero: string, texto: string): string {
   return `
@@ -142,7 +219,9 @@ export function boasVindas(d: DadosEmail) {
           d.temLoja
             ? "O próximo passo é importar seus relatórios do iFood, 99 Food ou Keeta — ou conectar a API do iFood, que puxa tudo sozinha."
             : "O primeiro passo leva menos de um minuto: <strong>cadastrar sua loja</strong>. Sem ela o sistema fica vazio, porque tudo aqui é sobre os números dela."
-        }</p>`,
+        }</p>
+        ${passoAPasso()}
+        ${instalarNoCelular()}`,
       imagens: [
         {
           arquivo: "dashboard.png",
@@ -743,6 +822,69 @@ export function novidadesAgosto26(d: { nome: string | null }) {
         <p style="margin:26px 0 0;">Tudo isso já está no ar na sua conta. Não precisa fazer nada.</p>`,
       cta: { texto: "Ver o que está esperando resposta", url: `${SITE}/avaliacoes` },
       ps: "Responder avaliação vale pras lojas com o iFood conectado por API. Se a sua ainda não está, me responde que eu conecto.",
+    }),
+  }
+}
+
+/**
+ * "Uma loja foi compartilhada com você."
+ *
+ * Não é o e-mail de conexão: ninguém conectou nada agora, a loja já vinha
+ * sendo sincronizada pela empresa dona. Dizer "sua loja foi conectada" seria
+ * falso e ainda daria a entender que ele controla a integração — que é
+ * justamente o que ele NÃO faz nessa loja.
+ *
+ * Leva os números junto porque a boa notícia é o histórico: ele abre e vê o
+ * ano inteiro, sem esperar autorização de ninguém.
+ */
+export function lojaCompartilhada(d: {
+  nome: string | null
+  loja: string
+  dona: string
+  linhas: { rotulo: string; valor: string }[]
+  /** De onde vem o faturamento. Sem isto o total parece ser só do iFood. */
+  plataformas?: { nome: string; valor: string; pct: number }[]
+}) {
+  const numeros = d.linhas.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0 0;border-top:1px solid ${LINHA};">
+        ${d.linhas
+          .map(
+            (l) => `<tr>
+              <td style="padding:9px 0;font-size:14px;color:${TEXTO};">${l.rotulo}</td>
+              <td style="padding:9px 0;text-align:right;font-size:15px;font-weight:700;color:${TINTA};white-space:nowrap;">${l.valor}</td>
+            </tr>`,
+          )
+          .join("")}
+      </table>`
+    : ""
+
+  return {
+    assunto: `${d.loja} está disponível na sua conta do DeliveryOS`,
+    html: layout({
+      titulo: `A ${d.loja} agora aparece no seu painel`,
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} A <strong>${d.loja}</strong> foi compartilhada com você por <strong>${d.dona}</strong>. Ela já estava conectada e sincronizando, então você não precisa conectar nem importar nada: abra o painel e o histórico está lá — <strong>das três plataformas juntas</strong>.</p>
+        ${numeros}
+        ${
+          (d.plataformas ?? []).length > 1
+            ? `<p style="margin:18px 0 8px;font-size:13px;font-weight:700;color:${TINTA};">De onde vem esse faturamento</p>
+               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                 ${d.plataformas!
+                   .map(
+                     (p) => `<tr>
+                       <td style="padding:6px 0;font-size:14px;color:${TEXTO};">${p.nome}</td>
+                       <td style="padding:6px 0;text-align:right;font-size:14px;color:${TINTA};white-space:nowrap;">${p.valor} <span style="color:${SUAVE};">· ${p.pct}%</span></td>
+                     </tr>`,
+                   )
+                   .join("")}
+               </table>
+               <p style="margin:10px 0 0;font-size:13px;line-height:1.55;color:${SUAVE};">O painel soma as três num lugar só — e continua somando conforme os relatórios entram.</p>`
+            : ""
+        }
+        <p style="margin:22px 0 14px;">Você acompanha essa loja em <strong>modo leitura</strong> — vê faturamento, taxas, repasses, avaliações, cardápio e o Super Restaurante, e os lançamentos e ajustes dela seguem com ${d.dona}. Suas próprias marcas você administra normalmente.</p>
+        ${instalarNoCelular()}`,
+      cta: { texto: "Ver a loja no painel", url: `${SITE}/unidades` },
+      ps: "Qualquer dúvida sobre os números dessa loja, é só responder este e-mail.",
     }),
   }
 }
