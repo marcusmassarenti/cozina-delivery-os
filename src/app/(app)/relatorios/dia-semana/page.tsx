@@ -158,13 +158,18 @@ export default async function RelatorioDiaSemanaPage({
                 <th className="pb-2 pr-3 font-medium">Melhor dia</th>
                 <th className="pb-2 pr-3 font-medium">Pior dia</th>
                 <th className="pb-2 pr-3 text-right font-medium">Diferença</th>
+                <th className="pb-2 pr-3 text-right font-medium">Pedidos</th>
                 <th className="pb-2 pr-3 text-right font-medium">Total</th>
                 <th className="pb-2 font-medium">Semana</th>
               </tr>
             </thead>
             <tbody>
               {linhas.map(({ unit, d }) => {
-                const max = Math.max(...d.dias.map((x) => x.valor), 1)
+                // Barra pela mesma régua do melhor/pior daquela loja: numa
+                // loja só-99 o valor é zero e todas as barras sumiriam.
+                const val = (x: { valor: number; pedidos: number }) =>
+                  d.base === "valor" ? x.valor : x.pedidos
+                const max = Math.max(...d.dias.map(val), 1)
                 return (
                   <tr key={unit.id} className="border-b last:border-0">
                     <td className="py-2 pr-3">
@@ -184,16 +189,29 @@ export default async function RelatorioDiaSemanaPage({
                       </Link>
                     </td>
                     <td className="py-2 pr-3 whitespace-nowrap text-emerald-700 dark:text-emerald-400">
-                      {d.melhor?.rotuloCurto} · {fmtBRLShort(d.melhor?.valor ?? 0)}
+                      {d.melhor?.rotuloCurto} ·{" "}
+                      {d.base === "valor"
+                        ? fmtBRLShort(d.melhor?.valor ?? 0)
+                        : `${fmtNum(d.melhor?.pedidos ?? 0)} ped.`}
                     </td>
                     <td className="py-2 pr-3 whitespace-nowrap text-rose-700 dark:text-rose-400">
-                      {d.pior?.rotuloCurto} · {fmtBRLShort(d.pior?.valor ?? 0)}
+                      {d.pior?.rotuloCurto} ·{" "}
+                      {d.base === "valor"
+                        ? fmtBRLShort(d.pior?.valor ?? 0)
+                        : `${fmtNum(d.pior?.pedidos ?? 0)} ped.`}
                     </td>
                     <td className="py-2 pr-3 text-right font-bold tabular-nums">
                       {Math.round(d.amplitudePct)}%
                     </td>
+                    {/* Pedidos soma as QUATRO plataformas; o total em R$ só
+                        iFood e Cardápio Web. Loja de 99/Keeta aparece aqui com
+                        pedido e sem valor — e é melhor mostrar metade do que
+                        somer da tabela. */}
                     <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
-                      {fmtBRL(d.total)}
+                      {fmtNum(d.totalPedidos)}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                      {d.base === "valor" ? fmtBRL(d.total) : "—"}
                     </td>
                     {/* Mini-barras: o número diz o tamanho, a forma diz onde
                         está o buraco. Juntos respondem mais rápido que os dois
@@ -202,7 +220,10 @@ export default async function RelatorioDiaSemanaPage({
                       <span
                         className="flex h-6 items-end gap-0.5"
                         title={d.dias
-                          .map((x) => `${x.rotuloCurto} ${fmtBRLShort(x.valor)}`)
+                          .map(
+                            (x) =>
+                              `${x.rotuloCurto} ${d.base === "valor" ? fmtBRLShort(x.valor) : `${x.pedidos} ped.`}`,
+                          )
                           .join(" · ")}
                       >
                         {d.dias.map((x) => (
@@ -216,7 +237,7 @@ export default async function RelatorioDiaSemanaPage({
                                   : "bg-muted-foreground/25"
                             }`}
                             style={{
-                              height: `${Math.max((x.valor / max) * 100, x.valor > 0 ? 10 : 4)}%`,
+                              height: `${Math.max((val(x) / max) * 100, val(x) > 0 ? 10 : 4)}%`,
                             }}
                           />
                         ))}
@@ -229,8 +250,11 @@ export default async function RelatorioDiaSemanaPage({
           </table>
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Loja com menos de 3 dias com venda fica de fora — não dá pra falar em
-          padrão de semana com tão pouca amostra. Soma iFood e Cardápio Web.
+          Loja com menos de 3 dias de operação fica de fora — não dá pra falar
+          em padrão de semana com tão pouca amostra, e dia com menos de 15% da
+          média da loja conta como fechado. <strong>Pedidos</strong> soma
+          iFood, Cardápio Web, 99 Food e Keeta; <strong>valor</strong> só as
+          duas primeiras, porque 99 e Keeta não guardam o preço do pedido.
         </p>
       </section>
     </div>

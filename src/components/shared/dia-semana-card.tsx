@@ -21,7 +21,7 @@ export function DiaSemanaCard({
   dados: VendasPorDiaSemana
   titulo?: string
 }) {
-  const { dias, melhor, pior, plataformas } = dados
+  const { dias, melhor, pior, plataformasValor, plataformasPedidos } = dados
   if (!melhor) return null
 
   const max = Math.max(...dias.map((d) => d.valor), 1)
@@ -111,9 +111,13 @@ export function DiaSemanaCard({
         </div>
       </div>
 
+      {/* Os dois escopos ditos lado a lado. Antes o rodapé falava só do valor
+          e dava a entender que 99 e Keeta estavam fora de tudo — elas entram
+          na contagem de pedidos, que é metade do que o card mostra. */}
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        Soma {plataformas.join(" e ")} — as outras plataformas guardam a data do
-        pedido, mas não o valor.
+        <strong>Valor</strong>: {plataformasValor.join(" e ")}.{" "}
+        <strong>Pedidos</strong>: {plataformasPedidos.join(", ")} — 99 Food e
+        Keeta guardam a data do pedido, mas não o valor.
       </p>
     </div>
   )

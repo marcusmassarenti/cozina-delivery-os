@@ -14,6 +14,16 @@ import { createAdminClient } from "@/lib/supabase/admin"
  * inventar. Quem chama recebe `plataformas` pra dizer isso na tela.
  */
 
+/**
+ * ⚠️ Os dois escopos são diferentes DE PROPÓSITO.
+ *
+ * 99 Food e Keeta guardam a data do pedido mas não o valor — entram na
+ * contagem e ficam de fora do faturamento. Dizer "soma as 4" no valor seria
+ * mentira; deixá-las de fora da contagem seria jogar dado no lixo.
+ */
+const PLATAFORMAS_VALOR = ["iFood", "Cardápio Web"]
+const PLATAFORMAS_PEDIDOS = ["iFood", "Cardápio Web", "99 Food", "Keeta"]
+
 export type DiaSemana = {
   /** 0 = domingo (padrão do Postgres). */
   dow: number
@@ -28,7 +38,11 @@ export type VendasPorDiaSemana = {
   melhor: DiaSemana | null
   pior: DiaSemana | null
   total: number
-  plataformas: string[]
+  totalPedidos: number
+  /** Plataformas que entram no VALOR — só as que guardam preço por pedido. */
+  plataformasValor: string[]
+  /** Plataformas que entram na contagem de PEDIDOS — todas. */
+  plataformasPedidos: string[]
 }
 
 const NOMES = [
@@ -66,6 +80,11 @@ export type DiaSemanaLoja = {
   diaFraco: DiaSemana | null
   /** Quantos pontos percentuais abaixo da rede, nesse dia. */
   desvioPp: number
+  /**
+   * Em que métrica melhor/pior foram calculados. `pedidos` quando a loja só
+   * tem plataforma que não guarda valor — sem isso ela sumiria do relatório.
+   */
+  base: "valor" | "pedidos"
 }
 
 /** Ordena a semana começando na segunda — ver `getVendasPorDiaSemana`. */
@@ -138,9 +157,16 @@ export async function getVendasPorDiaSemanaPorLoja(
     // Menos de 3 dias de operação real não dá pra falar em padrão de semana.
     if (opera.length < 3) continue
 
-    const porValor = [...opera].sort((a, b) => b.valor - a.valor)
-    const melhor = porValor[0]!
-    const pior = porValor[porValor.length - 1]!
+    // Loja que só vende no 99 ou na Keeta tem valor ZERO — ranquear por valor
+    // faria ela sumir do relatório inteiro. Nesses casos a régua é pedido, que
+    // é o que existe. `base` diz qual foi, pra tela não misturar.
+    const totalValorLoja = dias.reduce((s, d) => s + d.valor, 0)
+    const base: "valor" | "pedidos" = totalValorLoja > 0 ? "valor" : "pedidos"
+    const ordenado = [...opera].sort((a, b) =>
+      base === "valor" ? b.valor - a.valor : b.pedidos - a.pedidos,
+    )
+    const melhor = ordenado[0]!
+    const pior = ordenado[ordenado.length - 1]!
 
     // "Fora do padrão" pela PARTICIPAÇÃO do dia, não por qual é o pior.
     //
@@ -150,7 +176,7 @@ export async function getVendasPorDiaSemanaPorLoja(
     //
     // O que importa é a loja vender proporcionalmente MENOS naquele dia do que
     // a rede vende. Aí sim é buraco dela, não do mercado.
-    const totalValor = dias.reduce((s, d) => s + d.valor, 0)
+    const totalValor = totalValorLoja
     let maiorDesvio = 0
     let diaDesvio: DiaSemana | null = null
     if (totalValor > 0 && shareRede) {
@@ -172,8 +198,15 @@ export async function getVendasPorDiaSemanaPorLoja(
       naoOpera,
       total: totalValor,
       totalPedidos: total,
+      base,
       amplitudePct:
-        pior.valor > 0 ? ((melhor.valor - pior.valor) / pior.valor) * 100 : 0,
+        base === "valor"
+          ? pior.valor > 0
+            ? ((melhor.valor - pior.valor) / pior.valor) * 100
+            : 0
+          : pior.pedidos > 0
+            ? ((melhor.pedidos - pior.pedidos) / pior.pedidos) * 100
+            : 0,
       // 10 pontos percentuais. Um dia vale ~14% da semana, então 10pp é
       // perder QUASE O DIA INTEIRO em relação à rede.
       //
@@ -198,7 +231,9 @@ export async function getVendasPorDiaSemana(
     melhor: null,
     pior: null,
     total: 0,
-    plataformas: ["iFood", "Cardápio Web"],
+    totalPedidos: 0,
+    plataformasValor: PLATAFORMAS_VALOR,
+    plataformasPedidos: PLATAFORMAS_PEDIDOS,
   }
   if (!unitIds.length) return vazio
 
@@ -245,6 +280,8 @@ export async function getVendasPorDiaSemana(
     melhor: porValor[0] ?? null,
     pior: porValor[porValor.length - 1] ?? null,
     total: dias.reduce((s, d) => s + d.valor, 0),
-    plataformas: ["iFood", "Cardápio Web"],
+    totalPedidos: dias.reduce((s, d) => s + d.pedidos, 0),
+    plataformasValor: PLATAFORMAS_VALOR,
+    plataformasPedidos: PLATAFORMAS_PEDIDOS,
   }
 }
