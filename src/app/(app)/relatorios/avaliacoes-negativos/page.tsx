@@ -15,6 +15,7 @@ import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getComentariosNegativos } from "@/lib/data/avaliacoes-negativos"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView, userCan } from "@/lib/auth/permissions"
+import { getIaStatus } from "@/lib/data/diagnostico-ia"
 import { ResponderAvaliacao } from "@/app/(app)/avaliacoes/_components/responder-avaliacao"
 import { fmtNum } from "@/lib/format"
 import { formatPeriodLabel, formatRangeLabel } from "@/lib/period"
@@ -57,10 +58,11 @@ export default async function AvaliacoesNegativosPage({
   const ids = scoped.map((u) => u.id)
   const unitById = new Map(scoped.map((u) => [u.id, u]))
 
-  const [comentarios, availablePeriods, podeResponder] = await Promise.all([
+  const [comentarios, availablePeriods, podeResponder, ia] = await Promise.all([
     getComentariosNegativos(year, month, ids),
     getAvailablePeriods(),
     userCan("avaliacoes", "edit"),
+    getIaStatus(),
   ])
 
   const semResposta = comentarios.filter((c) => !c.resposta).length
@@ -208,8 +210,13 @@ export default async function AvaliacoesNegativosPage({
                   ) : podeResponder &&
                     c.plataforma === "ifood" &&
                     c.avaliacaoId &&
-                    c.reviewId ? (
-                    <ResponderAvaliacao avaliacaoId={c.avaliacaoId} />
+                    c.reviewId &&
+                    c.status === "NOT_REPLIED" ? (
+                    <ResponderAvaliacao
+                      avaliacaoId={c.avaliacaoId}
+                      podeIa={ia.podeUsar}
+                      diasRestantes={c.diasRestantes}
+                    />
                   ) : null}
                 </div>
               )

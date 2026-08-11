@@ -81,11 +81,25 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "novo",
+            title: "Esperando resposta: o que vence antes de você perceber",
+            antes:
+              "Numa rede, ninguém abre loja por loja todo dia. A reclamação passava dos 5 dias e o iFood publicava sem a resposta — o cliente nunca lia.",
+            depois:
+              "Um bloco no topo de Avaliações junta tudo que ainda dá pra responder, da rede inteira, ordenado por quem vence primeiro. Fora do filtro de mês, porque o prazo não liga pra virada do mês.",
+          },
+          {
+            kind: "novo",
+            title: "O Nino escreve o rascunho da resposta",
+            desc:
+              "Ele lê a nota, o comentário e as tags e propõe um texto específico — você lê, ajusta e envia. Faz parte do plano DeliveryOS AI.",
+          },
+          {
+            kind: "novo",
             title: "Responder a avaliação do iFood pelo painel",
             antes:
               "Responder um cliente exigia abrir o Portal do Parceiro, achar a avaliação e escrever por lá.",
             depois:
-              "O botão Responder está na própria avaliação, na loja e no relatório de negativos. Vale pras avaliações que chegam pela API daqui pra frente.",
+              "O botão Responder está na própria avaliação, na loja e no relatório de negativos, com o aviso de quanto falta do prazo de 5 dias que o iFood dá.",
           },
           {
             kind: "novo",

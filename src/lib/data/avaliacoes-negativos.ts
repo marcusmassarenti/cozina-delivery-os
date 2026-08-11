@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { textoOuNull } from "@/lib/format"
+import { PRAZO_RESPOSTA_DIAS } from "@/lib/data/avaliacoes-pendentes"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { installIdsDeProducao } from "@/lib/data/cardapioweb-imported"
 import type { PlatformId } from "@/components/platform-logo"
@@ -21,6 +22,14 @@ export type ComentarioNegativo = {
    */
   avaliacaoId?: string
   reviewId?: string | null
+  /**
+   * NOT_REPLIED = o iFood ainda aceita resposta. É ELE que manda, não a nossa
+   * conta de dias: 5★ e nota baixa sem comentário já nascem publicadas, e
+   * responder essas volta 409.
+   */
+  status?: string | null
+  /** Do prazo de 5 dias. Só faz sentido enquanto o status é NOT_REPLIED. */
+  diasRestantes?: number
 }
 
 /**
@@ -38,6 +47,15 @@ export type ComentarioNegativo = {
  * justamente pra agir rápido em cima de crítica. Numa loja sem marketplace, a
  * tela ficava permanentemente vazia como se não houvesse reclamação nenhuma.
  */
+/** Quanto sobra dos 5 dias que o iFood dá pra responder. */
+function diasQueRestam(dataAvaliacao: string | null): number | undefined {
+  if (!dataAvaliacao) return undefined
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const d = new Date(dataAvaliacao + "T00:00:00")
+  return PRAZO_RESPOSTA_DIAS - Math.round((hoje.getTime() - d.getTime()) / 86_400_000)
+}
+
 export async function getComentariosNegativos(
   year: number,
   month: number,
@@ -65,11 +83,12 @@ export async function getComentariosNegativos(
       data_avaliacao: string | null
       resposta_texto: string | null
       review_id: string | null
+      status_avaliacao: string | null
     }>((from, to) => {
       let q = admin
         .from("ifood_avaliacoes")
         .select(
-          "id, unit_id, nota, comentario, data_avaliacao, resposta_texto, review_id",
+          "id, unit_id, nota, comentario, data_avaliacao, resposta_texto, review_id, status_avaliacao",
         )
         .lte("nota", maxNota)
         .not("comentario", "is", null)
@@ -92,6 +111,8 @@ export async function getComentariosNegativos(
         resposta: textoOuNull(r.resposta_texto),
         avaliacaoId: r.id as string,
         reviewId: (r.review_id as string | null) ?? null,
+        status: (r.status_avaliacao as string | null) ?? null,
+        diasRestantes: diasQueRestam(r.data_avaliacao as string | null),
       })
     }
   }

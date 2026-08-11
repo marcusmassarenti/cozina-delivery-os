@@ -30,6 +30,11 @@ type AskOpts = {
   user: string
   maxTokens?: number
   model?: string
+  /**
+   * Recebe o consumo da chamada, pra quem quiser gravar custo (mesmo contrato
+   * do `onUso` do chat). Opcional: sem ele a chamada não vira linha de custo.
+   */
+  onUso?: (uso: UsoIa) => void
 }
 
 /** Chama o Claude e devolve o texto da resposta. */
@@ -63,6 +68,18 @@ export async function askClaude(opts: AskOpts): Promise<string> {
 
   const json = (await res.json()) as {
     content?: { type: string; text?: string }[]
+    model?: string
+    usage?: UsageApi
+  }
+  if (opts.onUso && json.usage) {
+    opts.onUso({
+      modelo: json.model || opts.model || diagnosticoModel(),
+      inputTokens: json.usage.input_tokens ?? 0,
+      outputTokens: json.usage.output_tokens ?? 0,
+      cacheReadTokens: json.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: json.usage.cache_creation_input_tokens ?? 0,
+      webSearches: json.usage.server_tool_use?.web_search_requests ?? 0,
+    })
   }
   const text = json.content?.find((c) => c.type === "text")?.text
   if (!text) throw new AnthropicError("Resposta do Claude sem texto.")

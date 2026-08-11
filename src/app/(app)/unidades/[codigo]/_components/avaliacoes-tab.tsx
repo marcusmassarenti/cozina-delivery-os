@@ -13,6 +13,8 @@ import {
 import { fmtNum, fmtPct } from "@/lib/format"
 import { PaginatedList } from "@/components/shared/paginated-list"
 import { userCan } from "@/lib/auth/permissions"
+import { getIaStatus } from "@/lib/data/diagnostico-ia"
+import { PRAZO_RESPOSTA_DIAS } from "@/lib/data/avaliacoes-pendentes"
 import { ResponderAvaliacao } from "@/app/(app)/avaliacoes/_components/responder-avaliacao"
 
 export async function AvaliacoesTab({
@@ -27,13 +29,14 @@ export async function AvaliacoesTab({
   /** Filtra a lista de comentários por nota (ex: [1,2]). Vazio = todas. */
   notasFiltro?: number[]
 }) {
-  const [resumo, lista, podeResponder] = await Promise.all([
+  const [resumo, lista, podeResponder, ia] = await Promise.all([
     getAvaliacoesResumoForMonth(unitId, year, month),
     // Limite alto = mês inteiro da loja (cabe bem abaixo do cap de 1000). Antes
     // era 50: o header "Comentários (N)" e o filtro de nota rodavam só sobre os
     // 50 mais recentes e subestimavam vs o KPI "Com comentário" (mês todo).
     listAvaliacoesForMonth(unitId, year, month, { limit: 1000 }),
     userCan("avaliacoes", "edit"),
+    getIaStatus(),
   ])
   const listaFiltrada =
     notasFiltro.length > 0
@@ -187,6 +190,7 @@ export async function AvaliacoesTab({
                 key={a.id}
                 avaliacao={a}
                 podeResponder={podeResponder}
+                podeIa={ia.podeUsar}
               />
             ))}
             pageSize={10}
@@ -287,9 +291,21 @@ function TagRow({
   )
 }
 
+/** Quanto sobra dos 5 dias que o iFood dá pra responder. */
+function diasQueRestam(dataAvaliacao: string): number {
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const d = new Date(dataAvaliacao + "T00:00:00")
+  return (
+    PRAZO_RESPOSTA_DIAS -
+    Math.round((hoje.getTime() - d.getTime()) / 86_400_000)
+  )
+}
+
 function AvaliacaoCard({
   avaliacao,
   podeResponder,
+  podeIa,
 }: {
   avaliacao: {
     id: string
@@ -304,6 +320,7 @@ function AvaliacaoCard({
     reviewId: string | null
   }
   podeResponder: boolean
+  podeIa: boolean
 }) {
   const stars = []
   for (let i = 1; i <= 5; i++) {
@@ -351,13 +368,19 @@ function AvaliacaoCard({
             <p className="text-sm text-foreground/80">{avaliacao.resposta}</p>
           </div>
         </div>
-      ) : podeResponder && avaliacao.reviewId && avaliacao.comentario ? (
-        // Duas condições, cada uma por um motivo:
-        //  • sem reviewId a avaliação é anterior à conexão com a API e a
-        //    resposta seria recusada;
-        //  • sem comentário não há o que responder — a maioria das avaliações
-        //    é só nota, e o botão em todas virava ruído na lista.
-        <ResponderAvaliacao avaliacaoId={avaliacao.id} />
+      ) : podeResponder &&
+        avaliacao.reviewId &&
+        avaliacao.statusAvaliacao === "NOT_REPLIED" ? (
+        // Quem decide é o STATUS, não a nossa régua. O iFood publica na hora
+        // as 5★ e as notas baixas sem comentário — nessas o POST volta 409, e
+        // o botão só existiria pra dar erro. Antes eu filtrava por "tem
+        // comentário", que acertava por acaso e mostrava botão em 5★ com
+        // comentário já publicada.
+        <ResponderAvaliacao
+          avaliacaoId={avaliacao.id}
+          podeIa={podeIa}
+          diasRestantes={diasQueRestam(avaliacao.dataAvaliacao)}
+        />
       ) : null}
       {(avaliacao.tagsPositivas.length > 0 ||
         avaliacao.tagsNegativas.length > 0) && (

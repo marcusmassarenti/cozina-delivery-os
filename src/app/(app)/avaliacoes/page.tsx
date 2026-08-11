@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
@@ -17,6 +18,7 @@ import {
 } from "@/lib/period"
 import { AlertTriangle } from "lucide-react"
 
+import { PendentesResposta } from "./_components/pendentes-resposta"
 import { AvaliacoesFilters } from "./_components/avaliacoes-filters"
 import { AvaliacoesNetworkDashboard } from "./_components/avaliacoes-network-dashboard"
 
@@ -146,6 +148,13 @@ export default async function AvaliacoesPage({
           plataformaSelected={selectedUnit ? plataforma : plataformaParam}
         />
       </div>
+
+      {/* Fica ACIMA do corpo e fora do filtro de mês/loja: é a única parte
+          da tela com prazo correndo. Suspense pra a consulta da rede não
+          segurar o resto da página. */}
+      <Suspense fallback={null}>
+        <PendentesResposta />
+      </Suspense>
 
       {/* Body */}
       {!selectedUnit ? (
