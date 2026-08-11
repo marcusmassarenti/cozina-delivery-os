@@ -242,12 +242,32 @@ async function unitIdsDaHolding(holdingId: string): Promise<string[]> {
     .select("id")
     .eq("holding_id", holdingId)
   const brandIds = (marcas ?? []).map((b) => b.id as string)
-  if (brandIds.length === 0) return []
-  const { data: lojas } = await admin
-    .from("units")
-    .select("id")
-    .in("brand_id", brandIds)
-  return (lojas ?? []).map((u) => u.id as string)
+
+  const ids = new Set<string>()
+  if (brandIds.length > 0) {
+    const { data: lojas } = await admin
+      .from("units")
+      .select("id")
+      .in("brand_id", brandIds)
+    for (const u of lojas ?? []) ids.add(u.id as string)
+  }
+
+  // As lojas EMPRESTADAS por outra empresa contam aqui.
+  //
+  // Esta função alimenta o "ver como o cliente", cujo propósito é mostrar
+  // exatamente o que ele vê. Sem isto, a loja compartilhada sumia justo no
+  // modo de conferência: o cliente enxergava a loja, e quem foi verificar via
+  // a conta vazia — concluindo que o compartilhamento não funcionou.
+  //
+  // O caminho normal (getAccessibleUnitIds pelo user_unit_access) sempre
+  // incluiu; era só este atalho que ficava para trás.
+  const { getLojasCompartilhadasPorHolding } = await import(
+    "@/lib/data/lojas-compartilhadas"
+  )
+  const compartilhadas = await getLojasCompartilhadasPorHolding()
+  for (const l of compartilhadas.get(holdingId) ?? []) ids.add(l.unitId)
+
+  return [...ids]
 }
 
 /**

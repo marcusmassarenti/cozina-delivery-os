@@ -339,6 +339,17 @@ export function UnitsListView({
                       Inativa
                     </span>
                   )}
+                  {/* Loja de outra empresa. Sem o selo, o código fora da
+                      sequência (ela carrega o número da rede dona) e a
+                      ausência de botões pareciam defeito. */}
+                  {unit.compartilhada && (
+                    <span
+                      className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                      title={`Compartilhada por ${unit.compartilhada.donaNome} — você acompanha, quem edita é a empresa dona.`}
+                    >
+                      Compartilhada
+                    </span>
+                  )}
                 </div>
                 <p className="line-clamp-2 text-sm font-semibold leading-snug">
                   {unit.name}

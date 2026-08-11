@@ -12,10 +12,15 @@ import {
   type SemDadoState,
 } from "@/app/(app)/_actions-sem-dado"
 
+// ⚠️ Toda plataforma precisa estar aqui. O Cardápio Web entrou no sistema
+// depois deste mapa e ninguém voltou: a faixa escrevia "1 loja no undefined"
+// na cara do cliente. O fallback pro código cru evita que a próxima falte
+// vire palavrão na tela de novo.
 const NOME: Record<string, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 /**
@@ -40,7 +45,10 @@ export function LojasSemDadoAviso({ lojas }: { lojas: LojaSemDado[] }) {
     porPlat.get(l.plataforma)!.push(l)
   }
   const resumo = [...porPlat.entries()]
-    .map(([p, ls]) => `${ls.length} ${ls.length === 1 ? "loja" : "lojas"} no ${NOME[p]}`)
+    .map(
+      ([p, ls]) =>
+        `${ls.length} ${ls.length === 1 ? "loja" : "lojas"} no ${NOME[p] ?? p}`,
+    )
     .join(" · ")
 
   return (

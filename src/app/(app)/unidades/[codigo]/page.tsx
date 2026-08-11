@@ -286,6 +286,13 @@ export default async function UnidadeDetalhePage({
                     Inativa
                   </span>
                 )}
+                {/* Loja emprestada por outra empresa: diz de quem é, aqui no
+                    topo, onde a pessoa procura o motivo de não poder editar. */}
+                {unit.compartilhada && (
+                  <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                    Compartilhada por {unit.compartilhada.donaNome}
+                  </span>
+                )}
                 {/* Selo do iFood ao lado do nome, como no app deles. Loja sem
                     relatório importado não renderiza nada — ver SuperBadge. */}
                 {superLoja && (

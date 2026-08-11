@@ -50,6 +50,14 @@ export type Unit = {
   /** Logo da loja (white-label por unidade). null = usa o logo da empresa. */
   logoUrl: string | null
   platforms: CanalId[]
+  /**
+   * Loja de OUTRA empresa, compartilhada com você só pra acompanhar.
+   *
+   * Sem esta marca a tela mentia por omissão: a loja aparecia igual às suas,
+   * com um código fora da sua sequência (ela carrega o número da rede dona) e
+   * sem botão de editar. Quem olhava concluía defeito, não permissão.
+   */
+  compartilhada?: { donaNome: string }
   /** Por plataforma, o ID da loja no sistema externo (ex.: iFood 260777). */
   externalStoreIds: Partial<Record<PlatformId, string | null>>
   /** Por plataforma, a data de inauguração na plataforma (override da unidade). */
@@ -195,9 +203,27 @@ export const getUnits = unstable_cache(getUnitsUncached, ["units-monthly-v2"], {
 export async function getVisibleUnits(): Promise<Unit[]> {
   const all = await getUnits()
   const allowed = await getAccessibleUnitIds()
-  if (allowed === null) return all
+  const marcar = async (lista: Unit[]) => {
+    // Marca as emprestadas. A pergunta "de quem é esta loja?" só tem resposta
+    // aqui, onde a lista já foi montada — cada tela responderia sozinha e
+    // responderia diferente.
+    const holdingId = await getCurrentHoldingId()
+    if (!holdingId) return lista
+    const { getLojasCompartilhadasPorHolding } = await import(
+      "@/lib/data/lojas-compartilhadas"
+    )
+    const mapa = await getLojasCompartilhadasPorHolding()
+    const minhas = mapa.get(holdingId) ?? []
+    if (minhas.length === 0) return lista
+    const porId = new Map(minhas.map((l) => [l.unitId, l.donaNome]))
+    return lista.map((u) => {
+      const dona = porId.get(u.id)
+      return dona ? { ...u, compartilhada: { donaNome: dona } } : u
+    })
+  }
+  if (allowed === null) return marcar(all)
   const set = new Set(allowed)
-  return all.filter((u) => set.has(u.id))
+  return marcar(all.filter((u) => set.has(u.id)))
 }
 
 /**
@@ -262,7 +288,7 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
     .maybeSingle()
   if (!logoErr)
     logoUrl = (logoRow as { logo_url: string | null } | null)?.logo_url ?? null
-  return attach(
+  const unidade = attach(
     data,
     platforms,
     externalStoreIds,
@@ -270,6 +296,20 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
     monthlyByUnit.get(data.id) ?? emptyMonthly,
     logoUrl,
   )
+
+  // A marca de "emprestada" também aqui: a tela da unidade não passa por
+  // getVisibleUnits, e sem isto o selo aparecia na LISTA e sumia ao abrir a
+  // loja — bem onde a pessoa procura o motivo de não ter botão de editar.
+  const holdingId = await getCurrentHoldingId()
+  if (holdingId) {
+    const { getLojasCompartilhadasPorHolding } = await import(
+      "@/lib/data/lojas-compartilhadas"
+    )
+    const mapa = await getLojasCompartilhadasPorHolding()
+    const dona = (mapa.get(holdingId) ?? []).find((l) => l.unitId === unidade.id)
+    if (dona) return { ...unidade, compartilhada: { donaNome: dona.donaNome } }
+  }
+  return unidade
 }
 
 export async function getUnitPlatformDetails(
