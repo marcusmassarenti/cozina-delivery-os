@@ -721,9 +721,17 @@ export default async function Home({
     {
       label: "Pedidos Cancelados",
       value: fmtNum(network.cancelados),
+      // O parcial some dentro do total, e são problemas diferentes: total é
+      // pedido que não aconteceu, parcial é item errado num pedido que
+      // seguiu. Medido em 2026: 726 parciais contra 3.567 totais — 17% do
+      // que a tela chamava de "cancelado" era outra coisa.
       trend:
         network.pedidos > 0
-          ? `${((network.cancelados / network.pedidos) * 100).toFixed(1)}% dos pedidos`
+          ? `${((network.cancelados / network.pedidos) * 100).toFixed(1)}% dos pedidos${
+              network.canceladosParciais > 0
+                ? ` · ${fmtNum(network.canceladosParciais)} são item errado`
+                : ""
+            }`
           : "sem pedidos no mês",
       tone: "neutral",
       icon: XCircle,
@@ -2124,6 +2132,10 @@ function networkTotalsMerged(
   let bruto = 0
   let liquido = 0
   let cancelados = 0
+  // Só o iFood distingue total de parcial hoje — as outras plataformas mandam
+  // um número só. Por isso o card diz "N são item errado" em vez de fatiar o
+  // total inteiro, que daria a entender que o resto foi conferido.
+  let canceladosParciais = 0
   // Venda direta: dinheiro/PIX/maquininha pagos na loja — não passa pelo
   // repasse. Somada sempre que a plataforma entra no escopo, pra que o
   // "Líquido pra Você" da rede seja o RESULTADO TOTAL, igual ao detalhe por
@@ -2162,6 +2174,7 @@ function networkTotalsMerged(
         liquido += ifoodImp.liquido
         cancelados +=
           ifoodImp.cancelamentoTotalQtd + ifoodImp.cancelamentoParcialQtd
+        canceladosParciais += ifoodImp.cancelamentoParcialQtd
       } else {
         const p = doMonthly("ifood")
         if (p) {
@@ -2263,6 +2276,7 @@ function networkTotalsMerged(
     mediaTicket,
     taxaRepasse,
     cancelados,
+    canceladosParciais,
   }
 }
 

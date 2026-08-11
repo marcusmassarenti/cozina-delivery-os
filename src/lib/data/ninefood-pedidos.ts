@@ -46,6 +46,17 @@ export type NinefoodPedidoResumo = {
   avaliados: number
   tempoPreparoMedioMin: number
   duracaoEntregaMediaMin: number
+  /**
+   * Tempo do ENTREGADOR até o cliente, em minutos.
+   *
+   * Diferente de `duracaoEntregaMediaMin`, que é o pedido inteiro (aceite +
+   * preparo + rota). Este isola a perna da rua — é o número que separa
+   * "cozinha demorou" de "entrega demorou", e a ação pra cada um é outra.
+   *
+   * Estava gravado em 12.233 pedidos e nunca era lido: não entrava nem no
+   * SELECT.
+   */
+  tempoEntregadorClienteMedioMin: number
   tempoAceitacaoMedioSeg: number
   tempoEsperaRetiradaMedioSeg: number
   preparacaoAtrasadaPct: number
@@ -79,6 +90,7 @@ function emptyResumo(): NinefoodPedidoResumo {
     avaliados: 0,
     tempoPreparoMedioMin: 0,
     duracaoEntregaMediaMin: 0,
+    tempoEntregadorClienteMedioMin: 0,
     tempoAceitacaoMedioSeg: 0,
     tempoEsperaRetiradaMedioSeg: 0,
     preparacaoAtrasadaPct: 0,
@@ -116,10 +128,11 @@ type Row = {
   preparacao_atrasada: boolean | null
   tempo_aceitacao_seg: number | null
   tempo_espera_retirada_seg: number | null
+  tempo_entregador_cliente_seg: number | null
 }
 
 const SELECT =
-  "unit_id, data, import_id, receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, pay_channel, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg"
+  "unit_id, data, import_id, receita_vendas, receita_real_loja, preco_original_item, despesas_ofertas, despesas_comissao, taxa_canal_pagamento, custos_logisticos, custo_loja_oferta_entrega_gratis, qtd_pedidos_anteriores_cliente, nivel_avaliacao, tempo_preparo_min, duracao_entrega_seg, forma_pagamento, pay_channel, horario_cancelamento, metodo_entrega, parte_responsavel_cancelamento, motivos_cancelamento_comerciante, preparacao_atrasada, tempo_aceitacao_seg, tempo_espera_retirada_seg, tempo_entregador_cliente_seg"
 
 const num = (v: number | string | null) => Math.abs(Number(v) || 0)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -203,6 +216,8 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   let nPreparo = 0
   let somaEntrega = 0
   let nEntrega = 0
+  let somaEntregador = 0
+  let nEntregador = 0
   let somaAceitacao = 0
   let nAceitacao = 0
   let somaEspera = 0
@@ -260,6 +275,13 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
       somaEntrega += row.duracao_entrega_seg
       nEntrega++
     }
+    if (
+      row.tempo_entregador_cliente_seg != null &&
+      row.tempo_entregador_cliente_seg > 0
+    ) {
+      somaEntregador += row.tempo_entregador_cliente_seg
+      nEntregador++
+    }
     const forma = formaPagamentoLabel({
       payChannel: row.pay_channel,
       formaPagamentoText: row.forma_pagamento,
@@ -276,6 +298,8 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   r.notaMedia = r.avaliados > 0 ? somaNotas / r.avaliados : 0
   r.tempoPreparoMedioMin = nPreparo > 0 ? somaPreparo / nPreparo : 0
   r.duracaoEntregaMediaMin = nEntrega > 0 ? somaEntrega / nEntrega / 60 : 0
+  r.tempoEntregadorClienteMedioMin =
+    nEntregador > 0 ? somaEntregador / nEntregador / 60 : 0
   r.tempoAceitacaoMedioSeg = nAceitacao > 0 ? somaAceitacao / nAceitacao : 0
   r.tempoEsperaRetiradaMedioSeg = nEspera > 0 ? somaEspera / nEspera : 0
   r.preparacaoAtrasadaPct =
@@ -298,6 +322,8 @@ function aggregate(rows: Row[]): NinefoodPedidoResumo {
   r.notaMedia = Math.round(r.notaMedia * 100) / 100
   r.tempoPreparoMedioMin = Math.round(r.tempoPreparoMedioMin * 10) / 10
   r.duracaoEntregaMediaMin = Math.round(r.duracaoEntregaMediaMin * 10) / 10
+  r.tempoEntregadorClienteMedioMin =
+    Math.round(r.tempoEntregadorClienteMedioMin * 10) / 10
   r.tempoAceitacaoMedioSeg = Math.round(r.tempoAceitacaoMedioSeg)
   r.tempoEsperaRetiradaMedioSeg = Math.round(r.tempoEsperaRetiradaMedioSeg)
   r.descontoPct = Math.round(r.descontoPct * 10) / 10

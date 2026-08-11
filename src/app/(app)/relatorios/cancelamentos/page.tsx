@@ -57,8 +57,15 @@ export default async function CancelamentosPage({
       const f = ifoodMap.get(u.id)
       const n = nineMap.get(u.id)
       const k = keetaMap.get(u.id)
-      const cancelIfood =
-        (f?.cancelamentoTotalQtd ?? 0) + (f?.cancelamentoParcialQtd ?? 0)
+      // ⚠️ Total e PARCIAL são coisas diferentes e o relatório somava as duas.
+      //
+      // Cancelamento total é pedido que não aconteceu; parcial é um item que
+      // veio errado num pedido que seguiu. Confundir os dois faz a loja
+      // parecer que perde pedido quando na verdade erra item — e a ação pra
+      // cada um é outra. Medido em 2026: 3.567 totais contra 726 parciais.
+      const cancelIfoodTotal = f?.cancelamentoTotalQtd ?? 0
+      const cancelIfoodParcial = f?.cancelamentoParcialQtd ?? 0
+      const cancelIfood = cancelIfoodTotal + cancelIfoodParcial
       const cancel99 = n?.cancelamentosQtd ?? 0
       const cancelKeeta = k?.cancelamentosQtd ?? 0
       const c = cwMap.get(u.id)
@@ -74,6 +81,8 @@ export default async function CancelamentosPage({
         pedidos,
         cancelados,
         cancelIfood,
+        cancelIfoodTotal,
+        cancelIfoodParcial,
         cancel99,
         cancelKeeta,
         cancelCw,
@@ -245,8 +254,18 @@ export default async function CancelamentosPage({
                     >
                       {fmtPct(r.taxa)}
                     </td>
+                    {/* O parcial ao lado do total, não somado: são problemas
+                        diferentes e a ação pra cada um é outra. */}
                     <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
                       {r.cancelIfood || "—"}
+                      {r.cancelIfoodParcial > 0 && (
+                        <span
+                          className="ml-1 text-[10px] text-amber-700 dark:text-amber-400"
+                          title={`${r.cancelIfoodTotal} totais e ${r.cancelIfoodParcial} parciais (item errado num pedido que seguiu)`}
+                        >
+                          {r.cancelIfoodParcial}p
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
                       {r.cancel99 || "—"}

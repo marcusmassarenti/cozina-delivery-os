@@ -26,6 +26,15 @@ import type {
 export type KeetaCoverageMatrix = NinefoodCoverageMatrix
 
 export type KeetaResumo = {
+  /**
+   * Horas abertas somadas e em quantos dias houve abertura.
+   *
+   * Guardo os dois em vez da média pronta porque o agregado da rede precisa
+   * somar antes de dividir — média de médias pesa igual a loja de 30 dias e a
+   * de 3. Estavam gravadas em 1.627 dias-loja e nenhuma tela lia.
+   */
+  horasAbertasSoma: number
+  diasComAbertura: number
   pedidos: number
   bruto: number
   liquido: number
@@ -52,6 +61,8 @@ function emptyKeeta(): KeetaResumo {
     pctLoja: 0,
     hasData: false,
     promocoesLoja: 0,
+    horasAbertasSoma: 0,
+    diasComAbertura: 0,
   }
 }
 
@@ -100,10 +111,13 @@ export async function getKeetaResumoByUnits(
     vendas_itens: number | string
     total_pedidos: number | null
     pedidos_cancelados: number | null
+    tempo_aberto_h: number | string | null
   }>((a, b) => {
     let q = admin
       .from("keeta_daily_loja")
-      .select("unit_id, vendas_itens, total_pedidos, pedidos_cancelados")
+      .select(
+        "unit_id, vendas_itens, total_pedidos, pedidos_cancelados, tempo_aberto_h",
+      )
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
@@ -117,6 +131,14 @@ export async function getKeetaResumoByUnits(
     cur.bruto += Number(r.vendas_itens) || 0
     cur.pedidos += r.total_pedidos || 0
     cur.cancelamentosQtd += r.pedidos_cancelados || 0
+    // Horas abertas: soma e conta os dias, pra virar média por dia aberto.
+    // Média sobre TODOS os dias do mês daria a impressão de que a loja abre
+    // menos do que abre — dia sem dado não é dia fechado.
+    const h = Number(r.tempo_aberto_h)
+    if (Number.isFinite(h) && h > 0) {
+      cur.horasAbertasSoma += h
+      cur.diasComAbertura += 1
+    }
     out.set(r.unit_id, cur)
   }
 

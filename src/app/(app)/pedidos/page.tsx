@@ -156,7 +156,28 @@ export default async function PedidosPage({
               faturamento: fatMap?.get(u.unitId)?.bruto || u.precoOriginal,
             }))
             .sort((a, b) => b.faturamento - a.faturamento)
-          return { resumo, unitsWithData, porLoja: enriched, promocoes }
+          // Horas abertas: soma antes de dividir. Média de médias pesaria
+          // igual a loja com 30 dias de dado e a com 3.
+          const abertura = ids.reduce(
+            (acc, id) => {
+              const k = fatMap?.get(id)
+              if (!k) return acc
+              return {
+                horas: acc.horas + k.horasAbertasSoma,
+                dias: acc.dias + k.diasComAbertura,
+              }
+            },
+            { horas: 0, dias: 0 },
+          )
+          return {
+            resumo,
+            unitsWithData,
+            porLoja: enriched,
+            promocoes,
+            horasAbertasMedia:
+              abertura.dias > 0 ? abertura.horas / abertura.dias : 0,
+            diasComAbertura: abertura.dias,
+          }
         })()
       : null
   const ninefood =
@@ -252,6 +273,8 @@ export default async function PedidosPage({
         <PedidosCardapiowebView op={cw!} lojas={filteredUnits.length} />
       ) : plataforma === "keeta" ? (
         <PedidosKeetaView
+          horasAbertasMedia={keeta!.horasAbertasMedia}
+          diasComAbertura={keeta!.diasComAbertura}
           resumo={keeta!.resumo}
           porLoja={keeta!.porLoja}
           promocoes={keeta!.promocoes}

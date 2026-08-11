@@ -268,6 +268,17 @@ export function PedidosNinefoodView({
                   : "—"
               }
             />
+            {/* A perna da RUA, separada do pedido inteiro. É o que distingue
+                "a cozinha demorou" de "a entrega demorou" — a linha acima
+                soma aceite, preparo e rota, e some essa diferença. */}
+            <LinhaInfo
+              label="Entregador → cliente"
+              value={
+                r.tempoEntregadorClienteMedioMin > 0
+                  ? `${r.tempoEntregadorClienteMedioMin.toFixed(1)} min`
+                  : "—"
+              }
+            />
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import Link from "next/link"
 import {
   BadgePercent,
   ChevronRight,
+  Clock,
   Megaphone,
   Receipt,
   Tag,
@@ -25,11 +26,16 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
  */
 export function PedidosKeetaView({
   resumo,
+  horasAbertasMedia,
+  diasComAbertura,
   porLoja,
   promocoes,
   periodoParam,
 }: {
   resumo: KeetaPedidoResumo
+  /** Média de horas abertas por dia em que a loja abriu. */
+  horasAbertasMedia: number
+  diasComAbertura: number
   porLoja?: KeetaPedidoUnitRow[]
   promocoes?: KeetaPromocaoResumo
   periodoParam?: string
@@ -167,6 +173,29 @@ export function PedidosKeetaView({
           </p>
         </div>
       </div>
+
+      {/* Tempo aberto: estava gravado em 1.627 dias-loja e nenhuma tela lia.
+          Loja fechada não vende, e é o primeiro lugar pra olhar quando o
+          faturamento cai sem o ticket mudar. */}
+      {diasComAbertura > 0 && (
+        <div className="rounded-xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Tempo de loja aberta</h3>
+          </div>
+          <p className="text-2xl font-bold tabular-nums">
+            {horasAbertasMedia.toFixed(1)}{" "}
+            <span className="text-sm font-normal text-muted-foreground">
+              h por dia
+            </span>
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            Média dos {fmtNum(diasComAbertura)} dias em que houve abertura —
+            dia sem dado não entra, senão a loja pareceria abrir menos do que
+            abre.
+          </p>
+        </div>
+      )}
 
       {/* Campanhas + Turnos + Cancelamento */}
       <div className="grid gap-4 lg:grid-cols-3">
