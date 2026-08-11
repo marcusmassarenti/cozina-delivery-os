@@ -237,7 +237,7 @@ export default async function RelatorioSuperPage({
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold">Situação loja a loja</h2>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto pb-3">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -346,7 +346,7 @@ export default async function RelatorioSuperPage({
         {/* Tabela compacta, não um card por loja: com 12 lojas, o card empurrava
             o resto da página pra baixo e virava scroll. Aqui é uma linha cada,
             com as 3 tags mais fortes de cada lado — o resto sai no hover. */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto pb-3">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -525,7 +525,7 @@ function Falta({ s }: { s: SuperCriterios }) {
   return (
     <span
       title={`Falta pro Nível 5: ${itens.join(", ")}`}
-      className="block max-w-[190px] truncate text-[11px] text-rose-700 dark:text-rose-400"
+      className="block whitespace-nowrap text-[11px] text-rose-700 dark:text-rose-400"
     >
       {itens.join(" · ")}
     </span>
