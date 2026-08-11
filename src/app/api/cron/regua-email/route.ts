@@ -7,6 +7,7 @@
  * A trava contra e-mail repetido é o índice único de email_enviados, não a
  * data — rodar duas vezes no mesmo dia não manda nada duas vezes.
  */
+import { enviarNovidades } from "@/lib/email/novidades"
 import { rodarReguaEmail } from "@/lib/data/regua-email"
 import { rodarReguaFechamento } from "@/lib/data/regua-fechamento"
 import { registrarCron } from "@/lib/cron/registrar"
@@ -33,12 +34,31 @@ export async function GET(req: Request) {
   // nos outros dias ela só devolve "não é hoje".
   const fechamento = await rodarReguaFechamento()
 
+  // ⚠️ GANCHO TEMPORÁRIO — campanha de novidades de ago/26.
+  //
+  // Mora aqui porque a chave do Resend só existe na Vercel: disparo local não
+  // sai (a chave do .env.local foi revogada). É o mesmo caminho pelo qual o
+  // e-mail de "conectado" da Vbfood saiu — o cron é quem manda, não a máquina.
+  //
+  // Se desliga sozinho: `enviarEmail` não repete um tipo já enviado com
+  // sucesso pro mesmo cliente, então da segunda passada em diante isto vira
+  // uma consulta e nada mais.
+  //
+  // REMOVER depois de confirmar que os 6 clientes receberam.
+  let novidades: Awaited<ReturnType<typeof enviarNovidades>> | null = null
+  try {
+    novidades = await enviarNovidades({ confirmar: true })
+  } catch (e) {
+    console.error("enviarNovidades:", e)
+  }
+
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
     temChave: Boolean(process.env.RESEND_API_KEY),
     ...r,
     fechamento,
+    novidades,
   })
   })
 }
