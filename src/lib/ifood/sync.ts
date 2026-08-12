@@ -27,7 +27,7 @@ import { getAnticipations, summarizeAnticipations } from "./anticipations"
 import { logPedidosSync, syncPedidosDaLoja } from "./pedidos-sync"
 import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
-import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 
 export type UnitSyncResult = {
   unitId: string
@@ -109,7 +109,7 @@ async function listIfoodUnits(unitIds?: string[] | null) {
   if (unitIds) q = q.in("unit_id", unitIds)
   const [{ data, error }, inativas] = await Promise.all([
     q,
-    idsDeUnidadesInativas(),
+    idsDeUnidadesForaDoSync(),
   ])
 
   if (error) throw new Error(`Falha ao listar unidades: ${error.message}`)

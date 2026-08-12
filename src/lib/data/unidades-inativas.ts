@@ -41,3 +41,25 @@ export async function idsDeUnidadesInativas(): Promise<Set<string>> {
   }
   return new Set(((data ?? []) as { id: string }[]).map((u) => u.id))
 }
+
+/**
+ * TODAS as lojas que o sync deve pular, por qualquer motivo.
+ *
+ * Ponto único de decisão de propósito. São dois motivos hoje — loja fechada no
+ * cadastro e assinatura suspensa há mais de uma semana — e cada um nasceu numa
+ * época: se cada sync fizesse a própria união, o terceiro motivo entraria em
+ * três dos quatro e ninguém perceberia no quarto.
+ *
+ * As duas consultas em paralelo: são pequenas e independentes.
+ */
+export async function idsDeUnidadesForaDoSync(): Promise<Set<string>> {
+  const { idsDeUnidadesSemAssinatura } = await import(
+    "@/lib/data/unidades-sem-assinatura"
+  )
+  const [inativas, semAssinatura] = await Promise.all([
+    idsDeUnidadesInativas(),
+    idsDeUnidadesSemAssinatura(),
+  ])
+  for (const id of semAssinatura) inativas.add(id)
+  return inativas
+}

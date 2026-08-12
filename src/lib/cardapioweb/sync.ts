@@ -18,6 +18,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 
 import type { CwAmbiente, CwAuthMode } from "./auth"
 import {
@@ -295,17 +296,28 @@ export async function sincronizarTodas(
 ): Promise<ResultadoSync[]> {
   const admin = createAdminClient()
   const prazo = Date.now() + (opts.limiteMs ?? 4 * 60_000)
-  const { data } = await admin
-    .from("cardapioweb_installs")
-    .select("id, merchant_name")
-    .eq("active", true)
-    .eq("ambiente", "producao")
-    .not("unit_id", "is", null) // sem loja o dado não aparece em tela nenhuma
-    .order("created_at")
+  const [{ data }, foraDoSync] = await Promise.all([
+    admin
+      .from("cardapioweb_installs")
+      .select("id, merchant_name, unit_id")
+      .eq("active", true)
+      .eq("ambiente", "producao")
+      .not("unit_id", "is", null) // sem loja o dado não aparece em tela nenhuma
+      .order("created_at"),
+    // Loja fechada no cadastro ou cliente suspenso há mais de uma semana.
+    // Este sync era o único dos cinco sem o filtro — o do iFood e os dois da
+    // 99 já paravam em loja inativa, e o Cardápio Web puxava assim mesmo.
+    idsDeUnidadesForaDoSync(),
+  ])
 
   const out: ResultadoSync[] = []
   for (const i of data ?? []) {
     const id = i.id as string
+    const unitId = i.unit_id as string | null
+    if (unitId && foraDoSync.has(unitId)) {
+      console.log(`[cw-cron] ${i.merchant_name ?? id}: fora do sync, pulando.`)
+      continue
+    }
     // A function da Vercel tem 5 minutos. Parar de COMEÇAR loja nova perto do
     // teto é melhor que ser cortado no meio: o cursor de cada loja guarda
     // onde parou, então quem ficou de fora entra na rodada seguinte.

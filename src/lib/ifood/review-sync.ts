@@ -15,7 +15,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isAppHomologation } from "./auth"
 import { fetchAllReviews, getReview, type IfoodReview } from "./review"
-import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 
 /** Tags de ELOGIO padrão do iFood (mesmas que o import gravava). Chave =
  *  minúsculo pra casar sem se importar com a caixa da API ("Comida Saborosa"
@@ -192,7 +192,7 @@ export async function syncIfoodReviews(
   }
   const [{ data: vinculos, error }, inativas] = await Promise.all([
     q,
-    idsDeUnidadesInativas(),
+    idsDeUnidadesForaDoSync(),
   ])
   if (error) throw new Error(`Falha ao listar lojas vinculadas: ${error.message}`)
 

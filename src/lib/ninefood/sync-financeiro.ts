@@ -13,7 +13,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAllShopBillDetail, type NinefoodBillRow } from "./financeiro"
-import { idsDeUnidadesInativas } from "@/lib/data/unidades-inativas"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 
 const cents = (v: number | null | undefined) => Math.round(Number(v ?? 0)) / 100
 
@@ -148,7 +148,7 @@ export async function syncNinefoodFinanceiro(opts: {
   if (opts.appShopIds?.length) q = q.in("app_shop_id", opts.appShopIds)
   const [{ data: links }, inativas] = await Promise.all([
     q,
-    idsDeUnidadesInativas(),
+    idsDeUnidadesForaDoSync(),
   ])
 
   const results: ShopSyncResult[] = []
