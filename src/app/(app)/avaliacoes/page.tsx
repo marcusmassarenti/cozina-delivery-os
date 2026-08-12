@@ -1,4 +1,6 @@
 import { Suspense } from "react"
+import Link from "next/link"
+import { AvaliacoesCwTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-cw-tab"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
@@ -57,7 +59,12 @@ export default async function AvaliacoesPage({
   const year = Number(periodRange.start.slice(0, 4))
   const month = Number(periodRange.start.slice(5, 7))
   const unidadeCode = sp.unidade ?? null
-  const plataformaParam = ["ifood", "99food", "keeta"].includes(
+  // O Cardápio Web entra aqui desde que a integração de avaliações existe.
+  // O comentário que dizia "escopo reviews não liberado" ficou pelo caminho e
+  // virou decisão: por causa dele, loja de canal próprio via esta tela dizer
+  // que ela "não tem plataformas com avaliações" — enquanto a MESMA loja, na
+  // aba da unidade, mostrava as avaliações com sub-nota por dimensão.
+  const plataformaParam = ["ifood", "99food", "keeta", "cardapioweb"].includes(
     sp.plataforma ?? "",
   )
     ? (sp.plataforma as PlatformId)
@@ -82,9 +89,10 @@ export default async function AvaliacoesPage({
   const unitOptions = activeUnits.map((u) => ({
     code: u.code,
     name: u.name,
-    // As 3 plataformas exportam avaliação (iFood, 99 Food e Keeta)
+    // As 4 plataformas expõem avaliação.
     platforms: u.platforms.filter(
-      (p) => p === "ifood" || p === "99food" || p === "keeta",
+      (p) =>
+        p === "ifood" || p === "99food" || p === "keeta" || p === "cardapioweb",
     ),
   }))
 
@@ -93,8 +101,11 @@ export default async function AvaliacoesPage({
     : null
   const availableForUnit: PlatformId[] =
     selectedUnit?.platforms.filter(
-      (p): p is "ifood" | "99food" | "keeta" =>
-        p === "ifood" || p === "99food" || p === "keeta",
+      (p): p is "ifood" | "99food" | "keeta" | "cardapioweb" =>
+        p === "ifood" ||
+        p === "99food" ||
+        p === "keeta" ||
+        p === "cardapioweb",
     ) ?? []
   // Plataforma efetiva = a do query, ou a 1ª disponível na unidade
   const plataforma: PlatformId | null =
@@ -161,13 +172,10 @@ export default async function AvaliacoesPage({
         <AvaliacoesNetworkDashboard
           year={year}
           month={month}
-          // Cardápio Web ainda não expõe avaliações (escopo `reviews`
-          // não liberado), então nunca vira filtro desta tela.
-          plataforma={
-            plataformaParam && plataformaParam !== "cardapioweb"
-              ? plataformaParam
-              : null
-          }
+          plataforma={plataformaParam}
+          // Lista concreta: o agregado do Cardápio Web não entende
+          // "sem filtro" — array vazio ali significa "sem dado".
+          cwUnitIds={activeUnits.map((u) => u.id)}
           notasFiltro={notasFiltro}
           unitIds={networkUnitIds}
         />
@@ -194,6 +202,15 @@ export default async function AvaliacoesPage({
           month={month}
           notasFiltro={notasFiltro}
         />
+      ) : plataforma === "cardapioweb" ? (
+        // Mesmo componente da aba da unidade — o canal próprio é o único que
+        // traz sub-nota por dimensão (atendimento, embalagem, tempo), e ele
+        // não aceita filtro de estrelas ainda.
+        <AvaliacoesCwTab
+          unitId={selectedUnit.id}
+          year={year}
+          month={month}
+        />
       ) : null}
     </div>
   )
@@ -206,8 +223,11 @@ function NoPlatformsState({ unitName }: { unitName: string }) {
         {unitName} não tem plataformas com avaliações
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Avaliações vêm do iFood, do 99 Food e do Keeta. Cadastre uma dessas
-        plataformas em <a href="/unidades" className="underline">/unidades</a>{" "}
+        Avaliações vêm do iFood, do 99 Food, do Keeta e do Cardápio Web.
+        Cadastre uma dessas plataformas em{" "}
+        <Link href="/unidades" className="underline">
+          /unidades
+        </Link>{" "}
         pra começar.
       </p>
       <div className="mt-3 flex items-center justify-center gap-2">

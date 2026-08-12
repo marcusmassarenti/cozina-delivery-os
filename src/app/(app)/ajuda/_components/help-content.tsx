@@ -13,9 +13,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         title: "Como o sistema funciona (visão geral)",
-        oque: "O Delivery OS junta o que as suas lojas vendem no iFood, 99 Food e Keeta e transforma em relatórios, DRE e alertas. Você sobe os relatórios das plataformas (ou conecta), e o sistema consolida tudo por loja e pra rede inteira.",
+        oque: "O Delivery OS junta o que as suas lojas vendem no iFood, 99 Food, Keeta e Cardápio Web e transforma em relatórios, DRE e alertas. Você sobe os relatórios das plataformas (ou conecta), e o sistema consolida tudo por loja e pra rede inteira.",
         como: [
-          "1) Personalize a conta (logo/nome). 2) Cadastre suas lojas. 3) Faça a primeira importação (sugestão: iFood).",
+          "1) Personalize a conta (logo/nome). 2) Cadastre suas lojas. 3) Conecte a primeira loja (iFood, 99 Food ou Cardápio Web) — ou suba a planilha, se for Keeta.",
           "Depois disso, Dashboard, Relatórios e DRE já mostram seus números.",
         ],
       },
@@ -70,7 +70,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         title: "Avaliações",
-        oque: "As avaliações dos clientes (iFood/99/Keeta), por loja ou da rede toda. Ajuda a acompanhar a satisfação e responder onde precisa.",
+        oque: "As avaliações dos clientes (iFood, 99 Food, Keeta e Cardápio Web), por loja ou da rede toda. Ajuda a acompanhar a satisfação e responder onde precisa.",
         href: "/avaliacoes",
       },
     ],

@@ -19,14 +19,16 @@ import {
   getAvaliacoesByUnitForMonth,
 } from "@/lib/data/avaliacoes-network"
 import { getNetworkKeetaAvaliacoesForMonth } from "@/lib/data/keeta-imported"
+import { getNetworkCardapioWebAvaliacoesForMonth } from "@/lib/data/cardapioweb-avaliacoes"
 import { fmtNum, fmtPct } from "@/lib/format"
 
-type PlatFiltro = "ifood" | "99food" | "keeta" | null
+type PlatFiltro = "ifood" | "99food" | "keeta" | "cardapioweb" | null
 
-const PLAT_LABEL: Record<"ifood" | "99food" | "keeta", string> = {
+const PLAT_LABEL: Record<"ifood" | "99food" | "keeta" | "cardapioweb", string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 /**
@@ -40,6 +42,7 @@ export async function AvaliacoesNetworkDashboard({
   plataforma = null,
   notasFiltro = [],
   unitIds,
+  cwUnitIds,
 }: {
   year: number
   month: number
@@ -48,11 +51,20 @@ export async function AvaliacoesNetworkDashboard({
   notasFiltro?: number[]
   /** Escopo de lojas. undefined = rede inteira (admin); array = só essas. */
   unitIds?: string[]
+  /**
+   * Lojas do escopo, SEMPRE como lista concreta. O agregado do Cardápio Web
+   * exige os ids (lista vazia = sem dado), diferente dos outros três, que
+   * tratam `undefined` como "sem filtro". Passar à parte evita ter que
+   * transformar `undefined` em lista aqui e mudar o escopo dos outros de
+   * quebra.
+   */
+  cwUnitIds: string[]
 }) {
-  const [ifood, nine, keeta, byUnit] = await Promise.all([
+  const [ifood, nine, keeta, cw, byUnit] = await Promise.all([
     getNetworkAvaliacoesForMonth(year, month, unitIds),
     getNetworkNinefoodAvaliacoesForMonth(year, month, unitIds),
     getNetworkKeetaAvaliacoesForMonth(year, month, unitIds),
+    getNetworkCardapioWebAvaliacoesForMonth(cwUnitIds, year, month),
     getAvaliacoesByUnitForMonth(year, month, unitIds),
   ])
 
@@ -64,20 +76,24 @@ export async function AvaliacoesNetworkDashboard({
         ? nine
         : plataforma === "keeta"
           ? keeta
-          : null
+          : plataforma === "cardapioweb"
+            ? cw
+            : null
   const escopo = plataforma ? PLAT_LABEL[plataforma] : "rede"
 
   // ─── Distribuição + total (filtrado ou combinado) ────────────────
   const dist = active
     ? { ...active.distribucao }
     : {
-        1: ifood.distribucao[1] + nine.distribucao[1] + keeta.distribucao[1],
-        2: ifood.distribucao[2] + nine.distribucao[2] + keeta.distribucao[2],
-        3: ifood.distribucao[3] + nine.distribucao[3] + keeta.distribucao[3],
-        4: ifood.distribucao[4] + nine.distribucao[4] + keeta.distribucao[4],
-        5: ifood.distribucao[5] + nine.distribucao[5] + keeta.distribucao[5],
+        1: ifood.distribucao[1] + nine.distribucao[1] + keeta.distribucao[1] + cw.distribucao[1],
+        2: ifood.distribucao[2] + nine.distribucao[2] + keeta.distribucao[2] + cw.distribucao[2],
+        3: ifood.distribucao[3] + nine.distribucao[3] + keeta.distribucao[3] + cw.distribucao[3],
+        4: ifood.distribucao[4] + nine.distribucao[4] + keeta.distribucao[4] + cw.distribucao[4],
+        5: ifood.distribucao[5] + nine.distribucao[5] + keeta.distribucao[5] + cw.distribucao[5],
       }
-  const total = active ? active.total : ifood.total + nine.total + keeta.total
+  const total = active
+    ? active.total
+    : ifood.total + nine.total + keeta.total + cw.total
 
   if (total === 0) {
     return (
@@ -105,7 +121,7 @@ export async function AvaliacoesNetworkDashboard({
   const notaMedia = total > 0 ? soma / total : 0
   const comComentario = active
     ? active.comComentario
-    : ifood.comComentario + nine.comComentario + keeta.comComentario
+    : ifood.comComentario + nine.comComentario + keeta.comComentario + cw.comComentario
   const pct = (n: 1 | 2 | 3 | 4 | 5) => (total > 0 ? (dist[n] / total) * 100 : 0)
   const negPct = pct(1) + pct(2)
 
@@ -136,7 +152,8 @@ export async function AvaliacoesNetworkDashboard({
     unitName: string
     nota: number
     comentario: string
-    data: string
+    /** null no Cardápio Web quando a avaliação vem sem data. */
+    data: string | null
     /** Resposta da loja. iFood e Keeta têm; 99 Food não manda no arquivo. */
     resposta: string | null
   }
@@ -187,7 +204,9 @@ export async function AvaliacoesNetworkDashboard({
         ]
   )
     .filter((c) => notasFiltro.length === 0 || notasFiltro.includes(c.nota))
-    .sort((a, b) => (a.data > b.data ? -1 : 1))
+    // Sem data vai pro fim: o Cardápio Web às vezes manda avaliação
+    // sem carimbo, e comparar com null jogaria ela pro topo.
+    .sort((a, b) => ((a.data ?? "") > (b.data ?? "") ? -1 : 1))
     .slice(0, notasFiltro.length > 0 ? 15 : 6)
 
   // Ranking por unidade — usa o total/nota da plataforma filtrada (ou geral)

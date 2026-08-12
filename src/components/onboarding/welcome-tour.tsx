@@ -59,8 +59,8 @@ export function WelcomeTour({
     },
     {
       icon: FileUp,
-      title: "Importe os relatórios",
-      body: "Suba os relatórios do iFood, 99 Food e Keeta na tela de Importação — o sistema organiza e consolida tudo automaticamente.",
+      title: "Traga seus números",
+      body: "O jeito mais rápido é conectar a loja: iFood, 99 Food e Cardápio Web entram sozinhos, todo dia. A Keeta ainda é por planilha — sobe na tela de Importação e o sistema consolida tudo.",
     },
     {
       icon: Rocket,

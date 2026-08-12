@@ -62,8 +62,8 @@ export default async function LoginPage({
                 <span className="text-[#ff4d1c]">num só painel.</span>
               </h1>
               <p className="mt-6 max-w-md text-sm leading-relaxed text-white/60">
-                iFood, 99 Food e Keeta — pedidos, financeiro, avaliações e DRE
-                consolidados, em tempo real.
+                iFood, 99 Food, Keeta e Cardápio Web — pedidos, financeiro,
+                avaliações e DRE consolidados, em tempo real.
               </p>
             </div>
 
@@ -76,6 +76,7 @@ export default async function LoginPage({
                 <PlatformLogo platform="ifood" size="sm" />
                 <PlatformLogo platform="99food" size="sm" />
                 <PlatformLogo platform="keeta" size="sm" />
+                <PlatformLogo platform="cardapioweb" size="sm" />
               </div>
             </div>
           </div>
