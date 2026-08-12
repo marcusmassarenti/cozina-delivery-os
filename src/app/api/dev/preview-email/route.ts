@@ -85,6 +85,53 @@ export async function POST(req: Request) {
     cliente?: boolean
     tipo?: string
     excluir?: string[]
+    holdingId?: string
+  }
+
+  // Cobrança de UM cliente, na hora. Existe porque a régua roda 10h da manhã:
+  // cliente cujo vencimento é hoje só receberia o toque amanhã, já suspenso.
+  // Manda só pra holding pedida — rodar a régua inteira dispararia também as
+  // outras regras (boas-vindas, fim de teste) pra quem casasse hoje.
+  if (body.tipo === "fatura" && body.holdingId) {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const { contatoDaHolding } = await import("@/lib/email/contato-holding")
+    const { faturaVencendo } = await import("@/lib/email/templates")
+    const { enviarEmail } = await import("@/lib/email/enviar")
+    const { todayISO, daysUntil } = await import("@/lib/data/billing")
+
+    const admin = createAdminClient()
+    const { data: h } = await admin
+      .from("holdings")
+      .select("name, due_date, suspend_on, monthly_fee")
+      .eq("id", body.holdingId)
+      .maybeSingle()
+    if (!h?.due_date) return Response.json({ erro: "holding sem vencimento" })
+
+    const contato = await contatoDaHolding(body.holdingId)
+    if (!contato?.email) return Response.json({ erro: "holding sem contato" })
+
+    const venc = String(h.due_date)
+    const dias = daysUntil(venc, todayISO())
+    const fmt = (iso: string) => iso.split("-").reverse().join("/")
+    const m = faturaVencendo({
+      nome: contato.nome,
+      empresa: String(h.name),
+      temLoja: true,
+      valorMensal: h.monthly_fee ? Number(h.monthly_fee) : undefined,
+      vencimento: fmt(venc),
+      diasRestantes: dias,
+      suspendeEm: h.suspend_on ? fmt(String(h.suspend_on)) : undefined,
+    })
+    const tipo =
+      dias <= 0 ? "fatura-vence-hoje" : dias <= 2 ? "fatura-2-dias" : "fatura-5-dias"
+    const r = await enviarEmail({
+      holdingId: body.holdingId,
+      tipo: `${tipo}-${venc}`,
+      para: contato.email,
+      assunto: m.assunto,
+      html: m.html,
+    })
+    return Response.json({ para: contato.email, dias, tipo, ...r })
   }
 
   // Aviso de manutenção do iFood — disparo pontual, para quem tem iFood ativo.

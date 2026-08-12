@@ -95,8 +95,19 @@ export function ClientsTable({
   nowMs: number
 }) {
   const router = useRouter()
+  const hojeISO = () =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date())
   const [query, setQuery] = React.useState("")
   const [status, setStatus] = React.useState<FiltroStatus>("todos")
+  // Escopo acima do filtro de status: relação viva x relação encerrada.
+  // Sem isto a lista abre em "todos" e o suspenso divide espaço com quem
+  // paga — com 7 clientes já eram 2 linhas mortas no topo da tela.
+  const [escopo, setEscopo] = React.useState<"ativos" | "arquivados">("ativos")
   const [sort, setSort] = React.useState<SortKey>("mrr")
   const [page, setPage] = React.useState(0)
 
@@ -113,22 +124,48 @@ export function ClientsTable({
   const [confirmOpen, setConfirmOpen] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
 
+  // Arquivado = relação encerrada. Duas portas: acesso cortado, ou teste que
+  // venceu sem a pessoa nunca ter cadastrado loja (ela abriu a conta e não
+  // voltou). São situações diferentes — uma é cliente perdido, outra é
+  // cadastro que não virou cliente — mas nenhuma das duas pede ação hoje, que
+  // é o critério pra estar na tela principal.
+  const ehArquivado = React.useCallback(
+    (c: ClientOverview) =>
+      c.billingStatus === "suspended" ||
+      (c.trialEndsAt !== null &&
+        c.trialEndsAt < hojeISO() &&
+        c.activeUnits === 0),
+    [],
+  )
+  const arquivados = React.useMemo(
+    () => clients.filter(ehArquivado).length,
+    [clients, ehArquivado],
+  )
+
   const counts = React.useMemo(() => {
     const c: Record<string, number> = {
-      todos: clients.length,
+      todos: 0,
       paid: 0,
       trial: 0,
       pending: 0,
       overdue: 0,
       suspended: 0,
     }
-    for (const cl of clients) c[cl.billingStatus] = (c[cl.billingStatus] ?? 0) + 1
+    // Conta DENTRO do escopo: "Todos 8" embaixo de uma aba de 6 faz o leitor
+    // duvidar de qual número está certo.
+    for (const cl of clients) {
+      if ((escopo === "arquivados") !== ehArquivado(cl)) continue
+      c.todos += 1
+      c[cl.billingStatus] = (c[cl.billingStatus] ?? 0) + 1
+    }
     return c
-  }, [clients])
+  }, [clients, escopo, ehArquivado])
+
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase()
     let list = clients.filter((c) => {
+      if ((escopo === "arquivados") !== ehArquivado(c)) return false
       if (status !== "todos" && c.billingStatus !== status) return false
       if (!q) return true
       return (
@@ -149,9 +186,9 @@ export function ClientsTable({
       }
     })
     return list
-  }, [clients, query, status, sort])
+  }, [clients, query, status, sort, escopo, ehArquivado])
 
-  React.useEffect(() => setPage(0), [query, status, sort])
+  React.useEffect(() => setPage(0), [query, status, sort, escopo])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageClamped = Math.min(page, totalPages - 1)
@@ -201,6 +238,36 @@ export function ClientsTable({
   return (
     <div className="flex flex-col gap-3">
       {/* Controles */}
+      {/* Escopo — vem ACIMA do filtro de status: primeiro "de quem estamos
+          falando", depois "em que pé está". */}
+      <div className="flex gap-1 border-b">
+        {(
+          [
+            { k: "ativos" as const, l: "Ativos", n: clients.length - arquivados },
+            { k: "arquivados" as const, l: "Suspensos", n: arquivados },
+          ]
+        ).map((e) => (
+          <button
+            key={e.k}
+            type="button"
+            onClick={() => {
+              setEscopo(e.k)
+              setStatus("todos")
+            }}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              escopo === e.k
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {e.l}
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">
+              {e.n}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">
           {tabs.map((t) => {
