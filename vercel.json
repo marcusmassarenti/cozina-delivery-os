@@ -9,8 +9,9 @@
       "schedule": "0 10 * * *"
     },
     {
+      "_nota": "TEMPORARIO ate 14/ago/26. Normal: 0 9 (06:00 BRT). O iFood avisou manutencao nas APIs Financeiras em 13/ago das 6h as 8h BRT, e este cron puxa a Conciliacao — a API afetada. Movido pra 11:30 UTC (08:30 BRT), depois da janela. REVERTER pra 0 9 na quinta.",
       "path": "/api/cron/ifood-sync",
-      "schedule": "0 9 * * *"
+      "schedule": "30 11 * * *"
     },
     {
       "path": "/api/cron/cardapioweb-sync",
@@ -21,8 +22,9 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "_nota": "TEMPORARIO ate 14/ago/26. Normal: 0 10 (07:00 BRT). Mesma janela de manutencao do iFood. Movido pra 11:45 UTC (08:45 BRT). REVERTER pra 0 10 na quinta.",
       "path": "/api/cron/ifood-review-sync",
-      "schedule": "0 10 * * *"
+      "schedule": "45 11 * * *"
     },
     {
       "path": "/api/cron/billing-vencimentos",
