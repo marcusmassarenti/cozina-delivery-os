@@ -691,6 +691,54 @@ function montarContexto(
  * Keeta e Cardápio Web entram por API/arquivo próprio e não têm "pendência de
  * importação" no mesmo sentido.
  */
+/**
+ * Até que dia do mês cada plataforma trouxe dado — o denominador honesto de
+ * qualquer projeção.
+ *
+ * Existe porque "dia do mês" e "dia com dado" não são a mesma coisa, e tratar
+ * como se fossem produz erro grande e para baixo. Em 12/ago/26 o mês estava no
+ * dia 12, mas a Pinheiros tinha Keeta até o dia 10 e iFood/99 até o 11.
+ * Projetando por 12 dias deu R$ 44 mil ("desaceleração leve"); pelos dias que
+ * o dado cobre, ~R$ 51 mil — acima de junho e julho. O erro não parecia erro,
+ * parecia queda de faturamento, que é o pior formato possível.
+ *
+ * ⚠️ Limite conhecido: é a cobertura da REDE VISÍVEL, não de cada loja. Uma
+ * loja atrasada em relação às outras ainda projeta um pouco alto. O por-loja
+ * pede uma agregação nova no banco (`max(data) group by unit_id`); enquanto
+ * não existe, o prompt manda o Nino dizer até quando o dado vai, pra a pessoa
+ * ver o denominador em vez de confiar cego no número.
+ */
+async function coberturaDoPeriodo(
+  year: number,
+  month: number,
+  unitIds: string[],
+): Promise<{
+  ifood: number | null
+  "99food": number | null
+  keeta: number | null
+  /** O menor entre as plataformas com dado — até aqui o mês está COMPLETO. */
+  completo_ate_dia: number | null
+}> {
+  const { getImportCoverageForMonth } = await import(
+    "@/lib/data/relatorio-diario"
+  )
+  const c = await getImportCoverageForMonth(year, month, unitIds).catch(
+    () => null,
+  )
+  const ifood = c?.ifood.lastDay ?? null
+  const nine = c?.ninefood.lastDay ?? null
+  const keeta = c?.keeta.lastDay ?? null
+  // MENOR, não maior: o dia em que só uma plataforma reportou é um dia
+  // incompleto, e dividir por ele achata a média diária da loja inteira.
+  const dias = [ifood, nine, keeta].filter((d): d is number => d != null)
+  return {
+    ifood,
+    "99food": nine,
+    keeta,
+    completo_ate_dia: dias.length > 0 ? Math.min(...dias) : null,
+  }
+}
+
 function coberturaDoMes(
   matrix: Awaited<ReturnType<typeof getCoverageMatrix>>,
   chave: string,
@@ -1209,7 +1257,10 @@ FORMATO DAS TABELAS: pra economizar espaço, as listas grandes ("historico_mensa
 ORDEM DAS LISTAS: as listas de LOJA ("por_loja", tanto o do mês quanto o dentro de "periodos") já vêm ordenadas do MAIOR pro MENOR FATURAMENTO — a primeira linha é a líder EM FATURAMENTO. Nunca embaralhe: se a lista que você vai mostrar é de faturamento (ou um "top N" sem métrica dita), mantenha exatamente essa ordem. MAS quando a pergunta é sobre OUTRA métrica — ROAS, nota, ticket, cancelamento, CMV, margem, marketing —, ordene pela métrica PERGUNTADA, do melhor pro pior, e diga qual é o critério. Listar ROAS na ordem de faturamento (13,17 depois de 12,59) parece erro de conta pra quem lê. A regra é: não invente ordem, mas siga a ordem da métrica que o dono pediu. Já as séries de tempo ("historico_mensal", "historico_rede_mensal") vêm em ordem CRONOLÓGICA, do mês mais antigo pro mais novo — não são ranking.
 
 O contexto tem:
-- "contexto_temporal": a data de hoje, o dia do mês, dias decorridos, dias no mês e dias restantes. Use pra PROJETAR o fechamento do mês (regra de três: faturamento_do_mes ÷ dias_decorridos × dias_no_mes) e dizer "no ritmo atual você fecha em ~R$ X" ou "faltam N dias". Deixe claro que é projeção, não certeza.
+- "contexto_temporal": a data de hoje, o dia do mês, dias no mês, dias restantes e "dado_vai_ate" — até que dia cada plataforma REALMENTE trouxe número, mais "completo_ate_dia" (o menor deles).
+- PROJEÇÃO DO MÊS — a regra é: faturamento_do_mes ÷ **completo_ate_dia** × dias_no_mes. NUNCA divida por "dias_decorridos": dia do calendário não é dia com dado. Hoje pode ser 12 e a última planilha ter parado no dia 10 — dividir por 12 espalha o faturamento de 10 dias por 12 e devolve uma queda que não existe. Se "completo_ate_dia" for null, não projete: diga que ainda não há dado suficiente no mês.
+- Ao projetar, SEMPRE diga até que dia o dado vai ("com dado até 10/ago"). É isso que deixa a pessoa julgar a projeção em vez de engolir o número. E deixe claro que é projeção, não certeza.
+- Se uma plataforma estiver bem mais atrasada que as outras, diga qual e sugira sincronizar/subir o relatório antes de tirar conclusão — projeção com dado velho vira diagnóstico errado de queda.
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
 - RÉGUA DO BRUTO (importante): "faturamento_bruto" é o total COM os pedidos cancelados — o mesmo número que o portal do iFood e todas as telas do sistema mostram. É esse que você usa ao falar de faturamento. Já "faturamento_valido" é a venda que não foi cancelada, e é sobre ELA que margem, CMV% e ticket médio são calculados (igual ao DRE). Por isso não estranhe se bruto ÷ pedidos não der exatamente o ticket médio: o ticket usa a base válida. Nunca recalcule margem ou CMV% dividindo pelo bruto.
 - "periodos": recortes de QUINZENA da rede e por loja — mes_corrente.dia_01_a_15, mes_corrente.dia_16_ao_fim, e o mesmo do mes_passado. Use pra "quanto faturei de 1 a 15", "primeira quinzena deste mês vs do mês passado", "01-15 de junho vs julho", "segunda quinzena".
@@ -1406,6 +1457,12 @@ export async function perguntarConsultor(
       dias_decorridos: diaDoMes,
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
+      // Até que dia cada plataforma REALMENTE trouxe dado. Sem isto o Nino
+      // projetava dividindo pelos dias do calendário — e a Pinheiros, cujo
+      // Keeta (70% do faturamento) parava no dia 10 enquanto o mês já estava
+      // no 12, fechou como "R$ 44 mil, desaceleração". Pelo dado real são
+      // ~R$ 51 mil, ACIMA de junho e julho: o diagnóstico saiu invertido.
+      dado_vai_ate: await coberturaDoPeriodo(year, month, unitIds),
     }
     const ant = mesAnterior(year, month)
     const cobertura = {
@@ -1608,6 +1665,12 @@ export async function* perguntarConsultorStream(
       dias_decorridos: diaDoMes,
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
+      // Até que dia cada plataforma REALMENTE trouxe dado. Sem isto o Nino
+      // projetava dividindo pelos dias do calendário — e a Pinheiros, cujo
+      // Keeta (70% do faturamento) parava no dia 10 enquanto o mês já estava
+      // no 12, fechou como "R$ 44 mil, desaceleração". Pelo dado real são
+      // ~R$ 51 mil, ACIMA de junho e julho: o diagnóstico saiu invertido.
+      dado_vai_ate: await coberturaDoPeriodo(year, month, unitIds),
     }
     const ant = mesAnterior(year, month)
     const cobertura = {

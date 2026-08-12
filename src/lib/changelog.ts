@@ -42,6 +42,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.17.3",
+    date: "2026-08-12",
+    tag: "Correções",
+    title: "Projeção do Nino conta os dias com dado, não os do calendário",
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "correcao",
+            title: "Projeção do fechamento do mês",
+            antes:
+              "O Nino projetava dividindo o faturamento pelos dias já decorridos do mês. Se hoje é dia 12 mas a última planilha parou no dia 10, ele espalhava 10 dias de venda por 12 e devolvia uma queda que não existe. Na Pinheiros isso virou \"R$ 44 mil, desaceleração\" quando o ritmo real apontava ~R$ 52 mil — acima dos dois meses anteriores.",
+            depois:
+              "Agora ele divide pelos dias que o dado realmente cobre e diz até quando vai (\"com dado até 10/ago\"). Se uma plataforma estiver bem atrasada, ele aponta qual e sugere sincronizar antes de tirar conclusão.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.17.2",
     date: "2026-08-12",
     tag: "Correções",
