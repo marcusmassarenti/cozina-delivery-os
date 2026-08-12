@@ -1,0 +1,28 @@
+-- Os RPCs de relatório passam a ler a view `cardapioweb_pedidos_proprios`
+-- (migration 0189) em vez da tabela crua.
+--
+-- Estavam erradas quatro funções — vendas_dia_semana_por_loja (as duas
+-- versões), frete_faixas_by_units e cobertura_por_unidade. Todas repetiam a
+-- consulta sem o filtro de canal próprio e de instalação de produção, e o
+-- efeito era o mesmo em todas: pedido de marketplace que passou pelo hub do
+-- Cardápio Web aparecia como venda do canal próprio. Medido em jul/26: 36
+-- pedidos, R$ 967,45. Pior, o mesmo pedido já estava no bloco do iFood — então
+-- quando o extrato entra, ele é contado duas vezes.
+--
+-- Três correções secundárias vieram junto:
+--
+-- 1. `status <> 'canceled'` virou `not ilike 'cancel%'`. A API do Cardápio Web
+--    não publica a lista de status; a igualdade estrita deixaria um
+--    'cancelled' entrar como venda. É a mesma régua do `ehCancelado` do TS.
+--
+-- 2. No relatório de frete, a receita do CW deixa de ser o `total` (que inclui
+--    entrega, serviço e adicionais) e passa a ser a cesta de itens, como nas
+--    outras três plataformas. Sem isso o ticket da faixa crescia junto com a
+--    própria taxa — fabricando exatamente o padrão que o relatório existe pra
+--    detectar ("quem paga frete alto compra mais").
+--
+-- 3. A versão de 3 argumentos do dia-da-semana virou um atalho pra a de 4, em
+--    vez de manter uma cópia da regra. Elas já tinham divergido uma vez.
+--
+-- ⚠️ O corpo aplicado está em produção via MCP; este arquivo é o registro
+-- versionado. Ao mexer numa dessas funções, leia da view.
