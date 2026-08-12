@@ -25,6 +25,17 @@ export async function GET(req: Request) {
   await requireSuperadmin()
 
   const tipo = new URL(req.url).searchParams.get("tipo")
+
+  // Aviso de manutenção não depende de loja nenhuma — sai antes de procurar
+  // loja compartilhada, senão a rota morre no "sem loja compartilhada".
+  if (tipo === "manutencao") {
+    const { manutencaoIfood } = await import("@/lib/email/templates")
+    const m = manutencaoIfood({ nome: "Marcus" })
+    return new Response(m.html, {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    })
+  }
+
   const mapa = await getLojasCompartilhadasPorHolding()
   const [holdingId, lojas] = [...mapa.entries()][0] ?? []
   if (!holdingId || !lojas?.[0]) return new Response("sem loja compartilhada")
@@ -72,6 +83,16 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     para?: string
     cliente?: boolean
+    tipo?: string
+    excluir?: string[]
+  }
+
+  // Aviso de manutenção do iFood — disparo pontual, para quem tem iFood ativo.
+  if (body.tipo === "manutencao") {
+    const { avisarManutencaoIfood } = await import(
+      "@/lib/email/manutencao-ifood"
+    )
+    return Response.json(await avisarManutencaoIfood({ excluir: body.excluir }))
   }
 
   if (body.cliente) {

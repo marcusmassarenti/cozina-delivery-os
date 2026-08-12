@@ -887,3 +887,51 @@ export function lojaCompartilhada(d: {
     }),
   }
 }
+
+/**
+ * Manutenção programada do iFood — 13/ago/26, 6h às 8h.
+ *
+ * Aviso curto e sem alarme: o efeito prático pro cliente é o número do iFood
+ * chegar ~2h30 mais tarde num dia. Escrito pra quem abre o painel às 7h e
+ * pensa "cadê o dado de ontem" — e pra ninguém confundir atraso com erro.
+ *
+ * NÃO promete que nada vai falhar: a janela é estimada pelo próprio iFood, e
+ * prometer horário que não é nosso é o caminho pra um segundo e-mail pedindo
+ * desculpa.
+ */
+export function manutencaoIfood(d: { nome: string | null }) {
+  return {
+    assunto: "Amanhã cedo o número do iFood chega mais tarde (manutenção deles)",
+    html: layout({
+      titulo: "O iFood faz manutenção amanhã de manhã",
+      corpo: `
+        <p style="margin:0 0 18px;">${oi(d.nome)} Um aviso rápido, e sem susto.</p>
+
+        <p style="margin:0 0 18px;">
+          O iFood comunicou uma <b>manutenção programada nas APIs financeiras
+          na quinta, 13 de agosto, das 6h às 8h</b> (horário estimado por eles).
+          Nesse período a conexão pode ficar instável.
+        </p>
+
+        <p style="margin:0 0 18px;">
+          <b>O que muda pra você:</b> a sincronização diária do iFood, que
+          normalmente roda às 6h, foi remarcada para <b>8h30</b> — depois da
+          janela. Ou seja, se você abrir o painel entre 6h e 8h30, o iFood ainda
+          vai estar mostrando o número de ontem. A partir das 8h30 tudo entra
+          normalmente, incluindo o movimento do dia anterior inteiro.
+        </p>
+
+        <p style="margin:0 0 18px;">
+          <b>Você não precisa fazer nada.</b> Nada se perde: o que não entrar no
+          horário é recuperado na mesma sincronização. 99 Food, Keeta e Cardápio
+          Web seguem no horário de sempre — a manutenção é só do iFood.
+        </p>
+
+        <p style="margin:0 0 8px;">
+          Se depois das 9h algum número parecer parado, me chama que eu olho.
+        </p>
+      `,
+      ps: "Esse aviso é só sobre a quinta-feira. Na sexta o horário volta ao normal, às 6h.",
+    }),
+  }
+}
