@@ -190,6 +190,58 @@ const RELATORIOS: { id: PlatId; itens: ItemRelatorio[] }[] = [
   { id: "keeta", itens: itensDaPlataforma("keeta") },
 ]
 
+/* ── Cardápio Web ──────────────────────────────────────────────────
+   Escrito à mão, e NÃO tirado do reports-catalog.ts de propósito: aquele
+   catálogo existe pra montar o guia de download, a cobertura e o "quais
+   relatórios eu uso" — todos sobre PLANILHA. O Cardápio Web não tem planilha
+   nenhuma, entra inteiro por API. Botar ele lá criaria guia de download pra
+   arquivo que não existe. O custo é este: relatório novo do CW precisa ser
+   somado aqui na mão.
+
+   "Clientes" fica de FORA. A base é sincronizada (nome, telefone,
+   aniversário, fidelidade, cashback), mas ainda não existe tela que mostre —
+   anunciar aqui seria prometer o que o cliente não acha ao entrar. */
+const CW_ITENS: ItemRelatorio[] = [
+  {
+    nome: "Financeiro e canal",
+    hint: "Faturamento do site, app, totem e WhatsApp separado do marketplace",
+  },
+  {
+    nome: "Pedidos e pagamento",
+    hint: "Pedido a pedido, taxa de entrega e serviço separadas, motivo do cancelamento",
+  },
+  {
+    nome: "Cardápio",
+    hint: "Itens com o código do PDV — a ponte pra ficha técnica e o CMV",
+  },
+  {
+    nome: "Avaliações por dimensão",
+    hint: "Notas de atendimento, produto, embalagem, tempo de entrega e custo/benefício",
+  },
+]
+
+/* Logo do Cardápio Web. Componente à parte em vez de entrar no PlatLogo
+   porque o `PlatId` é compartilhado com a landing antiga (_landing.tsx) e
+   alargar o tipo quebraria os mapas de lá. Fundo branco: o logo é roxo sobre
+   branco e some em qualquer fundo colorido. */
+function CwLogo({ size = 48, className = "" }: { size?: number; className?: string }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ${className}`}
+      style={{ width: size, height: size }}
+      title="Cardápio Web"
+      aria-label="Cardápio Web"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/platforms/cardapioweb.png"
+        alt="Cardápio Web"
+        className="size-full object-contain p-1.5"
+      />
+    </span>
+  )
+}
+
 
 /* Ato 2 — rede / franqueador (bento do painel consolidado). */
 const REDE: { icon: LucideIcon; t: string; d: string; tag?: string }[] = [
@@ -231,6 +283,186 @@ const FAQ = [
 
 
 /** Ícone do Instagram (o lucide desta versão não exporta um). */
+/**
+ * Cobertura por plataforma, em duas abas.
+ *
+ * Virou aba quando o Cardápio Web entrou: quatro cards lado a lado ficavam
+ * estreitos demais pro iFood, que tem o dobro de relatórios dos outros.
+ *
+ * O corte NÃO é "3 + 1 que sobrou" — é marketplace × canal próprio. São
+ * negócios diferentes: no marketplace você paga comissão e o cliente é deles;
+ * no Cardápio Web a venda é sua e a base de clientes também. Separar aqui já
+ * ensina a distinção que o resto da landing usa.
+ */
+function CoberturaTabs() {
+  const [tab, setTab] = useState(0)
+  const abas = [
+    { key: "marketplaces", label: "Marketplaces", chip: "3 plataformas" },
+    { key: "cw", label: "Cardápio Web", chip: "canal próprio" },
+  ]
+
+  return (
+    <div className="mt-14">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {abas.map((a, i) => (
+          <button
+            key={a.key}
+            type="button"
+            onClick={() => setTab(i)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95 ${
+              i === tab
+                ? "bg-[var(--brand)] text-white shadow-[0_12px_28px_-12px_oklch(0.65_0.21_35/.8)]"
+                : "border border-black/10 bg-white text-[oklch(0.4_0.01_48)] hover:border-[var(--brand)]"
+            }`}
+          >
+            {a.label}
+            <span
+              className={`rounded-full px-1.5 text-[10px] font-bold uppercase ${
+                i === tab
+                  ? "bg-white/20 text-white"
+                  : "bg-[var(--brand-soft)] text-[var(--brand-strong)]"
+              }`}
+            >
+              {a.chip}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {tab === 0 ? (
+        <div key="mk" className="rx-tab-in">
+          <div className="mt-14 grid gap-5 md:grid-cols-[1.5fr_1fr_1fr]">
+            {RELATORIOS.map((r, i) => (
+              <Reveal key={r.id} delay={i * 90}>
+                <CardCobertura
+                  logo={
+                    <PlatLogo
+                      id={r.id}
+                      size={r.id === "ifood" ? 60 : 48}
+                      className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-[0_14px_30px_-8px_rgba(0,0,0,.4)] ring-4 ring-white"
+                    />
+                  }
+                  titulo={PLAT_LABEL[r.id]}
+                  sub={PLAT_SUB[r.id]}
+                  itens={r.itens}
+                  accent={PLAT_ACCENT[r.id]}
+                  destaque={r.id === "ifood"}
+                  duasColunas={r.id === "ifood"}
+                />
+              </Reveal>
+            ))}
+          </div>
+          <p className="mx-auto mt-8 max-w-2xl text-balance text-center text-[15px] leading-relaxed text-[oklch(0.4_0.01_48)]">
+            O Delivery OS lê{" "}
+            <span className="font-semibold text-[oklch(0.28_0.01_48)]">todos</span>{" "}
+            os relatórios que cada plataforma oferece. 99 e Keeta têm menos
+            porque disponibilizam menos — o iFood simplesmente abre mais dados.
+          </p>
+        </div>
+      ) : (
+        <div key="cw" className="rx-tab-in">
+          <div className="mx-auto mt-14 max-w-3xl">
+            <CardCobertura
+              logo={
+                <CwLogo
+                  size={56}
+                  className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-[0_14px_30px_-8px_rgba(0,0,0,.35)] ring-4 ring-white"
+                />
+              }
+              titulo="Cardápio Web"
+              sub="O canal próprio da sua loja"
+              itens={CW_ITENS}
+              accent={CW_ACCENT}
+              destaque
+              duasColunas
+            />
+          </div>
+          <p className="mx-auto mt-8 max-w-2xl text-balance text-center text-[15px] leading-relaxed text-[oklch(0.4_0.01_48)]">
+            É o único canal{" "}
+            <span className="font-semibold text-[oklch(0.28_0.01_48)]">
+              sem comissão de marketplace
+            </span>{" "}
+            — e o único que diz <em>por que</em> o cliente deu 3 estrelas, e não
+            só que deu. O sistema soma ele ao resto e mostra quanto do seu
+            faturamento é venda sua de verdade.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Acento do Cardápio Web — roxo da marca, fora do mapa das plataformas. */
+const CW_ACCENT = {
+  card: "border-[#5b2a8640] bg-gradient-to-br from-[#5b2a8626] via-[#5b2a860f] to-transparent",
+  chip: "bg-[#5b2a861a] text-[#5b2a86]",
+}
+
+/** O card de uma plataforma. Extraído porque agora serve as duas abas. */
+function CardCobertura({
+  logo,
+  titulo,
+  sub,
+  itens,
+  accent,
+  destaque,
+  duasColunas,
+}: {
+  logo: React.ReactNode
+  titulo: string
+  sub: string
+  itens: ItemRelatorio[]
+  accent: { card: string; chip: string }
+  destaque?: boolean
+  duasColunas?: boolean
+}) {
+  return (
+    <div
+      className={`lift relative h-full rounded-2xl border bg-white px-6 pb-6 pt-14 text-center ${accent.card}`}
+    >
+      {logo}
+      <p className={`font-medium leading-tight ${destaque ? "text-lg" : ""}`}>
+        {titulo}
+      </p>
+      <p className="mt-0.5 text-xs text-[oklch(0.55_0.01_48)]">{sub}</p>
+      <span
+        className={`mt-2.5 inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${accent.chip}`}
+      >
+        {itens.length} relatórios
+      </span>
+      <ul
+        className={`mt-5 space-y-2.5 text-left ${
+          duasColunas
+            ? "sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2.5 sm:space-y-0"
+            : ""
+        }`}
+      >
+        {itens.map((item) => (
+          <li
+            key={item.nome}
+            className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
+          >
+            <Check
+              className="mt-[3px] size-4 shrink-0 text-[var(--brand)]"
+              strokeWidth={2.6}
+            />
+            <span>
+              <span className="font-medium text-[oklch(0.32_0.01_48)]">
+                {item.nome}
+              </span>
+              {item.hint && (
+                <span className="block text-xs leading-snug text-[oklch(0.58_0.01_48)]">
+                  {item.hint}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function IgIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -1500,76 +1732,13 @@ export function LandingV3({
           </Reveal>
           <Reveal delay={120}>
             <p className="mx-auto mt-4 max-w-2xl text-center text-[oklch(0.5_0.01_48)]">
-              iFood, 99 Food e Keeta entregam relatórios diferentes. O Delivery OS
-              entende cada um e junta tudo num painel só — e a lista só cresce.
+              iFood, 99 Food, Keeta e Cardápio Web entregam relatórios
+              diferentes. O Delivery OS entende cada um e junta tudo num painel
+              só — e a lista só cresce.
             </p>
           </Reveal>
 
-          {/* Cobertura — os 3 lado a lado (iFood maior). Logo centralizado e
-              "saltando" pra fora do topo do card. */}
-          <div className="mt-16 grid gap-5 md:grid-cols-[1.5fr_1fr_1fr]">
-            {RELATORIOS.map((r, i) => {
-              const featured = r.id === "ifood"
-              return (
-                <Reveal key={r.id} delay={i * 90}>
-                  <div className={`lift relative h-full rounded-2xl border bg-white px-6 pb-6 pt-14 text-center ${PLAT_ACCENT[r.id].card}`}>
-                    {/* logo flutuante — centralizado e pra fora do topo */}
-                    <PlatLogo
-                      id={r.id}
-                      size={featured ? 60 : 48}
-                      className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-[0_14px_30px_-8px_rgba(0,0,0,.4)] ring-4 ring-white"
-                    />
-                    <p className={`font-medium leading-tight ${featured ? "text-lg" : ""}`}>
-                      {PLAT_LABEL[r.id]}
-                    </p>
-                    <p className="mt-0.5 text-xs text-[oklch(0.55_0.01_48)]">
-                      {PLAT_SUB[r.id]}
-                    </p>
-                    <span className={`mt-2.5 inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${PLAT_ACCENT[r.id].chip}`}>
-                      {r.itens.length} relatórios
-                    </span>
-                    <ul
-                      className={`mt-5 space-y-2.5 text-left ${
-                        featured
-                          ? "sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2.5 sm:space-y-0"
-                          : ""
-                      }`}
-                    >
-                      {r.itens.map((item) => (
-                        <li
-                          key={item.nome}
-                          className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
-                        >
-                          <Check
-                            className="mt-[3px] size-4 shrink-0 text-[var(--brand)]"
-                            strokeWidth={2.6}
-                          />
-                          <span>
-                            <span className="font-medium text-[oklch(0.32_0.01_48)]">
-                              {item.nome}
-                            </span>
-                            {item.hint && (
-                              <span className="block text-xs leading-snug text-[oklch(0.58_0.01_48)]">
-                                {item.hint}
-                              </span>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </Reveal>
-              )
-            })}
-          </div>
-
-          <Reveal delay={100}>
-            <p className="mx-auto mt-8 max-w-2xl text-balance text-center text-[15px] leading-relaxed text-[oklch(0.4_0.01_48)]">
-              O Delivery OS lê <span className="font-semibold text-[oklch(0.28_0.01_48)]">todos</span> os
-              relatórios que cada plataforma oferece. 99 e Keeta têm menos porque
-              disponibilizam menos — o iFood simplesmente abre mais dados.
-            </p>
-          </Reveal>
+          <CoberturaTabs />
 
           <Reveal delay={140}>
             <div className="mt-6 flex justify-center">
