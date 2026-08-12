@@ -68,9 +68,20 @@ export function DreDetalhado({
   showPdf = true,
 }: {
   platforms: DrePlat[]
-  /** JÁ inclui a receita própria — o agregador soma antes de chegar aqui. */
+  /**
+   * ⚠️ CONTRATO: `totalBruto` e `totalLiquido` chegam aqui COM a receita
+   * própria dentro. O componente a separa de volta (`bruto - rp`) pra as taxas
+   * incidirem só sobre plataforma.
+   *
+   * Passar um líquido que já exclui a receita própria subtrai ela DUAS vezes:
+   * as taxas incham no valor do balcão, o "Fica na loja" encolhe no mesmo
+   * tanto, e as linhas por plataforma param de somar o total de taxas.
+   * Aconteceu no DRE da rede em 12/ago/26 — `resultado.ts` publica
+   * `liquidoPlataformas` SEM a receita própria de propósito, e o chamador
+   * precisa somá-la antes de passar pra cá.
+   */
   totalBruto: number
-  /** JÁ inclui a receita própria (não há taxa sobre ela). */
+  /** Idem: COM a receita própria. Ver o aviso acima. */
   totalLiquido: number
   /**
    * Venda que não passou por plataforma (balcão, salão, telefone), lançada à

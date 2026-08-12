@@ -325,8 +325,8 @@ export default async function RelatoriosPage({
             <DreDetalhado
               platforms={drePlatsShown}
               totalBruto={t.bruto}
-                receitaPropria={t.receitaPropria}
-              totalLiquido={t.liquidoPlataformas}
+              receitaPropria={t.receitaPropria}
+              totalLiquido={t.liquidoPlataformas + t.receitaPropria}
               cmv={t.cmvTotal}
               operacao={t.custoOperacao}
               vrInfo={vrInfoRede}
@@ -344,7 +344,7 @@ export default async function RelatoriosPage({
               recebidoDireto: p.recebidoDireto ?? 0,
             }))}
             totalBruto={t.bruto}
-            totalLiquido={t.liquidoPlataformas}
+            totalLiquido={t.liquidoPlataformas + t.receitaPropria}
             cmv={t.cmvTotal}
             operacao={t.custoOperacao}
           />

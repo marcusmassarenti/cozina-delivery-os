@@ -36,6 +36,12 @@ export function BrutoBreakdown({
   operacao,
 }: {
   platforms: Plat[]
+  /**
+   * ⚠️ `totalBruto` e `totalLiquido` vêm COM a receita própria (venda de
+   * balcão) dentro — a diferença entre os dois é o que a plataforma reteve.
+   * Passar um líquido sem ela faz a barra "Taxa da plataforma" engordar pelo
+   * valor do balcão inteiro.
+   */
   totalBruto: number
   totalLiquido: number
   cmv: number

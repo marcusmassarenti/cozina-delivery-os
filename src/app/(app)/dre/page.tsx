@@ -150,7 +150,13 @@ export default async function ResultadoPage({
   // Margem SEM VR (mesma definição do DRE da loja e do Resumo): líquido das
   // plataformas − CMV. O VR entra depois como ganho à parte. Recalcula aqui
   // porque totals.margemLiquida histórico inclui VR.
-  const margemSemVr = totals.liquidoPlataformas - totals.cmvTotal
+  //
+  // A receita própria (balcão) entra no numerador porque já está no
+  // denominador (`totals.bruto`). Sem ela aqui, uma loja que vendesse no
+  // balcão via a margem da REDE cair sem nada ter mudado na operação — o
+  // faturamento subia e o "que sobra" ficava parado.
+  const margemSemVr =
+    totals.liquidoPlataformas + totals.receitaPropria - totals.cmvTotal
   const margemSemVrPct =
     totals.bruto > 0 ? (margemSemVr / totals.bruto) * 100 : 0
 
@@ -307,7 +313,7 @@ export default async function ResultadoPage({
                 platforms={drePlats}
                 totalBruto={totals.bruto}
                 receitaPropria={totals.receitaPropria}
-                totalLiquido={totals.liquidoPlataformas}
+                totalLiquido={totals.liquidoPlataformas + totals.receitaPropria}
                 cmv={totals.cmvTotal}
                 operacao={totals.custoOperacao}
                 vrInfo={vrInfoRede}
@@ -325,7 +331,7 @@ export default async function ResultadoPage({
                 recebidoDireto: p.recebidoDireto ?? 0,
               }))}
               totalBruto={totals.bruto}
-              totalLiquido={totals.liquidoPlataformas}
+              totalLiquido={totals.liquidoPlataformas + totals.receitaPropria}
               cmv={totals.cmvTotal}
               operacao={totals.custoOperacao}
             />
