@@ -1305,10 +1305,34 @@ async function resumoRpc(
     // dateRange PRECISA ser repassado — sem ele o cache guardaria o mês inteiro
     // sob a chave de um recorte, e a seta compararia períodos de tamanhos
     // diferentes.
-    () => chamarResumo(unitIds, year, month, dateRange),
+    async () => {
+      const r = await chamarResumo(unitIds, year, month, dateRange)
+      // FALHA NÃO ENTRA NO CACHE.
+      //
+      // Antes entrava: `{ data: null, error }` é um valor como outro qualquer,
+      // então uma consulta que falhasse UMA vez ficava 24h guardada como se
+      // fosse a resposta do mês. E como quem lê trata erro devolvendo mapa
+      // vazio, o mês perdia o iFood INTEIRO e o número só ficava menor — sem
+      // faixa, sem log na tela, sem nada.
+      //
+      // Foi o que aconteceu com julho/26 da Pinheiros: R$ 7.585,19 de iFood
+      // sumiram do bruto e o mês passou a valer R$ 39.277 no lugar de
+      // R$ 46.863. Junho, que pegou um cache bom, estava certo; agosto também,
+      // porque mês corrente nunca entra em cache. Só o mês do meio mentia.
+      //
+      // Lançando aqui, o unstable_cache não guarda nada e a próxima requisição
+      // tenta de novo: o estrago vira um request, não um dia.
+      if (r.error) {
+        throw new Error(`ifood_financeiro_resumo_by_units falhou: ${r.error}`)
+      }
+      return r
+    },
     ["ifood-financeiro-resumo", chave],
     { tags: [TAG_FINANCEIRO_IFOOD], revalidate: 86_400 },
-  )()
+  )().catch((e) => ({
+    data: null,
+    error: e instanceof Error ? e.message : String(e),
+  }))
 }
 
 export async function getFinanceiroResumoByUnits(

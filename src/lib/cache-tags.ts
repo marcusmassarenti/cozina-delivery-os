@@ -73,10 +73,31 @@ export async function rpcMensalComCache<T>(
 
   if (!mesFechado(year, month)) return chamar()
 
-  return unstable_cache(chamar, [nome, `${year}-${month}-${[...unitIds].sort().join(",")}`], {
-    tags: [tag],
-    revalidate: 86_400,
-  })()
+  // FALHA NÃO ENTRA NO CACHE — mesma correção do resumo do iFood, e pelo mesmo
+  // motivo: `{ data: null, error }` é um valor como outro qualquer, então uma
+  // consulta que falhasse UMA vez ficava 24h guardada como resposta do mês.
+  // Quem lê trata erro devolvendo lista vazia, e aí a plataforma inteira some
+  // do mês sem nenhum aviso — o número apenas fica menor.
+  //
+  // Este helper serve Keeta, 99 Food e o Relatório Diário, então o buraco era
+  // maior que o do iFood, que foi onde ele apareceu (julho/26 da Pinheiros).
+  //
+  // Lançando dentro da função cacheada, o Next não guarda nada e a próxima
+  // requisição tenta de novo.
+  const semCachearFalha = async () => {
+    const r = await chamar()
+    if (r.error) throw new Error(`${nome} falhou: ${r.error}`)
+    return r
+  }
+
+  return unstable_cache(
+    semCachearFalha,
+    [nome, `${year}-${month}-${[...unitIds].sort().join(",")}`],
+    { tags: [tag], revalidate: 86_400 },
+  )().catch((e) => ({
+    data: null,
+    error: e instanceof Error ? e.message : String(e),
+  }))
 }
 
 /**

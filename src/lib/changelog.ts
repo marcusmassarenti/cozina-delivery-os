@@ -42,6 +42,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.17.2",
+    date: "2026-08-12",
+    tag: "Correções",
+    title: "Mês fechado não perde mais uma plataforma em silêncio",
+    areas: [
+      {
+        area: "Faturamento",
+        items: [
+          {
+            kind: "correcao",
+            title: "Falha de consulta não fica mais guardada como resultado",
+            antes:
+              "Se a apuração de um mês já encerrado falhasse uma única vez, a falha era guardada por 24 horas como se fosse a resposta — e a plataforma inteira sumia do mês. O número apenas ficava menor, sem nenhum aviso. Em julho, a Pinheiros apareceu com R$ 39.277 no lugar de R$ 46.863: faltava o iFood do mês.",
+            depois:
+              "A falha não entra mais no cache. Quando a consulta erra, a próxima abertura da tela tenta de novo — o estrago vira um clique, não um dia. Vale para iFood, 99 Food, Keeta e Relatório Diário.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.17.1",
     date: "2026-08-12",
     tag: "Melhorias",
