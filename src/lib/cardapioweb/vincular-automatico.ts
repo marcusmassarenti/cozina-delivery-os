@@ -73,6 +73,33 @@ export async function vincularSeObvio(
     return null
   }
 
+  // Marca o canal na unidade — o mesmo que a tela de vínculo manual faz.
+  //
+  // Sem isto a loja fica num estado esquisito: sincroniza todo dia e mesmo
+  // assim some das telas, porque quase tudo pergunta a `unit_platforms` (é ela
+  // que diz "esta loja usa Cardápio Web"). Some a aba do canal próprio em
+  // /pedidos, o painel "sincroniza sozinho" da cobertura volta a mentir por
+  // omissão, e as abas de Cardápio e Avaliações do CW desaparecem da unidade.
+  //
+  // Morde justamente quem entra pelo caminho automático: quem instala pela App
+  // Store do Cardápio Web nunca passa pelo nosso seletor de unidade, então
+  // nunca teve como marcar o checkbox. O vínculo manual já gravava; este
+  // caminho não.
+  const { error: erroPlat } = await admin
+    .from("unit_platforms")
+    .upsert(
+      { unit_id: loja.id, platform: "cardapioweb", active: true },
+      { onConflict: "unit_id,platform" },
+    )
+  // Não aborta: o vínculo (que é o que faz o dado entrar) já foi gravado.
+  // Falhar aqui deixa a loja invisível nas telas, não sem dado — e desfazer o
+  // vínculo por causa disso seria trocar um problema visual por um buraco.
+  if (erroPlat) {
+    console.error(
+      `[cw-vinculo] vinculou ${installId} mas não marcou a plataforma: ${erroPlat.message}`,
+    )
+  }
+
   console.log(
     `[cw-vinculo] ${i.merchant_name ?? installId} → ${loja.code} · ${loja.name}`,
   )
