@@ -45,6 +45,12 @@ export type UnitMonthly = {
   custoProdutosLoja: number | null
   /** Custo da operação (aluguel, folha, etc.) — opcional, manual */
   custoOperacao: number
+  /**
+   * Venda fora das plataformas (balcão, salão, telefone), lançada à mão.
+   * Já está somada em `faturamentoBruto` e `totalLiquido` — este campo existe
+   * pra a DRE conseguir MOSTRAR de onde veio, não pra somar de novo.
+   */
+  receitaPropria: number
   /** "Recebido real no caixa" lançado manualmente. Quando > 0, JÁ inclui o VR
    *  (é o que de fato entrou), então o VR não deve ser somado de novo. */
   totalRecebidoReal: number
@@ -89,6 +95,7 @@ export const emptyMonthly: UnitMonthly = {
   custoProdutosCozina: 0,
   custoProdutosLoja: null,
   custoOperacao: 0,
+  receitaPropria: 0,
   totalRecebidoReal: 0,
   margemLiquida: 0,
   margemLucroPct: 0,
@@ -140,6 +147,8 @@ export function mockMonthlyFor(code: string): UnitMonthly {
   return {
     pedidos,
     pedidosCancelados: Math.round(pedidos * 0.085),
+    // Mock não inventa venda de balcão: é dado que só existe se alguém lançar.
+    receitaPropria: 0,
     clientesNovos: Math.round(pedidos * 0.13),
     ticketMedio,
     faturamentoBruto,

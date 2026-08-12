@@ -55,6 +55,7 @@ export function DreDetalhado({
   platforms,
   totalBruto,
   totalLiquido,
+  receitaPropria = 0,
   cmv,
   operacao,
   cmvCats = [],
@@ -67,8 +68,17 @@ export function DreDetalhado({
   showPdf = true,
 }: {
   platforms: DrePlat[]
+  /** JÁ inclui a receita própria — o agregador soma antes de chegar aqui. */
   totalBruto: number
+  /** JÁ inclui a receita própria (não há taxa sobre ela). */
   totalLiquido: number
+  /**
+   * Venda que não passou por plataforma (balcão, salão, telefone), lançada à
+   * mão. Vem à parte pra a DRE conseguir separar de volta: as taxas incidem só
+   * sobre a venda de plataforma, e diluir o take-rate num bruto que inclui
+   * balcão faria a plataforma parecer mais barata do que é.
+   */
+  receitaPropria?: number
   cmv: number
   operacao: number
   /** Categorias que compõem o CMV (abre ao clicar na linha). */
@@ -130,8 +140,16 @@ export function DreDetalhado({
   // Escopo selecionado
   const isTodas = sel === "todas"
   const plat = isTodas ? null : platforms.find((p) => p.id === sel)
-  const bruto = isTodas ? totalBruto : plat?.bruto ?? 0
-  const liquido = isTodas ? totalLiquido : plat?.liquido ?? 0
+  // Receita própria só existe no consolidado: ela não é de plataforma nenhuma,
+  // então ao filtrar por iFood/99/Keeta ela some — junto com a linha dela.
+  const rp = isTodas ? receitaPropria : 0
+  // O bruto EXIBIDO no topo (inclui balcão) e o bruto que serve de BASE pras
+  // taxas (só plataforma) são números diferentes de propósito. Antes eram o
+  // mesmo, e aí uma loja que vendesse R$ 10 mil no balcão veria a comissão do
+  // iFood cair de 27% pra 18% sem o iFood ter mudado nada.
+  const brutoExibido = isTodas ? totalBruto : plat?.bruto ?? 0
+  const bruto = brutoExibido - rp
+  const liquido = (isTodas ? totalLiquido : plat?.liquido ?? 0) - rp
   const vr = isTodas ? vrTotal : plat?.vrLiquido ?? 0
   // "Recebido direto pela loja" — só iFood tem (PIX/dinheiro/VR/maquininha
   // em pedidos do app). Entra como receita extra, igual o VR mas DIFERENTE
@@ -172,7 +190,10 @@ export function DreDetalhado({
   // "Para onde vai o bruto", renderizado LADO A LADO com este, partia do
   // repasse + venda direta. Duas "Margem líquida" com valores diferentes, na
   // mesma tela, separadas exatamente pelo dinheiro pago na porta.
-  const ficaNaLoja = liquido + recebidoDireto
+  // A receita própria entra AQUI, não lá em cima: ela não sofre taxa, então
+  // atravessa o bloco de plataforma inteiro e se junta ao dinheiro no exato
+  // ponto em que ele vira caixa da loja.
+  const ficaNaLoja = liquido + recebidoDireto + rp
   const margem = ficaNaLoja - cmvScope
   const margemPct = bruto > 0 ? (margem / bruto) * 100 : 0
   const resultadoOperacional = margem - opScope
@@ -274,10 +295,30 @@ export function DreDetalhado({
         })()}
       <Row
         label={perdaCancel > 0.005 ? "= Faturamento bruto" : "Faturamento bruto"}
-        value={fmtBRL(bruto)}
+        value={fmtBRL(brutoExibido)}
         bold
         pct={100}
       />
+
+      {/* De onde veio o bruto. Só aparece quando há venda fora de plataforma —
+          sem isso o leitor vê "bruto R$ 20 mil / taxas 36% das plataformas" e
+          não tem como saber por que os 36% não fecham com o total. */}
+      {rp > 0.005 && (
+        <div className="mb-1 space-y-0.5 pl-3">
+          <Row
+            label="Venda pelas plataformas"
+            value={fmtBRL(bruto)}
+            muted
+            pct={brutoExibido > 0 ? (bruto / brutoExibido) * 100 : 0}
+          />
+          <Row
+            label="Receita própria (balcão, salão, telefone)"
+            value={fmtBRL(rp)}
+            muted
+            pct={brutoExibido > 0 ? (rp / brutoExibido) * 100 : 0}
+          />
+        </div>
+      )}
 
       {/* Faturou e não há repasse: o extrato do iFood ainda não chegou.
           Sem ele, "taxa = bruto − repasse" vira o faturamento inteiro e a DRE
@@ -337,14 +378,25 @@ export function DreDetalhado({
         {/* A venda direta precisa aparecer AQUI, entre o repasse e a margem —
             ela entra na margem agora, e uma conta que salta um degrau é uma
             conta que o lojista não consegue conferir. */}
-        {recebidoDireto > 0 && (
+        {(recebidoDireto > 0 || rp > 0.005) && (
           <>
-            <Row
-              label="(+) Venda direta (dinheiro / PIX / maquininha na loja)"
-              value={`+ ${fmtBRL(recebidoDireto)}`}
-              tone="pos"
-              pct={pctOf(recebidoDireto)}
-            />
+            {recebidoDireto > 0 && (
+              <Row
+                label="(+) Venda direta (dinheiro / PIX / maquininha na loja)"
+                value={`+ ${fmtBRL(recebidoDireto)}`}
+                tone="pos"
+                pct={pctOf(recebidoDireto)}
+              />
+            )}
+            {/* Sem taxa nenhuma pelo caminho: entra cheia. É por isso que ela
+                aparece aqui e não lá em cima junto do bruto. */}
+            {rp > 0.005 && (
+              <Row
+                label="(+) Receita própria (balcão, salão, telefone)"
+                value={`+ ${fmtBRL(rp)}`}
+                tone="pos"
+              />
+            )}
             <Row
               label="= Fica na loja"
               value={fmtBRL(ficaNaLoja)}

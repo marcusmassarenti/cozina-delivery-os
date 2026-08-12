@@ -306,6 +306,7 @@ export default async function ResultadoPage({
               <DreDetalhado
                 platforms={drePlats}
                 totalBruto={totals.bruto}
+                receitaPropria={totals.receitaPropria}
                 totalLiquido={totals.liquidoPlataformas}
                 cmv={totals.cmvTotal}
                 operacao={totals.custoOperacao}

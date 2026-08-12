@@ -28,6 +28,8 @@ export type MonthlyGeneral = {
   custoProdutosCozina: number
   custoProdutosLoja: number
   custoOperacao: number
+  /** Venda fora das plataformas (balcão, salão, telefone), lançada à mão. */
+  receitaPropria: number
   clientesNovos: number
   notaMedia: number
   observacoes: string
@@ -48,6 +50,7 @@ export const emptyMonthlyGeneral: MonthlyGeneral = {
   custoProdutosCozina: 0,
   custoProdutosLoja: 0,
   custoOperacao: 0,
+  receitaPropria: 0,
   clientesNovos: 0,
   notaMedia: 0,
   observacoes: "",
@@ -99,7 +102,7 @@ export async function getMonthlyGeneral(
   const { data, error } = await supabase
     .from("monthly_entries")
     .select(
-      "custo_produtos_cozina, custo_produtos_loja, custo_operacao, clientes_novos, nota_media, observacoes, total_recebido_real",
+      "custo_produtos_cozina, custo_produtos_loja, custo_operacao, receita_propria, clientes_novos, nota_media, observacoes, total_recebido_real",
     )
     .eq("unit_id", unitId)
     .eq("year", year)
@@ -111,6 +114,7 @@ export async function getMonthlyGeneral(
     custoProdutosCozina: Number(data.custo_produtos_cozina),
     custoProdutosLoja: Number(data.custo_produtos_loja),
     custoOperacao: Number(data.custo_operacao ?? 0),
+    receitaPropria: Number(data.receita_propria ?? 0),
     clientesNovos: data.clientes_novos,
     notaMedia: Number(data.nota_media),
     observacoes: data.observacoes,
@@ -321,7 +325,7 @@ export async function getRealMonthlyForUnits(
     medir("mensal", supabase
       .from("monthly_entries")
       .select(
-        "unit_id, custo_produtos_cozina, custo_produtos_loja, custo_operacao, clientes_novos, nota_media, observacoes, total_recebido_real",
+        "unit_id, custo_produtos_cozina, custo_produtos_loja, custo_operacao, receita_propria, clientes_novos, nota_media, observacoes, total_recebido_real",
       )
       .in("unit_id", unitIds)
       .eq("year", year)
@@ -334,6 +338,7 @@ export async function getRealMonthlyForUnits(
     custo_produtos_cozina: number | string
     custo_produtos_loja: number | string
     custo_operacao: number | string | null
+    receita_propria: number | string | null
     clientes_novos: number
     nota_media: number | string
     observacoes: string
@@ -497,11 +502,30 @@ export async function getRealMonthlyForUnits(
       platformBreakdown("cardapioweb", "Cardápio Web", cwBruto, cwLiquido, 0, 0),
     ]
 
-    const totalBruto = ifoodBruto + nineBruto + keetaBruto + cwBruto
-    const totalLiquido = ifoodLiquido + nineLiquido + keetaLiquido + cwLiquido
+    // Venda que NUNCA passou por plataforma (balcão, salão, telefone,
+    // encomenda). Lançada à mão porque não existe relatório que a enxergue.
+    //
+    // Entra no bruto E no líquido pelo valor cheio: não há comissão sobre ela,
+    // o dinheiro entra inteiro na loja. Somar só no bruto faria a loja parecer
+    // ter uma taxa efetiva maior do que tem.
+    //
+    // NÃO entra em `pedidos`: não sabemos a quantidade, e inventar um número
+    // estragaria o ticket médio. O ticket segue sendo o das plataformas — que
+    // é o que dá pra comparar entre lojas.
+    const receitaPropria = m ? Number(m.receita_propria ?? 0) : 0
+
+    const totalBruto =
+      ifoodBruto + nineBruto + keetaBruto + cwBruto + receitaPropria
+    const totalLiquido =
+      ifoodLiquido + nineLiquido + keetaLiquido + cwLiquido + receitaPropria
     const totalPedidos = ifoodPedidos + ninePedidos + keetaPedidos + cwPedidos
     const totalCancelados = ifoodCancel + nineCancel + keetaCancel + cwCancel
-    const ticketMedio = totalPedidos > 0 ? totalBruto / totalPedidos : 0
+    // Ticket = bruto DAS PLATAFORMAS ÷ pedidos das plataformas. A receita
+    // própria fica de fora dos dois lados: ela não tem contagem de pedido, e
+    // dividi-la pelos pedidos do delivery inflaria o ticket de mentira (numa
+    // loja com R$ 10 mil de balcão o ticket saltaria sem nenhum pedido novo).
+    const brutoPlataformas = ifoodBruto + nineBruto + keetaBruto + cwBruto
+    const ticketMedio = totalPedidos > 0 ? brutoPlataformas / totalPedidos : 0
 
     // VR é pago à parte pelo iFood (fora do líquido da Conciliação), então
     // entra como receita extra no DRE — resultado.ts soma o VR líquido
@@ -538,6 +562,7 @@ export async function getRealMonthlyForUnits(
       custoProdutosCozina: custoCozina,
       custoProdutosLoja: custoLoja > 0 ? custoLoja : null,
       custoOperacao,
+      receitaPropria,
       totalRecebidoReal,
       margemLiquida,
       margemLucroPct,
@@ -549,4 +574,36 @@ export async function getRealMonthlyForUnits(
   }
 
   return result
+}
+
+/**
+ * Receita própria por loja no mês — venda fora das plataformas, lançada à mão.
+ *
+ * Consulta separada (e não mais um campo do agregador grande) porque quem
+ * precisa dela do outro lado é o `getUnitMetricsForMonth`, que só lê as fontes
+ * importadas e não abria `monthly_entries`. Sem isto, o Nino e os comparativos
+ * mostrariam um faturamento menor que o da tela da unidade — o mesmo tipo de
+ * divergência silenciosa que custou caro em julho/26.
+ */
+export async function getReceitaPropriaByUnits(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (unitIds.length === 0) return out
+  const { data, error } = await createAdminClient()
+    .from("monthly_entries")
+    .select("unit_id, receita_propria")
+    .in("unit_id", unitIds)
+    .eq("year", year)
+    .eq("month", month)
+  // Falha não vira zero silencioso: zero aqui é "a loja não vendeu no balcão",
+  // e confundir os dois some com dinheiro sem avisar ninguém.
+  if (error) throw new Error(`receita_propria: ${error.message}`)
+  for (const r of (data ?? []) as { unit_id: string; receita_propria: number | string | null }[]) {
+    const v = Number(r.receita_propria ?? 0)
+    if (v > 0) out.set(r.unit_id, v)
+  }
+  return out
 }

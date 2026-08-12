@@ -39,6 +39,7 @@ import type { UnitMonthly } from "@/lib/mock-monthly"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
 import { UnitCostsEditor } from "./unit-costs-editor"
+import { ReceitaPropriaCard } from "./receita-propria-card"
 import { BrutoBreakdown } from "./bruto-breakdown"
 import { DreDetalhado, type DrePlat } from "./dre-detalhado"
 import { getQuemPagaEntrega } from "@/lib/data/taxa-entrega"
@@ -163,6 +164,11 @@ export async function FinanceiroLojaTab({
   // Fora do Promise.all de propósito: é leitura pequena e opcional — loja sem
   // relatório Super importado devolve vazio e o card some.
   const superCriterios = (await getSuperCriterios([unitId])).get(unitId) ?? null
+  // Loja emprestada por outra empresa: mostra o valor lançado, não deixa
+  // editar. O guard do servidor já recusaria, mas deixar o campo habilitado e
+  // recusar no blur é pior do que não deixar digitar.
+  const { getUnidadesSomenteLeitura } = await import("@/lib/auth/permissions")
+  const soLeitura = (await getUnidadesSomenteLeitura()).has(unitId)
   // Dia da semana respeita o recorte de datas do filtro: sem isso o card
   // mostraria o mês inteiro enquanto o resto da tela mostra 7 dias.
   const fimMes = new Date(year, month, 0).getDate()
@@ -353,6 +359,7 @@ export async function FinanceiroLojaTab({
             platforms={dreTaxas}
             totalBruto={bruto}
             totalLiquido={liquido}
+            receitaPropria={m.receitaPropria}
             cmv={cmv}
             operacao={operacao}
             cmvCats={costBreakdown.categories
@@ -368,7 +375,17 @@ export async function FinanceiroLojaTab({
           />
         </div>
 
-        {/* Custos editáveis */}
+        {/* Coluna da direita: o que a loja LANÇA à mão — a receita que nenhum
+            relatório traz, e os custos. */}
+        <div className="space-y-4">
+        <ReceitaPropriaCard
+          key={`rp-${unitId}-${year}-${month}`}
+          unitId={unitId}
+          year={year}
+          month={month}
+          valorInicial={m.receitaPropria}
+          somenteLeitura={soLeitura}
+        />
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold">Custos da loja</h3>
           {/* key estável (só unidade/mês): o editor é otimista e dono do próprio
@@ -388,6 +405,7 @@ export async function FinanceiroLojaTab({
             O bruto/líquido vêm dos relatórios; CMV e operação você lança aqui —
             crie categorias pra detalhar (ex.: bebidas, aluguel, funcionários).
           </p>
+        </div>
         </div>
       </div>
 

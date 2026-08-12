@@ -40,6 +40,8 @@ export type ResultadoUnitRow = {
   unitName: string
   pedidos: number
   bruto: number
+  /** Parte do bruto que veio de venda fora das plataformas (lançada à mão). */
+  receitaPropria: number
   /** Taxas retidas pelas plataformas = bruto − líquido das plataformas */
   taxasPlataforma: number
   /** Promoções/descontos que a LOJA bancou (já dentro das taxas — itemizado) */
@@ -73,6 +75,8 @@ export type ResultadoUnitRow = {
 export type ResultadoTotals = {
   pedidos: number
   bruto: number
+  /** Parte do bruto que veio de venda fora das plataformas (lançada à mão). */
+  receitaPropria: number
   taxasPlataforma: number
   promocoesLoja: number
   liquidoPlataformas: number
@@ -165,7 +169,13 @@ export async function getNetworkResultadoForMonth(
     const cwBruto = hasCw ? cw!.bruto : 0
     const cwLiq = hasCw ? cw!.liquido : 0
 
-    const bruto = ifoodBruto + nineBruto + keetaBruto + cwBruto
+    // Venda fora das plataformas, lançada à mão. Entra no bruto E no que fica
+    // na loja pelo valor cheio (não tem taxa), mas NÃO em liquidoPlataformas —
+    // aquele campo é "o que a plataforma repassou", e inflá-lo faria o repasse
+    // da rede parecer melhor do que é.
+    const receitaPropria = manual?.receitaPropria ?? 0
+    const bruto =
+      ifoodBruto + nineBruto + keetaBruto + cwBruto + receitaPropria
     const liquidoPlataformas = ifoodLiq + nineLiq + keetaLiq + cwLiq
     // Recebido direto (dinheiro/PIX na entrega, só iFood): dinheiro que a loja
     // pegou fora do repasse. Não é taxa e conta como receita — mesma régua do
@@ -194,7 +204,13 @@ export async function getNetworkResultadoForMonth(
       ? Math.max(0, manual.vrRecebido - manual.vrTaxaMedia8)
       : 0
 
-    const taxasPlataforma = Math.max(0, bruto - liquidoPlataformas - recebidoDireto)
+    // Base SEM a receita própria: bruto − líquido só faz sentido sobre o que
+    // passou por plataforma. Com o balcão dentro, a venda de balcão inteira
+    // apareceria como "taxa retida pela plataforma".
+    const taxasPlataforma = Math.max(
+      0,
+      bruto - receitaPropria - liquidoPlataformas - recebidoDireto,
+    )
     // Promoções/descontos que a loja bancou (já dentro das taxas, itemizado)
     // — iFood + 99 Food + Keeta ("Promoção financiada pela loja").
     const promocoesLoja =
@@ -215,7 +231,9 @@ export async function getNetworkResultadoForMonth(
     const leitura = lerFinanceiro({
       bruto,
       liquido: liquidoPlataformas,
-      recebidoDireto,
+      // A receita própria entra pelo mesmo caminho do dinheiro pago na porta:
+      // é valor que a loja embolsou sem passar pelo repasse.
+      recebidoDireto: recebidoDireto + receitaPropria,
       cmv: cmvTotal,
       operacao: custoOperacao,
     })
@@ -227,7 +245,9 @@ export async function getNetworkResultadoForMonth(
     // Repasse PURO (sem venda direta) — é o que a plataforma mandou, e serve
     // pra comparar plataformas entre si. Diferente do "% que fica na loja",
     // que é o que a loja embolsou no total.
-    const repassePct = bruto > 0 ? (liquidoPlataformas / bruto) * 100 : 0
+    const brutoPlataformas = bruto - receitaPropria
+    const repassePct =
+      brutoPlataformas > 0 ? (liquidoPlataformas / brutoPlataformas) * 100 : 0
 
     // Só entra no DRE quem tem faturamento (import ou manual)
     if (bruto <= 0 && pedidos <= 0) continue
@@ -238,6 +258,7 @@ export async function getNetworkResultadoForMonth(
       unitName: u.name,
       pedidos,
       bruto,
+      receitaPropria,
       taxasPlataforma,
       promocoesLoja,
       liquidoPlataformas,
@@ -264,6 +285,7 @@ export async function getNetworkResultadoForMonth(
     (acc, r) => {
       acc.pedidos += r.pedidos
       acc.bruto += r.bruto
+      acc.receitaPropria += r.receitaPropria
       acc.taxasPlataforma += r.taxasPlataforma
       acc.promocoesLoja += r.promocoesLoja
       acc.liquidoPlataformas += r.liquidoPlataformas
@@ -278,6 +300,7 @@ export async function getNetworkResultadoForMonth(
     {
       pedidos: 0,
       bruto: 0,
+      receitaPropria: 0,
       taxasPlataforma: 0,
       promocoesLoja: 0,
       liquidoPlataformas: 0,

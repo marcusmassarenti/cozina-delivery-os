@@ -294,3 +294,56 @@ export async function saveCostValue(input: {
     return { ok: false, message: err instanceof Error ? err.message : "Erro." }
   }
 }
+
+/**
+ * Receita própria do mês — venda que não passou por plataforma nenhuma
+ * (balcão, salão, telefone, encomenda).
+ *
+ * Upsert parcial na MESMA linha mensal dos custos, tocando só esta coluna: o
+ * `onConflict` preserva CMV, operação, nota e o resto. É o mesmo gesto do
+ * custo manual, só que do lado da receita.
+ *
+ * Escopo por UNIDADE (requireUnitWrite), não `financeiro:edit` global — o
+ * franqueado lança a própria loja, e loja emprestada em modo leitura é
+ * recusada aqui mesmo.
+ */
+export async function saveReceitaPropria(input: {
+  unitId: string
+  year: number
+  month: number
+  valor: number
+}): Promise<SaveCostsState> {
+  const { unitId, year, month } = input
+  if (!unitId || !year || !month) {
+    return { ok: false, message: "Dados inválidos." }
+  }
+  // Negativo não existe: venda que não aconteceu é 0, e um sinal trocado aqui
+  // derrubaria o faturamento da rede inteira sem parecer erro.
+  const valor = Number.isFinite(input.valor) ? Math.max(0, input.valor) : 0
+
+  try {
+    const { admin: supabase } = await requireUnitWrite(unitId)
+    const { error } = await supabase.from("monthly_entries").upsert(
+      {
+        unit_id: unitId,
+        year,
+        month,
+        receita_propria: valor,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "unit_id,year,month" },
+    )
+    if (error) return { ok: false, message: error.message }
+
+    revalidateTag("reports", "max")
+    revalidatePath("/dre")
+    revalidatePath("/unidades/[codigo]", "page")
+    revalidatePath("/inicio")
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Erro desconhecido",
+    }
+  }
+}

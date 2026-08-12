@@ -128,6 +128,7 @@ export async function getNetworkReportForRange(
   const totals: ResultadoTotals = {
     pedidos: 0,
     bruto: 0,
+    receitaPropria: 0,
     taxasPlataforma: 0,
     promocoesLoja: 0,
     liquidoPlataformas: 0,

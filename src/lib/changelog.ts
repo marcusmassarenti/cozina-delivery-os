@@ -42,6 +42,35 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.18.0",
+    date: "2026-08-12",
+    tag: "Grande novidade",
+    title: "Receita própria: a venda que não passa por plataforma",
+    summary:
+      "Balcão, salão, telefone e encomenda agora entram no faturamento da loja. Até hoje o sistema mostrava só o delivery, e a DRE terminava num resultado que era o do iFood, não o do negócio.",
+    areas: [
+      {
+        area: "Financeiro",
+        items: [
+          {
+            kind: "novo",
+            title: "Lance a venda de balcão no mês",
+            antes:
+              "Quem vende no salão ou atende por telefone via o sistema apontar um faturamento menor que o real, e não tinha onde lançar a diferença.",
+            depois:
+              "Card \"Receita própria\" na tela da unidade, ao lado dos custos: um valor por mês. Ele entra no faturamento bruto da loja e da rede, aparece separado na DRE e vai junto para o Dashboard, o Ranking, o DRE Grupo e o Nino.",
+          },
+          {
+            kind: "novo",
+            title: "A DRE mostra de onde veio cada real",
+            desc:
+              "Abaixo do faturamento bruto aparecem duas linhas — venda pelas plataformas e receita própria — e a receita própria entra de novo, cheia, logo antes do \"Fica na loja\": ela não paga comissão. As porcentagens das taxas continuam medidas sobre a venda de plataforma, senão a comissão do iFood pareceria menor só porque a loja vendeu no balcão.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.17.3",
     date: "2026-08-12",
     tag: "Correções",
