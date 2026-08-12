@@ -320,10 +320,35 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
     const venc = h.due_date ? String(h.due_date) : null
     if (venc && plano) {
       const faltamPraVencer = diasEntre(hoje, venc)
-      if (pago && faltamPraVencer >= 1 && faltamPraVencer <= 3) {
+      // TRÊS toques por ciclo: 5 dias, 2 dias e no dia do vencimento.
+      //
+      // Antes era um só, entre 1 e 3 dias, com o tipo fixo "fatura-vencendo" —
+      // e a trava de duplicidade é (holding_id, tipo) SEM data. Resultado: o
+      // lembrete saía UMA VEZ na vida do cliente e nunca mais. Mensalidade é
+      // mensal; o aviso não era.
+      //
+      // Agora o tipo carrega a data do vencimento, então cada ciclo tem a
+      // própria trava e o toque volta todo mês sem nunca repetir dentro do
+      // mesmo ciclo.
+      //
+      // Sai mesmo com `paid = true`: quem paga por Pix/boleto fica marcado
+      // como pago do ciclo ANTERIOR até alguém trocar na mão. Exigir
+      // `!pago` era o que segurava o aviso justamente de quem mais precisa.
+      const TOQUES = [
+        { dias: 5, tipo: "fatura-5-dias" },
+        { dias: 2, tipo: "fatura-2-dias" },
+        { dias: 0, tipo: "fatura-vence-hoje" },
+      ] as const
+      const toque = TOQUES.find((t) => t.dias === faltamPraVencer)
+      if (toque) {
         await disparar(
-          "fatura-vencendo",
-          faturaVencendo({ ...dados, vencimento: fmtData(venc) }),
+          `${toque.tipo}-${venc}` as TipoEmail,
+          faturaVencendo({
+            ...dados,
+            vencimento: fmtData(venc),
+            diasRestantes: faltamPraVencer,
+            suspendeEm: h.suspend_on ? fmtData(String(h.suspend_on)) : undefined,
+          }),
         )
       }
       if (!pago && faltamPraVencer < 0) {

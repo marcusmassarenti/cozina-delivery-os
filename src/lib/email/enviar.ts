@@ -65,6 +65,17 @@ export type TipoEmail =
    */
   | "manutencao-ifood-2026-08-13"
   /**
+   * Cobrança a vencer — três toques por CICLO: 5 dias, 2 dias e no dia.
+   *
+   * A data do vencimento faz parte do tipo porque a trava de duplicidade é
+   * `(holding_id, tipo)` SEM data. Com um tipo fixo, o lembrete sairia uma vez
+   * na vida do cliente e nunca mais — que é o que acontecia com
+   * "fatura-vencendo": mensalidade é mensal, o aviso não era.
+   */
+  | `fatura-5-dias-${string}`
+  | `fatura-2-dias-${string}`
+  | `fatura-vence-hoje-${string}`
+  /**
    * Aviso semanal ao cliente de que uma loja parou de mandar dado. Também NÃO
    * é régua: a mesma loja pode parar em semanas diferentes, então quem dispara
    * manda `forcar: true` — senão a trava engoliria a segunda vez em diante,

@@ -120,6 +120,21 @@ export default async function AppLayout({
     redirect("/suspenso")
   }
   const overdue = billing?.status === "overdue"
+  // Fatura A VENCER — o estado que faltava. Só existia faixa depois de vencer
+  // ("em atraso"), então o cliente descobria a cobrança quando ela já estava
+  // atrasada. A DG FOODS, com 56 lojas, tinha vencimento hoje e suspensão
+  // amanhã sem nenhum aviso na tela.
+  //
+  // Só aparece na última semana: faixa fixa o mês inteiro vira paisagem, e aí
+  // some justamente no dia em que precisava ser lida.
+  const diasPraVencer =
+    billing?.status === "pending" && billing.dueDate
+      ? daysUntil(billing.dueDate)
+      : null
+  const vencendo =
+    diasPraVencer !== null && diasPraVencer >= 0 && diasPraVencer <= 5
+      ? diasPraVencer
+      : null
   // Teste grátis em andamento → banner com os dias restantes.
   const trialDaysLeft =
     billing?.status === "trial" && billing.trialEndsAt
@@ -161,6 +176,25 @@ export default async function AppLayout({
                   ? ` — regularize até ${billing.suspendOn.split("-").reverse().join("/")} pra não suspender o acesso.`
                   : " — regularize pra manter o acesso."}
               </span>
+            </div>
+          )}
+          {vencendo !== null && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-sky-300 bg-sky-50 px-6 py-2.5 text-xs font-medium text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300">
+              <span className="text-base leading-none">🧾</span>
+              <span>
+                {vencendo === 0
+                  ? "Sua mensalidade vence hoje."
+                  : `Sua mensalidade vence em ${vencendo} dia${vencendo === 1 ? "" : "s"}.`}
+                {billing?.suspendOn
+                  ? ` Sem o pagamento, o acesso é suspenso em ${billing.suspendOn.split("-").reverse().join("/")}.`
+                  : ""}
+              </span>
+              <a
+                href="/assinatura"
+                className="font-semibold underline underline-offset-2 hover:opacity-80"
+              >
+                Pagar agora
+              </a>
             </div>
           )}
           {trialDaysLeft !== null && (

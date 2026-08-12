@@ -468,16 +468,46 @@ export function confirmarEmail(
   }
 }
 
-/** Aviso de fatura chegando (3 dias antes). Transacional: sem print, sem venda. */
-export function faturaVencendo(d: DadosEmail & { vencimento: string }) {
+/**
+ * Aviso de fatura a vencer. UM template, TRÊS momentos: 5 dias, 2 dias e no dia.
+ *
+ * O tom muda com a urgência de propósito — o de 5 dias é informativo e o do
+ * dia diz o que acontece se não pagar. Três textos iguais chegando em uma
+ * semana ensinam a pessoa a ignorar o remetente.
+ *
+ * Transacional: sem print, sem venda.
+ */
+export function faturaVencendo(
+  d: DadosEmail & {
+    vencimento: string
+    /** 5, 2 ou 0. */
+    diasRestantes: number
+    /** Quando o acesso é suspenso se não pagar. */
+    suspendeEm?: string
+  },
+) {
+  const hoje = d.diasRestantes <= 0
+  const valor = d.valorMensal ? ` de <strong>${brl(d.valorMensal)}</strong>` : ""
+  const assunto = hoje
+    ? `Sua mensalidade do DeliveryOS vence hoje`
+    : `Sua mensalidade do DeliveryOS vence em ${d.diasRestantes} dias`
+  const titulo = hoje
+    ? "Sua mensalidade vence hoje"
+    : `Sua mensalidade vence em ${d.diasRestantes} dias`
+
   return {
-    assunto: `Sua mensalidade do DeliveryOS vence em ${d.vencimento}`,
+    assunto,
     html: layout({
-      titulo: "Sua mensalidade vence em breve",
+      titulo,
       corpo: `
-        <p style="margin:0 0 14px;">${oi(d.nome)} Passando pra avisar que a mensalidade do ${d.empresa}${
-          d.valorMensal ? ` — <strong>${brl(d.valorMensal)}</strong>` : ""
-        } vence em <strong>${d.vencimento}</strong>.</p>
+        <p style="margin:0 0 14px;">${oi(d.nome)} A mensalidade do ${d.empresa}${valor} ${
+          hoje ? "vence <strong>hoje</strong>" : `vence em <strong>${d.vencimento}</strong>`
+        }.</p>
+        ${
+          hoje && d.suspendeEm
+            ? `<p style="margin:0 0 14px;">Se o pagamento não entrar, o acesso é suspenso em <strong>${d.suspendeEm}</strong> — os dados continuam guardados e voltam assim que você regularizar.</p>`
+            : ""
+        }
         <p style="margin:0 0 14px;">Se já pagou, pode ignorar este e-mail.</p>`,
       cta: { texto: "Ver minha assinatura", url: `${SITE}/minha-conta/assinatura` },
     }),
