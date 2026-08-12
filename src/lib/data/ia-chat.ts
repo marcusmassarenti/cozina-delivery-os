@@ -566,6 +566,7 @@ function montarContexto(
     >
   },
   plataformasSemDadoMap: ReturnType<typeof plataformasSemDado>,
+  coberturaLojas: Map<string, CoberturaLoja>,
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -579,6 +580,9 @@ function montarContexto(
         historico_mensal: historico.map((h) =>
           linha(h.mes, h.bruto, h.liquido, h.pedidos, h.cancelados, h.promocoes),
         ),
+        // Até que dia ESTA loja tem dado, por plataforma. É o denominador de
+        // qualquer projeção do mês corrente — ver a regra no prompt.
+        dado_vai_ate: coberturaLojas.get(u.id) ?? null,
         // Motivos de cancelamento (iFood) da loja no mês, com perda em R$.
         cancelamentos: cancelMap.get(u.id) ?? null,
         // Nota por canal + quantas avaliações 1-2★ a loja teve no mês.
@@ -708,35 +712,71 @@ function montarContexto(
  * não existe, o prompt manda o Nino dizer até quando o dado vai, pra a pessoa
  * ver o denominador em vez de confiar cego no número.
  */
-async function coberturaDoPeriodo(
-  year: number,
-  month: number,
-  unitIds: string[],
-): Promise<{
+export type CoberturaLoja = {
   ifood: number | null
   "99food": number | null
   keeta: number | null
-  /** O menor entre as plataformas com dado — até aqui o mês está COMPLETO. */
+  cardapioweb: number | null
+  /** O MENOR entre as plataformas com dado — até aqui o mês está completo. */
   completo_ate_dia: number | null
-}> {
-  const { getImportCoverageForMonth } = await import(
-    "@/lib/data/relatorio-diario"
+}
+
+/**
+ * Até que dia cada plataforma trouxe dado, POR LOJA.
+ *
+ * A primeira versão disto usava a cobertura da REDE (um número pra todas as
+ * lojas juntas). Resolveu o caso da Pinheiros por coincidência — a Keeta da
+ * rede também parava no dia 10 —, mas a diferença entre lojas é real: no mesmo
+ * 12/ago, a Alphaville estava no dia 8 do iFood enquanto metade da rede já
+ * estava no 12. Projetar a Alphaville por 11 dias inventaria faturamento.
+ *
+ * O MENOR entre as plataformas COM DADO, não o maior: o dia em que só uma
+ * plataforma reportou é um dia incompleto, e dividir por ele achata a média
+ * diária da loja inteira. Plataforma sem nenhum dado no mês (0) fica fora da
+ * conta — senão uma loja que não vende na Keeta projetaria por zero dia.
+ */
+async function coberturaPorLoja(
+  year: number,
+  month: number,
+  unitIds: string[],
+): Promise<Map<string, CoberturaLoja>> {
+  const out = new Map<string, CoberturaLoja>()
+  if (unitIds.length === 0) return out
+
+  const { data, error } = await createAdminClient().rpc(
+    "cobertura_por_unidade",
+    { p_unit_ids: unitIds, p_year: year, p_month: month },
   )
-  const c = await getImportCoverageForMonth(year, month, unitIds).catch(
-    () => null,
-  )
-  const ifood = c?.ifood.lastDay ?? null
-  const nine = c?.ninefood.lastDay ?? null
-  const keeta = c?.keeta.lastDay ?? null
-  // MENOR, não maior: o dia em que só uma plataforma reportou é um dia
-  // incompleto, e dividir por ele achata a média diária da loja inteira.
-  const dias = [ifood, nine, keeta].filter((d): d is number => d != null)
-  return {
-    ifood,
-    "99food": nine,
-    keeta,
-    completo_ate_dia: dias.length > 0 ? Math.min(...dias) : null,
+  // Sem cobertura o Nino NÃO deve projetar — o prompt trata completo_ate_dia
+  // null como "não dá pra projetar". Melhor ficar sem projeção do que voltar
+  // a dividir pelo dia do calendário.
+  if (error) {
+    console.error("cobertura_por_unidade:", error.message)
+    return out
   }
+
+  for (const r of (data ?? []) as {
+    unit_id: string
+    ifood_dia: number
+    ninefood_dia: number
+    keeta_dia: number
+    cardapioweb_dia: number
+  }[]) {
+    const zeroVira = (n: number) => (n > 0 ? n : null)
+    const ifood = zeroVira(r.ifood_dia)
+    const nine = zeroVira(r.ninefood_dia)
+    const keeta = zeroVira(r.keeta_dia)
+    const cw = zeroVira(r.cardapioweb_dia)
+    const dias = [ifood, nine, keeta, cw].filter((d): d is number => d != null)
+    out.set(r.unit_id, {
+      ifood,
+      "99food": nine,
+      keeta,
+      cardapioweb: cw,
+      completo_ate_dia: dias.length > 0 ? Math.min(...dias) : null,
+    })
+  }
+  return out
 }
 
 function coberturaDoMes(
@@ -1257,8 +1297,9 @@ FORMATO DAS TABELAS: pra economizar espaço, as listas grandes ("historico_mensa
 ORDEM DAS LISTAS: as listas de LOJA ("por_loja", tanto o do mês quanto o dentro de "periodos") já vêm ordenadas do MAIOR pro MENOR FATURAMENTO — a primeira linha é a líder EM FATURAMENTO. Nunca embaralhe: se a lista que você vai mostrar é de faturamento (ou um "top N" sem métrica dita), mantenha exatamente essa ordem. MAS quando a pergunta é sobre OUTRA métrica — ROAS, nota, ticket, cancelamento, CMV, margem, marketing —, ordene pela métrica PERGUNTADA, do melhor pro pior, e diga qual é o critério. Listar ROAS na ordem de faturamento (13,17 depois de 12,59) parece erro de conta pra quem lê. A regra é: não invente ordem, mas siga a ordem da métrica que o dono pediu. Já as séries de tempo ("historico_mensal", "historico_rede_mensal") vêm em ordem CRONOLÓGICA, do mês mais antigo pro mais novo — não são ranking.
 
 O contexto tem:
-- "contexto_temporal": a data de hoje, o dia do mês, dias no mês, dias restantes e "dado_vai_ate" — até que dia cada plataforma REALMENTE trouxe número, mais "completo_ate_dia" (o menor deles).
-- PROJEÇÃO DO MÊS — a regra é: faturamento_do_mes ÷ **completo_ate_dia** × dias_no_mes. NUNCA divida por "dias_decorridos": dia do calendário não é dia com dado. Hoje pode ser 12 e a última planilha ter parado no dia 10 — dividir por 12 espalha o faturamento de 10 dias por 12 e devolve uma queda que não existe. Se "completo_ate_dia" for null, não projete: diga que ainda não há dado suficiente no mês.
+- "contexto_temporal": a data de hoje, o dia do mês, dias no mês e dias restantes.
+- "dado_vai_ate" (dentro de CADA loja, não no contexto_temporal): até que dia AQUELA loja tem número em cada plataforma, mais "completo_ate_dia" (o menor entre as que têm dado).
+- PROJEÇÃO DO MÊS — a regra é: faturamento_do_mes ÷ **completo_ate_dia DA LOJA** × dias_no_mes. NUNCA divida por "dias_decorridos": dia do calendário não é dia com dado. Hoje pode ser 12 e a última planilha daquela loja ter parado no dia 10 — dividir por 12 espalha o faturamento de 10 dias por 12 e devolve uma queda que não existe. E NUNCA use a cobertura de uma loja pra projetar outra: no mesmo dia uma pode estar no dia 8 e outra no 12. Se "completo_ate_dia" for null, não projete: diga que ainda não há dado suficiente no mês.
 - Ao projetar, SEMPRE diga até que dia o dado vai ("com dado até 10/ago"). É isso que deixa a pessoa julgar a projeção em vez de engolir o número. E deixe claro que é projeção, não certeza.
 - Se uma plataforma estiver bem mais atrasada que as outras, diga qual e sugira sincronizar/subir o relatório antes de tirar conclusão — projeção com dado velho vira diagnóstico errado de queda.
 - "rede_mes_corrente" e o detalhe por loja do MÊS CORRENTE (com CMV, margem e quebra por plataforma).
@@ -1457,13 +1498,10 @@ export async function perguntarConsultor(
       dias_decorridos: diaDoMes,
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
-      // Até que dia cada plataforma REALMENTE trouxe dado. Sem isto o Nino
-      // projetava dividindo pelos dias do calendário — e a Pinheiros, cujo
-      // Keeta (70% do faturamento) parava no dia 10 enquanto o mês já estava
-      // no 12, fechou como "R$ 44 mil, desaceleração". Pelo dado real são
-      // ~R$ 51 mil, ACIMA de junho e julho: o diagnóstico saiu invertido.
-      dado_vai_ate: await coberturaDoPeriodo(year, month, unitIds),
     }
+    // Cobertura é POR LOJA (vai em cada item de `por_loja`), não aqui: no mesmo
+    // dia a Alphaville estava no dia 8 do iFood e metade da rede no 12.
+    const coberturaLojas = await coberturaPorLoja(year, month, unitIds)
     const ant = mesAnterior(year, month)
     const cobertura = {
       // O que cobra ação HOJE: mês fechado, prazo vencido, ainda sem relatório.
@@ -1483,7 +1521,7 @@ export async function perguntarConsultor(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))))
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))), coberturaLojas)
 
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
@@ -1665,13 +1703,10 @@ export async function* perguntarConsultorStream(
       dias_decorridos: diaDoMes,
       dias_no_mes,
       dias_restantes: Math.max(0, dias_no_mes - diaDoMes),
-      // Até que dia cada plataforma REALMENTE trouxe dado. Sem isto o Nino
-      // projetava dividindo pelos dias do calendário — e a Pinheiros, cujo
-      // Keeta (70% do faturamento) parava no dia 10 enquanto o mês já estava
-      // no 12, fechou como "R$ 44 mil, desaceleração". Pelo dado real são
-      // ~R$ 51 mil, ACIMA de junho e julho: o diagnóstico saiu invertido.
-      dado_vai_ate: await coberturaDoPeriodo(year, month, unitIds),
     }
+    // Cobertura é POR LOJA (vai em cada item de `por_loja`), não aqui: no mesmo
+    // dia a Alphaville estava no dia 8 do iFood e metade da rede no 12.
+    const coberturaLojas = await coberturaPorLoja(year, month, unitIds)
     const ant = mesAnterior(year, month)
     const cobertura = {
       // O que cobra ação HOJE: mês fechado, prazo vencido, ainda sem relatório.
@@ -1691,7 +1726,7 @@ export async function* perguntarConsultorStream(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))))
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))), coberturaLojas)
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),
