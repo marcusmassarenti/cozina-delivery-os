@@ -121,17 +121,73 @@ const DORES = [
 
 /* Cobertura por plataforma — derivada do catálogo oficial (reports-catalog.ts)
    pra nunca desatualizar em relação ao que o sistema realmente lê. */
-/* Rótulo SÓ na landing (marketing): deixa dois relatórios parecidos mais
-   distintos pra quem só está conhecendo. Nas telas operacionais (guia, config)
-   o nome real da Keeta é mantido pra o lojista achar o arquivo no portal. */
+/* Rótulo SÓ na landing (marketing). Nas telas operacionais (guia, config) o
+   nome real do portal é mantido pra o lojista achar o arquivo pra baixar.
+   Aqui é o contrário: quem está conhecendo não sabe o que é "Dados da loja" —
+   os nomes da 99 e da Keeta dizem o formato do arquivo, não o assunto. Então
+   viram nomes de ASSUNTO, na mesma língua dos do iFood. */
 const LANDING_NOME: Record<string, string> = {
-  "Pedidos recentes": "Taxas e promoções por pedido",
+  "Pedidos recentes": "Taxas e subsídio por pedido",
 }
-const nomeLanding = (n: string) => LANDING_NOME[n] ?? n
-const RELATORIOS: { id: PlatId; itens: string[] }[] = [
-  { id: "ifood", itens: reportsByPlatform("ifood").map((r) => nomeLanding(r.name)) },
-  { id: "99food", itens: reportsByPlatform("99food").map((r) => nomeLanding(r.name)) },
-  { id: "keeta", itens: reportsByPlatform("keeta").map((r) => nomeLanding(r.name)) },
+/* O que cada relatório puxa. Sem isto o nome sozinho ainda deixa dúvida —
+   "Cardápio" pode ser a lista de pratos ou o funil de quem olhou e não pediu. */
+const LANDING_HINT: Record<string, string> = {
+  // iFood
+  "Financeiro / Conciliação": "Faturamento, taxas e repasse",
+  Avaliações: "Notas, comentários e respostas",
+  "Qualidade da operação": "Tempo online, atrasos e chamados",
+  "Super Restaurante": "Nível, plano de ação e sentimento",
+  "Pedidos (VR / pagamento)": "Forma de pagamento e vale-refeição",
+  "Negociações e chamados": "Cancelamentos evitados e reembolsos",
+  // Keeta
+  "Taxas e subsídio por pedido": "Taxa por pedido e subsídio Keeta × loja",
+  "Fatura (repasse)": "Quanto e quando cai o dinheiro",
+}
+/* Nome + resumo por relatório, com fallback por plataforma pros que se
+   repetem nas três (Cardápio, Promoções…) mas puxam coisas diferentes. */
+const POR_PLATAFORMA: Partial<
+  Record<PlatId, Record<string, { nome?: string; hint: string }>>
+> = {
+  ifood: {
+    Cardápio: { hint: "Funil de conversão e itens vendidos" },
+    Promoções: { hint: "Investimento e retorno das campanhas" },
+  },
+  "99food": {
+    "Dados da loja": {
+      nome: "Financeiro e operação",
+      hint: "Faturamento, comissão, aceitação e preparo",
+    },
+    "Dados do item": { nome: "Cardápio", hint: "Itens vendidos, quantidade e valor" },
+    "Dados do pedido": {
+      nome: "Pedidos e pagamento",
+      hint: "Pedido a pedido, com forma de pagamento",
+    },
+  },
+  keeta: {
+    "Dados da loja": {
+      nome: "Financeiro e conversão",
+      hint: "Faturamento diário e funil de vendas",
+    },
+    "Dados do item": { nome: "Cardápio", hint: "Itens vendidos no período" },
+    Pedidos: { nome: "Pedidos e pagamento", hint: "Pedido a pedido, com pagamento" },
+    Promoções: { hint: "Investimento e retorno das campanhas" },
+  },
+}
+
+type ItemRelatorio = { nome: string; hint: string }
+
+function itensDaPlataforma(id: PlatId): ItemRelatorio[] {
+  const especifico = POR_PLATAFORMA[id] ?? {}
+  return reportsByPlatform(id).map((r) => {
+    const nome = especifico[r.name]?.nome ?? LANDING_NOME[r.name] ?? r.name
+    return { nome, hint: especifico[r.name]?.hint ?? LANDING_HINT[nome] ?? "" }
+  })
+}
+
+const RELATORIOS: { id: PlatId; itens: ItemRelatorio[] }[] = [
+  { id: "ifood", itens: itensDaPlataforma("ifood") },
+  { id: "99food", itens: itensDaPlataforma("99food") },
+  { id: "keeta", itens: itensDaPlataforma("keeta") },
 ]
 
 
@@ -1481,14 +1537,23 @@ export function LandingV3({
                     >
                       {r.itens.map((item) => (
                         <li
-                          key={item}
+                          key={item.nome}
                           className="flex items-start gap-2 text-sm text-[oklch(0.4_0.01_48)]"
                         >
                           <Check
-                            className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+                            className="mt-[3px] size-4 shrink-0 text-[var(--brand)]"
                             strokeWidth={2.6}
                           />
-                          {item}
+                          <span>
+                            <span className="font-medium text-[oklch(0.32_0.01_48)]">
+                              {item.nome}
+                            </span>
+                            {item.hint && (
+                              <span className="block text-xs leading-snug text-[oklch(0.58_0.01_48)]">
+                                {item.hint}
+                              </span>
+                            )}
+                          </span>
                         </li>
                       ))}
                     </ul>
