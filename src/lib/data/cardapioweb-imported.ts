@@ -24,6 +24,20 @@ export type CardapioWebResumo = {
    * backfill roda, o bruto está incompleto — quem exibe pode avisar.
    */
   semDetalhe: number
+  /**
+   * Cesta dos pedidos CANCELADOS. Fica FORA de `bruto` e de `liquido` — é
+   * perda, não receita e muito menos taxa. Existe pra quem quiser exibir o
+   * "valor das vendas" no formato do portal (válidos + cancelados), igual o
+   * painel já faz com o iFood.
+   */
+  cestaCancelados: number
+  /**
+   * Igual a `pedidos` hoje — os dois contam só quem tem valor. Mantido
+   * separado porque o nome diz a intenção no ponto de uso.
+   */
+  pedidosComValor: number
+  /** Válidos E com valor — o divisor honesto do ticket. */
+  validosComValor: number
 }
 
 export function emptyCardapioWeb(): CardapioWebResumo {
@@ -35,6 +49,9 @@ export function emptyCardapioWeb(): CardapioWebResumo {
     ticketMedio: 0,
     hasData: false,
     semDetalhe: 0,
+    cestaCancelados: 0,
+    pedidosComValor: 0,
+    validosComValor: 0,
   }
 }
 
@@ -185,24 +202,60 @@ export async function getCardapioWebResumoByUnits(
     const valor = l.total === null ? null : Number(l.total)
     const cancelado = ehCancelado(l.status)
 
-    r.pedidos += 1
     if (valor === null || Number.isNaN(valor)) {
+      // NÃO conta como pedido. O cabeçalho chegou, o detalhe (que traz o
+      // valor) não — então não sabemos quanto ele vale. Contá-lo mantinha
+      // `pedidos` cheio e `bruto` vazio: o ticket desabava e a tela parecia
+      // mostrar queda de faturamento.
+      //
+      // Em julho/26 eram 103 de 135 na loja do João Nilson, e a origem nem era
+      // backfill: são pedidos de uma instalação INATIVA ("Real Food /
+      // Mercados", token recusado com HTTP 429) apontada pra unidade dele.
+      // Filtrar por `active` resolveria este caso e quebraria outro — loja que
+      // desconecta amanhã não pode perder o histórico. Ignorar o que não tem
+      // valor é a regra que vale nos dois.
       r.semDetalhe += 1
     } else {
-      // Bruto inclui cancelado de propósito: é a cesta que o cliente montou,
-      // mesma régua já usada no iFood pra bater com o portal da plataforma.
-      r.bruto += valor
-      if (!cancelado) r.liquido += valor
+      r.pedidos += 1
+      r.pedidosComValor += 1
+      // CANCELADO FICA FORA DO BRUTO — igual ao iFood, cuja RPC descarta o
+      // pedido cancelado do `bruto` e devolve a cesta à parte.
+      //
+      // Antes o bruto incluía cancelado e o líquido não, "pra bater com o
+      // portal". O comentário estava errado sobre o iFood, e o efeito foi
+      // caro: toda tela calcula `taxa = bruto − líquido`, então a cesta dos
+      // cancelados virava TAXA de um canal que não cobra comissão nenhuma —
+      // R$ 212,70 em julho/26 rotulados "Fica com a plataforma", derrubando
+      // junto o "% que fica na loja" da rede.
+      //
+      // Quem quiser o número do portal (válidos + cancelados) soma
+      // `cestaCancelados`, que é o mesmo gesto já feito com o iFood.
+      if (cancelado) r.cestaCancelados += valor
+      else {
+        r.bruto += valor
+        r.liquido += valor
+        r.validosComValor += 1
+      }
     }
-    if (cancelado) r.cancelamentosQtd += 1
+    // Só cancelado COM valor: senão `cancelados` poderia passar de `pedidos`.
+    if (cancelado && valor !== null && !Number.isNaN(valor)) {
+      r.cancelamentosQtd += 1
+    }
 
     r.hasData = true
     porUnidade.set(l.unit_id, r)
   }
 
   for (const r of porUnidade.values()) {
-    const validos = r.pedidos - r.cancelamentosQtd
-    r.ticketMedio = validos > 0 ? r.liquido / validos : 0
+    // Divisor = pedidos VÁLIDOS E COM VALOR. Antes era `pedidos − cancelados`,
+    // que inclui o cabeçalho ainda sem detalhe — pedido que conta 1 e vale
+    // R$ 0. Em julho/26 eram 103 de 135 (76%) nessa situação, e o ticket do
+    // canal próprio saía R$ 16,40 onde o real é ~R$ 69. O número parecia
+    // completo e a "queda de ticket" parecia notícia.
+    // Contado no laço, não derivado: `cancelamentosQtd` inclui cancelado SEM
+    // valor, então `pedidosComValor − cancelados` erraria pra menos.
+    r.ticketMedio =
+      r.validosComValor > 0 ? r.liquido / r.validosComValor : 0
   }
 
   return porUnidade
