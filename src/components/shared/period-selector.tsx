@@ -116,20 +116,68 @@ export function PeriodSelector({
     applyRange(r.start, r.end)
   }
 
+  /**
+   * Pula um MÊS INTEIRO pra trás/frente sem abrir o calendário — o passo que
+   * mais se dá numa tela de acompanhamento ("como foi mês passado?").
+   *
+   * A base é sempre o mês do INÍCIO do período atual, mesmo quando o que está
+   * selecionado é um range solto (ex.: 10–15/ago). Nesse caso a seta não tenta
+   * deslocar o range: ela troca por um mês fechado, que é o que o botão
+   * promete. Range custom continua existindo — só sai pelo calendário.
+   */
+  const mesBase: Period = {
+    year: Number(range.start.slice(0, 4)),
+    month: Number(range.start.slice(5, 7)),
+  }
+  const hojeP = nowParts()
+  // Não deixa avançar pra frente do mês corrente: mês futuro não tem dado
+  // nenhum e a tela abriria zerada sem explicar por quê.
+  const podeAvancar =
+    mesBase.year < hojeP.year ||
+    (mesBase.year === hojeP.year && mesBase.month < hojeP.month)
+
+  function irParaMes(delta: number) {
+    const alvo = addMonth(mesBase, delta)
+    applyRange(firstDayOfMonth(alvo), lastDayOfMonth(alvo))
+  }
+
   const label = hasExplicitParam ? formatRangeLabel(range) : "Selecionar período"
 
   return (
     <div ref={rootRef} className={`relative inline-flex ${className ?? ""}`}>
       <button
         type="button"
+        onClick={() => irParaMes(-1)}
+        aria-label={`Mês anterior (${monthLabel(addMonth(mesBase, -1))})`}
+        title={`Mês anterior · ${monthLabel(addMonth(mesBase, -1))}`}
+        className="flex h-9 items-center rounded-l-md border border-r-0 bg-card px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <ChevronLeft className="size-4" />
+      </button>
+      <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+        className="flex h-9 items-center gap-2 border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
       >
         <Calendar className="size-3.5 text-muted-foreground" />
         <span>{label}</span>
         <ChevronDown className="size-3.5 text-muted-foreground" />
+      </button>
+      <button
+        type="button"
+        onClick={() => irParaMes(1)}
+        disabled={!podeAvancar}
+        aria-label={`Próximo mês (${monthLabel(addMonth(mesBase, 1))})`}
+        title={
+          podeAvancar
+            ? `Próximo mês · ${monthLabel(addMonth(mesBase, 1))}`
+            : "Não há mês seguinte pra mostrar"
+        }
+        className="flex h-9 items-center rounded-r-md border border-l-0 bg-card px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+      >
+        <ChevronRight className="size-4" />
       </button>
 
       {open && (

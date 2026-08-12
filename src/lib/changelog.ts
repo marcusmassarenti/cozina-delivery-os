@@ -42,6 +42,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.17.1",
+    date: "2026-08-12",
+    tag: "Melhorias",
+    title: "Trocar de mês virou um clique",
+    areas: [
+      {
+        area: "Filtro de período",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Setas de mês anterior / próximo mês",
+            antes:
+              "Pra ver o mês passado numa loja você abria o calendário, achava o mês e clicava no primeiro e no último dia.",
+            depois:
+              "Duas setas ao lado do filtro pulam um mês inteiro de uma vez, em todas as telas. A seta da direita trava no mês corrente — mês futuro não tem dado. O calendário continua ali pra quando você quiser um período solto.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.17.0",
     date: "2026-08-10",
     tag: "Grande novidade",
