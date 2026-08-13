@@ -428,6 +428,7 @@ function Checkout({
                   jaTemCliente={!!plano.customerId}
                   defaultNome={plano.name}
                   defaultPlan={defaultPlan}
+                  billingType={plano.billingType}
                 />
               </>
             ) : (

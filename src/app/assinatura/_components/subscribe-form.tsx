@@ -32,6 +32,7 @@ export function SubscribeForm({
   jaTemCliente,
   defaultNome,
   defaultPlan,
+  billingType,
 }: {
   planos: PlanoOption[]
   precoCustom: boolean
@@ -40,6 +41,8 @@ export function SubscribeForm({
   jaTemCliente: boolean
   defaultNome: string
   defaultPlan: PlanId
+  /** Forma de cobrança do cliente. "CREDIT_CARD" é o padrão. */
+  billingType: string
 }) {
   const [state, action] = useActionState<AssinarState, FormData>(assinar, {
     ok: false,
@@ -385,9 +388,15 @@ export function SubscribeForm({
         )}
         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Check className="size-3 text-emerald-600" strokeWidth={3} />
-          {ciclo === "anual" && !precoCustom
-            ? "Cartão de crédito · 1 cobrança à vista · renova a cada 12 meses"
-            : "Cartão de crédito · renova automático · cancele quando quiser"}
+          {billingType === "PIX"
+            ? "Pix · a cobrança chega todo mês no seu e-mail"
+            : billingType === "BOLETO"
+              ? "Boleto · a cobrança chega todo mês no seu e-mail"
+              : billingType === "UNDEFINED"
+                ? "Você escolhe como pagar · cancele quando quiser"
+                : ciclo === "anual" && !precoCustom
+                  ? "Cartão de crédito · 1 cobrança à vista · renova a cada 12 meses"
+                  : "Cartão de crédito · renova automático · cancele quando quiser"}
         </p>
       </div>
 
@@ -410,7 +419,15 @@ export function SubscribeForm({
       />
 
       <p className="text-center text-[11px] text-muted-foreground">
-        Pagamento seguro via Asaas · só cartão de crédito · cancele quando quiser.
+        Pagamento seguro via Asaas ·{" "}
+        {billingType === "PIX"
+          ? "Pix"
+          : billingType === "BOLETO"
+            ? "boleto"
+            : billingType === "UNDEFINED"
+              ? "cartão, Pix ou boleto"
+              : "só cartão de crédito"}{" "}
+        · cancele quando quiser.
       </p>
     </form>
   )
