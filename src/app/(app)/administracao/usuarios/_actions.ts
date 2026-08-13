@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdmin, requireModulePermission } from "@/lib/auth/guards"
+import { mensagemDeErroAuth } from "@/lib/auth/erros-supabase"
 import {
   getAccessibleUnitIds,
   getCurrentHoldingId,
@@ -371,12 +372,7 @@ export async function createUser(
       email_confirm: true,
       user_metadata: { full_name: fullName },
     })
-    if (error) {
-      const msg = error.message.includes("already")
-        ? "Já existe usuário com esse email."
-        : error.message
-      return { ok: false, message: msg }
-    }
+    if (error) return { ok: false, message: mensagemDeErroAuth(error.message) }
 
     if (data.user) {
       await supabase
@@ -457,7 +453,7 @@ export async function updateUser(
         userId,
         { password },
       )
-      if (pwErr) return { ok: false, message: pwErr.message }
+      if (pwErr) return { ok: false, message: mensagemDeErroAuth(pwErr.message) }
     }
 
     // Bloqueia self-demote: admin não pode tirar o próprio perfil de admin
@@ -523,7 +519,7 @@ export async function resetUserMfa(userId: string): Promise<UserActionState> {
         id: f.id,
         userId,
       })
-      if (error) return { ok: false, message: error.message }
+      if (error) return { ok: false, message: mensagemDeErroAuth(error.message) }
     }
 
     revalidatePath("/administracao/usuarios")
@@ -554,7 +550,7 @@ export async function deleteUser(userId: string): Promise<UserActionState> {
     if (targetErr) return { ok: false, message: targetErr }
 
     const { error } = await supabase.auth.admin.deleteUser(userId)
-    if (error) return { ok: false, message: error.message }
+    if (error) return { ok: false, message: mensagemDeErroAuth(error.message) }
     revalidatePath("/administracao/usuarios")
     return { ok: true }
   } catch (err) {

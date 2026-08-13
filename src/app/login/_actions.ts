@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 import { getMfaStatus } from "@/lib/auth/mfa"
+import { mensagemDeErroAuth } from "@/lib/auth/erros-supabase"
 import { createClient } from "@/lib/supabase/server"
 import { clientIp, rateLimit } from "@/lib/security/rate-limit"
 import { verificarTurnstile } from "@/lib/security/turnstile"
@@ -50,10 +51,7 @@ export async function signIn(
   if (error) {
     return {
       ok: false,
-      message:
-        error.message === "Invalid login credentials"
-          ? "Email ou senha incorretos."
-          : error.message,
+      message: mensagemDeErroAuth(error.message),
     }
   }
 

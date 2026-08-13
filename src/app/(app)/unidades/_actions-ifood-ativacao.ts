@@ -214,6 +214,16 @@ export type MinhaSolicitacao = {
   atualizadaEm: string
   /** O motivo escrito na recusa — é o que a pessoa precisa ler pra agir. */
   nota: string | null
+  /**
+   * Já chegou algum lançamento do iFood pra esta loja.
+   *
+   * Conectar e receber o dado são momentos DIFERENTES, e a distância entre os
+   * dois é de horas: o vínculo é imediato, mas quem baixa o extrato e o
+   * histórico é o cron da manhã seguinte. Sem separar os dois estados, o
+   * cliente recebia "conectada! 🎉" e abria um dashboard vazio — a leitura
+   * óbvia é que quebrou, não que está a caminho.
+   */
+  temDado: boolean
 }
 
 /**
@@ -255,7 +265,7 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     .order("updated_at", { ascending: false })
   if (acessiveis !== null) q = q.in("unit_id", acessiveis)
   const { data } = await q
-  return ((data ?? []) as unknown as {
+  const linhas = ((data ?? []) as unknown as {
     id: string
     unit_id: string
     status: MinhaSolicitacao["status"]
@@ -263,7 +273,27 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     cliente_confirmou_at: string | null
     updated_at: string
     units: { code: string; name: string } | null
-  }[]).map((s) => ({
+  }[])
+
+  // Quais dessas lojas JÁ têm lançamento do iFood. Uma consulta pro lote todo,
+  // não uma por loja: a DG FOODS abre esta tela com 47 solicitações.
+  //
+  // `head: true` + `limit(1)` por loja seria 47 idas ao banco; aqui vem o
+  // conjunto de unit_ids que têm ao menos uma linha, de uma vez. O `distinct`
+  // não existe no PostgREST, então o Set em memória faz esse papel — e a
+  // consulta é barata porque só devolve a coluna do índice.
+  const comDado = new Set<string>()
+  const ativas = linhas.filter((s) => s.status === "ativa").map((s) => s.unit_id)
+  if (ativas.length > 0) {
+    const { data: cds } = await db
+      .from("ifood_financeiro_lancamentos")
+      .select("unit_id")
+      .in("unit_id", ativas)
+      .limit(2000)
+    for (const r of (cds ?? []) as { unit_id: string }[]) comDado.add(r.unit_id)
+  }
+
+  return linhas.map((s) => ({
     id: s.id,
     unitId: s.unit_id,
     unitCode: s.units?.code ?? null,
@@ -272,6 +302,7 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     clienteConfirmou: !!s.cliente_confirmou_at,
     atualizadaEm: s.updated_at,
     nota: s.nota ?? null,
+    temDado: comDado.has(s.unit_id),
   }))
 }
 

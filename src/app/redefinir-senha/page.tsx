@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowRight, CheckCircle2, Loader2, Lock, TriangleAlert } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
+import { mensagemDeErroAuth } from "@/lib/auth/erros-supabase"
 import { DeliveryOsWordmark } from "@/components/delivery-os-logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,7 +63,7 @@ export default function RedefinirSenhaPage() {
     const { error: upErr } = await supabase.auth.updateUser({ password: pw })
     setSaving(false)
     if (upErr) {
-      setError(upErr.message)
+      setError(mensagemDeErroAuth(upErr.message))
       return
     }
     setPhase("done")

@@ -5,7 +5,15 @@ import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { CheckCircle2, Clock, ExternalLink, PartyPopper, X, XCircle } from "lucide-react"
+import {
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  PartyPopper,
+  RefreshCw,
+  X,
+  XCircle,
+} from "lucide-react"
 
 import {
   confirmarAprovacaoIfood,
@@ -55,8 +63,18 @@ export function IfoodClienteAviso({
   // continuava esperando uma conexão que não vinha, e a explicação só existia
   // na página daquela loja específica — onde ele não tinha motivo pra entrar.
   const recusadas = solicitacoes.filter((s) => s.status === "recusada")
+  // Conectada e SEM dado ainda = primeira carga rodando. Não tem prazo de
+  // validade de 7 dias como a comemoração: enquanto o dado não chega, o aviso
+  // é a única explicação pro dashboard estar vazio, e tirá-lo do ar deixaria a
+  // pessoa só com a tela em branco.
+  const sincronizando = solicitacoes.filter(
+    (s) => s.status === "ativa" && !s.temDado,
+  )
+  const prontas = ativas.filter((s) => s.temDado)
+
   if (
-    ativas.length === 0 &&
+    prontas.length === 0 &&
+    sincronizando.length === 0 &&
     pendentesAprovacao.length === 0 &&
     recusadas.length === 0
   ) {
@@ -72,10 +90,14 @@ export function IfoodClienteAviso({
           cima e não chegou nas ativas: a DG FOODS abriu a home com 47 avisos
           de "loja conectada", um por loja, empurrando o faturamento do dia pra
           fora da tela. Comemorar 47 vezes não é comemorar — é entulho. */}
-      {ativas.length > 2 ? (
-        <VariasAtivasCard lojas={ativas} />
+      {/* Conectada MAS ainda sem dado é um estado próprio, e vem antes de
+          qualquer comemoração: é o caso em que o cliente mais precisa de
+          notícia, porque o dashboard dele está vazio neste exato momento. */}
+      {sincronizando.length > 0 && <SincronizandoCard lojas={sincronizando} />}
+      {prontas.length > 2 ? (
+        <VariasAtivasCard lojas={prontas} />
       ) : (
-        ativas.map((s) => <AtivaCard key={s.id} s={s} />)
+        prontas.map((s) => <AtivaCard key={s.id} s={s} />)
       )}
       {/* Com mais de uma loja esperando, um card só: eram 7 avisos idênticos
           na home, cada um pedindo a mesma ação e cobrando um clique. */}
@@ -84,6 +106,61 @@ export function IfoodClienteAviso({
       ) : (
         pendentesAprovacao.map((s) => <SolicitadaCard key={s.id} s={s} />)
       )}
+    </div>
+  )
+}
+
+/**
+ * "Conectado, buscando seus dados" — o estado entre o vínculo e o primeiro dado.
+ *
+ * SEM BOTÃO e sem "fechar", de propósito. Não há nada que o cliente possa
+ * fazer pra acelerar, e um botão de "tentar de novo" só convida a clicar
+ * repetido numa fila que já está andando. O que ele precisa é de duas coisas
+ * que a tela antes não dava: a certeza de que estamos trabalhando (o pulso
+ * animado) e QUANDO termina (o prazo escrito).
+ *
+ * O prazo é deliberadamente conservador — "até amanhã de manhã". O extrato do
+ * iFood é gerado sob demanda e demora, e o histórico do ano inteiro vem no
+ * cron da manhã. Prometer "alguns minutos" e entregar em 12 horas é pior que
+ * não prometer nada: transforma espera normal em suspeita de defeito.
+ *
+ * Sai sozinho da tela quando o primeiro lançamento chega (`temDado`), dando
+ * lugar à comemoração — que aí sim tem número por trás.
+ */
+function SincronizandoCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
+  const uma = lojas.length === 1
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-sky-300/60 bg-sky-50/60 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/25">
+      <span className="relative flex size-8 shrink-0 items-center justify-center">
+        {/* Pulso por trás do ícone: diz "está rodando" sem pedir nada. */}
+        <span className="absolute inline-flex size-8 animate-ping rounded-full bg-sky-400 opacity-40" />
+        <span className="relative inline-flex size-8 items-center justify-center rounded-full bg-sky-600 text-white">
+          <RefreshCw className="size-4 animate-spin [animation-duration:2.4s]" />
+        </span>
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-foreground">
+          {uma ? (
+            <>
+              Buscando os dados da{" "}
+              <b>
+                {lojas[0].unitCode ? `${lojas[0].unitCode} · ` : ""}
+                {lojas[0].unitName}
+              </b>{" "}
+              no iFood…
+            </>
+          ) : (
+            <>
+              Buscando os dados de <b>{lojas.length} lojas</b> no iFood…
+            </>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          A loja já está conectada. Estamos baixando o histórico do ano e o
+          faturamento — <b>aparece aqui até amanhã de manhã</b>. Não precisa
+          fazer nada: a gente te avisa por e-mail quando terminar.
+        </p>
+      </div>
     </div>
   )
 }
