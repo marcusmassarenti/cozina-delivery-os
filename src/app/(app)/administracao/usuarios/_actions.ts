@@ -231,43 +231,96 @@ async function assertTargetInCurrentHolding(
  *   senão 'manager') — vê a rede toda.
  * - unit    → scope='unit', scope_id=unitId — só a loja vinculada.
  */
+/**
+ * A empresa a que o usuário JÁ pertence, lida do vínculo atual dele.
+ *
+ * Existe porque o vínculo era refeito na holding de QUEM EDITA, não na do
+ * editado. Um admin abrindo o usuário de outra empresa mudava a pessoa de
+ * empresa sem querer, e o superadmin (que não tem holding) não tinha nenhuma.
+ */
+async function holdingDoUsuario(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("user_unit_access")
+    .select("scope_type, scope_id")
+    .eq("user_id", userId)
+  const linhas = (data ?? []) as { scope_type: string; scope_id: string }[]
+  const porHolding = linhas.find((l) => l.scope_type === "holding")
+  if (porHolding) return porHolding.scope_id
+
+  // Escopo por loja: sobe unidade → marca → holding.
+  const unitIds = linhas.filter((l) => l.scope_type === "unit").map((l) => l.scope_id)
+  if (unitIds.length === 0) return null
+  const { data: us } = await supabase
+    .from("units")
+    .select("brands!inner(holding_id)")
+    .in("id", unitIds)
+    .limit(1)
+  const rel = (us ?? []) as unknown as { brands: { holding_id: string } }[]
+  return rel[0]?.brands?.holding_id ?? null
+}
+
+/**
+ * Reescreve o acesso do usuário. Devolve mensagem de erro, ou null se deu certo.
+ *
+ * ⚠️ NUNCA APAGUE ANTES DE SABER O QUE VAI INSERIR. Era exatamente esse o bug:
+ * o delete rodava sempre e o insert só acontecia `if (holdingId)` — e
+ * `getCurrentHoldingId()` devolve null pra superadmin, que não tem empresa
+ * própria. Resultado: o Marcus (superadmin) editou o usuário da conta demo, o
+ * delete levou o vínculo, o insert não rodou, e a ação respondeu "ok". O
+ * usuário abriu o sistema sem loja nenhuma, com a tela de "cadastre sua
+ * primeira loja" — sem nada indicando o que tinha acontecido.
+ *
+ * Valia pra qualquer cliente: bastava o superadmin abrir o usuário de alguém
+ * pelo painel e salvar.
+ *
+ * Agora o escopo é resolvido PRIMEIRO; sem escopo válido, aborta com mensagem
+ * e não encosta no que já existe. Deixar o acesso velho de pé é sempre melhor
+ * que deixar a pessoa órfã: o velho pode estar desatualizado, o órfão não
+ * entra.
+ */
 async function syncAccess(
   supabase: ReturnType<typeof createAdminClient>,
   userId: string,
   perfil: string,
   unitIds: string[],
-) {
-  // Limpa rows antigas desse usuário
-  await supabase.from("user_unit_access").delete().eq("user_id", userId)
-
+): Promise<string | null> {
   const scope = await roleScope(perfil)
 
   if (scope === "unit") {
     const ids = [...new Set(unitIds.filter(Boolean))]
-    if (ids.length > 0) {
-      await supabase.from("user_unit_access").insert(
-        ids.map((scope_id) => ({
-          user_id: userId,
-          scope_type: "unit",
-          scope_id,
-          role: "manager",
-        })),
-      )
+    if (ids.length === 0) {
+      return "Esse perfil precisa de pelo menos uma loja vinculada. Selecione as lojas antes de salvar."
     }
-    return
+    await supabase.from("user_unit_access").delete().eq("user_id", userId)
+    const { error } = await supabase.from("user_unit_access").insert(
+      ids.map((scope_id) => ({
+        user_id: userId,
+        scope_type: "unit",
+        scope_id,
+        role: "manager",
+      })),
+    )
+    return error ? `Não consegui gravar o acesso: ${error.message}` : null
   }
 
-  // holding-scoped → vincula à HOLDING do admin que está criando (multi-tenant),
-  // não mais à Cozina fixa.
-  const holdingId = await getCurrentHoldingId()
-  if (holdingId) {
-    await supabase.from("user_unit_access").insert({
-      user_id: userId,
-      scope_type: "holding",
-      scope_id: holdingId,
-      role: perfil === "administrador" ? "admin" : "manager",
-    })
+  // Perfil de empresa inteira: a empresa é a DO USUÁRIO. Só cai na de quem
+  // edita quando ele ainda não tem nenhuma (usuário sendo criado agora).
+  const holdingId =
+    (await holdingDoUsuario(supabase, userId)) ?? (await getCurrentHoldingId())
+  if (!holdingId) {
+    return "Não consegui identificar a empresa deste usuário. O acesso foi mantido como estava."
   }
+  await supabase.from("user_unit_access").delete().eq("user_id", userId)
+  const { error } = await supabase.from("user_unit_access").insert({
+    user_id: userId,
+    scope_type: "holding",
+    scope_id: holdingId,
+    role: perfil === "administrador" ? "admin" : "manager",
+  })
+  return error ? `Não consegui gravar o acesso: ${error.message}` : null
 }
 
 /**
@@ -380,7 +433,13 @@ export async function createUser(
         .update({ full_name: fullName, perfil })
         .eq("user_id", data.user.id)
 
-      await syncAccess(supabase, data.user.id, perfil, effectiveUnitIds)
+      const erroAcesso = await syncAccess(
+        supabase,
+        data.user.id,
+        perfil,
+        effectiveUnitIds,
+      )
+      if (erroAcesso) return { ok: false, message: erroAcesso }
     }
 
     if (lojaCriada) {
@@ -465,7 +524,8 @@ export async function updateUser(
       }
     }
 
-    await syncAccess(supabase, userId, perfil, unitIds)
+    const erroAcesso = await syncAccess(supabase, userId, perfil, unitIds)
+    if (erroAcesso) return { ok: false, message: erroAcesso }
 
     revalidatePath("/administracao/usuarios")
     return { ok: true }
