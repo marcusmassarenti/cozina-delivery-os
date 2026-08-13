@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PLATAFORMAS, PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
@@ -16,7 +16,7 @@ import {
 } from "@/lib/period"
 import { ProdutosFilters } from "../_components/produtos-filters"
 
-const ALL_PLAT: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
+const ALL_PLAT: PlatformId[] = PLATAFORMAS
 const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",

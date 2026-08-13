@@ -12,6 +12,7 @@ import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { currentPeriod } from "@/lib/period"
 import {
+  ordenarPlataformas,
   PLATAFORMAS,
   rotuloPlataforma,
   type CanalId,
@@ -176,7 +177,12 @@ async function getUnitsUncached(): Promise<Unit[]> {
   return units.map((u) =>
     attach(
       u,
-      platformsByUnit.get(u.id) ?? [],
+      // Ordem canônica JÁ NA ORIGEM (iFood, 99, Keeta, Cardápio Web). Sem
+      // isto a lista sai na ordem de inserção de `unit_platforms`, que varia
+      // de loja pra loja — a mesma combinação de plataformas aparecia numa
+      // sequência em um card e noutra no card ao lado. Ordenar aqui conserta
+      // todo consumidor de `unit.platforms` de uma vez.
+      ordenarPlataformas(platformsByUnit.get(u.id) ?? []),
       externalIdsByUnit.get(u.id) ?? {},
       inaugByUnit.get(u.id) ?? {},
       monthlyByUnit.get(u.id) ?? emptyMonthly,
@@ -270,7 +276,7 @@ export async function getUnitByCode(code: string): Promise<Unit | null> {
   const data = rows?.[0]
   if (!data) return null
   const platformsDetails = await getUnitPlatformDetails(data.id)
-  const platforms = platformsDetails.map((p) => p.platform)
+  const platforms = ordenarPlataformas(platformsDetails.map((p) => p.platform))
   const externalStoreIds: Partial<Record<PlatformId, string | null>> = {}
   const platformInauguracoes: Partial<Record<PlatformId, string | null>> = {}
   for (const p of platformsDetails) {

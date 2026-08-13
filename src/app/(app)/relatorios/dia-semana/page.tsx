@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/dia-semana"
 import { BrandLogo } from "@/components/brand-logo"
 import type { PlatformId } from "@/lib/data/dia-semana"
+import { PLATAFORMAS } from "@/components/platform-logo"
 import { PlataformaSelector } from "./_components/plataforma-selector"
 import { MapaCalor } from "./_components/mapa-calor"
 import { PeriodoSelector } from "./_components/periodo-selector"
@@ -82,7 +83,7 @@ export default async function RelatorioDiaSemanaPage({
 
   // Plataforma vinda da URL, validada contra a lista — querystring é entrada
   // do usuário e vai direto pro filtro do RPC.
-  const VALIDAS: PlatformId[] = ["ifood", "cardapioweb", "99food", "keeta"]
+  const VALIDAS: PlatformId[] = PLATAFORMAS
   const plataforma = VALIDAS.includes(sp.plataforma as PlatformId)
     ? (sp.plataforma as PlatformId)
     : null

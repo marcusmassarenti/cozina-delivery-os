@@ -4,12 +4,12 @@ import * as React from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
-import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { PLATAFORMAS, PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { RankingRow } from "@/lib/data/ranking"
 import type { RankingMetrica } from "./ranking-switcher"
 
-const PLATS_ORDER: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
+const PLATS_ORDER: PlatformId[] = PLATAFORMAS
 const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",

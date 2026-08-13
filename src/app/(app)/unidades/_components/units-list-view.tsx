@@ -6,7 +6,11 @@ import { useNavigate } from "@/components/shared/navigation-progress"
 import { ChevronRight, Filter, LayoutGrid, Plus, Search, X } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { PlatformLogo, type CanalId } from "@/components/platform-logo"
+import {
+  ordenarPlataformas,
+  PlatformLogo,
+  type CanalId,
+} from "@/components/platform-logo"
 import { type CoachStep } from "@/components/onboarding/coach-tour"
 import { TourButton } from "@/components/onboarding/tour-button"
 import type { Unit } from "@/lib/data/units"
@@ -363,40 +367,36 @@ export function UnitsListView({
               {/* Bottom: plataformas + seta */}
               <div className="mt-auto flex items-center justify-between border-t pt-3">
                 <div className="flex items-center gap-1">
-                  {unit.platforms.length === 0 &&
-                  !ninefoodSyncedIds.includes(unit.id) ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      Nenhuma plataforma
-                    </span>
-                  ) : (
-                    <>
-                      {unit.platforms.map((p) =>
-                        p === "99food" &&
-                        ninefoodSyncedIds.includes(unit.id) ? (
-                          <span
-                            key={p}
-                            className="relative inline-flex"
-                            title="Sincroniza pelo 99 Food (API)"
-                          >
-                            <PlatformLogo platform={p} size="sm" />
-                            <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 ring-1 ring-card" />
-                          </span>
-                        ) : (
-                          <PlatformLogo key={p} platform={p} size="sm" />
-                        ),
-                      )}
-                      {ninefoodSyncedIds.includes(unit.id) &&
-                        !unit.platforms.includes("99food") && (
-                          <span
-                            className="relative inline-flex"
-                            title="Sincroniza pelo 99 Food (API)"
-                          >
-                            <PlatformLogo platform="99food" size="sm" />
-                            <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 ring-1 ring-card" />
-                          </span>
-                        )}
-                    </>
-                  )}
+                  {(() => {
+                    // A 99 aparece mesmo sem estar marcada no cadastro quando
+                    // já sincroniza por API — o vínculo é prova mais forte que
+                    // o checkbox. Ordem canônica pra não variar de card em card.
+                    const nove = ninefoodSyncedIds.includes(unit.id)
+                    const lista = ordenarPlataformas(
+                      nove && !unit.platforms.includes("99food")
+                        ? [...unit.platforms, "99food" as CanalId]
+                        : unit.platforms,
+                    )
+                    if (lista.length === 0) {
+                      return (
+                        <span className="text-[10px] text-muted-foreground">
+                          Nenhuma plataforma
+                        </span>
+                      )
+                    }
+                    return lista.map((p) => (
+                      <PlatformLogo
+                        key={p}
+                        platform={p}
+                        size="sm"
+                        viaApi={
+                          (p === "99food" && nove) ||
+                          (p === "ifood" &&
+                            ifoodApiPorUnidade[unit.id] === "conectada")
+                        }
+                      />
+                    ))
+                  })()}
                 </div>
                 <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>

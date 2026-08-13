@@ -21,13 +21,43 @@ export type MarketplaceId = Exclude<PlatformId, "cardapioweb">
 
 export const MARKETPLACES: MarketplaceId[] = ["ifood", "99food", "keeta"]
 
-/** Toda plataforma, na ordem canônica de exibição. */
+/**
+ * Toda plataforma, na ORDEM CANÔNICA DE EXIBIÇÃO: iFood, 99, Keeta, Cardápio
+ * Web. Vale pro sistema inteiro — card de loja, filtro, gráfico, relatório.
+ *
+ * A ordem é por peso na operação, não alfabética: o iFood é onde está a maior
+ * parte do faturamento de quase toda loja, então é o primeiro número que a
+ * pessoa procura. Trocar a ordem entre telas obriga a reprocurar a cada tela.
+ */
 export const PLATAFORMAS: PlatformId[] = [
   "ifood",
   "99food",
   "keeta",
   "cardapioweb",
 ]
+
+const POSICAO = new Map(PLATAFORMAS.map((p, i) => [p, i]))
+
+/**
+ * Ordena qualquer lista de plataformas pela ordem canônica.
+ *
+ * Existe porque a ordem vinha do banco (ordem de inserção em `unit_platforms`),
+ * então o mesmo conjunto de plataformas aparecia em ordem diferente de loja pra
+ * loja — e cada tela que montava a lista à mão declarava a sua ordem. Já havia
+ * divergência em produção (o relatório de dia da semana listava iFood, Cardápio
+ * Web, 99, Keeta).
+ *
+ * Não muta o array de entrada. Id desconhecido vai pro fim em vez de sumir:
+ * plataforma nova aparece torta, o que se vê e se conserta, em vez de
+ * desaparecer calada da tela.
+ */
+export function ordenarPlataformas<T extends PlatformId>(ids: readonly T[]): T[] {
+  return [...ids].sort(
+    (a, b) =>
+      (POSICAO.get(a) ?? Number.MAX_SAFE_INTEGER) -
+      (POSICAO.get(b) ?? Number.MAX_SAFE_INTEGER),
+  )
+}
 
 /**
  * Nome de exibição da plataforma.
@@ -101,22 +131,33 @@ export function PlatformLogo({
   platform,
   size = "md",
   className,
+  viaApi = false,
 }: {
   platform: CanalId
   size?: Size
   className?: string
+  /**
+   * Loja conectada por API nesta plataforma — desenha a bolinha verde.
+   *
+   * A bolinha quer dizer "esta aqui entra sozinha, sem ninguém subir planilha".
+   * Por isso NÃO se marca o Cardápio Web: ele só existe por API, então a
+   * bolinha estaria em 100% deles e não separaria nada. Marcar tudo é o mesmo
+   * que não marcar nada.
+   */
+  viaApi?: boolean
 }) {
   const c = config[platform]
-  return (
+  const rotulo = viaApi ? `${c.label} · conectado por API` : c.label
+  const logo = (
     <span
       className={cn(
         "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded",
         sizeClass[size],
-        className,
+        !viaApi && className,
       )}
       style={{ backgroundColor: c.bg }}
-      aria-label={c.label}
-      title={c.label}
+      aria-label={rotulo}
+      title={rotulo}
     >
       <span
         aria-hidden
@@ -130,6 +171,20 @@ export function PlatformLogo({
         src={`/platforms/${platform}.png`}
         alt=""
         className="absolute inset-0 size-full object-contain"
+      />
+    </span>
+  )
+
+  if (!viaApi) return logo
+
+  // A bolinha fica FORA do span do logo: aquele tem overflow-hidden pra recortar
+  // o PNG no canto arredondado, e por dentro dele o ponto seria cortado ao meio.
+  return (
+    <span className={cn("relative inline-flex", className)}>
+      {logo}
+      <span
+        aria-hidden
+        className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 ring-1 ring-card"
       />
     </span>
   )

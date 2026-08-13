@@ -3,6 +3,7 @@
  * Server components (estáticos). Cores das plataformas fixas pra reconhecimento.
  */
 import {
+  PLATAFORMAS,
   rotuloPlataforma,
   type PlatformId,
 } from "@/components/platform-logo"
@@ -20,7 +21,7 @@ const PLATFORM_LABEL: Record<PlatformId, string> = {
   keeta: "Keeta",
   cardapioweb: "Cardápio Web",
 }
-const PLATS: PlatformId[] = ["ifood", "99food", "keeta", "cardapioweb"]
+const PLATS: PlatformId[] = PLATAFORMAS
 
 function ChartCard({
   title,
