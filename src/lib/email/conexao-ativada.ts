@@ -36,8 +36,24 @@ type Linha = { rotulo: string; valor: string }
 
 type Resumo = {
   linhas: Linha[]
-  /** O que ainda falta o cliente fazer. Vazio = está tudo de pé. */
+  /** O que ainda falta o CLIENTE fazer. Vazio = está tudo de pé. */
   pendencias: string[]
+  /**
+   * O que falta a NÓS buscar — ele não tem nada a fazer, só esperar.
+   *
+   * São coisas diferentes e misturá-las custou caro. "Autorizado" e "o dado
+   * chegou" não são o mesmo estado: as avaliações do iFood vêm num cron
+   * separado, então dá pra estar tudo autorizado e a tela de Avaliações
+   * continuar vazia por algumas horas. O e-mail lia só a autorização, dizia
+   * "você não precisa fazer mais nada" e ainda fechava com "esse é o último
+   * e-mail sobre a conexão" — o cliente abria as Avaliações, via zero, e a
+   * leitura óbvia era defeito. Aconteceu com a Tech Assessoria em 13/ago/26.
+   *
+   * Separado de `pendencias` de propósito: pendência pede ação e vai em caixa
+   * de alerta; isto é informação e vai em tom neutro. Tratar espera normal
+   * como problema treina a pessoa a ignorar os avisos de verdade.
+   */
+  aCaminho: string[]
   /** false = não achei dado nenhum; o e-mail não sai. */
   temDado: boolean
 }
@@ -64,6 +80,7 @@ export async function resumoDaLoja(
   const admin = createAdminClient()
   const linhas: Linha[] = []
   const pendencias: string[] = []
+  const aCaminho: string[] = []
 
   if (plataforma === "ifood") {
     /* ⚠️ ESTE BLOCO JÁ MENTIU. A versão anterior chamava um RPC que somava só
@@ -110,6 +127,22 @@ export async function resumoDaLoja(
       pendencias.push(
         "O app de Avaliações ainda não foi autorizado — as notas e comentários não entram até isso acontecer.",
       )
+
+    // Autorizado MAS ainda sem nenhuma avaliação = só falta o cron passar.
+    // Sem esta linha o e-mail afirmava "não precisa fazer mais nada" com a
+    // tela de Avaliações zerada, e ainda se despedia dizendo que não haveria
+    // outro aviso.
+    if (p?.review_enabled_at) {
+      const { count } = await admin
+        .from("ifood_avaliacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("unit_id", unitId)
+      if ((count ?? 0) === 0) {
+        aCaminho.push(
+          "As <strong>avaliações</strong> entram na próxima sincronização, amanhã de manhã — a autorização já está de pé, é só o histórico de notas e comentários que ainda está sendo baixado.",
+        )
+      }
+    }
   }
 
   if (plataforma === "99food") {
@@ -157,7 +190,7 @@ export async function resumoDaLoja(
     }
   }
 
-  return { linhas, pendencias, temDado: linhas.length > 0 }
+  return { linhas, pendencias, aCaminho, temDado: linhas.length > 0 }
 }
 
 /**
@@ -247,6 +280,7 @@ export async function avisarConexaoAtivada(
       plataforma: ROTULO[plataforma],
       linhas: resumo.linhas,
       pendencias: resumo.pendencias,
+      aCaminho: resumo.aCaminho,
     })
     await enviarEmail({
       holdingId,

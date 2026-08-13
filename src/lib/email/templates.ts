@@ -631,7 +631,10 @@ export function conexaoAtivada(d: {
   plataforma: string
   linhas: { rotulo: string; valor: string }[]
   pendencias: string[]
+  /** Falta a NÓS buscar — informação, não tarefa. Ver `aCaminho` no resumo. */
+  aCaminho?: string[]
 }) {
+  const emRota = d.aCaminho ?? []
   const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
   const tabela = d.linhas
     .map(
@@ -646,6 +649,16 @@ export function conexaoAtivada(d: {
          </td></tr>
        </table>`
     : ""
+  // Caixa NEUTRA (azul), separada da de pendência (âmbar): aqui não há nada
+  // pra pessoa fazer. Pintar espera normal de alerta é o caminho mais curto
+  // pra ela parar de ler os alertas de verdade.
+  const emRotaHtml = emRota.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+         <tr><td style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+           ${emRota.map((p) => `<p style="margin:0 0 8px;">${p}</p>`).join("")}
+         </td></tr>
+       </table>`
+    : ""
   return {
     assunto: `${d.plataforma} conectado${d.loja ? ` — ${d.loja}` : ""}`,
     html: layout({
@@ -654,13 +667,21 @@ export function conexaoAtivada(d: {
         <p style="margin:0 0 14px;">${oi(d.nome)} Deu certo. O ${d.plataforma}${daLoja} já está trazendo os dados sozinho — e o histórico veio junto:</p>
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">${tabela}</table>
         ${avisos}
+        ${emRotaHtml}
         <p style="margin:0 0 14px;">Daqui pra frente entra sozinho, todo dia, sem planilha.${
           d.pendencias.length
             ? " Resolvendo o ponto acima, fica completo."
-            : " Você não precisa fazer mais nada."
+            : emRota.length
+              ? " Não precisa fazer nada — é só aguardar o que ainda está vindo."
+              : " Você não precisa fazer mais nada."
         }</p>`,
       cta: { texto: "Ver no painel", url: `${SITE}/inicio` },
-      ps: "Esse é o último e-mail sobre a conexão. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal.",
+      // O "último e-mail" só vale quando REALMENTE acabou. Despedir-se com
+      // algo ainda em rota deixava o cliente sem nenhuma explicação futura
+      // pra tela que ele ia abrir vazia.
+      ps: emRota.length
+        ? "Quando o que falta terminar de entrar, você não precisa conferir nada — já vai estar no painel. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal."
+        : "Esse é o último e-mail sobre a conexão. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal.",
     }),
   }
 }
