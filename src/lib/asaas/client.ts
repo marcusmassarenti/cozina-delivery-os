@@ -27,9 +27,21 @@ function apiKey(): string {
  * ciclo, e boleto ainda leva dias pra compensar. Pra mudar, defina
  * ASAAS_BILLING_TYPE = CREDIT_CARD | PIX | BOLETO | UNDEFINED (todos).
  */
-// Pagamento é SEMPRE cartão de crédito (renova sozinho todo mês). Boleto/Pix
-// ficam de fora por decisão de produto — não dependemos de env pra isso.
+/**
+ * Forma de cobrança PADRÃO. Cartão continua sendo o default porque é o único
+ * que renova sozinho: fica salvo e o Asaas debita todo ciclo.
+ *
+ * Deixou de ser a ÚNICA opção quando a DG FOODS (56 lojas, R$ 3.500/mês)
+ * fechou em Pix. A alternativa seria ficar fora do Asaas em cobrança manual —
+ * sem fatura, sem lembrete, e dependendo de alguém marcar "pago" todo mês. É
+ * esse manual que fez o cron billing-vencimentos existir.
+ *
+ * Quem escolhe é a holding (`asaas_billing_type`); nulo cai aqui.
+ */
 const BILLING_TYPE = "CREDIT_CARD"
+
+/** Formas aceitas pelo Asaas. UNDEFINED = o cliente escolhe no checkout. */
+export type AsaasBillingType = "CREDIT_CARD" | "PIX" | "BOLETO" | "UNDEFINED"
 
 /**
  * Modo simulado: sem ASAAS_API_KEY, não batemos na API real — geramos IDs
@@ -155,11 +167,18 @@ export async function asaasCreateSubscription(input: {
   externalReference?: string
   /** Depois de pagar, o Asaas leva o cliente de volta pra cá. */
   callback?: { successUrl: string; autoRedirect?: boolean }
+  /**
+   * Forma de cobrança. Omitido = cartão (o único que debita sozinho). PIX e
+   * BOLETO emitem uma cobrança por ciclo que o cliente paga na mão — o
+   * webhook trata igual, mas ninguém é debitado automaticamente.
+   */
+  billingType?: AsaasBillingType
 }): Promise<AsaasSubscription> {
   if (asaasIsMock()) return { id: mockId("sub") }
+  const { billingType, ...resto } = input
   return call<AsaasSubscription>("/subscriptions", {
     method: "POST",
-    body: JSON.stringify({ billingType: BILLING_TYPE, ...input }),
+    body: JSON.stringify({ billingType: billingType ?? BILLING_TYPE, ...resto }),
   })
 }
 

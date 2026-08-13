@@ -25,6 +25,7 @@ import {
   asaasCreateCustomer,
   asaasCreatePayment,
   asaasCreateSubscription,
+  type AsaasBillingType,
   asaasFirstInvoiceUrl,
   asaasIsMock,
   asaasSetSubscriptionInvoiceSettings,
@@ -176,11 +177,14 @@ export async function assinar(
   const cupomDigitado = String(formData.get("cupom") ?? "").trim()
   const { data: hRow } = await admin
     .from("holdings")
-    .select("desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id")
+    .select("desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id, asaas_billing_type")
     .eq("id", holdingId)
     .maybeSingle()
   const jaAssinou = !!(hRow as { asaas_subscription_id?: string } | null)
     ?.asaas_subscription_id
+  const billingType =
+    ((hRow as { asaas_billing_type?: string } | null)?.asaas_billing_type ??
+      null) as AsaasBillingType | null
 
   let descontoPct = Number(
     (hRow as { desconto_primeira_fatura_pct?: number } | null)
@@ -287,6 +291,10 @@ export async function assinar(
       const sub = await asaasCreateSubscription({
         customer: customerId,
         value: valor,
+        // Forma de cobrança do cliente (nulo = cartão, o padrão). PIX e BOLETO
+        // NÃO debitam sozinhos: o Asaas emite uma cobrança por ciclo e o
+        // cliente paga cada uma. Combinado assim com a DG FOODS.
+        ...(billingType ? { billingType } : {}),
         nextDueDate: primeiroVencimento,
         cycle: asaasCycle(ciclo),
         description: `Delivery OS — plano ${planId} (${plano.name}) · ${ciclo}`,

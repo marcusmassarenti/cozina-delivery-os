@@ -92,6 +92,8 @@ export type PlanoOption = {
 }
 
 export type PlanoAtual = {
+  /** Forma de cobrança no Asaas. "CREDIT_CARD" é o padrão de quem não pediu outra. */
+  billingType: string
   holdingId: string
   name: string
   status: BillingStatus
@@ -123,7 +125,7 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   const { data: h } = await admin
     .from("holdings")
     .select(
-      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, pending_plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id",
+      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, pending_plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id, asaas_billing_type",
     )
     .eq("id", holdingId)
     .maybeSingle()
@@ -213,6 +215,9 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   return {
     holdingId,
     name: h.name,
+    // Forma de cobrança do cliente. Nulo = cartão (o padrão). A TELA usa isto
+    // pra não prometer "pagamento no cartão" pra quem fechou em Pix.
+    billingType: (h.asaas_billing_type as string | null) ?? "CREDIT_CARD",
     status,
     trialEndsAt,
     activeUnits,

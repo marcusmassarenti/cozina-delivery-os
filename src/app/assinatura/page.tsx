@@ -316,7 +316,15 @@ function Checkout({
         </div>
 
         <p className="relative text-[13px] text-white/40">
-          Pagamento seguro via Asaas · cartão de crédito · cancele quando quiser.
+          Pagamento seguro via Asaas ·{" "}
+          {plano?.billingType === "PIX"
+            ? "Pix"
+            : plano?.billingType === "BOLETO"
+              ? "boleto"
+              : plano?.billingType === "UNDEFINED"
+                ? "cartão, Pix ou boleto"
+                : "cartão de crédito"}{" "}
+          · cancele quando quiser.
         </p>
       </aside>
 
@@ -367,7 +375,12 @@ function Checkout({
                   cadastro.
                 </p>
                 <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
-                  ⏳ Cobrança gerada — falta só o pagamento no cartão.
+                  ⏳ Cobrança gerada — falta só o pagamento
+                  {plano?.billingType === "PIX"
+                    ? " via Pix."
+                    : plano?.billingType === "BOLETO"
+                      ? " do boleto."
+                      : " no cartão."}
                 </div>
                 <PlanBox plano={plano} />
                 <div className="mt-6">
