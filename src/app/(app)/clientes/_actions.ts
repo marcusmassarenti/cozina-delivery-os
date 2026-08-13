@@ -287,6 +287,15 @@ export async function setClientBilling(
     const dueDate = dateOrNull(formData.get("dueDate"))
     const suspendOn = dateOrNull(formData.get("suspendOn"))
     const paid = formData.get("paid") === "on"
+    // Forma de cobrança: só os 4 valores que o Asaas aceita. Qualquer outra
+    // coisa vira null (= cartão, o padrão) em vez de estourar o CHECK do banco
+    // — o form é um <select>, mas request forjado não é.
+    const btRaw = String(formData.get("billingType") ?? "").trim()
+    const billingType = ["CREDIT_CARD", "PIX", "BOLETO", "UNDEFINED"].includes(
+      btRaw,
+    )
+      ? btRaw
+      : null
 
     const { error } = await admin
       .from("holdings")
@@ -300,6 +309,7 @@ export async function setClientBilling(
         due_date: dueDate,
         paid,
         suspend_on: suspendOn,
+        asaas_billing_type: billingType,
       })
       .eq("id", holdingId)
     if (error) return { ok: false, message: error.message }

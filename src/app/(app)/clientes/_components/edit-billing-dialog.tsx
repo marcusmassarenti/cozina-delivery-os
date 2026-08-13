@@ -37,6 +37,8 @@ export type BillingClient = {
   dueDate: string | null
   paid: boolean
   suspendOn: string | null
+  /** Forma de cobrança da assinatura no Asaas. null = cartão (padrão). */
+  billingType: string | null
 }
 
 const initial: BillingActionState = { ok: false }
@@ -202,6 +204,26 @@ export function EditBillingDialog({
               </div>
             )}
           </details>
+
+          <Field label="Como o cliente paga a assinatura">
+            <select
+              name="billingType"
+              defaultValue={client.billingType ?? "CREDIT_CARD"}
+              className="h-9 w-full rounded-md border bg-background px-2 text-sm outline-none focus:border-primary"
+            >
+              <option value="CREDIT_CARD">Cartão de crédito — cobra sozinho</option>
+              <option value="PIX">Pix — cobrança por mês, ele paga cada uma</option>
+              <option value="BOLETO">Boleto — cobrança por mês, ele paga cada uma</option>
+              <option value="UNDEFINED">Ele escolhe no checkout</option>
+            </select>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Só o cartão renova sozinho: fica salvo e o Asaas debita todo
+              ciclo. Pix e boleto emitem uma cobrança por mês que o cliente
+              precisa pagar — se esquecer, entra na régua de atraso. Vale só
+              pra assinatura NOVA; trocar depois de assinada exige mexer no
+              painel do Asaas.
+            </p>
+          </Field>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input

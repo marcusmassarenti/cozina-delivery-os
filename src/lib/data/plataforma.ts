@@ -514,6 +514,8 @@ export type ClientDetail = ClientOverview & {
   unitsFull: ClientUnitFull[]
   asaasCustomerId: string | null
   asaasSubscriptionId: string | null
+  /** Forma de cobrança no Asaas. null = cartão (padrão). */
+  billingType: string | null
   /** NOTAS FISCAIS emitidas no Asaas (não confundir com `faturas`). */
   invoices: ClientInvoice[]
   /** COBRANÇAS que este cliente deve/pagou (holding_invoices). */
@@ -543,7 +545,7 @@ export async function getClientDetail(
   const { data: h } = await admin
     .from("holdings")
     .select(
-      "razao_social, doc_cpf_cnpj, account_type, nf_cep, nf_logradouro, nf_numero, nf_complemento, nf_bairro, nf_cidade, nf_uf, nf_telefone, nf_email, asaas_customer_id, asaas_subscription_id",
+      "razao_social, doc_cpf_cnpj, account_type, nf_cep, nf_logradouro, nf_numero, nf_complemento, nf_bairro, nf_cidade, nf_uf, nf_telefone, nf_email, asaas_customer_id, asaas_subscription_id, asaas_billing_type",
     )
     .eq("id", holdingId)
     .maybeSingle()
@@ -564,6 +566,7 @@ export async function getClientDetail(
   let fiscalPreenchido = Boolean(fiscal.cpfCnpj || fiscal.cep)
   const asaasCustomerId = (h?.asaas_customer_id as string) ?? null
   const asaasSubscriptionId = (h?.asaas_subscription_id as string) ?? null
+  const billingType = (h?.asaas_billing_type as string | null) ?? null
 
   // Backfill: se o cliente ainda não preencheu os dados fiscais no sistema mas
   // já tem cliente no Asaas, puxa de lá (CNPJ, endereço, e-mail de cobrança).
@@ -800,6 +803,7 @@ export async function getClientDetail(
     unitsFull,
     asaasCustomerId,
     asaasSubscriptionId,
+    billingType,
     invoices,
     faturas: await getFaturasDoCliente(holdingId),
     auditoria: await getAuditoriaDoCliente(holdingId),
