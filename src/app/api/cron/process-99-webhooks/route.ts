@@ -279,6 +279,20 @@ export async function GET(req: Request) {
     }
   }
 
+  // 4b) Os ITENS da comanda — o dado que o webhook sempre trouxe e este cron
+  // descartava, guardando só `contagem_item`. Roda DEPOIS do upsert do pedido
+  // e nunca derruba a rodada: item é enriquecimento, pedido é o essencial.
+  const { gravarItensDoWebhook } = await import(
+    "@/lib/ninefood/itens-do-webhook"
+  )
+  let itensGravados = 0
+  try {
+    const r = await gravarItensDoWebhook(admin, news, unitByAppShop)
+    itensGravados = r.linhas
+  } catch (e) {
+    console.error("process-99-webhooks: itens", e)
+  }
+
   // 5) orderFinish → set horario_conclusao
   let finished = 0
   for (const e of finishes) {
@@ -342,6 +356,7 @@ export async function GET(req: Request) {
       orderNew_upserted: upsertedNew,
       orderNew_duplicados: duplicadosDescartados,
       orderNew_skipped: skippedNew.length,
+      itens_gravados: itensGravados,
       orderFinish: finished,
       orderCancel: canceled,
       outros: events.length - news.length - finishes.length - cancels.length,
