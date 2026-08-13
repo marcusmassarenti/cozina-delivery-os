@@ -442,10 +442,22 @@ export async function getItensVendidos(
   year: number,
   month: number,
   holdingId?: string | null,
+  /**
+   * Recorte de lojas escolhido na tela. `undefined` = todas as do escopo.
+   *
+   * Cruza com `lojasDoEscopo` em vez de substituí-la: o filtro da tela é
+   * conveniência, o escopo é permissão. Trocar um pelo outro deixaria um
+   * franqueado ver a loja do vizinho digitando o código na URL.
+   */
+  unitIds?: string[],
 ): Promise<ItemVendido[]> {
   const hid = await escopo(holdingId)
+  const doEscopo = await lojasDoEscopo(hid)
+  const alvo = unitIds?.length
+    ? doEscopo.filter((id) => unitIds.includes(id))
+    : doEscopo
   const [sales, dePara, fichaByPrato] = await Promise.all([
-    getItemSalesByUnit(year, month, await lojasDoEscopo(hid)),
+    getItemSalesByUnit(year, month, alvo.length ? alvo : [SEM_DONO]),
     getDeParaMap(hid),
     getFichaByPrato(hid),
   ])

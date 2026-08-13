@@ -1,18 +1,62 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ChefHat, Info, Wallet } from "lucide-react"
+import { Boxes, ChefHat, Info, Store, Wallet } from "lucide-react"
 
 import { requireAdmin } from "@/lib/auth/guards"
 import { isProPlan } from "@/lib/data/billing"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getInsumos, getItensVendidos } from "@/lib/data/producao"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { LojaFilter } from "@/components/shared/loja-filter"
+import { PlatformFilter } from "@/components/shared/platform-filter"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { type CoachStep } from "@/components/onboarding/coach-tour"
+import { ordenarPlataformas, type PlatformId } from "@/components/platform-logo"
+import { getVisibleUnits } from "@/lib/data/units"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 
 import { InsumoImport } from "./_components/insumo-import"
 import { BulkFichaAction } from "./_components/bulk-ficha-action"
 import { ItensFichaList } from "./_components/itens-ficha-list"
+
+/**
+ * O passo a passo que substituiu a faixa azul fixa no topo.
+ *
+ * A faixa dizia o essencial, mas custava caro: ocupava espaço em toda visita
+ * pra ensinar algo que se aprende uma vez, e o texto terminava num
+ * `GET /api/v1/demanda-insumos` — informação de quem integra o ERP, no meio da
+ * tela de quem só quer dizer que o X-Salada leva 1 pão e 1 hambúrguer.
+ *
+ * Aqui cada passo aponta pro pedaço da tela que ele explica, e a ordem é a
+ * ordem de fazer: cadastrar insumo → abrir o item → montar a ficha.
+ */
+const TOUR_STEPS: CoachStep[] = [
+  {
+    selector: '[data-tour="ft-filtros"]',
+    icon: <Store className="size-4" />,
+    title: "Escolha o que quer ver",
+    body: "Filtre por loja, plataforma e mês. Serve pra montar a ficha de uma loja por vez, ou pra conferir o que uma plataforma específica vendeu no período.",
+  },
+  {
+    selector: '[data-tour="ft-insumos"]',
+    icon: <Boxes className="size-4" />,
+    title: "1. Cadastre seus insumos",
+    body: "Insumo é o que você compra: pão, hambúrguer, queijo, embalagem. Cadastre um por um, cole vários de uma vez, ou suba a planilha modelo. É a lista que vai aparecer pra escolher na ficha.",
+  },
+  {
+    selector: '[data-tour="ft-itens"]',
+    icon: <ChefHat className="size-4" />,
+    title: "2. Monte a ficha de cada item",
+    body: "Aqui estão os itens que suas lojas venderam, do mais vendido pro menos. Abra um e diga quanto ele consome de cada insumo POR UNIDADE VENDIDA — 1 pão, 2 hambúrgueres, 30 g de queijo.",
+  },
+  {
+    selector: '[data-tour="ft-itens"]',
+    icon: <Info className="size-4" />,
+    title: "Comece pelos de cima",
+    body: 'O selo "sem ficha" mostra o que ainda falta. Não precisa cadastrar tudo: os primeiros itens costumam ser a maior parte do volume, então montar os 10 mais vendidos já resolve quase todo o custo.',
+  },
+]
 
 /**
  * Ficha Técnica — de-para "item vendido no delivery → insumos do ERP" que
@@ -22,7 +66,13 @@ import { ItensFichaList } from "./_components/itens-ficha-list"
 export default async function FichaTecnicaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string }>
+  searchParams: Promise<{
+    periodo?: string
+    inicio?: string
+    fim?: string
+    lojas?: string
+    plataformas?: string
+  }>
 }) {
   // Deixou de ser interno da Cozina: a ficha técnica é o que dá custo por
   // prato, então virou tela do Financeiro (plano Pro) e não mais um de-para
@@ -60,48 +110,71 @@ export default async function FichaTecnicaPage({
   const sp = await searchParams
   const { range: periodRange, year, month } = readPeriod(sp)
 
-  const [insumos, itens, periods] = await Promise.all([
+  // Lojas do filtro: chegam por CÓDIGO na URL (é o que o LojaFilter escreve e
+  // o que fica legível num link compartilhado) e viram id aqui.
+  const units = await getVisibleUnits()
+  const codigos = (sp.lojas ?? "").split(",").filter(Boolean)
+  const unitIds = codigos.length
+    ? units.filter((u) => codigos.includes(u.code)).map((u) => u.id)
+    : undefined
+
+  const [insumos, itensTodos, periods] = await Promise.all([
     getInsumos(),
-    getItensVendidos(year, month),
+    getItensVendidos(year, month, null, unitIds),
     getAvailablePeriods(),
   ])
+
+  // Plataforma filtra em memória: o item já vem com a dele, e uma segunda
+  // consulta só pra isso seria ida ao banco pra refazer o que está na mão.
+  const plats = (sp.plataformas ?? "").split(",").filter(Boolean)
+  const itens = plats.length
+    ? itensTodos.filter((i) => plats.includes(i.platform))
+    : itensTodos
+
+  // Só as plataformas que ESTE mês tem — chip de plataforma sem item por trás
+  // é um filtro que só sabe devolver tela vazia.
+  const platsComItem = ordenarPlataformas([
+    ...new Set(itensTodos.map((i) => i.platform)),
+  ] as PlatformId[])
 
   return (
     <div className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ChefHat className="size-5 text-muted-foreground" />
             <h1 className="text-2xl font-semibold tracking-tight">
               Ficha Técnica
             </h1>
+            {/* Substitui a faixa azul fixa. O passo a passo é o mesmo, mas
+                aparece quando a pessoa pede e apontando pra cada parte da
+                tela — em vez de ocupar espaço todo dia depois de lido uma vez,
+                e falar de endpoint HTTP pra quem só quer montar a receita. */}
+            <TourButton steps={TOUR_STEPS} autoOpenParam="tour" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Converte o que as lojas vendem (itens) na demanda de insumos do ERP
             · itens de {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <PeriodSelector current={periodRange} options={periods} enableRange />
+        <div data-tour="ft-filtros" className="flex flex-wrap items-center gap-2">
+          <LojaFilter units={units.map((u) => ({ code: u.code, name: u.name }))} />
+          {platsComItem.length > 1 && (
+            <PlatformFilter disponiveis={platsComItem} />
+          )}
+          <PeriodSelector current={periodRange} options={periods} enableRange />
+        </div>
       </div>
 
-      <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300">
-        <Info className="mt-0.5 size-3.5 shrink-0" />
-        <span>
-          Fluxo: <b>1)</b> cadastre os insumos do ERP (códigos CNP) · <b>2)</b>{" "}
-          em cada item vendido, escolha os insumos que ele consome (a ficha). O
-          ERP puxa a demanda pronta em{" "}
-          <code className="rounded bg-sky-100 px-1 dark:bg-sky-900/40">
-            GET /api/v1/demanda-insumos
-          </code>
-          .
-        </span>
+      <div data-tour="ft-insumos">
+        <InsumoImport insumos={insumos} />
       </div>
-
-      <InsumoImport insumos={insumos} />
       {itens.some((i) => i.ficha.length > 0) && (
         <BulkFichaAction itens={itens} insumos={insumos} />
       )}
-      <ItensFichaList itens={itens} insumos={insumos} />
+      <div data-tour="ft-itens">
+        <ItensFichaList itens={itens} insumos={insumos} />
+      </div>
     </div>
   )
 }
