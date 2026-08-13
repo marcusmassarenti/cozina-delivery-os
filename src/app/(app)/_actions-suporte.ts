@@ -265,6 +265,25 @@ export async function enviarMensagem(
   // nunca vem e a conversa morre do nosso lado.
   if (c.status !== "ia") await chamarEquipe(false)
 
+  // IA fora do ar (chave ausente) NÃO pode virar buraco negro: sem isto a
+  // mensagem ficava gravada, ninguém respondia e ninguém era avisado — o
+  // cliente falando sozinho com uma tela. Vai direto pra fila da equipe.
+  if (c.status === "ia" && !isAnthropicConfigured()) {
+    await admin
+      .from("suporte_conversas")
+      .update({ status: "aguardando_humano" })
+      .eq("id", conversaId)
+    await admin.from("suporte_mensagens").insert({
+      conversa_id: conversaId,
+      autor: "ia",
+      texto:
+        "Recebi sua mensagem e já chamei alguém da equipe. A resposta chega aqui mesmo — pode fechar o chat que a gente te avisa.",
+    })
+    await chamarEquipe(true)
+    revalidatePath("/suporte")
+    return { ok: true, conversa: (await abrirConversa()) ?? undefined }
+  }
+
   // Com humano na conversa, a IA CALA. Duas vozes respondendo a mesma pessoa é
   // pior que nenhuma — e a equipe já viu o histórico.
   if (c.status === "ia" && isAnthropicConfigured()) {

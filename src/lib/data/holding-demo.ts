@@ -40,21 +40,23 @@ export async function idsDeUnidadesDemo(): Promise<Set<string>> {
 }
 
 /**
- * Quem enxerga o balão de suporte hoje.
+ * Quem enxerga o balão de suporte. Desde 13/08/2026: TODO CLIENTE.
  *
- * Nasce restrito à rede de demonstração porque o painel onde a EQUIPE responde
- * (bloco 3) ainda não existe: ligar pra todos deixaria o cliente clicar em
- * "falar com uma pessoa" e cair no vazio. Chamado sem ninguém do outro lado é
- * pior que não ter chat.
+ * Nasceu restrito à demo porque o painel onde a equipe responde ainda não
+ * existia — cliente clicando em "falar com uma pessoa" e caindo no vazio é
+ * pior que não ter chat. Com o painel e os avisos no ar, o motivo da trava
+ * acabou, então o padrão passa a ser liberado.
  *
- * Pra liberar depois, `SUPORTE_CHAT_HOLDINGS`: ids separados por vírgula, ou
- * `*` pra todos. É env var e não flag no código de propósito — liberar não
- * deveria exigir deploy.
+ * `SUPORTE_CHAT_HOLDINGS` continua valendo, mas agora RESTRINGE: uma lista de
+ * ids separados por vírgula limita o balão a eles (a demo entra sempre). Vazio
+ * ou `*` = todo mundo. Continua sendo env var e não flag no código porque
+ * fechar o chat às pressas — se um dia isso for preciso — não deveria esperar
+ * um deploy.
  */
 export function podeVerSuporte(holdingId: string | null): boolean {
   if (!holdingId) return false
   const cfg = (process.env.SUPORTE_CHAT_HOLDINGS ?? "").trim()
-  if (cfg === "*") return true
+  if (cfg === "" || cfg === "*") return true
   const liberados = new Set(
     cfg.split(",").map((s) => s.trim()).filter(Boolean),
   )

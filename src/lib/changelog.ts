@@ -42,6 +42,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.19.0",
+    date: "2026-08-13",
+    tag: "Grande novidade",
+    title: "Suporte dentro do sistema",
+    summary:
+      "Um balão no canto da tela responde na hora sobre a sua conta — e quando não souber, chama uma pessoa de verdade. Sem sair do sistema e sem WhatsApp.",
+    areas: [
+      {
+        area: "Suporte",
+        items: [
+          {
+            kind: "novo",
+            title: "Pergunte pelo balão, no canto da tela",
+            antes:
+              "Dúvida sobre uma loja que não conectou virava mensagem no WhatsApp, e a resposta dependia de alguém estar disponível.",
+            depois:
+              "O balão responde lendo a SUA conta: quais lojas estão conectadas, quais estão esperando o iFood liberar e até que dia entrou dado em cada uma.",
+          },
+          {
+            kind: "novo",
+            title: "Quando não souber, chama gente",
+            desc:
+              "Qualquer coisa sobre valor, erro específico ou pedido de mudança vai direto pra uma pessoa da equipe — com a sua conversa já na mão. Você também pode pedir isso a qualquer momento.",
+          },
+          {
+            kind: "novo",
+            title: "A resposta te encontra",
+            desc:
+              "Pode fechar o chat. Quando a equipe responder, você recebe um aviso no celular (ou por e-mail) e a conversa continua de onde parou.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.18.0",
     date: "2026-08-12",
     tag: "Grande novidade",
