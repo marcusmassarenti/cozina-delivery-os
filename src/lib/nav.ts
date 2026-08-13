@@ -1,6 +1,7 @@
 import {
   Share2,
   Activity,
+  Headset,
   Building2,
   Cable,
   CalendarRange,
@@ -214,6 +215,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Clientes",
         href: "/clientes",
         icon: Building2,
+        superadminOnly: true,
+      },
+      {
+        label: "Suporte",
+        href: "/suporte",
+        icon: Headset,
         superadminOnly: true,
       },
       {
