@@ -10,6 +10,7 @@ import {
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
+import { ehClienteArquivado } from "@/lib/data/cliente-arquivado"
 import { getSolicitacoesIfoodPendentes } from "@/lib/data/units"
 import {
   installIdsDeProducao,
@@ -38,6 +39,8 @@ export default async function ConexoesPage() {
   // Achata as lojas de todos os clientes numa lista só.
   const rows: ConexaoRow[] = []
   for (const c of clients) {
+    // Marca o CLIENTE, não a loja: suspensão e trial vencido são da conta.
+    const arquivado = ehClienteArquivado(c)
     for (const u of c.unitsList) {
       rows.push({
         unitId: u.id,
@@ -55,6 +58,7 @@ export default async function ConexoesPage() {
         ifoodApi: u.ifoodApi,
         ninefoodApi: u.ninefoodApi,
         cardapiowebApi: cwConectadas.has(u.id),
+        arquivado,
       })
     }
   }

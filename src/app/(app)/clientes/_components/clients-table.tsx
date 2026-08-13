@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { ChevronDown, Loader2, Pencil, Search, Trash2, X } from "lucide-react"
 
 import type { ClientOverview } from "@/lib/data/plataforma"
+import { ehClienteArquivado } from "@/lib/data/cliente-arquivado"
 import type { BillingStatus } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
 import {
@@ -95,13 +96,6 @@ export function ClientsTable({
   nowMs: number
 }) {
   const router = useRouter()
-  const hojeISO = () =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date())
   const [query, setQuery] = React.useState("")
   const [status, setStatus] = React.useState<FiltroStatus>("todos")
   // Escopo acima do filtro de status: relação viva x relação encerrada.
@@ -124,17 +118,10 @@ export function ClientsTable({
   const [confirmOpen, setConfirmOpen] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
 
-  // Arquivado = relação encerrada. Duas portas: acesso cortado, ou teste que
-  // venceu sem a pessoa nunca ter cadastrado loja (ela abriu a conta e não
-  // voltou). São situações diferentes — uma é cliente perdido, outra é
-  // cadastro que não virou cliente — mas nenhuma das duas pede ação hoje, que
-  // é o critério pra estar na tela principal.
+  // A régua mora em @/lib/data/cliente-arquivado — a tela de Conexões de API
+  // faz a mesma pergunta, e duas cópias divergem.
   const ehArquivado = React.useCallback(
-    (c: ClientOverview) =>
-      c.billingStatus === "suspended" ||
-      (c.trialEndsAt !== null &&
-        c.trialEndsAt < hojeISO() &&
-        c.activeUnits === 0),
+    (c: ClientOverview) => ehClienteArquivado(c),
     [],
   )
   const arquivados = React.useMemo(

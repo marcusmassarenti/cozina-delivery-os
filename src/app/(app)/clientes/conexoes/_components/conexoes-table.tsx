@@ -26,6 +26,13 @@ export type ConexaoRow = {
   ninefoodApi: boolean
   /** Instalação de produção ativa e vinculada — o "via API" do canal próprio. */
   cardapiowebApi: boolean
+  /**
+   * Cliente suspenso ou trial vencido sem loja — régua única em
+   * @/lib/data/cliente-arquivado. Fica FORA da tela principal e das contagens
+   * do topo: conexão de quem não é mais cliente inflava "75 de 85 via API" e
+   * fazia o painel parecer melhor do que é.
+   */
+  arquivado: boolean
 }
 
 const PLATS: { id: PlatformId; label: string }[] = [
@@ -53,6 +60,20 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
   // Clientes abertos. Com 500 lojas, a lista inteira aberta é ilegível — então
   // cada cliente nasce fechado e a pessoa abre o que quer olhar.
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set())
+  // Mesma divisão da tela de Clientes, de propósito: quem já conhece uma
+  // reconhece a outra.
+  const [escopo, setEscopo] = React.useState<"ativos" | "arquivados">("ativos")
+  const arquivadas = React.useMemo(
+    () => rows.filter((r) => r.arquivado).length,
+    [rows],
+  )
+  // TUDO nesta tela — contagem do topo, filtros e lista — enxerga só o escopo
+  // escolhido. Filtrar apenas a lista deixaria o resumo contando loja que a
+  // pessoa não está vendo.
+  const noEscopo = React.useMemo(
+    () => rows.filter((r) => r.arquivado === (escopo === "arquivados")),
+    [rows, escopo],
+  )
 
   const togglePlat = (p: PlatformId) =>
     setPlatSel((s) => {
@@ -75,7 +96,7 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
       keeta: { total: 0 },
       cardapioweb: { total: 0, api: 0 },
     }
-    for (const r of rows) {
+    for (const r of noEscopo) {
       if (r.platforms.includes("ifood")) s.ifood.total++
       if (r.platforms.includes("99food")) s["99food"].total++
       if (r.platforms.includes("keeta")) s.keeta.total++
@@ -85,11 +106,11 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
       if (r.cardapiowebApi) s.cardapioweb.api++
     }
     return s
-  }, [rows])
+  }, [noEscopo])
 
   const filtradas = React.useMemo(() => {
     const q = query.trim().toLowerCase()
-    return rows.filter((r) => {
+    return noEscopo.filter((r) => {
       for (const p of platSel) if (!r.platforms.includes(p)) return false
       if (apiSel.has("ifood") && !r.ifoodApi) return false
       if (apiSel.has("99food") && !r.ninefoodApi) return false
@@ -102,7 +123,7 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
         (r.unitCode ?? "").toLowerCase().includes(q)
       )
     })
-  }, [rows, query, platSel, apiSel])
+  }, [noEscopo, query, platSel, apiSel])
 
   // Agrupa por cliente. Uma tabela corrida com 500 lojas é ilegível: ninguém
   // acha a loja de um cliente no meio das outras, e o scroll vira o trabalho.
@@ -123,10 +144,45 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Ativos × Arquivados. A aba só aparece quando existe arquivado: numa
+          base sem nenhum, seria uma escolha permanente entre "tudo" e "nada". */}
+      {arquivadas > 0 && (
+        <div className="flex items-center gap-1 border-b">
+          {([
+            { k: "ativos" as const, r: "Ativos", n: rows.length - arquivadas },
+            { k: "arquivados" as const, r: "Suspensos e arquivados", n: arquivadas },
+          ]).map((e) => (
+            <button
+              key={e.k}
+              type="button"
+              onClick={() => setEscopo(e.k)}
+              className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+                escopo === e.k
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {e.r}{" "}
+              <span className="ml-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+                {e.n}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {escopo === "arquivados" && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          Clientes suspensos ou com teste vencido sem loja. As conexões seguem
+          gravadas, mas <b>o sync não puxa mais</b> depois de 7 dias suspenso —
+          e elas não entram na contagem da aba Ativos.
+        </p>
+      )}
+
       {/* Resumo por plataforma — clicável (também filtra). */}
       <div className="flex flex-wrap gap-2 text-xs">
         <span className="rounded-full border bg-card px-2.5 py-1 font-medium">
-          {rows.length} loja{rows.length !== 1 ? "s" : ""}
+          {noEscopo.length} loja{noEscopo.length !== 1 ? "s" : ""}
         </span>
         {PLATS.map((p) => {
           const st = stats[p.id]
