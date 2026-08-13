@@ -209,16 +209,18 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
 
       // Link novo a cada lembrete: o do Supabase expira em 24h, então mandar
       // o mesmo de novo seria mandar um botão quebrado.
+      // NÃO trocar por `generateLink(...).action_link`: manda botão morto.
+      // Motivo completo em @/lib/auth/link-email.
       let link: string | null = null
       try {
-        const { data: g } = await admin.auth.admin.generateLink({
-          type: "magiclink",
+        const { linkDeAuth } = await import("@/lib/auth/link-email")
+        link = await linkDeAuth({
+          tipo: "magiclink",
           email: p.email,
-          options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"}/` },
+          next: "/inicio",
         })
-        link = g?.properties?.action_link ?? null
       } catch (e) {
-        console.error("regua-email: generateLink", e)
+        console.error("regua-email: linkDeAuth", e)
       }
       if (!link) {
         out.falhas.push({ cliente: nome, tipo: `confirme-${etapa}`, erro: "não gerou o link" })

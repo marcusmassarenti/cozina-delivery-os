@@ -30,7 +30,7 @@ export async function requestReset(
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
   const proto =
     h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https")
-  const redirectTo = `${proto}://${host}/redefinir-senha`
+  const site = `${proto}://${host}`
 
   // O e-mail sai pelo NOSSO layout, não pelo template do Supabase.
   //
@@ -46,16 +46,19 @@ export async function requestReset(
   // impede alguém de descobrir quem tem conta testando endereços. Um erro
   // diferente aqui entregaria a resposta pelo tempo ou pela mensagem.
   try {
-    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const { linkDeAuth } = await import("@/lib/auth/link-email")
     const { recuperarSenha } = await import("@/lib/email/templates")
     const { enviarEmail } = await import("@/lib/email/enviar")
 
-    const { data: g } = await createAdminClient().auth.admin.generateLink({
-      type: "recovery",
+    // NÃO trocar por `generateLink(...).action_link`: aquele link chega aqui
+    // como "inválido ou expirado" mesmo recém-emitido. O motivo está inteiro
+    // em @/lib/auth/link-email.
+    const link = await linkDeAuth({
+      tipo: "recovery",
       email,
-      options: { redirectTo },
+      next: "/redefinir-senha",
+      site,
     })
-    const link = g?.properties?.action_link
     if (link) {
       const { assunto, html } = recuperarSenha({ link })
       await enviarEmail({
