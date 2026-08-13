@@ -33,6 +33,19 @@ export type ConversaSuporte = {
 /** Marca que o chat precisa de gente. Some da IA e entra na fila do painel. */
 const PEDIU_HUMANO = "[[ESCALAR]]"
 
+/**
+ * Quantas perguntas a IA responde antes de chamar gente.
+ *
+ * Três é o ponto onde a conversa deixa de ser dúvida e vira problema. Quem
+ * perguntou três vezes ou não foi entendido, ou tem um caso que o retrato da
+ * conta não cobre — e a quarta resposta automática, nessa altura, lê como
+ * enrolação. Melhor entregar pra um humano com o histórico pronto do que
+ * insistir.
+ *
+ * De quebra segura o custo: o teto por conversa é conhecido.
+ */
+const MAX_PERGUNTAS_IA = 3
+
 function instrucoes(raioX: RaioX | null): string {
   return `Você é o suporte do Delivery OS, um sistema que junta o faturamento de
 delivery (iFood, 99 Food, Keeta e Cardápio Web) de redes de restaurante.
@@ -49,6 +62,9 @@ depende de algo que não está ali — valor de fatura, erro específico, pedido
 mudança, reclamação, qualquer coisa sobre dinheiro — NÃO invente e NÃO chute.
 Responda em uma linha que vai chamar alguém e termine a mensagem com ${PEDIU_HUMANO}
 (exatamente assim, na última linha). Suporte que chuta é pior que suporte lento.
+
+VOCÊ TEM NO MÁXIMO ${MAX_PERGUNTAS_IA} RESPOSTAS nesta conversa. Se sentir que
+não está resolvendo, não insista: chame alguém antes de gastar as três.
 
 O QUE VOCÊ SABE FAZER SOZINHO
 - Dizer se uma loja está conectada, aguardando ou revogada, e desde quando.
@@ -158,6 +174,31 @@ export async function enviarMensagem(
     .update({ ultima_msg_em: new Date().toISOString(), lida_equipe_em: null })
     .eq("id", conversaId)
 
+  // Quantas vezes o cliente já perguntou (incluindo a de agora).
+  const { count: perguntas } = await admin
+    .from("suporte_mensagens")
+    .select("id", { count: "exact", head: true })
+    .eq("conversa_id", conversaId)
+    .eq("autor", "cliente")
+  const jaPerguntou = perguntas ?? 1
+
+  // Passou do teto: nem chama a IA. Uma quarta resposta automática pra quem já
+  // perguntou três vezes lê como enrolação.
+  if (c.status === "ia" && jaPerguntou > MAX_PERGUNTAS_IA) {
+    await admin
+      .from("suporte_conversas")
+      .update({ status: "aguardando_humano" })
+      .eq("id", conversaId)
+    await admin.from("suporte_mensagens").insert({
+      conversa_id: conversaId,
+      autor: "ia",
+      texto:
+        "Acho melhor alguém da equipe olhar isso com calma. Já passei sua conversa — a resposta chega aqui mesmo, pode fechar o chat que a gente te avisa.",
+    })
+    revalidatePath("/suporte")
+    return { ok: true, conversa: (await abrirConversa()) ?? undefined }
+  }
+
   // Com humano na conversa, a IA CALA. Duas vozes respondendo a mesma pessoa é
   // pior que nenhuma — e a equipe já viu o histórico.
   if (c.status === "ia" && isAnthropicConfigured()) {
@@ -178,7 +219,10 @@ export async function enviarMensagem(
         user: conversa,
         maxTokens: 700,
       })
-      const escalar = bruta.includes(PEDIU_HUMANO)
+      // Na ÚLTIMA pergunta do teto, responde e já chama gente junto: deixar o
+      // cliente descobrir o limite só na tentativa seguinte seria fazê-lo
+      // escrever mais uma vez à toa.
+      const escalar = bruta.includes(PEDIU_HUMANO) || jaPerguntou >= MAX_PERGUNTAS_IA
       const limpa = bruta.replaceAll(PEDIU_HUMANO, "").trim()
 
       await admin.from("suporte_mensagens").insert({
