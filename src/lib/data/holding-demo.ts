@@ -38,3 +38,26 @@ export async function idsDeUnidadesDemo(): Promise<Set<string>> {
   }
   return new Set(((data ?? []) as unknown as { id: string }[]).map((u) => u.id))
 }
+
+/**
+ * Quem enxerga o balão de suporte hoje.
+ *
+ * Nasce restrito à rede de demonstração porque o painel onde a EQUIPE responde
+ * (bloco 3) ainda não existe: ligar pra todos deixaria o cliente clicar em
+ * "falar com uma pessoa" e cair no vazio. Chamado sem ninguém do outro lado é
+ * pior que não ter chat.
+ *
+ * Pra liberar depois, `SUPORTE_CHAT_HOLDINGS`: ids separados por vírgula, ou
+ * `*` pra todos. É env var e não flag no código de propósito — liberar não
+ * deveria exigir deploy.
+ */
+export function podeVerSuporte(holdingId: string | null): boolean {
+  if (!holdingId) return false
+  const cfg = (process.env.SUPORTE_CHAT_HOLDINGS ?? "").trim()
+  if (cfg === "*") return true
+  const liberados = new Set(
+    cfg.split(",").map((s) => s.trim()).filter(Boolean),
+  )
+  liberados.add(HOLDING_DEMO_ID)
+  return liberados.has(holdingId)
+}

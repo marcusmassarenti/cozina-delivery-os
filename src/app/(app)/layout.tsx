@@ -9,6 +9,8 @@ import { VerComoFaixa } from "@/components/ver-como-faixa"
 import { WelcomeTour } from "@/components/onboarding/welcome-tour"
 import { WelcomeSubscribedModal } from "@/components/welcome-subscribed-modal"
 import { WhatsNewModal } from "@/components/whats-new-modal"
+import { SuporteBolha } from "@/components/suporte/suporte-bolha"
+import { podeVerSuporte } from "@/lib/data/holding-demo"
 import { SaudeSemanalModal } from "@/components/saude-semanal-modal"
 import { NinoCortesiaModal } from "@/components/nino-cortesia-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -95,6 +97,8 @@ export default async function AppLayout({
   )
   const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
   const superadmin = await isSuperadmin()
+  // Só pro gate do balão de suporte (ver podeVerSuporte).
+  const holdingAtual = await getCurrentHoldingId()
   const verComoId = await getVerComoHoldingId()
 
   /* Aviso semanal de saúde das lojas — 1x por semana, a partir da segunda.
@@ -239,6 +243,14 @@ export default async function AppLayout({
         />
         <WelcomeSubscribedModal userName={userContext.fullName} />
         <SaudeSemanalModal aviso={avisoSaude} />
+        {/* Balão de suporte. Só pro CLIENTE: quem é da plataforma responde no
+            painel de chamados, e ver o próprio balão ali só confundiria.
+            ⚠️ LIMITADO enquanto o painel de chamados não existe. Ligar pra
+            todo mundo antes disso deixaria o cliente pedir "falar com uma
+            pessoa" e cair no vazio — chamado sem ninguém do outro lado é pior
+            que não ter chat. Libera com SUPORTE_CHAT_HOLDINGS (ids separados
+            por vírgula) ou "*" pra todos, quando o bloco 3 estiver de pé. */}
+        {!superadmin && podeVerSuporte(holdingAtual) && <SuporteBolha />}
       </SidebarProvider>
     </TooltipProvider>
   )
