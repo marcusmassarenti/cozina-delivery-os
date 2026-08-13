@@ -70,8 +70,14 @@ export function SuporteBolha() {
     fim.current?.scrollIntoView({ behavior: "smooth" })
   }, [conversa?.mensagens.length, enviando])
 
-  async function enviar(e: React.FormEvent) {
-    e.preventDefault()
+  /**
+   * Não recebe evento de propósito: quem chama decide se precisa de
+   * `preventDefault`. A versão anterior fazia o atalho de teclado chamar isto
+   * passando o evento de TECLADO com um cast pra evento de formulário — não
+   * quebrava na prática, mas é o tipo de mentira de tipo que só se paga quando
+   * alguém confia nela.
+   */
+  async function enviar() {
     const msg = texto.trim()
     if (!msg || !conversa || enviando) return
     setTexto("")
@@ -237,14 +243,20 @@ export function SuporteBolha() {
         </p>
       )}
 
-      <form onSubmit={enviar} className="flex items-end gap-2 border-t p-2.5">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void enviar()
+        }}
+        className="flex items-end gap-2 border-t p-2.5"
+      >
         <textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault()
-              void enviar(e as unknown as React.FormEvent)
+              void enviar()
             }
           }}
           rows={1}
