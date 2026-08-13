@@ -14,7 +14,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.deliveryos.food"),
   title: "Delivery OS",
-  description: "O sistema operacional do seu delivery — iFood, 99 Food e Keeta num lugar só.",
+  description: "O sistema operacional do seu delivery — iFood, 99 Food, Keeta e Cardápio Web num lugar só.",
   // PWA: sem estes o iPhone instala com print da tela em vez de ícone, e abre
   // com a barra do Safari por cima — parece site salvo, não aplicativo.
   manifest: "/manifest.webmanifest",

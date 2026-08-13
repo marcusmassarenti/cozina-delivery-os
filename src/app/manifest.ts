@@ -17,7 +17,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Delivery OS",
     short_name: "Delivery OS",
     description:
-      "O sistema operacional do seu delivery — iFood, 99 Food e Keeta num lugar só.",
+      "O sistema operacional do seu delivery — iFood, 99 Food, Keeta e Cardápio Web num lugar só.",
     start_url: "/inicio",
     scope: "/",
     display: "standalone",

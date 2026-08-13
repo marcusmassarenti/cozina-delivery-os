@@ -27,6 +27,7 @@ export function ConviteAsaasButton({
   jaTemAssinatura,
   valorMensal,
   vencimento,
+  billingType,
 }: {
   holdingId: string
   clienteNome: string
@@ -35,6 +36,8 @@ export function ConviteAsaasButton({
   valorMensal?: number | null
   vencimento?: string | null
   jaTemAssinatura: boolean
+  /** Forma de cobrança do cliente. null = cartão (padrão). */
+  billingType?: string | null
 }) {
   const [state, action] = useActionState<ConviteAsaasState, FormData>(
     convidarParaAsaas,
@@ -59,12 +62,32 @@ export function ConviteAsaasButton({
   // padrão — logo no momento em que se está pedindo dinheiro pela 1ª vez.
   const valor = valorMensal && valorMensal > 0 ? fmtBRL(valorMensal) : null
   const venc = vencimento ? vencimento.split("-").reverse().join("/") : null
+
+  // A mensagem tem que descrever o que o cliente VAI ENCONTRAR na tela.
+  // Mandar "cadastre o cartão" pra quem fechou em Pix, e ainda prometer
+  // cobrança automática, é o tipo de erro que o cliente descobre sozinho no
+  // meio do checkout — e aí quem parece desorganizado é a gente, cobrando.
+  const ehAuto = !billingType || billingType === "CREDIT_CARD"
+  const comoPaga =
+    billingType === "PIX"
+      ? "escolher o plano e pagar no Pix"
+      : billingType === "BOLETO"
+        ? "escolher o plano e pagar o boleto"
+        : billingType === "UNDEFINED"
+          ? "escolher o plano e a forma de pagamento"
+          : "escolher o plano e cadastrar o cartão"
+  const comoCobra = ehAuto
+    ? valor
+      ? `— a mensalidade de ${valor} passa a ser cobrada automático todo mês.`
+      : "— a mensalidade passa a ser cobrada automático todo mês."
+    : valor
+      ? `— a mensalidade é de ${valor} e a cobrança chega todo mês no seu e-mail.`
+      : "— a cobrança chega todo mês no seu e-mail."
+
   const msg = [
     `Oi! Liberei a assinatura do ${clienteNome} no DeliveryOS.`,
-    `É só entrar em ${link}, escolher o plano e cadastrar o cartão`,
-    valor
-      ? `— a mensalidade de ${valor} passa a ser cobrada automático todo mês.`
-      : "— a mensalidade passa a ser cobrada automático todo mês.",
+    `É só entrar em ${link}, ${comoPaga}`,
+    comoCobra,
     venc ? `O primeiro vencimento é ${venc}.` : "",
     "Qualquer dúvida é só me chamar.",
   ]

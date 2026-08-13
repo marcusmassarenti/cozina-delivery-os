@@ -328,6 +328,7 @@ export function ClientDetailView({
                   jaTemAssinatura={c.asaasActive}
                   valorMensal={c.computedMonthly}
                   vencimento={c.dueDate}
+                  billingType={c.billingType}
                 />
               </div>
             )}
