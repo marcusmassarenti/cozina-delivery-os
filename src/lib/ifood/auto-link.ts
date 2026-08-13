@@ -478,6 +478,10 @@ export async function autoLinkIfoodMerchants(
   }
 
   // Compartilhado por todas as solicitações desta rodada.
+  const { merchantsSumidos, sumidoPorCnpj } = await import(
+    "@/lib/ifood/merchants-sumidos"
+  )
+  const sumidos = await merchantsSumidos()
   const sondadosAgora = new Set<string>()
   let processadas = 0
   for (const row of pendentes) {
@@ -565,9 +569,16 @@ export async function autoLinkIfoodMerchants(
         : null,
       motivo:
         conflito ??
-        (testados === 0
-          ? "Nenhum merchant candidato tem extrato pra confirmar o CNPJ ainda (loja sem movimento?)."
-          : `Nenhum dos ${testados} merchants testados tem o CNPJ ${cnpjPedido}.`),
+        // A CAUSA antes do sintoma. "Nenhum dos 2 merchants testados tem o
+        // CNPJ" é verdade e não ajuda: manda o operador conferir cadastro
+        // quando o que houve foi o lojista REVOGAR o app. Aconteceu com a Tech
+        // Assessoria em 13/ago/26 — o merchant apareceu às 12:48, sumiu da
+        // resposta da API às 18:09, e a tela só sabia falar do CNPJ.
+        (sumidoPorCnpj(sumidos, cnpjPedido)
+          ? `Esta loja JÁ apareceu no iFood e sumiu da lista — autorização revogada pelo lojista. Peça pra ele autorizar o Delivery OS de novo no Portal do Parceiro.`
+          : testados === 0
+            ? "Nenhum merchant candidato tem extrato pra confirmar o CNPJ ainda (loja sem movimento?)."
+            : `O lojista ainda não autorizou: nenhuma das lojas que o iFood nos devolve tem o CNPJ ${cnpjPedido}.`),
     })
   }
 

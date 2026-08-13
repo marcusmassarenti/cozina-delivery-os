@@ -6,6 +6,7 @@ import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhada
 
 import { RefreshButton, RunSyncButton } from "./_components/link-row"
 import { MerchantsTable } from "./_components/merchants-table"
+import { RevogadasAviso } from "./_components/revogadas-aviso"
 import {
   SolicitacoesPanel,
   type SolicitacaoAdmin,
@@ -216,11 +217,17 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
 }
 
 export default async function IfoodMerchantsPage() {
-  const [{ merchants, units, holdings, byMerchant }, solicitacoes, donoPorCnpj] =
-    await Promise.all([
+  const { merchantsSumidos } = await import("@/lib/ifood/merchants-sumidos")
+  const [
+    { merchants, units, holdings, byMerchant },
+    solicitacoes,
+    donoPorCnpj,
+    sumidos,
+  ] = await Promise.all([
     getData(),
     getSolicitacoes(),
     getDonoPorCnpj(),
+    merchantsSumidos(),
   ])
   const linkedCount = Object.keys(byMerchant).length
 
@@ -275,6 +282,8 @@ export default async function IfoodMerchantsPage() {
           <RefreshButton />
         </div>
       </div>
+
+      <RevogadasAviso sumidos={sumidos} />
 
       <SolicitacoesPanel solicitacoes={solicitacoes} lojasDaRede={units} />
 
