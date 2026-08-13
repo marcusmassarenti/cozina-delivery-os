@@ -3,10 +3,15 @@
 /**
  * Chat de suporte do CLIENTE — o balão flutuante.
  *
- * A IA responde lendo o estado real da conta (`montarRaioX`), e quando não
- * puder afirmar com o dado em mãos, ela mesma sobe pra um humano. É a diferença
- * entre este chat e o WhatsApp: aqui a resposta já existe no banco no instante
- * da pergunta.
+ * A primeira camada é um CATÁLOGO de respostas escritas (ver
+ * `src/lib/suporte/ajuda.ts`), não um modelo. A troca é uma melhora, não uma
+ * economia: as perguntas que mais aparecem têm resposta exata no banco, e
+ * passá-las por uma IA é pagar pra transformar um dado certo numa frase que
+ * pode sair errada.
+ *
+ * Texto livre NÃO é respondido automaticamente: vai direto pra fila da equipe.
+ * Fingir que entendeu uma pergunta que ninguém previu é o jeito mais rápido de
+ * queimar a confiança no chat inteiro.
  */
 
 import { revalidatePath } from "next/cache"
@@ -14,13 +19,14 @@ import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { askClaude, isAnthropicConfigured } from "@/lib/anthropic/client"
-import { montarRaioX, type RaioX } from "@/lib/data/suporte-raio-x"
+import { montarRaioX } from "@/lib/data/suporte-raio-x"
 import { avisarEquipe } from "@/lib/suporte/avisos"
+import { acharPergunta } from "@/lib/suporte/ajuda"
+import { resolverDado } from "@/lib/suporte/ajuda-dados"
 
 export type MensagemSuporte = {
   id: string
-  autor: "cliente" | "ia" | "equipe"
+  autor: "cliente" | "ia" | "ajuda" | "equipe"
   texto: string
   criadaEm: string
 }
@@ -29,54 +35,6 @@ export type ConversaSuporte = {
   id: string
   status: "ia" | "aguardando_humano" | "com_humano" | "resolvida"
   mensagens: MensagemSuporte[]
-}
-
-/** Marca que o chat precisa de gente. Some da IA e entra na fila do painel. */
-const PEDIU_HUMANO = "[[ESCALAR]]"
-
-/**
- * Quantas perguntas a IA responde antes de chamar gente.
- *
- * Três é o ponto onde a conversa deixa de ser dúvida e vira problema. Quem
- * perguntou três vezes ou não foi entendido, ou tem um caso que o retrato da
- * conta não cobre — e a quarta resposta automática, nessa altura, lê como
- * enrolação. Melhor entregar pra um humano com o histórico pronto do que
- * insistir.
- *
- * De quebra segura o custo: o teto por conversa é conhecido.
- */
-const MAX_PERGUNTAS_IA = 3
-
-function instrucoes(raioX: RaioX | null): string {
-  return `Você é o suporte do Delivery OS, um sistema que junta o faturamento de
-delivery (iFood, 99 Food, Keeta e Cardápio Web) de redes de restaurante.
-
-COMO RESPONDER
-- Português do Brasil, direto, sem saudação longa e sem "sinto muito pelo
-  transtorno". Vá ao ponto.
-- No máximo 4 linhas, salvo se a pessoa pedir detalhe.
-- Use SEMPRE o retrato da conta abaixo. Cite loja pelo nome e número, e data
-  quando existir.
-
-⚠️ REGRA QUE NÃO SE QUEBRA: só afirme o que estiver no retrato. Se a pergunta
-depende de algo que não está ali — valor de fatura, erro específico, pedido de
-mudança, reclamação, qualquer coisa sobre dinheiro — NÃO invente e NÃO chute.
-Responda em uma linha que vai chamar alguém e termine a mensagem com ${PEDIU_HUMANO}
-(exatamente assim, na última linha). Suporte que chuta é pior que suporte lento.
-
-VOCÊ TEM NO MÁXIMO ${MAX_PERGUNTAS_IA} RESPOSTAS nesta conversa. Se sentir que
-não está resolvendo, não insista: chame alguém antes de gastar as três.
-
-O QUE VOCÊ SABE FAZER SOZINHO
-- Dizer se uma loja está conectada, aguardando ou revogada, e desde quando.
-- Dizer até que dia entrou dado de cada loja.
-- Explicar que loja aguardando o iFood conecta sozinha em até 15 min depois que
-  o iFood libera, e que não há nada a fazer do lado do cliente.
-- Explicar que o relatório de ITENS VENDIDOS ainda é planilha no iFood e na
-  Keeta (a API deles não entrega esse dado).
-
-RETRATO DA CONTA AGORA:
-${raioX ? JSON.stringify(raioX, null, 1) : "(não consegui ler o estado da conta — escale)"}`
 }
 
 async function usuario() {
@@ -178,42 +136,101 @@ export async function temRespostaNova(): Promise<boolean> {
 
 export type EnvioState = { ok: boolean; conversa?: ConversaSuporte; erro?: string }
 
+/**
+ * Confere que a conversa é mesmo da empresa de quem está pedindo.
+ *
+ * Sem isto, o id na requisição viraria a porta pra ler e escrever no chat de
+ * outro cliente. Toda ação passa por aqui.
+ */
+async function conversaDoCliente(conversaId: string) {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return null
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("suporte_conversas")
+    .select("id, status, holding_id, lida_equipe_em")
+    .eq("id", conversaId)
+    .maybeSingle()
+  const c = data as {
+    status: ConversaSuporte["status"]
+    holding_id: string
+    lida_equipe_em: string | null
+  } | null
+  if (!c || c.holding_id !== holdingId) return null
+  return { ...c, holdingId, admin }
+}
+
+/**
+ * Cliente clicou numa pergunta da Central de Ajuda.
+ *
+ * Grava a pergunta e a resposta na conversa — não é enfeite: quando o caso
+ * subir pra uma pessoa, ela vê o que o cliente JÁ leu e não repete a mesma
+ * coisa. Repetir a resposta que a pessoa acabou de descartar é o jeito mais
+ * rápido de fazer o chat parecer inútil.
+ */
+export async function responderDoCatalogo(
+  conversaId: string,
+  perguntaId: string,
+): Promise<EnvioState> {
+  const user = await usuario()
+  const c = await conversaDoCliente(conversaId)
+  if (!user || !c) return { ok: false, erro: "Conversa não encontrada." }
+
+  const pergunta = acharPergunta(perguntaId)
+  if (!pergunta) return { ok: false, erro: "Pergunta não encontrada." }
+
+  const { admin } = c
+  await admin.from("suporte_mensagens").insert({
+    conversa_id: conversaId,
+    autor: "cliente",
+    user_id: user.id,
+    texto: pergunta.titulo,
+  })
+
+  let texto = pergunta.resposta
+  if (pergunta.dado) {
+    // O dado da conta é o motivo desta central existir. Só é lido quando a
+    // resposta pede — resposta de texto puro não paga o custo da consulta.
+    const raioX = await montarRaioX(c.holdingId)
+    texto = `${texto}\n\n${resolverDado(pergunta.dado, raioX)}`
+  }
+
+  await admin.from("suporte_mensagens").insert({
+    conversa_id: conversaId,
+    autor: "ajuda",
+    texto,
+    ajuda_id: pergunta.id,
+  })
+  await admin
+    .from("suporte_conversas")
+    .update({
+      ultima_msg_em: new Date().toISOString(),
+      lida_cliente_em: new Date().toISOString(),
+    })
+    .eq("id", conversaId)
+
+  return { ok: true, conversa: (await abrirConversa()) ?? undefined }
+}
+
+/**
+ * Texto livre do cliente. Vai DIRETO pra fila da equipe.
+ *
+ * Não existe tentativa automática de responder: se a dúvida não estava na
+ * lista, ninguém aqui sabe a resposta sem olhar. Chutar seria pior que a
+ * espera.
+ */
 export async function enviarMensagem(
   conversaId: string,
   texto: string,
 ): Promise<EnvioState> {
   const user = await usuario()
-  const holdingId = await getCurrentHoldingId()
   const msg = texto.trim()
-  if (!user || !holdingId) return { ok: false, erro: "Sessão expirada." }
   if (!msg) return { ok: false, erro: "Escreva sua mensagem." }
   if (msg.length > 2000) return { ok: false, erro: "Mensagem muito longa." }
 
-  const admin = createAdminClient()
-
-  // A conversa TEM que ser da empresa de quem está mandando. Sem isto, o id na
-  // requisição viraria a porta pra escrever no chat de outro cliente.
-  const { data: conv } = await admin
-    .from("suporte_conversas")
-    .select("id, status, holding_id, lida_equipe_em")
-    .eq("id", conversaId)
-    .maybeSingle()
-  const c = conv as {
-    status: ConversaSuporte["status"]
-    holding_id: string
-    lida_equipe_em: string | null
-  } | null
-  if (!c || c.holding_id !== holdingId) return { ok: false, erro: "Conversa não encontrada." }
-
-  /** Chama a equipe. `escalou` = acabou de virar caso de gente. */
-  const chamarEquipe = (escalou: boolean) =>
-    avisarEquipe({
-      conversaId,
-      holdingId,
-      texto: msg,
-      escalouAgora: escalou,
-      lidaEquipeEm: c.lida_equipe_em,
-    })
+  const c = await conversaDoCliente(conversaId)
+  if (!user || !c) return { ok: false, erro: "Conversa não encontrada." }
+  const { admin } = c
 
   await admin.from("suporte_mensagens").insert({
     conversa_id: conversaId,
@@ -221,9 +238,12 @@ export async function enviarMensagem(
     user_id: user.id,
     texto: msg,
   })
+
+  const jaEraDeGente = c.status !== "ia"
   await admin
     .from("suporte_conversas")
     .update({
+      status: jaEraDeGente ? c.status : "aguardando_humano",
       ultima_msg_em: new Date().toISOString(),
       lida_equipe_em: null,
       // O cliente acabou de escrever: ele está com o chat aberto. Marcar como
@@ -234,142 +254,60 @@ export async function enviarMensagem(
     })
     .eq("id", conversaId)
 
-  // Quantas vezes o cliente já perguntou (incluindo a de agora).
-  const { count: perguntas } = await admin
-    .from("suporte_mensagens")
-    .select("id", { count: "exact", head: true })
-    .eq("conversa_id", conversaId)
-    .eq("autor", "cliente")
-  const jaPerguntou = perguntas ?? 1
+  // Só avisa "entrou na fila" na PRIMEIRA vez. Repetir isso a cada mensagem
+  // faria a conversa virar uma parede de avisos automáticos entre as frases
+  // que interessam.
+  if (!jaEraDeGente) {
+    await admin.from("suporte_mensagens").insert({
+      conversa_id: conversaId,
+      autor: "ajuda",
+      texto:
+        "Recebi sua mensagem e chamei alguém da equipe. A resposta chega aqui mesmo — pode fechar o chat que a gente te avisa.",
+    })
+  }
 
-  // Passou do teto: nem chama a IA. Uma quarta resposta automática pra quem já
-  // perguntou três vezes lê como enrolação.
-  if (c.status === "ia" && jaPerguntou > MAX_PERGUNTAS_IA) {
+  await avisarEquipe({
+    conversaId,
+    holdingId: c.holdingId,
+    texto: msg,
+    escalouAgora: !jaEraDeGente,
+    lidaEquipeEm: c.lida_equipe_em,
+  })
+
+  revalidatePath("/suporte")
+  return { ok: true, conversa: (await abrirConversa()) ?? undefined }
+}
+
+/** O cliente pede gente sem escrever nada — o "não resolveu" do fim da resposta. */
+export async function pedirAtendente(conversaId: string): Promise<EnvioState> {
+  const c = await conversaDoCliente(conversaId)
+  if (!c) return { ok: false, erro: "Conversa não encontrada." }
+  const { admin } = c
+
+  if (c.status === "ia") {
     await admin
       .from("suporte_conversas")
-      .update({ status: "aguardando_humano" })
+      .update({
+        status: "aguardando_humano",
+        ultima_msg_em: new Date().toISOString(),
+        lida_equipe_em: null,
+      })
       .eq("id", conversaId)
     await admin.from("suporte_mensagens").insert({
       conversa_id: conversaId,
-      autor: "ia",
+      autor: "ajuda",
       texto:
-        "Acho melhor alguém da equipe olhar isso com calma. Já passei sua conversa — a resposta chega aqui mesmo, pode fechar o chat que a gente te avisa.",
+        "Certo, vou chamar alguém da equipe. Você recebe a resposta aqui mesmo — pode fechar o chat que a gente te avisa.",
     })
-    await chamarEquipe(true)
-    revalidatePath("/suporte")
-    return { ok: true, conversa: (await abrirConversa()) ?? undefined }
-  }
-
-  // Conversa que já é de gente: a IA não entra e a equipe precisa saber que o
-  // cliente falou de novo. Sem isto, quem respondeu fica esperando um sinal que
-  // nunca vem e a conversa morre do nosso lado.
-  if (c.status !== "ia") await chamarEquipe(false)
-
-  // IA fora do ar (chave ausente) NÃO pode virar buraco negro: sem isto a
-  // mensagem ficava gravada, ninguém respondia e ninguém era avisado — o
-  // cliente falando sozinho com uma tela. Vai direto pra fila da equipe.
-  if (c.status === "ia" && !isAnthropicConfigured()) {
-    await admin
-      .from("suporte_conversas")
-      .update({ status: "aguardando_humano" })
-      .eq("id", conversaId)
-    await admin.from("suporte_mensagens").insert({
-      conversa_id: conversaId,
-      autor: "ia",
-      texto:
-        "Recebi sua mensagem e já chamei alguém da equipe. A resposta chega aqui mesmo — pode fechar o chat que a gente te avisa.",
+    await avisarEquipe({
+      conversaId,
+      holdingId: c.holdingId,
+      texto: "Pediu pra falar com uma pessoa.",
+      escalouAgora: true,
+      lidaEquipeEm: c.lida_equipe_em,
     })
-    await chamarEquipe(true)
-    revalidatePath("/suporte")
-    return { ok: true, conversa: (await abrirConversa()) ?? undefined }
-  }
-
-  // Com humano na conversa, a IA CALA. Duas vozes respondendo a mesma pessoa é
-  // pior que nenhuma — e a equipe já viu o histórico.
-  if (c.status === "ia" && isAnthropicConfigured()) {
-    try {
-      const raioX = await montarRaioX(holdingId)
-      const { data: hist } = await admin
-        .from("suporte_mensagens")
-        .select("autor, texto")
-        .eq("conversa_id", conversaId)
-        .order("criada_em")
-        .limit(20)
-      const conversa = ((hist ?? []) as { autor: string; texto: string }[])
-        .map((m) => `${m.autor === "cliente" ? "Cliente" : "Suporte"}: ${m.texto}`)
-        .join("\n")
-
-      const bruta = await askClaude({
-        system: instrucoes(raioX),
-        user: conversa,
-        maxTokens: 700,
-      })
-      // Na ÚLTIMA pergunta do teto, responde e já chama gente junto: deixar o
-      // cliente descobrir o limite só na tentativa seguinte seria fazê-lo
-      // escrever mais uma vez à toa.
-      const escalar = bruta.includes(PEDIU_HUMANO) || jaPerguntou >= MAX_PERGUNTAS_IA
-      const limpa = bruta.replaceAll(PEDIU_HUMANO, "").trim()
-
-      await admin.from("suporte_mensagens").insert({
-        conversa_id: conversaId,
-        autor: "ia",
-        texto: limpa,
-        raio_x: raioX,
-      })
-      if (escalar) {
-        await admin
-          .from("suporte_conversas")
-          .update({ status: "aguardando_humano" })
-          .eq("id", conversaId)
-        await chamarEquipe(true)
-      }
-    } catch (e) {
-      // A IA falhar NÃO pode engolir a mensagem do cliente: ela já está
-      // gravada. Sobe pra humano, que é o comportamento seguro.
-      console.error("suporte: IA", e)
-      await admin
-        .from("suporte_conversas")
-        .update({ status: "aguardando_humano" })
-        .eq("id", conversaId)
-      await chamarEquipe(true)
-    }
   }
 
   revalidatePath("/suporte")
-  const atualizada = await abrirConversa()
-  return { ok: true, conversa: atualizada ?? undefined }
-}
-
-/** O cliente pede gente, sem passar pela IA. */
-export async function pedirAtendente(conversaId: string): Promise<EnvioState> {
-  const holdingId = await getCurrentHoldingId()
-  if (!holdingId) return { ok: false, erro: "Sessão expirada." }
-  const admin = createAdminClient()
-  const { data: conv } = await admin
-    .from("suporte_conversas")
-    .select("holding_id, lida_equipe_em")
-    .eq("id", conversaId)
-    .maybeSingle()
-  const c = conv as { holding_id: string; lida_equipe_em: string | null } | null
-  if (c?.holding_id !== holdingId) {
-    return { ok: false, erro: "Conversa não encontrada." }
-  }
-  await admin
-    .from("suporte_conversas")
-    .update({ status: "aguardando_humano", lida_equipe_em: null })
-    .eq("id", conversaId)
-  await admin.from("suporte_mensagens").insert({
-    conversa_id: conversaId,
-    autor: "ia",
-    texto:
-      "Certo, vou chamar alguém da equipe. Você recebe a resposta aqui mesmo — pode fechar o chat que a gente te avisa.",
-  })
-  await avisarEquipe({
-    conversaId,
-    holdingId,
-    texto: "Pediu pra falar com uma pessoa.",
-    escalouAgora: true,
-    lidaEquipeEm: c.lida_equipe_em,
-  })
   return { ok: true, conversa: (await abrirConversa()) ?? undefined }
 }

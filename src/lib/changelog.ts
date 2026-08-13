@@ -54,17 +54,17 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "novo",
-            title: "Pergunte pelo balão, no canto da tela",
+            title: "Escolha o assunto no balão, no canto da tela",
             antes:
               "Dúvida sobre uma loja que não conectou virava mensagem no WhatsApp, e a resposta dependia de alguém estar disponível.",
             depois:
-              "O balão responde lendo a SUA conta: quais lojas estão conectadas, quais estão esperando o iFood liberar e até que dia entrou dado em cada uma.",
+              "O balão abre com os assuntos separados. As respostas sobre a sua conta vêm com os dados reais: o nome de cada loja, como ela está conectada e até que dia entrou movimento.",
           },
           {
             kind: "novo",
-            title: "Quando não souber, chama gente",
+            title: "O que a lista não cobre vai direto pra uma pessoa",
             desc:
-              "Qualquer coisa sobre valor, erro específico ou pedido de mudança vai direto pra uma pessoa da equipe — com a sua conversa já na mão. Você também pode pedir isso a qualquer momento.",
+              "Escreva a dúvida no campo do fim e ela entra na fila da equipe na hora — sem resposta automática tentando adivinhar. Você também pode pedir uma pessoa a qualquer momento.",
           },
           {
             kind: "novo",

@@ -23,7 +23,7 @@ export type ChamadoResumo = {
   status: "ia" | "aguardando_humano" | "com_humano" | "resolvida"
   ultimaMsgEm: string
   ultimoTexto: string | null
-  ultimoAutor: "cliente" | "ia" | "equipe" | null
+  ultimoAutor: "cliente" | "ia" | "ajuda" | "equipe" | null
   /** Cliente escreveu e ninguém da equipe leu depois disso. */
   naoLida: boolean
   mensagens: number
@@ -35,7 +35,7 @@ export type ChamadoDetalhe = {
   status: ChamadoResumo["status"]
   mensagens: {
     id: string
-    autor: "cliente" | "ia" | "equipe"
+    autor: "cliente" | "ia" | "ajuda" | "equipe"
     texto: string
     criadaEm: string
   }[]
@@ -165,7 +165,7 @@ export async function abrirChamado(id: string): Promise<ChamadoDetalhe | null> {
     status: c.status,
     mensagens: ((msgs ?? []) as {
       id: string
-      autor: "cliente" | "ia" | "equipe"
+      autor: "cliente" | "ia" | "ajuda" | "equipe"
       texto: string
       criada_em: string
     }[]).map((m) => ({

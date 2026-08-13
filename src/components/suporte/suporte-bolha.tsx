@@ -1,13 +1,24 @@
 "use client"
 
 import * as React from "react"
-import { Headset, Loader2, MessageCircle, Send, User, X } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  Headset,
+  Loader2,
+  MessageCircle,
+  Send,
+  User,
+  X,
+} from "lucide-react"
 
 import { DeliveryOsMark } from "@/components/delivery-os-logo"
+import { CATEGORIAS, type Categoria } from "@/lib/suporte/ajuda"
 import {
   abrirConversa,
   enviarMensagem,
   pedirAtendente,
+  responderDoCatalogo,
   temRespostaNova,
   type ConversaSuporte,
 } from "@/app/(app)/_actions-suporte"
@@ -16,20 +27,27 @@ import {
  * Balão de suporte, canto inferior direito — o mesmo lugar onde todo mundo já
  * procura ajuda.
  *
+ * Abre numa LISTA DE CATEGORIAS, não num campo de texto em branco. Campo vazio
+ * transfere pro cliente o trabalho de adivinhar o que dá pra perguntar; a
+ * lista mostra. E cada resposta clicada é escrita por gente — as que dependem
+ * da conta continuam vindo do banco, com o nome das lojas e as datas.
+ *
+ * O campo de texto continua existindo, no fim, pro que a lista não cobre. Só
+ * que ele não tenta responder: vai direto pra fila da equipe.
+ *
  * A conversa só é criada quando a pessoa ABRE o balão, não quando a página
- * carrega: senão cada visita abriria um chamado vazio e a fila da equipe
- * encheria de conversa sem pergunta.
+ * carrega: senão cada visita abriria um chamado vazio.
  */
 export function SuporteBolha() {
   const [aberto, setAberto] = React.useState(false)
   const [conversa, setConversa] = React.useState<ConversaSuporte | null>(null)
+  const [categoria, setCategoria] = React.useState<Categoria | null>(null)
   const [texto, setTexto] = React.useState("")
   const [carregando, setCarregando] = React.useState(false)
   const [enviando, setEnviando] = React.useState(false)
   const [erro, setErro] = React.useState<string | null>(null)
-  const fim = React.useRef<HTMLDivElement>(null)
-
   const [temNova, setTemNova] = React.useState(false)
+  const fim = React.useRef<HTMLDivElement>(null)
 
   /**
    * Selo de resposta nova no balão fechado.
@@ -70,6 +88,31 @@ export function SuporteBolha() {
     fim.current?.scrollIntoView({ behavior: "smooth" })
   }, [conversa?.mensagens.length, enviando])
 
+  async function clicarPergunta(perguntaId: string, titulo: string) {
+    if (!conversa || enviando) return
+    setErro(null)
+    setEnviando(true)
+    setCategoria(null)
+    // Otimista: a pergunta aparece na hora. A resposta com dado da conta leva
+    // um instante, e a tela parada nesse meio-tempo lê como clique perdido.
+    setConversa({
+      ...conversa,
+      mensagens: [
+        ...conversa.mensagens,
+        {
+          id: `tmp-${Date.now()}`,
+          autor: "cliente",
+          texto: titulo,
+          criadaEm: new Date().toISOString(),
+        },
+      ],
+    })
+    const r = await responderDoCatalogo(conversa.id, perguntaId)
+    setEnviando(false)
+    if (!r.ok) return setErro(r.erro ?? "Não consegui buscar a resposta.")
+    if (r.conversa) setConversa(r.conversa)
+  }
+
   /**
    * Não recebe evento de propósito: quem chama decide se precisa de
    * `preventDefault`. A versão anterior fazia o atalho de teclado chamar isto
@@ -83,14 +126,17 @@ export function SuporteBolha() {
     setTexto("")
     setErro(null)
     setEnviando(true)
-    // Otimista: a mensagem aparece na hora. A resposta da IA leva alguns
-    // segundos, e ver o próprio texto sumir nesse meio-tempo dá a impressão
-    // de que não enviou.
+    setCategoria(null)
     setConversa({
       ...conversa,
       mensagens: [
         ...conversa.mensagens,
-        { id: `tmp-${Date.now()}`, autor: "cliente", texto: msg, criadaEm: new Date().toISOString() },
+        {
+          id: `tmp-${Date.now()}`,
+          autor: "cliente",
+          texto: msg,
+          criadaEm: new Date().toISOString(),
+        },
       ],
     })
     const r = await enviarMensagem(conversa.id, msg)
@@ -103,16 +149,18 @@ export function SuporteBolha() {
     if (r.conversa) setConversa(r.conversa)
   }
 
-  async function chamarGente() {
+  async function chamarPessoa() {
     if (!conversa || enviando) return
     setEnviando(true)
+    setCategoria(null)
     const r = await pedirAtendente(conversa.id)
     setEnviando(false)
     if (r.conversa) setConversa(r.conversa)
   }
 
-  const comHumano =
-    conversa?.status === "aguardando_humano" || conversa?.status === "com_humano"
+  const naFila = conversa?.status === "aguardando_humano"
+  const comHumano = naFila || conversa?.status === "com_humano"
+  const vazia = !conversa || conversa.mensagens.length === 0
 
   if (!aberto) {
     return (
@@ -139,7 +187,9 @@ export function SuporteBolha() {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight">Suporte</p>
           <p className="text-[11px] text-muted-foreground">
-            {comHumano ? "Alguém da equipe vai responder aqui" : "Resposta na hora"}
+            {comHumano
+              ? "Alguém da equipe vai responder aqui"
+              : "Central de ajuda"}
           </p>
         </div>
         <button
@@ -159,29 +209,11 @@ export function SuporteBolha() {
           </div>
         )}
 
-        {!carregando && conversa?.mensagens.length === 0 && (
-          <div className="py-4 text-center">
-            <p className="text-sm font-medium">Como posso ajudar?</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Eu enxergo suas lojas e conexões agora — pergunte à vontade.
-            </p>
-            <div className="mt-3 flex flex-col gap-1.5">
-              {[
-                "Minhas lojas estão conectadas?",
-                "Até que dia entrou faturamento?",
-                "Por que uma loja não conecta?",
-              ].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setTexto(s)}
-                  className="rounded-lg border px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+        {!carregando && vazia && !categoria && (
+          <p className="pb-1 pt-2 text-center text-xs text-muted-foreground">
+            Escolha um assunto. As respostas sobre a sua conta vêm com os dados
+            reais das suas lojas.
+          </p>
         )}
 
         {conversa?.mensagens.map((m) => (
@@ -225,11 +257,71 @@ export function SuporteBolha() {
         {enviando && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />
-            conferindo seus dados...
+            buscando a resposta...
           </div>
         )}
         <div ref={fim} />
       </div>
+
+      {/* Catálogo. Some quando a conversa já é de gente: oferecer resposta
+          pronta a quem está esperando um humano lê como enrolação. */}
+      {!carregando && !comHumano && (
+        <div className="border-t bg-muted/20 px-3 py-2.5">
+          {!categoria ? (
+            <div className="flex flex-col gap-1">
+              {CATEGORIAS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCategoria(c)}
+                  className="flex items-center gap-2 rounded-lg border bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium leading-tight">
+                      {c.titulo}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {c.resumo}
+                    </span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => setCategoria(null)}
+                className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ChevronLeft className="size-3.5" />
+                {categoria.titulo}
+              </button>
+              {categoria.perguntas.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => void clicarPergunta(p.id, p.titulo)}
+                  className="rounded-lg border bg-card px-2.5 py-2 text-left text-[13px] leading-snug transition-colors hover:bg-muted"
+                >
+                  {p.titulo}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Sempre visível: a saída pra gente não pode depender de achar a
+              categoria certa primeiro. */}
+          <button
+            type="button"
+            onClick={() => void chamarPessoa()}
+            className="mt-1.5 w-full rounded-lg px-2 py-1.5 text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+          >
+            Não achei o que preciso — falar com uma pessoa
+          </button>
+        </div>
+      )}
 
       {erro && (
         <p className="border-t bg-rose-50 px-4 py-1.5 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
@@ -237,7 +329,7 @@ export function SuporteBolha() {
         </p>
       )}
 
-      {conversa?.status === "aguardando_humano" && (
+      {naFila && (
         <p className="border-t bg-sky-50 px-4 py-1.5 text-[11px] text-sky-800 dark:bg-sky-950/30 dark:text-sky-300">
           Na fila da equipe. Pode fechar o chat — a gente te avisa.
         </p>
@@ -260,7 +352,9 @@ export function SuporteBolha() {
             }
           }}
           rows={1}
-          placeholder="Escreva sua dúvida..."
+          placeholder={
+            comHumano ? "Escreva pra equipe..." : "Ou escreva sua dúvida..."
+          }
           className="max-h-24 min-h-[38px] flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground focus:border-ring"
         />
         <button
@@ -272,17 +366,6 @@ export function SuporteBolha() {
           <Send className="size-4" />
         </button>
       </form>
-
-      {!comHumano && conversa && (
-        <button
-          type="button"
-          onClick={chamarGente}
-          disabled={enviando}
-          className="border-t px-4 py-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-        >
-          Prefiro falar com uma pessoa
-        </button>
-      )}
     </div>
   )
 }

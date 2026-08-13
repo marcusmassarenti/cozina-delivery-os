@@ -292,17 +292,23 @@ export function PainelChamados({ inicial }: { inicial: ChamadoResumo[] }) {
                     className={`max-w-[75%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
                       m.autor === "equipe"
                         ? "bg-primary text-primary-foreground"
-                        : m.autor === "ia"
-                          ? "bg-muted"
-                          : "border bg-background"
+                        : m.autor === "cliente"
+                          ? "border bg-background"
+                          : "bg-muted"
                     }`}
                   >
+                    {/* A origem tem que ser literal. "Ajuda" é resposta pronta
+                        do catálogo; "IA" só existe no histórico de antes da
+                        virada. Rotular errado esconde justamente a informação
+                        que importa quando uma resposta sai errada. */}
                     <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wider opacity-60">
                       {m.autor === "cliente"
                         ? "Cliente"
-                        : m.autor === "ia"
-                          ? "IA"
-                          : "Você"}{" "}
+                        : m.autor === "ajuda"
+                          ? "Ajuda"
+                          : m.autor === "ia"
+                            ? "IA"
+                            : "Você"}{" "}
                       · {quando(m.criadaEm)}
                     </span>
                     {m.texto}
