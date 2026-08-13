@@ -27,6 +27,7 @@ export function LojaFilter({
   const urlKey = fromUrl.join(",")
 
   const [open, setOpen] = React.useState(false)
+  const [busca, setBusca] = React.useState("")
   const [sel, setSel] = React.useState<Set<string>>(new Set(fromUrl))
 
   // Resync se a URL mudar por fora (voltar/avançar do navegador).
@@ -57,6 +58,19 @@ export function LojaFilter({
       : sel.size === 1
         ? "1 loja"
         : `${sel.size} lojas`
+
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+  const filtradas = React.useMemo(() => {
+    const q = norm(busca.trim())
+    if (!q) return units
+    return units.filter(
+      (u) => norm(u.name).includes(q) || u.code.toLowerCase().includes(q),
+    )
+  }, [units, busca])
 
   return (
     <div className="relative">
@@ -91,8 +105,26 @@ export function LojaFilter({
                 Selecionar todas
               </button>
             </div>
+            {/* Busca só quando a lista justifica: 56 lojas viram caçada, 3
+                não. Nome OU código, sem acento e sem caixa. */}
+            {units.length > 8 && (
+              <div className="border-b p-1.5">
+                <input
+                  autoFocus
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar loja por nome ou código..."
+                  className="h-8 w-full rounded-md border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+                />
+              </div>
+            )}
             <div className="flex-1 overflow-auto p-1">
-              {units.map((u) => {
+              {filtradas.length === 0 && (
+                <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                  Nenhuma loja com “{busca}”.
+                </p>
+              )}
+              {filtradas.map((u) => {
                 const on = sel.has(u.code)
                 return (
                   <button

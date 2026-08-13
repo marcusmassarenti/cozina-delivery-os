@@ -259,12 +259,15 @@ export function DadosDaUnidade({
           className={inputCls}
         />
       </Campo>
+      {/* OPCIONAL de propósito: muita loja de rede é tocada por gerente sem
+          e-mail próprio, e o obrigatório travava o cadastro inteiro no 14º
+          campo — depois de a pessoa já ter preenchido os outros 13. */}
       <Campo label="E-mail do responsável" span={4}>
         <input
           name="responsavel_email"
-            required
           type="email"
           defaultValue={perfil?.responsavelEmail ?? ""}
+          placeholder="opcional"
           className={inputCls}
         />
       </Campo>

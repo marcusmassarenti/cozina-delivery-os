@@ -142,7 +142,12 @@ async function aplicarCadastroExigente(
     ["cep", "cep", "CEP obrigatório"],
     ["telefone", "telefone", "Telefone obrigatório"],
     ["responsavel_nome", "responsavel_nome", "Responsável obrigatório"],
-    ["responsavel_email", "responsavel_email", "E-mail do responsável obrigatório"],
+    // E-MAIL DO RESPONSÁVEL É OPCIONAL de propósito, junto do complemento.
+    // Muita loja de rede é tocada por um gerente que não tem e-mail próprio, e
+    // o cadastro travava inteiro por causa disso — a pessoa preenchia 13
+    // campos, esbarrava no 14º e desistia de salvar o resto. Quando existe,
+    // ele é útil (aviso de conexão, resumo semanal); quando não existe, o
+    // obrigatório só produzia "nao@tem.com".
     ["tipo_operacao", "tipo_operacao", "Modelo da unidade obrigatório"],
     ["regime_fiscal", "regime_fiscal", "Regime fiscal obrigatório"],
     ["tipo_entrega", "tipo_entrega", "Informe quem entrega"],

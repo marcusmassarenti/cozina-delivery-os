@@ -93,6 +93,23 @@ export function DashboardFilters({
   const unitsCount = unidadesSelected.length
   const allSelected = unitsCount === 0 || unitsCount === unitOptions.length
 
+  // Busca por nome OU código: quem tem 56 lojas decora o número de algumas e o
+  // nome de outras. Sem acento e sem caixa, senão "Açaí" só acha quem digita a
+  // cedilha certa.
+  const [buscaUnidade, setBuscaUnidade] = React.useState("")
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+  const unitOptionsFiltradas = React.useMemo(() => {
+    const q = norm(buscaUnidade.trim())
+    if (!q) return unitOptions
+    return unitOptions.filter(
+      (u) => norm(u.name).includes(q) || u.code.toLowerCase().includes(q),
+    )
+  }, [unitOptions, buscaUnidade])
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Toggle: com faturamento */}
@@ -146,8 +163,28 @@ export function DashboardFilters({
                 </button>
               )}
             </div>
+            {/* Busca: a DG FOODS tem 56 lojas, e achar a #30 numa lista
+                rolável é caçar. Aparece só quando a rede é grande o bastante
+                pra justificar — em quem tem 3 lojas, o campo seria só mais
+                uma coisa na tela. */}
+            {unitOptions.length > 8 && (
+              <div className="border-b px-2 py-2">
+                <input
+                  autoFocus
+                  value={buscaUnidade}
+                  onChange={(e) => setBuscaUnidade(e.target.value)}
+                  placeholder="Buscar loja por nome ou código..."
+                  className="h-8 w-full rounded-md border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+                />
+              </div>
+            )}
             <div className="max-h-64 overflow-y-auto py-1">
-              {unitOptions.map((u) => {
+              {unitOptionsFiltradas.length === 0 && (
+                <p className="px-3 py-3 text-center text-[11px] text-muted-foreground">
+                  Nenhuma loja com “{buscaUnidade}”.
+                </p>
+              )}
+              {unitOptionsFiltradas.map((u) => {
                 const checked = unidadesSelected.includes(u.code)
                 return (
                   <button

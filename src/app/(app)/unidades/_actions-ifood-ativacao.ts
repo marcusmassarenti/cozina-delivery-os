@@ -275,22 +275,32 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     units: { code: string; name: string } | null
   }[])
 
-  // Quais dessas lojas JÁ têm lançamento do iFood. Uma consulta pro lote todo,
-  // não uma por loja: a DG FOODS abre esta tela com 47 solicitações.
+  // Quais dessas lojas JÁ têm lançamento do iFood.
   //
-  // `head: true` + `limit(1)` por loja seria 47 idas ao banco; aqui vem o
-  // conjunto de unit_ids que têm ao menos uma linha, de uma vez. O `distinct`
-  // não existe no PostgREST, então o Set em memória faz esse papel — e a
-  // consulta é barata porque só devolve a coluna do índice.
+  // ⚠️ NÃO DÁ PRA FAZER ISSO LENDO AS LINHAS. A primeira versão era
+  // `select unit_id ... in(lista) limit 2000` montando um Set: as 2.000
+  // primeiras linhas da DG FOODS (651.809 no total) cobriam DUAS lojas, e as
+  // outras 45 — sincronizando há meses — apareciam no dashboard dela como
+  // "Buscando os dados de 45 lojas no iFood…". Sem `distinct` no PostgREST,
+  // qualquer limite escolhido aqui é um número que mente numa rede grande.
+  //
+  // O `distinct` mora no banco (migration 0192): uma ida, resposta exata, e o
+  // tamanho da resposta é o número de LOJAS, não o de lançamentos.
   const comDado = new Set<string>()
   const ativas = linhas.filter((s) => s.status === "ativa").map((s) => s.unit_id)
   if (ativas.length > 0) {
-    const { data: cds } = await db
-      .from("ifood_financeiro_lancamentos")
-      .select("unit_id")
-      .in("unit_id", ativas)
-      .limit(2000)
-    for (const r of (cds ?? []) as { unit_id: string }[]) comDado.add(r.unit_id)
+    const { data: cds, error } = await db.rpc("unidades_com_dado_ifood", {
+      p_unit_ids: ativas,
+    })
+    // Falhar aqui NÃO pode inventar "sem dado": isso acenderia o aviso de
+    // sincronização em loja que já recebe. Na dúvida, trata como recebendo —
+    // o pior caso vira uma comemoração a mais, não um alarme falso.
+    if (error) {
+      console.error("unidades_com_dado_ifood:", error.message)
+      for (const id of ativas) comDado.add(id)
+    } else {
+      for (const r of (cds ?? []) as unknown as string[]) comDado.add(r)
+    }
   }
 
   return linhas.map((s) => ({

@@ -36,7 +36,9 @@ const CAMPOS_TEXTO = [
   "cep",
   "telefone",
   "responsavel_nome",
-  "responsavel_email",
+  // `responsavel_email` saiu daqui junto com o `required` do formulário: campo
+  // opcional não pode continuar contando como lacuna, senão a loja fica
+  // eternamente "incompleta" por algo que o sistema não pede mais.
   "tipo_operacao",
   "regime_fiscal",
   "tipo_entrega",
