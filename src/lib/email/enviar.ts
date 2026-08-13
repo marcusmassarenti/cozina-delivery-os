@@ -114,6 +114,19 @@ export type TipoEmail =
   | "ifood-aprovacao-confirmada"
   /** Cliente pediu a conexão do 99 Food. Interno, um por loja — `forcar`. */
   | "ninefood-solicitacao"
+  /**
+   * Chamado do chat de suporte esperando gente. INTERNO e sempre com
+   * `forcar: true` — vários chamados por dia são o funcionamento normal, e a
+   * trava padrão entregaria o primeiro e engoliria todos os outros.
+   *
+   * Só sai quando o push NÃO alcançou ninguém: é socorro, não cópia.
+   */
+  | "suporte-chamado"
+  /**
+   * "Respondemos seu chamado." Mesmo raciocínio, do outro lado: um cliente
+   * abre vários chamados ao longo do tempo e cada um merece a sua resposta.
+   */
+  | "suporte-resposta"
 
 export type ResultadoEnvio = {
   ok: boolean

@@ -8,6 +8,7 @@ import {
   abrirConversa,
   enviarMensagem,
   pedirAtendente,
+  temRespostaNova,
   type ConversaSuporte,
 } from "@/app/(app)/_actions-suporte"
 
@@ -27,6 +28,35 @@ export function SuporteBolha() {
   const [enviando, setEnviando] = React.useState(false)
   const [erro, setErro] = React.useState<string | null>(null)
   const fim = React.useRef<HTMLDivElement>(null)
+
+  const [temNova, setTemNova] = React.useState(false)
+
+  /**
+   * Selo de resposta nova no balão fechado.
+   *
+   * Confere ao montar e ao voltar pra aba — não em intervalo. Aba aberta e
+   * esquecida a tarde inteira custaria CPU na Vercel pra perguntar a mesma
+   * coisa; o momento em que a pessoa VOLTA é quando a resposta importa.
+   */
+  React.useEffect(() => {
+    if (aberto) return
+    const conferir = () => {
+      if (document.visibilityState === "visible") {
+        void temRespostaNova().then(setTemNova)
+      }
+    }
+    conferir()
+    document.addEventListener("visibilitychange", conferir)
+    return () => document.removeEventListener("visibilitychange", conferir)
+  }, [aberto])
+
+  // O aviso (push ou e-mail) leva pra cá com ?suporte=1 — abrir o sistema e
+  // ainda ter que procurar o balão desfaz metade do favor.
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("suporte") === "1") {
+      setAberto(true)
+    }
+  }, [])
 
   React.useEffect(() => {
     if (!aberto || conversa) return
@@ -83,10 +113,15 @@ export function SuporteBolha() {
       <button
         type="button"
         onClick={() => setAberto(true)}
-        aria-label="Abrir suporte"
+        aria-label={temNova ? "Abrir suporte (resposta nova)" : "Abrir suporte"}
         className="btn-brand fixed bottom-5 right-5 z-50 flex size-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105"
       >
         <MessageCircle className="size-6" />
+        {temNova && (
+          <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-rose-500 ring-2 ring-background">
+            <span className="size-1.5 rounded-full bg-white" />
+          </span>
+        )}
       </button>
     )
   }

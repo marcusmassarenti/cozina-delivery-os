@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { montarRaioX, type RaioX } from "@/lib/data/suporte-raio-x"
+import { avisarCliente } from "@/lib/suporte/avisos"
 
 export type ChamadoResumo = {
   id: string
@@ -194,6 +195,19 @@ export async function responderChamado(
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
 
+  // Lido ANTES de gravar: gravar zera `lida_cliente_em`, e é justamente o
+  // valor antigo que diz se o cliente está com o chat aberto agora.
+  const { data: conv } = await admin
+    .from("suporte_conversas")
+    .select("holding_id, aberta_por, lida_cliente_em")
+    .eq("id", id)
+    .maybeSingle()
+  const c = conv as {
+    holding_id: string
+    aberta_por: string | null
+    lida_cliente_em: string | null
+  } | null
+
   await admin.from("suporte_mensagens").insert({
     conversa_id: id,
     autor: "equipe",
@@ -210,6 +224,19 @@ export async function responderChamado(
       lida_cliente_em: null,
     })
     .eq("id", id)
+
+  // O cliente pode estar com o sistema fechado. Sem este aviso, a resposta
+  // fica esperando ele abrir o painel por acaso — que é exatamente o motivo
+  // pelo qual todo mundo prefere o WhatsApp.
+  if (c) {
+    await avisarCliente({
+      conversaId: id,
+      holdingId: c.holding_id,
+      texto: msg,
+      abertaPor: c.aberta_por,
+      lidaClienteEm: c.lida_cliente_em,
+    })
+  }
 
   revalidatePath("/suporte")
   return { ok: true }

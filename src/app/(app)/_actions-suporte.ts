@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { askClaude, isAnthropicConfigured } from "@/lib/anthropic/client"
 import { montarRaioX, type RaioX } from "@/lib/data/suporte-raio-x"
+import { avisarEquipe } from "@/lib/suporte/avisos"
 
 export type MensagemSuporte = {
   id: string
@@ -121,6 +122,13 @@ export async function abrirConversa(): Promise<ConversaSuporte | null> {
     .eq("conversa_id", id)
     .order("criada_em")
 
+  // Abriu o balão = leu. É o que apaga o selo de resposta nova e o que faz o
+  // aviso de push segurar enquanto a pessoa está com a conversa na frente.
+  await admin
+    .from("suporte_conversas")
+    .update({ lida_cliente_em: new Date().toISOString() })
+    .eq("id", id)
+
   return {
     id,
     status,
@@ -136,6 +144,36 @@ export async function abrirConversa(): Promise<ConversaSuporte | null> {
       criadaEm: m.criada_em,
     })),
   }
+}
+
+/**
+ * Tem resposta da equipe que o cliente ainda não viu?
+ *
+ * Sem isto o único sinal de resposta é o push — e quem negou a permissão de
+ * notificação, ou dispensou o aviso, não teria nenhum. É uma consulta de duas
+ * colunas, chamada ao montar e ao voltar pra aba: barato o bastante pra não
+ * virar polling.
+ */
+export async function temRespostaNova(): Promise<boolean> {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return false
+  const { data } = await createAdminClient()
+    .from("suporte_conversas")
+    .select("ultima_msg_em, lida_cliente_em")
+    .eq("holding_id", holdingId)
+    .neq("status", "resolvida")
+    .order("ultima_msg_em", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const c = data as {
+    ultima_msg_em: string
+    lida_cliente_em: string | null
+  } | null
+  if (!c) return false
+  return (
+    !c.lida_cliente_em ||
+    Date.parse(c.lida_cliente_em) < Date.parse(c.ultima_msg_em)
+  )
 }
 
 export type EnvioState = { ok: boolean; conversa?: ConversaSuporte; erro?: string }
@@ -157,11 +195,25 @@ export async function enviarMensagem(
   // requisição viraria a porta pra escrever no chat de outro cliente.
   const { data: conv } = await admin
     .from("suporte_conversas")
-    .select("id, status, holding_id")
+    .select("id, status, holding_id, lida_equipe_em")
     .eq("id", conversaId)
     .maybeSingle()
-  const c = conv as { status: ConversaSuporte["status"]; holding_id: string } | null
+  const c = conv as {
+    status: ConversaSuporte["status"]
+    holding_id: string
+    lida_equipe_em: string | null
+  } | null
   if (!c || c.holding_id !== holdingId) return { ok: false, erro: "Conversa não encontrada." }
+
+  /** Chama a equipe. `escalou` = acabou de virar caso de gente. */
+  const chamarEquipe = (escalou: boolean) =>
+    avisarEquipe({
+      conversaId,
+      holdingId,
+      texto: msg,
+      escalouAgora: escalou,
+      lidaEquipeEm: c.lida_equipe_em,
+    })
 
   await admin.from("suporte_mensagens").insert({
     conversa_id: conversaId,
@@ -171,7 +223,15 @@ export async function enviarMensagem(
   })
   await admin
     .from("suporte_conversas")
-    .update({ ultima_msg_em: new Date().toISOString(), lida_equipe_em: null })
+    .update({
+      ultima_msg_em: new Date().toISOString(),
+      lida_equipe_em: null,
+      // O cliente acabou de escrever: ele está com o chat aberto. Marcar como
+      // lido aqui é o que impede a própria mensagem dele de acender o selo de
+      // "tem resposta nova" — e o que segura o push de uma resposta que ele vai
+      // ler na tela, sem sair do lugar.
+      lida_cliente_em: new Date().toISOString(),
+    })
     .eq("id", conversaId)
 
   // Quantas vezes o cliente já perguntou (incluindo a de agora).
@@ -195,9 +255,15 @@ export async function enviarMensagem(
       texto:
         "Acho melhor alguém da equipe olhar isso com calma. Já passei sua conversa — a resposta chega aqui mesmo, pode fechar o chat que a gente te avisa.",
     })
+    await chamarEquipe(true)
     revalidatePath("/suporte")
     return { ok: true, conversa: (await abrirConversa()) ?? undefined }
   }
+
+  // Conversa que já é de gente: a IA não entra e a equipe precisa saber que o
+  // cliente falou de novo. Sem isto, quem respondeu fica esperando um sinal que
+  // nunca vem e a conversa morre do nosso lado.
+  if (c.status !== "ia") await chamarEquipe(false)
 
   // Com humano na conversa, a IA CALA. Duas vozes respondendo a mesma pessoa é
   // pior que nenhuma — e a equipe já viu o histórico.
@@ -236,6 +302,7 @@ export async function enviarMensagem(
           .from("suporte_conversas")
           .update({ status: "aguardando_humano" })
           .eq("id", conversaId)
+        await chamarEquipe(true)
       }
     } catch (e) {
       // A IA falhar NÃO pode engolir a mensagem do cliente: ela já está
@@ -245,6 +312,7 @@ export async function enviarMensagem(
         .from("suporte_conversas")
         .update({ status: "aguardando_humano" })
         .eq("id", conversaId)
+      await chamarEquipe(true)
     }
   }
 
@@ -260,10 +328,11 @@ export async function pedirAtendente(conversaId: string): Promise<EnvioState> {
   const admin = createAdminClient()
   const { data: conv } = await admin
     .from("suporte_conversas")
-    .select("holding_id")
+    .select("holding_id, lida_equipe_em")
     .eq("id", conversaId)
     .maybeSingle()
-  if ((conv as { holding_id: string } | null)?.holding_id !== holdingId) {
+  const c = conv as { holding_id: string; lida_equipe_em: string | null } | null
+  if (c?.holding_id !== holdingId) {
     return { ok: false, erro: "Conversa não encontrada." }
   }
   await admin
@@ -275,6 +344,13 @@ export async function pedirAtendente(conversaId: string): Promise<EnvioState> {
     autor: "ia",
     texto:
       "Certo, vou chamar alguém da equipe. Você recebe a resposta aqui mesmo — pode fechar o chat que a gente te avisa.",
+  })
+  await avisarEquipe({
+    conversaId,
+    holdingId,
+    texto: "Pediu pra falar com uma pessoa.",
+    escalouAgora: true,
+    lidaEquipeEm: c.lida_equipe_em,
   })
   return { ok: true, conversa: (await abrirConversa()) ?? undefined }
 }
