@@ -58,8 +58,12 @@ function coberturaNome(unitNome: string, merchant: IfoodMerchant): number {
 
 /** Nome bem coberto — usado só pra PRIORIZAR candidatos e detectar conflito. */
 const LIMIAR_AUTO = 0.8
-/** Teto de merchants testados por loja (cada teste baixa uma conciliação). */
-const MAX_TESTES_CNPJ = 3
+/**
+ * Teto de sondagens de CNPJ por loja. Cada sondagem pode baixar uma
+ * conciliação; contar a tentativa, e não só os CNPJs encontrados, impede que
+ * merchants novos sem extrato consumam toda a janela do cron.
+ */
+const MAX_SONDAGENS_CNPJ = 3
 
 /** Só dígitos — CNPJ vem mascarado num lado e cru no outro. */
 function soDigitos(v: string | null | undefined): string {
@@ -277,13 +281,16 @@ export async function autoLinkIfoodMerchants(
   // operação, nenhum valor.
   const { data: linkedRows } = await admin
     .from("unit_platforms")
-    .select("api_store_id")
+    .select("unit_id, api_store_id")
     .eq("platform", "ifood")
     .not("api_store_id", "is", null)
-  const jaVinculados = new Set(
+  const merchantsJaVinculados = new Set(
     (linkedRows ?? []).map((x) => x.api_store_id as string),
   )
-  const candidatos = merchants.filter((m) => !jaVinculados.has(m.id))
+  const unidadesJaVinculadas = new Set(
+    (linkedRows ?? []).map((x) => x.unit_id as string),
+  )
+  const candidatos = merchants.filter((m) => !merchantsJaVinculados.has(m.id))
 
   // CNPJ já descoberto de cada merchant, numa consulta só. Alimenta a passada
   // rápida abaixo — cada rodada anterior deixou aqui o que aprendeu baixando
@@ -331,9 +338,14 @@ export async function autoLinkIfoodMerchants(
     // razao_social vem junto: é uma das duas chaves de identidade pelo
     // `corporateName` do merchant (ver raizDoCorporateName).
     .select(
-      "unit_id, status, cnpj, units!inner(id, code, name, razao_social)",
+      "id, unit_id, status, cnpj, units!inner(id, code, name, razao_social)",
     )
     .in("status", ["pendente", "solicitada"])
+    // Uma solicitação que acabou de ser sondada vai para o fim da fila. Sem
+    // esta rotação, uma loja sem extrato pode consumir toda rodada de 15 min e
+    // deixar as seguintes esperando para sempre.
+    .order("last_auto_link_checked_at", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: true })
   if (restrictUnitIds) reqQ = reqQ.in("unit_id", restrictUnitIds)
   const { data: reqs, error: e1 } = await reqQ
   if (e1) {
@@ -348,6 +360,7 @@ export async function autoLinkIfoodMerchants(
   }
 
   const abertas = ((reqs ?? []) as unknown as {
+    id: string
     unit_id: string
     cnpj: string | null
     units: {
@@ -357,11 +370,23 @@ export async function autoLinkIfoodMerchants(
       /** Da Receita (import por CNPJ). Casa com o `corporateName` do merchant. */
       razao_social: string | null
     }
-  }[]).filter((row) => !jaVinculados.has(row.unit_id))
+  }[]).filter((row) => !unidadesJaVinculadas.has(row.unit_id))
 
   const vinculadas: AutoLinkResult["vinculadas"] = []
   const ambiguas: AutoLinkResult["ambiguas"] = []
   const usados = new Set<string>()
+
+  /** Registra a rodada mesmo quando não foi possível identificar a loja. */
+  async function marcarTentativa(requestId: string): Promise<void> {
+    const { error } = await admin
+      .from("ifood_activation_requests")
+      .update({ last_auto_link_checked_at: new Date().toISOString() })
+      .eq("id", requestId)
+    if (error) {
+      // A falha de telemetria não pode bloquear um vínculo que é seguro.
+      console.error("[auto-link] falhou ao registrar tentativa:", error.message)
+    }
+  }
 
   /** Vincula e marca a solicitação como ativa. Devolve false se o banco negou. */
   async function fechar(
@@ -487,6 +512,7 @@ export async function autoLinkIfoodMerchants(
   for (const row of pendentes) {
     if (semTempo()) break
     processadas++
+    await marcarTentativa(row.id)
     const cnpjPedido = soDigitos(row.cnpj)
     if (cnpjPedido.length !== 14) {
       ambiguas.push({
@@ -528,13 +554,15 @@ export async function autoLinkIfoodMerchants(
     // e só vincula quando bate com o CNPJ que o cliente pediu. É o que impede
     // trocar filiais de mesmo nome/raiz (ex.: 32.196.377/0001, /0002, /0003).
     let escolhido: { m: IfoodMerchant; score: number } | null = null
-    let testados = 0
+    let sondagens = 0
+    let cnpjsConfirmados = 0
     let conflito: string | null = null
     for (const cand of ordenados) {
-      if (testados >= MAX_TESTES_CNPJ) break
+      if (sondagens >= MAX_SONDAGENS_CNPJ) break
+      sondagens++
       const cnpjMerchant = await cnpjDoMerchant(cand.m.id, admin, sondadosAgora)
       if (!cnpjMerchant) continue // sem extrato pra verificar; tenta o próximo
-      testados++
+      cnpjsConfirmados++
       if (cnpjMerchant === cnpjPedido) {
         escolhido = cand
         break
@@ -589,9 +617,9 @@ export async function autoLinkIfoodMerchants(
          * duas causas em dez segundos. */
         (sumidoPorCnpj(sumidos, cnpjPedido)
           ? `Esta loja JÁ apareceu no iFood e sumiu da lista. Confira no Portal do Parceiro (aba Permissões, busque ${cnpjPedido}): se estiver "Aguardando Ativação", o lojista precisa aprovar de novo; se estiver "Ativo", o iFood parou de devolver a loja pra gente — aí é problema deles.`
-          : testados === 0
-            ? "Nenhum merchant candidato tem extrato pra confirmar o CNPJ ainda (loja sem movimento?)."
-            : `O iFood não devolve nenhuma loja com o CNPJ ${cnpjPedido}. Confira no Portal do Parceiro (aba Permissões, busque o CNPJ): "Aguardando Ativação" = falta o lojista aprovar; "Ativo" = está aprovado e o iFood não entrega — aí é problema deles.`),
+          : cnpjsConfirmados === 0
+            ? `A API devolveu merchants, mas nenhum dos ${sondagens} candidatos mais compatíveis trouxe conciliação para confirmar o CNPJ. Pode ser loja sem movimento; não vamos vincular sem prova.`
+            : `A API devolveu merchants, mas nenhum dos ${cnpjsConfirmados} CNPJs confirmados entre os ${sondagens} candidatos mais compatíveis bate com ${cnpjPedido}. Confira no Portal do Parceiro (aba Permissões, busque o CNPJ): se estiver "Ativo", envie este diagnóstico ao iFood.`),
     })
   }
 
