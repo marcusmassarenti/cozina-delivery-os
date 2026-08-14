@@ -2,7 +2,7 @@
 
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { Copy, Check, Undo2 } from "lucide-react"
+import { ChevronRight, Copy, Check, Undo2 } from "lucide-react"
 import * as React from "react"
 
 import { Button } from "@/components/ui/button"
@@ -546,8 +546,8 @@ export function SolicitacoesPanel({
           Portal do Desenvolvedor uma vez e despacha o lote dele inteiro. Solto,
           um lote de 14 lojas ficava intercalado com o de outro cliente e era
           impossível saber onde você tinha parado. */}
-      <Grupo titulo="Aguardando" itens={abertas} lojasDaRede={lojasDaRede} />
-      <Grupo titulo="Recusadas" itens={recusadas} lojasDaRede={lojasDaRede} />
+      <Grupo titulo="Aguardando" itens={abertas} lojasDaRede={lojasDaRede} busca={busca} />
+      <Grupo titulo="Recusadas" itens={recusadas} lojasDaRede={lojasDaRede} busca={busca} />
     </div>
   )
 }
@@ -561,10 +561,12 @@ function Grupo({
   titulo,
   itens,
   lojasDaRede,
+  busca,
 }: {
   titulo: string
   itens: SolicitacaoAdmin[]
   lojasDaRede: LojaDaRede[]
+  busca: string
 }) {
   if (itens.length === 0) return null
   const aguardando = titulo === "Aguardando"
@@ -601,8 +603,20 @@ function Grupo({
             const precisaDeVoce = conta("voce") + conta("confirmou")
 
             return (
-              <div key={cliente} className="rounded-lg border bg-background">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-2">
+              // Nasce FECHADO. Com 10 clientes e 500 lojas, abrir tudo é uma
+              // rolagem que não termina — e o cabeçalho já diz o que há dentro
+              // ("3 lojas · 3 com o cliente" + o selo "N pra você"), que é o
+              // suficiente pra decidir se vale abrir.
+              //
+              // Buscando, abre: quem digitou um nome quer VER o resultado, não
+              // um bloco fechado com a contagem certa.
+              <details
+                key={cliente}
+                open={Boolean(busca)}
+                className="group/cliente rounded-lg border bg-background"
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cliente:rotate-90" />
                   {/* Nome do cliente é a âncora: é por ele que o trabalho é
                       organizado (um Portal do Desenvolvedor por vez). */}
                   <h3 className="text-[15px] font-bold tracking-tight">
@@ -623,7 +637,7 @@ function Grupo({
                       <CopiarLote cnpjs={aLancar} />
                     </span>
                   )}
-                </div>
+                </summary>
                 <div className="p-3">
                 {/* A explicação vive AQUI, uma vez por cliente. */}
                 {aguardando &&
@@ -640,7 +654,7 @@ function Grupo({
                   ))}
                 </div>
                 </div>
-              </div>
+              </details>
             )
           },
         )}
