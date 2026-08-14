@@ -1,3 +1,5 @@
+"use client"
+
 import { AlertTriangle, Unplug } from "lucide-react"
 
 import type { MerchantSumido } from "@/lib/ifood/merchants-sumidos"

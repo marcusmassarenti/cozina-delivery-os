@@ -2,11 +2,12 @@
 
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { Copy, Check, Undo2 } from "lucide-react"
+import { ChevronRight, Copy, Check, Undo2 } from "lucide-react"
 import * as React from "react"
 
 import { Button } from "@/components/ui/button"
 
+import { combina } from "./abas"
 import {
   atualizarSolicitacaoIfood,
   compartilharLojaExistente,
@@ -41,6 +42,55 @@ function fmtCnpj(d: string): string {
   return d.length === 14
     ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
     : d
+}
+
+/**
+ * UM status por loja, e ele responde "de quem é a vez".
+ *
+ * Antes eram duas etiquetas lado a lado: "COM O CLIENTE" e "SOLICITADA". As
+ * duas dizem a mesma coisa — a segunda é o nome interno do estado, que só
+ * significa algo pra quem conhece o fluxo. Com 100 lojas na tela, cada linha
+ * gastava dois selos pra entregar uma informação, e a que importa (de quem é a
+ * vez) ficava do mesmo tamanho da que não importa.
+ */
+type Vez = "voce" | "cliente" | "confirmou" | "recusada"
+
+function vezDe(s: SolicitacaoAdmin): Vez {
+  if (s.status === "recusada") return "recusada"
+  if (s.status === "pendente") return "voce"
+  return s.clienteConfirmouAt ? "confirmou" : "cliente"
+}
+
+const SELO: Record<Vez, { texto: string; classe: string }> = {
+  voce: {
+    texto: "sua vez",
+    classe:
+      "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400",
+  },
+  confirmou: {
+    texto: "✋ cliente confirmou",
+    classe:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+  },
+  cliente: {
+    texto: "com o cliente",
+    classe: "bg-muted text-muted-foreground",
+  },
+  recusada: {
+    texto: "recusada",
+    classe: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400",
+  },
+}
+
+function Selo({ vez }: { vez: Vez }) {
+  const s = SELO[vez]
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${s.classe}`}
+    >
+      {s.texto}
+    </span>
+  )
 }
 
 function BotaoStatus({ rotulo }: { rotulo: string }) {
@@ -93,9 +143,17 @@ function Linha({
   // topo), e manter o botão fazia parecer que faltava uma ação do operador —
   // que ao clicar só recebia "esta loja ainda não apareceu no nosso app".
   // Em "solicitada" a bola está com o CLIENTE: a única saída manual é recusar.
+  /**
+   * O passo seguinte da fila. NUNCA fica escondido.
+   *
+   * O rótulo diz o efeito, não o nome do estado: é este botão que manda o
+   * e-mail pedindo pro cliente aprovar no Portal do Parceiro dele. "Marquei
+   * como solicitada" descrevia o campo no banco e deixava a pergunta óbvia sem
+   * resposta — "e como eu aviso o cliente?".
+   */
   const proximas: Array<{ status: string; rotulo: string }> =
     s.status === "pendente"
-      ? [{ status: "solicitada", rotulo: "Marquei como solicitada" }]
+      ? [{ status: "solicitada", rotulo: "Avisar cliente pra aprovar" }]
       : []
 
   /** Recusar é uma ação à parte: ela pede o aviso que o cliente vai ler. */
@@ -107,6 +165,26 @@ function Linha({
   // Fecha o campo assim que a gravação passa: depois de salvar, o aviso vira
   // texto de novo. Deixar a caixa aberta dava a impressão de que não salvou.
   const [editando, setEditando] = React.useState(false)
+
+  /**
+   * As ações ficam GUARDADAS até serem pedidas — menos nas recusadas, onde
+   * agir é o ponto da linha.
+   *
+   * Recusar, "já está na rede" e desfazer são exceções: o caminho normal da
+   * fila é copiar o CNPJ, lançar no portal e esperar o cliente aprovar. Só que
+   * elas ocupavam quase metade da altura de CADA linha. Com 100 lojas, isso é
+   * uma tela inteira de botões que quase nunca são clicados, empurrando pra
+   * baixo justamente o que se quer ler: qual loja, de quem, em que status.
+   */
+  const [acoesAbertas, setAcoesAbertas] = React.useState(false)
+  /**
+   * ⚠️ SÓ AS EXCEÇÕES SE ESCONDEM. O passo seguinte (`proximas`) fica sempre
+   * visível — escondê-lo foi um erro que travou a fila na prática: o botão
+   * "lancei" risca o CNPJ da sua lista mas NÃO muda o status nem avisa o
+   * cliente, então a loja continuava em "sua vez" sem nenhum caminho aparente
+   * pra sair dali.
+   */
+  const mostrarAcoes = acoesAbertas || jaRecusada || editando
   React.useEffect(() => {
     if (state.ok) setEditando(false)
   }, [state.ok])
@@ -115,38 +193,47 @@ function Linha({
     <div
       className={`rounded-lg border p-3 ${s.lancadoNoPortal ? "border-dashed bg-muted/10 opacity-70" : "bg-muted/20"}`}
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span
-          className={`tabular-nums ${s.lancadoNoPortal ? "text-muted-foreground line-through" : "font-medium"}`}
-        >
-          {fmtCnpj(s.cnpj)}
-        </span>
-        <CopiarCnpj cnpj={s.cnpj} />
-        {podeMarcarLancado && <BotaoLancado id={s.id} lancado={s.lancadoNoPortal} />}
-        {s.unitLabel && (
-          <span className="text-muted-foreground">{s.unitLabel}</span>
+      {/* A LOJA é o assunto da linha, então ela vem primeiro e em negrito.
+          Antes o CNPJ ocupava esse lugar: número de 18 dígitos como âncora
+          visual de 100 linhas, com o nome da loja em cinza atrás. Ninguém
+          procura uma loja pelo CNPJ — procura pelo nome e usa o CNPJ pra
+          colar no portal. A ordem agora reflete isso. */}
+      <div className="flex items-start gap-2 text-xs">
+        <div className="min-w-0 flex-1">
+          <p
+            className={`truncate text-[13px] font-semibold leading-tight ${
+              s.lancadoNoPortal ? "text-muted-foreground" : ""
+            }`}
+          >
+            {s.unitLabel ?? "(loja sem nome)"}
+          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`font-mono text-[11px] tabular-nums ${
+                s.lancadoNoPortal
+                  ? "text-muted-foreground line-through"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {fmtCnpj(s.cnpj)}
+            </span>
+            <CopiarCnpj cnpj={s.cnpj} />
+            {podeMarcarLancado && (
+              <BotaoLancado id={s.id} lancado={s.lancadoNoPortal} />
+            )}
+          </div>
+        </div>
+        <Selo vez={vezDe(s)} />
+        {!mostrarAcoes && (
+          <button
+            type="button"
+            onClick={() => setAcoesAbertas(true)}
+            title="Recusar, marcar que já está na rede, desfazer"
+            className="shrink-0 rounded px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            ⋯
+          </button>
         )}
-        {s.status === "solicitada" && s.clienteConfirmouAt && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-            ✋ cliente confirmou
-          </span>
-        )}
-        {/* De quem é a vez — a dúvida mais comum ao olhar esta fila. */}
-        {s.status === "pendente" && (
-          <span className="ml-auto rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:bg-sky-950/40 dark:text-sky-400">
-            sua vez
-          </span>
-        )}
-        {s.status === "solicitada" && !s.clienteConfirmouAt && (
-          <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            com o cliente
-          </span>
-        )}
-        <span
-          className={`${s.status === "solicitada" && s.clienteConfirmouAt ? "" : "ml-auto"} rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}
-        >
-          {s.status}
-        </span>
       </div>
 
       {/* O aviso salvo, em texto — é literalmente o que o cliente lê. */}
@@ -156,7 +243,8 @@ function Linha({
         </p>
       )}
 
-      {(proximas.length > 0 || podeRecusar || jaRecusada || podeDesfazer) && (
+      {/* O passo seguinte, sempre visível e destacado. */}
+      {proximas.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {proximas.map((p) => (
             <form key={p.status} action={action}>
@@ -165,6 +253,14 @@ function Linha({
               <BotaoStatus rotulo={p.rotulo} />
             </form>
           ))}
+          <span className="text-[11px] text-muted-foreground">
+            manda o e-mail pedindo que ele aprove no Portal do Parceiro
+          </span>
+        </div>
+      )}
+
+      {mostrarAcoes && (podeRecusar || jaRecusada || podeDesfazer) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
 
           {/* O campo do aviso fica GUARDADO até você decidir recusar.
               Aberto o tempo todo, ele aparecia em toda linha da fila — inclusive
@@ -404,15 +500,24 @@ export type LojaDaRede = {
 export function SolicitacoesPanel({
   solicitacoes,
   lojasDaRede = [],
+  busca = "",
 }: {
   solicitacoes: SolicitacaoAdmin[]
   /** Todas as lojas da plataforma — pro caso "essa loja já está na rede". */
   lojasDaRede?: LojaDaRede[]
+  /**
+   * Busca da tela, já normalizada. Precisa chegar aqui: a fila e a tabela de
+   * merchants são listas diferentes da MESMA pergunta ("cadê a loja X"), e uma
+   * busca que filtra só metade da tela responde errado sem avisar.
+   */
+  busca?: string
 }) {
   // Loja já ativa = jornada concluída → sai da fila (continua visível como
   // "Vinculado" na tabela de merchants abaixo). A fila mostra só o que ainda
   // precisa de ação: pendente, solicitada e recusada.
-  const naFila = solicitacoes.filter((s) => s.status !== "ativa")
+  const naFila = solicitacoes
+    .filter((s) => s.status !== "ativa")
+    .filter((s) => combina(busca, s.unitLabel, s.cnpj, s.holdingName))
   if (naFila.length === 0) return null
   const abertas = naFila.filter(
     (s) => s.status === "pendente" || s.status === "solicitada",
@@ -441,8 +546,8 @@ export function SolicitacoesPanel({
           Portal do Desenvolvedor uma vez e despacha o lote dele inteiro. Solto,
           um lote de 14 lojas ficava intercalado com o de outro cliente e era
           impossível saber onde você tinha parado. */}
-      <Grupo titulo="Aguardando" itens={abertas} lojasDaRede={lojasDaRede} />
-      <Grupo titulo="Recusadas" itens={recusadas} lojasDaRede={lojasDaRede} />
+      <Grupo titulo="Aguardando" itens={abertas} lojasDaRede={lojasDaRede} busca={busca} />
+      <Grupo titulo="Recusadas" itens={recusadas} lojasDaRede={lojasDaRede} busca={busca} />
     </div>
   )
 }
@@ -456,10 +561,12 @@ function Grupo({
   titulo,
   itens,
   lojasDaRede,
+  busca,
 }: {
   titulo: string
   itens: SolicitacaoAdmin[]
   lojasDaRede: LojaDaRede[]
+  busca: string
 }) {
   if (itens.length === 0) return null
   const aguardando = titulo === "Aguardando"
@@ -482,16 +589,56 @@ function Grupo({
                   (s.status === "pendente" || s.status === "solicitada"),
               )
               .map((s) => s.cnpj)
+            // Resumo por cliente: responde "esse cliente precisa de mim?"
+            // sem ler linha por linha. Com 100 lojas na fila, é a diferença
+            // entre varrer a tela e bater o olho.
+            const conta = (v: Vez) =>
+              doCliente.filter((x) => vezDe(x) === v).length
+            const resumo = [
+              conta("voce") > 0 && `${conta("voce")} sua vez`,
+              conta("confirmou") > 0 && `${conta("confirmou")} confirmada${conta("confirmou") > 1 ? "s" : ""}`,
+              conta("cliente") > 0 && `${conta("cliente")} com o cliente`,
+              conta("recusada") > 0 && `${conta("recusada")} recusada${conta("recusada") > 1 ? "s" : ""}`,
+            ].filter(Boolean) as string[]
+            const precisaDeVoce = conta("voce") + conta("confirmou")
+
             return (
-              <div key={cliente}>
-                <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                  <h3 className="text-xs font-semibold">{cliente}</h3>
-                  <span className="text-[10px] text-muted-foreground">
+              // Nasce FECHADO. Com 10 clientes e 500 lojas, abrir tudo é uma
+              // rolagem que não termina — e o cabeçalho já diz o que há dentro
+              // ("3 lojas · 3 com o cliente" + o selo "N pra você"), que é o
+              // suficiente pra decidir se vale abrir.
+              //
+              // Buscando, abre: quem digitou um nome quer VER o resultado, não
+              // um bloco fechado com a contagem certa.
+              <details
+                key={cliente}
+                open={Boolean(busca)}
+                className="group/cliente rounded-lg border bg-background"
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cliente:rotate-90" />
+                  {/* Nome do cliente é a âncora: é por ele que o trabalho é
+                      organizado (um Portal do Desenvolvedor por vez). */}
+                  <h3 className="text-[15px] font-bold tracking-tight">
+                    {cliente}
+                  </h3>
+                  {precisaDeVoce > 0 && (
+                    <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                      {precisaDeVoce} pra você
+                    </span>
+                  )}
+                  <span className="text-[11px] text-muted-foreground">
                     {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
+                    {resumo.length > 0 && ` · ${resumo.join(" · ")}`}
                     {aLancar.length > 0 && ` · ${aLancar.length} a lançar`}
                   </span>
-                  {aguardando && <CopiarLote cnpjs={aLancar} />}
-                </div>
+                  {aguardando && (
+                    <span className="ml-auto">
+                      <CopiarLote cnpjs={aLancar} />
+                    </span>
+                  )}
+                </summary>
+                <div className="p-3">
                 {/* A explicação vive AQUI, uma vez por cliente. */}
                 {aguardando &&
                   doCliente.some((s) => s.status === "solicitada") && (
@@ -506,7 +653,8 @@ function Grupo({
                     <Linha key={s.id} s={s} lojasDaRede={lojasDaRede} />
                   ))}
                 </div>
-              </div>
+                </div>
+              </details>
             )
           },
         )}
