@@ -83,6 +83,11 @@ export function IfoodClienteAviso({
 
   return (
     <div className="flex flex-col gap-2">
+      {/* Vem PRIMEIRO e só pra quem tem loja esperando: é a explicação de por
+          que o "falta você aprovar" logo abaixo não está saindo do lugar. Sem
+          ela, o cliente aprova, não acontece nada, e conclui que o sistema não
+          funciona. */}
+      {pendentesAprovacao.length > 0 && <IndisponibilidadeIfood />}
       {recusadas.map((s) => (
         <RecusadaCard key={s.id} s={s} />
       ))}
@@ -106,6 +111,52 @@ export function IfoodClienteAviso({
       ) : (
         pendentesAprovacao.map((s) => <SolicitadaCard key={s.id} s={s} />)
       )}
+    </div>
+  )
+}
+
+/**
+ * "A conexão de novas lojas com o iFood está indisponível."
+ *
+ * ⚠️ NÃO DIZ "MANUTENÇÃO". Em 14/08/26 a página de status do iFood marcava
+ * todos os sistemas operacionais e não havia manutenção declarada — afirmar
+ * uma causa que eles próprios não confirmam faz a frase se virar contra a
+ * gente no dia em que o cliente perguntar lá e ouvir "não tem manutenção
+ * nenhuma". O que é verdade e basta: está indisponível, o problema é do lado
+ * deles, já abrimos chamado, e a planilha resolve enquanto isso.
+ *
+ * Some sozinho quando não há mais loja esperando aprovação — aviso de
+ * problema que fica no ar depois de resolvido é o que ensina a ignorar avisos.
+ */
+function IndisponibilidadeIfood() {
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+      <div className="flex items-start gap-2.5">
+        <Clock className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            A conexão de novas lojas com o iFood está temporariamente
+            indisponível
+          </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
+            O problema é do lado do iFood: mesmo com a autorização aprovada no
+            Portal do Parceiro, eles não estão liberando as lojas novas para a
+            integração. Já abrimos um chamado técnico e estamos acompanhando —
+            <strong> não há nada pendente do seu lado</strong>.
+          </p>
+          <p className="mt-2 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
+            Enquanto isso, você não fica sem os números:{" "}
+            <Link
+              href="/importacao"
+              className="font-semibold underline underline-offset-2"
+            >
+              importe os relatórios pela planilha
+            </Link>{" "}
+            e o sistema funciona normalmente. Quando a conexão voltar, os dados
+            passam a entrar sozinhos e nada do que você subir se perde.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
