@@ -121,6 +121,31 @@ function CopiarCnpj({ cnpj }: { cnpj: string }) {
   )
 }
 
+/**
+ * Junta as lojas que ficaram de fora pelo MESMO motivo.
+ *
+ * O motivo vem pronto do servidor e traz o CNPJ dentro da frase, então doze
+ * lojas com o mesmo problema geram doze textos diferentes por um detalhe que
+ * não muda o diagnóstico. Normalizar o CNPJ pra agrupar é o que transforma
+ * doze parágrafos numa explicação e uma lista de nomes.
+ *
+ * O CNPJ não se perde: ele está no nome da loja na tabela logo abaixo, que é
+ * onde a pessoa vai agir.
+ */
+function agruparPorMotivo(
+  pendentes: { name: string; motivo: string }[],
+): { chave: string; motivo: string; lojas: string[] }[] {
+  const mapa = new Map<string, { motivo: string; lojas: string[] }>()
+  for (const p of pendentes) {
+    // Tira números longos (CNPJ com ou sem máscara) pra achar o texto comum.
+    const chave = p.motivo.replace(/[\d./-]{11,}/g, "#")
+    const atual = mapa.get(chave)
+    if (atual) atual.lojas.push(p.name)
+    else mapa.set(chave, { motivo: p.motivo.replace(/[\d./-]{11,}/g, "").replace(/\s{2,}/g, " ").trim(), lojas: [p.name] })
+  }
+  return [...mapa.entries()].map(([chave, v]) => ({ chave, ...v }))
+}
+
 /** Uma linha da fila com as transições de status possíveis. */
 function Linha({
   s,
@@ -445,18 +470,25 @@ function BotaoConferir() {
       {state.ok && (state.pendentes?.length ?? 0) > 0 && (
         <div className="mt-2 rounded-md bg-amber-50 p-2 dark:bg-amber-950/30">
           <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-400">
-            Estas ficaram de fora — resolva na tabela abaixo:
+            {state.pendentes!.length} ficaram de fora — resolva na tabela abaixo:
           </p>
-          <ul className="mt-1 space-y-0.5">
-            {state.pendentes!.map((a) => (
-              <li
-                key={a.name}
-                className="text-[11px] text-amber-700 dark:text-amber-400"
-              >
-                {a.name} — {a.motivo}
-              </li>
+          {/* AGRUPADO PELO MOTIVO. Cada loja vinha com o parágrafo inteiro de
+              explicação repetido: doze lojas com o mesmo problema produziam
+              doze parágrafos idênticos a menos do CNPJ, e o bloco virava um
+              muro de texto laranja onde não dava pra ver QUAIS lojas são.
+              Agora a explicação aparece uma vez e as lojas viram uma lista. */}
+          <div className="mt-1.5 flex flex-col gap-2">
+            {agruparPorMotivo(state.pendentes!).map((g) => (
+              <div key={g.chave}>
+                <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                  {g.motivo}
+                </p>
+                <p className="mt-0.5 text-[11px] font-semibold text-amber-900 dark:text-amber-300">
+                  {g.lojas.join(" · ")}
+                </p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
