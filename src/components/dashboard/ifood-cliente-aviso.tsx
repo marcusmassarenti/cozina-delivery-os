@@ -149,7 +149,7 @@ export function IfoodClienteAviso({
 function SincronizandoCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
   const uma = lojas.length === 1
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-sky-300/60 bg-sky-50/60 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/25">
+    <div className="flex items-start gap-3 rounded-lg border border-sky-300/60 bg-sky-50/60 px-3 py-2.5 text-sm dark:border-sky-900/40 dark:bg-sky-950/25">
       <span className="relative flex size-8 shrink-0 items-center justify-center">
         {/* Pulso por trás do ícone: diz "está rodando" sem pedir nada. */}
         <span className="absolute inline-flex size-8 animate-ping rounded-full bg-sky-400 opacity-40" />
@@ -179,6 +179,20 @@ function SincronizandoCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
           faturamento — <b>aparece aqui até amanhã de manhã</b>. Não precisa
           fazer nada: a gente te avisa por e-mail quando terminar.
         </p>
+        {/* QUAIS lojas, não só quantas.
+            A Prime Gestão tem 5 lojas no iFood e leu "buscando os dados de 3
+            lojas" logo acima de "2 de 5 ainda dependem de planilha": os dois
+            números estão certos (3 conectando + 2 na planilha = 5), mas contam
+            coisas diferentes sem dizer isso, e o 3 parecia erro de contagem.
+            Com os nomes na tela a pergunta "e as outras duas?" se responde
+            sozinha. */}
+        {!uma && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {lojas
+              .map((l) => `${l.unitCode ? `${l.unitCode} · ` : ""}${l.unitName}`)
+              .join(" · ")}
+          </p>
+        )}
       </div>
     </div>
   )

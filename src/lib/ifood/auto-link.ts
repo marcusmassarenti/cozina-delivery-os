@@ -761,7 +761,20 @@ export async function backfillPendentes(
       // `ok` distingue as duas coisas: veio 200 e a competência estava vazia
       // (pergunta respondida, nada a puxar) versus não consegui falar com a
       // API (aí não carimba e volta pra fila mesmo).
-      const respondeu = (u?.reconciliation ?? []).some((x) => x.ok === true)
+      //
+      // ⚠️ TODAS as competências, não `some`. Com `some`, UM mês respondido
+      // carimbava a loja inteira como "histórico completo" — e como o carimbo
+      // é o que define a fila, os meses que falharam nunca mais eram tentados.
+      // Aconteceu com o Baião de Dois em 14/08/26: seis meses vieram, maio e
+      // julho não, e a loja saiu da fila com dois buracos INVISÍVEIS (os
+      // pedidos desses meses entraram normalmente — só o financeiro faltava).
+      //
+      // Isto NÃO ressuscita o loop infinito documentado acima: competência
+      // vazia continua sendo `ok === true`. Quem segura o carimbo é só quem
+      // não conseguiu falar com a API — que é exatamente quem deve voltar.
+      const porCompetencia = u?.reconciliation ?? []
+      const respondeu =
+        porCompetencia.length > 0 && porCompetencia.every((x) => x.ok === true)
       if (respondeu) {
         await createAdminClient()
           .from("unit_platforms")
