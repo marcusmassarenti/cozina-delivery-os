@@ -1,0 +1,148 @@
+/* Identidade visual Delivery OS para documentos impressos (A4).
+ *
+ * Usado pelo contrato e pela proposta. Fica em arquivo separado pra os dois
+ * não divergirem — mas é EMBUTIDO em cada HTML na hora de gerar o PDF, porque
+ * o Chrome em modo headless não carrega CSS externo por file:// de forma
+ * confiável. Este arquivo é a fonte; o build copia pra dentro. */
+
+:root {
+  --laranja: #ff4d1c;
+  --tinta: #18181b;
+  --texto: #3f3f46;
+  --suave: #71717a;
+  --linha: #e4e4e7;
+  --fundo-suave: #fafafa;
+}
+
+@page {
+  size: A4;
+  margin: 18mm 16mm 16mm 16mm;
+}
+
+* { box-sizing: border-box; }
+
+/* Documento é PAPEL: branco sempre, em qualquer tema.
+ * Sem isto, quem está com o Mac no modo escuro abre o arquivo e vê texto preto
+ * sobre fundo preto — o título simplesmente some. `color-scheme: light` impede
+ * o navegador de inverter as cores por conta própria. */
+html { background: #fff; color-scheme: light; }
+
+body {
+  margin: 0;
+  background: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: var(--texto);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Capa ───────────────────────────────────────────────────────────── */
+.capa {
+  page-break-after: always;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 245mm;
+}
+.capa .marca { display: flex; align-items: center; gap: 12px; margin-bottom: 42px; }
+.capa .marca svg { width: 46px; height: 46px; border-radius: 11px; }
+.capa .marca .nome { font-size: 15pt; font-weight: 800; color: var(--tinta); letter-spacing: -0.3px; }
+.capa .marca .nome span { color: var(--laranja); }
+.capa h1 {
+  font-size: 27pt; line-height: 1.12; font-weight: 800;
+  color: var(--tinta); margin: 0 0 14px; letter-spacing: -0.8px;
+}
+.capa .sub { font-size: 12pt; color: var(--suave); margin: 0 0 44px; }
+.capa .regua { height: 4px; width: 68px; background: var(--laranja); border-radius: 2px; margin-bottom: 34px; }
+.capa .rodape { margin-top: auto; font-size: 9pt; color: var(--suave); border-top: 1px solid var(--linha); padding-top: 14px; }
+
+/* ── Estrutura ──────────────────────────────────────────────────────── */
+h2 {
+  font-size: 13pt; font-weight: 800; color: var(--tinta);
+  margin: 26px 0 10px; padding-bottom: 6px;
+  border-bottom: 2px solid var(--laranja);
+  page-break-after: avoid; letter-spacing: -0.2px;
+}
+h3 {
+  font-size: 11pt; font-weight: 700; color: var(--tinta);
+  margin: 18px 0 7px; page-break-after: avoid;
+}
+p { margin: 0 0 9px; text-align: justify; }
+strong { color: var(--tinta); font-weight: 700; }
+ol, ul { margin: 0 0 9px; padding-left: 20px; }
+li { margin-bottom: 4px; }
+
+.clausula { page-break-inside: avoid; margin-bottom: 4px; }
+.num { font-weight: 700; color: var(--tinta); }
+
+/* ── Tabelas ────────────────────────────────────────────────────────── */
+table {
+  width: 100%; border-collapse: collapse; margin: 12px 0 16px;
+  font-size: 9.5pt; page-break-inside: avoid;
+}
+th {
+  background: var(--tinta); color: #fff; font-weight: 700;
+  text-align: left; padding: 8px 10px; font-size: 8.5pt;
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+td { padding: 7px 10px; border-bottom: 1px solid var(--linha); vertical-align: top; }
+tbody tr:nth-child(even) { background: var(--fundo-suave); }
+.num-col, th.num-col { text-align: right; }
+.check { text-align: center; color: var(--laranja); font-weight: 800; }
+.total-row td { background: #fff7ed !important; font-weight: 800; color: var(--tinta); border-top: 2px solid var(--laranja); }
+
+/* ── Blocos de destaque ─────────────────────────────────────────────── */
+.aviso {
+  background: #fff7ed; border-left: 3px solid var(--laranja);
+  padding: 11px 14px; margin: 14px 0; font-size: 9.5pt;
+  border-radius: 0 6px 6px 0; page-break-inside: avoid;
+}
+.aviso .titulo { font-weight: 800; color: #7c2d12; display: block; margin-bottom: 3px; }
+
+.decisao {
+  background: #fef2f2; border: 1px dashed #fca5a5;
+  padding: 11px 14px; margin: 14px 0; font-size: 9pt;
+  border-radius: 6px; color: #7f1d1d; page-break-inside: avoid;
+}
+.decisao .titulo { font-weight: 800; display: block; margin-bottom: 3px; }
+
+.cartao {
+  border: 1px solid var(--linha); border-radius: 8px;
+  padding: 13px 15px; margin: 10px 0; page-break-inside: avoid;
+}
+.cartao h4 { margin: 0 0 5px; font-size: 10.5pt; color: var(--tinta); font-weight: 700; }
+.cartao p { margin: 0; font-size: 9.5pt; }
+
+.grade { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ── Campos preenchíveis ────────────────────────────────────────────── */
+.campo {
+  background: #fff7ed; border-bottom: 1.5px solid var(--laranja);
+  padding: 1px 6px; border-radius: 3px 3px 0 0;
+  color: #7c2d12; font-weight: 600; white-space: nowrap;
+}
+.campo:focus { outline: 2px solid var(--laranja); outline-offset: 1px; background: #fff; }
+
+.linha-assinatura {
+  border-bottom: 1px solid var(--tinta);
+  min-height: 26px; margin: 22px 0 5px;
+}
+.rotulo-assinatura { font-size: 8.5pt; color: var(--suave); text-transform: uppercase; letter-spacing: 0.6px; }
+
+.quebra { page-break-before: always; }
+
+/* ── Barra de ajuda (só na tela, some na impressão) ─────────────────── */
+.barra-tela {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 99;
+  background: var(--tinta); color: #fff; font-size: 12px;
+  padding: 9px 16px; display: flex; gap: 14px; align-items: center;
+}
+.barra-tela b { color: #ffd7c7; }
+body.com-barra { padding-top: 42px; }
+@media print {
+  .barra-tela { display: none !important; }
+  body.com-barra { padding-top: 0; }
+  .campo { background: transparent; }
+}
