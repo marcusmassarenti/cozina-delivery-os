@@ -142,9 +142,17 @@ function Linha({
   // topo), e manter o botão fazia parecer que faltava uma ação do operador —
   // que ao clicar só recebia "esta loja ainda não apareceu no nosso app".
   // Em "solicitada" a bola está com o CLIENTE: a única saída manual é recusar.
+  /**
+   * O passo seguinte da fila. NUNCA fica escondido.
+   *
+   * O rótulo diz o efeito, não o nome do estado: é este botão que manda o
+   * e-mail pedindo pro cliente aprovar no Portal do Parceiro dele. "Marquei
+   * como solicitada" descrevia o campo no banco e deixava a pergunta óbvia sem
+   * resposta — "e como eu aviso o cliente?".
+   */
   const proximas: Array<{ status: string; rotulo: string }> =
     s.status === "pendente"
-      ? [{ status: "solicitada", rotulo: "Marquei como solicitada" }]
+      ? [{ status: "solicitada", rotulo: "Avisar cliente pra aprovar" }]
       : []
 
   /** Recusar é uma ação à parte: ela pede o aviso que o cliente vai ler. */
@@ -168,6 +176,13 @@ function Linha({
    * baixo justamente o que se quer ler: qual loja, de quem, em que status.
    */
   const [acoesAbertas, setAcoesAbertas] = React.useState(false)
+  /**
+   * ⚠️ SÓ AS EXCEÇÕES SE ESCONDEM. O passo seguinte (`proximas`) fica sempre
+   * visível — escondê-lo foi um erro que travou a fila na prática: o botão
+   * "lancei" risca o CNPJ da sua lista mas NÃO muda o status nem avisa o
+   * cliente, então a loja continuava em "sua vez" sem nenhum caminho aparente
+   * pra sair dali.
+   */
   const mostrarAcoes = acoesAbertas || jaRecusada || editando
   React.useEffect(() => {
     if (state.ok) setEditando(false)
@@ -227,8 +242,8 @@ function Linha({
         </p>
       )}
 
-      {mostrarAcoes &&
-        (proximas.length > 0 || podeRecusar || jaRecusada || podeDesfazer) && (
+      {/* O passo seguinte, sempre visível e destacado. */}
+      {proximas.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {proximas.map((p) => (
             <form key={p.status} action={action}>
@@ -237,6 +252,14 @@ function Linha({
               <BotaoStatus rotulo={p.rotulo} />
             </form>
           ))}
+          <span className="text-[11px] text-muted-foreground">
+            manda o e-mail pedindo que ele aprove no Portal do Parceiro
+          </span>
+        </div>
+      )}
+
+      {mostrarAcoes && (podeRecusar || jaRecusada || podeDesfazer) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
 
           {/* O campo do aviso fica GUARDADO até você decidir recusar.
               Aberto o tempo todo, ele aparecia em toda linha da fila — inclusive
