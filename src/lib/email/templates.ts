@@ -625,6 +625,43 @@ export function recuperarSenha(d: { link: string }) {
  * semanal de saúde — e-mail que continua chegando vira ruído, e ruído faz
  * parar de ler o aviso que importa.
  */
+/**
+ * "Respondemos seu chamado" — a resposta do suporte chegando por e-mail.
+ *
+ * Usa a moldura de CLIENTE, não a dos avisos internos. A primeira versão
+ * reaproveitou `montarAvisoConexao`, que é a moldura que a gente usa pra falar
+ * com a gente mesmo: barra azul, tabelinha de rótulo/valor, sem logo. Chegava
+ * na caixa do cliente com cara de sistema, ao lado de e-mails nossos com outra
+ * cara — e cliente que recebe dois e-mails da mesma marca com visuais
+ * diferentes desconfia do segundo.
+ *
+ * A resposta vem no corpo, inteira. Um e-mail que só diz "você tem uma nova
+ * mensagem" obriga a pessoa a abrir o sistema pra descobrir se era importante;
+ * quem já leu decide na hora se precisa responder.
+ */
+export function suporteRespondido(d: { texto: string; url: string }) {
+  // Quebra de linha do chat vira parágrafo: o texto foi escrito num campo de
+  // conversa, e sem isso ele chega como um bloco só.
+  const corpo = d.texto
+    .split(/\n{2,}/)
+    .map(
+      (p) =>
+        `<p style="margin:0 0 14px;">${p.replace(/\n/g, "<br />")}</p>`,
+    )
+    .join("")
+
+  return {
+    assunto: "Respondemos seu chamado — Delivery OS",
+    html: layout({
+      titulo: "Respondemos você",
+      corpo: `
+        ${corpo}
+        <p style="margin:22px 0 0;font-size:14px;color:${SUAVE};">Pra continuar a conversa, é só abrir o chat no sistema — o histórico está todo lá.</p>`,
+      cta: { texto: "Continuar a conversa", url: d.url },
+    }),
+  }
+}
+
 export function conexaoAtivada(d: {
   nome: string | null
   loja: string | null

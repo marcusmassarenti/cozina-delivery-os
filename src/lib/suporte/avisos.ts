@@ -26,6 +26,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { enviarPush } from "@/lib/push/enviar"
 import { enviarEmail } from "@/lib/email/enviar"
 import { montarAvisoConexao, linhaAviso } from "@/lib/email/aviso-conexao"
+import { suporteRespondido } from "@/lib/email/templates"
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 
 /** Janela em que consideramos que a pessoa está com a conversa aberta. */
 const OLHANDO_MS = 60_000
@@ -162,20 +165,19 @@ export async function avisarCliente(input: {
 
     const para = await emailDoUsuario(input.abertaPor)
     if (!para) return
+    // A resposta vai INTEIRA no e-mail, não recortada: quem já leu decide na
+    // hora se precisa voltar ao sistema. O `resumo` continua valendo pro push,
+    // onde o espaço é do sistema operacional e não nosso.
+    const email = suporteRespondido({
+      texto: input.texto,
+      url: `${SITE}/inicio?suporte=1`,
+    })
     await enviarEmail({
       holdingId: input.holdingId,
       tipo: "suporte-resposta",
       para,
-      assunto: "Respondemos seu chamado no Delivery OS",
-      html: montarAvisoConexao({
-        plataforma: "Suporte",
-        titulo: "Respondemos você",
-        linhas: linhaAviso("Resposta", resumo(input.texto, 400)),
-        proximoPasso:
-          "É só abrir o sistema e clicar no balão de suporte — a conversa continua de onde parou.",
-        acaoHref: "/inicio?suporte=1",
-        acaoTexto: "Abrir a conversa →",
-      }),
+      assunto: email.assunto,
+      html: email.html,
       // Um cliente pode abrir vários chamados ao longo do tempo, e cada um
       // merece a sua resposta. A trava padrão avisaria só do primeiro.
       forcar: true,
