@@ -14,6 +14,7 @@ import {
   conferirLojasAutorizadas,
   desfazerStatusIfood,
   marcarLancadoNoPortal,
+  pausarAutomacaoSolicitacao,
   type ConferirAutorizadasState,
   type SolicitacaoUpdateState,
 } from "../_actions"
@@ -36,6 +37,11 @@ export type SolicitacaoAdmin = {
   statusAnterior: string | null
   /** Você já lançou este CNPJ no Portal do Desenvolvedor? */
   lancadoNoPortal: boolean
+  /**
+   * Motivo da pausa na régua automática, ou null quando a régua está normal.
+   * Pausada = não cobra confirmação em 1 dia nem recusa sozinha em 3.
+   */
+  pausadaMotivo: string | null
 }
 
 function fmtCnpj(d: string): string {
@@ -249,6 +255,17 @@ function Linha({
           </div>
         </div>
         <Selo vez={vezDe(s)} />
+        {/* Fica FORA das ações escondidas: pausa é um estado da linha, não uma
+            ação. Guardada atrás do "⋯", a fila mostraria "com o cliente" numa
+            loja que nunca vai cobrar nem recusar, e ninguém saberia por quê. */}
+        {s.pausadaMotivo && (
+          <span
+            title={`Régua pausada: ${s.pausadaMotivo}`}
+            className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+          >
+            não expira
+          </span>
+        )}
         {!mostrarAcoes && (
           <button
             type="button"
@@ -329,6 +346,10 @@ function Linha({
               </Button>
             ))}
 
+          {podeRecusar && (
+            <BotaoPausar id={s.id} motivo={s.pausadaMotivo} />
+          )}
+
           {podeRecusar && lojasDaRede.length > 0 && (
             <CompartilharLoja
               solicitacaoId={s.id}
@@ -379,6 +400,79 @@ function Linha({
         <p className="mt-1 text-[11px] text-rose-600">{state.error}</p>
       )}
     </div>
+  )
+}
+
+/**
+ * Liga e desliga a régua automática desta loja (cobrança em 1 dia, recusa
+ * em 3).
+ *
+ * O motivo é digitado na hora e obrigatório — é o que aparece no selo "não
+ * expira" da linha e no relatório do cron. Sem ele, daqui a três semanas a
+ * fila tem lojas paradas e ninguém lembra se ainda faz sentido esperar.
+ */
+function BotaoPausar({ id, motivo }: { id: string; motivo: string | null }) {
+  const [abrindo, setAbrindo] = React.useState(false)
+  const [state, action] = useActionState<SolicitacaoUpdateState, FormData>(
+    pausarAutomacaoSolicitacao,
+    { ok: false },
+  )
+  React.useEffect(() => {
+    if (state.ok) setAbrindo(false)
+  }, [state.ok])
+
+  // Já pausada: um clique volta ao normal. Não pede confirmação — despausar é
+  // o estado padrão do sistema, e o erro aqui se corrige pausando de novo.
+  if (motivo) {
+    return (
+      <form action={action} className="inline-flex items-center gap-1.5">
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="pausar" value="0" />
+        <Button type="submit" size="sm" variant="outline" className="h-7 text-[11px]">
+          Voltar a expirar
+        </Button>
+        <span className="text-[11px] text-muted-foreground">
+          pausada: {motivo}
+        </span>
+      </form>
+    )
+  }
+
+  if (!abrindo)
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 text-[11px]"
+        onClick={() => setAbrindo(true)}
+        title="Não cobrar confirmação nem recusar sozinha — pra quando a bola está com o iFood, não com o cliente"
+      >
+        Não expirar
+      </Button>
+    )
+
+  return (
+    <form action={action} className="flex flex-1 basis-full items-center gap-2">
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="pausar" value="1" />
+      <input
+        type="text"
+        name="motivo"
+        autoFocus
+        defaultValue="iFood não está liberando lojas novas — chamado aberto"
+        placeholder="Por que não deve expirar (só você lê)"
+        className="min-w-0 flex-1 rounded-md border bg-background px-2.5 py-1 text-[11px]"
+      />
+      <BotaoStatus rotulo="Pausar régua" />
+      <button
+        type="button"
+        onClick={() => setAbrindo(false)}
+        className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+      >
+        cancelar
+      </button>
+    </form>
   )
 }
 

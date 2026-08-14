@@ -184,14 +184,22 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
   const { data } = await admin
     .from("ifood_activation_requests")
     .select(
-      "id, cnpj, status, status_anterior, nota, created_at, cliente_confirmou_at, lancado_no_portal_at, holding_id, holdings(name), units(code, name)",
+      "id, cnpj, status, status_anterior, nota, created_at, cliente_confirmou_at, lancado_no_portal_at, automacao_pausada_em, automacao_pausada_motivo, holding_id, holdings(name), units(code, name)",
     )
     // Arquivadas saem da FILA (o histórico continua no banco). Sem isso, uma
     // recusa antiga ficava aqui pra sempre e o painel virava um cemitério
     // misturado com o que de fato precisa de ação.
-    .neq("status", "arquivada")
+    //
+    // ⚠️ AS ATIVAS TÊM QUE SAIR AQUI, não no componente. Enquanto o filtro era
+    // `neq arquivada` + `limit(30)`, as ativas (que são a maioria e as mais
+    // recentes) enchiam as 30 vagas e eram descartadas depois, na tela: em
+    // 14/08/26 o painel dizia "7 aguardando" com 12 abertas no banco — as 3
+    // Coringa da Prime e 2 da Tech simplesmente não existiam pra quem olhava.
+    // Fila que esconde item sem avisar é pior que fila nenhuma: dá a sensação
+    // de que está tudo despachado.
+    .in("status", ["pendente", "solicitada", "recusada"])
     .order("created_at", { ascending: false })
-    .limit(30)
+    .limit(200)
   return (data ?? []).map((s) => {
     const h = s.holdings as unknown as { name: string } | null
     const u = s.units as unknown as { code: string; name: string } | null
@@ -208,6 +216,11 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
       clienteConfirmouAt:
         (s.cliente_confirmou_at as string | null) ?? null,
       statusAnterior: (s.status_anterior as string | null) ?? null,
+      pausadaMotivo:
+        (s.automacao_pausada_motivo as string | null) ??
+        // Pausada sem motivo escrito não pode virar "não pausada" na tela: o
+        // efeito (não cobra, não recusa) continua valendo e some do painel.
+        (s.automacao_pausada_em ? "sem motivo escrito" : null),
     }
   })
 }

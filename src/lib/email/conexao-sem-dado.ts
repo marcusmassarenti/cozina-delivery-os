@@ -78,6 +78,10 @@ export async function cobrarConfirmacaoDeConexao(
     .select("id, holding_id, unit_id, cnpj, created_at, units!inner(id, name)")
     .in("status", ["pendente", "solicitada"])
     .is("cobranca_enviada_em", null)
+    // Pausada = já sabemos que a bola não é do cliente. Perguntar "você
+    // aprovou?" a quem aprovou e está travado do outro lado é o e-mail que
+    // ensina a ignorar os nossos. Ver `pausarAutomacao` mais abaixo.
+    .is("automacao_pausada_em", null)
     .lt("created_at", corte)
   if (opts.holdingIds?.length) q = q.in("holding_id", opts.holdingIds)
   const { data: reqs } = await q
@@ -192,6 +196,8 @@ export type ResultadoExpiracao = {
   expiradas: { cliente: string; loja: string; cnpj: string | null }[]
   /** Segunda rodada do mesmo problema: não expira, chama gente. */
   reincidentes: { cliente: string; loja: string; cnpj: string | null }[]
+  /** Alguém pausou a régua desta loja de propósito — ver `pausarAutomacao`. */
+  pausadas: { cliente: string; loja: string; motivo: string | null }[]
 }
 
 /**
@@ -217,7 +223,9 @@ export async function expirarSolicitacoesParadas(
 
   const { data: reqs } = await admin
     .from("ifood_activation_requests")
-    .select("id, holding_id, unit_id, cnpj, created_at, units!inner(id, name)")
+    .select(
+      "id, holding_id, unit_id, cnpj, created_at, automacao_pausada_em, automacao_pausada_motivo, units!inner(id, name)",
+    )
     .in("status", ["pendente", "solicitada"])
     .lt("created_at", corte)
 
@@ -226,10 +234,16 @@ export async function expirarSolicitacoesParadas(
     holding_id: string
     unit_id: string
     cnpj: string | null
+    automacao_pausada_em: string | null
+    automacao_pausada_motivo: string | null
     units: { id: string; name: string }
   }[]).filter((r) => r.unit_id)
 
-  const out: ResultadoExpiracao = { expiradas: [], reincidentes: [] }
+  const out: ResultadoExpiracao = {
+    expiradas: [],
+    reincidentes: [],
+    pausadas: [],
+  }
   if (linhas.length === 0) return out
 
   // Loja que já vinculou não expira — a solicitação pode ter ficado aberta por
@@ -268,6 +282,18 @@ export async function expirarSolicitacoesParadas(
     if (jaVinculada.has(r.unit_id)) continue
     const cliente = nomes.get(r.holding_id) ?? r.holding_id
     const item = { cliente, loja: r.units.name, cnpj: r.cnpj }
+
+    // Pausada de propósito: não expira, mas APARECE no resultado. Pausa
+    // silenciosa é fila que some do radar — e o motivo pra pausar (esperar o
+    // iFood) é exatamente o que precisa ser revisto de tempos em tempos.
+    if (r.automacao_pausada_em) {
+      out.pausadas.push({
+        cliente,
+        loja: r.units.name,
+        motivo: r.automacao_pausada_motivo,
+      })
+      continue
+    }
 
     if (jaExpirou.has(r.unit_id)) {
       out.reincidentes.push(item)

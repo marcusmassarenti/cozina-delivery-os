@@ -83,11 +83,6 @@ export function IfoodClienteAviso({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Vem PRIMEIRO e só pra quem tem loja esperando: é a explicação de por
-          que o "falta você aprovar" logo abaixo não está saindo do lugar. Sem
-          ela, o cliente aprova, não acontece nada, e conclui que o sistema não
-          funciona. */}
-      {pendentesAprovacao.length > 0 && <IndisponibilidadeIfood />}
       {recusadas.map((s) => (
         <RecusadaCard key={s.id} s={s} />
       ))}
@@ -115,51 +110,24 @@ export function IfoodClienteAviso({
   )
 }
 
-/**
- * "A conexão de novas lojas com o iFood está indisponível."
+/*
+ * ⚠️ AVISO DE INDISPONIBILIDADE DO iFOOD — REMOVIDO EM 14/08/26, DE PROPÓSITO.
  *
- * ⚠️ NÃO DIZ "MANUTENÇÃO". Em 14/08/26 a página de status do iFood marcava
- * todos os sistemas operacionais e não havia manutenção declarada — afirmar
- * uma causa que eles próprios não confirmam faz a frase se virar contra a
- * gente no dia em que o cliente perguntar lá e ouvir "não tem manutenção
- * nenhuma". O que é verdade e basta: está indisponível, o problema é do lado
- * deles, já abrimos chamado, e a planilha resolve enquanto isso.
+ * Ficou no ar por 40 minutos. Entre 12 e 14/08, 10 lojas de 3 clientes
+ * apareciam "Ativo" no Portal do Parceiro e o `GET /merchants` não devolvia
+ * nenhuma delas; o card explicava ao cliente que a trava era do lado do iFood
+ * e mandava importar por planilha. Às 15:45 de 14/08 as 10 voltaram na
+ * listagem de uma vez só — e a partir dali o card passou a afirmar aos
+ * clientes um problema que não existia mais.
  *
- * Some sozinho quando não há mais loja esperando aprovação — aviso de
- * problema que fica no ar depois de resolvido é o que ensina a ignorar avisos.
+ * Fica registrado porque a lição não é sobre o iFood: aviso de incidente
+ * escrito à mão precisa de alguém pra apagar, e quem escreve nunca é quem está
+ * olhando na hora em que resolve. Se voltar a acontecer, o caminho é o card
+ * nascer amarrado a um fato que o sistema mede sozinho (ex.: solicitação
+ * aberta há mais de X horas com o merchant ausente da listagem), não a uma
+ * data em que alguém decidiu escrever. O texto original está no commit
+ * be22cd7.
  */
-function IndisponibilidadeIfood() {
-  return (
-    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
-      <div className="flex items-start gap-2.5">
-        <Clock className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-            A conexão de novas lojas com o iFood está temporariamente
-            indisponível
-          </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
-            O problema é do lado do iFood: mesmo com a autorização aprovada no
-            Portal do Parceiro, eles não estão liberando as lojas novas para a
-            integração. Já abrimos um chamado técnico e estamos acompanhando —
-            <strong> não há nada pendente do seu lado</strong>.
-          </p>
-          <p className="mt-2 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
-            Enquanto isso, você não fica sem os números:{" "}
-            <Link
-              href="/importacao"
-              className="font-semibold underline underline-offset-2"
-            >
-              importe os relatórios pela planilha
-            </Link>{" "}
-            e o sistema funciona normalmente. Quando a conexão voltar, os dados
-            passam a entrar sozinhos e nada do que você subir se perde.
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /**
  * "Conectado, buscando seus dados" — o estado entre o vínculo e o primeiro dado.

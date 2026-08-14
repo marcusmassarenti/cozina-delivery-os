@@ -724,6 +724,55 @@ export async function marcarLancadoNoPortal(
   return { ok: true, message: marcar ? "Marcada como lançada." : "Desmarcada." }
 }
 
+/**
+ * Tira UMA solicitação da régua automática (cobrança em 1 dia, recusa em 3).
+ *
+ * POR QUE ISTO EXISTE: a régua pressupõe que quem está devendo é o cliente. Em
+ * ago/26 isso deixou de ser verdade — 10 lojas de 3 clientes apareciam "Ativo"
+ * no Portal do Parceiro e o iFood não as devolvia na API (chamado aberto do
+ * lado deles). Sem pausa, o sistema mandava e-mail de recusa a quem já tinha
+ * feito tudo certo, por uma falha que não é dele. Recusa injusta e automática
+ * é pior que fila parada.
+ *
+ * Não é botão de "adiar": é botão de "a bola não é do cliente". Por isso o
+ * motivo é obrigatório e aparece no painel — pausa sem motivo escrito vira
+ * estado órfão que ninguém sabe se ainda vale desfazer.
+ */
+export async function pausarAutomacaoSolicitacao(
+  _prev: SolicitacaoUpdateState,
+  formData: FormData,
+): Promise<SolicitacaoUpdateState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Apenas o admin da plataforma." }
+  }
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, error: "id ausente" }
+  const pausar = String(formData.get("pausar") ?? "") === "1"
+  const motivo = String(formData.get("motivo") ?? "").trim()
+  if (pausar && !motivo) {
+    return { ok: false, error: "Escreva por que está pausando." }
+  }
+
+  const { error } = await createAdminClient()
+    .from("ifood_activation_requests")
+    .update({
+      automacao_pausada_em: pausar ? new Date().toISOString() : null,
+      automacao_pausada_motivo: pausar ? motivo : null,
+    })
+    .eq("id", id)
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/integracao/ifood-merchants")
+  return {
+    ok: true,
+    message: pausar
+      ? "Pausada — não vai cobrar nem recusar sozinha."
+      : "Voltou pra régua normal.",
+  }
+}
+
 export type CompartilharState = {
   ok: boolean
   message?: string
