@@ -142,13 +142,56 @@ export async function GET(req: Request) {
   // ficava com "mês corrente + anterior" até o cron das 6h alcançá-la, e se
   // não alcançasse (teto de 2 por rodada), ficava assim pra sempre. Puxar o
   // histórico aqui é o que fecha o ciclo "cliente aprovou → dado na tela".
+  /**
+   * ⚠️ OS DOIS TRABALHOS NÃO CABEM NA MESMA RODADA — por isso eles se
+   * ALTERNAM em vez de dividir o tempo.
+   *
+   * O orçamento é de 240s. O auto-vínculo pode levar até 150s (cada CNPJ
+   * desconhecido custa o download de uma conciliação) e UMA loja de backfill
+   * leva ~160s. Somando, não cabe.
+   *
+   * Enquanto os dois disputavam a mesma janela, o backfill era servido com o
+   * resto e `backfillPendentes` reserva 180s por loja — então bastava o
+   * auto-vínculo passar de 60s pra sobrar menos que isso, e TODAS as lojas
+   * caírem em "adiado". Foi o que aconteceu em 14/08/26: a partir das 16:45 o
+   * auto-vínculo passou a levar 67–157s (28 merchants novos sem CNPJ), a fila
+   * do backfill congelou em 8 lojas por mais de duas horas, e cada rodada
+   * terminava `ok: true`. Fome silenciosa: o cron dizia que trabalhou.
+   *
+   * Alternar pelo relógio (:00 e :30 vinculam primeiro, :15 e :45 puxam
+   * histórico primeiro) dá a cada um uma janela INTEIRA a cada 30 minutos, sem
+   * estado novo pra guardar e sem depender de quem terminou antes.
+   */
   const t0 = Date.now()
-  const r = await autoLinkIfoodMerchants(unitIds, { deadlineMs: 150_000 })
-  const restante = 240_000 - (Date.now() - t0)
-  const hist =
-    restante > 60_000
-      ? await backfillPendentes({ deadlineMs: restante })
-      : { backfill: [], backfillAdiado: [] }
+  const vezDoHistorico = Math.floor(new Date().getMinutes() / 15) % 2 === 1
+
+  let r: Awaited<ReturnType<typeof autoLinkIfoodMerchants>>
+  let hist: Awaited<ReturnType<typeof backfillPendentes>>
+
+  if (vezDoHistorico) {
+    hist = await backfillPendentes({ deadlineMs: 200_000 })
+    const sobrou = 240_000 - (Date.now() - t0)
+    r =
+      sobrou > 20_000
+        ? await autoLinkIfoodMerchants(unitIds, { deadlineMs: sobrou })
+        : {
+            ok: true,
+            vinculadas: [],
+            ambiguas: [],
+            restantes: unitIds.length,
+            merchantsVistos: 0,
+          }
+  } else {
+    r = await autoLinkIfoodMerchants(unitIds, { deadlineMs: 150_000 })
+    const sobrou = 240_000 - (Date.now() - t0)
+    // 200s, não 60s: abaixo disso `backfillPendentes` adia tudo por dentro e a
+    // chamada só gasta tempo pra devolver lista vazia. Os dois números têm que
+    // concordar — foi a discordância entre eles que travou a fila.
+    hist =
+      sobrou > 200_000
+        ? await backfillPendentes({ deadlineMs: sobrou })
+        : { backfill: [], backfillAdiado: [] }
+  }
 
   return Response.json({
     ok: r.ok,
