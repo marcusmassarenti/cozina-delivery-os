@@ -13,6 +13,13 @@ import "server-only"
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 
+// Mesma paleta dos e-mails de cliente (templates.ts). Aviso interno com outra
+// cara faria parecer que saiu de outro sistema — e a caixa de entrada é a
+// mesma.
+const LARANJA = "#ff4d1c"
+const TINTA = "#18181b"
+const TEXTO = "#52525b"
+
 /** Uma linha "rótulo → valor" da tabelinha do e-mail. */
 export function linhaAviso(rotulo: string, valor: string): string {
   return `<tr><td style="padding-right:16px;color:#71717a;">${rotulo}</td><td>${valor}</td></tr>`
@@ -31,14 +38,43 @@ export function montarAvisoConexao(d: {
   acaoTexto: string
 }): string {
   return `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:24px;color:#18181b;">
-  <p style="margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:1.4px;color:#71717a;text-transform:uppercase;">Delivery OS · ${d.plataforma}</p>
-  <h1 style="margin:0 0 16px;font-size:20px;">${d.titulo}</h1>
-  <table cellpadding="0" cellspacing="0" border="0" style="font-size:14px;line-height:1.7;">
-    ${d.linhas}
+<div style="margin:0;padding:32px 12px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;margin:0 auto;">
+    <tr>
+      <td style="background:#ffffff;border-radius:16px;padding:32px 30px;">
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;">
+          <tr>
+            <td style="padding-right:12px;">
+              <img src="${SITE}/deliveryos-icon.png" width="36" height="36" alt="D"
+                   style="display:block;width:36px;height:36px;border-radius:9px;background:${LARANJA};" />
+            </td>
+            <td style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:#71717a;text-transform:uppercase;">Delivery OS · ${d.plataforma}</td>
+          </tr>
+        </table>
+
+        <h1 style="margin:0 0 18px;font-size:22px;line-height:1.25;color:${TINTA};font-weight:700;">${d.titulo}</h1>
+
+        <table cellpadding="0" cellspacing="0" border="0" style="font-size:14px;line-height:1.7;color:${TEXTO};">
+          ${d.linhas}
+        </table>
+
+        <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#7c2d12;background:#fff7ed;border-left:3px solid ${LARANJA};padding:11px 13px;border-radius:0 6px 6px 0;">${d.proximoPasso}</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 0;">
+          <tr><td>
+            <a href="${SITE}${d.acaoHref}" style="display:inline-block;background:${LARANJA};color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:999px;font-size:14px;font-weight:700;">${d.acaoTexto}</a>
+          </td></tr>
+        </table>
+
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding:16px 0 0;font-size:12px;color:#a1a1aa;">
+        Aviso interno do Delivery OS · deliveryos.food
+      </td>
+    </tr>
   </table>
-  <p style="margin:16px 0 0;font-size:13px;color:#1e40af;background:#eff6ff;border-left:3px solid #2563eb;padding:10px 12px;">${d.proximoPasso}</p>
-  <p style="margin:20px 0 0;"><a href="${SITE}${d.acaoHref}" style="color:#ff4d1c;font-weight:600;">${d.acaoTexto}</a></p>
 </div>`.trim()
 }
 
