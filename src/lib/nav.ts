@@ -1,6 +1,7 @@
 import {
   Share2,
   Activity,
+  FileSignature,
   Headset,
   Building2,
   Cable,
@@ -221,6 +222,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Suporte",
         href: "/suporte",
         icon: Headset,
+        superadminOnly: true,
+      },
+      {
+        label: "Propostas",
+        href: "/propostas",
+        icon: FileSignature,
         superadminOnly: true,
       },
       {
