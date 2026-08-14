@@ -72,7 +72,7 @@ export const CATEGORIAS: Categoria[] = [
         id: "conexao.revogada",
         titulo: "Uma loja parou de trazer dados do nada",
         resposta:
-          "Quando o iFood deixa de devolver uma loja que antes vinha, quase sempre é autorização revogada — alguém removeu o acesso do nosso app no Portal do Parceiro. O caminho de volta é reaprovar por lá, do mesmo jeito da primeira vez.",
+          "Quando o iFood deixa de devolver uma loja que antes vinha, há dois motivos possíveis: alguém removeu o acesso do nosso app no Portal do Parceiro, ou o iFood parou de entregar a loja mesmo com a autorização ativa.\n\nDá pra saber qual é em poucos segundos: no Portal do Parceiro, aba Permissões, procure o CNPJ da loja. Se aparecer \"Aguardando Ativação\", é só aprovar de novo. Se aparecer \"Ativo\", a autorização está de pé e o problema é do lado deles — nesse caso use o botão abaixo que a gente abre o chamado.",
         dado: "revogadas",
       },
       {

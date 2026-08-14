@@ -1,19 +1,24 @@
 import "server-only"
 
 /**
- * Merchants que o iFood PAROU de devolver — na prática, autorização revogada.
+ * Merchants que o iFood PAROU de devolver.
  *
  * A varredura grava `last_seen_at` em todo merchant que a API lista. Quando o
- * lojista revoga o app no Portal do Parceiro, o merchant simplesmente some da
- * resposta: nenhum erro, nenhum evento, nenhum aviso. A linha continua na
- * nossa tabela exatamente como estava, e a única pista é o `last_seen_at`
+ * merchant some da resposta, não vem erro, evento nem aviso: a linha continua
+ * na nossa tabela exatamente como estava, e a única pista é o `last_seen_at`
  * parado numa varredura antiga.
  *
- * Medido em 13/ago/26: a rodada das 18:09 devolveu 67 merchants; o "Marmitex
- * Faisão Restaurante" ficou em 12:49. O cliente tinha autorizado de manhã e
- * revogado à tarde. Do nosso lado, a tela só sabia dizer "nenhum dos 2
- * merchants testados tem esse CNPJ" — uma mensagem que descreve o sintoma e
- * esconde a causa, e que faz o operador procurar erro de cadastro.
+ * ⚠️ SUMIR NÃO É PROVA DE REVOGAÇÃO. Este arquivo já afirmou que era, e a
+ * afirmação estava errada. Medido em 13/ago/26: a rodada das 18:09 devolveu 67
+ * merchants e o "Marmitex Faisão Restaurante" ficou em 12:49 — mas o Portal do
+ * Parceiro seguia mostrando a permissão como "Ativo", e o acesso direto ao
+ * merchant respondia 403. Virou chamado aberto com o iFood.
+ *
+ * São duas causas possíveis e a API não separa: o lojista removeu o app, OU
+ * está autorizado e o iFood não entrega. Quem consome esta lista deve
+ * apresentar o FATO ("sumiu da lista") e mandar conferir o CNPJ na aba
+ * Permissões do portal — afirmar culpa do lojista faz cobrar dele uma
+ * aprovação que ele pode já ter feito.
  *
  * ⚠️ POR QUE O CORTE É `max(last_seen_at)` E NÃO `now()`: se a varredura
  * falhar (token vencido, iFood fora do ar), NADA é atualizado — e comparar com

@@ -66,13 +66,20 @@ export function RevogadasAviso({ sumidos }: { sumidos: MerchantSumido[] }) {
             <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
               {soltas.length === 1
-                ? "1 loja apareceu e sumiu (autorização revogada)"
-                : `${soltas.length} lojas apareceram e sumiram (autorização revogada)`}
+                ? "1 loja apareceu e sumiu da lista do iFood"
+                : `${soltas.length} lojas apareceram e sumiram da lista do iFood`}
             </p>
           </div>
+          {/* O que sabemos é só que o iFood parou de devolver a loja. Dizer
+              "o lojista revogou" é palpite, e em 13/ago/26 esse palpite estava
+              errado: as lojas da Tech Assessoria seguiam "Ativo" no portal e a
+              API respondia 403 — virou chamado com o iFood. Afirmar culpa do
+              cliente manda cobrar dele uma coisa que ele já fez. */}
           <p className="mt-1 pl-6 text-xs text-amber-800 dark:text-amber-300">
-            O lojista autorizou e depois removeu o app. Enquanto não autorizar
-            de novo, o vínculo não tem como fechar.
+            O iFood parou de devolver estas lojas. Confira o CNPJ na aba
+            Permissões do Portal do Parceiro: <b>&quot;Aguardando Ativação&quot;</b> =
+            o lojista precisa aprovar de novo; <b>&quot;Ativo&quot;</b> = está aprovado
+            e o iFood não está entregando — aí é problema deles.
           </p>
           <ul className="mt-2 space-y-1 pl-6">
             {soltas.map((m) => (
