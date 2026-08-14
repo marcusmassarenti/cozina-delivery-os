@@ -728,11 +728,23 @@ export async function backfillPendentes(
     backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
 
   for (const v of aBackfillar) {
-    // Uma loja leva ~2,7 min (medido na Pizzaria Quero Mais, 8 competências).
-    // Começar uma que não vai caber é gastar chamada de API pra ser cortado no
-    // meio — e meio backfill não carimba, então voltaria pra fila do mesmo
-    // jeito, tendo queimado o tempo.
-    if (Date.now() - t0 > limite - 180_000) {
+    // Começar uma loja que não vai caber é gastar chamada de API pra ser
+    // cortado no meio — e meio backfill não carimba, então voltaria pra fila do
+    // mesmo jeito, tendo queimado o tempo.
+    //
+    // ⚠️ A RESERVA ERA 180s, TRÊS VEZES O NECESSÁRIO. O número vinha de uma
+    // medição antiga ("~2,7 min na Pizzaria Quero Mais"). Medido de novo em
+    // 14/08/26 pelos carimbos de `platform_imports`: o Baião de Dois fez as 8
+    // competências entre 15:46:50 e 15:47:53 — 63 segundos. Com 200s de
+    // orçamento e 180s reservados, cabia UMA loja por rodada onde cabiam duas.
+    //
+    // 100s dá folga de 60% sobre o medido e ainda deixa a rodada terminar
+    // antes da seguinte começar. Aumentar o teto de lojas por rodada além
+    // disso não é ajuste de tempo, é apostar no limite de chamadas do iFood —
+    // que é por APLICAÇÃO, compartilhado com o sync diário de todos os
+    // clientes. Esse passo exige medir o 429 antes, não estimar.
+    const RESERVA_POR_LOJA_MS = 100_000
+    if (Date.now() - t0 > limite - RESERVA_POR_LOJA_MS) {
       backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
       continue
     }
