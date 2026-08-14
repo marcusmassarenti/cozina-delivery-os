@@ -644,11 +644,24 @@ export function SolicitacoesPanel({
   const naFila = solicitacoes
     .filter((s) => s.status !== "ativa")
     .filter((s) => combina(busca, s.unitLabel, s.cnpj, s.holdingName))
-  if (naFila.length === 0) return null
   const abertas = naFila.filter(
     (s) => s.status === "pendente" || s.status === "solicitada",
   )
-  const recusadas = naFila.filter((s) => s.status === "recusada")
+  /**
+   * Recusada SAI da tela — só volta se você procurar por ela.
+   *
+   * Recusar é o fim do assunto do lado de cá: o cliente já recebeu o e-mail e
+   * vê o motivo no dashboard dele, e pode pedir de novo quando resolver. Ficar
+   * no painel só criava um segundo clique obrigatório ("Resolver") pra tirar
+   * da frente algo que já estava decidido — e enquanto ninguém clicava, a fila
+   * acumulava linhas mortas junto com as vivas.
+   *
+   * Some, mas não vira irreversível: quem digita o nome ou o CNPJ na busca vê
+   * a recusada com o Desfazer intacto. É o caminho de quem clicou errado ou
+   * mudou de ideia — que é justamente quem vai procurar por aquela loja.
+   */
+  const recusadas = busca ? naFila.filter((s) => s.status === "recusada") : []
+  if (abertas.length === 0 && recusadas.length === 0) return null
   return (
     <div className="rounded-xl border bg-card p-5">
       <h2 className="text-sm font-semibold">
@@ -664,7 +677,8 @@ export function SolicitacoesPanel({
         CNPJ → solicitar no Portal do Desenvolvedor → marcar como solicitada →
         quando o cliente aprovar e a loja aparecer aqui, vincular à unidade e
         ativar. Loja conectada sai desta lista (fica como <b>Vinculado</b> na
-        tabela abaixo).
+        tabela abaixo), e recusada também — pra ver ou desfazer uma recusa,
+        busque pelo nome ou pelo CNPJ da loja.
       </p>
       {abertas.length > 0 && <BotaoConferir />}
 
