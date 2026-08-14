@@ -569,16 +569,29 @@ export async function autoLinkIfoodMerchants(
         : null,
       motivo:
         conflito ??
-        // A CAUSA antes do sintoma. "Nenhum dos 2 merchants testados tem o
-        // CNPJ" é verdade e não ajuda: manda o operador conferir cadastro
-        // quando o que houve foi o lojista REVOGAR o app. Aconteceu com a Tech
-        // Assessoria em 13/ago/26 — o merchant apareceu às 12:48, sumiu da
-        // resposta da API às 18:09, e a tela só sabia falar do CNPJ.
+        /* O FATO, e não um palpite de causa.
+         *
+         * Antes esta mensagem afirmava "o lojista ainda não autorizou". Só que
+         * o que a gente sabe é uma coisa só: o CNPJ não veio na lista que o
+         * iFood devolve. Isso tem DUAS causas possíveis e a API não distingue:
+         *
+         *   • o lojista realmente não aprovou (portal mostra "Aguardando
+         *     Ativação"); ou
+         *   • está aprovado e o iFood não entrega mesmo assim.
+         *
+         * A segunda não é hipótese: em 13/ago/26 as 3 lojas da Tech Assessoria
+         * apareciam "Ativo" no portal e a API respondia 403 — virou chamado
+         * aberto com eles. Nesses casos a mensagem antiga mandava cobrar do
+         * cliente uma aprovação que ele já tinha feito, e o problema ficava
+         * parado esperando a pessoa errada.
+         *
+         * Então: diz o que é verdade e entrega a conferência que separa as
+         * duas causas em dez segundos. */
         (sumidoPorCnpj(sumidos, cnpjPedido)
-          ? `Esta loja JÁ apareceu no iFood e sumiu da lista — autorização revogada pelo lojista. Peça pra ele autorizar o Delivery OS de novo no Portal do Parceiro.`
+          ? `Esta loja JÁ apareceu no iFood e sumiu da lista. Confira no Portal do Parceiro (aba Permissões, busque ${cnpjPedido}): se estiver "Aguardando Ativação", o lojista precisa aprovar de novo; se estiver "Ativo", o iFood parou de devolver a loja pra gente — aí é problema deles.`
           : testados === 0
             ? "Nenhum merchant candidato tem extrato pra confirmar o CNPJ ainda (loja sem movimento?)."
-            : `O lojista ainda não autorizou: nenhuma das lojas que o iFood nos devolve tem o CNPJ ${cnpjPedido}.`),
+            : `O iFood não devolve nenhuma loja com o CNPJ ${cnpjPedido}. Confira no Portal do Parceiro (aba Permissões, busque o CNPJ): "Aguardando Ativação" = falta o lojista aprovar; "Ativo" = está aprovado e o iFood não entrega — aí é problema deles.`),
     })
   }
 

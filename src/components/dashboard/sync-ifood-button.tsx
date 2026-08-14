@@ -624,14 +624,20 @@ export function SyncIfoodButton() {
                     items={revPuxaram}
                     render={(r) => `${r.gravadas.toLocaleString("pt-BR")} avaliações`}
                   />
-                  {/* Etapa manual: loja que ainda não autorizou o app no portal. */}
+                  {/* 403 = sem acesso AGORA. Não prova que falta autorizar.
+                      Em 13/ago/26 três lojas da Tech Assessoria apareciam
+                      "Ativo" no portal e respondiam 403 mesmo assim — virou
+                      chamado com o iFood. O título antigo mandava cobrar do
+                      cliente uma aprovação já feita. */}
                   {revFaltaAutorizar.length > 0 && (
                     <ReviewGroup
                       tone="amber"
                       icon={<ShieldAlert className="size-4" />}
-                      title="Falta autorizar o app no portal iFood"
+                      title="Sem acesso às avaliações (403)"
                       items={revFaltaAutorizar}
-                      render={() => "autorize esta loja no portal e sincronize de novo"}
+                      render={() =>
+                        'confira no portal: "Aguardando Ativação" = falta o lojista aprovar; "Ativo" = é o iFood que não está liberando'
+                      }
                     />
                   )}
                   {revSemNovas.length > 0 && (
