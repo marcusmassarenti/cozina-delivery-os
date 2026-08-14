@@ -626,6 +626,64 @@ export function recuperarSenha(d: { link: string }) {
  * parar de ler o aviso que importa.
  */
 /**
+ * "Pedimos a conexão e nada chegou" — cobrança de confirmação ao cliente.
+ *
+ * Nasceu do caso da Tech Assessoria (ago/26): três lojas solicitadas, nenhum
+ * dado entrando, e a descoberta veio de o Marcus ir olhar por conta própria.
+ * O cliente ficou dias com a tela vazia sem ninguém dizer nada — e do lado
+ * dele parecia que o sistema não funcionava.
+ *
+ * PEDE UMA RESPOSTA, e uma só. Não manda o cliente "conferir configurações":
+ * a pergunta é fechada — você aprovou ou não? Quem aprovou responde "aprovei"
+ * e a bola passa pra nós (é caso de chamado com o iFood). Quem não aprovou
+ * descobre o que falta. Sem a resposta, os dois lados ficam esperando o outro.
+ *
+ * NÃO afirma que o cliente não autorizou. Foi exatamente esse palpite que a
+ * gente teve que remover das telas: "não chegou dado" e "você não autorizou"
+ * são coisas diferentes, e tratá-las como a mesma faz cobrar de quem já fez.
+ */
+export function conexaoSemDado(d: {
+  nome: string | null
+  lojas: { nome: string; cnpj: string | null; desde: string }[]
+}) {
+  const lista = d.lojas
+    .map(
+      (l) =>
+        `<tr>
+           <td style="padding:8px 12px 8px 0;border-bottom:1px solid ${LINHA};">
+             <strong>${l.nome}</strong>${l.cnpj ? `<br /><span style="font-size:13px;color:${SUAVE};">CNPJ ${l.cnpj}</span>` : ""}
+           </td>
+           <td style="padding:8px 0;border-bottom:1px solid ${LINHA};font-size:14px;color:${SUAVE};white-space:nowrap;">
+             pedida em ${l.desde}
+           </td>
+         </tr>`,
+    )
+    .join("")
+
+  const uma = d.lojas.length === 1
+
+  return {
+    assunto: uma
+      ? "Sua loja no iFood ainda não começou a trazer dados"
+      : `Suas ${d.lojas.length} lojas no iFood ainda não começaram a trazer dados`,
+    html: layout({
+      titulo: uma
+        ? "Ainda não chegou nada desta loja"
+        : "Ainda não chegou nada destas lojas",
+      corpo: `
+        <p style="margin:0 0 14px;">${d.nome ? `Oi, ${d.nome}. ` : ""}Pedimos a conexão ${uma ? "desta loja" : "destas lojas"} no iFood, mas até agora nenhum dado entrou:</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;font-size:15px;line-height:1.5;">
+          ${lista}
+        </table>
+        <p style="margin:0 0 14px;"><strong>Você chegou a aprovar a conexão no Portal do Parceiro do iFood?</strong> É só responder este e-mail com um "sim" ou "ainda não" — com essa resposta a gente sabe de que lado continuar.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:${SUAVE};">Se <strong>já aprovou</strong>: o problema é do lado do iFood e a investigação é nossa — você não precisa fazer mais nada.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:${SUAVE};">Se <strong>ainda não</strong>: é no Portal do Parceiro, em Aplicativos. São <strong>dois</strong> aplicativos pra aprovar (um de faturamento e um de avaliações) e quem aprova precisa ser o usuário <strong>Proprietário</strong> da conta — essa é a causa mais comum de "não apareceu nada pra aprovar".</p>`,
+      ps: "Assim que a aprovação entrar, a loja conecta sozinha em até 15 minutos e o histórico entra desde janeiro.",
+    }),
+  }
+}
+
+/**
  * "Respondemos seu chamado" — a resposta do suporte chegando por e-mail.
  *
  * Usa a moldura de CLIENTE, não a dos avisos internos. A primeira versão

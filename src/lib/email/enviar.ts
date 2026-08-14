@@ -115,6 +115,21 @@ export type TipoEmail =
   /** Cliente pediu a conexão do 99 Food. Interno, um por loja — `forcar`. */
   | "ninefood-solicitacao"
   /**
+   * "Pedimos a conexão e nada chegou — você aprovou?" Cobra do cliente a
+   * confirmação quando a loja fica dias solicitada sem trazer dado.
+   *
+   * Vai com `forcar: true` e a trava REAL não é esta: é a coluna
+   * `ifood_activation_requests.cobranca_enviada_em`, marcada por LOJA. Tinha
+   * que ser assim porque o e-mail é um só por cliente, listando as lojas dele
+   * — com a trava padrão `(holding_id, tipo)`, um cliente com três lojas
+   * paradas seria avisado de uma e nunca das outras duas. Foi exatamente esse
+   * o caso que criou este e-mail (Tech Assessoria, ago/26).
+   *
+   * O sufixo do tipo é o id do cliente, só pra o registro em `email_enviados`
+   * dizer de quem era o envio.
+   */
+  | `conexao-sem-dado-${string}`
+  /**
    * Chamado do chat de suporte esperando gente. INTERNO e sempre com
    * `forcar: true` — vários chamados por dia são o funcionamento normal, e a
    * trava padrão entregaria o primeiro e engoliria todos os outros.

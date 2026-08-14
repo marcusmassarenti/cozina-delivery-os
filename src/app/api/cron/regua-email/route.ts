@@ -8,6 +8,7 @@
  * data — rodar duas vezes no mesmo dia não manda nada duas vezes.
  */
 import { avisarLojasCompartilhadas } from "@/lib/email/loja-compartilhada"
+import { cobrarConfirmacaoDeConexao } from "@/lib/email/conexao-sem-dado"
 import { enviarNovidades } from "@/lib/email/novidades"
 import { rodarReguaEmail } from "@/lib/data/regua-email"
 import { rodarReguaFechamento } from "@/lib/data/regua-fechamento"
@@ -58,6 +59,19 @@ export async function GET(req: Request) {
     console.error("avisarLojasCompartilhadas:", e)
   }
 
+  // Loja pedida há dias e sem nenhum dado: pergunta ao cliente se ele chegou
+  // a aprovar. Sem isso os dois lados ficam esperando o outro — foi o que
+  // aconteceu com a Tech Assessoria em ago/26, e a descoberta só veio porque
+  // o Marcus foi olhar por conta própria. A trava é por loja, então isto vira
+  // consulta e nada mais depois que o cliente já foi cobrado.
+  let semDado: Awaited<ReturnType<typeof cobrarConfirmacaoDeConexao>> | null =
+    null
+  try {
+    semDado = await cobrarConfirmacaoDeConexao()
+  } catch (e) {
+    console.error("cobrarConfirmacaoDeConexao:", e)
+  }
+
   let novidades: Awaited<ReturnType<typeof enviarNovidades>> | null = null
   try {
     novidades = await enviarNovidades({ confirmar: true })
@@ -73,6 +87,7 @@ export async function GET(req: Request) {
     fechamento,
     novidades,
     compartilhadas,
+    semDado,
   })
   })
 }
