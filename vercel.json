@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/ifood-sync",
-      "schedule": "30 11 * * *"
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/cron/cardapioweb-sync",
@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/ifood-review-sync",
-      "schedule": "45 11 * * *"
+      "schedule": "0 10 * * *"
     },
     {
       "path": "/api/cron/billing-vencimentos",
