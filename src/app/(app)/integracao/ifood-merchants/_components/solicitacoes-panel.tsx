@@ -7,6 +7,7 @@ import * as React from "react"
 
 import { Button } from "@/components/ui/button"
 
+import { combina } from "./abas"
 import {
   atualizarSolicitacaoIfood,
   compartilharLojaExistente,
@@ -499,15 +500,24 @@ export type LojaDaRede = {
 export function SolicitacoesPanel({
   solicitacoes,
   lojasDaRede = [],
+  busca = "",
 }: {
   solicitacoes: SolicitacaoAdmin[]
   /** Todas as lojas da plataforma — pro caso "essa loja já está na rede". */
   lojasDaRede?: LojaDaRede[]
+  /**
+   * Busca da tela, já normalizada. Precisa chegar aqui: a fila e a tabela de
+   * merchants são listas diferentes da MESMA pergunta ("cadê a loja X"), e uma
+   * busca que filtra só metade da tela responde errado sem avisar.
+   */
+  busca?: string
 }) {
   // Loja já ativa = jornada concluída → sai da fila (continua visível como
   // "Vinculado" na tabela de merchants abaixo). A fila mostra só o que ainda
   // precisa de ação: pendente, solicitada e recusada.
-  const naFila = solicitacoes.filter((s) => s.status !== "ativa")
+  const naFila = solicitacoes
+    .filter((s) => s.status !== "ativa")
+    .filter((s) => combina(busca, s.unitLabel, s.cnpj, s.holdingName))
   if (naFila.length === 0) return null
   const abertas = naFila.filter(
     (s) => s.status === "pendente" || s.status === "solicitada",

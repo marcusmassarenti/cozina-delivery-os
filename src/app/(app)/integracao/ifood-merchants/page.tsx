@@ -5,12 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhadas"
 
 import { RefreshButton, RunSyncButton } from "./_components/link-row"
-import { MerchantsTable } from "./_components/merchants-table"
-import { RevogadasAviso } from "./_components/revogadas-aviso"
-import {
-  SolicitacoesPanel,
-  type SolicitacaoAdmin,
-} from "./_components/solicitacoes-panel"
+import { PainelMerchants } from "./_components/painel"
+import type { SolicitacaoAdmin } from "./_components/solicitacoes-panel"
 
 type MerchantRow = {
   id: string
@@ -230,6 +226,13 @@ export default async function IfoodMerchantsPage() {
     merchantsSumidos(),
   ])
   const linkedCount = Object.keys(byMerchant).length
+  const ignorados = merchants.filter((m) => m.ignorado_em).length
+  const semVinculo = merchants.filter(
+    (m) => !m.ignorado_em && !byMerchant[m.id],
+  ).length
+  const solicitacoesAbertas = solicitacoes.filter(
+    (s) => s.status === "pendente" || s.status === "solicitada",
+  ).length
 
   // Lojas que cada cliente ACOMPANHA (de outra empresa), indexadas pelo NOME —
   // que é a chave por onde a tabela agrupa. Cliente que só acompanha não tem
@@ -283,20 +286,17 @@ export default async function IfoodMerchantsPage() {
         </div>
       </div>
 
-      <RevogadasAviso sumidos={sumidos} />
-
-      <SolicitacoesPanel solicitacoes={solicitacoes} lojasDaRede={units} />
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <StatCard label="Merchants no cache" value={String(merchants.length)} />
-        <StatCard
-          label="Vinculados a uma unidade"
-          value={`${linkedCount}/${merchants.length}`}
-        />
-        <StatCard label="Unidades ativas na rede" value={String(units.length)} />
-      </div>
-
-      <MerchantsTable
+      {/* Três perguntas, três abas. Empilhadas, a que tem trabalho pendente
+          ficava embaixo da que serve só pra consulta — e com 10 clientes e 200
+          lojas isso vira uma página que ninguém lê até o fim. */}
+      <PainelMerchants
+        sumidos={sumidos}
+        solicitacoes={solicitacoes}
+        contagens={{
+          pendencias: solicitacoesAbertas + semVinculo + sumidos.length,
+          conectadas: linkedCount,
+          ignoradas: ignorados,
+        }}
         merchants={merchants}
         units={units}
         holdings={holdings}
@@ -317,17 +317,6 @@ export default async function IfoodMerchantsPage() {
           e Financial Events (últimos 7 dias) com throttle de 6h.
         </p>
       </div>
-    </div>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-2xl font-bold tabular-nums">{value}</p>
     </div>
   )
 }
