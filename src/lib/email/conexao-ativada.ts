@@ -356,16 +356,55 @@ export async function varrerConexoesNovas(): Promise<{
     (installsCw.data ?? []).map((i) => i.unit_id as string).filter(Boolean),
   )
 
-  const conectada = (c: (typeof candidatos)[number]) =>
+  /**
+   * ⚠️ VÍNCULO NÃO É PROVA DE QUE A API FUNCIONA.
+   *
+   * O guarda acima já tinha falhado uma vez (09/08/26) usando só o cadastro,
+   * e falhou DE NOVO em 14/08/26 usando só o vínculo: o Marmitex Faisão tinha
+   * `api_store_id` preenchido e 4.536 lançamentos, e mesmo assim a API do
+   * iFood respondia 403 pra ele. Os lançamentos tinham vindo de PLANILHA. O
+   * cliente recebeu "iFood conectado" de uma loja que não estava conectada.
+   *
+   * A única prova que resta de pé é o dado ter chegado PELA API. É isso que
+   * `platform_imports.source = 'api'` registra, e é por isso que ele entra
+   * aqui: vínculo diz que apontamos pra uma loja; `source='api'` diz que ela
+   * respondeu.
+   */
+  const { data: cargasApi } = await admin
+    .from("platform_imports")
+    .select("unit_id, platform")
+    .eq("source", "api")
+    .in(
+      "unit_id",
+      candidatos.map((c) => c.unit_id),
+    )
+  const jaVeioPelaApi = new Set(
+    ((cargasApi ?? []) as { unit_id: string; platform: string }[]).map(
+      (r) => `${r.unit_id}|${r.platform}`,
+    ),
+  )
+
+  /** Aponta pra uma loja de API. Diz o que a gente configurou, não o que funciona. */
+  const temVinculo = (c: (typeof candidatos)[number]) =>
     c.platform === "ifood"
       ? Boolean(c.api_store_id)
       : c.platform === "99food"
         ? com99.has(c.unit_id)
         : comCw.has(c.unit_id)
 
+  /** A API respondeu de verdade pelo menos uma vez. É o que autoriza a frase. */
+  const conectada = (c: (typeof candidatos)[number]) =>
+    temVinculo(c) && jaVeioPelaApi.has(`${c.unit_id}|${c.platform}`)
+
   // Quem não é conexão de API sai da fila de vez: sem isto, cada varredura
   // reavaliaria as mesmas ~160 linhas todo dia pra sempre.
-  const foraDeEscopo = candidatos.filter((c) => !conectada(c))
+  //
+  // ⚠️ O corte é por VÍNCULO, não por `conectada`. Loja vinculada que ainda
+  // não recebeu dado da API não está fora de escopo — está esperando. Carimbar
+  // ela aqui a tiraria da fila pra sempre, e no dia em que a API destravasse
+  // o cliente nunca receberia o aviso. É o caso das lojas travadas hoje no
+  // 403: elas TÊM vínculo e não podem ser descartadas.
+  const foraDeEscopo = candidatos.filter((c) => !temVinculo(c))
   for (const c of foraDeEscopo) {
     await admin
       .from("unit_platforms")
