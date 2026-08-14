@@ -81,7 +81,9 @@ export async function GET(req: Request) {
       ok: true,
       ranAt: new Date().toISOString(),
       historico: hist.backfill.map(
-        (b) => `${b.unitCode} ${b.unitName}: ${b.meses} meses, ${b.linhas} linhas`,
+        (b) =>
+          `${b.unitCode} ${b.unitName}: ${b.meses} meses, ${b.linhas} linhas` +
+          (b.incompleto ? " ⚠️ saiu incompleto (esgotou as tentativas)" : ""),
       ),
       // O tamanho da fila que sobra é o número a acompanhar: parado por várias
       // rodadas seguidas significa que ninguém está sendo servido.

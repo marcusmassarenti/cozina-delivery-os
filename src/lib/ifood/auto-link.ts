@@ -670,6 +670,16 @@ export function competenciasDesdeInicio(now = new Date()): string[] {
  *  Como lojas novas chegam aos poucos, 2/rodada dá conta com folga. */
 const MAX_BACKFILL_POR_RODADA = 2
 
+/**
+ * Quantas rodadas uma loja pode falhar antes de sair da fila mesmo incompleta.
+ *
+ * Três, e não uma: a geração do extrato do iFood é assíncrona e falha sozinha
+ * de vez em quando — foi assim que o Baião de Dois perdeu maio e julho. Três
+ * chances cobrem a falha passageira. Além disso, o que sobra é mês que a loja
+ * não tem (abriu depois), e insistir nele é gastar 160s por rodada pra sempre.
+ */
+const MAX_TENTATIVAS = 3
+
 export type AutoLinkBackfillResult = AutoLinkResult & {
   backfill: {
     /** Necessário pra avisar o cliente logo depois — não é só rótulo. */
@@ -678,6 +688,12 @@ export type AutoLinkBackfillResult = AutoLinkResult & {
     unitName: string
     linhas: number
     meses: number
+    /**
+     * Saiu da fila SEM todos os meses (esgotou `MAX_TENTATIVAS`). Ou a loja é
+     * mais nova que janeiro — normal — ou o iFood ficou devendo, e aí é caso
+     * pra olhar. Aparece no JSON do cron pra não virar buraco silencioso.
+     */
+    incompleto?: boolean
   }[]
   backfillAdiado: { unitCode: string; unitName: string }[]
 }
@@ -774,32 +790,53 @@ export async function backfillPendentes(
       // (pergunta respondida, nada a puxar) versus não consegui falar com a
       // API (aí não carimba e volta pra fila mesmo).
       //
-      // ⚠️ TODAS as competências, não `some`. Com `some`, UM mês respondido
-      // carimbava a loja inteira como "histórico completo" — e como o carimbo
-      // é o que define a fila, os meses que falharam nunca mais eram tentados.
-      // Aconteceu com o Baião de Dois em 14/08/26: seis meses vieram, maio e
-      // julho não, e a loja saiu da fila com dois buracos INVISÍVEIS (os
-      // pedidos desses meses entraram normalmente — só o financeiro faltava).
+      // ⚠️ AQUI JÁ ERROU PARA OS DOIS LADOS, EM UM DIA SÓ (14/08/26):
       //
-      // Isto NÃO ressuscita o loop infinito documentado acima: competência
-      // vazia continua sendo `ok === true`. Quem segura o carimbo é só quem
-      // não conseguiu falar com a API — que é exatamente quem deve voltar.
+      //   `some` (algum mês respondeu) carimbava com BURACO. O Baião de Dois
+      //   saiu da fila sem maio e julho; como o carimbo define a fila, esses
+      //   dois meses nunca mais seriam tentados — e o buraco era invisível,
+      //   porque os PEDIDOS deles tinham entrado, só o financeiro faltava.
+      //
+      //   `every` (todos responderam) nunca carimbava loja NOVA. A Koike
+      //   Bistrô abriu em junho, então janeiro a maio não respondem nunca: ela
+      //   foi reprocessada 4 vezes seguidas (19:04, 19:10, 19:15, 19:20),
+      //   queimando 160s e chamadas de API por rodada e travando a cabeça da
+      //   fila. É o mesmo loop de 09/08 (Forno a Lenha, Ipiranga, Ki Delicia,
+      //   Nagay) voltando por outra porta.
+      //
+      // O contador de tentativas desfaz o dilema: exige TODOS os meses, mas
+      // desiste depois de `MAX_TENTATIVAS`. Falha transitória ganha várias
+      // chances; mês que não vai existir nunca para de segurar a fila.
       const porCompetencia = u?.reconciliation ?? []
       const respondeu =
         porCompetencia.length > 0 && porCompetencia.every((x) => x.ok === true)
-      if (respondeu) {
-        await createAdminClient()
-          .from("unit_platforms")
-          .update({ historico_backfill_at: new Date().toISOString() })
-          .eq("unit_id", v.unitId)
-          .eq("platform", "ifood")
-      }
+
+      const tentativas = (v.tentativas ?? 0) + 1
+      const desistiu = !respondeu && tentativas >= MAX_TENTATIVAS
+      const admin = createAdminClient()
+      await admin
+        .from("unit_platforms")
+        .update({
+          historico_tentativas: tentativas,
+          // Carimba quando deu certo OU quando esgotou. Nos dois casos a loja
+          // sai da fila — a diferença é que "esgotou" fica registrado na
+          // resposta do cron, pra não virar buraco silencioso como o do Baião.
+          ...(respondeu || desistiu
+            ? { historico_backfill_at: new Date().toISOString() }
+            : {}),
+        })
+        .eq("unit_id", v.unitId)
+        .eq("platform", "ifood")
       backfill.push({
         unitId: v.unitId,
         unitCode: v.unitCode,
         unitName: v.unitName,
         linhas,
         meses,
+        // Só aparece quando a loja saiu da fila SEM todos os meses. É o
+        // sinal de "olha aqui": ou a loja é mais nova que janeiro (normal), ou
+        // o iFood ficou devendo (aí é caso pra olhar).
+        ...(desistiu ? { incompleto: true } : {}),
       })
     } catch {
       backfillAdiado.push({ unitCode: v.unitCode, unitName: v.unitName })
@@ -817,12 +854,12 @@ export async function backfillPendentes(
  * vinculada por um caminho que não é o cron.
  */
 async function lojasSemHistorico(): Promise<
-  { unitId: string; unitCode: string; unitName: string }[]
+  { unitId: string; unitCode: string; unitName: string; tentativas: number }[]
 > {
   const admin = createAdminClient()
   const { data } = await admin
     .from("unit_platforms")
-    .select("unit_id, units(code, name, active)")
+    .select("unit_id, historico_tentativas, units(code, name, active)")
     .eq("platform", "ifood")
     .eq("active", true)
     .not("api_store_id", "is", null)
@@ -830,6 +867,7 @@ async function lojasSemHistorico(): Promise<
 
   return ((data ?? []) as unknown as {
     unit_id: string
+    historico_tentativas: number | null
     units: { code: string; name: string; active: boolean } | null
   }[])
     // Loja desativada não entra: puxar o ano de quem fechou as portas é gastar
@@ -839,5 +877,6 @@ async function lojasSemHistorico(): Promise<
       unitId: r.unit_id,
       unitCode: r.units?.code ?? "—",
       unitName: r.units?.name ?? "—",
+      tentativas: r.historico_tentativas ?? 0,
     }))
 }
