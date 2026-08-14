@@ -6,7 +6,7 @@ import { requireSuperadmin } from "@/lib/auth/guards"
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import {
   getIfoodMerchant,
-  listIfoodMerchants,
+  listAllIfoodMerchants,
   type IfoodMerchant,
 } from "@/lib/ifood/merchants"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -53,7 +53,7 @@ export async function refreshMerchants(
   _formData: FormData,
 ): Promise<RefreshMerchantsState> {
   try {
-    const r = await listIfoodMerchants()
+    const r = await listAllIfoodMerchants()
     if (!r.ok || !r.data) {
       revalidatePath("/integracao/ifood-merchants")
       return {

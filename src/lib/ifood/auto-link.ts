@@ -21,7 +21,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 
-import { listIfoodMerchants, type IfoodMerchant } from "./merchants"
+import { listAllIfoodMerchants, type IfoodMerchant } from "./merchants"
 import { downloadReconciliationRows } from "./reconciliation"
 import { syncIfoodAll } from "./sync"
 
@@ -237,7 +237,7 @@ export async function autoLinkIfoodMerchants(
   const admin = createAdminClient()
 
   // 1) Merchants autorizados no app, ao vivo.
-  const r = await listIfoodMerchants()
+  const r = await listAllIfoodMerchants()
   if (!r.ok || !r.data) {
     return {
       ok: false,

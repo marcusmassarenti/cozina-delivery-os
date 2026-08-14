@@ -53,13 +53,7 @@ export type IfoodMerchant = {
 /** GET /merchant/v1.0/merchants — lista paginada. */
 export type IfoodMerchantList = IfoodMerchant[]
 
-/**
- * Lista todos os merchants associados ao app.
- *
- * O endpoint costuma aceitar paginação (`page`, `size`), mas em apps
- * Centralizados pequenos cabe tudo numa página. Por enquanto pegamos 100
- * — a Onda 3.5 pode acrescentar iteração se a rede crescer.
- */
+/** Uma página da listagem. Quem quer a lista inteira usa `listAllIfoodMerchants`. */
 export async function listIfoodMerchants(
   opts: { page?: number; size?: number } = {},
 ): Promise<IfoodFetchResult<IfoodMerchantList>> {
@@ -72,6 +66,42 @@ export async function listIfoodMerchants(
     responseType: "json",
     endpointLabel: "GET /merchant/v1.0/merchants",
   })
+}
+
+/** Teto de páginas. 50 × 100 = 5.000 lojas; acima disso é laço maluco, não rede. */
+const MAX_PAGINAS = 50
+
+/**
+ * TODAS as lojas do app, percorrendo as páginas até acabar.
+ *
+ * Existe porque a versão anterior pedia UMA página de 100 e tratava o
+ * resultado como a lista inteira. Hoje são 67 lojas e funciona — na 101ª
+ * pararia de ver o resto, calada. E o resultado desta lista é o que decide
+ * quais lojas vinculam e quais entram no sync: uma loja fora dela some do
+ * sistema sem nenhum erro aparecer em lugar nenhum.
+ *
+ * É o mesmo tipo de corte silencioso que já mordeu este projeto duas vezes
+ * (a `.limit()` que mostrava "45 lojas" numa rede de 56). Truncar sem avisar
+ * é pior que falhar: falha a gente vê.
+ */
+export async function listAllIfoodMerchants(): Promise<
+  IfoodFetchResult<IfoodMerchantList>
+> {
+  const TAMANHO = 100
+  const todos: IfoodMerchant[] = []
+  let ultima: IfoodFetchResult<IfoodMerchantList> | null = null
+
+  for (let page = 1; page <= MAX_PAGINAS; page++) {
+    const r = await listIfoodMerchants({ page, size: TAMANHO })
+    ultima = r
+    // Falha no meio NÃO devolve lista parcial como se fosse completa: quem
+    // chama trataria 30 lojas como "as que existem" e desvincularia o resto.
+    if (!r.ok || !r.data) return r
+    todos.push(...r.data)
+    if (r.data.length < TAMANHO) break
+  }
+
+  return { ...(ultima as IfoodFetchResult<IfoodMerchantList>), data: todos }
 }
 
 /** Detalhe de um merchant específico (útil pra debug). */
