@@ -23,16 +23,26 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { contatosPorHolding } from "@/lib/data/contato-cliente"
 import { enviarEmail } from "@/lib/email/enviar"
 import { conexaoSemDado } from "@/lib/email/templates"
+import { avisarRecusaPorEmail } from "@/lib/email/recusa"
 
 /**
- * Dias de silêncio antes de cobrar.
+ * Dias de silêncio antes de cobrar a confirmação.
  *
- * Três, não um: a aprovação no Portal do Parceiro depende de a pessoa certa
- * (o Proprietário) sentar e fazer, e cobrar no dia seguinte trata atraso
- * normal como problema. Três dias já é tempo de sobra pra uma conexão que
- * costuma fechar em 15 minutos — passou disso, alguma coisa travou.
+ * Um dia. A conexão costuma fechar em 15 minutos depois da aprovação, então
+ * passar um dia inteiro sem nada já é sinal de que travou — e quanto antes a
+ * pergunta sai, menos tempo o cliente passa olhando uma tela vazia sem saber
+ * de quem é a vez.
  */
-const DIAS_DE_SILENCIO = 3
+const DIAS_DE_SILENCIO = 1
+
+/**
+ * Dias até a solicitação expirar sozinha.
+ *
+ * Passou disso sem dado, o pedido volta à estaca zero: o cliente pede de novo
+ * quando estiver pronto. Uma fila que só cresce para de ser fila — solicitação
+ * de três semanas atrás não diz nada sobre o que ainda vale.
+ */
+const DIAS_ATE_EXPIRAR = 3
 
 export type ResultadoCobranca = {
   clientes: number
@@ -170,4 +180,119 @@ export async function cobrarConfirmacaoDeConexao(
   }
 
   return { clientes: enviados.length, lojas, enviados }
+}
+
+/**
+ * Marca da recusa automática. Fica na `nota`, que o cliente lê — e é também
+ * como a rodada seguinte reconhece um pedido que JÁ expirou uma vez.
+ */
+const MARCA_EXPIRACAO = "Expirou sem trazer dado"
+
+export type ResultadoExpiracao = {
+  expiradas: { cliente: string; loja: string; cnpj: string | null }[]
+  /** Segunda rodada do mesmo problema: não expira, chama gente. */
+  reincidentes: { cliente: string; loja: string; cnpj: string | null }[]
+}
+
+/**
+ * Solicitação parada há dias volta à estaca zero: recusada, cliente avisado,
+ * fila limpa. Ele pede de novo quando estiver pronto.
+ *
+ * ⚠️ NÃO EXPIRA DUAS VEZES A MESMA LOJA. Se o pedido já expirou uma vez e o
+ * cliente pediu de novo, expirar outra vez cria um moinho: pede → cobra em 1
+ * dia → recusa em 3 → pede de novo → para sempre, com um e-mail por volta. E
+ * o caso que mais provoca isso é justamente aquele em que o cliente não tem
+ * culpa nenhuma — a loja da Tech Assessoria que o iFood mostra como "Ativo" e
+ * não entrega. Na segunda vez o pedido FICA e entra em `reincidentes`, pra
+ * uma pessoa olhar. Automação que insiste sozinha num problema que ela não
+ * sabe resolver só produz barulho.
+ */
+export async function expirarSolicitacoesParadas(
+  simular = false,
+): Promise<ResultadoExpiracao> {
+  const admin = createAdminClient()
+  const corte = new Date(
+    Date.now() - DIAS_ATE_EXPIRAR * 24 * 60 * 60 * 1000,
+  ).toISOString()
+
+  const { data: reqs } = await admin
+    .from("ifood_activation_requests")
+    .select("id, holding_id, unit_id, cnpj, created_at, units!inner(id, name)")
+    .in("status", ["pendente", "solicitada"])
+    .lt("created_at", corte)
+
+  const linhas = ((reqs ?? []) as unknown as {
+    id: string
+    holding_id: string
+    unit_id: string
+    cnpj: string | null
+    units: { id: string; name: string }
+  }[]).filter((r) => r.unit_id)
+
+  const out: ResultadoExpiracao = { expiradas: [], reincidentes: [] }
+  if (linhas.length === 0) return out
+
+  // Loja que já vinculou não expira — a solicitação pode ter ficado aberta por
+  // descuido, e recusar uma loja que está trazendo dado seria absurdo.
+  const { data: vinculadas } = await admin
+    .from("unit_platforms")
+    .select("unit_id")
+    .eq("platform", "ifood")
+    .not("api_store_id", "is", null)
+    .in("unit_id", linhas.map((r) => r.unit_id))
+  const jaVinculada = new Set(
+    ((vinculadas ?? []) as { unit_id: string }[]).map((v) => v.unit_id),
+  )
+
+  // Quem já expirou antes: a segunda volta não é automática.
+  const { data: antigas } = await admin
+    .from("ifood_activation_requests")
+    .select("unit_id")
+    .eq("status", "recusada")
+    .ilike("nota", `${MARCA_EXPIRACAO}%`)
+    .in("unit_id", linhas.map((r) => r.unit_id))
+  const jaExpirou = new Set(
+    ((antigas ?? []) as { unit_id: string }[]).map((a) => a.unit_id),
+  )
+
+  const nomes = new Map<string, string>()
+  const { data: hs } = await admin
+    .from("holdings")
+    .select("id, name")
+    .in("id", [...new Set(linhas.map((r) => r.holding_id))])
+  for (const h of (hs ?? []) as { id: string; name: string }[]) {
+    nomes.set(h.id, h.name)
+  }
+
+  for (const r of linhas) {
+    if (jaVinculada.has(r.unit_id)) continue
+    const cliente = nomes.get(r.holding_id) ?? r.holding_id
+    const item = { cliente, loja: r.units.name, cnpj: r.cnpj }
+
+    if (jaExpirou.has(r.unit_id)) {
+      out.reincidentes.push(item)
+      continue
+    }
+    out.expiradas.push(item)
+    if (simular) continue
+
+    const nota = `${MARCA_EXPIRACAO} em ${DIAS_ATE_EXPIRAR} dias. Quando a loja estiver aprovada no Portal do Parceiro, é só pedir a conexão de novo pelo sistema.`
+    const { error } = await admin
+      .from("ifood_activation_requests")
+      .update({ status: "recusada", nota, updated_at: new Date().toISOString() })
+      .eq("id", r.id)
+    if (error) continue
+
+    // Avisa DEPOIS de gravar, pelo mesmo caminho do botão manual. Se o e-mail
+    // falhar, a recusa continua de pé — e é assim que tem que ser: o estado é
+    // o que manda, o aviso é o acessório.
+    await avisarRecusaPorEmail({
+      holdingId: r.holding_id,
+      cnpj: r.cnpj ?? "",
+      loja: r.units.name,
+      motivo: nota,
+    })
+  }
+
+  return out
 }

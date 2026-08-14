@@ -8,7 +8,10 @@
  * data — rodar duas vezes no mesmo dia não manda nada duas vezes.
  */
 import { avisarLojasCompartilhadas } from "@/lib/email/loja-compartilhada"
-import { cobrarConfirmacaoDeConexao } from "@/lib/email/conexao-sem-dado"
+import {
+  cobrarConfirmacaoDeConexao,
+  expirarSolicitacoesParadas,
+} from "@/lib/email/conexao-sem-dado"
 import { enviarNovidades } from "@/lib/email/novidades"
 import { rodarReguaEmail } from "@/lib/data/regua-email"
 import { rodarReguaFechamento } from "@/lib/data/regua-fechamento"
@@ -72,6 +75,17 @@ export async function GET(req: Request) {
     console.error("cobrarConfirmacaoDeConexao:", e)
   }
 
+  // Depois de cobrar: o que passou de 3 dias volta à estaca zero. A ordem
+  // importa — cobrar e expirar na mesma passada dá ao cliente a chance de
+  // responder antes de o pedido morrer.
+  let expiradas: Awaited<ReturnType<typeof expirarSolicitacoesParadas>> | null =
+    null
+  try {
+    expiradas = await expirarSolicitacoesParadas()
+  } catch (e) {
+    console.error("expirarSolicitacoesParadas:", e)
+  }
+
   let novidades: Awaited<ReturnType<typeof enviarNovidades>> | null = null
   try {
     novidades = await enviarNovidades({ confirmar: true })
@@ -88,6 +102,7 @@ export async function GET(req: Request) {
     novidades,
     compartilhadas,
     semDado,
+    expiradas,
   })
   })
 }

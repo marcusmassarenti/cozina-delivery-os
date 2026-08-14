@@ -10,6 +10,7 @@ import {
   type IfoodMerchant,
 } from "@/lib/ifood/merchants"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { avisarRecusaPorEmail } from "@/lib/email/recusa"
 
 export type RefreshMerchantsState = {
   ok: boolean
@@ -578,55 +579,6 @@ async function avisarSolicitacaoPorEmail(d: {
       : `Não consegui avisar por e-mail: ${r.erro ?? "falha no envio"}.`
   } catch (e) {
     console.error("avisarSolicitacaoPorEmail", e)
-    return "Não consegui avisar por e-mail (erro interno)."
-  }
-}
-
-/**
- * Manda a recusa pro administrador da holding e devolve o que contar na tela.
- *
- * Nunca lança: o status já foi gravado quando isto roda, e falhar o e-mail não
- * pode desfazer a recusa nem parecer que a recusa falhou. O retorno é texto pra
- * quem recusou saber se o cliente foi mesmo avisado — sem isso o operador fica
- * achando que avisou quando não avisou.
- */
-async function avisarRecusaPorEmail(d: {
-  holdingId: string | null
-  cnpj: string
-  loja: string | null
-  motivo: string | null
-}): Promise<string> {
-  if (!d.holdingId) return "Não avisei por e-mail: solicitação sem empresa."
-  try {
-    const { contatoDaHolding } = await import("@/lib/email/contato-holding")
-    const { enviarEmail } = await import("@/lib/email/enviar")
-    const { conexaoRecusada } = await import("@/lib/email/templates")
-
-    const contato = await contatoDaHolding(d.holdingId)
-    if (!contato) {
-      return "Não avisei por e-mail: a empresa não tem administrador com e-mail confirmado."
-    }
-
-    const { assunto, html } = conexaoRecusada({
-      nome: contato.nome,
-      loja: d.loja,
-      cnpj: d.cnpj,
-      motivo: d.motivo,
-    })
-    const r = await enviarEmail({
-      holdingId: d.holdingId,
-      tipo: "conexao-recusada",
-      para: contato.email,
-      assunto,
-      html,
-      // Pode recusar mais de uma vez o mesmo cliente (outro CNPJ errado).
-      forcar: true,
-    })
-    return r.ok
-      ? `Avisei ${contato.email} por e-mail.`
-      : `Não consegui avisar por e-mail: ${r.erro ?? "falha no envio"}.`
-  } catch (e) {
-    console.error("avisarRecusaPorEmail", e)
     return "Não consegui avisar por e-mail (erro interno)."
   }
 }

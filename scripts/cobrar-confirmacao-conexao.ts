@@ -14,7 +14,10 @@
  * `--dias` e `--holding` são pra disparo à mão, quando já se sabe que a loja
  * travou e esperar o prazo não muda nada. O cron nunca passa esses dois.
  */
-import { cobrarConfirmacaoDeConexao } from "../src/lib/email/conexao-sem-dado"
+import {
+  cobrarConfirmacaoDeConexao,
+  expirarSolicitacoesParadas,
+} from "../src/lib/email/conexao-sem-dado"
 
 async function main() {
   const enviar = process.argv.includes("--enviar")
@@ -38,7 +41,20 @@ async function main() {
     for (const l of e.lojas) console.log(`    - ${l}`)
     if (e.erro) console.log(`    ⚠️  ${e.erro}`)
   }
-  if (r.enviados.length === 0) console.log("(nenhuma loja parada há 3+ dias)")
+  if (r.enviados.length === 0) console.log("(nenhuma loja a cobrar)")
+
+  // Quem passou do prazo volta à estaca zero.
+  const exp = await expirarSolicitacoesParadas(!enviar)
+  console.log(
+    `\n=== ${enviar ? "EXPIRADAS" : "EXPIRARIAM"}: ${exp.expiradas.length} ===`,
+  )
+  for (const e of exp.expiradas) console.log(`  • ${e.cliente} — ${e.loja}`)
+  if (exp.reincidentes.length > 0) {
+    console.log(
+      `\n⚠️  ${exp.reincidentes.length} já expiraram antes — NÃO expiram de novo, precisam de gente:`,
+    )
+    for (const e of exp.reincidentes) console.log(`  • ${e.cliente} — ${e.loja}`)
+  }
   if (!enviar) console.log("\nNada foi enviado. Rode com --enviar pra valer.")
 }
 
