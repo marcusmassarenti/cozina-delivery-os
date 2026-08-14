@@ -22,6 +22,18 @@ import "server-only"
 import { gunzipSync } from "node:zlib"
 
 import { fetchIfood, type IfoodFetchResult } from "./client"
+import { createAdminClient } from "@/lib/supabase/admin"
+
+/**
+ * Janela em que o iFood reaproveita o pedido de extrato em vez de criar um
+ * novo. É REGRA DELES (6h), não nossa — por isso o número mora aqui perto do
+ * uso, e não numa config: se eles mudarem, o conserto é uma linha neste lugar.
+ *
+ * Descontamos 5 minutos da borda. Um pedido feito a 5h59 ainda seria aceito
+ * pela nossa conta e recusado pela deles, e o caso de borda voltaria a gastar
+ * exatamente a chamada 409 que este cache existe pra evitar.
+ */
+const JANELA_REUSO_MS = 6 * 60 * 60 * 1000 - 5 * 60 * 1000
 
 const ON_DEMAND_TPL =
   "/financial/v3.0/merchants/{merchantId}/reconciliation/on-demand"
@@ -37,14 +49,97 @@ function sleep(ms: number): Promise<void> {
 type OnDemandRequest = {
   ok: boolean
   requestId?: string
-  /** 202 = pedido novo; 409 = reusando pedido recente das últimas 6h */
+  /** 202 = pedido novo; 409 = reusando o vigente; 0 = reusado do nosso cache */
   status: number
+  /**
+   * O pedido nasceu AGORA (202). Falso quando reusamos um id anterior — e a
+   * diferença importa: relatório recém-pedido ainda não existe, relatório de
+   * um pedido antigo quase sempre já está pronto. É isso que decide se vale
+   * esperar antes da primeira consulta.
+   */
+  novo?: boolean
   error?: string
+}
+
+/** Lê o requestId ainda dentro da janela de reuso. Falha de leitura = sem cache. */
+async function pedidoVigente(
+  merchantId: string,
+  competencia: string,
+): Promise<string | null> {
+  try {
+    const { data } = await createAdminClient()
+      .from("ifood_reconciliation_pedidos")
+      .select("request_id, criado_em")
+      .eq("merchant_id", merchantId)
+      .eq("competencia", competencia)
+      .maybeSingle()
+    const p = data as { request_id: string; criado_em: string } | null
+    if (!p) return null
+    if (Date.now() - Date.parse(p.criado_em) > JANELA_REUSO_MS) return null
+    return p.request_id
+  } catch (e) {
+    // Cache indisponível NÃO pode impedir o extrato: sem ele o comportamento
+    // volta a ser o de antes (chama, leva 409, lê o id da mensagem).
+    console.error("[reconciliation] cache de pedido:", e)
+    return null
+  }
+}
+
+/**
+ * Esquece o pedido guardado. Chamado quando ele NÃO entrega o arquivo.
+ *
+ * Sem isto, um id que morreu do lado do iFood (expirou, falhou) ficaria sendo
+ * reusado a cada tentativa por até 6 horas — a loja passaria a manhã inteira
+ * falhando pelo mesmo motivo, e o cache que existe pra economizar chamada
+ * viraria a causa do problema. Esquecer devolve o comportamento antigo: a
+ * próxima tentativa pede um extrato novo.
+ */
+async function esquecerPedido(
+  merchantId: string,
+  competencia: string,
+): Promise<void> {
+  try {
+    await createAdminClient()
+      .from("ifood_reconciliation_pedidos")
+      .delete()
+      .eq("merchant_id", merchantId)
+      .eq("competencia", competencia)
+  } catch (e) {
+    console.error("[reconciliation] esquecer pedido:", e)
+  }
+}
+
+async function guardarPedido(
+  merchantId: string,
+  competencia: string,
+  requestId: string,
+): Promise<void> {
+  try {
+    await createAdminClient()
+      .from("ifood_reconciliation_pedidos")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          competencia,
+          request_id: requestId,
+          criado_em: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id,competencia" },
+      )
+  } catch (e) {
+    console.error("[reconciliation] gravar pedido:", e)
+  }
 }
 
 /**
  * Solicita a geração do extrato (POST). Em 409 (já existe pedido recente nas
  * últimas 6h), o iFood devolve o requestId vigente na mensagem — reusamos.
+ *
+ * Antes de chamar, confere se JÁ temos o id vigente guardado. Sem essa
+ * conferência, a segunda tentativa dentro da janela de 6h gastava um POST só
+ * pra receber 409 e ler da mensagem o id que já estava no nosso banco — foram
+ * 1.253 chamadas assim em 30 dias (medido em 13/08/2026). O teto do iFood é
+ * por APLICATIVO: chamada jogada fora numa loja tira a vez de outra.
  */
 export async function requestReconciliation(
   merchantId: string,
@@ -55,6 +150,10 @@ export async function requestReconciliation(
       `competencia deve estar no formato YYYY-MM (recebido: ${competencia})`,
     )
   }
+
+  const guardado = await pedidoVigente(merchantId, competencia)
+  if (guardado) return { ok: true, requestId: guardado, status: 0, novo: false }
+
   const r = await fetchIfood<{ requestId?: string }>({
     path: onDemandPath(merchantId),
     method: "POST",
@@ -64,12 +163,20 @@ export async function requestReconciliation(
     endpointLabel: "POST /financial/v3.0/merchants/{id}/reconciliation/on-demand",
   })
   if (r.status === 202 && r.data?.requestId) {
-    return { ok: true, requestId: r.data.requestId, status: 202 }
+    await guardarPedido(merchantId, competencia, r.data.requestId)
+    return { ok: true, requestId: r.data.requestId, status: 202, novo: true }
   }
   // 409: "There is already a recent and valid request Id: <uuid>. ..."
+  //
+  // Guarda o id que veio na recusa: é o mesmo que o iFood devolveria na
+  // próxima tentativa, então esta é a última vez que essa loja precisa gastar
+  // um 409 nesta competência.
   if (r.status === 409) {
     const m = r.raw.match(/request Id:\s*([0-9a-fA-F-]{36})/)
-    if (m) return { ok: true, requestId: m[1], status: 409 }
+    if (m) {
+      await guardarPedido(merchantId, competencia, m[1])
+      return { ok: true, requestId: m[1], status: 409, novo: false }
+    }
   }
   return { ok: false, status: r.status, error: r.error ?? r.raw.slice(0, 200) }
 }
@@ -239,6 +346,23 @@ export async function downloadReconciliationRows(
   let lastRaw = ""
   let espera = pollMs
   const deadline = Date.now() + maxWaitMs
+
+  // Pedido NOVO ainda não tem arquivo: espera antes da PRIMEIRA pergunta.
+  //
+  // Medido em 13/08/2026: 1.854 pedidos deram exatamente UM 404 cada — o da
+  // primeira consulta — e TODOS os 1.854 viraram 200 logo em seguida. Nenhum
+  // ficou só no 404. O relatório não existe no instante em que o pedido é
+  // aceito, então perguntar ali é gastar uma chamada pra ouvir "ainda não".
+  // Não atrasa nada: a geração leva ~30–60s, muito além desta espera.
+  //
+  // Pedido REUSADO é o contrário — foi feito minutos ou horas atrás e quase
+  // sempre já está pronto. Ali a espera seria atraso puro, multiplicado por
+  // dezenas de lojas na mesma rodada de cron.
+  if (req.novo) {
+    await sleep(espera)
+    espera = Math.min(espera * 2, 30_000)
+  }
+
   while (Date.now() < deadline) {
     const st = await getReconciliationRequest(merchantId, req.requestId)
     lastStatus = st.status
@@ -249,6 +373,7 @@ export async function downloadReconciliationRows(
       break
     }
     if (s === "failed" || s === "error" || s === "expired") {
+      await esquecerPedido(merchantId, competencia)
       return {
         ok: false,
         linkStatus: st.status,
@@ -261,12 +386,14 @@ export async function downloadReconciliationRows(
     // Se o iFood pediu pra esperar (429 com Retry-After), obedece — insistir
     // no ritmo antigo depois de um 429 é o que transforma congestionamento em
     // cascata.
-    const pedido = st.retryAfterMs
-    await sleep(pedido ?? espera)
+    await sleep(st.retryAfterMs ?? espera)
     // Teto de 30s: acima disso o ganho some e o risco é estourar o tempo total.
     espera = Math.min(espera * 2, 30_000)
   }
   if (!filePath) {
+    // Estourou o tempo. Se o id era reusado, some com ele: pode ser um pedido
+    // velho que nunca vai ficar pronto, e insistir nele trava a loja por horas.
+    if (!req.novo) await esquecerPedido(merchantId, competencia)
     return {
       ok: false,
       linkStatus: lastStatus,
