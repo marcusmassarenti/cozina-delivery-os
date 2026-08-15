@@ -9,6 +9,7 @@
  *
  *   /api/dev/preview-email                → loja compartilhada
  *   /api/dev/preview-email?tipo=conexao   → "sua loja está conectada" (iFood)
+ *   /api/dev/preview-email?tipo=saude     → relatório de saúde, com o dado de AGORA
  *
  * Superadmin apenas. Não envia nada: renderiza e devolve o HTML.
  */
@@ -28,6 +29,64 @@ export async function GET(req: Request) {
 
   // Aviso de manutenção não depende de loja nenhuma — sai antes de procurar
   // loja compartilhada, senão a rota morre no "sem loja compartilhada".
+  /**
+   * Relatório de saúde com o dado deste instante — o mesmo que o cron
+   * mandaria, sem mandar. Existe pelo mesmo motivo da rota inteira: até aqui,
+   * conferir o conteúdo do relatório exigia esperar as 11h ou disparar o cron
+   * e receber o e-mail de verdade.
+   */
+  if (tipo === "saude") {
+    const [
+      { diagnosticarIntegracoes },
+      { conferirFontes },
+      { resumoDaRodada },
+      { agruparSaude },
+      { medirInfra },
+      { emailSaude },
+      { estadoDoPipeline },
+    ] = await Promise.all([
+      import("@/lib/data/saude-integracoes"),
+      import("@/lib/data/conferencia-fontes"),
+      import("@/lib/data/rodada-diaria"),
+      import("@/lib/data/saude-agrupada"),
+      import("@/lib/data/infra-metricas"),
+      import("@/lib/email/saude"),
+      import("@/lib/data/pipeline-do-dia"),
+    ])
+
+    const agora = new Date()
+    const s2 = await diagnosticarIntegracoes()
+    const linhas = await conferirFontes(agora.getFullYear(), agora.getMonth() + 1)
+    const conferencia = linhas
+      .filter((l) => l.soApiMiolo > 0 || l.soPlanilhaMiolo > 0)
+      .slice(0, 25)
+      .map((l) => ({
+        clienteNome: l.clienteNome,
+        unitCode: l.unitCode,
+        unitName: l.unitName,
+        plataforma: "iFood",
+        pedidosApi: l.pedidosApi,
+        pedidosPlanilha: l.pedidosPlanilha,
+        provavelMotivo: l.provavelMotivo,
+      }))
+    const [rodada, g, infra, estado] = await Promise.all([
+      resumoDaRodada().catch(() => undefined),
+      Promise.resolve(agruparSaude(s2.lojas)),
+      medirInfra().catch(() => null),
+      estadoDoPipeline(),
+    ])
+    const m = emailSaude(s2, conferencia, rodada, g, infra)
+    const aviso = estado.concluido
+      ? ""
+      : `<div style="padding:10px 14px;background:#fff7ed;border-left:3px solid #ff4d1c;font:600 13px system-ui;color:#7c2d12;">
+           PREVIEW · a rotina do dia ainda não fechou — ${estado.faltamExtrato} loja(s) sem extrato,
+           ${estado.faltamBackfill} no backfill. O cron só enviaria agora se fosse a última janela.
+         </div>`
+    return new Response(aviso + m.html, {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    })
+  }
+
   if (tipo === "manutencao") {
     const { manutencaoIfood } = await import("@/lib/email/templates")
     const m = manutencaoIfood({ nome: "Marcus" })

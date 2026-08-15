@@ -264,6 +264,13 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     "ifood-sync",
     "ifood-review-sync",
     "ifood-auto-vincular",
+    // Entraram em 15/08/26 e não são coadjuvantes: o COLETOR é quem faz o
+    // financeiro do dia entrar (o sync só PEDE o extrato, que o iFood gera de
+    // forma assíncrona e pode levar horas), e o BACKFILL é quem traz o
+    // histórico de loja nova. Se qualquer um parar, o cliente vê número
+    // velho — e sem estarem nesta lista, ninguém ficaria sabendo.
+    "ifood-coletor",
+    "ifood-backfill",
     "ninefood-sync",
     "cardapioweb-sync",
     "process-99-webhooks",
@@ -271,16 +278,35 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     "emitir-faturas",
     "regua-email",
   ]
-  const { data: runs } = await admin
-    .from("cron_runs")
-    .select("nome, iniciado_em, ok, duracao_ms, erro")
-    .order("iniciado_em", { ascending: false })
-    .limit(400)
-
+  /**
+   * ⚠️ UMA CONSULTA POR CRON, e não "as N linhas mais recentes".
+   *
+   * Era `.limit(400)` sobre a tabela inteira ordenada por data. Isso funciona
+   * enquanto todos os crons têm cadência parecida — e quebrou no dia em que
+   * dois crons de minuto entraram no ar (15/08/26: coletor a cada 4 min,
+   * backfill a cada 5). Eles sozinhos ocuparam 398 das 400 linhas, os crons
+   * DIÁRIOS caíram fora da janela, e o relatório de saúde anunciou SETE
+   * rotinas "nunca registrou execução — está parado" com todas rodando
+   * normalmente.
+   *
+   * Limite por contagem é uma aposta na cadência de quem escreve. Perguntar
+   * "qual foi a última execução DESTE cron" não tem esse problema, e são 9
+   * consultas de uma linha cada, servidas pelo índice.
+   */
   const ultimoPorCron = new Map<string, Record<string, unknown>>()
-  for (const r of (runs ?? []) as Record<string, unknown>[]) {
-    const n = String(r.nome)
-    if (!ultimoPorCron.has(n)) ultimoPorCron.set(n, r)
+  const ultimos = await Promise.all(
+    ESPERADOS.map((nome) =>
+      admin
+        .from("cron_runs")
+        .select("nome, iniciado_em, ok, duracao_ms, erro")
+        .eq("nome", nome)
+        .order("iniciado_em", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+  )
+  for (const { data: r } of ultimos) {
+    if (r) ultimoPorCron.set(String(r.nome), r as Record<string, unknown>)
   }
 
   // Há quanto tempo o medidor existe?
