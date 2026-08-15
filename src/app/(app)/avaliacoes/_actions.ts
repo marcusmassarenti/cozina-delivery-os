@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 import { getVisibleUnits } from "@/lib/data/units"
 import { podeEscreverNaUnidade, userCan } from "@/lib/auth/permissions"
 import { replyToReview } from "@/lib/ifood/review"
@@ -95,6 +96,32 @@ export async function responderAvaliacaoIfood(
     .maybeSingle()
   if (!vinc?.api_store_id)
     return { ok: false, message: "Essa loja não está conectada à API do iFood." }
+
+  /**
+   * NA DEMO, RESPONDER TEM QUE FUNCIONAR — sem falar com o iFood.
+   *
+   * Os merchants da conta de demonstração são fictícios, então a chamada real
+   * volta 403 e a tela mostrava "o iFood recusou a resposta" bem na hora em
+   * que o vendedor está mostrando o recurso pro cliente. Aqui a resposta é
+   * gravada igual, e a tela se comporta igual — só não sai da nossa casa.
+   *
+   * Não é atalho de teste: é a demo cumprindo o que ela promete, que é mostrar
+   * o sistema inteiro funcionando.
+   */
+  const demo = await idsDeUnidadesDemo()
+  if (demo.has(av.unit_id)) {
+    await admin
+      .from("ifood_avaliacoes")
+      .update({
+        resposta_texto: t,
+        respondida_em: new Date().toISOString(),
+        status_avaliacao: "REPLIED",
+      })
+      .eq("id", av.id)
+    revalidatePath("/relatorios/avaliacoes-negativos")
+    revalidatePath("/avaliacoes")
+    return { ok: true, message: "Resposta enviada." }
+  }
 
   const r = await replyToReview(vinc.api_store_id, av.review_id, t)
   if (!r.ok) {
