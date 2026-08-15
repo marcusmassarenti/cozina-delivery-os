@@ -12,9 +12,19 @@ import { createAdminClient } from "@/lib/supabase/admin"
  * negócio: o histórico que importa mora em `ifood_financeiro_lancamentos` e
  * `ifood_pedidos`, que continuam intactos.
  *
- * ⚠️ 90 DIAS foi decisão do Marcus (09/08/2026), não um padrão meu. É o mais
- * conservador dos que estavam na mesa: hoje não apaga quase nada (a tabela tem
- * 55 dias de vida), só põe o limite antes de virar problema.
+ * ⚠️ ERA 90 DIAS — decisão do Marcus em 09/08/2026, revista por ele em
+ * 15/08/2026 com o dado na mão. O 90 foi escolhido quando a tabela tinha 55
+ * dias de vida e o expurgo, na prática, nunca apagou nada: em 15/08 ela estava
+ * com 291 MB e 117.762 linhas, 17,6% do banco inteiro e a segunda maior tabela
+ * do sistema, crescendo ~27 MB por dia.
+ *
+ * 14 dias porque é o que as telas realmente usam (a de homologação e o export
+ * de auditoria leem as ÚLTIMAS 50 CHAMADAS) e o que cobre um incidente: o do
+ * iFood, em 12–14/08, levou dois dias pra ser diagnosticado e os logs foram
+ * parte da prova. Uma semana seria justo demais nesse caso.
+ *
+ * O regime permanente com 14 dias é ~65 mil linhas / ~160 MB, contra
+ * crescimento sem teto. Se apertar mais, 7 dias levaria a ~80 MB.
  *
  * NÃO É FUNÇÃO DO BANCO de propósito. Um `security definer` novo seria mais
  * uma porta pra fechar contra o anônimo — o P0 que já voltou duas vezes neste
@@ -24,7 +34,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
  * como `Bearer ***` (conferido nas 89.188 linhas). O expurgo é por espaço.
  */
 
-export const DIAS_DE_LOG = 90
+export const DIAS_DE_LOG = 14
 
 export async function expurgarLogsApi(
   dias = DIAS_DE_LOG,
