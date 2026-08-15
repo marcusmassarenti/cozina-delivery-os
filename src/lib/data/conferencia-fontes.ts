@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 
 /**
  * Conferência entre as duas fontes do mesmo pedido do iFood: a Conciliação que
@@ -90,7 +91,9 @@ export async function conferirFontes(
     throw new Error(`conferirFontes: ${error.message}`)
   }
 
-  const rows = (data ?? []) as Row[]
+  // A demo fica fora: ver a nota em saude-integracoes.ts.
+  const demo = await idsDeUnidadesDemo()
+  const rows = ((data ?? []) as Row[]).filter((r) => !demo.has(r.unit_id))
   if (rows.length === 0) return []
 
   // Nome do cliente e da loja pra mensagem ser acionável ("qual cliente, qual

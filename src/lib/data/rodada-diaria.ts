@@ -17,6 +17,7 @@ import "server-only"
  * Por isso a régua aqui é OUTRA: não é "a rotina executou", é "o dado chegou".
  */
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 
 import type { Gravidade } from "./saude-integracoes"
 
@@ -120,7 +121,13 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
     source_filename: string | null
   }
 
-  const [{ data: recentes }, { data: extratos }, { data: conectadas }] =
+  // A DEMO NÃO É CLIENTE — fora de qualquer relatório interno. As lojas dela
+  // são marcadas como conectadas por API de propósito (é o que se mostra na
+  // apresentação), então entravam no "86/86 iFood" e na lista de lojas que
+  // "nunca fecharam o extrato" — sendo que elas nem sincronizam.
+  const demo = await idsDeUnidadesDemo()
+
+  const [{ data: recentesRaw }, { data: extratosRaw }, { data: conectadasRaw }] =
     await Promise.all([
       // Tudo que entrou nas últimas 24h — de qualquer plataforma, só via API.
       // Importação manual do cliente não é rotina automática e mediria outra
@@ -150,6 +157,12 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
         .eq("active", true)
         .not("api_store_id", "is", null),
     ])
+
+  const foraDaDemo = <T extends { unit_id: string }>(xs: T[] | null) =>
+    (xs ?? []).filter((x) => !demo.has(x.unit_id))
+  const recentes = foraDaDemo(recentesRaw as { unit_id: string }[] | null)
+  const extratos = foraDaDemo(extratosRaw as { unit_id: string }[] | null)
+  const conectadas = foraDaDemo(conectadasRaw as { unit_id: string }[] | null)
 
   // ── Volume por fonte ────────────────────────────────────────────────────
   // O extrato vem com report_type 'financeiro' e source 'report' (é um arquivo
@@ -199,7 +212,7 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
   for (const r of (recentes ?? []) as Imp[]) registrar(r)
   // O extrato vem com source='report' (é arquivo, não endpoint), então não
   // entrou no recorte acima — mas é a linha que mais importa aqui.
-  for (const r of (recentesExtrato ?? []) as {
+  for (const r of foraDaDemo(recentesExtrato as { unit_id: string }[] | null) as unknown as {
     unit_id: string
     ref_year: number | null
     ref_month: number | null
