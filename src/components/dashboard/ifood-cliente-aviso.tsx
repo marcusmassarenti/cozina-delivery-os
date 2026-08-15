@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { CheckCircle2, Clock, ExternalLink, PartyPopper, X, XCircle } from "lucide-react"
 
+import { useMarcaNavegador } from "@/components/shared/use-marca-navegador"
 import {
   confirmarAprovacaoIfood,
   confirmarTodasAprovacoesIfood,
@@ -30,24 +31,13 @@ export function IfoodClienteAviso({
 }: {
   solicitacoes: MinhaSolicitacao[]
 }) {
-  // "Foi conectada!" tem PRAZO DE VALIDADE. Passada a primeira semana o
-  // cliente já sabe que está conectado — o aviso deixa de ser notícia e vira
-  // entulho fixo na home, ocupando o lugar do faturamento do dia.
-  //
-  // Isto substitui o "fechar" como mecanismo principal, e de propósito: o
-  // fechar mora no localStorage, então some ao trocar de navegador ou de
-  // celular, e a DG FOODS tinha 47 avisos que voltavam a cada aparelho novo.
-  // Prazo é servidor: vale igual em todo lugar, sem ninguém precisar clicar.
-  const VALIDADE_DIAS = 7
-  const corte = Date.now() - VALIDADE_DIAS * 24 * 60 * 60 * 1000
-  const ativas = solicitacoes.filter(
-    (s) =>
-      s.status === "ativa" &&
-      // Sem data legível, mostra: errar pro lado de avisar é melhor que
-      // engolir a confirmação que a pessoa está esperando.
-      (Number.isNaN(Date.parse(s.atualizadaEm)) ||
-        Date.parse(s.atualizadaEm) >= corte),
-  )
+  // "Foi conectada!" tem PRAZO DE VALIDADE de 7 dias, e quem o aplica é o
+  // SERVIDOR (ver `getMinhasSolicitacoesIfood`): as ativas que chegam aqui já
+  // estão dentro da janela. O relógio não pode morar nesta renderização —
+  // `Date.now()` durante o render dá um corte no servidor e outro no
+  // navegador, e uma loja bem na fronteira dos 7 dias aparece num e some no
+  // outro, que é hydration mismatch.
+  const ativas = solicitacoes.filter((s) => s.status === "ativa")
   const pendentesAprovacao = solicitacoes.filter(
     (s) => s.status === "solicitada",
   )
@@ -89,23 +79,17 @@ export function IfoodClienteAviso({
 }
 
 function AtivaCard({ s }: { s: MinhaSolicitacao }) {
-  const [visto, setVisto] = React.useState(true)
-  React.useEffect(() => {
-    try {
-      setVisto(localStorage.getItem(`ifood_ativou_${s.id}`) === s.atualizadaEm)
-    } catch {
-      setVisto(false)
-    }
-  }, [s.id, s.atualizadaEm])
+  // `noServidor: true` = presume já visto e não renderiza no servidor. A
+  // comemoração erra pro lado de não aparecer: melhor ela chegar um instante
+  // depois da hidratação do que piscar na tela de quem já a viu.
+  //
+  // O valor guardado é a DATA da ativação, não "1": reconectou a loja, a data
+  // muda e o aviso volta — que é o comportamento que já existia aqui.
+  const [visto, fechar] = useMarcaNavegador("local", `ifood_ativou_${s.id}`, {
+    valor: s.atualizadaEm,
+    noServidor: true,
+  })
   if (visto) return null
-  function fechar() {
-    setVisto(true)
-    try {
-      localStorage.setItem(`ifood_ativou_${s.id}`, s.atualizadaEm)
-    } catch {
-      /* ignora */
-    }
-  }
   return (
     <div className="flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/40 dark:bg-emerald-950/25">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
@@ -369,14 +353,9 @@ function VariasAtivasCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
   // A chave inclui a contagem: conectou mais uma, o aviso volta com o número
   // novo. Sem isso, quem fechou com 47 nunca mais saberia da 48ª.
   const chave = `ifood_ativou_lote_${lojas.length}`
-  const [visto, setVisto] = React.useState(true)
-  React.useEffect(() => {
-    try {
-      setVisto(localStorage.getItem(chave) === "1")
-    } catch {
-      setVisto(false)
-    }
-  }, [chave])
+  const [visto, fechar] = useMarcaNavegador("local", chave, {
+    noServidor: true,
+  })
   if (visto) return null
 
   return (
@@ -403,14 +382,7 @@ function VariasAtivasCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
       </div>
       <button
         type="button"
-        onClick={() => {
-          setVisto(true)
-          try {
-            localStorage.setItem(chave, "1")
-          } catch {
-            /* ignora */
-          }
-        }}
+        onClick={fechar}
         className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
         aria-label="Fechar"
       >

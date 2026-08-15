@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { AlertTriangle, X } from "lucide-react"
 
+import { useMarcaNavegador } from "@/components/shared/use-marca-navegador"
 import type { CadastroIncompleto } from "@/lib/data/cadastro-incompleto"
 
 /**
@@ -34,13 +35,12 @@ export function CadastroIncompletoAviso({
   dados: CadastroIncompleto
   permanente?: boolean
 }) {
-  const [fechado, setFechado] = React.useState(false)
   const chave = `cadastro-incompleto:${dados.lojas}:${dados.campos}`
-
-  React.useEffect(() => {
-    if (permanente || dados.lojas === 0) return
-    if (sessionStorage.getItem(chave)) setFechado(true)
-  }, [chave, permanente, dados.lojas])
+  // `noServidor: false` = enquanto não existe navegador, presume NÃO fechado e
+  // mostra. Aviso de pendência erra pro lado de aparecer.
+  const [fechado, fechar] = useMarcaNavegador("session", chave, {
+    noServidor: false,
+  })
 
   if (dados.lojas === 0 || (!permanente && fechado)) return null
 
@@ -87,10 +87,7 @@ export function CadastroIncompletoAviso({
       {!permanente && (
         <button
           type="button"
-          onClick={() => {
-            sessionStorage.setItem(chave, "1")
-            setFechado(true)
-          }}
+          onClick={fechar}
           className="rounded-md p-1 text-amber-700 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/40"
           aria-label="Fechar aviso"
         >

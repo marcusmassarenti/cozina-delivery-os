@@ -255,7 +255,7 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     .order("updated_at", { ascending: false })
   if (acessiveis !== null) q = q.in("unit_id", acessiveis)
   const { data } = await q
-  return ((data ?? []) as unknown as {
+  const linhas: MinhaSolicitacao[] = ((data ?? []) as unknown as {
     id: string
     unit_id: string
     status: MinhaSolicitacao["status"]
@@ -273,6 +273,30 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     atualizadaEm: s.updated_at,
     nota: s.nota ?? null,
   }))
+
+  // "Sua loja foi conectada!" tem PRAZO DE VALIDADE de 7 dias. Passada a
+  // primeira semana o cliente já sabe que está conectado — o aviso deixa de
+  // ser notícia e vira entulho fixo na home, ocupando o lugar do faturamento
+  // do dia.
+  //
+  // Isto substitui o "fechar" como mecanismo principal, e de propósito: o
+  // fechar mora no localStorage, então some ao trocar de navegador ou de
+  // celular, e a DG FOODS tinha 47 avisos que voltavam a cada aparelho novo.
+  //
+  // O corte é feito AQUI, no servidor, e não na tela: `Date.now()` durante a
+  // renderização de um componente cliente dá um corte no servidor e outro no
+  // navegador, e uma loja bem na fronteira dos 7 dias apareceria num e sumiria
+  // no outro. Além disso é aqui que o prazo faz sentido — ele vale igual em
+  // todo lugar, que era a promessa desde o começo.
+  const corte = Date.now() - 7 * 24 * 60 * 60 * 1000
+  return linhas.filter(
+    (s) =>
+      s.status !== "ativa" ||
+      // Sem data legível, mostra: errar pro lado de avisar é melhor que
+      // engolir a confirmação que a pessoa está esperando.
+      Number.isNaN(Date.parse(s.atualizadaEm)) ||
+      Date.parse(s.atualizadaEm) >= corte,
+  )
 }
 
 /**
