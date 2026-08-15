@@ -146,11 +146,20 @@ type Admin = ReturnType<typeof createAdminClient>
  * Sincroniza UMA competência (On Demand: POST → poll → baixa → grava).
  * Idempotente: persistFinanceiro dedupe por competência.
  */
-async function syncReconciliationCompetencia(
+export async function syncReconciliationCompetencia(
   u: UnitLite,
   competencia: string,
   force: boolean,
   admin: Admin,
+  /**
+   * Quanto esperar o iFood terminar de gerar o extrato.
+   *
+   * O padrão de 150s é do sync DIÁRIO, que só tem uma chance por dia. O
+   * coletor passa um valor curto de propósito: se não estiver pronto agora,
+   * ele volta em 5 minutos. Esperar 150s por loja num cron de 300s é o que
+   * fazia 148 pedidos serem disparados e quase nenhum ser recolhido.
+   */
+  opts: { maxWaitMs?: number; esquecerNoTimeout?: boolean } = {},
 ): Promise<ReconLine> {
   const ep = `reconciliation:${competencia}`
   // O MÊS CORRENTE sempre regenera (ignora o throttle de 6h): a conciliação do
@@ -163,7 +172,10 @@ async function syncReconciliationCompetencia(
     if (!gate.ok) return { competencia, skipped: gate.reason }
   }
   try {
-    const recon = await downloadReconciliationRows(u.merchantId, competencia)
+    const recon = await downloadReconciliationRows(u.merchantId, competencia, {
+      maxWaitMs: opts.maxWaitMs,
+      esquecerNoTimeout: opts.esquecerNoTimeout,
+    })
     await recordCall(u.merchantId, ep, recon.linkStatus)
     if (!recon.ok) {
       /* EXTRATO AINDA GERANDO ≠ EXTRATO QUE FALHOU.
@@ -184,7 +196,10 @@ async function syncReconciliationCompetencia(
        * retomarem, em vez de precisar de alguém percebendo. NÃO gravamos o
        * throttle nesse caso: pedido em andamento não é chamada consumida.
        */
-      const aindaGerando = /enqueued|processing|created|not ready|202/i.test(
+      // "Tempo esgotado" entra aqui: quem estourou foi o NOSSO relógio, não o
+      // iFood — o extrato segue na fila dele. Classificar isso como falha fazia
+      // o coletor tratar o caso mais comum dele como erro.
+      const aindaGerando = /enqueued|processing|created|not ready|202|tempo esgotado/i.test(
         `${recon.linkError ?? ""} ${recon.linkStatus ?? ""}`,
       )
       return {

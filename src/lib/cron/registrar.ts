@@ -19,6 +19,7 @@ export type NomeCron =
   | "ifood-review-sync"
   | "ifood-auto-vincular"
   | "ifood-backfill"
+  | "ifood-coletor"
   | "ninefood-sync"
   | "cardapioweb-sync"
   | "process-99-webhooks"

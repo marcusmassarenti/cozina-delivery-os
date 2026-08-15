@@ -94,7 +94,7 @@ async function pedidoVigente(
  * viraria a causa do problema. Esquecer devolve o comportamento antigo: a
  * próxima tentativa pede um extrato novo.
  */
-async function esquecerPedido(
+export async function esquecerPedido(
   merchantId: string,
   competencia: string,
 ): Promise<void> {
@@ -107,6 +107,36 @@ async function esquecerPedido(
   } catch (e) {
     console.error("[reconciliation] esquecer pedido:", e)
   }
+}
+
+/**
+ * Extratos JÁ PEDIDOS e ainda dentro da janela de reuso — a fila do coletor.
+ *
+ * Esta tabela nasceu como cache (evitar pedir duas vezes o mesmo extrato em 6h)
+ * e é, sem ter sido projetada pra isso, uma fila de trabalho pendente: cada
+ * linha é um arquivo que o iFood está gerando e que ninguém foi buscar. O
+ * coletor lê daqui; quem baixa com sucesso apaga a linha.
+ */
+export async function pedidosVigentes(): Promise<
+  { merchantId: string; competencia: string; requestId: string; criadoEm: string }[]
+> {
+  const corte = new Date(Date.now() - JANELA_REUSO_MS).toISOString()
+  const { data } = await createAdminClient()
+    .from("ifood_reconciliation_pedidos")
+    .select("merchant_id, competencia, request_id, criado_em")
+    .gt("criado_em", corte)
+    .order("criado_em")
+  return ((data ?? []) as {
+    merchant_id: string
+    competencia: string
+    request_id: string
+    criado_em: string
+  }[]).map((r) => ({
+    merchantId: r.merchant_id,
+    competencia: r.competencia,
+    requestId: r.request_id,
+    criadoEm: r.criado_em,
+  }))
 }
 
 async function guardarPedido(
@@ -315,11 +345,29 @@ export type ReconciliationRowsResult =
 export async function downloadReconciliationRows(
   merchantId: string,
   competencia: string,
-  opts: { maxWaitMs?: number; pollMs?: number } = {},
+  opts: {
+    maxWaitMs?: number
+    pollMs?: number
+    /**
+     * Ao estourar o tempo, joga fora o requestId guardado?
+     *
+     * `true` (padrão) é o certo pro sync DIÁRIO: ele espera 150s, e se nem
+     * assim veio, o id provavelmente morreu — insistir nele travaria a loja
+     * por horas.
+     *
+     * O COLETOR passa `false`, e a diferença é a razão de ele existir: ali o
+     * tempo esgotado é o caso NORMAL (espera de 12s), não sintoma de id morto.
+     * Descartar o pedido a cada rodada faria o coletor destruir exatamente o
+     * trabalho que ele foi criado pra recolher — medido em 15/08/26: a
+     * primeira versão apagou 5 pedidos válidos na primeira execução.
+     */
+    esquecerNoTimeout?: boolean
+  } = {},
 ): Promise<ReconciliationRowsResult> {
   const t0 = Date.now()
   const maxWaitMs = opts.maxWaitMs ?? 150_000
   const pollMs = opts.pollMs ?? 5_000
+  const esquecerNoTimeout = opts.esquecerNoTimeout ?? true
 
   // 1. Solicita (ou reusa, via 409) a geração do extrato.
   const req = await requestReconciliation(merchantId, competencia)
@@ -393,7 +441,9 @@ export async function downloadReconciliationRows(
   if (!filePath) {
     // Estourou o tempo. Se o id era reusado, some com ele: pode ser um pedido
     // velho que nunca vai ficar pronto, e insistir nele trava a loja por horas.
-    if (!req.novo) await esquecerPedido(merchantId, competencia)
+    if (!req.novo && esquecerNoTimeout) {
+      await esquecerPedido(merchantId, competencia)
+    }
     return {
       ok: false,
       linkStatus: lastStatus,

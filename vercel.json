@@ -25,6 +25,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/ifood-coletor",
+      "schedule": "*/4 * * * *"
+    },
+    {
       "path": "/api/cron/ifood-review-sync",
       "schedule": "0 10 * * *"
     },
