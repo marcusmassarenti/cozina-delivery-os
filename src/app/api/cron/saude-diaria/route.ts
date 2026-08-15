@@ -9,8 +9,8 @@
  *
  * ⏰ 14:00 UTC (11h de Brasília) — DEPOIS de todos os outros crons, que vão
  * até 13:00 UTC. Rodar antes faria o relatório julgar um dia que ainda não
- * aconteceu. 1x/dia porque a conta Vercel é HOBBY, onde cron mais frequente
- * que diário FALHA O DEPLOY — não é aviso, o build quebra.
+ * aconteceu. 1x/dia porque o relatório é do DIA: rodar duas vezes só mandaria
+ * o mesmo veredito outra vez, e a graça dele é ser um por dia, sempre.
  */
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
 import { emailSaude, type ConferenciaResumo } from "@/lib/email/saude"

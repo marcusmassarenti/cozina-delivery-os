@@ -15,14 +15,18 @@
  * Barato quando não há nada: a primeira query é um count; sem loja confirmada
  * esperando, sai antes de falar com o iFood.
  *
- * ⏰ Roda 1x/dia (12:00 UTC) porque a conta Vercel é HOBBY, e ali cron mais
- * frequente que diário FALHA O DEPLOY — não é aviso, o build quebra. Foi assim
- * que 17 commits ficaram travados em 27/jul.
+ * ⏰ Roda de 15 em 15 minutos (ver vercel.json), que é a cadência que faz o
+ * fluxo acima parecer automático: quem aprova no Portal do Parceiro vê a loja
+ * conectar em minutos, não no dia seguinte.
  *
- * O custo disso é real: quem aprova no Portal do Parceiro pode esperar até o
- * dia seguinte pra conexão fechar. Quem não quer esperar usa o botão "Já
- * autorizei — conferir e vincular" na tela de merchants, que faz o mesmo na
- * hora. Se a conta virar Pro, dá pra voltar a rodar de 15 em 15 minutos.
+ * Já rodou 1x/dia, quando a conta Vercel era Hobby — lá, cron mais frequente
+ * que diário quebrava o BUILD, e foi assim que 17 commits ficaram travados em
+ * 27/jul. A conta é Pro desde então e o limite não existe mais; fica o
+ * registro porque a cicatriz explica por que este cron foi escrito pra ser
+ * barato quando não há nada a fazer.
+ *
+ * Quem não quer esperar os 15 min usa o botão "Já autorizei — conferir e
+ * vincular" na tela de merchants, que faz o mesmo na hora.
  */
 import {
   autoLinkIfoodMerchants,
