@@ -20,6 +20,7 @@ import { conferirFontes } from "@/lib/data/conferencia-fontes"
 import { enviarEmail } from "@/lib/email/enviar"
 import { registrarCron } from "@/lib/cron/registrar"
 import { medirInfra, type InfraMetricas } from "@/lib/data/infra-metricas"
+import { estadoDoPipeline, saudeJaSaiuHoje } from "@/lib/data/pipeline-do-dia"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -35,6 +36,35 @@ export async function GET(req: Request) {
   }
 
   return registrarCron("saude-diaria", async () => {
+    /**
+     * ESPERA A ROTINA DO DIA FECHAR — mas nunca deixa de falar.
+     *
+     * O relatório saía às 11h em ponto, e a rotina não termina em horário
+     * fixo: os extratos do iFood são assíncronos e, em 15/08/26, só ficaram
+     * prontos ao longo da tarde. O e-mail das 11h dizia "fechou em 70/86
+     * lojas" e listava lojas saudáveis como atrasadas.
+     *
+     * Agora o cron roda de hora em hora e só ENVIA quando a fila zera. Se não
+     * zerar — às vezes não zera, porque depende da fila deles —, ele manda na
+     * última janela do dia dizendo que saiu incompleto. As duas checagens
+     * abaixo são baratas de propósito: nas janelas em que não vai enviar, o
+     * cron sai antes de montar o diagnóstico inteiro.
+     */
+    if (await saudeJaSaiuHoje()) {
+      return Response.json({ ok: true, pulou: "já saiu hoje" })
+    }
+    const estado = await estadoDoPipeline()
+    // Última janela (20h de Brasília = 23h UTC): manda do jeito que estiver.
+    const ultimaJanela = new Date().getUTCHours() >= 23
+    if (!estado.concluido && !ultimaJanela) {
+      return Response.json({
+        ok: true,
+        pulou: "rotina do dia ainda rodando",
+        faltamExtrato: estado.faltamExtrato,
+        faltamBackfill: estado.faltamBackfill,
+      })
+    }
+
     const s = await diagnosticarIntegracoes()
 
     // Conferência API × planilha do mês corrente. Nunca derruba o relatório de
@@ -91,6 +121,13 @@ export async function GET(req: Request) {
 
     const msg = emailSaude(s, conferencia, rodada, g, infra)
 
+    // Quem lê precisa saber que está vendo um retrato parcial — senão vai
+    // tratar "faltam 12 lojas" como problema, quando é só a fila do iFood
+    // ainda rodando.
+    const assunto = estado.concluido
+      ? msg.assunto
+      : `${msg.assunto} (parcial — ${estado.faltamExtrato} loja(s) sem extrato ainda)`
+
     // holdingId null + forcar: este e-mail não pertence a cliente nenhum e
     // precisa sair TODO dia — a trava de "já enviei este tipo" mataria o
     // segundo envio pra sempre.
@@ -98,7 +135,7 @@ export async function GET(req: Request) {
       holdingId: null,
       tipo: "saude-diaria",
       para: DESTINO,
-      assunto: msg.assunto,
+      assunto,
       html: msg.html,
       forcar: true,
     })
@@ -106,7 +143,8 @@ export async function GET(req: Request) {
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
-      assunto: msg.assunto,
+      assunto,
+      completo: estado.concluido,
       email: envio.ok ? "enviado" : `falhou: ${envio.erro}`,
       resumo: s.resumo,
       conferencia: conferencia.length,
