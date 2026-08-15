@@ -1,20 +1,25 @@
 /**
- * Push de "a importação da manhã terminou" — pro superadmin, não pro cliente.
+ * Vigia do fechamento da manhã. Só fala quando algo deu errado.
  *
- * O relatório de saúde por e-mail (11h) já conta a mesma história com muito
- * mais detalhe. Este push existe pra outra pergunta, feita cinco horas antes:
- * "posso abrir o painel e confiar no número?". Ele chega às 6h30, logo depois
- * do último sync da manhã, e responde sim ou não.
+ * Cada sync manda o próprio relatório quando termina (ver `relatorio-sync`) —
+ * iFood financeiro às 4h, avaliações às 5h, 99 Food às 6h. Este cron, às 6h30,
+ * existe pro caso que aqueles três NÃO cobrem: rotina que não rodou não manda
+ * nada, e a ausência de push se parece com "estava tudo bem". Ele lê
+ * `cron_runs` e transforma esse silêncio em aviso.
+ *
+ * Por isso ele é silencioso no dia bom: quatro pushes verdes toda manhã
+ * treinam qualquer um a deslizar a notificação sem ler — e aí o dia em que
+ * aparece o vermelho também passa batido.
  *
  * O veredito vem de `cron_runs`, e não de contar linha importada, de
  * propósito: dia sem venda nenhuma numa loja é indistinguível de dia em que o
- * sync não rodou se a gente olhar só o volume. `cron_runs` sabe a diferença
- * entre "rodou e não achou nada" e "não rodou".
+ * sync não rodou se a gente olhar só o volume.
  */
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { enviarPush } from "@/lib/push/enviar"
+import { idsSuperadmin } from "@/lib/push/relatorio-sync"
 
 /** Os syncs que precisam ter passado antes de o painel estar confiável. */
 const SYNCS_DA_MANHA = [
@@ -37,8 +42,10 @@ export type ResultadoResumoImportacao = {
   dia: string
   syncs: StatusSync[]
   lojasComDado: number
-  titulo: string
-  corpo: string
+  /** true = manhã limpa, nenhum push mandado. */
+  silencioso: boolean
+  titulo: string | null
+  corpo: string | null
   enviados: number
   destinatarios: number
 }
@@ -105,46 +112,53 @@ export async function enviarResumoImportacao(): Promise<ResultadoResumoImportaca
     // Contagem é enfeite; o push sai sem ela em vez de não sair.
   }
 
-  const falharam = syncs.filter((s) => s.ok === false)
-  const naoRodaram = syncs.filter((s) => s.ok === null)
-  const passaram = syncs.filter((s) => s.ok === true)
+  // Falha e ausência viram o MESMO alerta de propósito: pra quem vai abrir o
+  // painel, "rodou e deu erro" e "não rodou" têm a mesma consequência — o
+  // número da tela não está fechado.
+  const problemas = syncs.filter((s) => s.ok !== true)
 
-  let titulo: string
-  let corpo: string
-  if (falharam.length === 0 && naoRodaram.length === 0) {
-    titulo = "✅ Importação da manhã concluída"
-    corpo = `As 4 rotinas rodaram. ${lojasComDado} ${lojasComDado === 1 ? "loja recebeu" : "lojas receberam"} dado novo do iFood. Pode confiar no painel.`
-  } else {
-    // Falha e ausência viram o MESMO alerta de propósito: pra quem vai abrir o
-    // painel, "rodou e deu erro" e "não rodou" têm a mesma consequência — o
-    // número da tela não está fechado.
-    const problemas = [...falharam, ...naoRodaram]
-    titulo = `⚠️ Importação com ${problemas.length} ${problemas.length === 1 ? "pendência" : "pendências"}`
-    const lista = problemas
-      .map((s) => `${s.rotulo} (${s.ok === false ? "falhou" : "não rodou"})`)
-      .join(", ")
-    corpo = `${lista}. ${passaram.length} de 4 ok · ${lojasComDado} lojas com dado novo.`
+  // Manhã limpa: cada sync já mandou o próprio "importou" na hora certa, e um
+  // quarto push repetindo isso só gastaria a atenção que o alerta vai precisar
+  // no dia em que algo quebrar.
+  if (problemas.length === 0) {
+    return {
+      dia,
+      syncs,
+      lojasComDado,
+      silencioso: true,
+      titulo: null,
+      corpo: null,
+      enviados: 0,
+      destinatarios: 0,
+    }
   }
 
-  // Quem recebe: superadmin. Este push é operação da plataforma, não do
-  // negócio do cliente — franqueado não tem o que fazer com "o cron das 6h
-  // falhou", e receber isso só ensinaria a ignorar notificação.
-  const { data: admins } = await admin
-    .from("profiles")
-    .select("user_id")
-    .eq("is_superadmin", true)
+  const titulo = `⚠️ Importação com ${problemas.length} ${problemas.length === 1 ? "pendência" : "pendências"}`
+  const lista = problemas
+    .map((s) => `${s.rotulo} (${s.ok === false ? "falhou" : "não rodou"})`)
+    .join(", ")
+  const corpo = `${lista}. ${syncs.length - problemas.length} de ${syncs.length} ok · ${lojasComDado} lojas com dado novo.`
 
-  const userIds = ((admins ?? []) as { user_id: string }[]).map((a) => a.user_id)
+  const userIds = await idsSuperadmin()
   if (userIds.length === 0) {
-    return { dia, syncs, lojasComDado, titulo, corpo, enviados: 0, destinatarios: 0 }
+    return {
+      dia,
+      syncs,
+      lojasComDado,
+      silencioso: false,
+      titulo,
+      corpo,
+      enviados: 0,
+      destinatarios: 0,
+    }
   }
 
   const res = await enviarPush(userIds, {
     titulo,
     corpo,
     url: "/saude",
-    // Mesmo `tag` todo dia: o resumo de hoje substitui o de ontem na tela de
-    // bloqueio. Empilhar sete "importação concluída" é como não mandar nenhum.
+    // Mesmo `tag` todo dia: o alerta de hoje substitui o de ontem na tela de
+    // bloqueio, em vez de empilhar pendências velhas já resolvidas.
     tag: "resumo-importacao",
   })
 
@@ -152,6 +166,7 @@ export async function enviarResumoImportacao(): Promise<ResultadoResumoImportaca
     dia,
     syncs,
     lojasComDado,
+    silencioso: false,
     titulo,
     corpo,
     enviados: res.enviados,

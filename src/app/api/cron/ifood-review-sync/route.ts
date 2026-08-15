@@ -17,6 +17,7 @@
  */
 import { syncIfoodReviews } from "@/lib/ifood/review-sync"
 import { registrarCron } from "@/lib/cron/registrar"
+import { tentarRelatorioSync } from "@/lib/push/relatorio-sync"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -36,9 +37,19 @@ export async function GET(req: Request) {
   try {
     const r = await syncIfoodReviews(null)
 
+    const push = await tentarRelatorioSync({
+      rotulo: "iFood avaliações",
+      ok: true,
+      lojas: r.lojasProcessadas,
+      erros: r.resultados.filter((u) => !u.ok).length,
+      destaque: `${r.totalGravadas.toLocaleString("pt-BR")} novas`,
+      chave: "ifood-avaliacoes",
+    })
+
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
+      push,
       ...r,
     })
   } catch (e) {

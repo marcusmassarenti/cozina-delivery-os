@@ -1,10 +1,15 @@
 /**
- * Fecha a manhã: confere se os syncs passaram e avisa por push (Vercel Cron —
+ * Fecha a manhã: confere em `cron_runs` se os syncs passaram (Vercel Cron —
  * ver vercel.json).
  *
- * ⏰ 09:30 UTC = 6h30 de Brasília. Roda DEPOIS dos quatro syncs (99 Food 5h,
- * iFood financeiro e avaliações 6h, Cardápio Web 6h05) — é o que dá sentido
- * ao "tudo importou": um push disparado no meio da rodada só contaria metade.
+ * ⏰ 09:30 UTC = 6h30 de Brasília. Roda DEPOIS dos quatro syncs (iFood
+ * financeiro 4h, avaliações 5h, 99 Food 6h, Cardápio Web 6h05).
+ *
+ * Só manda push quando algo falhou ou não rodou. O "importou" de cada rotina
+ * já chega na hora dela, pelo próprio cron; o que falta é justamente o aviso
+ * que NENHUM deles consegue dar, porque rotina que não dispara não notifica —
+ * a ausência de push se parece com tudo certo. É esse silêncio que aqui vira
+ * alerta.
  *
  * Também é aqui que mora a varredura dos e-mails de "conexão ativada", que
  * antes ficava pendurada no sync de avaliações. Ela precisa ser a ÚLTIMA coisa
@@ -49,6 +54,7 @@ export async function GET(req: Request) {
         ok: true,
         ranAt: new Date().toISOString(),
         dia: r.dia,
+        silencioso: r.silencioso,
         titulo: r.titulo,
         corpo: r.corpo,
         syncs: r.syncs,

@@ -12,6 +12,7 @@
 import { syncNinefoodFinanceiro } from "@/lib/ninefood/sync-financeiro"
 import { syncNinefoodCardapio } from "@/lib/ninefood/sync-cardapio"
 import { registrarCron } from "@/lib/cron/registrar"
+import { tentarRelatorioSync } from "@/lib/push/relatorio-sync"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -59,10 +60,22 @@ export async function GET(req: Request) {
 
   const card = await syncNinefoodCardapio()
 
+  // Lojas: o MAIOR entre as competências, não a soma — a mesma loja aparece no
+  // mês corrente e no anterior, e somar contaria cada uma duas vezes.
+  const push = await tentarRelatorioSync({
+    rotulo: "99 Food",
+    ok: true,
+    lojas: financeiro.reduce((m, f) => Math.max(m, f.lojas), 0),
+    erros: financeiro.reduce((s, f) => s + f.erros, 0),
+    destaque: `cardápio de ${card.results.length}`,
+    chave: "99food",
+  })
+
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
     financeiro,
+    push,
     cardapio: {
       lojas: card.results.length,
       erros: card.results.filter((x) => x.error).length,
