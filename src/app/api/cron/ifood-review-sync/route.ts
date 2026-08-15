@@ -3,6 +3,15 @@
  * vercel.json). Roda global (todas as lojas vinculadas), puxando as avaliações
  * novas via API e as tags do detalhe. Loja não autorizada é pulada.
  *
+ * ⏰ 09:00 UTC = 6h de Brasília, no mesmo horário do sync do financeiro. As
+ * duas pontas da API do iFood passam a fechar junto: até 09/08 as avaliações
+ * vinham uma hora depois, e quem abria o painel às 6h30 via o financeiro do
+ * dia ao lado de avaliações de ontem.
+ *
+ * A varredura dos e-mails de "conexão ativada" saiu daqui e foi pro cron
+ * `resumo-importacao` (6h30). Ela precisa rodar por último, e este cron
+ * deixou de ser o último da manhã.
+ *
  * Segurança: a Vercel manda `Authorization: Bearer <CRON_SECRET>`. Sem a env
  * CRON_SECRET batendo → 401.
  */
@@ -27,29 +36,10 @@ export async function GET(req: Request) {
   try {
     const r = await syncIfoodReviews(null)
 
-    // Varredura dos e-mails de "conectado — olha o que já entrou", das TRÊS
-    // plataformas, pendurada aqui de propósito.
-    //
-    // Este é o último cron da manhã: 99 Food às 5h, iFood às 6h, Cardápio Web
-    // às 6h05, avaliações às 7h. Rodando junto do sync do financeiro (6h) o
-    // e-mail diria "as avaliações ainda não estão entrando -- falta autorizar
-    // o segundo app" pra quem autorizou os dois certinho, porque elas só
-    // chegam uma hora depois.
-    //
-    // Não derruba o cron: o sync de avaliações é o que não pode faltar.
-    let conexoes: { avaliadas: number; enviados: number } | null = null
-    try {
-      const { varrerConexoesNovas } = await import("@/lib/email/conexao-ativada")
-      conexoes = await varrerConexoesNovas()
-    } catch (e) {
-      console.error("varrerConexoesNovas:", e)
-    }
-
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
       ...r,
-      conexoes,
     })
   } catch (e) {
     console.error("/api/cron/ifood-review-sync:", e)

@@ -260,6 +260,10 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     "billing-vencimentos",
     "emitir-faturas",
     "regua-email",
+    // Diário, e o silêncio dele é o que mais engana: se o resumo da manhã
+    // parar de sair, a falta do push se parece com "deu tudo certo e não teve
+    // o que avisar".
+    "resumo-importacao",
   ]
   const { data: runs } = await admin
     .from("cron_runs")
