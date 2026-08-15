@@ -57,6 +57,8 @@ function ym(d: Date): string {
 
 export type ResultadoColeta = {
   naFila: number
+  /** Lojas puladas por 403 recente — ver `MERCHANTS_EM_QUARENTENA`. */
+  emQuarentena: number
   /** Perguntamos o status de quantos nesta rodada. */
   conferidos: number
   /** Pedidos abertos agora (não havia extrato em geração). */
@@ -152,6 +154,7 @@ export async function coletarExtratosPendentes(
 
   const out: ResultadoColeta = {
     naFila: fila.length,
+    emQuarentena: 0,
     conferidos: 0,
     pedidosNovos: 0,
     prontos: 0,
@@ -161,6 +164,31 @@ export async function coletarExtratosPendentes(
     aBaixar: 0,
   }
   if (fila.length === 0) return out
+
+  /**
+   * ⚠️ QUARENTENA DE 403 — loja sem permissão não pode ser martelada.
+   *
+   * A cota do iFood é POR APLICAÇÃO, confirmado por eles: chamada gasta numa
+   * loja é chamada tirada de todas as outras. Em 15/08/26 a Pizzaria Quero
+   * Mais devolveu 403 em 394 chamadas num único dia — este coletor batendo
+   * nela de 4 em 4 minutos, sem nunca desistir. No mesmo dia apareceram os
+   * primeiros 429 do sistema, e o JK e o Restaurante Cardeal ficaram sem os
+   * pedidos do dia por causa disso.
+   *
+   * 403 não se resolve tentando de novo: é permissão, e muda no portal do
+   * iFood, não aqui. Quem levou 403 nas últimas 6h sai da rodada — e aparece
+   * na contagem, pra não sumir em silêncio.
+   */
+  const desde403 = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+  const { data: bloqueados } = await admin
+    .from("ifood_api_logs")
+    .select("merchant_id")
+    .eq("response_status", 403)
+    .gte("created_at", desde403)
+    .not("merchant_id", "is", null)
+  const quarentena = new Set(
+    ((bloqueados ?? []) as { merchant_id: string }[]).map((b) => b.merchant_id),
+  )
 
   // Quem já tem extrato em geração — evita um SELECT por item na varredura.
   const vigentes = new Map<string, string>()
@@ -172,6 +200,10 @@ export async function coletarExtratosPendentes(
   const prontos: { loja: Loja; competencia: string }[] = []
   for (const item of fila) {
     if (Date.now() - t0 > limite * 0.6) break
+    if (quarentena.has(item.loja.merchantId)) {
+      out.emQuarentena++
+      continue
+    }
     const chave = `${item.loja.merchantId}|${item.competencia}`
     const requestId = vigentes.get(chave)
     out.conferidos++

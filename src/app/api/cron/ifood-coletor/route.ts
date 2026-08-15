@@ -36,7 +36,8 @@ export async function GET(req: Request) {
       // ANDA. Parada por várias rodadas seguidas com o mesmo número é o
       // sintoma que o coletor existe pra não deixar acontecer de novo.
       resumo:
-        `fila ${r.naFila} · conferidos ${r.conferidos} · ${r.pedidosNovos} pedidos novos · ` +
+        `fila ${r.naFila} · ${r.emQuarentena} em quarentena (403) · ` +
+        `conferidos ${r.conferidos} · ${r.pedidosNovos} pedidos novos · ` +
         `${r.prontos} prontos · ${r.coletados.length} coletados · ` +
         `${r.aindaGerando} ainda gerando · ${r.falhas.length} falha(s)`,
     })
