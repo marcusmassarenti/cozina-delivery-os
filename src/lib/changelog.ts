@@ -42,6 +42,57 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.20.0",
+    date: "2026-08-16",
+    tag: "Grande novidade",
+    title: "Unidades em lista, com cadastro em massa por planilha",
+    summary:
+      "A tela de Unidades virou uma lista: mais lojas por tela, busca que acha de verdade e paginação. E deu pra cadastrar (ou corrigir) várias lojas de uma vez por planilha do Excel.",
+    areas: [
+      {
+        area: "Unidades",
+        items: [
+          {
+            kind: "novo",
+            title: "Cadastrar em massa por planilha",
+            antes:
+              "Cada loja era um formulário. Cadastrar dez dava trabalho; cadastrar trezentas era inviável.",
+            depois:
+              "Baixe a planilha modelo, preencha no Excel e traga de volta. Antes de gravar, o sistema mostra o que vai criar, o que vai mudar e o que deu erro em cada linha — nada entra sem você conferir. Dá pra subir os logos em lote junto: o arquivo 01.png vai pra loja 01.",
+          },
+          {
+            kind: "novo",
+            title: "Exportar unidades",
+            desc:
+              "Baixa as suas lojas em Excel, já preenchidas. Serve pra conferir tudo de uma vez e, editando e trazendo de volta, pra corrigir várias lojas sem abrir formulário nenhum.",
+          },
+          {
+            kind: "melhoria",
+            title: "A lista mostra o que falta no cadastro e o que entra sozinho",
+            desc:
+              "Cada loja mostra quantas informações faltam (passe o mouse pra ver quais) e uma bolinha verde na plataforma que sincroniza sozinha — o tooltip diz o que entra por API e o que ainda depende de planilha.",
+          },
+          {
+            kind: "melhoria",
+            title: "Busca acha mesmo sem acento",
+            antes:
+              "Procurar por \"ribeira\" não achava \"Ribeirão Preto\", e a loja parecia não existir.",
+            depois:
+              "Agora acha com ou sem acento, por nome, código, cidade ou CNPJ — e responde enquanto você digita.",
+          },
+          {
+            kind: "correcao",
+            title: "Cidade com grafia padronizada",
+            antes:
+              "A mesma cidade aparecia escrita de dois jeitos (SAO PAULO e São Paulo), o filtro listava as duas e escolher uma escondia as lojas da outra.",
+            depois:
+              "A cidade é corrigida pela lista oficial do IBGE ao salvar. Pode digitar sem acento ou em caixa alta.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.19.0",
     date: "2026-08-13",
     tag: "Grande novidade",
