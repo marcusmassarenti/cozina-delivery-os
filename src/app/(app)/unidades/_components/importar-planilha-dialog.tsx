@@ -120,8 +120,7 @@ export function ImportarPlanilhaDialog() {
         <DialogHeader>
           <DialogTitle>Cadastrar em massa</DialogTitle>
           <DialogDescription>
-            Baixe a planilha, preencha no Excel e traga de volta. Serve pra
-            cadastrar lojas novas e pra completar as que já existem.
+            Baixe a planilha, preencha no Excel e traga de volta.
           </DialogDescription>
         </DialogHeader>
 
@@ -134,15 +133,14 @@ export function ImportarPlanilhaDialog() {
             Baixe a planilha modelo
           </h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Vem <strong className="text-foreground">vazia</strong>, com uma
-            linha por loja pra preencher. A aba{" "}
-            <strong className="text-foreground">LEIA-ME</strong> explica cada
-            coluna, lista os valores aceitos e traz um exemplo preenchido.
+            Vem vazia: uma linha por loja. A aba{" "}
+            <strong className="text-foreground">LEIA-ME</strong> mostra como
+            preencher, com exemplo.
           </p>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Quer <strong className="text-foreground">corrigir lojas que já existem</strong>?
-            Use o botão <strong className="text-foreground">Exportar unidades</strong> na
-            tela — ele traz a sua lista preenchida, e é só editar e trazer de volta.
+            Só quer arrumar lojas que já existem? Use{" "}
+            <strong className="text-foreground">Exportar unidades</strong> — vem
+            tudo preenchido.
           </p>
           <a
             href="/api/unidades/planilha?tipo=modelo"
@@ -159,20 +157,16 @@ export function ImportarPlanilhaDialog() {
             <span className="grid size-5 place-items-center rounded-full bg-muted text-[11px] font-bold">
               2
             </span>
-            Traga a planilha preenchida
+            Traga a planilha de volta
           </h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            O <strong className="text-foreground">Código</strong> é a chave:
-            código que já existe atualiza a loja, código novo cria. Nada é
-            gravado antes de você conferir o resumo.
+            Cada loja é identificada pelo{" "}
+            <strong className="text-foreground">Código</strong>: código novo
+            cria a loja, código que já existe atualiza.
           </p>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Salve como <strong className="text-foreground">.xlsx</strong>.{" "}
-            <strong className="text-foreground">CSV não serve</strong>: no Excel
-            em português ele separa colunas por ponto e vírgula, e a coluna
-            Plataformas usa ponto e vírgula por dentro (
-            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">ifood;99food</code>
-            ) — o arquivo desalinha e grava dado trocado sem avisar.
+            Salve como <strong className="text-foreground">.xlsx</strong> (CSV
+            não funciona). Você confere tudo antes de gravar.
           </p>
 
           <label className="mt-3 inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted">
@@ -231,15 +225,13 @@ export function ImportarPlanilhaDialog() {
             <span className="grid size-5 place-items-center rounded-full bg-muted text-[11px] font-bold">
               3
             </span>
-            Logos das lojas (opcional)
+            Logos (opcional)
           </h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Selecione várias imagens de uma vez.{" "}
-            <strong className="text-foreground">
-              O nome do arquivo tem que ser o código da loja
-            </strong>{" "}
-            — <code className="rounded bg-muted px-1 py-0.5 text-[11px]">01.png</code>{" "}
-            vai pra unidade 01. PNG, JPG ou WEBP.
+            Escolha várias imagens de uma vez. Cada arquivo precisa ter o{" "}
+            <strong className="text-foreground">nome do código da loja</strong>:{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">01.png</code>{" "}
+            vai pra loja 01.
           </p>
 
           <label className="mt-3 inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted">

@@ -94,7 +94,11 @@ export async function lerPlanilhaUnidades(
     return {
       ...vazio,
       fatais: [
-        "Arquivo CSV não é aceito — use .xlsx mesmo. No Excel em português o CSV usa ponto e vírgula pra separar colunas, e a coluna Plataformas também usa (ifood;99food): o arquivo desalinharia e gravaria dado trocado sem avisar. No Excel: Arquivo → Salvar como → Pasta de Trabalho do Excel (.xlsx).",
+        // ⚠️ A mensagem diz O QUE FAZER, não por que o CSV quebra. O motivo
+        // (separador do Excel em português × ponto e vírgula da coluna
+        // Plataformas) está no comentário acima, que é onde ele serve pra
+        // alguém. Na tela, explicação técnica só atrasa quem quer resolver.
+        "Este arquivo é CSV e não dá pra usar. No Excel: Arquivo → Salvar como → Pasta de Trabalho do Excel (.xlsx). Depois é só trazer de novo.",
       ],
     }
   }
