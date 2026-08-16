@@ -45,26 +45,33 @@ export async function idsDeUnidadesInativas(): Promise<Set<string>> {
 /**
  * TODAS as lojas que o sync deve pular, por qualquer motivo.
  *
- * Ponto único de decisão de propósito. São TRÊS motivos hoje — loja fechada no
- * cadastro, assinatura suspensa há mais de uma semana, e a rede de
- * demonstração — e cada um nasceu numa época: se cada sync fizesse a própria
- * união, o terceiro motivo entraria em três dos quatro e ninguém perceberia no
- * quarto. (O terceiro chegou em 13/ago/26 e entrou aqui, como previsto.)
+ * Ponto único de decisão de propósito. São QUATRO motivos hoje — loja fechada
+ * no cadastro, assinatura suspensa há mais de uma semana, a rede de
+ * demonstração, e cliente encerrado — e cada um nasceu numa época: se cada
+ * sync fizesse a própria união, o terceiro motivo entraria em três dos quatro
+ * e ninguém perceberia no quarto. (O terceiro chegou em 13/ago/26 e o quarto
+ * em 16/ago/26, os dois entraram aqui, como previsto.)
  *
  * As consultas em paralelo: são pequenas e independentes.
  */
 export async function idsDeUnidadesForaDoSync(): Promise<Set<string>> {
-  const [{ idsDeUnidadesSemAssinatura }, { idsDeUnidadesDemo }] =
-    await Promise.all([
-      import("@/lib/data/unidades-sem-assinatura"),
-      import("@/lib/data/holding-demo"),
-    ])
-  const [inativas, semAssinatura, demo] = await Promise.all([
+  const [
+    { idsDeUnidadesSemAssinatura },
+    { idsDeUnidadesDemo },
+    { idsDeUnidadesEncerradas },
+  ] = await Promise.all([
+    import("@/lib/data/unidades-sem-assinatura"),
+    import("@/lib/data/holding-demo"),
+    import("@/lib/data/unidades-encerradas"),
+  ])
+  const [inativas, semAssinatura, demo, encerradas] = await Promise.all([
     idsDeUnidadesInativas(),
     idsDeUnidadesSemAssinatura(),
     idsDeUnidadesDemo(),
+    idsDeUnidadesEncerradas(),
   ])
   for (const id of semAssinatura) inativas.add(id)
   for (const id of demo) inativas.add(id)
+  for (const id of encerradas) inativas.add(id)
   return inativas
 }

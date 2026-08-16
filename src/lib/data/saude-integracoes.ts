@@ -20,6 +20,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
+import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
 
 /**
  * Atraso do financeiro em relação ao último pedido.
@@ -146,8 +147,19 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   // rotinas com 10 lojas "que nunca fecharam o extrato" — sendo que elas nem
   // sincronizam. Relatório de saúde com loja fictícia dentro é relatório que
   // ninguém consegue usar pra decidir nada.
-  const demo = await idsDeUnidadesDemo()
-  const linhas = ((sinais ?? []) as Sinal[]).filter((s) => !demo.has(s.unit_id))
+  //
+  // Cliente ENCERRADO sai pelo mesmo motivo, com uma razão a mais: o sync dele
+  // foi desligado de propósito (ver unidades-encerradas.ts), então ele ficaria
+  // eternamente na lista de "parou de mandar dado" — acusando como falha
+  // justamente o que a gente decidiu que devia acontecer. Suspenso por
+  // cobrança NÃO sai: ali o silêncio ainda é informação, o cliente pode voltar.
+  const [demo, encerradas] = await Promise.all([
+    idsDeUnidadesDemo(),
+    idsDeUnidadesEncerradas(),
+  ])
+  const linhas = ((sinais ?? []) as Sinal[]).filter(
+    (s) => !demo.has(s.unit_id) && !encerradas.has(s.unit_id),
+  )
 
   const unitIds = [...new Set(linhas.map((s) => s.unit_id))]
   const { data: units } = await admin
