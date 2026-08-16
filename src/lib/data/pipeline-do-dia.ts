@@ -25,27 +25,65 @@ import { inicioDoDiaBR } from "@/lib/dia-br"
 
 export type EstadoDoDia = {
   concluido: boolean
-  /** Lojas conectadas que ainda não fecharam o extrato de hoje. */
+  /** Lojas que ainda PODEM fechar o extrato hoje e não fecharam. */
   faltamExtrato: number
   /** Lojas na fila do backfill de histórico. */
   faltamBackfill: number
+  /**
+   * Lojas que o iFood está NEGANDO (403) — não fecham hoje nem nunca, até
+   * alguém reautorizar no Portal do Parceiro. Não entram em `faltamExtrato`
+   * porque não são espera, são bloqueio.
+   */
+  bloqueadas: { unitId: string; merchantId: string }[]
 }
 
 export async function estadoDoPipeline(): Promise<EstadoDoDia> {
   const admin = createAdminClient()
 
-  const [{ data: vinculos }, foraDoSync] = await Promise.all([
+  /**
+   * ⚠️ LOJA BLOQUEADA NÃO É LOJA ATRASADA (corrigido 16/08/26).
+   *
+   * O portão original esperava TODAS as lojas fecharem o extrato. Parece
+   * conservador e é frágil: basta UMA loja que não pode fechar pra o relatório
+   * nunca sair no horário.
+   *
+   * Foi exatamente o que aconteceu. A Pizzaria Quero Mais (Vbfood) está com
+   * 403 do iFood desde 14/08 — sem permissão, o extrato não é gerado hoje nem
+   * amanhã. O relatório das 11h foi adiado quatro janelas seguidas
+   * ("faltamExtrato: 1") e só sairia às 20h, marcado como parcial, todo dia,
+   * até alguém reautorizar do lado do cliente.
+   *
+   * A distinção que faltava: ESPERAR faz sentido quando a coisa ainda vai
+   * acontecer. Quando não vai, esperar é só atrasar a notícia — e a notícia é
+   * justamente que aquela loja está bloqueada. Isso pertence ao CONTEÚDO do
+   * relatório, não ao gatilho dele.
+   *
+   * A régua é a mesma da quarentena do coletor: 403 nas últimas 6 horas.
+   */
+  const desde403 = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+  const [{ data: vinculos }, foraDoSync, { data: negadas }] = await Promise.all([
     admin
       .from("unit_platforms")
-      .select("unit_id, historico_backfill_at, units!inner(id, active)")
+      .select("unit_id, api_store_id, historico_backfill_at, units!inner(id, active)")
       .eq("platform", "ifood")
       .eq("active", true)
       .not("api_store_id", "is", null),
     idsDeUnidadesForaDoSync(),
+    admin
+      .from("ifood_api_logs")
+      .select("merchant_id")
+      .eq("response_status", 403)
+      .gte("created_at", desde403)
+      .not("merchant_id", "is", null),
   ])
+
+  const merchantsNegados = new Set(
+    ((negadas ?? []) as { merchant_id: string }[]).map((r) => r.merchant_id),
+  )
 
   const lojas = ((vinculos ?? []) as unknown as {
     unit_id: string
+    api_store_id: string
     historico_backfill_at: string | null
     units: { id: string; active: boolean }
   }[]).filter((v) => v.units?.active && !foraDoSync.has(v.units.id))
@@ -68,9 +106,14 @@ export async function estadoDoPipeline(): Promise<EstadoDoDia> {
   const fecharam = new Set(
     ((fresco ?? []) as { unit_id: string }[]).map((r) => r.unit_id),
   )
-  const faltamExtrato = lojas.filter((l) => !fecharam.has(l.unit_id)).length
+  const pendentes = lojas.filter((l) => !fecharam.has(l.unit_id))
+  const bloqueadas = pendentes
+    .filter((l) => merchantsNegados.has(l.api_store_id))
+    .map((l) => ({ unitId: l.unit_id, merchantId: l.api_store_id }))
+  const faltamExtrato = pendentes.length - bloqueadas.length
 
   return {
+    bloqueadas,
     concluido: faltamExtrato === 0 && faltamBackfill === 0,
     faltamExtrato,
     faltamBackfill,

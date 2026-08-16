@@ -67,6 +67,7 @@ export async function GET(req: Request) {
         pulou: "rotina do dia ainda rodando",
         faltamExtrato: estado.faltamExtrato,
         faltamBackfill: estado.faltamBackfill,
+        bloqueadas: estado.bloqueadas.length,
       })
     }
 
@@ -129,9 +130,20 @@ export async function GET(req: Request) {
     // Quem lê precisa saber que está vendo um retrato parcial — senão vai
     // tratar "faltam 12 lojas" como problema, quando é só a fila do iFood
     // ainda rodando.
+    // ⚠️ Loja BLOQUEADA entra no assunto, não some.
+    //
+    // Ela deixou de segurar o envio (ver pipeline-do-dia.ts), e o risco de
+    // parar de segurar é parar de aparecer — trocar um relatório atrasado por
+    // um relatório pontual que esconde o problema seria piorar disfarçando.
+    // O corpo já lista a loja em "parou de mandar dado"; o assunto diz que a
+    // causa é permissão, que é o que muda a ação de quem lê.
+    const bloqueio =
+      estado.bloqueadas.length > 0
+        ? ` · ${estado.bloqueadas.length} loja(s) sem permissão no iFood`
+        : ""
     const assunto = estado.concluido
-      ? msg.assunto
-      : `${msg.assunto} (parcial — ${estado.faltamExtrato} loja(s) sem extrato ainda)`
+      ? `${msg.assunto}${bloqueio}`
+      : `${msg.assunto} (parcial — ${estado.faltamExtrato} loja(s) sem extrato ainda)${bloqueio}`
 
     // holdingId null + forcar: este e-mail não pertence a cliente nenhum e
     // precisa sair TODO dia — a trava de "já enviei este tipo" mataria o
@@ -150,6 +162,7 @@ export async function GET(req: Request) {
       ranAt: new Date().toISOString(),
       assunto,
       completo: estado.concluido,
+      bloqueadas: estado.bloqueadas.length,
       email: envio.ok ? "enviado" : `falhou: ${envio.erro}`,
       resumo: s.resumo,
       conferencia: conferencia.length,
