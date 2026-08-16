@@ -413,14 +413,11 @@ export function DocumentoProposta({
               {brl(mensal)}
             </td>
           </tr>
-          <tr style={{ background: "#fff7ed" }}>
-            <td className="p-2 font-extrabold text-zinc-900" colSpan={3}>
-              Total do período (12 meses)
-            </td>
-            <td className="p-2 text-right font-extrabold tabular-nums text-zinc-900">
-              {brl(mensal * 12)}
-            </td>
-          </tr>
+          {/* ⚠️ SEM "total do período" (Marcus, 16/08/26): "o valor alto pode
+              assustar a pessoa". R$ 42.000 dito de uma vez é um número que
+              muda a conversa, mesmo sendo a mesma mensalidade que a linha de
+              cima — e a proposta não deixa de informar o compromisso, porque a
+              seção Vigência continua dizendo 12 meses com todas as letras. */}
         </tbody>
       </table>
 
