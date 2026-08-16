@@ -49,6 +49,85 @@ export function DocumentoProposta({
       style={{ colorScheme: "light" }}
     >
       {/* ── Cabeçalho ───────────────────────────────────────────── */}
+      {/* ══ CAPA ═══════════════════════════════════════════════════════
+          No idioma visual da TELA DE LOGIN: fundo zinc-950, brilhos laranja
+          desfocados, grade sutil e a mesma chamada. Quem recebe a proposta e
+          depois entra no sistema encontra a mesma frase — um faz o outro
+          parecer consequência, não coincidência.
+
+          `print:break-after-page` porque capa dividindo página com conteúdo
+          deixa de ser capa. */}
+      <div
+        className="capa-proposta relative -mx-10 -mt-10 mb-8 flex flex-col overflow-hidden bg-zinc-950 px-10 py-12"
+        style={{ minHeight: 560 }}
+      >
+        <div
+          className="pointer-events-none absolute -left-24 -top-16 size-[380px] rounded-full"
+          style={{ background: LARANJA, opacity: 0.25, filter: "blur(110px)" }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-20 -right-16 size-[320px] rounded-full"
+          style={{ background: LARANJA, opacity: 0.15, filter: "blur(110px)" }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+          }}
+        />
+
+        <div className="relative z-10 flex flex-1 flex-col">
+          <div className="flex items-center gap-2">
+            <span
+              className="grid size-8 place-items-center rounded-lg"
+              style={{ background: LARANJA }}
+            >
+              <svg viewBox="0 0 24 24" className="size-4" fill="white">
+                <rect x="4" y="12" width="3.2" height="8" rx="1" />
+                <rect x="10.4" y="7" width="3.2" height="13" rx="1" />
+                <rect x="16.8" y="9.5" width="3.2" height="10.5" rx="1" />
+              </svg>
+            </span>
+            <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-white/80">
+              Delivery OS
+            </span>
+          </div>
+
+          <div className="my-auto">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1 text-[9px] font-medium uppercase tracking-[0.18em] text-white/70">
+              Proposta comercial nº {numero}
+            </div>
+            <h1 className="max-w-[26ch] text-[30px] font-bold leading-[1.15] text-white">
+              {modelo.capaTitulo}
+            </h1>
+            <p className="mt-4 max-w-[52ch] text-[12.5px] leading-relaxed text-white/60">
+              {modelo.capaSubtitulo}
+            </p>
+          </div>
+
+          <div className="flex items-end justify-between border-t border-white/10 pt-5">
+            <div>
+              <p className="text-[9px] uppercase tracking-widest text-white/40">
+                Preparada para
+              </p>
+              <p className="mt-1 text-[15px] font-bold text-white">
+                {d.razaoSocial || "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] uppercase tracking-widest text-white/40">
+                Válida até
+              </p>
+              <p className="mt-1 text-[13px] font-semibold text-white">
+                {dataBr(d.validadeAte)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-start justify-between gap-6 border-b-2 pb-5" style={{ borderColor: LARANJA }}>
         <div className="flex items-center gap-3">
           <svg viewBox="0 0 512 512" className="size-11 rounded-[11px]">
@@ -86,85 +165,6 @@ export function DocumentoProposta({
           <p className="text-[11px] text-zinc-500">
             Válida até {dataBr(d.validadeAte)}
           </p>
-        </div>
-      </div>
-
-      {/* ══ CAPA ═══════════════════════════════════════════════════════
-          No idioma visual da TELA DE LOGIN: fundo zinc-950, brilhos laranja
-          desfocados, grade sutil e a mesma chamada. Quem recebe a proposta e
-          depois entra no sistema encontra a mesma frase — um faz o outro
-          parecer consequência, não coincidência.
-
-          `print:break-after-page` porque capa dividindo página com conteúdo
-          deixa de ser capa. */}
-      <div
-        className="relative -mx-10 -mt-10 mb-8 overflow-hidden bg-zinc-950 px-10 py-14 print:break-after-page"
-        style={{ minHeight: 470 }}
-      >
-        <div
-          className="pointer-events-none absolute -left-24 -top-16 size-[380px] rounded-full"
-          style={{ background: LARANJA, opacity: 0.25, filter: "blur(110px)" }}
-        />
-        <div
-          className="pointer-events-none absolute -bottom-20 -right-16 size-[320px] rounded-full"
-          style={{ background: LARANJA, opacity: 0.15, filter: "blur(110px)" }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.06]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
-            backgroundSize: "44px 44px",
-          }}
-        />
-
-        <div className="relative z-10 flex h-full flex-col">
-          <div className="flex items-center gap-2">
-            <span
-              className="grid size-8 place-items-center rounded-lg"
-              style={{ background: LARANJA }}
-            >
-              <svg viewBox="0 0 24 24" className="size-4" fill="white">
-                <rect x="4" y="12" width="3.2" height="8" rx="1" />
-                <rect x="10.4" y="7" width="3.2" height="13" rx="1" />
-                <rect x="16.8" y="9.5" width="3.2" height="10.5" rx="1" />
-              </svg>
-            </span>
-            <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-white/80">
-              Delivery OS
-            </span>
-          </div>
-
-          <div className="mt-16">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1 text-[9px] font-medium uppercase tracking-[0.18em] text-white/70">
-              Proposta comercial nº {numero}
-            </div>
-            <h1 className="max-w-[26ch] text-[30px] font-bold leading-[1.15] text-white">
-              {modelo.capaTitulo}
-            </h1>
-            <p className="mt-4 max-w-[52ch] text-[12.5px] leading-relaxed text-white/60">
-              {modelo.capaSubtitulo}
-            </p>
-          </div>
-
-          <div className="mt-14 flex items-end justify-between border-t border-white/10 pt-5">
-            <div>
-              <p className="text-[9px] uppercase tracking-widest text-white/40">
-                Preparada para
-              </p>
-              <p className="mt-1 text-[15px] font-bold text-white">
-                {d.razaoSocial || "—"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[9px] uppercase tracking-widest text-white/40">
-                Válida até
-              </p>
-              <p className="mt-1 text-[13px] font-semibold text-white">
-                {dataBr(d.validadeAte)}
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 

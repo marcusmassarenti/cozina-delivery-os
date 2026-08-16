@@ -469,6 +469,28 @@
     break-inside: avoid;
   }
 
+  /* ─── Capa da PROPOSTA COMERCIAL ────────────────────────────────────
+     Folha inteira, e nada depois dela na mesma página.
+
+     ⚠️ 276mm, e cada milímetro tem motivo. A4 tem 297mm; o @page reserva 8mm
+     em cima e embaixo, sobrando 281mm de área imprimível. Pedir os 281mm
+     cheios é convidar o arredondamento do motor de impressão a estourar por
+     uma fração e jogar uma PÁGINA EM BRANCO atrás da capa — que é pior que a
+     sobra que estamos consertando. Os 5mm de folga são invisíveis no papel e
+     garantem que a quebra caia onde deve.
+
+     As margens negativas do componente (-mx-10 -mt-10) já sangram a cor até a
+     borda do papel; aqui só a ALTURA precisava ser resolvida. */
+  .capa-proposta {
+    min-height: 276mm !important;
+    page-break-after: always;
+    break-after: page;
+    /* Fundo escuro só sai no papel se o navegador puder pintar. Sem isto a
+       capa imprime branca e o texto branco some. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* Padrão: RETRATO. A4 paisagem fica só pro .acomp-print (page: landscapeReport). */
   @page {
     margin: 8mm;
