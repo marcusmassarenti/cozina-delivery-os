@@ -68,11 +68,19 @@ export function DocumentoProposta({
   modelo: ModeloProposta
 }) {
   const adicionais = Math.max(Number(d.lojas || 1) - 1, 0)
-  const escopo = modelo.escopoItens
+  // Só o que o plano contratado inclui — o resto vira oferta, não lista de nãos.
+  const escopoIncluido = modelo.escopoItens.filter((i) =>
+    i.planos.includes(d.plano),
+  )
+  const foraDoPlano = modelo.escopoItens.filter(
+    (i) => !i.planos.includes(d.plano) && i.planos.length > 0,
+  )
   const ilimitado = d.modeloPreco === "ilimitado"
   // O total vem de fontes diferentes conforme o modelo: no ilimitado é o valor
   // fechado; no por-loja é a conta que a tabela acima mostra linha a linha.
   const mensal = ilimitado ? Number(d.valorIlimitado || 0) : d.totalMensal
+  // Quem já está no AI não recebe oferta do que já tem.
+  const podeSubirParaAi = d.plano !== "ai" && foraDoPlano.length > 0
 
   return (
     <div
@@ -305,37 +313,24 @@ export function DocumentoProposta({
           parágrafo. Sem a lista do que fica DE FORA, "eu achei que tinha
           relatório de X" vira discussão no quarto mês — e sempre com quem já
           está pagando. O "–" é tão importante quanto o "✓". */}
+      {/* ⚠️ SÓ O QUE ESTÁ INCLUÍDO (Marcus, 16/08/26).
+          A versão anterior listava também o que NÃO entrava, com "–", pelo
+          argumento de evitar "achei que tinha isso". O Marcus trocou por algo
+          melhor: em vez de uma lista do que falta, o que não entra vira OFERTA
+          no bloco seguinte, com preço e a informação de que a fatura se ajusta
+          sozinha. Uma proposta comercial não precisa de uma coluna de nãos. */}
       <table className="mt-2 w-full border-collapse text-[11.5px]">
-        <thead>
-          <tr className="border-b-2" style={{ borderColor: LARANJA }}>
-            <th className="py-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Recurso
-            </th>
-            <th className="w-[110px] py-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Plano {d.planoLabel}
-            </th>
-          </tr>
-        </thead>
         <tbody>
-          {escopo.map((item) => {
-            const tem = item.planos.includes(d.plano)
-            return (
-              <tr key={item.recurso} className="border-b border-zinc-100">
-                <td className={`py-1 ${tem ? "text-zinc-900" : "text-zinc-400"}`}>
-                  {item.recurso}
-                </td>
-                <td className="py-1 text-center">
-                  {tem ? (
-                    <span style={{ color: LARANJA }} className="font-bold">
-                      ✓
-                    </span>
-                  ) : (
-                    <span className="text-zinc-300">–</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
+          {escopoIncluido.map((item) => (
+            <tr key={item.recurso} className="border-b border-zinc-100">
+              <td className="py-1 pr-2">
+                <span style={{ color: LARANJA }} className="mr-2 font-bold">
+                  ✓
+                </span>
+                {item.recurso}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <p className="mt-2 text-[11px] text-zinc-500">
@@ -344,6 +339,16 @@ export function DocumentoProposta({
       </p>
 
       {/* ── Investimento ────────────────────────────────────────── */}
+      {/* ⚠️ BLOCO INDIVISÍVEL. A tabela estava partindo no meio: a linha da 1ª
+          loja ficava numa página e o resto na seguinte, com o cabeçalho preto
+          repetido — parecia duas tabelas diferentes, e o total aparecia longe
+          das linhas que o formam. Numa proposta comercial isso é pior que
+          feio: o cliente lê o total sem ver a conta.
+
+          `break-inside: avoid` empurra o bloco inteiro pra próxima folha se
+          ele não couber. É seguro porque são no máximo 6 linhas — o escopo,
+          que é longo de verdade, continua livre pra quebrar. */}
+      <div className="break-inside-avoid">
       <Titulo>Investimento</Titulo>
       <table className="w-full border-collapse text-[12px]">
         <thead>
@@ -426,10 +431,74 @@ export function DocumentoProposta({
         </tbody>
       </table>
 
+      </div>
+
+      {/* ── Como cresce ─────────────────────────────────────────── */}
+      {/* O que não está no plano vira OFERTA, com preço e a promessa de que a
+          cobrança se ajusta sozinha. É a diferença entre "isso você não tem" e
+          "isso você pode ter, e é assim". */}
+      <div className="break-inside-avoid">
+      <Titulo>Se precisar de mais</Titulo>
+      <div className="space-y-2">
+        {podeSubirParaAi && (
+          <div className="rounded-lg border border-zinc-200 p-3">
+            <p className="text-[12px] font-bold text-zinc-900">
+              Nino AI e diagnóstico por inteligência artificial
+            </p>
+            <p className="mt-1 text-[11.5px] leading-snug">
+              {/* Sem toLowerCase: ele transformava "Nino AI" em "nino ai". */}
+              {foraDoPlano.length > 0 && (
+                <>Inclui: {foraDoPlano.map((f) => f.recurso).join(" · ")}. </>
+              )}
+              A qualquer momento você habilita no próprio sistema:{" "}
+              {ilimitado ? (
+                <>
+                  o valor passa a ser combinado sobre a sua mensalidade atual
+                </>
+              ) : (
+                <>
+                  a mensalidade passa de {brl(d.precoPrimeira)} para{" "}
+                  {brl(d.precoAiPrimeira)} na primeira loja e de{" "}
+                  {brl(d.precoAdicional)} para {brl(d.precoAiAdicional)} nas
+                  adicionais
+                </>
+              )}
+              , e <b className="text-zinc-900">a fatura é atualizada
+              automaticamente</b> — sem nova proposta e sem religar nada.
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-zinc-200 p-3">
+          <p className="text-[12px] font-bold text-zinc-900">
+            Lojas novas entram quando você quiser
+          </p>
+          <p className="mt-1 text-[11.5px] leading-snug">
+            {ilimitado ? (
+              <>
+                Neste formato as lojas são <b className="text-zinc-900">ilimitadas</b>:
+                cadastre quantas precisar, sem mudar a mensalidade.
+              </>
+            ) : (
+              <>
+                Cada loja nova custa{" "}
+                <b className="text-zinc-900">{brl(d.precoAdicional)} por mês</b> e
+                começa a ser cobrada proporcionalmente a partir da ativação. Você
+                cadastra pelo sistema e{" "}
+                <b className="text-zinc-900">o pagamento se ajusta sozinho</b> — a
+                exclusão vale a partir do ciclo seguinte.
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+      </div>
+
       {/* ── Cronograma ──────────────────────────────────────────── */}
       {/* A Mercos lista as 12 parcelas com data. Aqui a mensalidade é fixa, então
           repetir doze linhas iguais seria encher página — o que a pessoa
           precisa saber é QUANDO começa e QUANDO vence cada uma. */}
+      <div className="break-inside-avoid">
       <Titulo>Pagamento</Titulo>
       <table className="w-full text-[12px]">
         <tbody>
@@ -454,7 +523,10 @@ export function DocumentoProposta({
         </tbody>
       </table>
 
+      </div>
+
       {/* ── Atendimento e condições ─────────────────────────────── */}
+      <div className="break-inside-avoid">
       <Titulo>Atendimento e condições</Titulo>
       <table className="w-full text-[12px]">
         <tbody>
@@ -463,6 +535,8 @@ export function DocumentoProposta({
           <Linha rot="Treinamento" val={modelo.treinamentoPrazo} />
         </tbody>
       </table>
+
+      </div>
 
       {/* ── Vigência ────────────────────────────────────────────── */}
       <Titulo>Vigência</Titulo>

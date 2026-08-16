@@ -507,6 +507,22 @@
     break-after: page;
   }
 
+  /* O Tailwind gera `break-inside-avoid`, mas o Chrome só respeita a quebra
+     dentro de um bloco quando ele NÃO é `display:contents` nem está dentro de
+     um flex container que se estica. Reafirmar com page-break-inside cobre o
+     motor antigo, que é o que o "Salvar como PDF" usa. */
+  .break-inside-avoid {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Cabeçalho de tabela não se repete numa tabela que não deveria ter
+     quebrado. Onde a quebra é legítima (escopo, com 20 linhas), repetir ajuda
+     — por isso a regra é só para os blocos protegidos. */
+  .break-inside-avoid thead {
+    display: table-header-group;
+  }
+
   /* Padrão: RETRATO. A4 paisagem fica só pro .acomp-print (page: landscapeReport). */
   @page {
     margin: 8mm;

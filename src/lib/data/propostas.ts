@@ -81,6 +81,14 @@ export type DadosProposta = {
   /** Esconde a linha na proposta quando o cliente não tem contato separado. */
   ocultarBoleto: boolean
   ocultarNf: boolean
+  /**
+   * Preços do plano AI, pro bloco de "quer contratar depois".
+   *
+   * Congelados no retrato junto com o resto: se a tabela subir amanhã, a
+   * proposta que o cliente tem na mão continua valendo o que foi oferecido.
+   */
+  precoAiPrimeira: number
+  precoAiAdicional: number
 }
 
 export type Proposta = {
@@ -222,6 +230,8 @@ export async function montarDoCadastro(
       valorIlimitado: Math.round(total * 100) / 100,
       ocultarBoleto: false,
       ocultarNf: false,
+      precoAiPrimeira: precos.ai.first,
+      precoAiAdicional: precos.ai.add,
     },
   }
 }
@@ -289,6 +299,39 @@ export async function listarPropostas(): Promise<Proposta[]> {
   }))
 }
 
+/**
+ * Preenche o que o retrato antigo não tem.
+ *
+ * ⚠️ O `dados` é JSONB: proposta criada antes de um campo existir simplesmente
+ * não o tem, e no documento isso vira `undefined` — que virou "R$ 0,00" na
+ * oferta do Nino AI e num susto de quem estava conferindo. Campo novo não pode
+ * transformar proposta antiga em documento errado.
+ *
+ * Preenche só o AUSENTE, nunca o preenchido: o retrato continua sendo o que
+ * foi negociado.
+ */
+async function completarDados(
+  d: Partial<DadosProposta>,
+): Promise<DadosProposta> {
+  const precos = await getDefaultPlan()
+  return {
+    ...(d as DadosProposta),
+    modeloPreco: d.modeloPreco ?? "por_loja",
+    valorIlimitado: d.valorIlimitado ?? d.totalMensal ?? 0,
+    ocultarBoleto: d.ocultarBoleto ?? false,
+    ocultarNf: d.ocultarNf ?? false,
+    contatoBoletoNome: d.contatoBoletoNome ?? "",
+    contatoBoletoEmail: d.contatoBoletoEmail ?? "",
+    contatoBoletoTelefone: d.contatoBoletoTelefone ?? "",
+    contatoNfNome: d.contatoNfNome ?? "",
+    contatoNfEmail: d.contatoNfEmail ?? "",
+    contatoNfTelefone: d.contatoNfTelefone ?? "",
+    inicioCobranca: d.inicioCobranca ?? "",
+    precoAiPrimeira: d.precoAiPrimeira || precos.ai.first,
+    precoAiAdicional: d.precoAiAdicional || precos.ai.add,
+  }
+}
+
 export async function getProposta(id: string): Promise<Proposta | null> {
   const admin = createAdminClient()
   const { data } = await admin
@@ -307,7 +350,7 @@ export async function getProposta(id: string): Promise<Proposta | null> {
     holdingId: p.holding_id as string,
     holdingNome: (p.holdings as { name?: string } | null)?.name ?? "—",
     status: p.status as StatusProposta,
-    dados: p.dados as DadosProposta,
+    dados: await completarDados(p.dados as Partial<DadosProposta>),
     assinaturaUrl: (p.assinatura_url as string | null) ?? null,
     enviadaEm: (p.enviada_em as string | null) ?? null,
     assinadaEm: (p.assinada_em as string | null) ?? null,
