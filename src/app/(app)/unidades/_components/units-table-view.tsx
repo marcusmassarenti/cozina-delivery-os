@@ -193,17 +193,6 @@ export function UnitsTableView({
     router.replace(pathname, { scroll: false })
   }
 
-  /**
-   * A coluna Marca só aparece quando existe mais de uma na tela.
-   *
-   * "Marca" não é campo do cadastro da unidade — vem de `brands`, criada no
-   * onboarding do cliente. Numa rede de marca única ela repete o mesmo texto
-   * em todas as linhas e só rouba largura. Já na DG FOODS, com 56 marcas
-   * diferentes, é a coluna que diz de quem é a loja.
-   */
-  const mostrarMarca =
-    new Set(pagina.linhas.map((l) => l.brandName)).size > 1
-
   const primeiro = pagina.total === 0 ? 0 : (pagina.page - 1) * pagina.perPage + 1
   const ultimo = Math.min(pagina.page * pagina.perPage, pagina.total)
 
@@ -372,11 +361,6 @@ export function UnitsTableView({
                     filtros={filtros}
                     onClick={ordenarPor}
                   />
-                  {mostrarMarca && (
-                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Marca
-                    </th>
-                  )}
                   <Cabecalho
                     col="city"
                     label="Cidade"
@@ -392,12 +376,6 @@ export function UnitsTableView({
                     filtros={filtros}
                     onClick={ordenarPor}
                   />
-                  <th
-                    className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                    title="Até que dia esta loja tem dado importado, somando todas as plataformas. Não é ordenável: seria preciso calcular a data de todas as lojas da rede a cada abertura da tela."
-                  >
-                    Dados até
-                  </th>
                   {/* Cabeçalho nomeado: o ícone sozinho no canto direito não
                       dizia o que era, e a pessoa não achava onde editar. */}
                   <th className="w-[92px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -416,7 +394,6 @@ export function UnitsTableView({
                     cadastroExigente={cadastroExigente}
                     ifoodApi={ifoodApiPorUnidade[u.id]}
                     nineApi={nineApiPorUnidade[u.id]}
-                    mostrarMarca={mostrarMarca}
                     onOpen={() => navigate(`/unidades/${u.code}`)}
                   />
                 ))}
@@ -426,12 +403,20 @@ export function UnitsTableView({
 
           {/* Rodapé: quantas está vendo, quantas por página, e as páginas */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2.5 text-xs text-muted-foreground">
-            <span>
-              Mostrando{" "}
-              <strong className="text-foreground">
-                {primeiro}–{ultimo}
-              </strong>{" "}
-              de <strong className="text-foreground">{pagina.total}</strong>
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>
+                Mostrando{" "}
+                <strong className="text-foreground">
+                  {primeiro}–{ultimo}
+                </strong>{" "}
+                de <strong className="text-foreground">{pagina.total}</strong>
+              </span>
+              {/* Legenda da bolinha. Sem ela o ponto verde vira enfeite: quem
+                  não acompanhou a mudança não tem como adivinhar o que é. */}
+              <span className="flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-emerald-500" />
+                entra sozinho pela API
+              </span>
             </span>
 
             <span className="flex items-center gap-1.5">
@@ -509,7 +494,6 @@ function Linha({
   cadastroExigente,
   ifoodApi,
   nineApi,
-  mostrarMarca,
   onOpen,
 }: {
   u: LinhaUnidade
@@ -519,7 +503,6 @@ function Linha({
   cadastroExigente: boolean
   ifoodApi?: "conectada" | "andamento"
   nineApi?: "conectada" | "andamento"
-  mostrarMarca: boolean
   onOpen: () => void
 }) {
   // O que falta, por extenso, pro `title` da célula. O número vem do banco
@@ -596,13 +579,6 @@ function Linha({
         </div>
       </td>
 
-      {/* Nome de marca longo quebrava a linha em duas e a tabela perdia a
-          densidade que é o motivo dela existir. Corta com reticências. */}
-      {mostrarMarca && (
-        <td className="max-w-[180px] truncate whitespace-nowrap px-3 py-2 text-muted-foreground">
-          {u.brandName}
-        </td>
-      )}
 
       <td className="max-w-[200px] truncate whitespace-nowrap px-3 py-2 text-muted-foreground">
         {u.city ? `${u.city}${u.state ? ` · ${u.state}` : ""}` : "—"}
@@ -612,9 +588,31 @@ function Linha({
         {u.platforms.length === 0 ? (
           <span className="text-xs text-muted-foreground">—</span>
         ) : (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1.5">
             {u.platforms.map((p) => (
-              <PlatformLogo key={p} platform={p} size="sm" />
+              <PlatformLogo
+                key={p}
+                platform={p}
+                size="sm"
+                /**
+                 * ⚠️ Bolinha verde = ENTRA SOZINHO pela API.
+                 *
+                 * Era a informação que faltava na tabela: olhando os logos não
+                 * dava pra saber quais plataformas daquela loja sincronizam e
+                 * quais dependem de alguém subir planilha todo mês — e essa é
+                 * a diferença que decide onde o trabalho manual está.
+                 *
+                 * Keeta fica sempre sem: não tem API, é planilha por
+                 * definição. Cardápio Web também não é marcado, mas pelo
+                 * motivo oposto — ele SÓ existe por API, então a bolinha
+                 * estaria em 100% deles e não separaria nada (ver
+                 * platform-logo.tsx). Marcar tudo é o mesmo que não marcar.
+                 */
+                viaApi={
+                  (p === "ifood" && ifoodApi === "conectada") ||
+                  (p === "99food" && nineApi === "conectada")
+                }
+              />
             ))}
           </span>
         )}
@@ -636,11 +634,6 @@ function Linha({
         )}
       </td>
 
-      <td className="px-3 py-2">
-        {/* Loja fechada não é cobrada por não vender — pintar de âmbar a
-            última venda dela é alarme sobre o que a gente já sabe. */}
-        <UltimaVenda data={u.ultimaVenda} alertar={u.active} />
-      </td>
 
       <td
         className="px-3 py-2"
@@ -702,43 +695,6 @@ function Linha({
         </div>
       </td>
     </tr>
-  )
-}
-
-/**
- * "hoje / ontem / há N dias / a data". Dias absolutos viram distância só até
- * uma semana — passou disso, a data importa mais que a contagem.
- */
-function UltimaVenda({
-  data,
-  alertar = true,
-}: {
-  data: string | null
-  alertar?: boolean
-}) {
-  if (!data) {
-    return <span className="text-xs text-muted-foreground">sem venda</span>
-  }
-  const hoje = new Date(
-    new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }) +
-      "T00:00:00-03:00",
-  )
-  const d = new Date(`${data}T00:00:00-03:00`)
-  const dias = Math.round((hoje.getTime() - d.getTime()) / 86_400_000)
-
-  let texto: string
-  if (dias <= 0) texto = "hoje"
-  else if (dias === 1) texto = "ontem"
-  else if (dias <= 7) texto = `há ${dias} dias`
-  else texto = d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
-
-  return (
-    <span
-      className={`text-xs ${alertar && dias >= 3 ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
-      title={d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
-    >
-      {texto}
-    </span>
   )
 }
 

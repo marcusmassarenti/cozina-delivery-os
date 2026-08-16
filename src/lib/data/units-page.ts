@@ -53,7 +53,6 @@ type LinhaRpc = {
   cnpj: string | null
   active: boolean
   brand_id: string
-  brand_name: string
   logo_url: string | null
   data_inauguracao: string | null
   data_encerramento: string | null
@@ -74,7 +73,6 @@ type LinhaRpc = {
   cnae_descricao: string | null
   situacao_cadastral: string | null
   faltando: number
-  ultima_venda: string | null
   total: number
 }
 
@@ -192,7 +190,6 @@ export async function getUnitsPage(
       cnpj: r.cnpj,
       active: r.active,
       brandId: r.brand_id,
-      brandName: r.brand_name,
       logoUrl: r.logo_url,
       // Ordem canônica (iFood, 99, Keeta, Cardápio Web) já na origem — senão a
       // mesma combinação aparece numa sequência numa linha e noutra na de
@@ -201,7 +198,6 @@ export async function getUnitsPage(
       externalStoreIds: p?.externalStoreIds ?? {},
       platformInauguracoes: p?.platformInauguracoes ?? {},
       faltando: r.faltando,
-      ultimaVenda: r.ultima_venda,
       ...(dona ? { compartilhada: { donaNome: dona } } : {}),
       dataInauguracao: r.data_inauguracao,
       dataEncerramento: r.data_encerramento,

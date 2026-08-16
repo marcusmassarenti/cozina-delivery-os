@@ -40,15 +40,12 @@ export type LinhaUnidade = {
   cnpj: string | null
   active: boolean
   brandId: string
-  brandName: string
   logoUrl: string | null
   platforms: CanalId[]
   externalStoreIds: Partial<Record<CanalId, string | null>>
   platformInauguracoes: Partial<Record<CanalId, string | null>>
   /** Quantos campos do cadastro faltam (0 = completo). */
   faltando: number
-  /** Última venda em qualquer plataforma (YYYY-MM-DD). */
-  ultimaVenda: string | null
   compartilhada?: { donaNome: string }
   dataInauguracao: string | null
   dataEncerramento: string | null
