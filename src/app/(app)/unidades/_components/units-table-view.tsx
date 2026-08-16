@@ -34,6 +34,7 @@ import {
 import { DeleteUnitButton } from "./delete-unit-button"
 import { EditUnitDialog } from "./edit-unit-dialog"
 import { NewUnitDialog } from "./new-unit-dialog"
+import { ImportarPlanilhaDialog } from "./importar-planilha-dialog"
 
 /**
  * A listagem de Unidades em TABELA, paginada.
@@ -273,6 +274,7 @@ export function UnitsTableView({
               className="h-9 w-64 rounded-md border bg-card pl-8 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
           </div>
+          {canEdit && <ImportarPlanilhaDialog />}
           {canEdit && <NewUnitDialog cadastroExigente={cadastroExigente} />}
         </div>
       </div>

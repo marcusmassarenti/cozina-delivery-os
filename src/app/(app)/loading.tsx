@@ -1,6 +1,11 @@
 /**
  * Skeleton genérico mostrado enquanto Server Components carregam.
- * Cobre /, /unidades, /unidades/[codigo], /importacao, /administracao/*
+ * Cobre / (Dashboard) e as telas de formato parecido.
+ *
+ * ⚠️ NÃO serve pra tudo: ele desenha SEIS CARTÕES DE KPI, que é o formato do
+ * Dashboard. Em /unidades isso prometia uma tela que não vinha (lá é tabela) e
+ * o Marcus estranhou, com razão — skeleton só ajuda quando ANTECIPA o layout.
+ * Rota cujo formato difere ganha o `loading.tsx` dela (ver unidades/loading.tsx).
  * (Next 16 rebobina pra rota mais próxima quando navega.)
  */
 export default function Loading() {
