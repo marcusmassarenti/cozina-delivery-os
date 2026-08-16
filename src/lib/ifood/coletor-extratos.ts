@@ -41,6 +41,7 @@ import "server-only"
  */
 import { createAdminClient } from "@/lib/supabase/admin"
 import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import { inicioDoDiaBR } from "@/lib/dia-br"
 import {
   getReconciliationRequest,
   pedidosVigentes,
@@ -124,11 +125,11 @@ export async function coletarExtratosPendentes(
   // Lê de `platform_imports` (uma linha por importação) e não da tabela de
   // lançamentos: aquela tem milhões de linhas, e um group-by nela a cada 4
   // minutos seria custo fixo pra responder uma pergunta pequena.
-  const hoje = new Date(
-    agora.getFullYear(),
-    agora.getMonth(),
-    agora.getDate(),
-  ).toISOString()
+  // ⚠️ Virada do dia em BRASÍLIA — ver src/lib/dia-br.ts. Com a virada em UTC
+  // (o fuso da Vercel), "hoje" começava às 21h da véspera: as 74 lojas
+  // recarregavam de madrugada e o coletor passava o dia inteiro ocioso,
+  // achando que já tinha trabalhado.
+  const hoje = inicioDoDiaBR(agora)
   const { data: fresco } = await admin
     .from("platform_imports")
     .select("unit_id, ref_year, ref_month")

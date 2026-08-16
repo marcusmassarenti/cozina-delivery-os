@@ -21,6 +21,7 @@ import "server-only"
  */
 import { createAdminClient } from "@/lib/supabase/admin"
 import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import { inicioDoDiaBR } from "@/lib/dia-br"
 
 export type EstadoDoDia = {
   concluido: boolean
@@ -53,12 +54,9 @@ export async function estadoDoPipeline(): Promise<EstadoDoDia> {
 
   // Quem já fechou o extrato HOJE. Mesma leitura barata do coletor: uma linha
   // por importação, não um group-by na tabela de milhões de lançamentos.
-  const hoje = new Date()
-  const inicio = new Date(
-    hoje.getFullYear(),
-    hoje.getMonth(),
-    hoje.getDate(),
-  ).toISOString()
+  // Virada do dia em Brasília — ver src/lib/dia-br.ts. Em UTC, este gate dava
+  // "rotina fechada" logo depois das 21h, que é quando a fila virava.
+  const inicio = inicioDoDiaBR()
   const { data: fresco } = await admin
     .from("platform_imports")
     .select("unit_id")
@@ -81,12 +79,7 @@ export async function estadoDoPipeline(): Promise<EstadoDoDia> {
 
 /** O relatório de saúde já saiu hoje? Evita mandar um por janela. */
 export async function saudeJaSaiuHoje(): Promise<boolean> {
-  const hoje = new Date()
-  const inicio = new Date(
-    hoje.getFullYear(),
-    hoje.getMonth(),
-    hoje.getDate(),
-  ).toISOString()
+  const inicio = inicioDoDiaBR()
   const { count } = await createAdminClient()
     .from("email_enviados")
     .select("id", { count: "exact", head: true })

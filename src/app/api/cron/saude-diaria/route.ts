@@ -7,10 +7,15 @@
  * nada: está tudo bem ou o relatório parou?") é o modo de falha que este
  * relatório existe pra eliminar.
  *
- * ⏰ 14:00 UTC (11h de Brasília) — DEPOIS de todos os outros crons, que vão
- * até 13:00 UTC. Rodar antes faria o relatório julgar um dia que ainda não
- * aconteceu. 1x/dia porque a conta Vercel é HOBBY, onde cron mais frequente
- * que diário FALHA O DEPLOY — não é aviso, o build quebra.
+ * ⏰ De hora em hora, das 11:00 às 23:00 UTC (8h às 20h de Brasília), e ENVIA
+ * na primeira janela em que a rotina do dia já fechou. A primeira é 8h porque
+ * é logo depois do último cron diário (avaliações, 7h de Brasília) — antes
+ * disso o relatório julgaria um dia que ainda não aconteceu.
+ *
+ * A janela começava às 11h de Brasília por causa de um bug, não por escolha: a
+ * virada do dia estava em UTC, então a fila do coletor só virava às 21h e a
+ * rotina nunca fechava de manhã. Com a virada em Brasília (src/lib/dia-br.ts)
+ * ela fecha de madrugada, e às 8h o quadro já é o do dia inteiro.
  */
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
 import { emailSaude, type ConferenciaResumo } from "@/lib/email/saude"
