@@ -2,6 +2,38 @@
 
 import type { DadosProposta } from "@/lib/data/propostas"
 import type { ModeloProposta } from "@/lib/data/proposta-modelo"
+import {
+  AlertTriangle,
+  BarChart3,
+  Clock,
+  Mail,
+  Network,
+  Star,
+  Store,
+  Table2,
+  UtensilsCrossed,
+  Wallet,
+} from "lucide-react"
+
+/**
+ * Id do modelo → componente do ícone.
+ *
+ * Mora aqui e não no módulo de dados porque importar os ícones lá carregaria a
+ * biblioteca inteira em qualquer tela que encostasse no modelo. Id
+ * desconhecido cai no neutro em vez de quebrar o documento.
+ */
+const ICONES = {
+  rede: Network,
+  loja: Store,
+  dinheiro: Wallet,
+  planilha: Table2,
+  cardapio: UtensilsCrossed,
+  email: Mail,
+  grafico: BarChart3,
+  relogio: Clock,
+  estrela: Star,
+  alerta: AlertTriangle,
+} as const
 
 /**
  * A FOLHA. Isto é o que o cliente recebe — na tela e no PDF, o mesmo componente.
@@ -168,23 +200,46 @@ export function DocumentoProposta({
         </div>
       </div>
 
-      {/* ══ NOSSA HISTÓRIA ═════════════════════════════════════════════ */}
-      <Titulo>Quem somos</Titulo>
-      {modelo.historia.split("\n\n").map((par, i) => (
-        <p key={i} className={i > 0 ? "mt-2" : ""}>
-          {par}
-        </p>
-      ))}
-
-      {/* ══ COMO AJUDAMOS ══════════════════════════════════════════════ */}
-      <Titulo>O que muda pra quem usa</Titulo>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-        {modelo.ajudamos.map((b) => (
-          <div key={b.titulo}>
-            <p className="text-[12px] font-bold text-zinc-900">{b.titulo}</p>
-            <p className="mt-0.5 text-[11.5px] leading-snug">{b.texto}</p>
-          </div>
+      {/* ══ APRESENTAÇÃO — UMA PÁGINA SÓ ══════════════════════════════
+          "Quem somos" e "O que muda" ficam juntos numa folha, e o Cliente
+          começa na seguinte. Antes eles vazavam pro meio da página do cadastro
+          e a história virava rodapé de outra coisa. */}
+      <div className="pagina-apresentacao">
+        <Titulo>Quem somos</Titulo>
+        {modelo.historia.split("\n\n").map((par, i) => (
+          <p key={i} className={i > 0 ? "mt-2" : ""}>
+            {par}
+          </p>
         ))}
+
+        <Titulo>O que muda pra quem usa</Titulo>
+        {/* Cards com ícone, no mesmo desenho do site: selo arredondado com a
+            cor da marca em fundo suave. Numa proposta impressa o ícone faz o
+            olho encontrar o bloco antes de ler — que é justamente o que essa
+            página precisa fazer. */}
+        <div className="grid grid-cols-2 gap-3">
+          {modelo.ajudamos.map((b) => {
+            const Icone =
+              ICONES[(b.icone ?? "grafico") as keyof typeof ICONES] ?? BarChart3
+            return (
+              <div
+                key={b.titulo}
+                className="break-inside-avoid rounded-xl border border-zinc-200 p-3.5"
+              >
+                <span
+                  className="mb-2 flex size-9 items-center justify-center rounded-lg"
+                  style={{ background: "#fff1ec", color: LARANJA }}
+                >
+                  <Icone className="size-[18px]" strokeWidth={2} />
+                </span>
+                <p className="text-[12.5px] font-bold text-zinc-900">
+                  {b.titulo}
+                </p>
+                <p className="mt-1 text-[11.5px] leading-snug">{b.texto}</p>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── Cliente ─────────────────────────────────────────────── */}

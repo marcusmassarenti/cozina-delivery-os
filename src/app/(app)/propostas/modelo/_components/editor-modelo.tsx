@@ -14,6 +14,7 @@ import { Check, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { ItemEscopo, ModeloProposta } from "@/lib/data/proposta-modelo"
+import { ICONES_PROPOSTA } from "@/lib/proposta-icones"
 import { salvarModeloProposta } from "../_actions"
 
 const PLANOS = [
@@ -113,6 +114,26 @@ export function EditorModelo({
                   placeholder="Quem é (ex.: O dono da rede)"
                   className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium outline-none focus:border-ring"
                 />
+                {/* Lista fechada: ícone digitado à mão quebraria o documento
+                    em silêncio no dia de um typo. */}
+                <select
+                  value={b.icone ?? "grafico"}
+                  onChange={(e) =>
+                    set(
+                      "ajudamos",
+                      m.ajudamos.map((x, idx) =>
+                        idx === i ? { ...x, icone: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  className="h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
+                >
+                  {ICONES_PROPOSTA.map((ic) => (
+                    <option key={ic.id} value={ic.id}>
+                      Ícone: {ic.label}
+                    </option>
+                  ))}
+                </select>
                 <textarea
                   value={b.texto}
                   onChange={(e) =>

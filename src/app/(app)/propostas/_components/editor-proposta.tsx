@@ -264,6 +264,22 @@ export function EditorProposta({
           <Campo label="Observações" v={d.observacoes} on={(x) => set("observacoes", x)} ro={travada} area />
         </Grupo>
 
+        {/* O "Quem somos", os blocos com ícone e o escopo são do MODELO, não
+            desta proposta — mas quem está editando uma proposta é justamente
+            quem quer mudar o texto. O atalho evita a caçada pelo menu. */}
+        <div className="rounded-md border border-dashed p-2.5">
+          <p className="text-[11px] text-muted-foreground">
+            Quem somos, os blocos de &quot;o que muda&quot; e o escopo valem
+            para todas as propostas.
+          </p>
+          <a
+            href="/propostas/modelo"
+            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold underline underline-offset-2"
+          >
+            Editar textos do modelo
+          </a>
+        </div>
+
         <Grupo titulo="Consultor">
           <Campo label="Nome" v={d.consultorNome} on={(x) => set("consultorNome", x)} ro={travada} />
           <Campo label="E-mail" v={d.consultorEmail} on={(x) => set("consultorEmail", x)} ro={travada} />

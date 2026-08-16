@@ -30,7 +30,12 @@ export type ItemEscopo = {
   planos: ("essencial" | "pro" | "ai")[]
 }
 
-export type BlocoAjuda = { titulo: string; texto: string }
+export type BlocoAjuda = {
+  titulo: string
+  texto: string
+  /** Id de `ICONES_PROPOSTA`. Vazio/desconhecido cai no ícone neutro. */
+  icone?: string
+}
 
 export type ModeloProposta = {
   capaTitulo: string
@@ -93,31 +98,37 @@ export const MODELO_PADRAO: ModeloProposta = {
   ajudamos: [
     {
       titulo: "O dono da rede",
+      icone: "rede",
       texto:
         "Enxerga todas as lojas no mesmo painel, compara umas com as outras e descobre onde está o problema antes do fim do mês.",
     },
     {
       titulo: "O gerente da loja",
+      icone: "loja",
       texto:
         "Vê a nota, os cancelamentos e o que o cliente reclamou, e responde a avaliação sem sair do sistema.",
     },
     {
       titulo: "O financeiro",
+      icone: "dinheiro",
       texto:
         "Recebe o faturamento já conciliado com o repasse da plataforma — o que entrou, o que foi taxa e o que ainda está pra cair.",
     },
     {
       titulo: "O contador",
+      icone: "planilha",
       texto:
         "Tem DRE por loja e da rede, com custo e CMV no lugar certo, em vez de uma pilha de relatórios pra reorganizar.",
     },
     {
       titulo: "Quem monta o cardápio",
+      icone: "cardapio",
       texto:
         "Sabe qual item vende, qual item some no funil e o que a promoção realmente trouxe de volta.",
     },
     {
       titulo: "Quem não tem tempo pra nada disso",
+      icone: "email",
       texto:
         "Recebe um e-mail por dia com o resumo, e um aviso quando alguma loja para de mandar dado.",
     },

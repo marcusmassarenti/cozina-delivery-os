@@ -20,7 +20,7 @@ export async function salvarModeloProposta(
     capaTitulo: string
     capaSubtitulo: string
     historia: string
-    ajudamos: { titulo: string; texto: string }[]
+    ajudamos: { titulo: string; texto: string; icone?: string }[]
     escopoItens: ItemEscopo[]
     atendimento: string
     termoAceite: string
