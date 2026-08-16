@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
+import { CAMPOS_CADASTRO, camposFaltando } from "@/lib/cadastro-campos"
 
 /**
  * Lojas com cadastro pela metade.
@@ -12,9 +13,10 @@ import { getAccessibleUnitIds } from "@/lib/auth/roles"
  * momento possível — o aviso antecipa, dizendo quantas lojas precisam de
  * atenção antes da pessoa esbarrar nisso.
  *
- * ⚠️ NÃO conta `complemento`: muito endereço não tem, e cobrar geraria "-".
- * A lista aqui é exatamente a mesma de `aplicarCadastroExigente` — se mudar
- * lá, muda aqui, senão o aviso passa a mentir em uma das duas direções.
+ * ⚠️ A lista de campos NÃO mora mais aqui: veio pra `@/lib/cadastro-campos`
+ * quando o selo por loja precisou da mesma resposta e a alternativa era uma
+ * TERCEIRA cópia. `aplicarCadastroExigente` (o formulário) ainda tem a sua —
+ * é a próxima a puxar pra lá.
  */
 
 export type CadastroIncompleto = {
@@ -24,35 +26,31 @@ export type CadastroIncompleto = {
   campos: number
   /** As 5 com mais lacunas — é por onde começar. */
   piores: { unitId: string; codigo: string; nome: string; faltando: number }[]
+  /**
+   * Quantas lojas ATIVAS estão sem CNPJ — subconjunto das incompletas.
+   *
+   * Sai daqui e não da tela porque é a mesma leitura: a consulta já traz o
+   * `cnpj` de todas as lojas do escopo. Contar de novo lá em cima significaria
+   * a página carregar a rede inteira só pra isso — que é exatamente o que a
+   * paginação acabou de tirar.
+   */
+  semCnpj: number
 }
 
-const CAMPOS_TEXTO = [
-  "cnpj",
-  "razao_social",
-  "tipo_cozinha",
-  "logradouro",
-  "numero",
-  "bairro",
-  "cep",
-  "telefone",
-  "responsavel_nome",
-  // `responsavel_email` saiu daqui junto com o `required` do formulário: campo
-  // opcional não pode continuar contando como lacuna, senão a loja fica
-  // eternamente "incompleta" por algo que o sistema não pede mais.
-  "tipo_operacao",
-  "regime_fiscal",
-  "tipo_entrega",
-] as const
-
 export async function getCadastroIncompleto(): Promise<CadastroIncompleto> {
-  const vazio: CadastroIncompleto = { lojas: 0, campos: 0, piores: [] }
+  const vazio: CadastroIncompleto = {
+    lojas: 0,
+    campos: 0,
+    piores: [],
+    semCnpj: 0,
+  }
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
 
   let q = admin
     .from("units")
     .select(
-      `id, code, name, active, data_inauguracao, ${CAMPOS_TEXTO.join(", ")}`,
+      `id, code, name, active, data_inauguracao, ${CAMPOS_CADASTRO.join(", ")}`,
     )
     .eq("active", true)
   if (allowed !== null) {
@@ -74,13 +72,9 @@ export async function getCadastroIncompleto(): Promise<CadastroIncompleto> {
   )
 
   const linhas = unidades.map((u) => {
-    let faltando = 0
-    for (const c of CAMPOS_TEXTO) {
-      const v = u[c]
-      if (v === null || v === undefined || String(v).trim() === "") faltando++
-    }
-    if (!u.data_inauguracao) faltando++
-    if (!comPlataforma.has(u.id as string)) faltando++
+    const faltando = camposFaltando(u, {
+      temPlataforma: comPlataforma.has(u.id as string),
+    }).length
     return {
       unitId: u.id as string,
       codigo: (u.code as string) ?? "—",
@@ -89,8 +83,16 @@ export async function getCadastroIncompleto(): Promise<CadastroIncompleto> {
     }
   })
 
+  // CNPJ conta como faltando quando está vazio OU incompleto: o campo aceita
+  // texto, e "12.345" cadastrado pela metade não casa a loja com o iFood do
+  // mesmo jeito que o vazio não casa.
+  const semCnpj = unidades.filter(
+    (u) => String(u.cnpj ?? "").replace(/\D/g, "").length !== 14,
+  ).length
+
   const incompletas = linhas.filter((l) => l.faltando > 0)
   return {
+    semCnpj,
     lojas: incompletas.length,
     campos: incompletas.reduce((s, l) => s + l.faltando, 0),
     piores: incompletas

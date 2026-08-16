@@ -1,49 +1,86 @@
-import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView, isSuperadmin, userCan } from "@/lib/auth/permissions"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { AvisoSemCnpj } from "@/components/unidades/aviso-sem-cnpj"
 import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
+import { getUnitsPage } from "@/lib/data/units-page"
+import { filtrosDaUrl } from "@/lib/data/units-page-tipos"
 import { CadastroIncompletoAviso } from "./_components/cadastro-incompleto-aviso"
-import { UnitsListView } from "./_components/units-list-view"
+import { UnitsTableView } from "./_components/units-table-view"
 
-export default async function UnidadesPage() {
+/**
+ * ⚠️ Esta página deixou de carregar a rede inteira em 16/08/26.
+ *
+ * Antes: `getVisibleUnits()` trazia TODAS as lojas com os ~25 campos de
+ * cadastro E o agregado mensal de cada uma (`getRealMonthlyForUnits`), que a
+ * listagem nunca chegou a exibir. Com as 487 lojas do maior cliente isso é
+ * meio megabyte e uma agregação inteira por abertura de tela.
+ *
+ * Agora só a PÁGINA (50 lojas) vem do banco, já filtrada e ordenada lá. Tudo
+ * que decora a linha — situação da API do iFood e do 99 — é consultado só pros
+ * ids da página, e não mais pra tabela toda.
+ */
+export default async function UnidadesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   await assertCanView("unidades")
   const admin = createAdminClient()
-  const [units, canEdit, canDelete, links, ctx, superadmin, upIfood, reqs, reqs99, incompleto] =
+  const filtros = filtrosDaUrl(await searchParams)
+
+  const [pagina, canEdit, canDelete, ctx, superadmin, incompleto] =
     await Promise.all([
-      getVisibleUnits(),
+      getUnitsPage(filtros),
       userCan("unidades", "edit"),
       userCan("unidades", "delete"),
-      admin.from("ninefood_store_links").select("unit_id").eq("active", true),
       getCurrentUserContext(),
       isSuperadmin(),
-      admin
-        .from("unit_platforms")
-        .select("unit_id, api_store_id")
-        .eq("platform", "ifood")
-        .eq("active", true)
-        .not("api_store_id", "is", null),
-      admin
-        .from("ifood_activation_requests")
-        .select("unit_id, status, created_at")
-        .in("status", ["pendente", "solicitada"])
-        .order("created_at", { ascending: false }),
-      admin
-        .from("ninefood_activation_requests")
-        .select("unit_id, status, created_at")
-        .in("status", ["pendente", "solicitada"])
-        .order("created_at", { ascending: false }),
-      getCadastroIncompleto()
+      getCadastroIncompleto(),
     ])
-  // unidades que sincronizam financeiro/cardápio pela API do 99
-  const ninefoodSyncedIds = ((links.data ?? []) as { unit_id: string | null }[])
-    .map((r) => r.unit_id)
-    .filter((id): id is string => !!id)
 
-  // Situação iFood-via-API por unidade (pro bloco dentro do Editar):
-  // vinculada > solicitação em aberto. O "disponivel" o view deriva sozinho
-  // (unidade com iFood ativo e sem nada disso).
+  const ids = pagina.linhas.map((u) => u.id)
+  const semIds = ids.length === 0
+
+  // Situação das APIs, só das lojas que estão na tela. Estas três consultas
+  // varriam as tabelas inteiras (sem filtro de unidade nenhum) — o que era
+  // barato com 16 lojas e passaria a trazer a base toda de todos os clientes.
+  const [upIfood, reqs, links, reqs99] = await Promise.all([
+    semIds
+      ? { data: [] }
+      : admin
+          .from("unit_platforms")
+          .select("unit_id, api_store_id")
+          .eq("platform", "ifood")
+          .eq("active", true)
+          .not("api_store_id", "is", null)
+          .in("unit_id", ids),
+    semIds
+      ? { data: [] }
+      : admin
+          .from("ifood_activation_requests")
+          .select("unit_id, status, created_at")
+          .in("status", ["pendente", "solicitada"])
+          .in("unit_id", ids)
+          .order("created_at", { ascending: false }),
+    semIds
+      ? { data: [] }
+      : admin
+          .from("ninefood_store_links")
+          .select("unit_id")
+          .eq("active", true)
+          .in("unit_id", ids),
+    semIds
+      ? { data: [] }
+      : admin
+          .from("ninefood_activation_requests")
+          .select("unit_id, status, created_at")
+          .in("status", ["pendente", "solicitada"])
+          .in("unit_id", ids)
+          .order("created_at", { ascending: false }),
+  ])
+
+  // Vinculada > solicitação em aberto. O "disponivel" a tela deriva sozinha
+  // (loja com a plataforma ativa e sem nada disso).
   const ifoodApiPorUnidade: Record<string, "conectada" | "andamento"> = {}
   for (const r of (reqs.data ?? []) as { unit_id: string | null }[]) {
     if (r.unit_id && !ifoodApiPorUnidade[r.unit_id])
@@ -53,30 +90,29 @@ export default async function UnidadesPage() {
     ifoodApiPorUnidade[r.unit_id] = "conectada"
   }
 
-  // Mesma régua do iFood pro 99: vinculada > solicitação em aberto. O
-  // "disponivel" a view deriva sozinha (loja com 99 ativo e nada disso).
   const nineApiPorUnidade: Record<string, "conectada" | "andamento"> = {}
   for (const r of (reqs99.data ?? []) as { unit_id: string | null }[]) {
     if (r.unit_id && !nineApiPorUnidade[r.unit_id])
       nineApiPorUnidade[r.unit_id] = "andamento"
   }
-  for (const id of ninefoodSyncedIds) nineApiPorUnidade[id] = "conectada"
+  for (const r of (links.data ?? []) as { unit_id: string | null }[]) {
+    if (r.unit_id) nineApiPorUnidade[r.unit_id] = "conectada"
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       {/* Permanente aqui: é a tela onde o problema se resolve, e aviso que se
           fecha some justamente de quem tinha como agir. */}
-      <CadastroIncompletoAviso dados={incompleto} permanente />
-      <AvisoSemCnpj
-        unidades={units
-          .filter((u) => !u.cnpj || u.cnpj.replace(/\D/g, "").length !== 14)
-          .map((u) => ({ code: u.code, name: u.name }))}
+      <CadastroIncompletoAviso
+        dados={incompleto}
+        permanente
+        semCnpj={incompleto.semCnpj}
       />
-      <UnitsListView
-        units={units}
+      <UnitsTableView
+        pagina={pagina}
+        filtros={filtros}
         canEdit={canEdit}
         canDelete={canDelete}
-        ninefoodSyncedIds={ninefoodSyncedIds}
         brandLogoUrl={ctx.logoUrl}
         cadastroExigente={!superadmin}
         ifoodApiPorUnidade={ifoodApiPorUnidade}
