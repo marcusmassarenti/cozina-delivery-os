@@ -75,6 +75,30 @@ export async function lerPlanilhaUnidades(
     fatais: [],
   }
 
+  /**
+   * ⚠️ CSV É RECUSADO DE PROPÓSITO — e não é frescura de formato.
+   *
+   * O leitor por baixo (SheetJS) abre CSV numa boa, então seria fácil aceitar.
+   * O problema é o Excel em português: ele salva CSV usando PONTO E VÍRGULA
+   * como separador de coluna. E a nossa coluna "Plataformas" usa ponto e
+   * vírgula por dentro — "ifood;99food". Num CSV brasileiro isso vira duas
+   * colunas, a planilha inteira desalinha a partir dali, e o estrago aparece
+   * como dado trocado, não como erro.
+   *
+   * Um formato que funciona no Excel em inglês e corrompe no Excel em
+   * português é pior que um formato recusado: falha em silêncio, na máquina de
+   * outra pessoa. Melhor dizer não aqui, com o motivo.
+   */
+  const nome = arquivo.name.toLowerCase()
+  if (nome.endsWith(".csv") || nome.endsWith(".txt")) {
+    return {
+      ...vazio,
+      fatais: [
+        "Arquivo CSV não é aceito — use .xlsx mesmo. No Excel em português o CSV usa ponto e vírgula pra separar colunas, e a coluna Plataformas também usa (ifood;99food): o arquivo desalinharia e gravaria dado trocado sem avisar. No Excel: Arquivo → Salvar como → Pasta de Trabalho do Excel (.xlsx).",
+      ],
+    }
+  }
+
   const buf = new Uint8Array(await arquivo.arrayBuffer())
   let wb: XLSX.WorkBook
   try {

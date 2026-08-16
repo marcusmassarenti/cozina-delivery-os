@@ -8,6 +8,7 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
+  Download,
   Filter,
   Loader2,
   Plus,
@@ -274,6 +275,17 @@ export function UnitsTableView({
               className="h-9 w-64 rounded-md border bg-card pl-8 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
             />
           </div>
+          {/* Exportar é um LINK, não um diálogo: baixar a própria lista não
+              tem nada pra explicar nem pra confirmar. Só importar precisa de
+              passo a passo, porque é o que escreve no banco. */}
+          <a
+            href="/api/unidades/planilha?tipo=dados"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted"
+            title="Baixa as suas lojas em Excel, já preenchidas. Editar e trazer de volta atualiza o cadastro."
+          >
+            <Download className="size-3.5" />
+            Exportar unidades
+          </a>
           {canEdit && <ImportarPlanilhaDialog />}
           {canEdit && <NewUnitDialog cadastroExigente={cadastroExigente} />}
         </div>

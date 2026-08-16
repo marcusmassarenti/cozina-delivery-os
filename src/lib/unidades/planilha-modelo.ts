@@ -1,25 +1,27 @@
 import "server-only"
 
 /**
- * A planilha de unidades: modelo pra preencher E retrato do que já existe.
+ * A planilha de unidades, em dois sabores.
  *
- * ── POR QUE VEM COM AS LOJAS ATUAIS DENTRO ───────────────────────────────
- * O pedido do Marcus foi "exportar um modelo pra preencher e importar em massa
- * um número grande de unidades". Um modelo vazio resolve isso — e joga fora
- * metade do valor.
+ * ── POR QUE DOIS ARQUIVOS E NÃO UM ───────────────────────────────────────
+ * Começou como um só, que vinha com as lojas atuais dentro — e o Marcus
+ * separou (16/08/26): "baixar planilha sempre a modelo; exportar as unidades
+ * deveria vir minha lista".
  *
- * Como a importação casa por CÓDIGO (existe = atualiza), a MESMA planilha que
- * cadastra 300 lojas novas serve pra completar as que já estão pela metade. No
- * dia em que isto foi escrito eram 116 informações faltando em 11 lojas, e
- * arrumar isso na tela significa abrir 11 formulários. Na planilha é uma
- * coluna arrastada pra baixo.
+ * Ele está certo, e o motivo é que são duas intenções diferentes:
  *
- * Por isso o arquivo sai com as lojas atuais preenchidas e linhas em branco
- * embaixo pra acrescentar. Quem só quer cadastrar novas ignora o que veio.
+ *   MODELO  — "vou cadastrar 300 lojas novas". Arquivo vazio. Qualquer linha
+ *             preenchida é uma loja nova, sem risco de mexer no que existe.
+ *   EXPORTAR — "quero ver/corrigir o que já tenho". Vem preenchido, e como a
+ *             importação casa por código, editar e devolver ATUALIZA.
  *
- * ⚠️ NÃO exporta loja de outra empresa (compartilhada) nem loja fora do escopo
- * do usuário: a planilha é do cliente, e devolver ela por importação criaria
- * cópias de loja alheia dentro da rede dele.
+ * Misturar os dois num arquivo só faz quem queria cadastrar receber 300 linhas
+ * que não pediu, e obriga a apagá-las — mexendo justamente no que não deveria
+ * tocar.
+ *
+ * ⚠️ NENHUM DOS DOIS exporta loja fora do escopo do usuário: a planilha é do
+ * cliente, e devolvê-la por importação criaria cópias de loja alheia na rede
+ * dele.
  */
 import * as XLSX from "xlsx"
 
@@ -27,15 +29,18 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { COLUNAS, CABECALHO } from "./planilha-colunas"
 
-/** Quantas linhas vazias sobram pra cadastrar loja nova. */
-const LINHAS_EM_BRANCO = 30
+/** Linhas em branco. No modelo são muitas; no export, um punhado. */
+const LINHAS_MODELO = 200
+const LINHAS_EXPORT = 20
 
 type UnidadeExport = Record<string, unknown> & {
   id: string
   code: string | null
 }
 
-export async function gerarPlanilhaUnidades(): Promise<Uint8Array> {
+export async function gerarPlanilhaUnidades(
+  opts: { comDados: boolean },
+): Promise<Uint8Array> {
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
 
@@ -50,7 +55,9 @@ export async function gerarPlanilhaUnidades(): Promise<Uint8Array> {
     if (allowed.length === 0) q = q.in("id", ["-"])
     else q = q.in("id", allowed)
   }
-  const { data, error } = await q
+  const { data, error } = opts.comDados
+    ? await q
+    : { data: [] as unknown, error: null }
   if (error) throw new Error(`Falha ao montar a planilha: ${error.message}`)
   const unidades = ((data ?? []) as unknown as UnidadeExport[]).filter(Boolean)
 
@@ -84,7 +91,8 @@ export async function gerarPlanilhaUnidades(): Promise<Uint8Array> {
     }),
   )
 
-  for (let i = 0; i < LINHAS_EM_BRANCO; i++) {
+  const emBranco = opts.comDados ? LINHAS_EXPORT : LINHAS_MODELO
+  for (let i = 0; i < emBranco; i++) {
     linhas.push(COLUNAS.map(() => ""))
   }
 
@@ -95,7 +103,7 @@ export async function gerarPlanilhaUnidades(): Promise<Uint8Array> {
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, aba, "Unidades")
-  XLSX.utils.book_append_sheet(wb, abaInstrucoes(), "Como preencher")
+  XLSX.utils.book_append_sheet(wb, abaInstrucoes(opts.comDados), "LEIA-ME")
 
   return new Uint8Array(
     XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer,
@@ -107,24 +115,74 @@ export async function gerarPlanilhaUnidades(): Promise<Uint8Array> {
  * os valores aceitos escritos em algum lugar a pessoa inventa ("Pizzaria" vs
  * "pizza") e a importação recusa a linha. Melhor entregar a resposta junto.
  */
-function abaInstrucoes(): XLSX.WorkSheet {
-  const linhas: string[][] = [
-    ["Como preencher esta planilha"],
-    [],
-    [
-      "1. A aba 'Unidades' já vem com as suas lojas atuais. Corrija o que estiver errado ou faltando.",
-    ],
-    ["2. Para cadastrar loja nova, use as linhas em branco no fim."],
-    [
-      "3. A coluna Código é a chave: código que já existe ATUALIZA a loja; código novo CRIA.",
-    ],
-    ["4. Salve como .xlsx e volte em Unidades → Importar planilha."],
-    [
-      "5. Antes de gravar qualquer coisa, o sistema mostra o que vai criar, o que vai atualizar e o que tem erro.",
-    ],
-    [],
-    ["Coluna", "Obrigatório", "Como preencher"],
-  ]
+function abaInstrucoes(comDados: boolean): XLSX.WorkSheet {
+  const linhas: string[][] = comDados
+    ? [
+        ["LEIA-ME — planilha das suas unidades"],
+        [],
+        ["Esta planilha veio com as SUAS LOJAS ATUAIS já preenchidas."],
+        [
+          "Corrija o que estiver errado ou faltando e traga de volta: o sistema atualiza as lojas.",
+        ],
+        [],
+        ["⚠️ A coluna Código é a CHAVE. Não mexa nela."],
+        [
+          "Código que já existe ATUALIZA aquela loja. Código novo CRIA uma loja nova.",
+        ],
+        [
+          "Se você trocar o código de uma linha, o sistema entende que é outra loja e cria uma duplicada.",
+        ],
+        [],
+        ["Para cadastrar lojas novas em massa, prefira a PLANILHA MODELO"],
+        ["(botão 'Importar em massa' na tela de Unidades) — ela vem vazia."],
+        [],
+        ["Salve sempre como .xlsx. CSV NÃO é aceito:"],
+        [
+          "o Excel em português separa CSV por ponto e vírgula, e a coluna Plataformas usa ponto e vírgula por dentro (ifood;99food) — o arquivo desalinha e grava dado trocado.",
+        ],
+        [],
+        [
+          "Nada é gravado antes de você conferir: ao subir o arquivo o sistema mostra o que vai criar, o que vai mudar e o que deu erro, linha por linha.",
+        ],
+        [],
+        ["Coluna", "Obrigatório", "Como preencher"],
+      ]
+    : [
+        ["LEIA-ME — planilha modelo de unidades"],
+        [],
+        ["Preencha UMA LINHA POR LOJA na aba 'Unidades'. Não mude o cabeçalho."],
+        [],
+        ["⚠️ A coluna Código é a CHAVE da importação."],
+        ["Código que ainda não existe CRIA a loja. Código que já existe ATUALIZA a loja."],
+        [
+          "Use um código por loja e não repita — código repetido dentro do arquivo é recusado.",
+        ],
+        [],
+        [
+          "Quer corrigir lojas que JÁ existem? Use o botão 'Exportar unidades' na tela: ele traz a sua lista preenchida.",
+        ],
+        [],
+        ["Salve como .xlsx. CSV NÃO é aceito:"],
+        [
+          "o Excel em português separa CSV por ponto e vírgula, e a coluna Plataformas usa ponto e vírgula por dentro (ifood;99food) — o arquivo desalinha e grava dado trocado.",
+        ],
+        [],
+        [
+          "Nada é gravado antes de você conferir: ao subir o arquivo o sistema mostra o que vai criar, o que vai mudar e o que deu erro, linha por linha. Linha com erro fica de fora; o resto entra normalmente.",
+        ],
+        [],
+        ["EXEMPLO de uma linha preenchida"],
+        ["Código", "01"],
+        ["Nome da unidade", "Jardins"],
+        ["CNPJ", "33.584.039/0001-52"],
+        ["Tipo de cozinha", "Marmita / Prato feito"],
+        ["Cidade / UF", "São Paulo / SP"],
+        ["Inauguração", "15/03/2025"],
+        ["Plataformas", "ifood;99food;keeta"],
+        [],
+        ["Coluna", "Obrigatório", "Como preencher"],
+      ]
+
   for (const c of COLUNAS) {
     linhas.push([c.titulo, c.obrigatorio ? "sim" : "não", c.ajuda])
   }

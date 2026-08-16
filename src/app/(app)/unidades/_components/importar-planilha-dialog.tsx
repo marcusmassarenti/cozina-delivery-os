@@ -111,8 +111,8 @@ export function ImportarPlanilhaDialog() {
             type="button"
             className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted"
           >
-            <FileSpreadsheet className="size-3.5" />
-            Planilha
+            <Upload className="size-3.5" />
+            Importar em massa
           </button>
         }
       />
@@ -131,19 +131,25 @@ export function ImportarPlanilhaDialog() {
             <span className="grid size-5 place-items-center rounded-full bg-muted text-[11px] font-bold">
               1
             </span>
-            Baixe a planilha
+            Baixe a planilha modelo
           </h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Ela já vem com <strong className="text-foreground">as suas lojas atuais preenchidas</strong> e
-            linhas em branco no fim. A aba &quot;Como preencher&quot; explica cada
-            coluna e lista os valores aceitos.
+            Vem <strong className="text-foreground">vazia</strong>, com uma
+            linha por loja pra preencher. A aba{" "}
+            <strong className="text-foreground">LEIA-ME</strong> explica cada
+            coluna, lista os valores aceitos e traz um exemplo preenchido.
+          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Quer <strong className="text-foreground">corrigir lojas que já existem</strong>?
+            Use o botão <strong className="text-foreground">Exportar unidades</strong> na
+            tela — ele traz a sua lista preenchida, e é só editar e trazer de volta.
           </p>
           <a
-            href="/api/unidades/planilha"
+            href="/api/unidades/planilha?tipo=modelo"
             className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted"
           >
             <Download className="size-3.5" />
-            Baixar planilha (.xlsx)
+            Baixar modelo (.xlsx)
           </a>
         </section>
 
@@ -159,6 +165,14 @@ export function ImportarPlanilhaDialog() {
             O <strong className="text-foreground">Código</strong> é a chave:
             código que já existe atualiza a loja, código novo cria. Nada é
             gravado antes de você conferir o resumo.
+          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Salve como <strong className="text-foreground">.xlsx</strong>.{" "}
+            <strong className="text-foreground">CSV não serve</strong>: no Excel
+            em português ele separa colunas por ponto e vírgula, e a coluna
+            Plataformas usa ponto e vírgula por dentro (
+            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">ifood;99food</code>
+            ) — o arquivo desalinha e grava dado trocado sem avisar.
           </p>
 
           <label className="mt-3 inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted">
