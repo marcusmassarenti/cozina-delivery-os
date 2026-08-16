@@ -101,7 +101,10 @@ export function filtrosDaUrl(
     q: um("q").slice(0, 80),
     city: um("cidade"),
     platforms: um("plat").split(",").filter(Boolean) as CanalId[],
-    onlyActive: um("ativas") === "1",
+    // ⚠️ LIGADO POR PADRÃO (decisão do Marcus, 16/08/26). A tela é de operação
+    // e loja fechada só atrapalha a leitura. Por isso a leitura é invertida:
+    // parâmetro AUSENTE = ligado; `ativas=0` é o único jeito de desligar.
+    onlyActive: um("ativas") !== "0",
     comPendencia: um("pend") === "1",
     sort: (["code", "name", "city", "faltando"] as const).includes(
       sort as OrdemUnidades,

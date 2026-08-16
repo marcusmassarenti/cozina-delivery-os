@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Loader2,
   Plus,
   Search,
   Table2,
@@ -128,17 +129,25 @@ export function UnitsTableView({
     [router, pathname, searchParams],
   )
 
-  // ── Busca: digita agora, consulta depois ──────────────────────────────
-  // O input é local pra não engasgar a cada tecla; a URL só muda depois de
-  // 350 ms parado. Sem isso seria uma consulta ao servidor por caractere.
+  // ── Busca: digita agora, consulta quase junto ─────────────────────────
+  //
+  // Eram 350 ms de espera e a busca "demorava" (Marcus, 16/08). 350 ms é o
+  // limiar em que a pessoa percebe que a tela travou — bom pra economizar
+  // consulta, ruim pra quem está procurando uma loja. Baixou pra 120 ms, que
+  // ainda junta as teclas de quem digita rápido sem parecer lento.
+  //
+  // O `useTransition` é a outra metade: sem ele o React congela o input
+  // enquanto o servidor responde, e aí a lentidão fica no CAMPO, que é onde
+  // mais incomoda. Com ele o texto aparece na hora e só a tabela espera.
   const [busca, setBusca] = React.useState(filtros.q)
   const buscaAplicada = React.useRef(filtros.q)
+  const [buscando, iniciarBusca] = React.useTransition()
   React.useEffect(() => {
     if (busca === buscaAplicada.current) return
     const t = setTimeout(() => {
       buscaAplicada.current = busca
-      aplicar({ q: busca || null })
-    }, 350)
+      iniciarBusca(() => aplicar({ q: busca || null }))
+    }, 120)
     return () => clearTimeout(t)
   }, [busca, aplicar])
 
@@ -169,11 +178,13 @@ export function UnitsTableView({
     aplicar({ plat: Array.from(atual).join(",") || null })
   }
 
+  // `onlyActive` não conta como filtro: é o estado padrão da tela, e marcá-lo
+  // como "filtro ativo" faria o botão Limpar aparecer sempre.
   const temFiltro =
     filtros.q !== "" ||
     filtros.city !== "" ||
     filtros.platforms.length > 0 ||
-    filtros.onlyActive ||
+    !filtros.onlyActive ||
     filtros.comPendencia
 
   const limpar = () => {
@@ -181,6 +192,17 @@ export function UnitsTableView({
     buscaAplicada.current = ""
     router.replace(pathname, { scroll: false })
   }
+
+  /**
+   * A coluna Marca só aparece quando existe mais de uma na tela.
+   *
+   * "Marca" não é campo do cadastro da unidade — vem de `brands`, criada no
+   * onboarding do cliente. Numa rede de marca única ela repete o mesmo texto
+   * em todas as linhas e só rouba largura. Já na DG FOODS, com 56 marcas
+   * diferentes, é a coluna que diz de quem é a loja.
+   */
+  const mostrarMarca =
+    new Set(pagina.linhas.map((l) => l.brandName)).size > 1
 
   const primeiro = pagina.total === 0 ? 0 : (pagina.page - 1) * pagina.perPage + 1
   const ultimo = Math.min(pagina.page * pagina.perPage, pagina.total)
@@ -206,7 +228,11 @@ export function UnitsTableView({
         </div>
         <div data-tour="un-novo" className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            {buscando ? (
+              <Loader2 className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            ) : (
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            )}
             <input
               type="search"
               value={busca}
@@ -267,7 +293,10 @@ export function UnitsTableView({
           <input
             type="checkbox"
             checked={filtros.onlyActive}
-            onChange={(e) => aplicar({ ativas: e.target.checked ? "1" : null })}
+            // Ligado por padrão (16/08): a tela é de operação, e loja fechada
+            // só atrapalha a leitura. Desmarcar grava `ativas=0` na URL —
+            // ausente significa LIGADO, não desligado.
+            onChange={(e) => aplicar({ ativas: e.target.checked ? null : "0" })}
             className="size-3.5 rounded border-border"
           />
           Só ativas
@@ -339,13 +368,15 @@ export function UnitsTableView({
                   />
                   <Cabecalho
                     col="name"
-                    label="Loja"
+                    label="Unidade"
                     filtros={filtros}
                     onClick={ordenarPor}
                   />
-                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Marca
-                  </th>
+                  {mostrarMarca && (
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Marca
+                    </th>
+                  )}
                   <Cabecalho
                     col="city"
                     label="Cidade"
@@ -363,11 +394,15 @@ export function UnitsTableView({
                   />
                   <th
                     className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                    title="Última venda em qualquer plataforma. Não é ordenável: seria preciso calcular a data de todas as lojas da rede a cada abertura da tela."
+                    title="Até que dia esta loja tem dado importado, somando todas as plataformas. Não é ordenável: seria preciso calcular a data de todas as lojas da rede a cada abertura da tela."
                   >
-                    Última venda
+                    Dados até
                   </th>
-                  <th className="w-[92px] px-3 py-2.5" />
+                  {/* Cabeçalho nomeado: o ícone sozinho no canto direito não
+                      dizia o que era, e a pessoa não achava onde editar. */}
+                  <th className="w-[92px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Editar
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -381,6 +416,7 @@ export function UnitsTableView({
                     cadastroExigente={cadastroExigente}
                     ifoodApi={ifoodApiPorUnidade[u.id]}
                     nineApi={nineApiPorUnidade[u.id]}
+                    mostrarMarca={mostrarMarca}
                     onOpen={() => navigate(`/unidades/${u.code}`)}
                   />
                 ))}
@@ -473,6 +509,7 @@ function Linha({
   cadastroExigente,
   ifoodApi,
   nineApi,
+  mostrarMarca,
   onOpen,
 }: {
   u: LinhaUnidade
@@ -482,6 +519,7 @@ function Linha({
   cadastroExigente: boolean
   ifoodApi?: "conectada" | "andamento"
   nineApi?: "conectada" | "andamento"
+  mostrarMarca: boolean
   onOpen: () => void
 }) {
   // O que falta, por extenso, pro `title` da célula. O número vem do banco
@@ -560,9 +598,11 @@ function Linha({
 
       {/* Nome de marca longo quebrava a linha em duas e a tabela perdia a
           densidade que é o motivo dela existir. Corta com reticências. */}
-      <td className="max-w-[180px] truncate whitespace-nowrap px-3 py-2 text-muted-foreground">
-        {u.brandName}
-      </td>
+      {mostrarMarca && (
+        <td className="max-w-[180px] truncate whitespace-nowrap px-3 py-2 text-muted-foreground">
+          {u.brandName}
+        </td>
+      )}
 
       <td className="max-w-[200px] truncate whitespace-nowrap px-3 py-2 text-muted-foreground">
         {u.city ? `${u.city}${u.state ? ` · ${u.state}` : ""}` : "—"}
@@ -607,7 +647,11 @@ function Linha({
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        {/* ⚠️ SEMPRE VISÍVEL. Antes só aparecia no hover, e o Marcus não achava
+            onde editar — com razão: um botão que só existe depois que o mouse
+            passa por cima é um botão que não existe pra quem está procurando.
+            No hover ele ganha contraste, mas nunca some. */}
+        <div className="flex items-center justify-end gap-0.5 text-muted-foreground opacity-70 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           {canEdit && (
             <EditUnitDialog
               inline

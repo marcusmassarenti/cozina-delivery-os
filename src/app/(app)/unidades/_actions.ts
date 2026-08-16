@@ -7,6 +7,42 @@ import { isSuperadmin } from "@/lib/auth/permissions"
 import { getDefaultBrand } from "@/lib/data/units"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
+
+
+/**
+ * Cidade com a grafia oficial do IBGE (ou como veio, se não reconhecer).
+ *
+ * POR QUE EXISTE: a consulta de CNPJ na Receita devolve "SAO PAULO", e quem
+ * digita no formulário escreve "São Paulo". As duas iam parar na mesma coluna,
+ * e o seletor de cidade da tela de Unidades listava a mesma cidade duas vezes
+ * — filtrar por uma escondia as lojas da outra. Em 16/08/26 eram 45 "cidades"
+ * distintas pra 101 lojas; depois de padronizar, 40 de verdade.
+ *
+ * Normaliza NA GRAVAÇÃO e não na exibição de propósito: assim o agrupamento,
+ * o filtro e qualquer relatório futuro já nascem certos, em vez de cada tela
+ * ter que lembrar de arrumar o texto.
+ *
+ * Nunca apaga: cidade fora da lista (bairro cadastrado como cidade, UF errada)
+ * fica exatamente como a pessoa escreveu.
+ */
+async function cidadePadronizada(
+  supabase: ReturnType<typeof createAdminClient>,
+  city: string,
+  state: string,
+): Promise<string> {
+  if (!city) return city
+  const { data, error } = await supabase.rpc("normalizar_cidade", {
+    p_cidade: city,
+    p_uf: state,
+  })
+  // Erro aqui não pode impedir o cadastro de salvar: grafia é acabamento,
+  // não requisito.
+  if (error) {
+    console.error("normalizar_cidade:", error.message)
+    return city
+  }
+  return (data as string | null) ?? city
+}
 import { validateImageUpload } from "@/lib/upload/image"
 
 export type CreateUnitState = {
@@ -237,7 +273,7 @@ export async function createUnit(
         brand_id: brand.id,
         code,
         name,
-        city,
+        city: await cidadePadronizada(supabase, city, state),
         state,
         cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
         active,
@@ -494,7 +530,7 @@ export async function updateUnit(
       .from("units")
       .update({
         name,
-        city,
+        city: await cidadePadronizada(supabase, city, state),
         state,
         cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
         active,
