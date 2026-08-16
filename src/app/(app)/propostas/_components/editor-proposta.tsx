@@ -32,9 +32,12 @@ import { DocumentoProposta } from "./documento-proposta"
 export function EditorProposta({
   proposta,
   modelo,
+  cadastroTemMais = false,
 }: {
   proposta: Proposta
   modelo: ModeloProposta
+  /** O cadastro do cliente tem dado que este retrato ainda não tem. */
+  cadastroTemMais?: boolean
 }) {
   const router = useRouter()
   const [d, setD] = React.useState<DadosProposta>(proposta.dados)
@@ -131,6 +134,11 @@ export function EditorProposta({
               <RotateCcw className="size-3" />
               Puxar do cadastro de novo
             </button>
+          )}
+          {cadastroTemMais && !travada && (
+            <p className="mb-2 text-[11px] text-amber-700 dark:text-amber-400">
+              O cadastro do cliente tem dados que esta proposta ainda não tem.
+            </p>
           )}
           <Campo label="Razão social" v={d.razaoSocial} on={(x) => set("razaoSocial", x)} ro={travada} />
           <Campo label="CNPJ" v={d.cnpj} on={(x) => set("cnpj", x)} ro={travada} />
