@@ -63,6 +63,10 @@ async function registrar(
       ok: !r.erro,
       erro: r.erro ?? null,
       resumo: {
+        // ⚠️ ONDE rodou. Sem isto, "chave ausente" é ambíguo: pode ser a
+        // Vercel sem a variável ou o dev server do Marcus, que legitimamente
+        // não tem a chave. Custou um turno inteiro pra distinguir os dois.
+        ambiente: process.env.VERCEL_ENV ?? "local",
         holdingId,
         preenchidos: r.preenchidos,
         divergentes: r.divergentes,
