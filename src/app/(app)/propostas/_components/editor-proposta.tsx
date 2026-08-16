@@ -2,14 +2,18 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Check, FileDown, Loader2, Send } from "lucide-react"
+import { Check, FileDown, Loader2, RotateCcw, Send } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { forcarTemaClaroNoPrint } from "@/lib/print-tema-claro"
 import type { DadosProposta, Proposta } from "@/lib/data/propostas"
 import type { ModeloProposta } from "@/lib/data/proposta-modelo"
 
-import { mudarStatusProposta, salvarProposta } from "../_actions"
+import {
+  mudarStatusProposta,
+  recarregarClienteDaProposta,
+  salvarProposta,
+} from "../_actions"
 import { DocumentoProposta } from "./documento-proposta"
 
 /**
@@ -108,6 +112,26 @@ export function EditorProposta({
         )}
 
         <Grupo titulo="Cliente">
+          {/* A proposta é um retrato do cadastro no dia em que nasceu. Quando o
+              cadastro estava incompleto na hora (a DG ficou sem CNPJ até o
+              espelho do Asaas rodar), este botão refaz só a parte do cliente —
+              preço e desconto ficam como foram negociados. */}
+          {!travada && (
+            <button
+              type="button"
+              onClick={async () => {
+                setSalvando(true)
+                const r = await recarregarClienteDaProposta(proposta.id)
+                setSalvando(false)
+                if (r.ok) router.refresh()
+                else setErro(r.error ?? r.message ?? "Erro")
+              }}
+              className="mb-2 inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-medium hover:bg-muted"
+            >
+              <RotateCcw className="size-3" />
+              Puxar do cadastro de novo
+            </button>
+          )}
           <Campo label="Razão social" v={d.razaoSocial} on={(x) => set("razaoSocial", x)} ro={travada} />
           <Campo label="CNPJ" v={d.cnpj} on={(x) => set("cnpj", x)} ro={travada} />
           <Campo label="Endereço" v={d.endereco} on={(x) => set("endereco", x)} ro={travada} />

@@ -108,6 +108,24 @@ export async function montarDoCadastro(
 ): Promise<{ nome: string; dados: DadosProposta } | null> {
   const admin = createAdminClient()
 
+  /**
+   * Puxa do Asaas o que faltar no cadastro fiscal ANTES de montar a proposta.
+   *
+   * É aqui e não num cron porque é aqui que o dado passa a importar: a
+   * proposta é o primeiro documento que precisa do CNPJ, e o momento em que
+   * alguém abre uma é exatamente quando vale a pena ir buscar. Cron rodaria
+   * todo dia pra 8 clientes que não mudam.
+   *
+   * Nunca derruba a proposta: se o Asaas estiver fora do ar, a tela abre com o
+   * que já existe — que é o comportamento de antes desta linha.
+   */
+  try {
+    const { espelharCadastroDoAsaas } = await import("@/lib/data/espelhar-asaas")
+    await espelharCadastroDoAsaas(holdingId)
+  } catch (e) {
+    console.error("espelharCadastroDoAsaas:", e)
+  }
+
   // ⚠️ `select` em UMA string literal, sem concatenar: o client tipado do
   // Supabase lê a lista de colunas em tempo de compilação, e uma expressão
   // `"a," + "b"` faz ele desistir e devolver GenericStringError em todo campo.
