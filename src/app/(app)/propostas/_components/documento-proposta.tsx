@@ -423,8 +423,12 @@ export function DocumentoProposta({
 
       <table className="mt-3 w-full text-[12px]">
         <tbody>
-          <Linha rot="Setup inicial" val={d.setup || "—"} />
-          <Linha rot="Treinamento" val={d.treinamento || "—"} />
+          {/* Desligado some, não vira "—": linha com traço numa proposta diz
+              que faltou preencher, não que não faz parte da oferta. */}
+          {d.setupAtivo && <Linha rot="Setup inicial" val={d.setup || "—"} />}
+          {d.treinamentoAtivo && (
+            <Linha rot="Treinamento" val={d.treinamento || "—"} />
+          )}
         </tbody>
       </table>
 

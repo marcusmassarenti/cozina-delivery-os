@@ -101,11 +101,27 @@ export function EditorProposta({
   }
 
   return (
-    <div className="flex flex-1 gap-5">
+    <div className="flex flex-1 items-start gap-5 print:block">
       {/* ── Formulário ────────────────────────────────────────────── */}
       <div
         data-print="hide"
-        className="w-[340px] shrink-0 space-y-4 overflow-y-auto"
+        /**
+         * ⚠️ STICKY, não container de altura fixa.
+         *
+         * A tentativa óbvia — travar a altura da página e dar overflow em cada
+         * coluna — não pega: o shell do app (`sidebar-inset`) tem
+         * `min-height: auto` e cresce com o conteúdo, então quem rolava
+         * continuava sendo a página inteira. Forçar altura fixa exigiria mexer
+         * no layout de TODAS as telas.
+         *
+         * Pior: altura fixa com overflow escondido CORTA o documento na
+         * impressão — o PDF sairia com uma página só. Sticky não toca no fluxo
+         * do papel (o `print:static` garante), e resolve o que importa: a
+         * lateral fica parada enquanto a proposta rola.
+         *
+         * O topo é 56px (a barra do app) + 20px do respiro da página.
+         */
+        className="sticky top-[76px] max-h-[calc(100svh-96px)] w-[340px] shrink-0 space-y-4 overflow-y-auto pr-1 print:static print:max-h-none"
       >
         {travada && (
           <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
@@ -257,8 +273,32 @@ export function EditorProposta({
           <div className="grid grid-cols-2 gap-2">
             <Campo label="Vencimento (dia)" tipo="number" v={String(d.vencimentoDia)} on={(x) => set("vencimentoDia", Number(x) || 10)} ro={travada} />
             <Campo label="Validade até" tipo="date" v={d.validadeAte} on={(x) => set("validadeAte", x)} ro={travada} />
-            <Campo label="Setup" v={d.setup} on={(x) => set("setup", x)} ro={travada} />
-            <Campo label="Treinamento" v={d.treinamento} on={(x) => set("treinamento", x)} ro={travada} />
+            <div>
+              <label className="mb-1 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={d.setupAtivo}
+                  onChange={(e) => set("setupAtivo", e.target.checked)}
+                  disabled={travada}
+                  className="size-3.5 rounded border-border"
+                />
+                Setup inicial
+              </label>
+              <Campo label="" v={d.setup} on={(x) => set("setup", x)} ro={travada || !d.setupAtivo} />
+            </div>
+            <div>
+              <label className="mb-1 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={d.treinamentoAtivo}
+                  onChange={(e) => set("treinamentoAtivo", e.target.checked)}
+                  disabled={travada}
+                  className="size-3.5 rounded border-border"
+                />
+                Treinamento
+              </label>
+              <Campo label="" v={d.treinamento} on={(x) => set("treinamento", x)} ro={travada || !d.treinamentoAtivo} />
+            </div>
             <Campo label="1ª cobrança" tipo="date" v={d.inicioCobranca} on={(x) => set("inicioCobranca", x)} ro={travada} />
           </div>
           <Campo label="Observações" v={d.observacoes} on={(x) => set("observacoes", x)} ro={travada} area />
@@ -325,7 +365,7 @@ export function EditorProposta({
       </div>
 
       {/* ── Documento (é o que imprime) ───────────────────────────── */}
-      <div className="min-w-0 flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-y-auto print:overflow-visible">
         <DocumentoProposta numero={proposta.numero} d={d} modelo={modelo} />
       </div>
     </div>

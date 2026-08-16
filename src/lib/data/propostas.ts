@@ -89,6 +89,9 @@ export type DadosProposta = {
    */
   precoAiPrimeira: number
   precoAiAdicional: number
+  /** Desligado = a linha some da proposta (não vira "—"). */
+  setupAtivo: boolean
+  treinamentoAtivo: boolean
 }
 
 export type Proposta = {
@@ -232,6 +235,8 @@ export async function montarDoCadastro(
       ocultarNf: false,
       precoAiPrimeira: precos.ai.first,
       precoAiAdicional: precos.ai.add,
+      setupAtivo: true,
+      treinamentoAtivo: true,
     },
   }
 }
@@ -329,6 +334,9 @@ async function completarDados(
     inicioCobranca: d.inicioCobranca ?? "",
     precoAiPrimeira: d.precoAiPrimeira || precos.ai.first,
     precoAiAdicional: d.precoAiAdicional || precos.ai.add,
+    // Proposta antiga não tem o campo: mantém como sempre foi (ligado).
+    setupAtivo: d.setupAtivo ?? true,
+    treinamentoAtivo: d.treinamentoAtivo ?? true,
   }
 }
 
