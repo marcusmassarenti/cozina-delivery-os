@@ -21,6 +21,7 @@ import { PlatformLogo, type CanalId } from "@/components/platform-logo"
 import { type CoachStep } from "@/components/onboarding/coach-tour"
 import { TourButton } from "@/components/onboarding/tour-button"
 import { camposFaltando } from "@/lib/cadastro-campos"
+import { textoCobertura } from "@/lib/plataforma-api"
 // ⚠️ Do módulo de TIPOS, nunca de `units-page.ts`: aquele é `server-only` e
 // puxa next/headers — importar um valor de lá daqui quebra o build inteiro.
 import {
@@ -65,6 +66,11 @@ const ALL_PLATFORMS: { id: CanalId; label: string }[] = [
   { id: "keeta", label: "Keeta" },
   { id: "cardapioweb", label: "Cardápio Web" },
 ]
+
+/** Mesmo rótulo do filtro, indexado — pro tooltip do logo na linha. */
+const ROTULO_PLATAFORMA = Object.fromEntries(
+  ALL_PLATFORMS.map((p) => [p.id, p.label]),
+) as Record<CanalId, string>
 
 const TOUR_STEPS: CoachStep[] = [
   {
@@ -193,6 +199,43 @@ export function UnitsTableView({
     router.replace(pathname, { scroll: false })
   }
 
+  /**
+   * ── BUSCA QUE RESPONDE NA TECLA ───────────────────────────────────────
+   *
+   * Mesmo com 120 ms de espera, a busca "não estava instantânea" (Marcus,
+   * 16/08) — e não ia ficar: entre a tecla e a tabela tem debounce, ida ao
+   * servidor e re-render. Enquanto isso a tabela ficava parada mostrando o
+   * resultado velho, que é o que dá a sensação de travamento.
+   *
+   * A solução é filtrar a PÁGINA JÁ CARREGADA na hora, enquanto a resposta de
+   * verdade não chega. A pessoa digita "rib" e as linhas somem no mesmo
+   * quadro; quando o servidor responde, a lista certa entra por cima.
+   *
+   * ⚠️ É um retrato PARCIAL de propósito — só filtra as 50 linhas que já estão
+   * na tela, e a loja procurada pode estar na página 3. Por isso duas regras:
+   *
+   *   1. compara sem acento, igual ao banco (senão "ribeira" sumia com tudo
+   *      e a prévia mostraria vazio pra uma busca que ACHA no servidor);
+   *   2. enquanto está buscando, NUNCA mostra "nenhuma unidade encontrada" —
+   *      dizer que não existe antes de perguntar ao servidor é mentir.
+   */
+  const semAcento = React.useCallback(
+    (t: string) =>
+      t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase(),
+    [],
+  )
+  const linhasVisiveis = React.useMemo(() => {
+    const termo = semAcento(busca.trim())
+    if (!termo || termo === semAcento(filtros.q.trim())) return pagina.linhas
+    return pagina.linhas.filter((l) =>
+      [l.name, l.code, l.city ?? ""].some((campo) =>
+        semAcento(campo).includes(termo),
+      ),
+    )
+  }, [pagina.linhas, busca, filtros.q, semAcento])
+
+  const preFiltrando = linhasVisiveis !== pagina.linhas
+
   const primeiro = pagina.total === 0 ? 0 : (pagina.page - 1) * pagina.perPage + 1
   const ultimo = Math.min(pagina.page * pagina.perPage, pagina.total)
 
@@ -314,7 +357,7 @@ export function UnitsTableView({
       </div>
 
       {/* Tabela */}
-      {pagina.linhas.length === 0 ? (
+      {linhasVisiveis.length === 0 && !buscando && !preFiltrando ? (
         <div className="rounded-xl border border-dashed bg-card p-12 text-center">
           <p className="text-sm font-medium">
             {temFiltro
@@ -384,7 +427,17 @@ export function UnitsTableView({
                 </tr>
               </thead>
               <tbody>
-                {pagina.linhas.map((u) => (
+                {linhasVisiveis.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-3 py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Procurando…
+                    </td>
+                  </tr>
+                ) : null}
+                {linhasVisiveis.map((u) => (
                   <Linha
                     key={u.id}
                     u={u}
@@ -404,18 +457,33 @@ export function UnitsTableView({
           {/* Rodapé: quantas está vendo, quantas por página, e as páginas */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2.5 text-xs text-muted-foreground">
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {/* Durante a prévia local a contagem do servidor ainda é a da
+                  busca anterior — dizer "13 de 13" com 1 linha na tela seria
+                  um número errado piscando. */}
               <span>
-                Mostrando{" "}
-                <strong className="text-foreground">
-                  {primeiro}–{ultimo}
-                </strong>{" "}
-                de <strong className="text-foreground">{pagina.total}</strong>
+                {preFiltrando || buscando ? (
+                  "Procurando…"
+                ) : (
+                  <>
+                    Mostrando{" "}
+                    <strong className="text-foreground">
+                      {primeiro}–{ultimo}
+                    </strong>{" "}
+                    de <strong className="text-foreground">{pagina.total}</strong>
+                  </>
+                )}
               </span>
               {/* Legenda da bolinha. Sem ela o ponto verde vira enfeite: quem
                   não acompanhou a mudança não tem como adivinhar o que é. */}
-              <span className="flex items-center gap-1.5">
+              <span
+                className="flex items-center gap-1.5"
+                title="A bolinha marca a plataforma que sincroniza sozinha. Passe o mouse no logo pra ver o que entra e o que ainda depende de planilha."
+              >
                 <span className="size-1.5 rounded-full bg-emerald-500" />
-                entra sozinho pela API
+                sincroniza sozinho —{" "}
+                <span className="underline decoration-dotted underline-offset-2">
+                  passe o mouse no logo pra ver o quê
+                </span>
               </span>
             </span>
 
@@ -589,31 +657,33 @@ function Linha({
           <span className="text-xs text-muted-foreground">—</span>
         ) : (
           <span className="flex items-center gap-1.5">
-            {u.platforms.map((p) => (
-              <PlatformLogo
-                key={p}
-                platform={p}
-                size="sm"
-                /**
-                 * ⚠️ Bolinha verde = ENTRA SOZINHO pela API.
-                 *
-                 * Era a informação que faltava na tabela: olhando os logos não
-                 * dava pra saber quais plataformas daquela loja sincronizam e
-                 * quais dependem de alguém subir planilha todo mês — e essa é
-                 * a diferença que decide onde o trabalho manual está.
-                 *
-                 * Keeta fica sempre sem: não tem API, é planilha por
-                 * definição. Cardápio Web também não é marcado, mas pelo
-                 * motivo oposto — ele SÓ existe por API, então a bolinha
-                 * estaria em 100% deles e não separaria nada (ver
-                 * platform-logo.tsx). Marcar tudo é o mesmo que não marcar.
-                 */
-                viaApi={
-                  (p === "ifood" && ifoodApi === "conectada") ||
-                  (p === "99food" && nineApi === "conectada")
-                }
-              />
-            ))}
+            {u.platforms.map((p) => {
+              const conectada =
+                (p === "ifood" && ifoodApi === "conectada") ||
+                (p === "99food" && nineApi === "conectada") ||
+                p === "cardapioweb"
+              return (
+                <PlatformLogo
+                  key={p}
+                  platform={p}
+                  size="sm"
+                  /**
+                   * ⚠️ Bolinha verde = ENTRA SOZINHO, não "está resolvido".
+                   *
+                   * O tooltip diz exatamente o quê: no iFood são financeiro,
+                   * pedidos e avaliações — cardápio, qualidade, promoções e
+                   * Super continuam dependendo de planilha. Selo que promete
+                   * mais do que entrega faz parar de conferir.
+                   *
+                   * O Cardápio Web não ganha o ponto (ele SÓ existe por API,
+                   * então o ponto estaria em 100% deles e não separaria nada),
+                   * mas ganha o tooltip — ali a informação é útil.
+                   */
+                  viaApi={p === "ifood" || p === "99food" ? conectada : false}
+                  titulo={textoCobertura(p, ROTULO_PLATAFORMA[p], conectada)}
+                />
+              )
+            })}
           </span>
         )}
       </td>

@@ -132,6 +132,7 @@ export function PlatformLogo({
   size = "md",
   className,
   viaApi = false,
+  titulo,
 }: {
   platform: CanalId
   size?: Size
@@ -145,9 +146,18 @@ export function PlatformLogo({
    * que não marcar nada.
    */
   viaApi?: boolean
+  /**
+   * Texto do tooltip, quando quem chama sabe mais que este componente.
+   *
+   * A tabela de Unidades manda aqui o que a plataforma traz sozinha e o que
+   * ainda depende de planilha (`textoCobertura`) — "conectado por API" sozinho
+   * dá a entender que a loja está resolvida, e no iFood metade dos relatórios
+   * continua manual.
+   */
+  titulo?: string
 }) {
   const c = config[platform]
-  const rotulo = viaApi ? `${c.label} · conectado por API` : c.label
+  const rotulo = titulo ?? (viaApi ? `${c.label} · conectado por API` : c.label)
   const logo = (
     <span
       className={cn(
