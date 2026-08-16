@@ -62,6 +62,95 @@ export function EditorModelo({
         abrir. Deixe um campo em branco para voltar ao texto padrão do sistema.
       </div>
 
+      {/* ── Capa e apresentação ────────────────────────────────────── */}
+      <section className="grid gap-4 rounded-xl border bg-card p-4">
+        <h2 className="text-sm font-semibold">Capa e apresentação</h2>
+        <Campo
+          rot="Título da capa"
+          ajuda="A frase grande. Hoje é a mesma da tela de login — quem recebe a proposta e depois entra no sistema encontra a mesma promessa."
+          v={m.capaTitulo}
+          padrao={padrao.capaTitulo}
+          onChange={(v) => set("capaTitulo", v)}
+          linhas={2}
+        />
+        <Campo
+          rot="Subtítulo da capa"
+          v={m.capaSubtitulo}
+          padrao={padrao.capaSubtitulo}
+          onChange={(v) => set("capaSubtitulo", v)}
+          linhas={2}
+        />
+        <Campo
+          rot="Quem somos"
+          ajuda="Separe os parágrafos com uma linha em branco."
+          v={m.historia}
+          padrao={padrao.historia}
+          onChange={(v) => set("historia", v)}
+          linhas={9}
+        />
+      </section>
+
+      {/* ── O que muda pra quem usa ────────────────────────────────── */}
+      <section className="rounded-xl border bg-card p-4">
+        <h2 className="text-sm font-semibold">O que muda pra quem usa</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Blocos por perfil de pessoa. Saem em duas colunas na proposta.
+        </p>
+        <div className="mt-3 space-y-3">
+          {m.ajudamos.map((b, i) => (
+            <div key={i} className="flex gap-2">
+              <div className="flex-1 space-y-1.5">
+                <input
+                  value={b.titulo}
+                  onChange={(e) =>
+                    set(
+                      "ajudamos",
+                      m.ajudamos.map((x, idx) =>
+                        idx === i ? { ...x, titulo: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  placeholder="Quem é (ex.: O dono da rede)"
+                  className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium outline-none focus:border-ring"
+                />
+                <textarea
+                  value={b.texto}
+                  onChange={(e) =>
+                    set(
+                      "ajudamos",
+                      m.ajudamos.map((x, idx) =>
+                        idx === i ? { ...x, texto: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  rows={2}
+                  placeholder="O que muda pra essa pessoa"
+                  className="w-full rounded-md border bg-background p-2 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  set("ajudamos", m.ajudamos.filter((_, idx) => idx !== i))
+                }
+                className="h-8 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Remover bloco"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => set("ajudamos", [...m.ajudamos, { titulo: "", texto: "" }])}
+          className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium hover:bg-muted"
+        >
+          <Plus className="size-3.5" />
+          Adicionar bloco
+        </button>
+      </section>
+
       {/* ── Escopo ─────────────────────────────────────────────────── */}
       <section className="rounded-xl border bg-card p-4">
         <h2 className="text-sm font-semibold">Escopo — o que entra em cada plano</h2>

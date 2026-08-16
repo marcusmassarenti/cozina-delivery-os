@@ -155,15 +155,84 @@ export function EditorProposta({
             Quem recebe boleto e nota fiscal. Se for a mesma pessoa do contato,
             repita — ou deixe em branco e sai &quot;—&quot; na proposta.
           </p>
-          <Campo label="Boleto — nome" v={d.contatoBoletoNome} on={(x) => set("contatoBoletoNome", x)} ro={travada} />
-          <Campo label="Boleto — e-mail" v={d.contatoBoletoEmail} on={(x) => set("contatoBoletoEmail", x)} ro={travada} />
-          <Campo label="Boleto — telefone" v={d.contatoBoletoTelefone} on={(x) => set("contatoBoletoTelefone", x)} ro={travada} />
-          <Campo label="Nota fiscal — nome" v={d.contatoNfNome} on={(x) => set("contatoNfNome", x)} ro={travada} />
-          <Campo label="Nota fiscal — e-mail" v={d.contatoNfEmail} on={(x) => set("contatoNfEmail", x)} ro={travada} />
-          <Campo label="Nota fiscal — telefone" v={d.contatoNfTelefone} on={(x) => set("contatoNfTelefone", x)} ro={travada} />
+          <label className="mb-2 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={d.ocultarBoleto}
+              onChange={(e) => set("ocultarBoleto", e.target.checked)}
+              disabled={travada}
+              className="size-3.5 rounded border-border"
+            />
+            Não mostrar a linha do boleto na proposta
+          </label>
+          <Campo label="Boleto — nome" v={d.contatoBoletoNome} on={(x) => set("contatoBoletoNome", x)} ro={travada || d.ocultarBoleto} />
+          <Campo label="Boleto — e-mail" v={d.contatoBoletoEmail} on={(x) => set("contatoBoletoEmail", x)} ro={travada || d.ocultarBoleto} />
+          <Campo label="Boleto — telefone" v={d.contatoBoletoTelefone} on={(x) => set("contatoBoletoTelefone", x)} ro={travada || d.ocultarBoleto} />
+          <label className="mb-2 mt-2 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={d.ocultarNf}
+              onChange={(e) => set("ocultarNf", e.target.checked)}
+              disabled={travada}
+              className="size-3.5 rounded border-border"
+            />
+            Não mostrar a linha da nota fiscal
+          </label>
+          <Campo label="Nota fiscal — nome" v={d.contatoNfNome} on={(x) => set("contatoNfNome", x)} ro={travada || d.ocultarNf} />
+          <Campo label="Nota fiscal — e-mail" v={d.contatoNfEmail} on={(x) => set("contatoNfEmail", x)} ro={travada || d.ocultarNf} />
+          <Campo label="Nota fiscal — telefone" v={d.contatoNfTelefone} on={(x) => set("contatoNfTelefone", x)} ro={travada || d.ocultarNf} />
         </Grupo>
 
         <Grupo titulo="Comercial">
+          {/* As duas formas que existem na prática. Trocar aqui muda a tabela
+              de investimento inteira — no ilimitado ela mostra um valor só, em
+              vez de reconstruir "58 × R$ 79 − desconto". */}
+          <div className="mb-2 flex gap-1 rounded-md border p-0.5">
+            {(
+              [
+                ["por_loja", "1ª loja + adicionais"],
+                ["ilimitado", "Valor fixo, lojas ilimitadas"],
+              ] as const
+            ).map(([id, rot]) => (
+              <button
+                key={id}
+                type="button"
+                disabled={travada}
+                onClick={() => {
+                  // Proposta antiga não tem `valorIlimitado` no JSON: trocar o
+                  // modo mostraria R$ 0,00 e faria a pessoa descobrir sozinha
+                  // que precisa preencher. Semeia com o total que já estava na
+                  // tela, que na prática é o valor negociado.
+                  if (id === "ilimitado" && !Number(d.valorIlimitado)) {
+                    setD((p) => ({
+                      ...p,
+                      modeloPreco: id,
+                      valorIlimitado: p.totalMensal,
+                    }))
+                    setMsg(null)
+                    return
+                  }
+                  set("modeloPreco", id)
+                }}
+                className={`flex-1 rounded px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                  d.modeloPreco === id
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {rot}
+              </button>
+            ))}
+          </div>
+          {d.modeloPreco === "ilimitado" && (
+            <Campo
+              label="Mensalidade (R$)"
+              tipo="number"
+              v={String(d.valorIlimitado)}
+              on={(x) => set("valorIlimitado", Number(x) || 0)}
+              ro={travada}
+            />
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Campo label="Plano" v={d.planoLabel} on={(x) => set("planoLabel", x)} ro={travada} />
             <Campo label="Lojas" tipo="number" v={String(d.lojas)} on={(x) => set("lojas", Number(x) || 1)} ro={travada} />

@@ -63,6 +63,24 @@ export type DadosProposta = {
   contatoNfTelefone: string
   /** Primeira cobrança (YYYY-MM-DD). Vazio = na contratação. */
   inicioCobranca: string
+  /**
+   * As DUAS formas de cobrar que existem na prática (Marcus, 16/08/26):
+   *
+   *   "por_loja"   → 1ª loja + adicionais. É o preço de tabela do site.
+   *   "ilimitado"  → um valor fixo, lojas à vontade. Foi o que fechou com a
+   *                  DG (R$ 3.500 para 58 lojas) e é o formato que faz sentido
+   *                  quando a rede é grande demais pro preço por unidade.
+   *
+   * Sem isso a proposta da DG mostrava "58 × R$ 79 − desconto de R$ 1.102",
+   * que é uma reconstrução artificial de um número que foi negociado inteiro.
+   * O cliente lia a conta e perguntava de onde saiu o desconto.
+   */
+  modeloPreco: "por_loja" | "ilimitado"
+  /** Mensalidade fixa quando `modeloPreco === "ilimitado"`. */
+  valorIlimitado: number
+  /** Esconde a linha na proposta quando o cliente não tem contato separado. */
+  ocultarBoleto: boolean
+  ocultarNf: boolean
 }
 
 export type Proposta = {
@@ -199,6 +217,11 @@ export async function montarDoCadastro(
       contatoNfEmail: (h.nf_email as string) ?? "",
       contatoNfTelefone: (h.nf_telefone as string) ?? "",
       inicioCobranca: "",
+      // Padrão é o preço de tabela; virar "ilimitado" é decisão de negociação.
+      modeloPreco: "por_loja",
+      valorIlimitado: Math.round(total * 100) / 100,
+      ocultarBoleto: false,
+      ocultarNf: false,
     },
   }
 }

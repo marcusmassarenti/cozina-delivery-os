@@ -17,6 +17,10 @@ export type EstadoModelo = { ok: boolean; message?: string }
 
 export async function salvarModeloProposta(
   input: {
+    capaTitulo: string
+    capaSubtitulo: string
+    historia: string
+    ajudamos: { titulo: string; texto: string }[]
     escopoItens: ItemEscopo[]
     atendimento: string
     termoAceite: string
@@ -43,6 +47,10 @@ export async function salvarModeloProposta(
     .upsert(
       {
         id: true,
+        capa_titulo: nulo(input.capaTitulo),
+        capa_subtitulo: nulo(input.capaSubtitulo),
+        historia: nulo(input.historia),
+        ajudamos: input.ajudamos.filter((b) => b.titulo.trim() !== ""),
         escopo_itens: input.escopoItens.filter((i) => i.recurso.trim() !== ""),
         atendimento: nulo(input.atendimento),
         termo_aceite: nulo(input.termoAceite),

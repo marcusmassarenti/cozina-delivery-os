@@ -37,6 +37,10 @@ export function DocumentoProposta({
 }) {
   const adicionais = Math.max(Number(d.lojas || 1) - 1, 0)
   const escopo = modelo.escopoItens
+  const ilimitado = d.modeloPreco === "ilimitado"
+  // O total vem de fontes diferentes conforme o modelo: no ilimitado é o valor
+  // fechado; no por-loja é a conta que a tabela acima mostra linha a linha.
+  const mensal = ilimitado ? Number(d.valorIlimitado || 0) : d.totalMensal
 
   return (
     <div
@@ -85,6 +89,104 @@ export function DocumentoProposta({
         </div>
       </div>
 
+      {/* ══ CAPA ═══════════════════════════════════════════════════════
+          No idioma visual da TELA DE LOGIN: fundo zinc-950, brilhos laranja
+          desfocados, grade sutil e a mesma chamada. Quem recebe a proposta e
+          depois entra no sistema encontra a mesma frase — um faz o outro
+          parecer consequência, não coincidência.
+
+          `print:break-after-page` porque capa dividindo página com conteúdo
+          deixa de ser capa. */}
+      <div
+        className="relative -mx-10 -mt-10 mb-8 overflow-hidden bg-zinc-950 px-10 py-14 print:break-after-page"
+        style={{ minHeight: 470 }}
+      >
+        <div
+          className="pointer-events-none absolute -left-24 -top-16 size-[380px] rounded-full"
+          style={{ background: LARANJA, opacity: 0.25, filter: "blur(110px)" }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-20 -right-16 size-[320px] rounded-full"
+          style={{ background: LARANJA, opacity: 0.15, filter: "blur(110px)" }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+          }}
+        />
+
+        <div className="relative z-10 flex h-full flex-col">
+          <div className="flex items-center gap-2">
+            <span
+              className="grid size-8 place-items-center rounded-lg"
+              style={{ background: LARANJA }}
+            >
+              <svg viewBox="0 0 24 24" className="size-4" fill="white">
+                <rect x="4" y="12" width="3.2" height="8" rx="1" />
+                <rect x="10.4" y="7" width="3.2" height="13" rx="1" />
+                <rect x="16.8" y="9.5" width="3.2" height="10.5" rx="1" />
+              </svg>
+            </span>
+            <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-white/80">
+              Delivery OS
+            </span>
+          </div>
+
+          <div className="mt-16">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1 text-[9px] font-medium uppercase tracking-[0.18em] text-white/70">
+              Proposta comercial nº {numero}
+            </div>
+            <h1 className="max-w-[26ch] text-[30px] font-bold leading-[1.15] text-white">
+              {modelo.capaTitulo}
+            </h1>
+            <p className="mt-4 max-w-[52ch] text-[12.5px] leading-relaxed text-white/60">
+              {modelo.capaSubtitulo}
+            </p>
+          </div>
+
+          <div className="mt-14 flex items-end justify-between border-t border-white/10 pt-5">
+            <div>
+              <p className="text-[9px] uppercase tracking-widest text-white/40">
+                Preparada para
+              </p>
+              <p className="mt-1 text-[15px] font-bold text-white">
+                {d.razaoSocial || "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] uppercase tracking-widest text-white/40">
+                Válida até
+              </p>
+              <p className="mt-1 text-[13px] font-semibold text-white">
+                {dataBr(d.validadeAte)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ══ NOSSA HISTÓRIA ═════════════════════════════════════════════ */}
+      <Titulo>Quem somos</Titulo>
+      {modelo.historia.split("\n\n").map((par, i) => (
+        <p key={i} className={i > 0 ? "mt-2" : ""}>
+          {par}
+        </p>
+      ))}
+
+      {/* ══ COMO AJUDAMOS ══════════════════════════════════════════════ */}
+      <Titulo>O que muda pra quem usa</Titulo>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+        {modelo.ajudamos.map((b) => (
+          <div key={b.titulo}>
+            <p className="text-[12px] font-bold text-zinc-900">{b.titulo}</p>
+            <p className="mt-0.5 text-[11.5px] leading-snug">{b.texto}</p>
+          </div>
+        ))}
+      </div>
+
       {/* ── Cliente ─────────────────────────────────────────────── */}
       <Titulo>Cliente</Titulo>
       <table className="w-full text-[12px]">
@@ -101,7 +203,10 @@ export function DocumentoProposta({
             }
           />
           {/* Quem assina é o dono; quem paga é o financeiro. Mandar boleto pro
-              e-mail de quem assinou é como uma cobrança some por três semanas. */}
+              e-mail de quem assinou é como uma cobrança some por três semanas.
+              Quando o cliente não tem financeiro separado, a linha sai fora —
+              deixar "—" numa proposta é dizer que faltou preencher. */}
+          {!d.ocultarBoleto && (
           <Linha
             rot="Recebe o boleto"
             val={
@@ -110,6 +215,8 @@ export function DocumentoProposta({
                 .join(" · ") || "—"
             }
           />
+          )}
+          {!d.ocultarNf && (
           <Linha
             rot="Recebe a nota fiscal"
             val={
@@ -118,15 +225,25 @@ export function DocumentoProposta({
                 .join(" · ") || "—"
             }
           />
+          )}
         </tbody>
       </table>
 
       {/* ── Escopo ──────────────────────────────────────────────── */}
       <Titulo>Escopo contratado</Titulo>
       <p>
-        Plano <b className="text-zinc-900">{d.planoLabel}</b> para{" "}
-        <b className="text-zinc-900">{d.lojas}</b>{" "}
-        {d.lojas === 1 ? "loja" : "lojas"}, com usuários ilimitados.
+        Plano <b className="text-zinc-900">{d.planoLabel}</b>{" "}
+        {ilimitado ? (
+          <>
+            com <b className="text-zinc-900">lojas ilimitadas</b> (hoje{" "}
+            {d.lojas}) e usuários ilimitados.
+          </>
+        ) : (
+          <>
+            para <b className="text-zinc-900">{d.lojas}</b>{" "}
+            {d.lojas === 1 ? "loja" : "lojas"}, com usuários ilimitados.
+          </>
+        )}
       </p>
       {/* ⚠️ ITEM A ITEM, INCLUSIVE O QUE NÃO ENTRA.
           Era a lacuna mais séria da versão anterior, que resolvia o escopo num
@@ -183,38 +300,57 @@ export function DocumentoProposta({
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b">
-            <td className="p-2">{d.planoLabel} — 1ª loja</td>
-            <td className="p-2 text-right tabular-nums">1</td>
-            <td className="p-2 text-right tabular-nums">{brl(d.precoPrimeira)}</td>
-            <td className="p-2 text-right tabular-nums">{brl(d.precoPrimeira)}</td>
-          </tr>
-          {adicionais > 0 && (
-            <tr className="border-b bg-zinc-50">
-              <td className="p-2">{d.planoLabel} — lojas adicionais</td>
-              <td className="p-2 text-right tabular-nums">{adicionais}</td>
-              <td className="p-2 text-right tabular-nums">{brl(d.precoAdicional)}</td>
-              <td className="p-2 text-right tabular-nums">
-                {brl(d.precoAdicional * adicionais)}
-              </td>
-            </tr>
-          )}
-          {Number(d.descontoMensal) > 0 && (
+          {/* ⚠️ DUAS FORMAS DE COBRAR, e a diferença não é cosmética.
+              No "ilimitado" o valor foi negociado INTEIRO — mostrar "58 × R$ 79
+              menos um desconto de R$ 1.102" reconstrói uma conta que nunca
+              existiu, e o cliente pergunta de onde saiu o desconto. */}
+          {ilimitado ? (
             <tr className="border-b">
-              <td className="p-2">Desconto comercial</td>
-              <td className="p-2 text-right">—</td>
+              <td className="p-2">
+                {d.planoLabel} — lojas ilimitadas
+              </td>
+              <td className="p-2 text-right tabular-nums">{d.lojas} hoje</td>
               <td className="p-2 text-right">—</td>
               <td className="p-2 text-right tabular-nums">
-                −{brl(d.descontoMensal)}
+                {brl(d.valorIlimitado)}
               </td>
             </tr>
+          ) : (
+            <>
+              <tr className="border-b">
+                <td className="p-2">{d.planoLabel} — 1ª loja</td>
+                <td className="p-2 text-right tabular-nums">1</td>
+                <td className="p-2 text-right tabular-nums">{brl(d.precoPrimeira)}</td>
+                <td className="p-2 text-right tabular-nums">{brl(d.precoPrimeira)}</td>
+              </tr>
+              {adicionais > 0 && (
+                <tr className="border-b bg-zinc-50">
+                  <td className="p-2">{d.planoLabel} — lojas adicionais</td>
+                  <td className="p-2 text-right tabular-nums">{adicionais}</td>
+                  <td className="p-2 text-right tabular-nums">{brl(d.precoAdicional)}</td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(d.precoAdicional * adicionais)}
+                  </td>
+                </tr>
+              )}
+              {Number(d.descontoMensal) > 0 && (
+                <tr className="border-b">
+                  <td className="p-2">Desconto comercial</td>
+                  <td className="p-2 text-right">—</td>
+                  <td className="p-2 text-right">—</td>
+                  <td className="p-2 text-right tabular-nums">
+                    −{brl(d.descontoMensal)}
+                  </td>
+                </tr>
+              )}
+            </>
           )}
           <tr style={{ background: "#fff7ed", borderTop: `2px solid ${LARANJA}` }}>
             <td className="p-2 font-extrabold text-zinc-900" colSpan={3}>
               Total mensal
             </td>
             <td className="p-2 text-right font-extrabold tabular-nums text-zinc-900">
-              {brl(d.totalMensal)}
+              {brl(mensal)}
             </td>
           </tr>
           <tr style={{ background: "#fff7ed" }}>
@@ -222,7 +358,7 @@ export function DocumentoProposta({
               Total do período (12 meses)
             </td>
             <td className="p-2 text-right font-extrabold tabular-nums text-zinc-900">
-              {brl(d.totalMensal * 12)}
+              {brl(mensal * 12)}
             </td>
           </tr>
         </tbody>
