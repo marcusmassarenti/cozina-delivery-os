@@ -482,6 +482,14 @@
      As margens negativas do componente (-mx-10 -mt-10) já sangram a cor até a
      borda do papel; aqui só a ALTURA precisava ser resolvida. */
   .capa-proposta {
+    /* ⚠️ MARGEM NEGATIVA ZERADA AQUI.
+       Na tela a capa usa -mx-10/-mt-10 pra sangrar por cima do padding do
+       documento. Na impressão o documento tem `print:p-0` — não há padding pra
+       compensar, e a margem negativa empurra a capa 40px PRA FORA da folha:
+       o título saía cortado na borda esquerda. Descoberto renderizando o PDF
+       de verdade, não olhando a tela. */
+    margin: 0 !important;
+    padding: 14mm 16mm !important;
     min-height: 276mm !important;
     page-break-after: always;
     break-after: page;
