@@ -30,7 +30,13 @@ export type ItemEscopo = {
   planos: ("essencial" | "pro" | "ai")[]
 }
 
+export type BlocoAjuda = { titulo: string; texto: string }
+
 export type ModeloProposta = {
+  capaTitulo: string
+  capaSubtitulo: string
+  historia: string
+  ajudamos: BlocoAjuda[]
   escopoItens: ItemEscopo[]
   atendimento: string
   termoAceite: string
@@ -76,6 +82,46 @@ const ESCOPO_PADRAO: ItemEscopo[] = [
 ]
 
 export const MODELO_PADRAO: ModeloProposta = {
+  // A capa fala a mesma língua da tela de login: a frase é a mesma que o
+  // cliente vê ao entrar no sistema todo dia. Proposta e produto dizendo a
+  // mesma coisa é o que faz um parecer consequência do outro.
+  capaTitulo: "Toda a sua operação num só painel.",
+  capaSubtitulo:
+    "iFood, 99 Food, Keeta e Cardápio Web — pedidos, financeiro, avaliações e DRE consolidados, em tempo real.",
+  historia:
+    "O Delivery OS nasceu dentro de uma operação de delivery, não numa mesa de software. A gente vivia o mesmo problema dos nossos clientes: faturamento numa planilha, taxas em outra, avaliação numa terceira, e o fechamento do mês virando dois dias de conferência manual — com a sensação incômoda de que o número final podia estar errado.\n\nO sistema é a resposta que a gente construiu pra si mesmo e passou a oferecer. Ele conversa direto com as plataformas, junta o que estava espalhado e devolve o quadro inteiro: quanto entrou de verdade, quanto ficou na loja, onde a margem está indo embora.\n\nHoje ele cuida de redes de uma a mais de cinquenta lojas — e continua sendo feito por quem opera delivery, não só por quem programa.",
+  ajudamos: [
+    {
+      titulo: "O dono da rede",
+      texto:
+        "Enxerga todas as lojas no mesmo painel, compara umas com as outras e descobre onde está o problema antes do fim do mês.",
+    },
+    {
+      titulo: "O gerente da loja",
+      texto:
+        "Vê a nota, os cancelamentos e o que o cliente reclamou, e responde a avaliação sem sair do sistema.",
+    },
+    {
+      titulo: "O financeiro",
+      texto:
+        "Recebe o faturamento já conciliado com o repasse da plataforma — o que entrou, o que foi taxa e o que ainda está pra cair.",
+    },
+    {
+      titulo: "O contador",
+      texto:
+        "Tem DRE por loja e da rede, com custo e CMV no lugar certo, em vez de uma pilha de relatórios pra reorganizar.",
+    },
+    {
+      titulo: "Quem monta o cardápio",
+      texto:
+        "Sabe qual item vende, qual item some no funil e o que a promoção realmente trouxe de volta.",
+    },
+    {
+      titulo: "Quem não tem tempo pra nada disso",
+      texto:
+        "Recebe um e-mail por dia com o resumo, e um aviso quando alguma loja para de mandar dado.",
+    },
+  ],
   escopoItens: ESCOPO_PADRAO,
   atendimento:
     "Suporte por chat dentro do sistema e por e-mail (suporte@deliveryos.food), de segunda a sexta, das 9h às 18h, exceto feriados nacionais. Pode ser acionado por qualquer usuário da conta.",
@@ -104,9 +150,14 @@ export async function getModeloProposta(): Promise<ModeloProposta> {
 
   const r = data as Record<string, unknown>
   const itens = r.escopo_itens as ItemEscopo[] | null
+  const ajuda = r.ajudamos as BlocoAjuda[] | null
   return {
     // Campo em branco cai no padrão, um a um: um modelo salvo pela metade não
     // pode produzir uma proposta pela metade.
+    capaTitulo: (r.capa_titulo as string) || MODELO_PADRAO.capaTitulo,
+    capaSubtitulo: (r.capa_subtitulo as string) || MODELO_PADRAO.capaSubtitulo,
+    historia: (r.historia as string) || MODELO_PADRAO.historia,
+    ajudamos: ajuda && ajuda.length > 0 ? ajuda : MODELO_PADRAO.ajudamos,
     escopoItens: itens && itens.length > 0 ? itens : MODELO_PADRAO.escopoItens,
     atendimento: (r.atendimento as string) || MODELO_PADRAO.atendimento,
     termoAceite: (r.termo_aceite as string) || MODELO_PADRAO.termoAceite,

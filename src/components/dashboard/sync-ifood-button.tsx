@@ -37,6 +37,14 @@ type ReconLine = {
   novas?: number
   skipped?: string
   error?: string
+  /**
+   * O SERVIDOR já diz que é espera, não falha.
+   *
+   * `syncReconciliationCompetencia` devolve `pendente: true` quando o iFood
+   * respondeu "ainda estou gerando". A tela ignorava isso e tentava adivinhar
+   * pelo TEXTO do erro — ver a nota em `classificar`.
+   */
+  pendente?: boolean
 }
 
 const MES_CURTO = [
@@ -184,11 +192,32 @@ function classify(u: UnitResult): StoreVerdict {
   // "expired" ou tempo esgotado). Não é erro nosso: o iFood não fechou o
   // extrato daquela loja/competência agora (comum no mês em aberto). Fica num
   // balde ameno "tenta mais tarde", separado de erro real (rede/parse).
+  //
+  // ⚠️ A BANDEIRA VEM PRIMEIRO, O TEXTO É SÓ RESERVA.
+  //
+  // Esta classificação era feita SÓ por texto de mensagem, e quebrou do jeito
+  // mais previsível: quando o coletor foi construído, a frase mudou pra
+  // "extrato ainda sendo gerado pelo iFood" e a lista de frases não
+  // acompanhou. Resultado — o Diego (DG FOODS) abriu o popup e viu
+  // "Com erro (50)" em produção, com as 50 lojas tendo puxado financeiro E
+  // pedidos normalmente naquele mesmo dia.
+  //
+  // Casar comportamento com prosa é combinar por acidente: qualquer melhoria
+  // de texto vira regressão silenciosa, e a regressão aparece como alarme
+  // falso na tela do cliente. O servidor já mandava `pendente: true`; agora é
+  // isso que decide. O texto fica como rede pra payload antigo em cache.
   const pendenteIfood =
     errs.length > 0 &&
     errs.every((r) => {
+      if (r.pendente) return true
       const e = (r.error ?? "").toLowerCase()
       return (
+        e.includes("ainda sendo gerado") ||
+        e.includes("ainda não fechou") ||
+        e.includes("ainda nao fechou") ||
+        e.includes("entra na próxima sincronização") ||
+        e.includes("entra na proxima sincronizacao") ||
+        e.includes("tempo esgotado") ||
         e.includes("geração do extrato") ||
         e.includes("geracao do extrato") ||
         e.includes("esperando a geração") ||
@@ -205,7 +234,12 @@ function classify(u: UnitResult): StoreVerdict {
       bucket: "pendente",
       persisted: 0,
       months: [],
-      detail: "o iFood ainda não fechou o extrato desta loja — tenta de novo mais tarde",
+      // A mensagem antiga ("tenta de novo mais tarde") pedia uma ação que não é
+    // necessária: o coletor roda de 4 em 4 minutos e pega sozinho. Mandar o
+    // cliente tentar de novo é dar trabalho pra ele por algo que já está
+    // resolvido.
+    detail:
+      "o iFood ainda está gerando o extrato — entra sozinho em alguns minutos, sem precisar fazer nada",
     }
   }
   // Erro real (rede, parse, etc.) ou nada gravado.
@@ -521,7 +555,7 @@ export function SyncIfoodButton() {
                 <Group
                   tone="sky"
                   icon={<Clock className="size-4" />}
-                  title="iFood ainda não fechou o extrato"
+                  title="Em geração no iFood — entra sozinho"
                   empty=""
                   items={pendente}
                 />
