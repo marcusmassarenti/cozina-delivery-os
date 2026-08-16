@@ -7,6 +7,7 @@ import { Check, FileDown, Loader2, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { forcarTemaClaroNoPrint } from "@/lib/print-tema-claro"
 import type { DadosProposta, Proposta } from "@/lib/data/propostas"
+import type { ModeloProposta } from "@/lib/data/proposta-modelo"
 
 import { mudarStatusProposta, salvarProposta } from "../_actions"
 import { DocumentoProposta } from "./documento-proposta"
@@ -24,7 +25,13 @@ import { DocumentoProposta } from "./documento-proposta"
  * negociando preço, e um valor intermediário gravado sozinho vira o número que
  * o cliente vê se ele abrir o link no meio da digitação.
  */
-export function EditorProposta({ proposta }: { proposta: Proposta }) {
+export function EditorProposta({
+  proposta,
+  modelo,
+}: {
+  proposta: Proposta
+  modelo: ModeloProposta
+}) {
   const router = useRouter()
   const [d, setD] = React.useState<DadosProposta>(proposta.dados)
   const [salvando, setSalvando] = React.useState(false)
@@ -109,6 +116,21 @@ export function EditorProposta({ proposta }: { proposta: Proposta }) {
           <Campo label="Contato (telefone)" v={d.contatoTelefone} on={(x) => set("contatoTelefone", x)} ro={travada} />
         </Grupo>
 
+        {/* Quem assina é o dono; quem paga é o financeiro. Separar os dois
+            evita a cobrança que dorme três semanas na caixa errada. */}
+        <Grupo titulo="Financeiro do cliente">
+          <p className="mb-1.5 text-[11px] text-muted-foreground">
+            Quem recebe boleto e nota fiscal. Se for a mesma pessoa do contato,
+            repita — ou deixe em branco e sai &quot;—&quot; na proposta.
+          </p>
+          <Campo label="Boleto — nome" v={d.contatoBoletoNome} on={(x) => set("contatoBoletoNome", x)} ro={travada} />
+          <Campo label="Boleto — e-mail" v={d.contatoBoletoEmail} on={(x) => set("contatoBoletoEmail", x)} ro={travada} />
+          <Campo label="Boleto — telefone" v={d.contatoBoletoTelefone} on={(x) => set("contatoBoletoTelefone", x)} ro={travada} />
+          <Campo label="Nota fiscal — nome" v={d.contatoNfNome} on={(x) => set("contatoNfNome", x)} ro={travada} />
+          <Campo label="Nota fiscal — e-mail" v={d.contatoNfEmail} on={(x) => set("contatoNfEmail", x)} ro={travada} />
+          <Campo label="Nota fiscal — telefone" v={d.contatoNfTelefone} on={(x) => set("contatoNfTelefone", x)} ro={travada} />
+        </Grupo>
+
         <Grupo titulo="Comercial">
           <div className="grid grid-cols-2 gap-2">
             <Campo label="Plano" v={d.planoLabel} on={(x) => set("planoLabel", x)} ro={travada} />
@@ -136,6 +158,7 @@ export function EditorProposta({ proposta }: { proposta: Proposta }) {
             <Campo label="Validade até" tipo="date" v={d.validadeAte} on={(x) => set("validadeAte", x)} ro={travada} />
             <Campo label="Setup" v={d.setup} on={(x) => set("setup", x)} ro={travada} />
             <Campo label="Treinamento" v={d.treinamento} on={(x) => set("treinamento", x)} ro={travada} />
+            <Campo label="1ª cobrança" tipo="date" v={d.inicioCobranca} on={(x) => set("inicioCobranca", x)} ro={travada} />
           </div>
           <Campo label="Observações" v={d.observacoes} on={(x) => set("observacoes", x)} ro={travada} area />
         </Grupo>
@@ -186,7 +209,7 @@ export function EditorProposta({ proposta }: { proposta: Proposta }) {
 
       {/* ── Documento (é o que imprime) ───────────────────────────── */}
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <DocumentoProposta numero={proposta.numero} d={d} />
+        <DocumentoProposta numero={proposta.numero} d={d} modelo={modelo} />
       </div>
     </div>
   )

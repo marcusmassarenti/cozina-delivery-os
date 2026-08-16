@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { FileSignature } from "lucide-react"
+import { FileSignature, FileText } from "lucide-react"
 
 import { isSuperadmin } from "@/lib/auth/permissions"
 import { listarClientes, listarPropostas } from "@/lib/data/propostas"
@@ -57,7 +57,17 @@ export default async function PropostasPage() {
             , que a proposta apenas referencia.
           </p>
         </div>
-        <NovaPropostaBotao clientes={clientes} />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/propostas/modelo"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted"
+            title="Editar os textos padrão que entram em toda proposta"
+          >
+            <FileText className="size-3.5" />
+            Modelo
+          </Link>
+          <NovaPropostaBotao clientes={clientes} />
+        </div>
       </div>
 
       {propostas.length === 0 ? (

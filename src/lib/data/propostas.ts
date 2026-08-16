@@ -48,6 +48,21 @@ export type DadosProposta = {
   consultorNome: string
   consultorEmail: string
   observacoes: string
+  /**
+   * Quem recebe boleto e nota fiscal — separado do contato comercial.
+   *
+   * A proposta da Mercos pede os dois, e o motivo é prático: quem assina é o
+   * dono, quem paga é o financeiro. Mandar o boleto pro e-mail de quem assinou
+   * é como uma cobrança some por três semanas.
+   */
+  contatoBoletoNome: string
+  contatoBoletoEmail: string
+  contatoBoletoTelefone: string
+  contatoNfNome: string
+  contatoNfEmail: string
+  contatoNfTelefone: string
+  /** Primeira cobrança (YYYY-MM-DD). Vazio = na contratação. */
+  inicioCobranca: string
 }
 
 export type Proposta = {
@@ -156,6 +171,16 @@ export async function montarDoCadastro(
       consultorNome: "",
       consultorEmail: "",
       observacoes: "",
+      // Já vem com o contato comercial: na maioria dos clientes pequenos é a
+      // mesma pessoa, e pré-preencher poupa três campos. Quem tem financeiro
+      // separado troca na tela.
+      contatoBoletoNome: (h.nf_email as string) ? "" : "",
+      contatoBoletoEmail: (h.nf_email as string) ?? "",
+      contatoBoletoTelefone: (h.nf_telefone as string) ?? "",
+      contatoNfNome: "",
+      contatoNfEmail: (h.nf_email as string) ?? "",
+      contatoNfTelefone: (h.nf_telefone as string) ?? "",
+      inicioCobranca: "",
     },
   }
 }

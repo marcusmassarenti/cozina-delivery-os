@@ -6,6 +6,7 @@ import { isSuperadmin } from "@/lib/auth/permissions"
 import { getProposta } from "@/lib/data/propostas"
 
 import { EditorProposta } from "../_components/editor-proposta"
+import { getModeloProposta } from "@/lib/data/proposta-modelo"
 
 export const metadata = { title: "Proposta — Delivery OS" }
 
@@ -16,7 +17,10 @@ export default async function PropostaPage({
 }) {
   if (!(await isSuperadmin())) notFound()
   const { id } = await params
-  const proposta = await getProposta(id)
+  const [proposta, modelo] = await Promise.all([
+    getProposta(id),
+    getModeloProposta(),
+  ])
   if (!proposta) notFound()
 
   return (
@@ -37,7 +41,7 @@ export default async function PropostaPage({
         </span>
       </div>
 
-      <EditorProposta proposta={proposta} />
+      <EditorProposta proposta={proposta} modelo={modelo} />
     </div>
   )
 }
