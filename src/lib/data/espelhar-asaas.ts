@@ -39,12 +39,51 @@ export type ResultadoEspelho = {
 
 const VAZIO: ResultadoEspelho = { preenchidos: [], divergentes: [] }
 
+/**
+ * Registra o que aconteceu, pra o resultado ser VERIFICÁVEL.
+ *
+ * ⚠️ Existe porque eu fiquei dois turnos adivinhando por que o CNPJ da DG não
+ * vinha: podia ser o deploy que não subiu, a chave ausente, o cliente sem CNPJ
+ * do lado do Asaas ou a chamada falhando. Sem registro, cada hipótese custava
+ * um "abre de novo e me avisa" — e o Marcus fazendo o trabalho de
+ * instrumentação que era meu.
+ *
+ * Grava em `cron_runs` de propósito: é a tabela de "rodou, e deu nisso" que eu
+ * já sei ler, e um erro aqui aparece no relatório de saúde sozinho.
+ */
+async function registrar(
+  holdingId: string,
+  r: ResultadoEspelho & { erro?: string },
+): Promise<void> {
+  try {
+    await createAdminClient().from("cron_runs").insert({
+      nome: "espelho-asaas",
+      iniciado_em: new Date().toISOString(),
+      terminado_em: new Date().toISOString(),
+      ok: !r.erro,
+      erro: r.erro ?? null,
+      resumo: {
+        holdingId,
+        preenchidos: r.preenchidos,
+        divergentes: r.divergentes,
+        motivo: r.motivo ?? null,
+      },
+    })
+  } catch {
+    // Registro é diagnóstico: nunca pode derrubar o que ele observa.
+  }
+}
+
 export async function espelharCadastroDoAsaas(
   holdingId: string,
 ): Promise<ResultadoEspelho> {
   // Sem chave (dev local), o cliente do Asaas devolve dado simulado. Espelhar
   // isso encheria a base de "Cliente (simulado)" e "00000000000".
-  if (asaasIsMock()) return { ...VAZIO, motivo: "Asaas em modo simulado" }
+  if (asaasIsMock()) {
+    const r = { ...VAZIO, motivo: "ASAAS_API_KEY ausente (modo simulado)" }
+    await registrar(holdingId, r)
+    return r
+  }
 
   const admin = createAdminClient()
   const { data: h } = await admin
@@ -59,11 +98,25 @@ export async function espelharCadastroDoAsaas(
     | string
     | undefined
   if (!h || !customerId) {
-    return { ...VAZIO, motivo: "Cliente sem cadastro no Asaas" }
+    const r = { ...VAZIO, motivo: "Cliente sem asaas_customer_id" }
+    await registrar(holdingId, r)
+    return r
   }
 
   const c = await asaasGetCustomer(customerId)
-  if (!c) return { ...VAZIO, motivo: "Cliente não encontrado no Asaas" }
+  if (!c) {
+    // `asaasGetCustomer` engole o erro e devolve null: pode ser id inexistente,
+    // chave sem permissão ou a API fora. O registro pelo menos separa "não
+    // achou" de "não tentou".
+    const r = { ...VAZIO, motivo: `Asaas não devolveu o cliente ${customerId}` }
+    await registrar(holdingId, r)
+    return r
+  }
+  if (!String(c.cpfCnpj ?? "").trim()) {
+    const r = { ...VAZIO, motivo: `Cliente ${customerId} está sem CNPJ no Asaas` }
+    await registrar(holdingId, r)
+    return r
+  }
 
   const atual = h as Record<string, unknown>
   const patch: Record<string, string> = {}
@@ -96,7 +149,11 @@ export async function espelharCadastroDoAsaas(
       .from("holdings")
       .update(patch)
       .eq("id", holdingId)
-    if (error) return { ...VAZIO, motivo: error.message }
+    if (error) {
+      const r = { ...VAZIO, erro: error.message, motivo: error.message }
+      await registrar(holdingId, r)
+      return r
+    }
   }
 
   if (divergentes.length > 0) {
@@ -105,5 +162,7 @@ export async function espelharCadastroDoAsaas(
     )
   }
 
-  return { preenchidos, divergentes }
+  const r = { preenchidos, divergentes }
+  await registrar(holdingId, r)
+  return r
 }
