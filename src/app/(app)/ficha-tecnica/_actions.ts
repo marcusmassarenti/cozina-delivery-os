@@ -1,466 +1,143 @@
 "use server"
 
+/**
+ * Salvar o custo de um item vendido.
+ *
+ * Uma ação por linha, sem botão de "salvar tudo": quem preenche cem linhas não
+ * pode perder o trabalho porque fechou a aba antes de apertar salvar. Cada
+ * campo grava sozinho ao sair dele.
+ */
 import { revalidatePath } from "next/cache"
 
+import { getAuthUser } from "@/lib/auth/permissions"
 import { requireAdmin } from "@/lib/auth/guards"
-import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getVisibleUnits } from "@/lib/data/units"
+import { PLATAFORMAS_CUSTO } from "@/lib/data/custo-itens"
 
-export type ActionState = { ok: boolean; message?: string }
-
-/**
- * Empresa dona do cadastro. TUDO aqui é escopado por ela desde a migration
- * 0169: a ficha técnica deixou de ser cadastro interno da Cozina e virou tela
- * de cliente, então gravar sem dono criaria linha órfã — invisível pela RLS e
- * fora da chave única (holding_id, codigo).
- */
-async function holdingAtual(): Promise<string | null> {
-  return getCurrentHoldingId()
-}
-
-type Platform = "ifood" | "99food" | "keeta"
-
-function fail(message: string): ActionState {
-  return { ok: false, message }
-}
+export type EstadoCusto = { ok: boolean; erro?: string }
 
 /**
- * Importa/atualiza o catálogo de insumos do ERP a partir de texto colado
- * (uma linha por insumo). Aceita colunas separadas por TAB (Código / Nome /
- * Unidade) ou "CÓDIGO Nome".
+ * A loja tem que estar no escopo de quem está salvando.
+ *
+ * ⚠️ O unitId chega do navegador. Sem esta checagem, um administrador de outro
+ * cliente gravaria custo na loja do vizinho mandando o uuid na mão — a tela
+ * nunca ofereceria a opção, mas a ação aceitaria.
  */
-export async function importInsumos(text: string): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const rows: { codigo: string; nome: string; unidade: string; ativo: boolean }[] =
-    []
-  for (const raw of (text ?? "").split("\n")) {
-    const line = raw.trim()
-    if (!line) continue
-    let codigo: string
-    let nome: string
-    let unidade = "UN"
-    if (line.includes("\t")) {
-      const p = line.split("\t").map((s) => s.trim())
-      codigo = p[0]
-      nome = p[1] || p[0]
-      if (p[2]) unidade = p[2]
-    } else {
-      const m = line.match(/^(\S+)\s+(.*)$/)
-      if (m) {
-        codigo = m[1]
-        nome = m[2]
-      } else {
-        codigo = line
-        nome = line
-      }
-    }
-    if (!codigo) continue
-    rows.push({ codigo: codigo.toUpperCase(), nome, unidade, ativo: true })
-  }
-  if (rows.length === 0) return fail("Nada pra importar.")
-
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-
-  const { error } = await admin
-    .from("producao_insumo")
-    .upsert(
-      rows.map((r) => ({ ...r, holding_id: holdingId })),
-      { onConflict: "holding_id,codigo" },
-    )
-  if (error) return fail(`Erro ao salvar: ${error.message}`)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true, message: `${rows.length} insumo(s) salvos.` }
+async function lojaPermitida(unitId: string): Promise<boolean> {
+  const units = await getVisibleUnits()
+  return units.some((u) => u.id === unitId)
 }
 
-/** Adiciona/atualiza insumos do catálogo a partir de linhas estruturadas
- * (form de campos + importação de planilha .xlsx). */
-export async function upsertInsumosRows(
-  rows: { codigo: string; nome: string; unidade?: string }[],
-): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const clean = (rows ?? [])
-    .map((r) => ({
-      codigo: (r.codigo ?? "").trim().toUpperCase(),
-      nome: (r.nome ?? "").trim(),
-      unidade: (r.unidade ?? "").trim() || "UN",
-      ativo: true,
-    }))
-    .filter((r) => r.codigo && r.nome)
-  if (clean.length === 0) return fail("Preencha pelo menos Código e Nome.")
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-  const { error } = await admin
-    .from("producao_insumo")
-    .upsert(
-      clean.map((r) => ({ ...r, holding_id: holdingId })),
-      { onConflict: "holding_id,codigo" },
-    )
-  if (error) return fail(`Erro ao salvar: ${error.message}`)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true, message: `${clean.length} insumo(s) salvos.` }
-}
-
-/** Exclui um insumo do catálogo. Bloqueia se ele estiver em uso em alguma
- * ficha — nesse caso é preciso substituir antes (ver replaceInsumoAndDelete). */
-export async function deleteInsumo(
-  codigo: string,
-): Promise<ActionState & { emUso?: number }> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const cod = (codigo ?? "").trim().toUpperCase()
-  if (!cod) return fail("Código inválido.")
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-
-  const { count } = await admin
-    .from("producao_ficha")
-    .select("id", { count: "exact", head: true })
-    .eq("holding_id", holdingId)
-    .eq("insumo_codigo", cod)
-  if (count && count > 0) {
-    return {
-      ok: false,
-      emUso: count,
-      message: `Em uso em ${count} ficha(s). Substitua por outro insumo antes de excluir.`,
-    }
-  }
-  const { error } = await admin
-    .from("producao_insumo")
-    .delete()
-    .eq("holding_id", holdingId)
-    .eq("codigo", cod)
-  if (error) return fail(`Erro: ${error.message}`)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true, message: "Insumo excluído." }
-}
-
-/** Exclui um insumo MESMO em uso: remove ele de todas as fichas e apaga do
- * catálogo. Pra fase de cadastro/teste, quando não quer substituir. */
-export async function forceDeleteInsumo(
-  codigo: string,
-): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const cod = (codigo ?? "").trim().toUpperCase()
-  if (!cod) return fail("Código inválido.")
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-  await admin
-    .from("producao_ficha")
-    .delete()
-    .eq("holding_id", holdingId)
-    .eq("insumo_codigo", cod)
-  const { error } = await admin
-    .from("producao_insumo")
-    .delete()
-    .eq("holding_id", holdingId)
-    .eq("codigo", cod)
-  if (error) return fail(`Erro: ${error.message}`)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true, message: "Insumo excluído (removido das fichas)." }
-}
-
-/** Troca um insumo por outro em TODAS as fichas (somando onde o destino já
- * existe) e exclui o antigo do catálogo. */
-export async function replaceInsumoAndDelete(input: {
-  fromCodigo: string
-  toCodigo: string
-}): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  const from = (input.fromCodigo ?? "").trim().toUpperCase()
-  const to = (input.toCodigo ?? "").trim().toUpperCase()
-  if (!from || !to || from === to) return fail("Escolha um insumo diferente.")
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-
-  const { data: toIns } = await admin
-    .from("producao_insumo")
-    .select("codigo")
-    .eq("holding_id", holdingId)
-    .eq("codigo", to)
-    .maybeSingle()
-  if (!toIns) return fail("Insumo substituto não existe.")
-
-  const { data: rows } = await admin
-    .from("producao_ficha")
-    .select("id, prato_id, qtd")
-    .eq("holding_id", holdingId)
-    .eq("insumo_codigo", from)
-  for (const r of rows ?? []) {
-    const { data: dup } = await admin
-      .from("producao_ficha")
-      .select("id, qtd")
-      .eq("holding_id", holdingId)
-      .eq("prato_id", r.prato_id)
-      .eq("insumo_codigo", to)
-      .maybeSingle()
-    if (dup) {
-      await admin
-        .from("producao_ficha")
-        .update({ qtd: Number(dup.qtd) + Number(r.qtd) })
-        .eq("id", dup.id)
-      await admin.from("producao_ficha").delete().eq("id", r.id)
-    } else {
-      await admin
-        .from("producao_ficha")
-        .update({ insumo_codigo: to })
-        .eq("id", r.id)
-    }
-  }
-  await admin
-    .from("producao_insumo")
-    .delete()
-    .eq("holding_id", holdingId)
-    .eq("codigo", from)
-  revalidatePath("/ficha-tecnica")
-  return { ok: true, message: `Substituído por ${to} e excluído.` }
-}
-
-/**
- * Define a ficha de UM item vendido (1 etapa: item → insumos). Por trás cria/
- * acha o "prato" interno (nome = nome do item) e o de-para, e grava a ficha.
- * Códigos repetidos somam; fora do catálogo são ignorados e reportados.
- */
-export async function setItemFicha(input: {
-  platform: Platform
+export async function salvarCustoItem(input: {
+  unitId: string
+  platform: string
   nomeItem: string
-  linhas: { codigo: string; qtd: number }[]
-}): Promise<ActionState> {
-  let admin
+  /** Null apaga a linha — é como se volta pra "não preenchido". */
+  custo: number | null
+}): Promise<EstadoCusto> {
   try {
-    ;({ admin } = await requireAdmin())
+    await requireAdmin()
   } catch {
-    return fail("Apenas administradores.")
-  }
-  if (!input.nomeItem) return fail("Item inválido.")
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-
-  // Normaliza + soma repetidos.
-  const merged = new Map<string, number>()
-  for (const l of input.linhas ?? []) {
-    const codigo = (l.codigo ?? "").trim().toUpperCase()
-    const qtd = Number(l.qtd) || 0
-    if (!codigo || qtd <= 0) continue
-    merged.set(codigo, (merged.get(codigo) ?? 0) + qtd)
+    return { ok: false, erro: "Sem permissão." }
   }
 
-  // Acha (ou cria) o prato interno desse item.
-  const { data: existing } = await admin
-    .from("producao_prato_nome")
-    .select("prato_id")
-    .eq("holding_id", holdingId)
-    .eq("platform", input.platform)
-    .eq("nome_item", input.nomeItem)
-    .maybeSingle()
-  let pratoId = existing?.prato_id as string | undefined
-  if (!pratoId) {
-    if (merged.size === 0) return { ok: true }
-    const { data: created, error: e1 } = await admin
-      .from("producao_prato")
-      .insert({ nome: input.nomeItem, holding_id: holdingId })
-      .select("id")
-      .single()
-    if (e1 || !created) return fail(`Erro ao criar: ${e1?.message ?? ""}`)
-    pratoId = created.id
-    const { error: e2 } = await admin.from("producao_prato_nome").insert({
-      platform: input.platform,
-      nome_item: input.nomeItem,
-      prato_id: pratoId,
-      holding_id: holdingId,
-    })
-    if (e2) return fail(`Erro ao mapear: ${e2.message}`)
+  if (!(await lojaPermitida(input.unitId))) {
+    return { ok: false, erro: "Loja fora do seu acesso." }
   }
-  const pid: string = pratoId!
+  if (!PLATAFORMAS_CUSTO.includes(input.platform as never)) {
+    return { ok: false, erro: "Plataforma inválida." }
+  }
+  const nome = input.nomeItem.trim()
+  if (!nome) return { ok: false, erro: "Item sem nome." }
 
-  // Valida contra o catálogo.
-  const { data: insumos } = await admin
-    .from("producao_insumo")
-    .select("codigo")
-    .eq("holding_id", holdingId)
-  const validos = new Set((insumos ?? []).map((i) => i.codigo as string))
-  const aplicar: { codigo: string; qtd: number }[] = []
-  const invalidos: string[] = []
-  for (const [codigo, qtd] of merged) {
-    if (validos.has(codigo)) aplicar.push({ codigo, qtd })
-    else invalidos.push(codigo)
-  }
+  const admin = createAdminClient()
 
-  const { error: eDel } = await admin
-    .from("producao_ficha")
-    .delete()
-    .eq("holding_id", holdingId)
-    .eq("prato_id", pid)
-  if (eDel) return fail(`Erro ao limpar ficha: ${eDel.message}`)
-  if (aplicar.length > 0) {
-    const { error: eIns } = await admin.from("producao_ficha").insert(
-      aplicar.map((p) => ({
-        prato_id: pid,
-        insumo_codigo: p.codigo,
-        qtd: p.qtd,
-        holding_id: holdingId,
-      })),
-    )
-    if (eIns) return fail(`Erro ao salvar ficha: ${eIns.message}`)
-  }
-  revalidatePath("/ficha-tecnica")
-  return {
-    ok: true,
-    message:
-      invalidos.length > 0
-        ? `Salvo. Ignorados (fora do catálogo): ${invalidos.join(", ")}`
-        : `Ficha salva (${aplicar.length} insumo(s)).`,
-  }
-}
-
-/**
- * Aplica uma ficha (lista de insumos × qtd) em VÁRIOS itens de uma vez. Cada
- * destino pode ter a sua lista (ex.: mesma base, proteína trocada). Cria/acha o
- * prato interno de cada item, valida contra o catálogo e grava.
- */
-export async function bulkSetFichas(
-  targets: {
-    platform: Platform
-    nomeItem: string
-    linhas: { codigo: string; qtd: number }[]
-  }[],
-): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
-  }
-  if (!targets || targets.length === 0) {
-    return fail("Nenhum produto selecionado.")
-  }
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-  const { data: insumos } = await admin
-    .from("producao_insumo")
-    .select("codigo")
-    .eq("holding_id", holdingId)
-  const validos = new Set((insumos ?? []).map((i) => i.codigo as string))
-
-  let okCount = 0
-  for (const t of targets) {
-    if (!t.nomeItem) continue
-    const merged = new Map<string, number>()
-    for (const l of t.linhas ?? []) {
-      const codigo = (l.codigo ?? "").trim().toUpperCase()
-      const qtd = Number(l.qtd) || 0
-      if (!codigo || qtd <= 0 || !validos.has(codigo)) continue
-      merged.set(codigo, (merged.get(codigo) ?? 0) + qtd)
-    }
-    if (merged.size === 0) continue
-
-    const { data: existing } = await admin
-      .from("producao_prato_nome")
-      .select("prato_id")
-      .eq("holding_id", holdingId)
-      .eq("platform", t.platform)
-      .eq("nome_item", t.nomeItem)
-      .maybeSingle()
-    let pratoId = existing?.prato_id as string | undefined
-    if (!pratoId) {
-      const { data: created } = await admin
-        .from("producao_prato")
-        .insert({ nome: t.nomeItem, holding_id: holdingId })
-        .select("id")
-        .single()
-      if (!created) continue
-      pratoId = created.id
-      await admin.from("producao_prato_nome").insert({
-        platform: t.platform,
-        nome_item: t.nomeItem,
-        prato_id: pratoId,
-        holding_id: holdingId,
-      })
-    }
-    const pid: string = pratoId!
-    await admin
-      .from("producao_ficha")
+  // Campo apagado = some a linha. Zero continua sendo um custo válido (item de
+  // cortesia), então não dá pra usar zero como "vazio".
+  if (input.custo === null) {
+    const { error } = await admin
+      .from("item_custos")
       .delete()
-      .eq("holding_id", holdingId)
-      .eq("prato_id", pid)
-    await admin.from("producao_ficha").insert(
-      Array.from(merged.entries()).map(([codigo, qtd]) => ({
-        prato_id: pid,
-        insumo_codigo: codigo,
-        qtd,
-        holding_id: holdingId,
-      })),
-    )
-    okCount++
+      .eq("unit_id", input.unitId)
+      .eq("platform", input.platform)
+      .eq("nome_item", nome)
+    if (error) return { ok: false, erro: error.message }
+    revalidatePath("/ficha-tecnica")
+    return { ok: true }
   }
-  revalidatePath("/ficha-tecnica")
-  return { ok: true, message: `Ficha aplicada em ${okCount} produto(s).` }
-}
 
-/** Remove a ficha/mapeamento de um item (volta a "sem ficha"). Limpa o prato
- * interno se ele não tiver mais nenhum nome apontando. */
-export async function removeItemFicha(input: {
-  platform: Platform
-  nomeItem: string
-}): Promise<ActionState> {
-  let admin
-  try {
-    ;({ admin } = await requireAdmin())
-  } catch {
-    return fail("Apenas administradores.")
+  if (!Number.isFinite(input.custo) || input.custo < 0) {
+    return { ok: false, erro: "Custo inválido." }
   }
-  const holdingId = await holdingAtual()
-  if (!holdingId) return fail("Sem empresa no contexto.")
-  const { data: map } = await admin
-    .from("producao_prato_nome")
-    .select("prato_id")
-    .eq("holding_id", holdingId)
-    .eq("platform", input.platform)
-    .eq("nome_item", input.nomeItem)
-    .maybeSingle()
-  await admin
-    .from("producao_prato_nome")
-    .delete()
-    .eq("holding_id", holdingId)
-    .eq("platform", input.platform)
-    .eq("nome_item", input.nomeItem)
-  if (map?.prato_id) {
-    const { count } = await admin
-      .from("producao_prato_nome")
-      .select("id", { count: "exact", head: true })
-      .eq("prato_id", map.prato_id)
-    if (!count) {
-      // A ficha some junto por ON DELETE CASCADE do prato.
-      await admin
-        .from("producao_prato")
-        .delete()
-        .eq("holding_id", holdingId)
-        .eq("id", map.prato_id)
-    }
-  }
+
+  const user = await getAuthUser()
+  const { error } = await admin.from("item_custos").upsert(
+    {
+      unit_id: input.unitId,
+      platform: input.platform,
+      nome_item: nome,
+      custo: input.custo,
+      updated_by: user?.id ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "unit_id,platform,nome_item" },
+  )
+  if (error) return { ok: false, erro: error.message }
+
   revalidatePath("/ficha-tecnica")
   return { ok: true }
+}
+
+/**
+ * Copia o custo de uma linha para as outras que parecem ser a mesma comida.
+ *
+ * ⚠️ NÃO É AUTOMÁTICO, e é por isso que ele existe como botão. Medimos que
+ * casar nome entre plataformas acerta pouco (127 nomes numa loja viram 115
+ * depois de normalizar tudo): um vínculo automático erraria em silêncio. Aqui a
+ * pessoa vê a lista do que vai receber o custo e confirma — a mesma sobrecoxa
+ * escrita de três jeitos resolve num clique, e o erro, se houver, é visível.
+ */
+export async function aplicarCustoEmLote(input: {
+  unitId: string
+  custo: number
+  alvos: { platform: string; nomeItem: string }[]
+}): Promise<EstadoCusto & { gravados?: number }> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, erro: "Sem permissão." }
+  }
+  if (!(await lojaPermitida(input.unitId))) {
+    return { ok: false, erro: "Loja fora do seu acesso." }
+  }
+  if (!Number.isFinite(input.custo) || input.custo < 0) {
+    return { ok: false, erro: "Custo inválido." }
+  }
+
+  const validos = input.alvos.filter(
+    (a) =>
+      PLATAFORMAS_CUSTO.includes(a.platform as never) && a.nomeItem.trim() !== "",
+  )
+  if (validos.length === 0) return { ok: true, gravados: 0 }
+
+  const user = await getAuthUser()
+  const agora = new Date().toISOString()
+  const { error } = await createAdminClient()
+    .from("item_custos")
+    .upsert(
+      validos.map((a) => ({
+        unit_id: input.unitId,
+        platform: a.platform,
+        nome_item: a.nomeItem.trim(),
+        custo: input.custo,
+        updated_by: user?.id ?? null,
+        updated_at: agora,
+      })),
+      { onConflict: "unit_id,platform,nome_item" },
+    )
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, gravados: validos.length }
 }

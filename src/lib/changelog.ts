@@ -42,6 +42,47 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.21.0",
+    date: "2026-08-16",
+    tag: "Grande novidade",
+    title: "Ficha Técnica agora mostra quanto sobra em cada item",
+    summary:
+      "Digite o custo do prato e veja, item a item, o preço praticado, a comissão da plataforma e o lucro que sobra — por loja e por plataforma.",
+    areas: [
+      {
+        area: "Ficha Técnica",
+        items: [
+          {
+            kind: "novo",
+            title: "Custo direto na linha do item",
+            antes:
+              "Era preciso cadastrar insumo por insumo e depois ligar cada nome vendido a um prato. Quem não terminava esse caminho inteiro não via número nenhum.",
+            depois:
+              "A tela lista o que a loja vendeu, da maior receita pra menor, e você digita o custo na própria linha. O lucro aparece na hora.",
+          },
+          {
+            kind: "novo",
+            title: "A comissão vem do seu extrato, não de um chute",
+            desc:
+              "O sistema calcula quanto aquela loja pagou de comissão à plataforma no mês e aplica no item. Nada pra preencher.",
+          },
+          {
+            kind: "novo",
+            title: "Barra de cobertura",
+            desc:
+              "Mostra quanto da sua receita já tem custo e quantas linhas faltam pra chegar a 90%. Normalmente são 20 itens — o resto quase não muda a conta.",
+          },
+          {
+            kind: "novo",
+            title: "Repetir o custo nos nomes parecidos",
+            desc:
+              "O mesmo prato costuma ter nome diferente em cada plataforma. Ao salvar um custo, a tela oferece as linhas parecidas — já desmarcando as de preço muito diferente, que costumam ser porção maior.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.20.0",
     date: "2026-08-16",
     tag: "Grande novidade",

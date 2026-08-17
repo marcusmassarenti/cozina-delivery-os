@@ -1,82 +1,41 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { Boxes, ChefHat, Info, Store, Wallet } from "lucide-react"
+import { ChefHat, Wallet } from "lucide-react"
 
 import { requireAdmin } from "@/lib/auth/guards"
 import { isProPlan } from "@/lib/data/billing"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getInsumos, getItensVendidos } from "@/lib/data/producao"
-import { PeriodSelector } from "@/components/shared/period-selector"
-import { LojaFilter } from "@/components/shared/loja-filter"
-import { PlatformFilter } from "@/components/shared/platform-filter"
-import { TourButton } from "@/components/onboarding/tour-button"
-import { type CoachStep } from "@/components/onboarding/coach-tour"
-import { ordenarPlataformas, type PlatformId } from "@/components/platform-logo"
 import { getVisibleUnits } from "@/lib/data/units"
+import { getAvailablePeriods } from "@/lib/data/ifood-imported"
+import { getCustoItens } from "@/lib/data/custo-itens"
+import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 
-import { InsumoImport } from "./_components/insumo-import"
-import { BulkFichaAction } from "./_components/bulk-ficha-action"
-import { ItensFichaList } from "./_components/itens-ficha-list"
+import { BancadaCusto } from "./_components/bancada-custo"
+import { SeletorLoja } from "./_components/seletor-loja"
+
+export const metadata = { title: "Ficha Técnica — Delivery OS" }
 
 /**
- * O passo a passo que substituiu a faixa azul fixa no topo.
+ * Ficha Técnica: o custo do que a loja vende, e a margem que sai disso.
  *
- * A faixa dizia o essencial, mas custava caro: ocupava espaço em toda visita
- * pra ensinar algo que se aprende uma vez, e o texto terminava num
- * `GET /api/v1/demanda-insumos` — informação de quem integra o ERP, no meio da
- * tela de quem só quer dizer que o X-Salada leva 1 pão e 1 hambúrguer.
+ * ── UMA LOJA POR VEZ, DE PROPÓSITO ───────────────────────────────────────
+ * Não é filtro de várias lojas como no resto do sistema. O cardápio, o preço e
+ * a taxa são de UMA loja — juntar duas produziria uma linha "Sobrecoxa" com o
+ * preço médio de lugares que cobram diferente, e um custo que não é de
+ * ninguém. Quem opera isso (o Diego, as agências) trabalha loja a loja mesmo.
  *
- * Aqui cada passo aponta pro pedaço da tela que ele explica, e a ordem é a
- * ordem de fazer: cadastrar insumo → abrir o item → montar a ficha.
- */
-const TOUR_STEPS: CoachStep[] = [
-  {
-    selector: '[data-tour="ft-filtros"]',
-    icon: <Store className="size-4" />,
-    title: "Escolha o que quer ver",
-    body: "Filtre por loja, plataforma e mês. Serve pra montar a ficha de uma loja por vez, ou pra conferir o que uma plataforma específica vendeu no período.",
-  },
-  {
-    selector: '[data-tour="ft-insumos"]',
-    icon: <Boxes className="size-4" />,
-    title: "1. Cadastre seus insumos",
-    body: "Insumo é o que você compra: pão, hambúrguer, queijo, embalagem. Cadastre um por um, cole vários de uma vez, ou suba a planilha modelo. É a lista que vai aparecer pra escolher na ficha.",
-  },
-  {
-    selector: '[data-tour="ft-itens"]',
-    icon: <ChefHat className="size-4" />,
-    title: "2. Monte a ficha de cada item",
-    body: "Aqui estão os itens que suas lojas venderam, do mais vendido pro menos. Abra um e diga quanto ele consome de cada insumo POR UNIDADE VENDIDA — 1 pão, 2 hambúrgueres, 30 g de queijo.",
-  },
-  {
-    selector: '[data-tour="ft-itens"]',
-    icon: <Info className="size-4" />,
-    title: "Comece pelos de cima",
-    body: 'O selo "sem ficha" mostra o que ainda falta. Não precisa cadastrar tudo: os primeiros itens costumam ser a maior parte do volume, então montar os 10 mais vendidos já resolve quase todo o custo.',
-  },
-]
-
-/**
- * Ficha Técnica — de-para "item vendido no delivery → insumos do ERP" que
- * alimenta a integração de demanda → produção (endpoint /api/v1/demanda-insumos).
- * Cadastro global da rede, só admin.
+ * ── A ORDEM É A RECEITA ──────────────────────────────────────────────────
+ * Sempre. Não é alfabética nem por plataforma: os 20 primeiros itens de cada
+ * loja respondem por 84% a 98% do que ela fatura (medido nas 10 lojas com
+ * venda). Ordenar por receita é o que transforma "127 nomes" em "preenche as
+ * vinte primeiras linhas e acabou".
  */
 export default async function FichaTecnicaPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    periodo?: string
-    inicio?: string
-    fim?: string
-    lojas?: string
-    plataformas?: string
-  }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; loja?: string }>
 }) {
-  // Deixou de ser interno da Cozina: a ficha técnica é o que dá custo por
-  // prato, então virou tela do Financeiro (plano Pro) e não mais um de-para
-  // escondido em Integrações, visível só pro super-admin.
   if (!(await isProPlan())) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-muted/30 p-10 text-center">
@@ -85,8 +44,8 @@ export default async function FichaTecnicaPage({
           Ficha técnica é um recurso do plano Pro
         </p>
         <p className="max-w-md text-sm text-muted-foreground">
-          É ela que transforma a nota do fornecedor em custo por prato — e a
-          venda do dia em demanda de insumo.
+          É ela que mostra quanto sobra em cada item depois da taxa da
+          plataforma e do custo da mercadoria.
         </p>
         <Link
           href="/minha-conta/assinatura"
@@ -110,35 +69,28 @@ export default async function FichaTecnicaPage({
   const sp = await searchParams
   const { range: periodRange, year, month } = readPeriod(sp)
 
-  // Lojas do filtro: chegam por CÓDIGO na URL (é o que o LojaFilter escreve e
-  // o que fica legível num link compartilhado) e viram id aqui.
   const units = await getVisibleUnits()
-  const codigos = (sp.lojas ?? "").split(",").filter(Boolean)
-  const unitIds = codigos.length
-    ? units.filter((u) => codigos.includes(u.code)).map((u) => u.id)
-    : undefined
+  if (units.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-muted/30 p-10 text-sm text-muted-foreground">
+        Cadastre uma loja para começar.
+      </div>
+    )
+  }
 
-  const [insumos, itensTodos, periods] = await Promise.all([
-    getInsumos(),
-    getItensVendidos(year, month, null, unitIds),
+  // A loja vem por CÓDIGO na URL (legível quando o link é compartilhado) e cai
+  // na primeira do escopo quando não vem — a tela nunca abre sem loja, senão o
+  // primeiro contato é uma tela vazia pedindo um clique.
+  const loja =
+    units.find((u) => u.code === sp.loja) ?? units[0]
+
+  const [resumo, periods] = await Promise.all([
+    getCustoItens(loja.id, year, month),
     getAvailablePeriods(),
   ])
 
-  // Plataforma filtra em memória: o item já vem com a dele, e uma segunda
-  // consulta só pra isso seria ida ao banco pra refazer o que está na mão.
-  const plats = (sp.plataformas ?? "").split(",").filter(Boolean)
-  const itens = plats.length
-    ? itensTodos.filter((i) => plats.includes(i.platform))
-    : itensTodos
-
-  // Só as plataformas que ESTE mês tem — chip de plataforma sem item por trás
-  // é um filtro que só sabe devolver tela vazia.
-  const platsComItem = ordenarPlataformas([
-    ...new Set(itensTodos.map((i) => i.platform)),
-  ] as PlatformId[])
-
   return (
-    <div className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
+    <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -146,35 +98,38 @@ export default async function FichaTecnicaPage({
             <h1 className="text-2xl font-semibold tracking-tight">
               Ficha Técnica
             </h1>
-            {/* Substitui a faixa azul fixa. O passo a passo é o mesmo, mas
-                aparece quando a pessoa pede e apontando pra cada parte da
-                tela — em vez de ocupar espaço todo dia depois de lido uma vez,
-                e falar de endpoint HTTP pra quem só quer montar a receita. */}
-            <TourButton steps={TOUR_STEPS} autoOpenParam="tour" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Converte o que as lojas vendem (itens) na demanda de insumos do ERP
-            · itens de {formatRangeLabel(periodRange)}
+            Digite o custo de cada item e veja quanto sobra depois da taxa da
+            plataforma · {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <div data-tour="ft-filtros" className="flex flex-wrap items-center gap-2">
-          <LojaFilter units={units.map((u) => ({ code: u.code, name: u.name }))} />
-          {platsComItem.length > 1 && (
-            <PlatformFilter disponiveis={platsComItem} />
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <SeletorLoja
+            units={units.map((u) => ({ code: u.code, name: u.name }))}
+            atual={loja.code}
+          />
           <PeriodSelector current={periodRange} options={periods} enableRange />
         </div>
       </div>
 
-      <div data-tour="ft-insumos">
-        <InsumoImport insumos={insumos} />
-      </div>
-      {itens.some((i) => i.ficha.length > 0) && (
-        <BulkFichaAction itens={itens} insumos={insumos} />
-      )}
-      <div data-tour="ft-itens">
-        <ItensFichaList itens={itens} insumos={insumos} />
-      </div>
+      <BancadaCusto
+        unitId={loja.id}
+        lojaNome={loja.name}
+        resumo={resumo}
+      />
+
+      <p className="text-[11px] text-muted-foreground">
+        Precisa da receita insumo a insumo (a que alimenta a produção do ERP)?
+        Ela mora em{" "}
+        <Link
+          href="/ficha-tecnica/insumos"
+          className="font-medium underline underline-offset-2"
+        >
+          Insumos e receitas
+        </Link>
+        .
+      </p>
     </div>
   )
 }
