@@ -122,6 +122,15 @@ export type ResumoCusto = {
     /** Começa em outro mês — a receita do iFood inclui dias de fora. */
     foraDoMes: boolean
   } | null
+  /** TEMPORÁRIO — ver o bloco `diag` em getCustoItens. Remover depois. */
+  diag?: {
+    linhas: number
+    erro: string | null
+    chaves: string[]
+    mapaCusto: number
+    mapaCategoria: number
+    mapaPrecoVenda: number
+  }
 }
 
 /**
@@ -247,6 +256,21 @@ export async function getCustoItens(
   // nem chegou a rodar.
   if (erroCustos) console.error("item_custos:", erroCustos)
 
+  /**
+   * TEMPORÁRIO (17/08/26) — diagnóstico do carregamento de `item_custos`.
+   *
+   * A tela mostra o custo preenchido mas categoria e preço de venda em branco,
+   * saindo da MESMA linha, do mesmo laço, com a mesma chave. Verifiquei banco,
+   * PostgREST, o client real, o código commitado e o deploy: todos corretos.
+   * Como já errei três hipóteses deduzindo, esta linha mede em vez de supor.
+   * Sai assim que a causa aparecer.
+   */
+  const diag = {
+    linhas: (custos ?? []).length,
+    erro: erroCustos?.message ?? null,
+    chaves: [] as string[],
+  }
+
   const mapaCusto = new Map<string, number>()
   const mapaCategoria = new Map<string, string>()
   const mapaPrecoVenda = new Map<string, number>()
@@ -269,6 +293,14 @@ export async function getCustoItens(
     }
     if (c.categoria) {
       mapaCategoria.set(`${c.platform} ${c.nome_item}`, c.categoria)
+    }
+    if (diag.chaves.length < 2) {
+      // A linha crua como o servidor a recebeu, com as chaves do objeto. Se
+      // `categoria`/`preco_venda` não estiverem entre as chaves, o bundle em
+      // produção tem um select antigo — e aí a resposta é build, não dado.
+      diag.chaves.push(
+        `${Object.keys(c).join("|")} => custo=${c.custo} cat=${c.categoria} pv=${c.preco_venda}`,
+      )
     }
   }
 
@@ -367,6 +399,12 @@ export async function getCustoItens(
           foraDoMes: j.period_start.slice(0, 7) !== `${year}-${String(month).padStart(2, "0")}`,
         }
       : null,
+    diag: {
+      ...diag,
+      mapaCusto: mapaCusto.size,
+      mapaCategoria: mapaCategoria.size,
+      mapaPrecoVenda: mapaPrecoVenda.size,
+    },
   }
 }
 
