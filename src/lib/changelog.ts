@@ -74,6 +74,30 @@ export const CHANGELOG: Release[] = [
           },
           {
             kind: "novo",
+            title: "Abre pela lista de lojas",
+            desc:
+              "Igual Unidades: busca escrevendo o nome, código ou cidade, e cada loja já mostra quanto da receita tem custo e a margem que está dando.",
+          },
+          {
+            kind: "novo",
+            title: "Painel com curva ABC e o que fazer com cada item",
+            desc:
+              "Separa os itens em Estrela, Enigma, Cavalo de batalha e Abacaxi, mostra quanto cada um deixou no mês e sai em PDF.",
+          },
+          {
+            kind: "novo",
+            title: "Planilha para preencher em massa",
+            desc:
+              "Exporte a lista já com preço e volume, preencha o custo no Excel e importe de volta. Tem também categoria, com filtro por categoria e por plataforma.",
+          },
+          {
+            kind: "novo",
+            title: "O custo vale para os próximos meses",
+            desc:
+              "Preencheu uma vez, vale em agosto, setembro e adiante. Só volte quando o preço de compra mudar.",
+          },
+          {
+            kind: "novo",
             title: "Repetir o custo nos nomes parecidos",
             desc:
               "O mesmo prato costuma ter nome diferente em cada plataforma. Ao salvar um custo, a tela oferece as linhas parecidas — já desmarcando as de preço muito diferente, que costumam ser porção maior.",

@@ -6,35 +6,28 @@ import { requireAdmin } from "@/lib/auth/guards"
 import { isProPlan } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getCustoItens } from "@/lib/data/custo-itens"
+import { getLojasCusto } from "@/lib/data/custo-itens"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 
-import { BancadaCusto } from "./_components/bancada-custo"
-import { SeletorLoja } from "./_components/seletor-loja"
+import { ListaLojas } from "./_components/lista-lojas"
 
 export const metadata = { title: "Ficha Técnica — Delivery OS" }
 
 /**
- * Ficha Técnica: o custo do que a loja vende, e a margem que sai disso.
+ * Ficha Técnica: abre pela LISTA DE LOJAS, como Unidades.
  *
- * ── UMA LOJA POR VEZ, DE PROPÓSITO ───────────────────────────────────────
- * Não é filtro de várias lojas como no resto do sistema. O cardápio, o preço e
- * a taxa são de UMA loja — juntar duas produziria uma linha "Sobrecoxa" com o
- * preço médio de lugares que cobram diferente, e um custo que não é de
- * ninguém. Quem opera isso (o Diego, as agências) trabalha loja a loja mesmo.
- *
- * ── A ORDEM É A RECEITA ──────────────────────────────────────────────────
- * Sempre. Não é alfabética nem por plataforma: os 20 primeiros itens de cada
- * loja respondem por 84% a 98% do que ela fatura (medido nas 10 lojas com
- * venda). Ordenar por receita é o que transforma "127 nomes" em "preenche as
- * vinte primeiras linhas e acabou".
+ * ── POR QUE NÃO UM SELETOR (Marcus, 16/08/26) ────────────────────────────
+ * A primeira versão tinha um `<select>` com as lojas. Com 500 lojas isso é uma
+ * lista impossível de percorrer — e, pior, escondia a informação que interessa
+ * antes de escolher: quais lojas já têm custo e quais não têm. Agora a tela
+ * abre mostrando exatamente isso, e a busca é por digitação, igual Unidades.
  */
 export default async function FichaTecnicaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string; loja?: string }>
+  searchParams: Promise<{ periodo?: string; inicio?: string; fim?: string }>
 }) {
   if (!(await isProPlan())) {
     return (
@@ -70,24 +63,13 @@ export default async function FichaTecnicaPage({
   const { range: periodRange, year, month } = readPeriod(sp)
 
   const units = await getVisibleUnits()
-  if (units.length === 0) {
-    return (
-      <div className="flex flex-1 items-center justify-center bg-muted/30 p-10 text-sm text-muted-foreground">
-        Cadastre uma loja para começar.
-      </div>
-    )
-  }
-
-  // A loja vem por CÓDIGO na URL (legível quando o link é compartilhado) e cai
-  // na primeira do escopo quando não vem — a tela nunca abre sem loja, senão o
-  // primeiro contato é uma tela vazia pedindo um clique.
-  const loja =
-    units.find((u) => u.code === sp.loja) ?? units[0]
-
-  const [resumo, periods] = await Promise.all([
-    getCustoItens(loja.id, year, month),
+  const [lojas, periods] = await Promise.all([
+    getLojasCusto(units, year, month),
     getAvailablePeriods(),
   ])
+
+  const receita = lojas.reduce((s, l) => s + l.receita, 0)
+  const coberta = lojas.reduce((s, l) => s + l.receitaComCusto, 0)
 
   return (
     <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-6">
@@ -98,25 +80,23 @@ export default async function FichaTecnicaPage({
             <h1 className="text-2xl font-semibold tracking-tight">
               Ficha Técnica
             </h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lojas.length} {lojas.length === 1 ? "loja" : "lojas"}
+            </span>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Digite o custo de cada item e veja quanto sobra depois da taxa da
-            plataforma · {formatRangeLabel(periodRange)}
+            Escolha a loja para preencher o custo dos itens ·{" "}
+            {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <SeletorLoja
-            units={units.map((u) => ({ code: u.code, name: u.name }))}
-            atual={loja.code}
-          />
-          <PeriodSelector current={periodRange} options={periods} enableRange />
-        </div>
+        <PeriodSelector current={periodRange} options={periods} enableRange />
       </div>
 
-      <BancadaCusto
-        unitId={loja.id}
-        lojaNome={loja.name}
-        resumo={resumo}
+      <ListaLojas
+        lojas={lojas}
+        receitaRede={receita}
+        cobertaRede={coberta}
+        periodoQuery={sp.periodo ?? ""}
       />
 
       <p className="text-[11px] text-muted-foreground">

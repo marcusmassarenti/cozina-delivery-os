@@ -8,7 +8,11 @@ import { PlatformLogo } from "@/components/platform-logo"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import type { ItemCusto, ResumoCusto } from "@/lib/data/custo-itens"
 
-import { aplicarCustoEmLote, salvarCustoItem } from "../_actions"
+import {
+  aplicarCustoEmLote,
+  salvarCategoriaItem,
+  salvarCustoItem,
+} from "../../_actions"
 
 /**
  * A bancada: uma linha por item vendido, custo digitado direto nela.
@@ -36,6 +40,8 @@ export function BancadaCusto({
   const router = useRouter()
   const [busca, setBusca] = React.useState("")
   const [soSemCusto, setSoSemCusto] = React.useState(false)
+  const [plataforma, setPlataforma] = React.useState<string>("")
+  const [categoria, setCategoria] = React.useState<string>("")
   const [salvando, setSalvando] = React.useState<string | null>(null)
   const [erro, setErro] = React.useState<string | null>(null)
   const [oferta, setOferta] = React.useState<{
@@ -63,14 +69,23 @@ export function BancadaCusto({
 
   const chave = (i: ItemCusto) => `${i.platform}|${i.nomeItem}`
 
+  const plataformasComItem = React.useMemo(
+    () => [...new Set(resumo.itens.map((i) => i.platform))],
+    [resumo.itens],
+  )
+
   const visiveis = React.useMemo(() => {
     const q = normalizar(busca)
     return resumo.itens.filter((i) => {
       if (soSemCusto && i.custo !== null) return false
+      if (plataforma && i.platform !== plataforma) return false
+      if (categoria === "__sem__" && i.categoria) return false
+      if (categoria && categoria !== "__sem__" && i.categoria !== categoria)
+        return false
       if (q && !normalizar(i.nomeItem).includes(q)) return false
       return true
     })
-  }, [resumo.itens, busca, soSemCusto])
+  }, [resumo.itens, busca, soSemCusto, plataforma, categoria])
 
   async function salvar(item: ItemCusto, texto: string) {
     const k = chave(item)
@@ -322,6 +337,44 @@ export function BancadaCusto({
             className="h-9 w-56 rounded-lg border bg-background pl-8 pr-3 text-sm outline-none focus:border-ring"
           />
         </div>
+        {/* Só as plataformas que ESTE mês tem: chip sem item por trás é um
+            filtro que só sabe devolver tela vazia. */}
+        {plataformasComItem.length > 1 && (
+          <div className="flex items-center gap-1">
+            {plataformasComItem.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPlataforma(plataforma === p ? "" : p)}
+                title={p}
+                className={
+                  plataforma === p
+                    ? "rounded-lg border border-primary bg-primary/10 px-2 py-1.5"
+                    : "rounded-lg border px-2 py-1.5 opacity-60 hover:opacity-100"
+                }
+              >
+                <PlatformLogo platform={p} size="sm" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {resumo.categorias.length > 0 && (
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className="h-9 rounded-lg border bg-background px-2.5 text-xs outline-none focus:border-ring"
+            aria-label="Categoria"
+          >
+            <option value="">Todas as categorias</option>
+            {resumo.categorias.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            <option value="__sem__">Sem categoria</option>
+          </select>
+        )}
+
         <label className="flex cursor-pointer items-center gap-1.5 text-xs">
           <input
             type="checkbox"
@@ -343,10 +396,18 @@ export function BancadaCusto({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full min-w-[880px] text-sm">
+          {/* Autocompletar com o que já existe: evita "Bebidas", "bebidas" e
+              "Bebida" virarem três categorias na mesma loja. */}
+          <datalist id="ft-categorias">
+            {resumo.categorias.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b text-[10.5px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-2.5 text-left font-medium">Item</th>
+                <th className="px-3 py-2.5 text-left font-medium">Categoria</th>
                 <th className="px-3 py-2.5 text-right font-medium">
                   Receita no mês
                 </th>
@@ -379,6 +440,27 @@ export function BancadaCusto({
                       <span className="ml-6 text-[11px] text-muted-foreground">
                         {fmtNum(i.qtd)} un
                       </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        list="ft-categorias"
+                        defaultValue={i.categoria ?? ""}
+                        placeholder="—"
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v === (i.categoria ?? "")) return
+                          void salvarCategoriaItem({
+                            unitId,
+                            platform: i.platform,
+                            nomeItem: i.nomeItem,
+                            categoria: v,
+                          }).then((r) => {
+                            if (r.ok) router.refresh()
+                            else setErro(r.erro ?? "Não deu.")
+                          })
+                        }}
+                        className="w-28 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs outline-none hover:border-border focus:border-ring"
+                      />
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {fmtBRL(i.receita)}

@@ -141,3 +141,135 @@ export async function aplicarCustoEmLote(input: {
   revalidatePath("/ficha-tecnica")
   return { ok: true, gravados: validos.length }
 }
+
+/**
+ * Categoria do item.
+ *
+ * Grava na MESMA linha do custo (upsert por loja+plataforma+nome), então pode
+ * existir categoria sem custo: é comum a pessoa classificar o cardápio inteiro
+ * primeiro e só depois sentar pra preencher preço de compra.
+ */
+export async function salvarCategoriaItem(input: {
+  unitId: string
+  platform: string
+  nomeItem: string
+  categoria: string
+}): Promise<EstadoCusto> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, erro: "Sem permissão." }
+  }
+  if (!(await lojaPermitida(input.unitId))) {
+    return { ok: false, erro: "Loja fora do seu acesso." }
+  }
+  if (!PLATAFORMAS_CUSTO.includes(input.platform as never)) {
+    return { ok: false, erro: "Plataforma inválida." }
+  }
+
+  const nome = input.nomeItem.trim()
+  const cat = input.categoria.trim().slice(0, 60)
+  if (!nome) return { ok: false, erro: "Item sem nome." }
+
+  const user = await getAuthUser()
+  const { error } = await createAdminClient()
+    .from("item_custos")
+    .upsert(
+      {
+        unit_id: input.unitId,
+        platform: input.platform,
+        nome_item: nome,
+        // Campo em branco volta a "sem categoria" em vez de gravar "".
+        categoria: cat === "" ? null : cat,
+        updated_by: user?.id ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "unit_id,platform,nome_item" },
+    )
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/ficha-tecnica")
+  return { ok: true }
+}
+
+/**
+ * Importa custos e categorias da planilha.
+ *
+ * ⚠️ SÓ ACEITA ITEM QUE A LOJA REALMENTE VENDEU. A planilha é editada fora do
+ * sistema e volta com o que quer que tenham digitado; sem essa conferência, um
+ * nome alterado viraria uma linha de custo que nunca casa com venda nenhuma —
+ * invisível na tela e somando errado em lugar nenhum. O que não bate volta
+ * contado como `ignorados`, pra pessoa saber que sobrou coisa.
+ */
+export async function importarCustosPlanilha(input: {
+  unitId: string
+  linhas: {
+    platform: string
+    nomeItem: string
+    custo: number | null
+    categoria: string | null
+  }[]
+}): Promise<EstadoCusto & { gravados?: number; ignorados?: number }> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, erro: "Sem permissão." }
+  }
+  if (!(await lojaPermitida(input.unitId))) {
+    return { ok: false, erro: "Loja fora do seu acesso." }
+  }
+
+  const admin = createAdminClient()
+
+  // O conjunto do que existe vem da mesma RPC que desenha a tela. Usar outra
+  // fonte aqui abriria espaço pros dois discordarem sobre o que é "um item".
+  const hoje = new Date()
+  const { data: vendas } = await admin.rpc("itens_vendidos_mes", {
+    p_unit_id: input.unitId,
+    p_year: hoje.getFullYear(),
+    p_month: hoje.getMonth() + 1,
+  })
+  const existentes = new Set(
+    ((vendas ?? []) as { platform: string; nome_item: string }[]).map(
+      (v) => `${v.platform}|${v.nome_item}`,
+    ),
+  )
+
+  // Mês corrente pode estar vazio (loja que ainda não vendeu hoje). Aí vale o
+  // que já tem custo gravado — senão a importação recusaria tudo.
+  const { data: jaTem } = await admin
+    .from("item_custos")
+    .select("platform, nome_item")
+    .eq("unit_id", input.unitId)
+  for (const c of (jaTem ?? []) as { platform: string; nome_item: string }[]) {
+    existentes.add(`${c.platform}|${c.nome_item}`)
+  }
+
+  const user = await getAuthUser()
+  const agora = new Date().toISOString()
+  const validas = input.linhas.filter(
+    (l) =>
+      PLATAFORMAS_CUSTO.includes(l.platform as never) &&
+      existentes.has(`${l.platform}|${l.nomeItem}`) &&
+      (l.custo !== null || l.categoria !== null),
+  )
+  const ignorados = input.linhas.length - validas.length
+  if (validas.length === 0) return { ok: true, gravados: 0, ignorados }
+
+  const { error } = await admin.from("item_custos").upsert(
+    validas.map((l) => ({
+      unit_id: input.unitId,
+      platform: l.platform,
+      nome_item: l.nomeItem,
+      custo: l.custo ?? 0,
+      categoria: l.categoria,
+      updated_by: user?.id ?? null,
+      updated_at: agora,
+    })),
+    { onConflict: "unit_id,platform,nome_item" },
+  )
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, gravados: validas.length, ignorados }
+}
