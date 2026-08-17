@@ -32,6 +32,21 @@ import { BarraMassa } from "./barra-massa"
  *   oferta de aplicar nelas — com a lista à vista. É o substituto do de-para
  *   automático, que a gente mediu e não funciona (ver migration 0212).
  */
+/** Um valor digitado e a foto do que o servidor mostrava naquele instante. */
+type Palpite<T = number | null> = { valor: T; base: T }
+
+/**
+ * O palpite ainda vale? Só enquanto o servidor não saiu da base em que ele foi
+ * feito. Quando sai — porque confirmou o nosso, ou porque outra pessoa mudou —,
+ * o palpite se descarta sozinho e a tela volta a mostrar a verdade do servidor.
+ *
+ * Fora do componente de propósito: aqui dentro ela seria recriada a cada render
+ * e viraria dependência instável dos memos que a usam.
+ */
+function valeAinda<T>(p: Palpite<T> | undefined, atual: T): p is Palpite<T> {
+  return p !== undefined && atual === p.base
+}
+
 export function BancadaCusto({
   unitId,
   lojaNome,
@@ -107,9 +122,18 @@ export function BancadaCusto({
    * Sem essa âncora o overlay viraria uma segunda fonte de verdade permanente,
    * escondendo pra sempre uma edição feita por outro usuário ou pela planilha.
    */
-  type Palpite = { valor: number | null; base: number | null }
   const [otimista, setOtimista] = React.useState<
-    Record<string, { custo?: Palpite; precoVenda?: Palpite }>
+    Record<
+      string,
+      {
+        custo?: Palpite
+        precoVenda?: Palpite
+        // Categoria entra aqui porque classificar em massa é a ação mais usada
+        // da barra de seleção — trinta bebidas de uma vez. Sem ela, metade do
+        // trabalho em lote continuaria esperando o servidor.
+        categoria?: Palpite<string | null>
+      }
+    >
   >({})
 
   const chave = (i: ItemCusto) => `${i.platform}|${i.nomeItem}`
@@ -141,19 +165,20 @@ export function BancadaCusto({
     return resumo.itens.map((i) => {
       const o = otimista[`${i.platform}|${i.nomeItem}`]
       if (!o) return i
-      // Palpite só vale enquanto o servidor não se mexeu daquela base.
-      const vale = (p: Palpite | undefined, atual: number | null) =>
-        p !== undefined && atual === p.base
-      const custo = vale(o.custo, i.custo) ? (o.custo as Palpite).valor : i.custo
-      const precoVenda = vale(o.precoVenda, i.precoVenda)
-        ? (o.precoVenda as Palpite).valor
+      const custo = valeAinda(o.custo, i.custo) ? o.custo.valor : i.custo
+      const precoVenda = valeAinda(o.precoVenda, i.precoVenda)
+        ? o.precoVenda.valor
         : i.precoVenda
+      const categoria = valeAinda(o.categoria, i.categoria)
+        ? o.categoria.valor
+        : i.categoria
       const lucro = custo === null ? null : i.precoMedio - i.taxaValor - custo
       const desconto = precoVenda === null ? null : precoVenda - i.precoMedio
       return {
         ...i,
         custo,
         precoVenda,
+        categoria,
         desconto,
         descontoPct:
           precoVenda === null || precoVenda <= 0
@@ -299,7 +324,7 @@ export function BancadaCusto({
     }
 
     if (valor !== null) {
-      const parecidos = semelhantes(item, resumo.itens)
+      const parecidos = semelhantes(item, itensExibidos)
       if (parecidos.length > 0) {
         setOferta({
           custo: valor,
@@ -326,6 +351,17 @@ export function BancadaCusto({
       setOferta(null)
       return
     }
+    // As linhas mudam ao fechar a oferta, não quando o servidor responder.
+    const antes = otimista
+    setOtimista((p) => {
+      const n = { ...p }
+      for (const a of escolhidos) {
+        const k = chave(a)
+        n[k] = { ...n[k], custo: { valor: oferta.custo, base: a.custo } }
+      }
+      return n
+    })
+
     setSalvando("lote")
     const r = await aplicarCustoEmLote({
       unitId,
@@ -337,8 +373,12 @@ export function BancadaCusto({
     })
     setSalvando(null)
     setOferta(null)
-    if (!r.ok) setErro(r.erro ?? "Não deu.")
-    else router.refresh()
+    if (!r.ok) {
+      setErro(r.erro ?? "Não deu.")
+      setOtimista(antes)
+      return
+    }
+    router.refresh()
   }
 
   async function aplicarMassa(input: {
@@ -346,14 +386,41 @@ export function BancadaCusto({
     custo?: number | null
     custoPctPreco?: number | null
   }) {
-    const alvos = resumo.itens
-      .filter((i) => selecao.has(chave(i)))
-      .map((i) => ({
-        platform: i.platform,
-        nomeItem: i.nomeItem,
-        precoMedio: i.precoMedio,
-      }))
+    // Parte de `itensExibidos` e não de `resumo.itens`: aplicar em massa logo
+    // depois de outra ação em massa tem que enxergar o resultado da primeira.
+    const selecionados = itensExibidos.filter((i) => selecao.has(chave(i)))
+    const alvos = selecionados.map((i) => ({
+      platform: i.platform,
+      nomeItem: i.nomeItem,
+      precoMedio: i.precoMedio,
+    }))
     if (alvos.length === 0) return
+
+    // As linhas selecionadas mudam no clique. As mesmas contas do servidor:
+    // custo fixo vale pra todas; "% do preço" é por linha, sobre o preço médio
+    // de cada uma.
+    const antes = otimista
+    setOtimista((p) => {
+      const n = { ...p }
+      for (const i of selecionados) {
+        const k = chave(i)
+        const atual = { ...n[k] }
+        if (input.categoria !== undefined) {
+          atual.categoria = { valor: input.categoria, base: i.categoria }
+        }
+        if (input.custo !== undefined && input.custo !== null) {
+          atual.custo = { valor: input.custo, base: i.custo }
+        }
+        if (input.custoPctPreco !== undefined && input.custoPctPreco !== null) {
+          atual.custo = {
+            valor: i.precoMedio * (input.custoPctPreco / 100),
+            base: i.custo,
+          }
+        }
+        n[k] = atual
+      }
+      return n
+    })
 
     setSalvando("massa")
     setErro(null)
@@ -361,6 +428,7 @@ export function BancadaCusto({
     setSalvando(null)
     if (!r.ok) {
       setErro(r.erro ?? "Não deu.")
+      setOtimista(antes)
       return
     }
     // A seleção some depois de aplicar: manter marcado convida a aplicar duas
@@ -762,6 +830,17 @@ export function BancadaCusto({
                         opcoes={opcoesCategoria}
                         className="w-32"
                         onEscolher={(v) => {
+                          // A linha muda na hora; o refresh confirma depois.
+                          setOtimista((p) => ({
+                            ...p,
+                            [k]: {
+                              ...p[k],
+                              categoria: {
+                                valor: v.trim() === "" ? null : v,
+                                base: i.categoria,
+                              },
+                            },
+                          }))
                           void salvarCategoriaItem({
                             unitId,
                             platform: i.platform,
@@ -769,7 +848,14 @@ export function BancadaCusto({
                             categoria: v,
                           }).then((r) => {
                             if (r.ok) router.refresh()
-                            else setErro(r.erro ?? "Não deu.")
+                            else {
+                              setErro(r.erro ?? "Não deu.")
+                              setOtimista((p) => {
+                                const n = { ...p }
+                                if (n[k]) delete n[k].categoria
+                                return n
+                              })
+                            }
                           })
                         }}
                       />
@@ -917,7 +1003,7 @@ export function BancadaCusto({
       )}
 
       <BarraMassa
-        selecionados={resumo.itens.filter((i) => selecao.has(chave(i)))}
+        selecionados={itensExibidos.filter((i) => selecao.has(chave(i)))}
         categorias={opcoesCategoria}
         ocupado={salvando === "massa"}
         onLimpar={() => setSelecao(new Set())}
