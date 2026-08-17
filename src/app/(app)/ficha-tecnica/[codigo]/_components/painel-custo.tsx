@@ -358,9 +358,10 @@ export function PainelCusto({
       </div>
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        <b>Margem</b> é preço − comissão da plataforma − custo, sobre o preço.
-        Entrega, taxa de serviço e mensalidade são cobradas por pedido ou por mês
-        e ficam no DRE da loja, não aqui.
+        <b>Margem</b> é preço − o que a plataforma reteve − custo, sobre o
+        preço. O percentual retido é o do extrato da própria loja no mês e
+        inclui entrega e taxa de serviço, que são cobradas por pedido: elas
+        entram rateadas por receita entre os itens.
       </p>
     </div>
   )

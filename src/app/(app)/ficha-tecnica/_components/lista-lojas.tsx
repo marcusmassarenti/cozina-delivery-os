@@ -47,13 +47,27 @@ export function ListaLojas({
   }, [lojas, busca, soFaltando])
 
   const pctRede = receitaRede > 0 ? cobertaRede / receitaRede : 0
+
+  /**
+   * Plataformas que faturaram mas não trouxeram item, e em quantas lojas.
+   *
+   * Vira faixa no topo porque é a diferença entre "a tela quebrou" e "falta
+   * subir um relatório" — e sem ela a primeira leitura é sempre a errada.
+   */
+  const lacunas = React.useMemo(() => {
+    const m = new Map<string, number>()
+    for (const l of lojas) {
+      for (const p of l.semItens) m.set(p, (m.get(p) ?? 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [lojas])
   const href = (l: LojaCusto) =>
     `/ficha-tecnica/${encodeURIComponent(l.codigo)}${periodoQuery ? `?periodo=${periodoQuery}` : ""}`
 
   return (
     <div className="flex flex-col gap-3">
       {/* ── Rede ──────────────────────────────────────────────────── */}
-      <div className="rounded-xl border bg-card p-4">
+      <div data-tour="ft-rede" className="rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <span className="text-sm font-semibold">Toda a rede</span>
           <div className="relative h-1.5 min-w-[160px] flex-1 overflow-hidden rounded-full bg-muted">
@@ -71,6 +85,36 @@ export function ListaLojas({
           </span>
         </div>
       </div>
+
+      {lacunas.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
+          <p className="text-[12.5px] font-semibold text-amber-900 dark:text-amber-200">
+            Falta o relatório de itens de{" "}
+            {lacunas.map(([p], i) => (
+              <span key={p}>
+                {i > 0 ? (i === lacunas.length - 1 ? " e " : ", ") : ""}
+                {NOME_PLATAFORMA[p] ?? p}
+                <span className="font-normal">
+                  {" "}
+                  ({lacunas[i][1]} {lacunas[i][1] === 1 ? "loja" : "lojas"})
+                </span>
+              </span>
+            ))}
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+            Essas lojas <b>venderam</b> nessas plataformas neste mês, mas o
+            relatório que abre a venda item a item não entrou — no iFood ele vem
+            de planilha, não pela API. Sem ele, o custo desses itens não tem
+            onde ser preenchido e a receita deles fica fora da conta.{" "}
+            <Link
+              href="/importacao"
+              className="font-semibold underline underline-offset-2"
+            >
+              Importar relatórios
+            </Link>
+          </p>
+        </div>
+      )}
 
       {/* ── Filtros ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
@@ -98,7 +142,7 @@ export function ListaLojas({
       </div>
 
       {/* ── Tabela ────────────────────────────────────────────────── */}
-      <div className="overflow-x-auto rounded-xl border bg-card">
+      <div data-tour="ft-lista" className="overflow-x-auto rounded-xl border bg-card">
         <table className="w-full min-w-[860px] text-sm">
           <thead>
             <tr className="border-b text-[10.5px] uppercase tracking-wider text-muted-foreground">
@@ -140,12 +184,25 @@ export function ListaLojas({
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1">
-                    {l.plataformas.length === 0 ? (
+                    {l.plataformas.length === 0 && l.semItens.length === 0 ? (
                       <span className="text-xs text-muted-foreground">—</span>
                     ) : (
-                      l.plataformas.map((p) => (
-                        <PlatformLogo key={p} platform={p} size="sm" />
-                      ))
+                      <>
+                        {l.plataformas.map((p) => (
+                          <PlatformLogo key={p} platform={p} size="sm" />
+                        ))}
+                        {/* Vendeu mas não trouxe item: aparece apagada, com o
+                            motivo no title. Sumir seria dizer que não vendeu. */}
+                        {l.semItens.map((p) => (
+                          <span
+                            key={p}
+                            title="Vendeu neste mês, mas o relatório de itens desta plataforma não foi importado"
+                            className="opacity-25 grayscale"
+                          >
+                            <PlatformLogo platform={p} size="sm" />
+                          </span>
+                        ))}
+                      </>
                     )}
                   </div>
                 </td>
@@ -172,6 +229,10 @@ export function ListaLojas({
                         {Math.round(l.cobertura * 100)}%
                       </span>
                     </div>
+                  ) : l.semItens.length > 0 ? (
+                    <span className="text-xs text-amber-600">
+                      vendeu, sem relatório de itens
+                    </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">
                       sem venda no mês
@@ -228,6 +289,13 @@ export function ListaLojas({
       </p>
     </div>
   )
+}
+
+const NOME_PLATAFORMA: Record<string, string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 function normalizar(s: string): string {

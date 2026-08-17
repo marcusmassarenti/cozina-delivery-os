@@ -32,10 +32,13 @@ export function BancadaCusto({
   unitId,
   lojaNome,
   resumo,
+  categoriasPadrao = [],
 }: {
   unitId: string
   lojaNome: string
   resumo: ResumoCusto
+  /** A lista da rede (tela inicial). Vem antes das que só existem nesta loja. */
+  categoriasPadrao?: string[]
 }) {
   const router = useRouter()
   const [busca, setBusca] = React.useState("")
@@ -68,6 +71,15 @@ export function BancadaCusto({
   const enviado = React.useRef<Record<string, number | null>>({})
 
   const chave = (i: ItemCusto) => `${i.platform}|${i.nomeItem}`
+
+  // Padrão da rede primeiro, depois o que só existe aqui — sem repetir.
+  const opcoesCategoria = React.useMemo(() => {
+    const vistas = new Set(categoriasPadrao.map((c) => c.toLowerCase()))
+    return [
+      ...categoriasPadrao,
+      ...resumo.categorias.filter((c) => !vistas.has(c.toLowerCase())),
+    ]
+  }, [categoriasPadrao, resumo.categorias])
 
   const plataformasComItem = React.useMemo(
     () => [...new Set(resumo.itens.map((i) => i.platform))],
@@ -358,7 +370,7 @@ export function BancadaCusto({
           </div>
         )}
 
-        {resumo.categorias.length > 0 && (
+        {opcoesCategoria.length > 0 && (
           <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
@@ -366,7 +378,7 @@ export function BancadaCusto({
             aria-label="Categoria"
           >
             <option value="">Todas as categorias</option>
-            {resumo.categorias.map((c) => (
+            {opcoesCategoria.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -399,7 +411,7 @@ export function BancadaCusto({
           {/* Autocompletar com o que já existe: evita "Bebidas", "bebidas" e
               "Bebida" virarem três categorias na mesma loja. */}
           <datalist id="ft-categorias">
-            {resumo.categorias.map((c) => (
+            {opcoesCategoria.map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>
@@ -540,7 +552,7 @@ export function BancadaCusto({
       {/* ── De onde vêm os percentuais ────────────────────────────── */}
       <div className="rounded-xl border bg-card p-4">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Comissão medida no extrato desta loja
+          O que a plataforma reteve desta loja no mês
         </p>
         <div className="mt-2 flex flex-col gap-1.5">
           {(
@@ -554,14 +566,15 @@ export function BancadaCusto({
               <div key={p} className="flex items-center gap-2 text-xs">
                 <PlatformLogo platform={p} size="sm" />
                 <span className="font-semibold tabular-nums">
-                  {fmtPct(t.comissaoPct * 100, 1)}
+                  {fmtPct(t.cargaTotalPct * 100, 1)}
                 </span>
-                <span className="text-muted-foreground">de comissão</span>
+                <span className="text-muted-foreground">
+                  do bruto — é o que entra na conta de cada item
+                </span>
                 {t.cargaTotalPct > t.comissaoPct + 0.005 && (
                   <span className="text-muted-foreground">
-                    · a plataforma reteve{" "}
-                    {fmtPct(t.cargaTotalPct * 100, 1)} no total do mês, contando
-                    entrega e promoção
+                    · sendo {fmtPct(t.comissaoPct * 100, 1)} de comissão e o
+                    resto entrega, promoção e demais descontos
                   </span>
                 )}
               </div>
@@ -571,10 +584,12 @@ export function BancadaCusto({
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         <b>Preço</b> é a receita dividida pela quantidade — já com a promoção
-        descontada. <b>Taxas</b> é só a <b>comissão</b>, que é percentual sobre o
-        valor do item e por isso cabe nele. Entrega, taxa de serviço, anúncio e
-        mensalidade são cobrados por pedido ou por mês: ficam no DRE da loja, não
-        aqui. <b>Lucro bruto</b> é preço − comissão − custo.
+        descontada. <b>Taxas</b> é tudo que a plataforma reteve da loja no mês
+        (comissão, entrega, taxa de serviço e demais descontos), aplicado como
+        percentual sobre o item. Como a entrega é cobrada por pedido e não por
+        item, ela está sendo <b>rateada por receita</b> — não existe, em
+        plataforma nenhuma, o dado de qual entrega pertence a qual item.{" "}
+        <b>Lucro bruto</b> é preço − taxas − custo.
       </p>
     </div>
   )

@@ -7,6 +7,7 @@ import { isProPlan } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getCustoItens } from "@/lib/data/custo-itens"
+import { getCategoriasPadrao } from "@/lib/data/categorias-item"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
@@ -58,9 +59,10 @@ export default async function FichaTecnicaLojaPage({
   // do vizinho na URL não descobre se ele existe.
   if (!loja) notFound()
 
-  const [resumo, periods] = await Promise.all([
+  const [resumo, periods, categoriasPadrao] = await Promise.all([
     getCustoItens(loja.id, year, month),
     getAvailablePeriods(),
+    getCategoriasPadrao(),
   ])
 
   const aba = sp.aba === "painel" ? "painel" : "custos"
@@ -104,6 +106,7 @@ export default async function FichaTecnicaLojaPage({
             unitId={loja.id}
             lojaNome={loja.name}
             resumo={resumo}
+            categoriasPadrao={categoriasPadrao.map((c) => c.nome)}
           />
         </>
       ) : (

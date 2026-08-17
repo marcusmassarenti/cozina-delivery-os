@@ -9,7 +9,7 @@
  */
 import { revalidatePath } from "next/cache"
 
-import { getAuthUser } from "@/lib/auth/permissions"
+import { getAuthUser, getCurrentHoldingId } from "@/lib/auth/permissions"
 import { requireAdmin } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -53,12 +53,12 @@ export async function salvarCustoItem(input: {
 
   const admin = createAdminClient()
 
-  // Campo apagado = some a linha. Zero continua sendo um custo válido (item de
-  // cortesia), então não dá pra usar zero como "vazio".
+  // Campo apagado = custo volta a NULL. NÃO apaga a linha: ela pode carregar a
+  // categoria, e limpar o custo não é pedido pra desclassificar o item.
   if (input.custo === null) {
     const { error } = await admin
       .from("item_custos")
-      .delete()
+      .update({ custo: null, updated_at: new Date().toISOString() })
       .eq("unit_id", input.unitId)
       .eq("platform", input.platform)
       .eq("nome_item", nome)
@@ -181,6 +181,9 @@ export async function salvarCategoriaItem(input: {
         nome_item: nome,
         // Campo em branco volta a "sem categoria" em vez de gravar "".
         categoria: cat === "" ? null : cat,
+        // ⚠️ NÃO manda `custo`. Na inserção ele fica NULL (= não preenchido) e
+        // no conflito o que já estava é preservado. Mandar 0 aqui faria
+        // classificar um item parecer que ele custa zero.
         updated_by: user?.id ?? null,
         updated_at: new Date().toISOString(),
       },
@@ -261,7 +264,7 @@ export async function importarCustosPlanilha(input: {
       unit_id: input.unitId,
       platform: l.platform,
       nome_item: l.nomeItem,
-      custo: l.custo ?? 0,
+      custo: l.custo,
       categoria: l.categoria,
       updated_by: user?.id ?? null,
       updated_at: agora,
@@ -272,4 +275,54 @@ export async function importarCustosPlanilha(input: {
 
   revalidatePath("/ficha-tecnica")
   return { ok: true, gravados: validas.length, ignorados }
+}
+
+/**
+ * Salva a lista de categorias padrão do cliente.
+ *
+ * Recebe a lista inteira e substitui: é um campo de texto onde a pessoa
+ * escreve uma por linha, então "o que ficou lá" é o estado desejado. Diff por
+ * item exigiria id no cliente e não ganharia nada numa lista de dez linhas.
+ *
+ * ⚠️ APAGAR UMA CATEGORIA DAQUI NÃO APAGA A DOS ITENS. `item_custos.categoria`
+ * é texto e continua onde está — some só a sugestão. Tirar a categoria de mil
+ * itens porque alguém corrigiu uma lista seria destruição silenciosa.
+ */
+export async function salvarCategoriasPadrao(
+  nomes: string[],
+): Promise<EstadoCusto> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, erro: "Sem permissão." }
+  }
+
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, erro: "Cliente não identificado." }
+
+  const limpos: string[] = []
+  for (const n of nomes) {
+    const v = n.trim().slice(0, 60)
+    // Sem repetidos, ignorando caixa: "Bebidas" e "bebidas" são a mesma.
+    if (v && !limpos.some((x) => x.toLowerCase() === v.toLowerCase())) {
+      limpos.push(v)
+    }
+  }
+
+  const admin = createAdminClient()
+  const { error: erroDel } = await admin
+    .from("item_categorias")
+    .delete()
+    .eq("holding_id", holdingId)
+  if (erroDel) return { ok: false, erro: erroDel.message }
+
+  if (limpos.length > 0) {
+    const { error } = await admin.from("item_categorias").insert(
+      limpos.map((nome, i) => ({ holding_id: holdingId, nome, ordem: i })),
+    )
+    if (error) return { ok: false, erro: error.message }
+  }
+
+  revalidatePath("/ficha-tecnica")
+  return { ok: true }
 }

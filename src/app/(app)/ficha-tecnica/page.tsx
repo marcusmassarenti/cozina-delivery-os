@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ChefHat, Wallet } from "lucide-react"
+import { ChefHat, ListChecks, Tags, Wallet } from "lucide-react"
 
 import { requireAdmin } from "@/lib/auth/guards"
 import { isProPlan } from "@/lib/data/billing"
@@ -11,7 +11,50 @@ import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 
+import { TourButton } from "@/components/onboarding/tour-button"
+import { type CoachStep } from "@/components/onboarding/coach-tour"
+import { getCategoriasPadrao } from "@/lib/data/categorias-item"
+
 import { ListaLojas } from "./_components/lista-lojas"
+import { CategoriasPadrao } from "./_components/categorias-padrao"
+
+/**
+ * O tour da tela. A ordem é a ordem de FAZER, não a de ler: escolher a loja →
+ * preencher custo → olhar o resultado. Cada passo aponta pro pedaço da tela
+ * que ele explica.
+ */
+const TOUR_STEPS: CoachStep[] = [
+  {
+    selector: '[data-tour="ft-rede"]',
+    icon: <ListChecks className="size-4" />,
+    title: "O que esta tela responde",
+    body: "Quanto sobra em cada item que suas lojas vendem, depois do que a plataforma retém e do custo da mercadoria. A barra mostra quanto da sua receita já tem custo preenchido.",
+  },
+  {
+    selector: '[data-tour="ft-categorias"]',
+    icon: <Tags className="size-4" />,
+    title: "1. Defina suas categorias",
+    body: "Churrasco, Bebidas, Combos… uma por linha. Elas valem para todas as lojas — é o que deixa você comparar categoria contra categoria depois, em vez de cada loja inventar um nome.",
+  },
+  {
+    selector: '[data-tour="ft-lista"]',
+    icon: <ChefHat className="size-4" />,
+    title: "2. Abra uma loja e preencha o custo",
+    body: "Cada loja tem o cardápio dela. Comece pelas de cima, que são as de maior receita. Dentro da loja, os itens vêm ordenados do que mais fatura pro que menos — os 20 primeiros costumam ser quase 90% do faturamento.",
+  },
+  {
+    selector: '[data-tour="ft-lista"]',
+    icon: <Tags className="size-4" />,
+    title: "O custo vale pros próximos meses",
+    body: "Ele é do item, não do mês. Preencheu uma vez, aparece em agosto, setembro e adiante. Só volte quando o preço de compra mudar.",
+  },
+  {
+    selector: '[data-tour="ft-lista"]',
+    icon: <ListChecks className="size-4" />,
+    title: "3. Leia o resultado no Painel",
+    body: "Dentro da loja, a aba Painel monta a curva ABC, separa os itens entre Estrela, Enigma, Cavalo de batalha e Abacaxi, e exporta em PDF.",
+  },
+]
 
 export const metadata = { title: "Ficha Técnica — Delivery OS" }
 
@@ -63,9 +106,10 @@ export default async function FichaTecnicaPage({
   const { range: periodRange, year, month } = readPeriod(sp)
 
   const units = await getVisibleUnits()
-  const [lojas, periods] = await Promise.all([
+  const [lojas, periods, categorias] = await Promise.all([
     getLojasCusto(units, year, month),
     getAvailablePeriods(),
+    getCategoriasPadrao(),
   ])
 
   const receita = lojas.reduce((s, l) => s + l.receita, 0)
@@ -83,13 +127,20 @@ export default async function FichaTecnicaPage({
             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {lojas.length} {lojas.length === 1 ? "loja" : "lojas"}
             </span>
+            <TourButton steps={TOUR_STEPS} autoOpenParam="tour" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Escolha a loja para preencher o custo dos itens ·{" "}
             {formatRangeLabel(periodRange)}
           </p>
         </div>
-        <PeriodSelector current={periodRange} options={periods} enableRange />
+        <div className="flex flex-wrap items-center gap-2">
+          <PeriodSelector current={periodRange} options={periods} enableRange />
+        </div>
+      </div>
+
+      <div data-tour="ft-categorias">
+        <CategoriasPadrao categorias={categorias} />
       </div>
 
       <ListaLojas
