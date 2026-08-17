@@ -1,6 +1,6 @@
 "use client"
 
-import type { DadosProposta } from "@/lib/data/propostas"
+import type { AceiteProposta, DadosProposta } from "@/lib/data/propostas"
 import type { ModeloProposta } from "@/lib/data/proposta-modelo"
 import {
   AlertTriangle,
@@ -61,11 +61,20 @@ export function DocumentoProposta({
   modelo,
   numero,
   d,
+  aceite = null,
 }: {
   numero: string
   d: DadosProposta
   /** Textos padrão (editáveis em /propostas/modelo). */
   modelo: ModeloProposta
+  /**
+   * Quando existe, as linhas em branco de assinatura dão lugar ao COMPROVANTE.
+   *
+   * É o que faz o PDF se sustentar sozinho: quem receber o arquivo lê ali quem
+   * aceitou, quando, de onde e o hash do conteúdo — sem precisar entrar no
+   * sistema pra conferir.
+   */
+  aceite?: AceiteProposta | null
 }) {
   const adicionais = Math.max(Number(d.lojas || 1) - 1, 0)
   // Só o que o plano contratado inclui — o resto vira oferta, não lista de nãos.
@@ -584,32 +593,36 @@ export function DocumentoProposta({
           .
         </p>
 
-        <div className="mt-7 grid grid-cols-2 gap-8">
-          <div>
-            <div className="border-b border-zinc-800 pb-6" />
-            <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
-              Nome do representante legal
-            </p>
+        {aceite ? (
+          <ComprovanteAceite a={aceite} />
+        ) : (
+          <div className="mt-7 grid grid-cols-2 gap-8">
+            <div>
+              <div className="border-b border-zinc-800 pb-6" />
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
+                Nome do representante legal
+              </p>
+            </div>
+            <div>
+              <div className="border-b border-zinc-800 pb-6" />
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
+                CNPJ
+              </p>
+            </div>
+            <div>
+              <div className="border-b border-zinc-800 pb-6" />
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
+                Assinatura
+              </p>
+            </div>
+            <div>
+              <div className="border-b border-zinc-800 pb-6" />
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
+                Data
+              </p>
+            </div>
           </div>
-          <div>
-            <div className="border-b border-zinc-800 pb-6" />
-            <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
-              CNPJ
-            </p>
-          </div>
-          <div>
-            <div className="border-b border-zinc-800 pb-6" />
-            <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
-              Assinatura
-            </p>
-          </div>
-          <div>
-            <div className="border-b border-zinc-800 pb-6" />
-            <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
-              Data
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Protege contra "não usei, não pago" e contra o número mudar sem
@@ -622,6 +635,88 @@ export function DocumentoProposta({
         Consultor: {d.consultorNome || "—"}
         {d.consultorEmail ? ` · ${d.consultorEmail}` : ""} · Delivery OS ·
         deliveryos.food
+      </p>
+    </div>
+  )
+}
+
+/**
+ * O comprovante que substitui as linhas de assinatura.
+ *
+ * Traz os quatro elementos que sustentam uma assinatura eletrônica simples
+ * (Lei 14.063/2020, art. 4º, I): QUEM, QUANDO, DE ONDE e SOBRE O QUÊ. O hash é
+ * o "sobre o quê" — sem ele, o comprovante prova que alguém clicou, mas não em
+ * qual texto.
+ *
+ * Fonte monoespaçada no hash de propósito: é um dado pra conferir caractere a
+ * caractere, não pra ler.
+ */
+function ComprovanteAceite({ a }: { a: AceiteProposta }) {
+  const dt = new Date(a.em)
+  const quando = dt.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "medium",
+  })
+  const doc = a.cpf.replace(/\D/g, "")
+  const docFmt =
+    doc.length === 11
+      ? doc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+      : doc.length === 14
+        ? doc.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
+        : doc
+
+  return (
+    <div className="mt-6 rounded-md bg-zinc-50 p-4">
+      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-zinc-900">
+        ✓ Aceito eletronicamente
+      </p>
+      <table className="w-full text-[11.5px]">
+        <tbody>
+          <tr>
+            <td className="w-[130px] py-0.5 pr-3 align-top text-zinc-500">
+              Aceito por
+            </td>
+            <td className="py-0.5 align-top font-semibold text-zinc-900">
+              {a.nome}
+              {a.cargo ? ` · ${a.cargo}` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-3 align-top text-zinc-500">CPF/CNPJ</td>
+            <td className="py-0.5 align-top text-zinc-900">{docFmt || "—"}</td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-3 align-top text-zinc-500">E-mail</td>
+            <td className="py-0.5 align-top text-zinc-900">{a.email || "—"}</td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-3 align-top text-zinc-500">
+              Data e hora
+            </td>
+            <td className="py-0.5 align-top text-zinc-900">
+              {quando} (horário de Brasília)
+            </td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-3 align-top text-zinc-500">Endereço IP</td>
+            <td className="py-0.5 align-top text-zinc-900">{a.ip || "—"}</td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-3 align-top text-zinc-500">
+              Hash do documento
+            </td>
+            <td className="py-0.5 align-top font-mono text-[9.5px] leading-snug text-zinc-700">
+              {a.hash}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="mt-2.5 text-[10px] leading-relaxed text-zinc-500">
+        Aceite eletrônico registrado pela plataforma Delivery OS nos termos do
+        art. 4º, I, da Lei nº 14.063/2020. O hash acima (SHA-256) identifica de
+        forma única o conteúdo desta proposta: qualquer alteração no documento
+        produz um hash diferente.
       </p>
     </div>
   )

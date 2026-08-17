@@ -9,6 +9,7 @@ import "server-only"
  * assinada reescreveria um documento com valor jurídico.
  */
 import { createAdminClient } from "@/lib/supabase/admin"
+import type { ModeloProposta } from "@/lib/data/proposta-modelo"
 import {
   PLANOS_META,
   getDefaultPlan,
@@ -94,6 +95,24 @@ export type DadosProposta = {
   treinamentoAtivo: boolean
 }
 
+/**
+ * A prova do aceite eletrônico.
+ *
+ * Mora aqui, e não em `proposta-aceite.ts`, pra que os dois módulos não
+ * precisem se importar em runtime: este arquivo é o dono dos TIPOS da proposta
+ * e o outro é quem executa o aceite.
+ */
+export type AceiteProposta = {
+  nome: string
+  cpf: string
+  cargo: string
+  email: string
+  ip: string
+  userAgent: string
+  hash: string
+  em: string
+}
+
 export type Proposta = {
   id: string
   numero: string
@@ -105,6 +124,18 @@ export type Proposta = {
   enviadaEm: string | null
   assinadaEm: string | null
   criadaEm: string
+  /** Segredo do link público. Null enquanto ninguém pediu o link. */
+  tokenPublico: string | null
+  /** Preenchido só depois do aceite eletrônico. Ver proposta-aceite.ts. */
+  aceite: AceiteProposta | null
+  /**
+   * Textos do modelo congelados no aceite.
+   *
+   * Existe porque o modelo é GLOBAL: sem o retrato, editar "Quem somos" hoje
+   * mudaria o escopo de uma proposta assinada mês passado. Quando preenchido,
+   * é ele que o documento renderiza — nunca o modelo atual.
+   */
+  modeloSnapshot: ModeloProposta | null
 }
 
 function fmtEndereco(h: Record<string, unknown>): string {
@@ -301,6 +332,11 @@ export async function listarPropostas(): Promise<Proposta[]> {
     enviadaEm: (p.enviada_em as string | null) ?? null,
     assinadaEm: (p.assinada_em as string | null) ?? null,
     criadaEm: p.created_at as string,
+    // A listagem não carrega o link nem a prova: são detalhe de UMA proposta,
+    // e trazê-los aqui espalharia o segredo do link por uma tela de tabela.
+    tokenPublico: null,
+    aceite: null,
+    modeloSnapshot: null,
   }))
 }
 
@@ -315,6 +351,12 @@ export async function listarPropostas(): Promise<Proposta[]> {
  * Preenche só o AUSENTE, nunca o preenchido: o retrato continua sendo o que
  * foi negociado.
  */
+export async function completarDadosPublico(
+  d: Partial<DadosProposta>,
+): Promise<DadosProposta> {
+  return completarDados(d)
+}
+
 async function completarDados(
   d: Partial<DadosProposta>,
 ): Promise<DadosProposta> {
@@ -345,7 +387,7 @@ export async function getProposta(id: string): Promise<Proposta | null> {
   const { data } = await admin
     .from("propostas")
     .select(
-      "id, numero, holding_id, status, dados, assinatura_url, enviada_em, assinada_em, created_at, holdings(name)",
+      "id, numero, holding_id, status, dados, assinatura_url, enviada_em, assinada_em, created_at, token_publico, modelo_snapshot, signatario_nome, signatario_cpf, signatario_cargo, signatario_email, aceite_ip, aceite_user_agent, aceite_hash, holdings(name)",
     )
     .eq("id", id)
     .maybeSingle()
@@ -363,6 +405,26 @@ export async function getProposta(id: string): Promise<Proposta | null> {
     enviadaEm: (p.enviada_em as string | null) ?? null,
     assinadaEm: (p.assinada_em as string | null) ?? null,
     criadaEm: p.created_at as string,
+    tokenPublico: (p.token_publico as string | null) ?? null,
+    aceite: montarAceite(p),
+    modeloSnapshot: (p.modelo_snapshot as ModeloProposta | null) ?? null,
+  }
+}
+
+/** A prova do aceite, quando existe. Sem `assinada_em` não há o que provar. */
+export function montarAceite(
+  p: Record<string, unknown>,
+): AceiteProposta | null {
+  if (!p.assinada_em || !p.signatario_nome) return null
+  return {
+    nome: p.signatario_nome as string,
+    cpf: (p.signatario_cpf as string) ?? "",
+    cargo: (p.signatario_cargo as string) ?? "",
+    email: (p.signatario_email as string) ?? "",
+    ip: (p.aceite_ip as string) ?? "",
+    userAgent: (p.aceite_user_agent as string) ?? "",
+    hash: (p.aceite_hash as string) ?? "",
+    em: p.assinada_em as string,
   }
 }
 

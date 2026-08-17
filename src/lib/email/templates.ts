@@ -1081,3 +1081,81 @@ export function manutencaoIfood(d: { nome: string | null }) {
     }),
   }
 }
+
+/**
+ * Comprovante do aceite eletrônico da proposta.
+ *
+ * ⚠️ O CORPO É A PROVA, não um aviso de que existe prova em outro lugar.
+ * Nome, CPF, data, IP e hash vão escritos no e-mail — é o que faz o
+ * comprovante continuar valendo se um dia o cliente sair do sistema. E-mail
+ * que diz "acesse o painel para ver os detalhes" não serve de nada num
+ * desentendimento.
+ *
+ * A MESMA função gera as duas versões: o texto muda de destinatário
+ * (`interno`), mas os dados são idênticos, e é isso que garante que a cópia
+ * do Marcus e a do cliente não divirjam.
+ */
+export function propostaAceita(d: {
+  numero: string
+  cliente: string
+  nome: string
+  cargo: string
+  doc: string
+  email: string
+  ip: string
+  hash: string
+  quando: string
+  interno: boolean
+}) {
+  const linha = (rot: string, val: string) => `
+    <tr>
+      <td style="padding:5px 12px 5px 0;font-size:13px;color:${SUAVE};white-space:nowrap;vertical-align:top;">${rot}</td>
+      <td style="padding:5px 0;font-size:13px;color:${TINTA};vertical-align:top;">${val || "—"}</td>
+    </tr>`
+
+  const comprovante = `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0;">
+    <tr>
+      <td style="background:#fafafa;border:1px solid ${LINHA};border-radius:12px;padding:20px 22px;">
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:${TINTA};">Comprovante de aceite</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${linha("Proposta", `nº ${d.numero}`)}
+          ${linha("Cliente", d.cliente)}
+          ${linha("Aceito por", d.cargo ? `${d.nome} · ${d.cargo}` : d.nome)}
+          ${linha("CPF/CNPJ", d.doc)}
+          ${linha("E-mail", d.email)}
+          ${linha("Data e hora", `${d.quando} (horário de Brasília)`)}
+          ${linha("Endereço IP", d.ip)}
+        </table>
+        <p style="margin:12px 0 4px;font-size:12px;color:${SUAVE};">Hash do documento (SHA-256)</p>
+        <p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;color:${TEXTO};word-break:break-all;">${d.hash}</p>
+      </td>
+    </tr>
+  </table>`
+
+  if (d.interno) {
+    return {
+      assunto: `✅ ${d.cliente} aceitou a proposta ${d.numero}`,
+      html: layout({
+        titulo: "Proposta aceita",
+        corpo: `
+          <p style="margin:0 0 14px;"><strong>${d.cliente}</strong> aceitou a proposta nº ${d.numero}.</p>
+          ${comprovante}
+          <p style="margin:0;font-size:14px;color:${SUAVE};">O comprovante também foi enviado para ${d.email}.</p>`,
+      }),
+    }
+  }
+
+  return {
+    assunto: `Comprovante de aceite — proposta ${d.numero} · Delivery OS`,
+    html: layout({
+      titulo: "Recebemos seu aceite",
+      corpo: `
+        <p style="margin:0 0 14px;">Olá, ${d.nome.split(" ")[0]}. Registramos o aceite da proposta nº ${d.numero}. Guarde este e-mail: ele é o seu comprovante.</p>
+        ${comprovante}
+        <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">O aceite eletrônico foi registrado nos termos do art. 4º, I, da Lei nº 14.063/2020. O hash acima identifica de forma única o conteúdo da proposta que você aceitou — qualquer alteração no documento produz um hash diferente.</p>
+        <p style="margin:0;font-size:14px;line-height:1.6;">As condições contratuais completas estão em <a href="${SITE}/contrato" style="color:${LARANJA};">deliveryos.food/contrato</a>. A partir daqui é com a gente: seu acesso é liberado e a gente avisa você.</p>`,
+      ps: "Não foi você que aceitou esta proposta? Responda este e-mail agora — a gente cancela na hora.",
+    }),
+  }
+}

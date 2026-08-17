@@ -142,6 +142,13 @@ export type TipoEmail =
    * abre vários chamados ao longo do tempo e cada um merece a sua resposta.
    */
   | "suporte-resposta"
+  /**
+   * Comprovante do aceite eletrônico da proposta — vai pra quem aceitou e uma
+   * cópia interna. `forcar: true` sempre: o mesmo cliente pode aceitar outra
+   * proposta depois (renovação, troca de plano), e a trava de duplicidade
+   * engoliria o comprovante da segunda.
+   */
+  | "proposta-aceita"
 
 export type ResultadoEnvio = {
   ok: boolean

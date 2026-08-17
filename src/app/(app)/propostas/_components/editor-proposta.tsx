@@ -2,7 +2,15 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Check, FileDown, Loader2, RotateCcw, Send } from "lucide-react"
+import {
+  Check,
+  Copy,
+  FileDown,
+  Link2,
+  Loader2,
+  RotateCcw,
+  Send,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { forcarTemaClaroNoPrint } from "@/lib/print-tema-claro"
@@ -10,6 +18,7 @@ import type { DadosProposta, Proposta } from "@/lib/data/propostas"
 import type { ModeloProposta } from "@/lib/data/proposta-modelo"
 
 import {
+  gerarLinkAceite,
   mudarStatusProposta,
   recarregarClienteDaProposta,
   salvarProposta,
@@ -44,8 +53,33 @@ export function EditorProposta({
   const [salvando, setSalvando] = React.useState(false)
   const [msg, setMsg] = React.useState<string | null>(null)
   const [erro, setErro] = React.useState<string | null>(null)
+  const [link, setLink] = React.useState<string | null>(
+    proposta.tokenPublico
+      ? `${typeof window === "undefined" ? "" : window.location.origin}/proposta/${proposta.tokenPublico}`
+      : null,
+  )
+  const [copiado, setCopiado] = React.useState(false)
 
   const travada = proposta.status === "assinada"
+
+  async function pedirLink() {
+    setErro(null)
+    const r = await gerarLinkAceite(proposta.id)
+    if (r.ok && r.url) {
+      // A URL vem do servidor com o domínio de produção. Em localhost isso
+      // geraria um link que não abre aqui — troca pela origem da janela.
+      const u = new URL(r.url)
+      setLink(`${window.location.origin}${u.pathname}`)
+      router.refresh()
+    } else setErro(r.error ?? "Não deu.")
+  }
+
+  async function copiar() {
+    if (!link) return
+    await navigator.clipboard.writeText(link)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
 
   function set<K extends keyof DadosProposta>(k: K, v: DadosProposta[K]) {
     setD((p) => ({ ...p, [k]: v }))
@@ -356,6 +390,81 @@ export function EditorProposta({
               </Button>
             )}
           </div>
+
+          {/* ── Link de aceite ────────────────────────────────────────
+              O caminho que substituiu a plataforma de assinatura: o cliente
+              abre este link, lê a proposta e aceita ali mesmo. Só aparece
+              enquanto faz sentido — depois de aceita, o que importa é a
+              prova, não o convite. */}
+          {!travada && proposta.status !== "recusada" && (
+            <div className="rounded-md border border-dashed p-2.5">
+              {link ? (
+                <>
+                  <p className="text-[11px] font-semibold">
+                    Link para o cliente aceitar
+                  </p>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <input
+                      readOnly
+                      value={link}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="min-w-0 flex-1 rounded border bg-muted/50 px-2 py-1 text-[10.5px]"
+                    />
+                    <Button size="sm" variant="outline" onClick={copiar}>
+                      {copiado ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      {copiado ? "Copiado" : "Copiar"}
+                    </Button>
+                  </div>
+                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                    Quem abrir lê a proposta e aceita na própria página. O
+                    comprovante (nome, CPF, data, IP e hash) fica registrado
+                    aqui e vai por e-mail para os dois lados.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-muted-foreground">
+                    Em vez de imprimir e pedir assinatura, mande o link — o
+                    cliente aceita pela própria página e o comprovante fica
+                    registrado.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5"
+                    onClick={pedirLink}
+                  >
+                    <Link2 className="size-3.5" />
+                    Gerar link de aceite
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
+          {proposta.aceite && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950">
+              <p className="text-[11px] font-bold">✓ Aceita eletronicamente</p>
+              <p className="mt-0.5 text-[10.5px] leading-relaxed">
+                {proposta.aceite.nome}
+                {proposta.aceite.cargo ? ` · ${proposta.aceite.cargo}` : ""} ·{" "}
+                {new Date(proposta.aceite.em).toLocaleString("pt-BR", {
+                  timeZone: "America/Sao_Paulo",
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+                {proposta.aceite.ip ? ` · IP ${proposta.aceite.ip}` : ""}
+              </p>
+              <p className="mt-1 break-all font-mono text-[9px] leading-tight opacity-70">
+                {proposta.aceite.hash}
+              </p>
+            </div>
+          )}
+
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             <b>Gerar PDF</b> abre a impressão do navegador — escolha
             &quot;Salvar como PDF&quot;. Salve antes: o PDF sai com o que está
@@ -366,7 +475,15 @@ export function EditorProposta({
 
       {/* ── Documento (é o que imprime) ───────────────────────────── */}
       <div className="min-w-0 flex-1 overflow-y-auto print:overflow-visible">
-        <DocumentoProposta numero={proposta.numero} d={d} modelo={modelo} />
+        {/* ⚠️ Proposta aceita renderiza pelo SNAPSHOT do modelo, não pelo
+            modelo atual: os textos globais podem ter mudado depois do aceite,
+            e o documento assinado não pode mudar junto. */}
+        <DocumentoProposta
+          numero={proposta.numero}
+          d={d}
+          modelo={proposta.modeloSnapshot ?? modelo}
+          aceite={proposta.aceite}
+        />
       </div>
     </div>
   )

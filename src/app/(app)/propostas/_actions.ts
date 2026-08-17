@@ -110,6 +110,50 @@ export async function mudarStatusProposta(
 }
 
 /**
+ * Cria (ou devolve) o link público pra o cliente ler e aceitar.
+ *
+ * ⚠️ MARCA A PROPOSTA COMO ENVIADA de quebra, e é intencional: o link só
+ * funciona nesse estado (ver `getPropostaPorToken`), então gerar o link sem
+ * mudar o status produziria uma URL que abre em "não encontrada" — o pior
+ * defeito possível num link que você acabou de mandar pro cliente.
+ */
+export async function gerarLinkAceite(
+  id: string,
+): Promise<PropostaState & { url?: string }> {
+  try {
+    await exigirDono()
+  } catch {
+    return { ok: false, error: "Apenas o admin da plataforma." }
+  }
+
+  const { gerarTokenPublico } = await import("@/lib/data/proposta-aceite")
+  const token = await gerarTokenPublico(id)
+  if (!token) return { ok: false, error: "Não deu para gerar o link." }
+
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("propostas")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle()
+
+  if ((data as { status?: string } | null)?.status === "rascunho") {
+    const agora = new Date().toISOString()
+    await admin
+      .from("propostas")
+      .update({ status: "enviada", enviada_em: agora, updated_at: agora })
+      .eq("id", id)
+      .eq("status", "rascunho")
+  }
+
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
+  revalidatePath(`/propostas/${id}`)
+  revalidatePath("/propostas")
+  return { ok: true, url: `${base}/proposta/${token}` }
+}
+
+/**
  * Recarrega os dados do CLIENTE a partir do cadastro, mantendo o comercial.
  *
  * Uma proposta é um retrato: os valores dela ficam congelados no momento em
