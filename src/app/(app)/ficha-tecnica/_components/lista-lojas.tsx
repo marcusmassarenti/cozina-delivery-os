@@ -55,22 +55,37 @@ export function ListaLojas({
    * subir um relatório" — e sem ela a primeira leitura é sempre a errada.
    */
   /**
-   * Janelas de iFood de tamanhos diferentes na mesma tela.
+   * A janela que a MAIORIA das lojas tem.
    *
-   * ⚠️ Isto é o que fazia a Jardins parecer a maior loja da rede: ela mostrava
-   * 30 dias e as vizinhas, 8. Comparar as colunas sem dizer isso é comparar
-   * coisas diferentes com a mesma cara.
+   * ⚠️ Existe porque a primeira versão carimbava a data em toda linha e o
+   * Marcus disse que poluiu — com razão: treze lojas repetindo "27/07–04/08 ·
+   * inclui outro mês" é a mesma informação treze vezes. O que discrimina é a
+   * EXCEÇÃO. Então a regra comum sobe pro aviso, uma vez, e a linha só carimba
+   * quem foge dela.
    */
-  const janelasDesiguais = React.useMemo(() => {
-    const ds = [
-      ...new Set(
-        lojas.map((l) => l.janelaIfoodDias).filter((d): d is number => !!d),
-      ),
-    ].sort((a, b) => a - b)
-    return ds.length > 1 ? { min: ds[0], max: ds[ds.length - 1] } : null
+  const janelaComum = React.useMemo(() => {
+    const contagem = new Map<string, { n: number; l: LojaCusto }>()
+    for (const l of lojas) {
+      if (!l.janelaIfood) continue
+      const k = `${l.janelaIfood.inicio}|${l.janelaIfood.fim}`
+      const atual = contagem.get(k)
+      contagem.set(k, { n: (atual?.n ?? 0) + 1, l })
+    }
+    let melhor: { n: number; l: LojaCusto } | null = null
+    for (const v of contagem.values()) {
+      if (!melhor || v.n > melhor.n) melhor = v
+    }
+    return melhor && melhor.n > 1 ? melhor : null
   }, [lojas])
 
   const foraDoMes = lojas.filter((l) => l.janelaForaDoMes).length
+  const fogemDaComum = lojas.filter(
+    (l) =>
+      l.janelaIfood &&
+      janelaComum &&
+      (l.janelaIfood.inicio !== janelaComum.l.janelaIfood!.inicio ||
+        l.janelaIfood.fim !== janelaComum.l.janelaIfood!.fim),
+  ).length
 
   const lacunas = React.useMemo(() => {
     const m = new Map<string, number>()
@@ -109,7 +124,7 @@ export function ListaLojas({
           que ficava confuso e parecia desorganizado. São o mesmo assunto: o
           relatório de itens do iFood e da Keeta é manual, então ora falta, ora
           vem com período diferente. Uma frase por problema, no mesmo lugar. */}
-      {(lacunas.length > 0 || janelasDesiguais || foraDoMes > 0) && (
+      {(lacunas.length > 0 || janelaComum) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
           <p className="text-[12.5px] font-semibold text-amber-900 dark:text-amber-200">
             Falta relatório de itens em algumas lojas
@@ -123,28 +138,33 @@ export function ListaLojas({
                 venderam no {NOME_PLATAFORMA[p] ?? p} e não têm itens no mês.
               </li>
             ))}
-            {foraDoMes > 0 && (
+            {janelaComum && (
               <li>
+                O relatório do iFood cobre{" "}
                 <b>
-                  {foraDoMes} {foraDoMes === 1 ? "loja" : "lojas"}
+                  {dm(janelaComum.l.janelaIfood!.inicio)} a{" "}
+                  {dm(janelaComum.l.janelaIfood!.fim)}
                 </b>{" "}
-                têm relatório que começa em outro mês — a receita delas inclui
-                dias de fora e <b>não é a do mês</b>. O período está ao lado do
-                logo do iFood.
+                na maioria das lojas
+                {janelaComum.l.janelaForaDoMes && (
+                  <>
+                    {" "}
+                    — como ele começa no mês anterior, a receita do iFood aqui{" "}
+                    <b>não é só a deste mês</b>
+                  </>
+                )}
+                .
+                {fogemDaComum > 0 && (
+                  <>
+                    {" "}
+                    {fogemDaComum}{" "}
+                    {fogemDaComum === 1 ? "loja tem" : "lojas têm"} período
+                    diferente, marcado na linha.
+                  </>
+                )}
               </li>
             )}
-            {/* Só quando NÃO há o problema do mês: as duas frases juntas
-                dizem quase a mesma coisa, e o aviso vira parede de texto —
-                que foi exatamente a reclamação. */}
-            {janelasDesiguais && foraDoMes === 0 && (
-              <li>
-                Os relatórios cobrem períodos diferentes conforme a loja (de{" "}
-                <b>
-                  {janelasDesiguais.min} a {janelasDesiguais.max} dias
-                </b>
-                ), então a receita não é comparável entre elas.
-              </li>
-            )}
+
           </ul>
           <Link
             href="/importacao"
@@ -248,39 +268,27 @@ export function ListaLojas({
                         ))}
                       </>
                     )}
-                    {l.janelaIfood && (
-                      <span
-                        title={`Período do relatório de Cardápio do iFood: ${dm(l.janelaIfood.inicio)} a ${dm(l.janelaIfood.fim)}${l.janelaForaDoMes ? " — começa em outro mês, então a receita inclui dias fora deste mês" : ""}`}
-                        className={
-                          l.janelaForaDoMes
-                            ? "ml-0.5 rounded bg-amber-100 px-1 py-0.5 font-mono text-[9.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                            : "ml-0.5 rounded bg-muted px-1 py-0.5 font-mono text-[9.5px] text-muted-foreground"
-                        }
-                      >
-                        {dm(l.janelaIfood.inicio)}–{dm(l.janelaIfood.fim)}
-                      </span>
-                    )}
+                    {/* Só a exceção ganha carimbo — a janela da maioria está
+                        escrita no aviso, uma vez. */}
+                    {l.janelaIfood &&
+                      janelaComum &&
+                      (l.janelaIfood.inicio !==
+                        janelaComum.l.janelaIfood!.inicio ||
+                        l.janelaIfood.fim !== janelaComum.l.janelaIfood!.fim) && (
+                        <span
+                          title={`O relatório do iFood desta loja cobre ${dm(l.janelaIfood.inicio)} a ${dm(l.janelaIfood.fim)}, diferente das demais`}
+                          className="ml-0.5 rounded bg-amber-100 px-1 py-0.5 font-mono text-[9.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                        >
+                          {dm(l.janelaIfood.inicio)}–{dm(l.janelaIfood.fim)}
+                        </span>
+                      )}
                   </div>
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
                   {l.itens > 0 ? fmtNum(l.itens) : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
-                  {l.receita > 0 ? (
-                    <>
-                      {fmtBRL(l.receita)}
-                      {l.janelaForaDoMes && (
-                        <span
-                          className="block text-[10px] font-medium text-amber-600"
-                          title="Inclui dias de outro mês, pelo período do relatório do iFood"
-                        >
-                          inclui outro mês
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    "—"
-                  )}
+                  {l.receita > 0 ? fmtBRL(l.receita) : "—"}
                 </td>
                 <td className="px-3 py-2.5">
                   {l.receita > 0 ? (
