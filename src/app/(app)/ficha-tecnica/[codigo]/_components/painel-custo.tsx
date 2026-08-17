@@ -507,7 +507,19 @@ export function PainelCusto({
             painel, e o Marcus reclamou do tamanho (17/08/26). O que a curva ABC
             precisa responder aqui é "quais poucos itens carregam a loja"; a
             lista inteira já existe na aba ao lado. */}
-        <div className="mt-3 space-y-1.5">
+        {/* ⚠️ Quando encolhi a ABC de tabela para lista, os cabeçalhos foram
+            junto — e três números soltos por linha não se identificam sozinhos
+            (Marcus, 17/08/26). A lista fica enxuta, mas rotulada. */}
+        <div className="mt-3 flex items-center gap-2 border-b pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="flex-1">Item · plataforma</span>
+          <span className="shrink-0">Receita no mês</span>
+          <span className="w-10 shrink-0 text-right" title="Receita acumulada">
+            % acum.
+          </span>
+          <span className="w-12 shrink-0 text-right">Margem</span>
+        </div>
+
+        <div className="mt-1.5 space-y-1.5">
           {abc
             .filter((x) => x.classe === "A")
             .slice(0, 6)
@@ -549,8 +561,12 @@ export function PainelCusto({
         <div className="break-inside-avoid rounded-xl border bg-card p-4">
           <h2 className="text-sm font-bold">O que fazer com cada item</h2>
           <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            Cortado pela mediana desta loja: {fmtNum(Math.round(quadrantes.corteVol))}{" "}
-            unidades e {fmtPct(quadrantes.corteMar * 100, 1)} de margem.
+            Cada linha é um item <b>em uma plataforma</b> — o mesmo produto pode
+            cair em quadrantes diferentes, porque a comissão muda a margem. Os
+            números são <b>quantidade vendida</b> e <b>margem</b> (o que sobra do
+            preço depois da taxa e do custo). O corte é a mediana desta loja:{" "}
+            {fmtNum(Math.round(quadrantes.corteVol))} unidades e{" "}
+            {fmtPct(quadrantes.corteMar * 100, 1)} de margem.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Quadrante
@@ -587,8 +603,18 @@ export function PainelCusto({
           Quanto cada item deixou no mês
         </h2>
         <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-          Lucro por unidade × quantidade vendida. É o que o item somou de fato.
+          Lucro por unidade × quantidade vendida. É o que o item somou de fato —
+          não é a receita dele, é o que <b>sobrou</b> depois da taxa da
+          plataforma e do custo do insumo.
         </p>
+        {/* Cabeçalho do gráfico: sem ele o número da direita não se identifica
+            (Marcus, 17/08/26 — "não fala o que significa o valor e qual a
+            quantidade"). */}
+        <div className="mt-3 flex items-center gap-2 border-b pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="w-[38%] shrink-0">Item · plataforma</span>
+          <span className="flex-1">Vendidos</span>
+          <span className="w-24 shrink-0 text-right">Lucro no mês</span>
+        </div>
         <div className="mt-3 flex flex-col gap-1.5">
           {[...comCusto]
             .sort((a, b) => (b.lucroMes ?? 0) - (a.lucroMes ?? 0))
@@ -617,6 +643,11 @@ export function PainelCusto({
                         width: `${Math.max((Math.abs(v) / maiorLucroMes) * 100, 1.5)}%`,
                       }}
                     />
+                    {/* A quantidade dentro da própria barra: quem vê R$ 800 de
+                        lucro precisa saber se veio de 23 vendas ou de 230. */}
+                    <span className="absolute inset-y-0 left-1.5 flex items-center text-[10px] font-medium text-white mix-blend-luminosity">
+                      {fmtNum(i.qtd)} un
+                    </span>
                   </div>
                   <span
                     className={
@@ -718,8 +749,14 @@ function Quadrante({
                 {i.nomeItem}
               </span>
             </span>
+            {/* "23 un · 70%" não dizia o que era o 70% (Marcus, 17/08/26).
+                Agora a unidade vai colada no número. */}
             <span className="shrink-0 tabular-nums text-muted-foreground">
-              {fmtNum(i.qtd)} un · {fmtPct((i.lucroPct ?? 0) * 100, 0)}
+              {fmtNum(i.qtd)} un ·{" "}
+              <span className="font-semibold text-foreground">
+                {fmtPct((i.lucroPct ?? 0) * 100, 0)}
+              </span>{" "}
+              margem
             </span>
           </li>
         ))}

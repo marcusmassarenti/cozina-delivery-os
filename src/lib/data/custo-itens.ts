@@ -39,6 +39,29 @@ export const PLATAFORMAS_CUSTO = [
 ] as const
 export type PlataformaCusto = (typeof PLATAFORMAS_CUSTO)[number]
 
+/**
+ * A chave que casa uma linha de `item_custos` com uma linha de venda.
+ *
+ * ── POR QUE ISSO É UMA FUNÇÃO, E NÃO UM TEMPLATE SOLTO (17/08/26) ────────
+ * Era. E o separador escrito à mão era um byte NUL invisível — que o editor
+ * mostra como espaço. Quando acrescentei os mapas de preço de venda e de
+ * categoria, digitei um espaço de verdade. Os três mapas ficaram cheios, mas
+ * dois deles guardavam numa chave que ninguém procurava: a tela mostrava o
+ * custo e deixava categoria e preço em branco, sem erro em lugar nenhum.
+ *
+ * Uma função elimina a classe inteira do problema: não dá pra "digitar o
+ * separador errado" num lugar só. O `\u0000` está escrito como escape de
+ * propósito — byte invisível em código-fonte também fazia o `grep` tratar o
+ * arquivo como binário e as buscas literais falharem.
+ *
+ * O NUL continua sendo a escolha certa de separador: é o único caractere que
+ * não pode aparecer num nome de item, então "A" + "B C" e "A B" + "C" nunca
+ * colidem.
+ */
+export function chaveItem(platform: string, nomeItem: string): string {
+  return `${platform}\u0000${nomeItem}`
+}
+
 export type TaxaPlataforma = {
   /** Só a comissão ÷ bruto. Não é o que se aplica: serve pra tela quebrar. */
   comissaoPct: number
@@ -261,14 +284,14 @@ export async function getCustoItens(
     // foi assim que classificar a categoria de um item o fez aparecer com
     // custo zero — logo, com lucro integral. Ver migration 0215.
     if (c.custo !== null) {
-      mapaCusto.set(`${c.platform} ${c.nome_item}`, Number(c.custo))
+      mapaCusto.set(chaveItem(c.platform, c.nome_item), Number(c.custo))
     }
     // Mesma regra do custo (0217): zero é preço válido, NULL é não-preenchido.
     if (c.preco_venda !== null) {
-      mapaPrecoVenda.set(`${c.platform} ${c.nome_item}`, Number(c.preco_venda))
+      mapaPrecoVenda.set(chaveItem(c.platform, c.nome_item), Number(c.preco_venda))
     }
     if (c.categoria) {
-      mapaCategoria.set(`${c.platform} ${c.nome_item}`, c.categoria)
+      mapaCategoria.set(chaveItem(c.platform, c.nome_item), c.categoria)
     }
   }
 
@@ -289,7 +312,7 @@ export async function getCustoItens(
     const taxaPct = taxas[platform]?.cargaTotalPct ?? 0
     const taxaValor = precoMedio * taxaPct
 
-    const chave = `${platform} ${v.nome_item}`
+    const chave = chaveItem(platform, v.nome_item)
     const custo = mapaCusto.has(chave) ? (mapaCusto.get(chave) as number) : null
     const precoVenda = mapaPrecoVenda.has(chave)
       ? (mapaPrecoVenda.get(chave) as number)
