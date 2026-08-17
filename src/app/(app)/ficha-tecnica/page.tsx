@@ -106,7 +106,10 @@ export default async function FichaTecnicaPage({
   const sp = await searchParams
   const { range: periodRange, year, month } = readPeriod(sp)
 
-  const units = await getVisibleUnits()
+  // ⚠️ SÓ AS ATIVAS. Loja encerrada não tem custo a preencher, e ela poluía a
+  // lista e o denominador de "X de Y lojas prontas" — dava a impressão de
+  // trabalho pendente que não existe.
+  const units = (await getVisibleUnits()).filter((u) => u.active)
   const [lojas, periods, categorias] = await Promise.all([
     getLojasCusto(units, year, month),
     getAvailablePeriods(),
