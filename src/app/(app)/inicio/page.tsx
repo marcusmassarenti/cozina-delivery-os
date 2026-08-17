@@ -78,6 +78,7 @@ import {
   getNetworkAvaliacoesForMonth,
   getNetworkCancelamentosPorMotivo,
   getNetworkFunnelForMonth,
+  getJanelasRankingRede,
   getNetworkTopItemsForMonth,
 } from "@/lib/data/ifood-imported"
 import {
@@ -401,6 +402,9 @@ export default async function Home({
         500,
         scopeIds ?? activeUnitIds,
       ),
+      // As janelas que entraram no top do iFood — pra o card poder explicar
+      // que normalizou por dia, em vez de normalizar calado.
+      getJanelasRankingRede(year, month, scopeIds),
     ])
 
   // Fase 2a: resumos por unidade + cobertura + entrega.
@@ -531,6 +535,7 @@ export default async function Home({
     networkAvaliacoesKeeta,
     networkAvaliacoesCw,
     networkTopItemsCw,
+    janelaRankingIfood,
   ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
   cron.marca("rede")
 
@@ -1638,7 +1643,10 @@ export default async function Home({
                             nomeItem: it.nomeItem,
                             qtdVendida: it.qtdVendida,
                             valorTotal: it.valorTotal,
+                            qtdPorDia: it.qtdPorDia,
+                            valorPorDia: it.valorPorDia,
                           }))}
+                          janela={janelaRankingIfood}
                         />
                       ) : (
                         <EmptyMsg text="Sem Cardápio iFood neste mês" />
@@ -2715,19 +2723,51 @@ function TagsList({
 
 /** Lista compartilhada de top produtos (iFood/99/Keeta). Recebe a lista
  *  COMPLETA (pra calcular % do total) e exibe só o pódio dos 5. */
+/**
+ * Top produtos da rede.
+ *
+ * ── POR QUE O RANKING DO iFOOD É POR DIA (Marcus, 17/08/26) ───────────────
+ * O relatório de Cardápio do iFood cobre um período escolhido por quem exporta.
+ * Em agosto/26 tinha loja com 7 dias e loja com 60 na mesma base — somar os
+ * totais fazia o ranking medir tamanho de janela em vez de venda. Quando vêm as
+ * taxas diárias (`valorPorDia`), o card passa a ordenar e a calcular os % por
+ * elas, e diz isso na cara: um ranking normalizado em silêncio engana igual a
+ * um ranking distorcido em silêncio.
+ *
+ * As outras plataformas não têm esse problema — o dado delas já é diário e já
+ * nasce recortado no mês — então continuam no total e sem a nota.
+ */
 function TopItemsList({
   items,
+  janela,
 }: {
-  items: Array<{ nomeItem: string; qtdVendida: number; valorTotal: number }>
+  items: Array<{
+    nomeItem: string
+    qtdVendida: number
+    valorTotal: number
+    qtdPorDia?: number
+    valorPorDia?: number
+  }>
+  janela?: { diasMin: number; diasMax: number; lojas: number } | null
 }) {
-  const totalGeral = items.reduce((s, i) => s + i.valorTotal, 0)
-  const top5 = [...items]
-    .sort((a, b) => b.valorTotal - a.valorTotal)
-    .slice(0, 5)
-  const somaTop5 = top5.reduce((s, i) => s + i.valorTotal, 0)
+  // Só normaliza se a camada de dados mandou a taxa. Sem ela, total mesmo.
+  const porDia = items.some((i) => i.valorPorDia != null)
+  const base = (i: (typeof items)[number]) =>
+    porDia ? (i.valorPorDia ?? 0) : i.valorTotal
+  const qtdBase = (i: (typeof items)[number]) =>
+    porDia ? (i.qtdPorDia ?? 0) : i.qtdVendida
+
+  const totalGeral = items.reduce((s, i) => s + base(i), 0)
+  const top5 = [...items].sort((a, b) => base(b) - base(a)).slice(0, 5)
+  const somaTop5 = top5.reduce((s, i) => s + base(i), 0)
   const pctTop5 = totalGeral > 0 ? Math.round((somaTop5 / totalGeral) * 100) : 0
   const pct = (v: number) =>
     totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0
+
+  // Janelas iguais = nada a revelar. A nota só aparece quando a normalização
+  // realmente mudou alguma coisa.
+  const janelaDesigual =
+    porDia && !!janela && janela.diasMax > janela.diasMin && janela.lojas > 1
 
   return (
     <div>
@@ -2745,6 +2785,15 @@ function TopItemsList({
           </span>
         </div>
       </div>
+
+      {janelaDesigual && (
+        <p className="mb-3 text-[10px] leading-snug text-muted-foreground">
+          Comparação por dia: as {janela.lojas} lojas exportaram o relatório de
+          Cardápio com períodos diferentes ({janela.diasMin} a {janela.diasMax}{" "}
+          dias), então somar os totais colocaria quem exportou período maior na
+          frente.
+        </p>
+      )}
 
       {/* Pódio numerado: top 3 com badge dourado; % de cada no total à direita. */}
       <div className="space-y-2">
@@ -2767,14 +2816,19 @@ function TopItemsList({
             <div className="shrink-0 text-right leading-tight">
               <span className="flex items-baseline justify-end gap-1">
                 <span className="text-[11px] font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                  {fmtBRLShort(it.valorTotal)}
+                  {fmtBRLShort(base(it))}
+                  {porDia && (
+                    <span className="font-normal text-muted-foreground">
+                      /dia
+                    </span>
+                  )}
                 </span>
                 <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {pct(it.valorTotal)}%
+                  {pct(base(it))}%
                 </span>
               </span>
               <span className="block text-[10px] tabular-nums text-muted-foreground">
-                {fmtNum(it.qtdVendida)} un
+                {fmtNum(Math.round(qtdBase(it)))} un{porDia ? "/dia" : ""}
               </span>
             </div>
           </div>

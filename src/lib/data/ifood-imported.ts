@@ -53,6 +53,30 @@ export type ItemRanking = {
   valorTotal: number
   conversaoPctMedia: number
   qtdComPromocao: number
+  /**
+   * Venda por DIA — a base de comparação do ranking da rede.
+   *
+   * ── POR QUE EXISTE (Marcus, 17/08/26) ───────────────────────────────────
+   * O relatório de Cardápio do iFood é um snapshot de um período que QUEM
+   * EXPORTA escolhe. Em agosto/26 a base tinha loja com janela de 7 dias e
+   * loja com janela de 60. Somar os dois totais no mesmo ranking media tamanho
+   * de janela, não venda: a Brooklin (60 dias) valia 19,8% do ranking da rede
+   * e a JK (9 dias), 3,9% — sem que uma vendesse 5x a outra.
+   *
+   * Dividir a contribuição de cada loja pelos dias da própria janela põe todo
+   * mundo na mesma régua sem depender de ninguém reexportar a planilha certa.
+   * Os campos brutos (`qtdVendida` / `valorTotal`) continuam sendo a soma crua
+   * do que veio — servem de referência, mas NÃO são comparáveis entre lojas.
+   */
+  qtdPorDia: number
+  valorPorDia: number
+}
+
+/** Janelas que entraram num ranking de rede — pra tela poder revelar. */
+export type JanelaRanking = {
+  diasMin: number
+  diasMax: number
+  lojas: number
 }
 
 export type ComplementoRanking = {
@@ -868,6 +892,25 @@ export function apenasJanelaVigente<
   })
 }
 
+/**
+ * Dias cobertos por uma janela do relatório de Cardápio, inclusive nas duas
+ * pontas (01/08 a 01/08 é 1 dia, não 0).
+ *
+ * Devolve 1 no mínimo — é o denominador da normalização e um zero aqui viraria
+ * Infinity no ranking. Datas vêm do Postgres como 'YYYY-MM-DD', então dá pra
+ * usar UTC direto sem cair no fuso.
+ */
+export function diasDaJanela(
+  periodStart: string | null | undefined,
+  periodEnd: string,
+): number {
+  if (!periodStart) return 1
+  const ini = Date.parse(`${periodStart}T00:00:00Z`)
+  const fim = Date.parse(`${periodEnd}T00:00:00Z`)
+  if (!Number.isFinite(ini) || !Number.isFinite(fim)) return 1
+  return Math.max(1, Math.round((fim - ini) / 86_400_000) + 1)
+}
+
 export async function getItemsRankingForMonth(
   unitId: string,
   year: number,
@@ -887,6 +930,7 @@ export async function getItemsRankingForMonth(
     qtd_vendida: number | null
     qtd_com_promocao: number | null
     valor_total: number | string | null
+    period_start: string | null
     period_end: string
     imported_at: string | null
   }>(
@@ -894,7 +938,7 @@ export async function getItemsRankingForMonth(
       admin
         .from("ifood_cardapio_periodo_items")
         .select(
-          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total, period_end, imported_at",
+          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total, period_start, period_end, imported_at",
         )
         .eq("unit_id", unitId)
         .gte("period_end", start)
@@ -907,6 +951,13 @@ export async function getItemsRankingForMonth(
   // Só a exportação vigente — ver apenasJanelaVigente.
   const itensVigentes = apenasJanelaVigente(periodoItems ?? [])
   if (itensVigentes.length > 0) {
+    // Dentro de UMA loja todos os itens vieram da mesma janela, então aqui a
+    // normalização não muda a ordem — só deixa a taxa disponível pra quem
+    // quiser comparar essa loja com outra.
+    const dias = diasDaJanela(
+      itensVigentes[0].period_start,
+      itensVigentes[0].period_end,
+    )
     return itensVigentes
       .map((r) => ({
         nomeItem: r.nome_item,
@@ -917,6 +968,8 @@ export async function getItemsRankingForMonth(
         valorTotal: Number(r.valor_total) || 0,
         conversaoPctMedia: Number(r.conversao_pct ?? 0),
         qtdComPromocao: r.qtd_com_promocao || 0,
+        qtdPorDia: (r.qtd_vendida || 0) / dias,
+        valorPorDia: (Number(r.valor_total) || 0) / dias,
       }))
       .sort((a, b) => b.valorTotal - a.valorTotal)
       .slice(0, limit)
@@ -924,6 +977,7 @@ export async function getItemsRankingForMonth(
 
   // Fallback: agrega do DIÁRIO
   const data = await fetchAllRows<{
+    date: string
     nome_item: string
     categoria: string | null
     visitas: number | null
@@ -937,7 +991,7 @@ export async function getItemsRankingForMonth(
       admin
         .from("ifood_daily_items")
         .select(
-          "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+          "date, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
         )
         .eq("unit_id", unitId)
         .gte("date", start)
@@ -947,6 +1001,8 @@ export async function getItemsRankingForMonth(
         .range(from, to),
     "ifood_daily_items unidade",
   )
+
+  const diasComDado = Math.max(1, new Set(data.map((r) => r.date)).size)
 
   // Agrega por nome_item
   const acc = new Map<string, ItemRanking & { _convSum: number; _convN: number }>()
@@ -960,6 +1016,8 @@ export async function getItemsRankingForMonth(
       valorTotal: 0,
       conversaoPctMedia: 0,
       qtdComPromocao: 0,
+      qtdPorDia: 0,
+      valorPorDia: 0,
       _convSum: 0,
       _convN: 0,
     }
@@ -968,6 +1026,8 @@ export async function getItemsRankingForMonth(
     cur.visitas += r.visitas || 0
     cur.valorTotal += Number(r.valor_total) || 0
     cur.qtdComPromocao += r.qtd_com_promocao || 0
+    cur.qtdPorDia += (r.qtd_vendida || 0) / diasComDado
+    cur.valorPorDia += (Number(r.valor_total) || 0) / diasComDado
     if (r.conversao_pct != null) {
       cur._convSum += Number(r.conversao_pct)
       cur._convN += 1
@@ -1103,13 +1163,14 @@ export async function getNetworkTopItemsForMonth(
     qtd_vendida: number | null
     qtd_com_promocao: number | null
     valor_total: number | string | null
+    period_start: string | null
     period_end: string
     imported_at: string | null
   }>((from, to) => {
     let qPer = admin
       .from("ifood_cardapio_periodo_items")
       .select(
-        "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total, period_end, imported_at",
+        "unit_id, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total, period_start, period_end, imported_at",
       )
       .gte("period_end", start)
       .lte("period_end", end)
@@ -1125,11 +1186,21 @@ export async function getNetworkTopItemsForMonth(
   // no ranking com até 3x o faturamento real do produto.
   const itensRedeVigentes = apenasJanelaVigente(periodoItems ?? [])
   if (itensRedeVigentes.length > 0) {
+    // Dias de cada loja — o denominador da normalização. Uma loja tem UMA
+    // janela vigente, então basta o primeiro registro dela.
+    const diasPorLoja = new Map<string, number>()
+    for (const r of itensRedeVigentes) {
+      if (!diasPorLoja.has(r.unit_id)) {
+        diasPorLoja.set(r.unit_id, diasDaJanela(r.period_start, r.period_end))
+      }
+    }
+
     const acc = new Map<
       string,
       ItemRanking & { _convSum: number; _convN: number }
     >()
     for (const r of itensRedeVigentes) {
+      const dias = diasPorLoja.get(r.unit_id) ?? 1
       const cur = acc.get(r.nome_item) ?? {
         nomeItem: r.nome_item,
         categoria: r.categoria,
@@ -1139,6 +1210,8 @@ export async function getNetworkTopItemsForMonth(
         valorTotal: 0,
         conversaoPctMedia: 0,
         qtdComPromocao: 0,
+        qtdPorDia: 0,
+        valorPorDia: 0,
         _convSum: 0,
         _convN: 0,
       }
@@ -1147,6 +1220,9 @@ export async function getNetworkTopItemsForMonth(
       cur.visitas += r.visitas || 0
       cur.valorTotal += Number(r.valor_total) || 0
       cur.qtdComPromocao += r.qtd_com_promocao || 0
+      // A contribuição de cada loja entra pela TAXA dela, não pelo total.
+      cur.qtdPorDia += (r.qtd_vendida || 0) / dias
+      cur.valorPorDia += (Number(r.valor_total) || 0) / dias
       if (r.conversao_pct != null) {
         cur._convSum += Number(r.conversao_pct)
         cur._convN += 1
@@ -1158,12 +1234,14 @@ export async function getNetworkTopItemsForMonth(
         ...rest,
         conversaoPctMedia: _convN > 0 ? _convSum / _convN : 0,
       }))
-      .sort((a, b) => b.valorTotal - a.valorTotal)
+      .sort((a, b) => b.valorPorDia - a.valorPorDia)
       .slice(0, limit)
   }
 
   // Fallback: agrega do DIÁRIO da rede inteira
   const data = await fetchAllRows<{
+    unit_id: string
+    date: string
     nome_item: string
     categoria: string | null
     visitas: number | null
@@ -1176,7 +1254,7 @@ export async function getNetworkTopItemsForMonth(
     let qDay = admin
       .from("ifood_daily_items")
       .select(
-        "nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
+        "unit_id, date, nome_item, categoria, visitas, pedidos, conversao_pct, qtd_vendida, qtd_com_promocao, valor_total",
       )
       .gte("date", start)
       .lte("date", end)
@@ -1188,11 +1266,22 @@ export async function getNetworkTopItemsForMonth(
     return qDay
   }, "ifood_daily_items rede")
 
+  // Aqui a janela não é escolhida na exportação, mas ainda varia: uma loja pode
+  // ter 30 dias de diário e a vizinha 4. Mesma régua, denominador diferente —
+  // são os dias que a loja realmente reportou.
+  const diasPorLoja = new Map<string, Set<string>>()
+  for (const r of data) {
+    const s = diasPorLoja.get(r.unit_id) ?? new Set<string>()
+    s.add(r.date)
+    diasPorLoja.set(r.unit_id, s)
+  }
+
   const acc = new Map<
     string,
     ItemRanking & { _convSum: number; _convN: number }
   >()
   for (const r of data) {
+    const dias = Math.max(1, diasPorLoja.get(r.unit_id)?.size ?? 1)
     const cur = acc.get(r.nome_item) ?? {
       nomeItem: r.nome_item,
       categoria: r.categoria,
@@ -1202,6 +1291,8 @@ export async function getNetworkTopItemsForMonth(
       valorTotal: 0,
       conversaoPctMedia: 0,
       qtdComPromocao: 0,
+      qtdPorDia: 0,
+      valorPorDia: 0,
       _convSum: 0,
       _convN: 0,
     }
@@ -1210,6 +1301,8 @@ export async function getNetworkTopItemsForMonth(
     cur.visitas += r.visitas || 0
     cur.valorTotal += Number(r.valor_total) || 0
     cur.qtdComPromocao += r.qtd_com_promocao || 0
+    cur.qtdPorDia += (r.qtd_vendida || 0) / dias
+    cur.valorPorDia += (Number(r.valor_total) || 0) / dias
     if (r.conversao_pct != null) {
       cur._convSum += Number(r.conversao_pct)
       cur._convN += 1
@@ -1221,8 +1314,55 @@ export async function getNetworkTopItemsForMonth(
       ...rest,
       conversaoPctMedia: _convN > 0 ? _convSum / _convN : 0,
     }))
-    .sort((a, b) => b.valorTotal - a.valorTotal)
+    .sort((a, b) => b.valorPorDia - a.valorPorDia)
     .slice(0, limit)
+}
+
+/**
+ * As janelas que entraram no ranking do mês — pra tela poder dizer ao usuário
+ * que a comparação foi normalizada, e por quê.
+ *
+ * Ranking silenciosamente normalizado é tão ruim quanto ranking silenciosamente
+ * distorcido: em ambos o número muda sem o usuário saber. Se as janelas forem
+ * todas iguais, não há o que revelar e a tela não mostra nada.
+ */
+export async function getJanelasRankingRede(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+): Promise<JanelaRanking | null> {
+  const admin = createAdminClient()
+  const { start, end } = monthRange(year, month)
+
+  let q = admin
+    .from("ifood_cardapio_periodo_items")
+    .select("unit_id, period_start, period_end, imported_at")
+    .gte("period_end", start)
+    .lte("period_end", end)
+    .order("id")
+    .limit(20_000)
+  if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
+
+  const { data, error } = await q
+  if (error) {
+    console.error("[getJanelasRankingRede]", error.message)
+    return null
+  }
+
+  const dias = new Map<string, number>()
+  for (const r of apenasJanelaVigente(data ?? [])) {
+    if (!dias.has(r.unit_id)) {
+      dias.set(r.unit_id, diasDaJanela(r.period_start, r.period_end))
+    }
+  }
+  if (dias.size === 0) return null
+
+  const vs = Array.from(dias.values())
+  return {
+    diasMin: Math.min(...vs),
+    diasMax: Math.max(...vs),
+    lojas: dias.size,
+  }
 }
 
 // ─── Financeiro ──────────────────────────────────────────────────────

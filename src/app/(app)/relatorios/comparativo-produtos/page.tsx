@@ -9,8 +9,11 @@ import { LojaFilter } from "@/components/shared/loja-filter"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
-import { getAvailablePeriods } from "@/lib/data/ifood-imported"
-import { getTopProdutos } from "@/lib/data/produtos"
+import {
+  getAvailablePeriods,
+  getJanelasRankingRede,
+} from "@/lib/data/ifood-imported"
+import { getTopProdutos, type ProdutoRanking } from "@/lib/data/produtos"
 import { getVisibleUnits } from "@/lib/data/units"
 import { assertCanView } from "@/lib/auth/permissions"
 import { fmtBRL, fmtNum } from "@/lib/format"
@@ -64,16 +67,32 @@ export default async function ComparativoProdutosPage({
       ? allUnits.filter((u) => lojaCodes.includes(u.code))
       : allUnits
 
-  const [perUnit, availablePeriods] = await Promise.all([
+  const [perUnit, availablePeriods, janelaIfood] = await Promise.all([
     Promise.all(
       scoped.map((u) => getTopProdutos(plataforma, [u.id], year, month)),
     ),
     getAvailablePeriods(),
+    plataforma === "ifood"
+      ? getJanelasRankingRede(
+          year,
+          month,
+          scoped.map((u) => u.id),
+        )
+      : Promise.resolve(null),
   ])
 
-  // pivot: produto → { porLoja: Map<code, valor>, total }
-  const val = (r: { qtdVendida: number; valorTotal: number }) =>
-    metrica === "valor" ? r.valorTotal : r.qtdVendida
+  // ── Comparar loja com loja exige a mesma régua ────────────────────────────
+  // Esta tela é a que mais sofria com a janela do relatório de Cardápio: cada
+  // coluna é uma loja, e loja que exportou 60 dias aparecia com o dobro da que
+  // exportou 30 sem vender mais nada. Quando a camada de dados manda a taxa
+  // diária (só o iFood precisa), o pivô é montado por ela.
+  const porDia = perUnit.some((rows) => rows.some((r) => r.valorPorDia != null))
+  const val = (r: ProdutoRanking) =>
+    metrica === "valor"
+      ? (r.valorPorDia ?? r.valorTotal)
+      : (r.qtdPorDia ?? r.qtdVendida)
+  const janelaDesigual =
+    porDia && !!janelaIfood && janelaIfood.diasMax > janelaIfood.diasMin
   const prods = new Map<string, { porLoja: Map<string, number>; total: number }>()
   scoped.forEach((u, i) => {
     for (const r of perUnit[i]) {
@@ -90,7 +109,11 @@ export default async function ComparativoProdutosPage({
     .slice(0, TOP_N)
 
   const fmt = (v: number) =>
-    v > 0 ? (metrica === "valor" ? fmtBRL(v) : fmtNum(v)) : null
+    v > 0
+      ? metrica === "valor"
+        ? `${fmtBRL(v)}${porDia ? "/dia" : ""}`
+        : `${fmtNum(Math.round(v))}${porDia ? "/dia" : ""}`
+      : null
 
   const pill = (active: boolean) =>
     `rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
@@ -124,7 +147,17 @@ export default async function ComparativoProdutosPage({
             {isFullMonth
               ? formatRangeLabel(periodRange)
               : formatPeriodLabel({ year, month })}
+            {porDia && " · venda por dia"}
           </p>
+          {janelaDesigual && (
+            <p className="mt-1 max-w-xl text-xs leading-snug text-muted-foreground">
+              As lojas exportaram o relatório de Cardápio com períodos
+              diferentes ({janelaIfood.diasMin} a {janelaIfood.diasMax} dias),
+              então a tabela compara <strong>venda por dia</strong> — no total
+              cru, quem exportou período maior apareceria na frente sem ter
+              vendido mais.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ExportPdfButton />

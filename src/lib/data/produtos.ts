@@ -15,6 +15,16 @@ export type ProdutoRanking = {
   nomeItem: string
   qtdVendida: number
   valorTotal: number
+  /**
+   * Venda por dia — só o iFood preenche, e só porque só ele precisa.
+   *
+   * O relatório de Cardápio do iFood cobre um período escolhido na exportação
+   * (a base tinha de 7 a 60 dias em agosto/26), então total não compara entre
+   * lojas. 99 / Keeta / Cardápio Web vêm de tabela diária já recortada no mês —
+   * ali total já é comparável e estes campos ficam indefinidos de propósito.
+   */
+  qtdPorDia?: number
+  valorPorDia?: number
 }
 
 export type ProdutoMetric = "qtd" | "valor"
@@ -43,6 +53,8 @@ export async function getTopProdutos(
       nomeItem: r.nomeItem,
       qtdVendida: r.qtdVendida,
       valorTotal: r.valorTotal,
+      qtdPorDia: r.qtdPorDia,
+      valorPorDia: r.valorPorDia,
     }))
   }
   if (platform === "99food") {

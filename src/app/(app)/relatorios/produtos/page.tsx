@@ -30,11 +30,23 @@ function keyToYM(key: string): { year: number; month: number } {
   const [y, m] = key.split("-").map(Number)
   return { year: y, month: m }
 }
+/**
+ * Valor de comparação do produto.
+ *
+ * Prefere a TAXA DIÁRIA quando ela existe (só o iFood manda — ver
+ * ProdutoRanking). Nesta tela isso pesa duas vezes: o ranking soma lojas com
+ * janelas de exportação diferentes, e o modo "comparar" ainda põe mês contra
+ * mês. Um agosto exportado com 9 dias contra um julho de 31 apareceria como
+ * queda de 70% sem ninguém ter vendido menos.
+ */
 function valOf(p: ProdutoRanking, metrica: string): number {
-  return metrica === "valor" ? p.valorTotal : p.qtdVendida
+  return metrica === "valor"
+    ? (p.valorPorDia ?? p.valorTotal)
+    : (p.qtdPorDia ?? p.qtdVendida)
 }
-function fmtVal(v: number, metrica: string): string {
-  return metrica === "valor" ? fmtBRL(v) : fmtNum(v)
+function fmtVal(v: number, metrica: string, porDia = false): string {
+  const n = metrica === "valor" ? fmtBRL(v) : fmtNum(Math.round(v))
+  return porDia ? `${n}/dia` : n
 }
 
 export default async function ProdutosPage({
@@ -101,6 +113,9 @@ export default async function ProdutosPage({
       ? getTopProdutos(plataforma, selectedIds, ymB.year, ymB.month)
       : Promise.resolve([] as ProdutoRanking[]),
   ])
+
+  // Só o iFood manda taxa diária — e só quando tem relatório de Cardápio.
+  const porDia = [...prodA, ...prodB].some((p) => p.valorPorDia != null)
 
   const filtersInitial = {
     plataforma,
@@ -175,7 +190,16 @@ export default async function ProdutosPage({
             {selectedUnits.length === allUnits.length
               ? "rede toda"
               : `${selectedUnits.length} loja${selectedUnits.length === 1 ? "" : "s"}`}
+            {porDia && " · venda por dia"}
           </p>
+          {porDia && (
+            <p className="mt-1 max-w-xl text-xs leading-snug text-muted-foreground">
+              O relatório de Cardápio do iFood cobre o período escolhido na
+              exportação, e ele varia de loja pra loja e de mês pra mês — por
+              isso os números aqui são <strong>por dia</strong>, e não o total
+              do período.
+            </p>
+          )}
         </div>
         <div data-print="hide">
           <ExportPdfButton />
@@ -203,6 +227,7 @@ export default async function ProdutosPage({
             title="Em alta"
             up
             metrica={metrica}
+            porDia={porDia}
             labelA={formatPeriodLabel(keyToYM(mesA))}
             labelB={formatPeriodLabel(keyToYM(mesB))}
             rows={emAlta}
@@ -211,6 +236,7 @@ export default async function ProdutosPage({
             title="Em queda"
             up={false}
             metrica={metrica}
+            porDia={porDia}
             labelA={formatPeriodLabel(keyToYM(mesA))}
             labelB={formatPeriodLabel(keyToYM(mesB))}
             rows={emQueda}
@@ -254,7 +280,7 @@ export default async function ProdutosPage({
                       </div>
                     </div>
                     <span className="shrink-0 text-sm font-semibold tabular-nums">
-                      {fmtVal(v, metrica)}
+                      {fmtVal(v, metrica, porDia)}
                     </span>
                   </div>
                 )
@@ -271,6 +297,7 @@ function MoversTable({
   title,
   up,
   metrica,
+  porDia,
   labelA,
   labelB,
   rows,
@@ -278,6 +305,7 @@ function MoversTable({
   title: string
   up: boolean
   metrica: string
+  porDia?: boolean
   labelA: string
   labelB: string
   rows: { nome: string; a: number; b: number; d: number | null }[]
@@ -309,8 +337,8 @@ function MoversTable({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{r.nome}</p>
                 <p className="text-[11px] tabular-nums text-muted-foreground">
-                  {metrica === "valor" ? fmtBRL(r.b) : fmtNum(r.b)} →{" "}
-                  {metrica === "valor" ? fmtBRL(r.a) : fmtNum(r.a)}
+                  {fmtVal(r.b, metrica, porDia)} →{" "}
+                  {fmtVal(r.a, metrica, porDia)}
                 </p>
               </div>
               <span
