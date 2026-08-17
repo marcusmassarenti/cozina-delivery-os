@@ -513,6 +513,38 @@ export function BancadaCusto({
     }
   }, [itensExibidos, otimista, resumo])
 
+  /**
+   * Margem média de cada plataforma, no topo da tela.
+   *
+   * ── POR QUE NO CABEÇALHO E NÃO SÓ NO PAINEL (Marcus, 17/08/26) ───────────
+   * Quem está preenchendo custo não troca de aba pra ver o efeito. E o efeito
+   * mais forte não é por item, é por canal: o mesmo hambúrguer sai com 69% de
+   * margem no Cardápio Web e 30% no iFood, porque a comissão come a diferença.
+   * Ver isso enquanto digita é o que faz a pessoa entender pra que serve o
+   * trabalho que está fazendo.
+   *
+   * Sai do overlay, não do servidor — assim mexe junto com o que foi digitado
+   * agora, igual ao resto do cabeçalho.
+   */
+  const margemPorPlataforma = React.useMemo(() => {
+    const acc = new Map<string, { receita: number; custo: number; taxa: number }>()
+    for (const i of itensExibidos) {
+      if (i.custo === null || i.receita <= 0) continue
+      const a = acc.get(i.platform) ?? { receita: 0, custo: 0, taxa: 0 }
+      a.receita += i.receita
+      a.custo += i.custo * i.qtd
+      a.taxa += i.taxaValor * i.qtd
+      acc.set(i.platform, a)
+    }
+    return [...acc.entries()]
+      .map(([platform, a]) => ({
+        platform,
+        receita: a.receita,
+        margemPct: (a.receita - a.custo - a.taxa) / a.receita,
+      }))
+      .sort((a, b) => b.receita - a.receita)
+  }, [itensExibidos])
+
   const pct = Math.round(vivo.cobertura * 100)
 
   return (
@@ -555,6 +587,38 @@ export function BancadaCusto({
           />
           <Kpi rot="Itens vendidos" val={fmtNum(resumo.itens.length)} />
         </div>
+
+        {margemPorPlataforma.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Margem média por plataforma
+            </span>
+            {margemPorPlataforma.map((p) => (
+              <span
+                key={p.platform}
+                className="flex items-center gap-1.5 text-[13px]"
+                title={`${fmtBRL(p.receita)} analisados`}
+              >
+                <PlatformLogo
+                  platform={p.platform as React.ComponentProps<typeof PlatformLogo>["platform"]}
+                  size="sm"
+                />
+                <span
+                  className={
+                    p.margemPct >= 0
+                      ? "font-bold tabular-nums text-emerald-600"
+                      : "font-bold tabular-nums text-rose-600"
+                  }
+                >
+                  {fmtPct(p.margemPct * 100, 1)}
+                </span>
+              </span>
+            ))}
+            <span className="text-[11px] text-muted-foreground">
+              o que sobra do preço depois da taxa da plataforma e do custo
+            </span>
+          </div>
+        )}
         {resumo.janelaIfood && (
           <p
             className={
@@ -874,6 +938,12 @@ export function BancadaCusto({
                         {salvandoPreco !== k && i.precoVenda !== null && (
                           <Check className="size-3 text-emerald-600" />
                         )}
+                      {/* O "R$" fica dentro do campo, à esquerda: sem ele a
+                          coluna virava um número solto do lado de outro
+                          número solto (Marcus, 17/08/26). */}
+                      <span className="pointer-events-none -mr-1 text-[11px] text-muted-foreground">
+                        R$
+                      </span>
                       <input
                         inputMode="decimal"
                         value={
@@ -942,6 +1012,9 @@ export function BancadaCusto({
                         {salvando !== k && i.custo !== null && (
                           <Check className="size-3 text-emerald-600" />
                         )}
+                        <span className="pointer-events-none -mr-1 text-[11px] text-muted-foreground">
+                          R$
+                        </span>
                         <input
                           data-custo
                           inputMode="decimal"
