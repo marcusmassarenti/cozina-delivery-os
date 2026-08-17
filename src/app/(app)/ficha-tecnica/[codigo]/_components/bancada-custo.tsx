@@ -286,6 +286,18 @@ export function BancadaCusto({
           />
           <Kpi rot="Itens vendidos" val={fmtNum(resumo.itens.length)} />
         </div>
+        {resumo.janelaIfood && (
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            O iFood desta loja está mostrando{" "}
+            <b>
+              {resumo.janelaIfood.dias}{" "}
+              {resumo.janelaIfood.dias === 1 ? "dia" : "dias"}
+            </b>{" "}
+            ({dataBr(resumo.janelaIfood.inicio)} a{" "}
+            {dataBr(resumo.janelaIfood.fim)}) — é o período que foi escolhido ao
+            exportar o relatório de Cardápio, e não o mês inteiro.
+          </p>
+        )}
         {resumo.cobertura < 0.999 && resumo.receitaTotal > 0 && (
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
             O lucro acima soma <b>só as linhas que já têm custo</b> — hoje {pct}%
@@ -750,4 +762,10 @@ function semelhantes(base: ItemCusto, todos: ItemCusto[]): ItemCusto[] {
     if (b.length >= 12 && a.includes(b)) return true
     return false
   })
+}
+
+/** Dia/mês curto — o ano já está no seletor de período do topo. */
+function dataBr(iso: string): string {
+  const [, m, d] = iso.slice(0, 10).split("-")
+  return `${d}/${m}`
 }

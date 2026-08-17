@@ -54,6 +54,22 @@ export function ListaLojas({
    * Vira faixa no topo porque é a diferença entre "a tela quebrou" e "falta
    * subir um relatório" — e sem ela a primeira leitura é sempre a errada.
    */
+  /**
+   * Janelas de iFood de tamanhos diferentes na mesma tela.
+   *
+   * ⚠️ Isto é o que fazia a Jardins parecer a maior loja da rede: ela mostrava
+   * 30 dias e as vizinhas, 8. Comparar as colunas sem dizer isso é comparar
+   * coisas diferentes com a mesma cara.
+   */
+  const janelasDesiguais = React.useMemo(() => {
+    const ds = [
+      ...new Set(
+        lojas.map((l) => l.janelaIfoodDias).filter((d): d is number => !!d),
+      ),
+    ].sort((a, b) => a - b)
+    return ds.length > 1 ? { min: ds[0], max: ds[ds.length - 1] } : null
+  }, [lojas])
+
   const lacunas = React.useMemo(() => {
     const m = new Map<string, number>()
     for (const l of lojas) {
@@ -112,6 +128,22 @@ export function ListaLojas({
             >
               Importar relatórios
             </Link>
+          </p>
+        </div>
+      )}
+
+      {janelasDesiguais && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
+          <p className="text-[12.5px] font-semibold text-amber-900 dark:text-amber-200">
+            As lojas não estão mostrando o mesmo número de dias de iFood
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+            O relatório de Cardápio do iFood é exportado à mão, com um período
+            escolhido na hora — e aqui ele varia de{" "}
+            <b>{janelasDesiguais.min} a {janelasDesiguais.max} dias</b> conforme
+            a loja. Uma loja com mais dias aparece com mais itens e mais
+            receita <b>sem vender mais</b>. O número de dias de cada uma está na
+            coluna Plataformas.
           </p>
         </div>
       )}
@@ -208,6 +240,19 @@ export function ListaLojas({
                           </span>
                         ))}
                       </>
+                    )}
+                    {l.janelaIfoodDias !== null && (
+                      <span
+                        title="Dias que o relatório de Cardápio do iFood cobre neste mês"
+                        className={
+                          janelasDesiguais &&
+                          l.janelaIfoodDias < janelasDesiguais.max
+                            ? "ml-0.5 rounded bg-amber-100 px-1 py-0.5 font-mono text-[9.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                            : "ml-0.5 rounded bg-muted px-1 py-0.5 font-mono text-[9.5px] text-muted-foreground"
+                        }
+                      >
+                        {l.janelaIfoodDias}d
+                      </span>
                     )}
                   </div>
                 </td>

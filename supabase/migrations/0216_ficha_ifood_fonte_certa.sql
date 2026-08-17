@@ -62,3 +62,41 @@ grant execute on function public.ifood_itens_janela_vigente(uuid[], int, int) to
 -- `itens_vendidos_mes` e `custo_resumo_lojas` passam a chamar a função acima no
 -- lugar de ler `ifood_daily_items`. O corpo das duas está no banco (aplicado
 -- junto com esta migration); o que muda é só o ramo do iFood.
+
+-- ── A JANELA QUE FOI USADA, exposta pra tela ────────────────────────────────
+--
+-- ⚠️ POR QUE ISTO PRECISA APARECER (Marcus, 16/08): "por que Jardins tem tanto
+-- produto a mais que Pinheiros sendo que é a mesma rede?"
+--
+-- Não é a loja: é a JANELA. O relatório de Cardápio do iFood é exportado à mão,
+-- e cada loja pode ter um período diferente. Em agosto/26, treze lojas do
+-- Churrasco no Pote têm a janela 27/07→04/08 (8 dias) e a Jardins tem
+-- 12/07→10/08 (30 dias). Jardins aparece com quase o dobro de itens e muito
+-- mais receita porque está mostrando quase quatro vezes mais dias — não porque
+-- vende mais.
+--
+-- Comparar loja com loja sem dizer isso é comparar coisas diferentes com a
+-- mesma cara. A tela passa a mostrar o período de cada uma.
+create or replace function public.ifood_janela_usada(
+  p_unit_ids uuid[],
+  p_year int,
+  p_month int
+)
+returns table (unit_id uuid, period_start date, period_end date, dias int)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct on (i.unit_id)
+         i.unit_id, i.period_start, i.period_end,
+         (i.period_end - i.period_start + 1)::int
+  from public.ifood_cardapio_periodo_items i
+  where i.unit_id = any(p_unit_ids)
+    and extract(year from i.period_end) = p_year
+    and extract(month from i.period_end) = p_month
+  order by i.unit_id, i.period_end desc, i.imported_at desc nulls last;
+$$;
+
+revoke all on function public.ifood_janela_usada(uuid[], int, int) from public, anon, authenticated;
+grant execute on function public.ifood_janela_usada(uuid[], int, int) to service_role;

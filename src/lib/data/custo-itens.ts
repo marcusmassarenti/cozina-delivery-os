@@ -87,6 +87,15 @@ export type ResumoCusto = {
   taxaPorPlataforma: Record<PlataformaCusto, TaxaPlataforma>
   /** Categorias já usadas nesta loja, pro filtro. */
   categorias: string[]
+  /**
+   * O período do relatório de Cardápio do iFood que está sendo mostrado.
+   *
+   * ⚠️ Não é o mês: é a janela que o lojista escolheu ao exportar. Em agosto/26
+   * treze lojas tinham 8 dias e a Jardins tinha 30 — e a Jardins parecia a
+   * maior da rede por causa disso. Enquanto o dado do iFood vier de exportação
+   * manual, o período precisa estar escrito na tela.
+   */
+  janelaIfood: { inicio: string; fim: string; dias: number } | null
 }
 
 /**
@@ -194,6 +203,17 @@ export async function getCustoItens(
     taxasEfetivas(unitId, year, month),
   ])
 
+  const { data: janela } = await admin.rpc("ifood_janela_usada", {
+    p_unit_ids: [unitId],
+    p_year: year,
+    p_month: month,
+  })
+  const j = ((janela ?? []) as {
+    period_start: string
+    period_end: string
+    dias: number
+  }[])[0]
+
   if (error) console.error("itens_vendidos_mes:", error)
   // ⚠️ Este erro estava sendo descartado. Um select que falha devolve `data:
   // null`, e a tela mostrava "nenhum custo preenchido" com a mesma cara de uma
@@ -293,6 +313,9 @@ export async function getCustoItens(
     categorias: [
       ...new Set(itens.map((i) => i.categoria).filter(Boolean) as string[]),
     ].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    janelaIfood: j
+      ? { inicio: j.period_start, fim: j.period_end, dias: Number(j.dias) }
+      : null,
   }
 }
 
@@ -314,6 +337,14 @@ export type LojaCusto = {
    * inteira fica indistinguível de "não vendeu".
    */
   semItens: PlataformaCusto[]
+  /**
+   * A janela do relatório de Cardápio do iFood desta loja, em dias.
+   *
+   * ⚠️ É o que torna a coluna "Itens" e a "Receita" comparáveis — ou não. Em
+   * agosto/26, treze lojas tinham 8 dias e a Jardins tinha 30: ela aparecia como
+   * a maior da rede porque mostrava quase quatro vezes mais dias.
+   */
+  janelaIfoodDias: number | null
   itens: number
   itensComCusto: number
   qtdVendida: number
@@ -353,8 +384,14 @@ export async function getLojasCusto(
   const ids = units.map((u) => u.id)
   const admin = createAdminClient()
 
-  const [{ data: linhas, error }, fin, nine, keeta, cw] = await Promise.all([
+  const [{ data: linhas, error }, { data: janelas }, fin, nine, keeta, cw] =
+    await Promise.all([
     admin.rpc("custo_resumo_lojas", {
+      p_unit_ids: ids,
+      p_year: year,
+      p_month: month,
+    }),
+    admin.rpc("ifood_janela_usada", {
       p_unit_ids: ids,
       p_year: year,
       p_month: month,
@@ -393,6 +430,7 @@ export async function getLojasCusto(
       logoUrl: u.logoUrl ?? null,
       plataformas: [],
       semItens: [],
+      janelaIfoodDias: null,
       itens: 0,
       itensComCusto: 0,
       qtdVendida: 0,
@@ -447,6 +485,11 @@ export async function getLojasCusto(
       const lucro = receitaComCusto - receitaComCusto * taxaPct - custoTotal
       cur.lucroMes = (cur.lucroMes ?? 0) + lucro
     }
+  }
+
+  for (const j of (janelas ?? []) as { unit_id: string; dias: number }[]) {
+    const cur = acc.get(j.unit_id)
+    if (cur) cur.janelaIfoodDias = Number(j.dias)
   }
 
   // Quem faturou na plataforma mas não trouxe item nenhum.
