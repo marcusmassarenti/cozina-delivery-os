@@ -8,6 +8,13 @@ import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { forcarTemaClaroNoPrint } from "@/lib/print-tema-claro"
 import type { ItemCusto, ResumoCusto } from "@/lib/data/custo-itens"
 
+import {
+  BarrasTabelaVsMedio,
+  COR,
+  Rosca,
+  corDaFatia,
+} from "./painel-graficos"
+
 /**
  * O painel: o resultado do que foi preenchido, pra quem não vai preencher.
  *
@@ -40,16 +47,26 @@ export function PainelCusto({
   const abc = React.useMemo(() => {
     const ordenado = [...comCusto].sort((a, b) => b.receita - a.receita)
     const total = ordenado.reduce((s, i) => s + i.receita, 0)
+    // Laço explícito, não `map` com acumulador de fora: o React Compiler trata
+    // o callback como possivelmente adiado e acusa a reatribuição (erro de
+    // lint `react-hooks/immutability`). Aqui a soma corre dentro do próprio
+    // escopo, sem depender de quando o callback roda.
+    const saida: {
+      item: ItemCusto
+      acumuladoPct: number
+      classe: "A" | "B" | "C"
+    }[] = []
     let acumulado = 0
-    return ordenado.map((i) => {
+    for (const i of ordenado) {
       acumulado += i.receita
       const pct = total > 0 ? acumulado / total : 0
-      return {
+      saida.push({
         item: i,
         acumuladoPct: pct,
         classe: pct <= 0.8 ? "A" : pct <= 0.95 ? "B" : "C",
-      }
-    })
+      })
+    }
+    return saida
   }, [comCusto])
 
   /**
@@ -92,6 +109,59 @@ export function PainelCusto({
     const receita = comCusto.reduce((s, i) => s + i.receita, 0)
     const custo = comCusto.reduce((s, i) => s + (i.custo ?? 0) * i.qtd, 0)
     return receita > 0 ? custo / receita : 0
+  }, [comCusto])
+
+  /** As três partes em que a receita se divide. É a leitura de abertura. */
+  const cascata = React.useMemo(() => {
+    const receita = comCusto.reduce((s, i) => s + i.receita, 0)
+    const custo = comCusto.reduce((s, i) => s + (i.custo ?? 0) * i.qtd, 0)
+    const taxa = comCusto.reduce((s, i) => s + i.taxaValor * i.qtd, 0)
+    return { receita, custo, taxa, lucro: receita - custo - taxa }
+  }, [comCusto])
+
+  /** Receita por categoria. Sem categoria vira "Sem categoria" em vez de sumir:
+   *  o buraco no cadastro tem que aparecer, não se esconder. */
+  const porCategoria = React.useMemo(() => {
+    const acc = new Map<string, number>()
+    for (const i of comCusto) {
+      const k = i.categoria ?? "Sem categoria"
+      acc.set(k, (acc.get(k) ?? 0) + i.receita)
+    }
+    return [...acc.entries()]
+      .map(([rotulo, valor]) => ({ rotulo, valor }))
+      .sort((a, b) => b.valor - a.valor)
+      .map((f, idx) => ({ ...f, cor: corDaFatia(idx) }))
+  }, [comCusto])
+
+  /**
+   * As linhas do comparativo tabela × realizado.
+   *
+   * Só entram itens COM preço de tabela: uma barra encurtada por falta de
+   * cadastro seria lida como desconto enorme. O que falta é dito em número.
+   */
+  const comparativo = React.useMemo(() => {
+    const comPreco = comCusto.filter((i) => i.precoVenda !== null)
+    return {
+      linhas: [...comPreco]
+        .sort((a, b) => b.receita - a.receita)
+        .slice(0, 12)
+        .map((i) => ({
+          nomeItem: i.nomeItem,
+          precoVenda: i.precoVenda,
+          precoMedio: i.precoMedio,
+          desconto: i.desconto,
+          descontoPct: i.descontoPct,
+        })),
+      semPreco: comCusto.length - comPreco.length,
+      // Desconto médio ponderado pela receita: o desconto do carro-chefe pesa
+      // mais que o de um item que vendeu duas unidades.
+      descontoMedioPct: (() => {
+        const base = comPreco.reduce((s, i) => s + (i.precoVenda ?? 0) * i.qtd, 0)
+        const dado = comPreco.reduce((s, i) => s + (i.desconto ?? 0) * i.qtd, 0)
+        return base > 0 ? dado / base : 0
+      })(),
+      totalDado: comPreco.reduce((s, i) => s + (i.desconto ?? 0) * i.qtd, 0),
+    }
   }, [comCusto])
 
   const margemMedia =
@@ -170,6 +240,91 @@ export function PainelCusto({
         </p>
       )}
 
+      {/* ── Para onde vai o dinheiro + receita por categoria ───────── */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="break-inside-avoid rounded-xl border bg-card p-4">
+          <h2 className="text-sm font-bold">Para onde vai o que você vende</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            Da receita analisada, quanto é insumo, quanto a plataforma retém e
+            quanto sobra.
+          </p>
+          <div className="mt-3">
+            <Rosca
+              centroTitulo="sobra"
+              centroValor={fmtPct(
+                cascata.receita > 0
+                  ? (cascata.lucro / cascata.receita) * 100
+                  : 0,
+                0,
+              )}
+              fatias={[
+                { rotulo: "CMV (insumo)", valor: cascata.custo, cor: COR.cmv },
+                { rotulo: "Taxas da plataforma", valor: cascata.taxa, cor: COR.taxa },
+                { rotulo: "Lucro bruto", valor: Math.max(cascata.lucro, 0), cor: COR.lucro },
+              ]}
+            />
+          </div>
+          {cascata.lucro < 0 && (
+            <p className="mt-3 rounded-md bg-rose-50 px-2.5 py-1.5 text-[11.5px] font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+              Custo e taxas juntos passam da receita: o que foi analisado deu
+              prejuízo de {fmtBRL(Math.abs(cascata.lucro))}.
+            </p>
+          )}
+        </div>
+
+        <div className="break-inside-avoid rounded-xl border bg-card p-4">
+          <h2 className="text-sm font-bold">Receita por categoria</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            Onde o faturamento se concentra no cardápio.
+          </p>
+          <div className="mt-3">
+            <Rosca
+              centroTitulo="analisado"
+              centroValor={fmtBRL(cascata.receita)}
+              fatias={porCategoria}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tabela × realizado ────────────────────────────────────── */}
+      {comparativo.linhas.length > 0 && (
+        <div className="break-inside-avoid rounded-xl border bg-card p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold">
+                Preço de tabela × o que entrou
+              </h2>
+              <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                A barra cheia é o preço que entrou de verdade; o resto do trilho
+                é o desconto — promoção, cupom ou preço que mudou no período.
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold tabular-nums" style={{ color: COR.desconto }}>
+                {fmtPct(comparativo.descontoMedioPct * 100, 1)}
+              </p>
+              <p className="text-[10.5px] text-muted-foreground">
+                desconto médio · {fmtBRL(comparativo.totalDado)} no mês
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <BarrasTabelaVsMedio linhas={comparativo.linhas} />
+          </div>
+
+          {comparativo.semPreco > 0 && (
+            <p className="mt-2.5 text-[11px] text-muted-foreground">
+              {comparativo.semPreco}{" "}
+              {comparativo.semPreco === 1 ? "item ficou" : "itens ficaram"} de
+              fora por não ter preço de tabela preenchido — sem ele não dá pra
+              dizer se houve desconto.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Curva ABC ─────────────────────────────────────────────── */}
       <div className="break-inside-avoid rounded-xl border bg-card p-4">
         <h2 className="text-sm font-bold">Curva ABC</h2>
@@ -202,70 +357,44 @@ export function PainelCusto({
           })}
         </div>
 
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[620px] text-[13px]">
-            <thead>
-              <tr className="border-b text-[10px] uppercase tracking-wider text-muted-foreground">
-                <th className="py-2 pr-3 text-left font-medium">Classe</th>
-                <th className="py-2 pr-3 text-left font-medium">Item</th>
-                <th className="py-2 pr-3 text-right font-medium">Receita</th>
-                <th className="py-2 pr-3 text-right font-medium">% acum.</th>
-                <th className="py-2 text-right font-medium">Margem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {abc.slice(0, 20).map(({ item, acumuladoPct, classe }) => (
-                <tr
-                  key={`${item.platform}|${item.nomeItem}`}
-                  className="border-b last:border-0"
+        {/* ⚠️ Só os itens da classe A, e no máximo seis.
+            A versão anterior listava vinte linhas com classe, receita, %
+            acumulado e margem — virou uma segunda aba de Custos dentro do
+            painel, e o Marcus reclamou do tamanho (17/08/26). O que a curva ABC
+            precisa responder aqui é "quais poucos itens carregam a loja"; a
+            lista inteira já existe na aba ao lado. */}
+        <div className="mt-3 space-y-1.5">
+          {abc
+            .filter((x) => x.classe === "A")
+            .slice(0, 6)
+            .map(({ item, acumuladoPct }) => (
+              <div
+                key={`${item.platform}|${item.nomeItem}`}
+                className="flex items-center gap-2 text-[12.5px]"
+              >
+                <PlatformLogo platform={item.platform} size="sm" />
+                <span className="min-w-0 flex-1 truncate">{item.nomeItem}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  {fmtBRL(item.receita)}
+                </span>
+                <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                  {fmtPct(acumuladoPct * 100, 0)}
+                </span>
+                <span
+                  className={
+                    (item.lucroPct ?? 0) >= 0
+                      ? "w-12 shrink-0 text-right font-semibold tabular-nums text-emerald-600"
+                      : "w-12 shrink-0 text-right font-semibold tabular-nums text-rose-600"
+                  }
                 >
-                  <td className="py-1.5 pr-3">
-                    <span
-                      className={
-                        classe === "A"
-                          ? "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                          : classe === "B"
-                            ? "rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                            : "rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground"
-                      }
-                    >
-                      {classe}
-                    </span>
-                  </td>
-                  <td className="py-1.5 pr-3">
-                    <span className="flex items-center gap-1.5">
-                      <PlatformLogo platform={item.platform} size="sm" />
-                      {item.nomeItem}
-                    </span>
-                  </td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">
-                    {fmtBRL(item.receita)}
-                  </td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
-                    {fmtPct(acumuladoPct * 100, 0)}
-                  </td>
-                  <td className="py-1.5 text-right tabular-nums">
-                    <span
-                      className={
-                        (item.lucroPct ?? 0) >= 0
-                          ? "font-semibold text-emerald-600"
-                          : "font-semibold text-rose-600"
-                      }
-                    >
-                      {fmtPct((item.lucroPct ?? 0) * 100, 1)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {abc.length > 20 && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Mostrando os 20 primeiros de {abc.length}. Os demais somam{" "}
-              {fmtBRL(
-                abc.slice(20).reduce((s, x) => s + x.item.receita, 0),
-              )}
-              .
+                  {fmtPct((item.lucroPct ?? 0) * 100, 0)}
+                </span>
+              </div>
+            ))}
+          {abc.filter((x) => x.classe === "A").length > 6 && (
+            <p className="pt-1 text-[11px] text-muted-foreground">
+              +{abc.filter((x) => x.classe === "A").length - 6} itens na classe
+              A. A lista completa está na aba <b>Custos</b>.
             </p>
           )}
         </div>
