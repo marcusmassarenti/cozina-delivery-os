@@ -113,7 +113,7 @@ export default async function FichaTecnicaPage({
     getCategoriasPadrao(),
   ])
 
-  const receita = lojas.reduce((s, l) => s + l.receita, 0)
+  const receita = lojas.reduce((s, l) => s + l.receitaItens, 0)
   const coberta = lojas.reduce((s, l) => s + l.receitaComCusto, 0)
 
   return (

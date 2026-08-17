@@ -370,7 +370,23 @@ export type LojaCusto = {
   itens: number
   itensComCusto: number
   qtdVendida: number
-  receita: number
+  /**
+   * Faturamento REAL do mês, da mesma fonte do DRE (bruto das 4 plataformas).
+   *
+   * ⚠️ É diferente de `receitaItens` e isso é o ponto. A soma dos itens vem do
+   * relatório de Cardápio, cuja janela pode ser 12/07→10/08 — a Jardins
+   * aparecia com R$ 180 mil embaixo de um rótulo "Agosto". Marcus: "essa
+   * receita não poderia puxar a receita atual de agosto?". Poderia, e é o
+   * número que ele reconhece: a coluna passa a mostrar este.
+   */
+  receitaMes: number
+  /**
+   * Receita SOMANDO OS ITENS do relatório. Continua existindo porque é a base
+   * que o custo consegue cobrir — a barra de progresso mede sobre ela, não
+   * sobre o faturamento do mês. Misturar as duas faria a cobertura despencar
+   * por um motivo que não é falta de cadastro.
+   */
+  receitaItens: number
   receitaComCusto: number
   cobertura: number
   /** Lucro bruto do que tem custo. Null quando nada foi preenchido. */
@@ -458,7 +474,8 @@ export async function getLojasCusto(
       itens: 0,
       itensComCusto: 0,
       qtdVendida: 0,
-      receita: 0,
+      receitaMes: 0,
+      receitaItens: 0,
       receitaComCusto: 0,
       cobertura: 0,
       lucroMes: null,
@@ -502,7 +519,7 @@ export async function getLojasCusto(
     if (!cur.plataformas.includes(plataforma)) cur.plataformas.push(plataforma)
     cur.itens += Number(l.itens) || 0
     cur.itensComCusto += Number(l.itens_com_custo) || 0
-    cur.receita += receita
+    cur.receitaItens += receita
     cur.receitaComCusto += receitaComCusto
 
     if (receitaComCusto > 0) {
@@ -540,16 +557,29 @@ export async function getLojasCusto(
       .map(([p]) => p)
   }
 
+  // Faturamento do mês, das mesmas funções que alimentam o DRE.
+  for (const u of units) {
+    const cur = acc.get(u.id)
+    if (!cur) continue
+    cur.receitaMes =
+      (fin.get(u.id)?.bruto ?? 0) +
+      (nine.get(u.id)?.bruto ?? 0) +
+      (keeta.get(u.id)?.bruto ?? 0) +
+      (cw.get(u.id)?.bruto ?? 0)
+  }
+
   for (const l of acc.values()) {
-    l.cobertura = l.receita > 0 ? l.receitaComCusto / l.receita : 0
+    l.cobertura = l.receitaItens > 0 ? l.receitaComCusto / l.receitaItens : 0
     l.lucroPct =
       l.lucroMes !== null && l.receitaComCusto > 0
         ? l.lucroMes / l.receitaComCusto
         : null
   }
 
-  // Loja sem venda no mês vai pro fim: ela não tem trabalho a fazer aqui.
-  return [...acc.values()].sort((a, b) => b.receita - a.receita)
+  // Ordena pelo faturamento REAL: é ele que diz qual loja vale preencher
+  // primeiro. Ordenar pela soma dos itens colocaria na frente quem exportou um
+  // período maior.
+  return [...acc.values()].sort((a, b) => b.receitaMes - a.receitaMes)
 }
 
 /**

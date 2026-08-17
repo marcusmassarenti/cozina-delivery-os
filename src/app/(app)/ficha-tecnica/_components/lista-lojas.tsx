@@ -114,7 +114,7 @@ export function ListaLojas({
           </span>
           <span className="text-xs text-muted-foreground">
             {lojas.filter((l) => l.cobertura >= 0.9).length} de{" "}
-            {lojas.filter((l) => l.receita > 0).length} lojas prontas
+            {lojas.filter((l) => l.receitaItens > 0).length} lojas prontas
           </span>
         </div>
       </div>
@@ -140,20 +140,14 @@ export function ListaLojas({
             ))}
             {janelaComum && (
               <li>
-                O relatório do iFood cobre{" "}
+                Os itens do iFood vêm do relatório de{" "}
                 <b>
                   {dm(janelaComum.l.janelaIfood!.inicio)} a{" "}
                   {dm(janelaComum.l.janelaIfood!.fim)}
                 </b>{" "}
-                na maioria das lojas
-                {janelaComum.l.janelaForaDoMes && (
-                  <>
-                    {" "}
-                    — como ele começa no mês anterior, a receita do iFood aqui{" "}
-                    <b>não é só a deste mês</b>
-                  </>
-                )}
-                .
+                na maioria das lojas — a coluna Receita é o mês inteiro, então a
+                barra de custo preenchido não chega a 100% enquanto o relatório
+                cobrir menos dias.
                 {fogemDaComum > 0 && (
                   <>
                     {" "}
@@ -288,10 +282,10 @@ export function ListaLojas({
                   {l.itens > 0 ? fmtNum(l.itens) : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
-                  {l.receita > 0 ? fmtBRL(l.receita) : "—"}
+                  {l.receitaMes > 0 ? fmtBRL(l.receitaMes) : "—"}
                 </td>
                 <td className="px-3 py-2.5">
-                  {l.receita > 0 ? (
+                  {l.receitaItens > 0 ? (
                     <div className="flex items-center gap-2">
                       <div className="relative h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                         <span
@@ -360,10 +354,11 @@ export function ListaLojas({
       )}
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        <b>Lucro bruto</b> é preço − comissão da plataforma − custo, somando só
-        os itens que já têm custo preenchido. Enquanto a barra não fecha, o
-        número vem marcado como <b>parcial</b> — ele cresce conforme você
-        preenche.
+        <b>Receita</b> é o faturamento do mês, o mesmo do Dashboard.{" "}
+        <b>Custo preenchido</b> mede sobre a receita dos itens do relatório, que
+        pode cobrir um período menor que o mês. <b>Lucro bruto</b> é preço − o
+        que a plataforma reteve − custo, somando só os itens que já têm custo —
+        por isso vem marcado como <b>parcial</b> até a barra fechar.
       </p>
     </div>
   )
