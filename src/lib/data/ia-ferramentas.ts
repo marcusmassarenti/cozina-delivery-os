@@ -99,7 +99,7 @@ export function ferramentasDoNino(
     {
       name: "produtos_vendidos",
       description:
-        "Itens vendidos por loja/rede no mês: quanto cada produto faturou, quantas unidades saíram e a variação contra o mês anterior. Use pra 'produto mais vendido', 'o que caiu de venda', 'top 10 itens', 'qual item cresceu', 'o que parou de vender'. Cobre as 4 plataformas.",
+        "Itens vendidos por loja/rede no mês: quanto cada produto faturou, quantas unidades saíram e a variação contra o mês anterior. Use pra 'produto mais vendido', 'o que caiu de venda', 'top 10 itens', 'qual item cresceu', 'o que parou de vender'. Cobre as 4 plataformas. ⚠️ Os percentuais são sobre a receita COM DETALHE DE ITEM, que costuma ser menor que o faturamento total — sempre confira `pct_do_faturamento_com_detalhe_de_item` e repasse o `aviso_cobertura` ao usuário quando ele vier preenchido.",
       input_schema: {
         type: "object",
         properties: {
@@ -153,7 +153,7 @@ export function ferramentasDoNino(
             // número, justamente na frase de conclusão que o dono lê. Ele
             // tinha como dividir, mas depois da regra de não somar ficou
             // conservador demais. Melhor entregar o percentual do que torcer.
-            pct_do_faturamento_de_itens:
+            pct_da_receita_com_item:
               totalGeral > 0 ? r2((v.valor / totalGeral) * 100) : null,
             variacao_pct:
               v.valorAnt > 0 ? r2((v.valor / v.valorAnt - 1) * 100) : null,
@@ -174,6 +174,7 @@ export function ferramentasDoNino(
           soma_top_10: somar(10),
           soma_top_20: somar(20),
           faturamento_de_todos_os_itens: somar(linhas.length),
+          ...(await coberturaDeItens(unitIds, year, month, alvo)),
           top_20: linhas.slice(0, 20),
           // Quedas só valem com base de comparação; sem mês anterior a
           // variação é null e o item não deve aparecer como "caiu".
@@ -371,4 +372,64 @@ export function ferramentasDoNino(
       }),
     },
   ] as FerramentaIa[]
+}
+
+
+/**
+ * Quanto do FATURAMENTO tem detalhamento por item — e quanto não tem.
+ *
+ * ── POR QUE ISTO EXISTE (Marcus, 17/08/26) ───────────────────────────────
+ * O Nino respondeu "os 10 itens geraram R$ 393 mil (58,4% do faturamento com
+ * itens)" e o Marcus rebateu: "porque faturamos 1.1mm, tá faltando dado".
+ * Ele estava certo. O rótulo dizia "faturamento com itens" — tecnicamente
+ * correto —, mas quem lê entende "faturamento", e a base era R$ 673 mil de um
+ * mês de R$ 1,09 milhão.
+ *
+ * O buraco é quase todo do iFood: em julho o relatório de Cardápio dele cobria
+ * R$ 63 mil de R$ 473 mil faturados (13%), porque é exportado à mão, uma loja
+ * por arquivo, com o período escolhido na hora. Keeta e 99 ficam perto de 100%.
+ *
+ * Sem esses campos o modelo não tem como saber que o chão que ele pisa é
+ * parcial — e apresenta uma fatia do cardápio como se fosse o todo.
+ */
+async function coberturaDeItens(
+  unitIds: string[],
+  year: number,
+  month: number,
+  plataformas: PlatformId[],
+): Promise<Record<string, unknown>> {
+  try {
+    const { getLojasCusto } = await import("@/lib/data/custo-itens")
+    const { getVisibleUnits } = await import("@/lib/data/units")
+    const todas = await getVisibleUnits()
+    const alvo = todas.filter(
+      (u) => u.active && (unitIds.length === 0 || unitIds.includes(u.id)),
+    )
+    if (alvo.length === 0) return {}
+
+    const lojas = await getLojasCusto(alvo, year, month)
+    const faturamento = lojas.reduce((s, l) => s + l.receitaMes, 0)
+    const comItem = lojas.reduce((s, l) => s + l.receitaItens, 0)
+    if (faturamento <= 0) return {}
+
+    const semRelatorio = lojas
+      .filter((l) => l.semItens.length > 0)
+      .map((l) => ({ loja: l.nome, plataformas: l.semItens }))
+
+    return {
+      faturamento_total_do_periodo: r2(faturamento),
+      pct_do_faturamento_com_detalhe_de_item: r2((comItem / faturamento) * 100),
+      // Instrução explícita: o modelo não infere sozinho que deve ressalvar.
+      aviso_cobertura:
+        comItem / faturamento < 0.9
+          ? `ATENÇÃO: só ${Math.round((comItem / faturamento) * 100)}% do faturamento tem detalhamento por item. Os percentuais acima são sobre a receita COM ITEM (R$ ${r2(comItem)}), não sobre o faturamento total (R$ ${r2(faturamento)}). Diga isso ao usuário — o relatório de Cardápio do iFood e o da Keeta são importados à mão e podem cobrir só parte do mês.`
+          : null,
+      lojas_sem_relatorio_de_item: semRelatorio.length > 0 ? semRelatorio : null,
+      plataformas_consultadas: plataformas,
+    }
+  } catch (e) {
+    // Diagnóstico nunca pode derrubar a resposta que ele acompanha.
+    console.error("coberturaDeItens:", e)
+    return {}
+  }
 }
