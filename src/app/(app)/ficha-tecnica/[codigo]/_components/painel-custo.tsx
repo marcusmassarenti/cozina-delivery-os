@@ -196,6 +196,7 @@ export function PainelCusto({
         .sort((a, b) => b.receita - a.receita)
         .slice(0, 12)
         .map((i) => ({
+          platform: i.platform,
           nomeItem: i.nomeItem,
           precoVenda: i.precoVenda,
           precoMedio: i.precoMedio,

@@ -7,6 +7,7 @@
  */
 import * as React from "react"
 
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { fmtBRL, fmtPct } from "@/lib/format"
 
 /** Amarelo = insumo, vermelho = plataforma, verde = o que sobra. */
@@ -46,8 +47,24 @@ export function Rosca({
 }) {
   const total = fatias.reduce((s, f) => s + Math.max(f.valor, 0), 0)
   const R = 54
+  const ESPESSURA = 20
   const C = 2 * Math.PI * R
   let acumulado = 0
+
+  /**
+   * A fonte do centro se ajusta ao texto.
+   *
+   * ⚠️ Era fixa em 15 e "R$ 29.923,26" vazava por cima do anel (Marcus,
+   * 17/08/26: "gráfico de pizza quebrando número"). O furo tem
+   * `2 × (R − espessura/2)` de largura, e o texto precisa caber nele com
+   * folga — então o tamanho sai da conta, não de um palpite que funciona só
+   * pros valores que eu testei.
+   */
+  const furo = 2 * (R - ESPESSURA / 2)
+  const tamanhoFonte = Math.max(
+    8,
+    Math.min(17, (furo * 0.9) / ((centroValor?.length ?? 1) * 0.58)),
+  )
 
   return (
     <div className="flex items-center gap-4">
@@ -57,7 +74,14 @@ export function Rosca({
         className="shrink-0"
         role="img"
       >
-        <circle cx="70" cy="70" r={R} fill="none" stroke="#E2E8F0" strokeWidth="20" />
+        <circle
+          cx="70"
+          cy="70"
+          r={R}
+          fill="none"
+          stroke="#E2E8F0"
+          strokeWidth={ESPESSURA}
+        />
         {total > 0 &&
           fatias.map((f) => {
             const v = Math.max(f.valor, 0)
@@ -75,7 +99,7 @@ export function Rosca({
                 r={R}
                 fill="none"
                 stroke={f.cor}
-                strokeWidth="20"
+                strokeWidth={ESPESSURA}
                 strokeDasharray={`${comprimento} ${C - comprimento}`}
                 strokeDashoffset={offset}
                 transform="rotate(-90 70 70)"
@@ -88,17 +112,17 @@ export function Rosca({
           <>
             <text
               x="70"
-              y="66"
+              y={centroTitulo ? 70 : 75}
               textAnchor="middle"
               className="fill-current"
-              style={{ fontSize: 15, fontWeight: 700 }}
+              style={{ fontSize: tamanhoFonte, fontWeight: 700 }}
             >
               {centroValor}
             </text>
             {centroTitulo && (
               <text
                 x="70"
-                y="82"
+                y="84"
                 textAnchor="middle"
                 fill="#94A3B8"
                 style={{ fontSize: 8.5, textTransform: "uppercase", letterSpacing: 0.6 }}
@@ -135,6 +159,9 @@ export function Rosca({
 }
 
 export type LinhaPreco = {
+  /** Sem isso o mesmo item em duas plataformas vira duas linhas iguais — e,
+   *  pior, duas `key` idênticas no React. */
+  platform: PlatformId
   nomeItem: string
   precoVenda: number | null
   precoMedio: number
@@ -170,9 +197,15 @@ export function BarrasTabelaVsMedio({ linhas }: { linhas: LinhaPreco[] }) {
         const larguraMedio = (l.precoMedio / maximo) * 100
         const temDesconto = (l.desconto ?? 0) > 0.005
         return (
-          <div key={l.nomeItem} className="flex items-center gap-2.5">
-            <span className="w-40 shrink-0 truncate text-[11.5px]" title={l.nomeItem}>
-              {l.nomeItem}
+          <div
+            key={`${l.platform}|${l.nomeItem}`}
+            className="flex items-center gap-2.5"
+          >
+            <span className="flex w-40 shrink-0 items-center gap-1.5 text-[11.5px]">
+              <PlatformLogo platform={l.platform} size="sm" />
+              <span className="truncate" title={l.nomeItem}>
+                {l.nomeItem}
+              </span>
             </span>
             <div className="relative h-5 min-w-0 flex-1">
               {/* Trilho = preço de tabela */}
