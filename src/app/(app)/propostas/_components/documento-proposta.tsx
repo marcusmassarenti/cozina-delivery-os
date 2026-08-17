@@ -220,7 +220,17 @@ export function DocumentoProposta({
           </p>
         ))}
 
-        <Titulo>O que muda pra quem usa</Titulo>
+        {/* Título com mais peso que os outros: esta é a página que vende, e
+            ela precisa parecer o começo de um argumento, não mais uma seção. */}
+        <h2
+          className="mb-1 mt-8 break-after-avoid text-[19px] font-extrabold leading-tight tracking-tight text-zinc-900"
+        >
+          O que muda pra quem usa
+        </h2>
+        <p className="mb-3 border-b pb-3 text-[12px] text-zinc-500" style={{ borderColor: LARANJA }}>
+          Não é relatório novo pra olhar. É a sua operação respondendo o que
+          você já pergunta todo dia.
+        </p>
         {/* Cards com ícone, no mesmo desenho do site: selo arredondado com a
             cor da marca em fundo suave. Numa proposta impressa o ícone faz o
             olho encontrar o bloco antes de ler — que é justamente o que essa
@@ -240,10 +250,12 @@ export function DocumentoProposta({
                 >
                   <Icone className="size-[18px]" strokeWidth={2} />
                 </span>
-                <p className="text-[12.5px] font-bold text-zinc-900">
+                <p className="text-[13.5px] font-extrabold leading-tight tracking-tight text-zinc-900">
                   {b.titulo}
                 </p>
-                <p className="mt-1 text-[11.5px] leading-snug">{b.texto}</p>
+                <p className="mt-1.5 text-[11.5px] leading-snug text-zinc-600">
+                  {b.texto}
+                </p>
               </div>
             )
           })}

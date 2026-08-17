@@ -95,42 +95,54 @@ export const MODELO_PADRAO: ModeloProposta = {
     "iFood, 99 Food, Keeta e Cardápio Web — pedidos, financeiro, avaliações e DRE consolidados, em tempo real.",
   historia:
     "O Delivery OS nasceu dentro de uma operação de delivery, não numa mesa de software. A gente vivia o mesmo problema dos nossos clientes: faturamento numa planilha, taxas em outra, avaliação numa terceira, e o fechamento do mês virando dois dias de conferência manual — com a sensação incômoda de que o número final podia estar errado.\n\nO sistema é a resposta que a gente construiu pra si mesmo e passou a oferecer. Ele conversa direto com as plataformas, junta o que estava espalhado e devolve o quadro inteiro: quanto entrou de verdade, quanto ficou na loja, onde a margem está indo embora.\n\nHoje ele cuida de redes de uma a mais de cinquenta lojas — e continua sendo feito por quem opera delivery, não só por quem programa.",
+  /**
+   * ⚠️ O FOCO É QUEM USA, NÃO O CARGO (Marcus, 16/08/26).
+   *
+   * A primeira versão dividia por função — "o financeiro", "o contador",
+   * "quem monta o cardápio". Parecia organizado e vendia errado: descrevia
+   * DEPARTAMENTOS de uma empresa grande, quando quem lê a proposta é o dono
+   * que faz tudo isso sozinho. E falava do que o sistema TEM, não do que muda
+   * no dia dele.
+   *
+   * Agora cada bloco é um momento da operação, em segunda pessoa, e termina
+   * num resultado — não numa funcionalidade.
+   */
   ajudamos: [
     {
-      titulo: "O dono da rede",
-      icone: "rede",
+      titulo: "Você sabe quanto sobrou, não só quanto vendeu",
       texto:
-        "Enxerga todas as lojas no mesmo painel, compara umas com as outras e descobre onde está o problema antes do fim do mês.",
-    },
-    {
-      titulo: "O gerente da loja",
-      icone: "loja",
-      texto:
-        "Vê a nota, os cancelamentos e o que o cliente reclamou, e responde a avaliação sem sair do sistema.",
-    },
-    {
-      titulo: "O financeiro",
+        "O faturamento bruto todo mundo vê no app da plataforma. Aqui você vê o que restou depois da taxa, da entrega, da promoção e do cancelamento — por loja e por dia.",
       icone: "dinheiro",
-      texto:
-        "Recebe o faturamento já conciliado com o repasse da plataforma — o que entrou, o que foi taxa e o que ainda está pra cair.",
     },
     {
-      titulo: "O contador",
+      titulo: "O problema aparece no dia, não no fim do mês",
+      texto:
+        "Loja que parou de vender, nota que caiu, cancelamento fora da curva: o aviso chega enquanto ainda dá pra agir.",
+      icone: "alerta",
+    },
+    {
+      titulo: "Suas lojas comparadas na mesma régua",
+      texto:
+        "Quem fatura mais, quem perde mais com cancelamento, quem tem a pior nota. Lado a lado, é onde a decisão fica óbvia.",
+      icone: "rede",
+    },
+    {
+      titulo: "A conversa com o cliente sem trocar de tela",
+      texto:
+        "Avaliação, nota e reclamação num lugar só — e a resposta sai daqui mesmo, sem abrir o portal de cada plataforma.",
+      icone: "estrela",
+    },
+    {
+      titulo: "O fim do mês deixa de ser um dia de planilha",
+      texto:
+        "Faturamento, taxas, repasse e custo já conciliados. O fechamento vira conferência, não montagem.",
       icone: "planilha",
-      texto:
-        "Tem DRE por loja e da rede, com custo e CMV no lugar certo, em vez de uma pilha de relatórios pra reorganizar.",
     },
     {
-      titulo: "Quem monta o cardápio",
-      icone: "cardapio",
+      titulo: "Você não precisa entrar pra saber como foi",
       texto:
-        "Sabe qual item vende, qual item some no funil e o que a promoção realmente trouxe de volta.",
-    },
-    {
-      titulo: "Quem não tem tempo pra nada disso",
+        "Um e-mail por dia com o resumo da rede, e um aviso quando alguma loja para de mandar dado.",
       icone: "email",
-      texto:
-        "Recebe um e-mail por dia com o resumo, e um aviso quando alguma loja para de mandar dado.",
     },
   ],
   escopoItens: ESCOPO_PADRAO,
