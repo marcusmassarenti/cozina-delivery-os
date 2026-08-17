@@ -8,6 +8,7 @@ import { getVisibleUnits } from "@/lib/data/units"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getLojasCusto } from "@/lib/data/custo-itens"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { PlatformLogo } from "@/components/platform-logo"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 
@@ -133,6 +134,32 @@ export default async function FichaTecnicaPage({
             Escolha a loja para preencher o custo dos itens ·{" "}
             {formatRangeLabel(periodRange)}
           </p>
+
+          {/* ── De onde vem o item de cada plataforma ─────────────────
+              Marcus pediu que a tela explicasse isso, e é a pergunta que ele
+              mesmo fez três vezes hoje. As origens são diferentes e não dá pra
+              adivinhar: o iFood e a Keeta só entram por planilha; o 99 Food e o
+              Cardápio Web entram sozinhos. Sem isso, uma loja sem item parece
+              defeito do sistema. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted-foreground">
+            <span className="font-medium">Os itens chegam assim:</span>
+            <span className="flex items-center gap-1">
+              <PlatformLogo platform="ifood" size="sm" />
+              <PlatformLogo platform="keeta" size="sm" />
+              relatório de Cardápio, importado por você
+            </span>
+            <span className="flex items-center gap-1">
+              <PlatformLogo platform="99food" size="sm" />
+              <PlatformLogo platform="cardapioweb" size="sm" />
+              entram sozinhos, pela API
+            </span>
+            <Link
+              href="/importacao"
+              className="font-semibold underline underline-offset-2"
+            >
+              Importar relatórios
+            </Link>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodSelector current={periodRange} options={periods} enableRange />

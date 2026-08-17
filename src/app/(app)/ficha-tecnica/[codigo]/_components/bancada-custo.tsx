@@ -287,15 +287,29 @@ export function BancadaCusto({
           <Kpi rot="Itens vendidos" val={fmtNum(resumo.itens.length)} />
         </div>
         {resumo.janelaIfood && (
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            O iFood desta loja está mostrando{" "}
+          <p
+            className={
+              resumo.janelaIfood.foraDoMes
+                ? "mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                : "mt-2 text-[11px] leading-relaxed text-muted-foreground"
+            }
+          >
+            O iFood desta loja vem do relatório de{" "}
             <b>
-              {resumo.janelaIfood.dias}{" "}
-              {resumo.janelaIfood.dias === 1 ? "dia" : "dias"}
+              {dataBr(resumo.janelaIfood.inicio)} a{" "}
+              {dataBr(resumo.janelaIfood.fim)}
             </b>{" "}
-            ({dataBr(resumo.janelaIfood.inicio)} a{" "}
-            {dataBr(resumo.janelaIfood.fim)}) — é o período que foi escolhido ao
-            exportar o relatório de Cardápio, e não o mês inteiro.
+            ({resumo.janelaIfood.dias}{" "}
+            {resumo.janelaIfood.dias === 1 ? "dia" : "dias"}) — é o período
+            escolhido ao exportar.
+            {resumo.janelaIfood.foraDoMes && (
+              <>
+                {" "}
+                <b>Ele começa em outro mês</b>, então a receita do iFood aqui
+                inclui dias de fora e não é a do mês selecionado. Pra corrigir,
+                exporte o relatório com o período do mês e importe de novo.
+              </>
+            )}
           </p>
         )}
         {resumo.cobertura < 0.999 && resumo.receitaTotal > 0 && (

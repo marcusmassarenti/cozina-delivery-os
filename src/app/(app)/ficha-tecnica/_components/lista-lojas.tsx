@@ -70,6 +70,8 @@ export function ListaLojas({
     return ds.length > 1 ? { min: ds[0], max: ds[ds.length - 1] } : null
   }, [lojas])
 
+  const foraDoMes = lojas.filter((l) => l.janelaForaDoMes).length
+
   const lacunas = React.useMemo(() => {
     const m = new Map<string, number>()
     for (const l of lojas) {
@@ -102,51 +104,54 @@ export function ListaLojas({
         </div>
       </div>
 
-      {lacunas.length > 0 && (
+      {/* ── UM aviso só ───────────────────────────────────────────
+          Eram dois (relatório faltando + janelas diferentes) e o Marcus disse
+          que ficava confuso e parecia desorganizado. São o mesmo assunto: o
+          relatório de itens do iFood e da Keeta é manual, então ora falta, ora
+          vem com período diferente. Uma frase por problema, no mesmo lugar. */}
+      {(lacunas.length > 0 || janelasDesiguais || foraDoMes > 0) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
           <p className="text-[12.5px] font-semibold text-amber-900 dark:text-amber-200">
-            Falta o relatório de itens de{" "}
-            {lacunas.map(([p], i) => (
-              <span key={p}>
-                {i > 0 ? (i === lacunas.length - 1 ? " e " : ", ") : ""}
-                {NOME_PLATAFORMA[p] ?? p}
-                <span className="font-normal">
-                  {" "}
-                  ({lacunas[i][1]} {lacunas[i][1] === 1 ? "loja" : "lojas"})
-                </span>
-              </span>
+            Falta relatório de itens em algumas lojas
+          </p>
+          <ul className="mt-1 space-y-0.5 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+            {lacunas.map(([p, n]) => (
+              <li key={p}>
+                <b>
+                  {n} {n === 1 ? "loja" : "lojas"}
+                </b>{" "}
+                venderam no {NOME_PLATAFORMA[p] ?? p} e não têm itens no mês.
+              </li>
             ))}
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-            <b>A conexão não está com problema.</b> A API do iFood traz
-            faturamento, pedidos e avaliações — ela não traz <b>quais itens</b>{" "}
-            foram vendidos. Isso só existe no relatório de Cardápio, exportado à
-            mão no Portal do Parceiro. Enquanto ele não entra, o custo desses
-            itens não tem onde ser preenchido e a receita deles fica fora da
-            conta.{" "}
-            <Link
-              href="/importacao"
-              className="font-semibold underline underline-offset-2"
-            >
-              Importar relatórios
-            </Link>
-          </p>
-        </div>
-      )}
-
-      {janelasDesiguais && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
-          <p className="text-[12.5px] font-semibold text-amber-900 dark:text-amber-200">
-            As lojas não estão mostrando o mesmo número de dias de iFood
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-            O relatório de Cardápio do iFood é exportado à mão, com um período
-            escolhido na hora — e aqui ele varia de{" "}
-            <b>{janelasDesiguais.min} a {janelasDesiguais.max} dias</b> conforme
-            a loja. Uma loja com mais dias aparece com mais itens e mais
-            receita <b>sem vender mais</b>. O número de dias de cada uma está na
-            coluna Plataformas.
-          </p>
+            {foraDoMes > 0 && (
+              <li>
+                <b>
+                  {foraDoMes} {foraDoMes === 1 ? "loja" : "lojas"}
+                </b>{" "}
+                têm relatório que começa em outro mês — a receita delas inclui
+                dias de fora e <b>não é a do mês</b>. O período está ao lado do
+                logo do iFood.
+              </li>
+            )}
+            {/* Só quando NÃO há o problema do mês: as duas frases juntas
+                dizem quase a mesma coisa, e o aviso vira parede de texto —
+                que foi exatamente a reclamação. */}
+            {janelasDesiguais && foraDoMes === 0 && (
+              <li>
+                Os relatórios cobrem períodos diferentes conforme a loja (de{" "}
+                <b>
+                  {janelasDesiguais.min} a {janelasDesiguais.max} dias
+                </b>
+                ), então a receita não é comparável entre elas.
+              </li>
+            )}
+          </ul>
+          <Link
+            href="/importacao"
+            className="mt-1.5 inline-block text-[12px] font-semibold underline underline-offset-2 text-amber-900 dark:text-amber-200"
+          >
+            Importar relatórios
+          </Link>
         </div>
       )}
 
@@ -243,17 +248,16 @@ export function ListaLojas({
                         ))}
                       </>
                     )}
-                    {l.janelaIfoodDias !== null && (
+                    {l.janelaIfood && (
                       <span
-                        title="Dias que o relatório de Cardápio do iFood cobre neste mês"
+                        title={`Período do relatório de Cardápio do iFood: ${dm(l.janelaIfood.inicio)} a ${dm(l.janelaIfood.fim)}${l.janelaForaDoMes ? " — começa em outro mês, então a receita inclui dias fora deste mês" : ""}`}
                         className={
-                          janelasDesiguais &&
-                          l.janelaIfoodDias < janelasDesiguais.max
+                          l.janelaForaDoMes
                             ? "ml-0.5 rounded bg-amber-100 px-1 py-0.5 font-mono text-[9.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
                             : "ml-0.5 rounded bg-muted px-1 py-0.5 font-mono text-[9.5px] text-muted-foreground"
                         }
                       >
-                        {l.janelaIfoodDias}d
+                        {dm(l.janelaIfood.inicio)}–{dm(l.janelaIfood.fim)}
                       </span>
                     )}
                   </div>
@@ -262,7 +266,21 @@ export function ListaLojas({
                   {l.itens > 0 ? fmtNum(l.itens) : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
-                  {l.receita > 0 ? fmtBRL(l.receita) : "—"}
+                  {l.receita > 0 ? (
+                    <>
+                      {fmtBRL(l.receita)}
+                      {l.janelaForaDoMes && (
+                        <span
+                          className="block text-[10px] font-medium text-amber-600"
+                          title="Inclui dias de outro mês, pelo período do relatório do iFood"
+                        >
+                          inclui outro mês
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-3 py-2.5">
                   {l.receita > 0 ? (
@@ -348,6 +366,12 @@ const NOME_PLATAFORMA: Record<string, string> = {
   "99food": "99 Food",
   keeta: "Keeta",
   cardapioweb: "Cardápio Web",
+}
+
+/** Dia/mês curto — o ano está no seletor de período. */
+function dm(iso: string): string {
+  const [, m, d] = iso.slice(0, 10).split("-")
+  return `${d}/${m}`
 }
 
 function normalizar(s: string): string {

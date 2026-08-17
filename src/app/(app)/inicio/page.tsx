@@ -25,7 +25,6 @@ import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoe
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
 import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
 import { AvisosConvite } from "@/components/dashboard/avisos-convite"
-import { getJanelasIfood } from "@/lib/data/custo-itens"
 import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
 import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
 import { CadastroIncompletoAviso } from "@/app/(app)/unidades/_components/cadastro-incompleto-aviso"
@@ -535,9 +534,6 @@ export default async function Home({
   ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
   cron.marca("rede")
 
-  // Janela do relatório de Cardápio por loja — o Top produtos do iFood soma
-  // lojas que podem ter períodos diferentes, e isso precisa aparecer.
-  const janelasIfood = await getJanelasIfood(networkScopeIds ?? [], year, month)
 
   // Cesta dos pedidos cancelados no iFood (escopo visível) — o card
   // "Faturamento Bruto" mostra o total COM cancelados ("Valor das vendas" do
@@ -1643,7 +1639,6 @@ export default async function Home({
                             qtdVendida: it.qtdVendida,
                             valorTotal: it.valorTotal,
                           }))}
-                          janelas={janelasIfood}
                         />
                       ) : (
                         <EmptyMsg text="Sem Cardápio iFood neste mês" />
@@ -2722,20 +2717,8 @@ function TagsList({
  *  COMPLETA (pra calcular % do total) e exibe só o pódio dos 5. */
 function TopItemsList({
   items,
-  janelas,
 }: {
   items: Array<{ nomeItem: string; qtdVendida: number; valorTotal: number }>
-  /**
-   * Dias de relatório de cada loja que entrou neste ranking (só iFood).
-   *
-   * ⚠️ POR QUE ISTO APARECE AQUI (Marcus, 16/08): o relatório de Cardápio do
-   * iFood é exportado à mão, uma loja por arquivo, com o período escolhido na
-   * hora. Em agosto/26 treze lojas tinham 9 dias e a Jardins tinha 30 — e a
-   * Jardins pesava quase quatro vezes mais neste ranking sem vender mais.
-   * Somar lojas com janelas diferentes é somar coisas diferentes; a tela não
-   * pode fazer isso calada.
-   */
-  janelas?: { dias: number; lojasSemRelatorio: number }[]
 }) {
   const totalGeral = items.reduce((s, i) => s + i.valorTotal, 0)
   const top5 = [...items]
@@ -2746,38 +2729,8 @@ function TopItemsList({
   const pct = (v: number) =>
     totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0
 
-  const dias = (janelas ?? []).map((j) => j.dias).filter(Boolean)
-  const desigual =
-    dias.length > 1 && Math.min(...dias) !== Math.max(...dias)
-  const semRelatorio = janelas?.[0]?.lojasSemRelatorio ?? 0
-
   return (
     <div>
-      {(desigual || semRelatorio > 0) && (
-        <p className="mb-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-          {desigual && (
-            <>
-              As lojas deste ranking têm relatórios de{" "}
-              <b>
-                {Math.min(...dias)} a {Math.max(...dias)} dias
-              </b>{" "}
-              — quem tem mais dias pesa mais aqui sem necessariamente vender
-              mais.
-            </>
-          )}
-          {desigual && semRelatorio > 0 && " "}
-          {semRelatorio > 0 && (
-            <>
-              {semRelatorio}{" "}
-              {semRelatorio === 1
-                ? "loja vendeu e não entrou"
-                : "lojas venderam e não entraram"}{" "}
-              (sem relatório de Cardápio neste mês).
-            </>
-          )}
-        </p>
-      )}
-
       {/* Peso dos 5 mais vendidos no total de produtos */}
       <div className="mb-3 rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/70 dark:text-emerald-400/70">

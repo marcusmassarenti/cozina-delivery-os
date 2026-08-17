@@ -95,7 +95,13 @@ export type ResumoCusto = {
    * maior da rede por causa disso. Enquanto o dado do iFood vier de exportação
    * manual, o período precisa estar escrito na tela.
    */
-  janelaIfood: { inicio: string; fim: string; dias: number } | null
+  janelaIfood: {
+    inicio: string
+    fim: string
+    dias: number
+    /** Começa em outro mês — a receita do iFood inclui dias de fora. */
+    foraDoMes: boolean
+  } | null
 }
 
 /**
@@ -314,7 +320,12 @@ export async function getCustoItens(
       ...new Set(itens.map((i) => i.categoria).filter(Boolean) as string[]),
     ].sort((a, b) => a.localeCompare(b, "pt-BR")),
     janelaIfood: j
-      ? { inicio: j.period_start, fim: j.period_end, dias: Number(j.dias) }
+      ? {
+          inicio: j.period_start,
+          fim: j.period_end,
+          dias: Number(j.dias),
+          foraDoMes: j.period_start.slice(0, 7) !== `${year}-${String(month).padStart(2, "0")}`,
+        }
       : null,
   }
 }
@@ -345,6 +356,17 @@ export type LojaCusto = {
    * a maior da rede porque mostrava quase quatro vezes mais dias.
    */
   janelaIfoodDias: number | null
+  /** Início e fim do relatório, pra tela mostrar a data e não só a duração. */
+  janelaIfood: { inicio: string; fim: string } | null
+  /**
+   * O relatório começa em outro mês.
+   *
+   * ⚠️ É o caso que enganou de verdade: a Jardins mostrava R$ 180 mil em
+   * "Agosto/2026" com um relatório de 12/07 a 10/08 — vinte dos trinta dias
+   * eram julho. Não dá pra recortar (o relatório traz o total do período, sem
+   * abertura por dia), então a tela precisa dizer.
+   */
+  janelaForaDoMes: boolean
   itens: number
   itensComCusto: number
   qtdVendida: number
@@ -431,6 +453,8 @@ export async function getLojasCusto(
       plataformas: [],
       semItens: [],
       janelaIfoodDias: null,
+      janelaIfood: null,
+      janelaForaDoMes: false,
       itens: 0,
       itensComCusto: 0,
       qtdVendida: 0,
@@ -487,9 +511,18 @@ export async function getLojasCusto(
     }
   }
 
-  for (const j of (janelas ?? []) as { unit_id: string; dias: number }[]) {
+  for (const j of (janelas ?? []) as {
+    unit_id: string
+    dias: number
+    period_start: string
+    period_end: string
+  }[]) {
     const cur = acc.get(j.unit_id)
-    if (cur) cur.janelaIfoodDias = Number(j.dias)
+    if (!cur) continue
+    cur.janelaIfoodDias = Number(j.dias)
+    cur.janelaIfood = { inicio: j.period_start, fim: j.period_end }
+    const [ay, am] = j.period_start.slice(0, 7).split("-").map(Number)
+    cur.janelaForaDoMes = ay !== year || am !== month
   }
 
   // Quem faturou na plataforma mas não trouxe item nenhum.
