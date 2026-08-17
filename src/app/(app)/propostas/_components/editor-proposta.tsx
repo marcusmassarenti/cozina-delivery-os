@@ -8,6 +8,7 @@ import {
   FileDown,
   Link2,
   Loader2,
+  MessageCircle,
   RotateCcw,
   Send,
 } from "lucide-react"
@@ -79,6 +80,41 @@ export function EditorProposta({
     await navigator.clipboard.writeText(link)
     setCopiado(true)
     setTimeout(() => setCopiado(false), 2000)
+  }
+
+  /**
+   * Manda o link pelo WhatsApp — que é por onde a proposta realmente circula.
+   *
+   * ⚠️ O LINK VAI EM PRODUÇÃO, sempre. Aqui o `link` do estado pode estar
+   * apontando pra localhost (ver `pedirLink`), e mandar isso pro cliente seria
+   * mandar um link que não abre em lugar nenhum.
+   *
+   * Sem número no cadastro, o `wa.me` abre a lista de contatos em vez de
+   * recusar: melhor escolher a pessoa na hora do que travar o botão porque
+   * falta um campo que ninguém preencheu.
+   */
+  function whatsapp() {
+    if (!link) return
+    const caminho = new URL(link, window.location.origin).pathname
+    const url = `https://www.deliveryos.food${caminho}`
+
+    // 11 dígitos = celular sem DDI. O WhatsApp exige o 55 na frente; com o
+    // número já internacionalizado (12+), não mexe.
+    const so = (d.contatoTelefone ?? "").replace(/\D/g, "")
+    const numero = so.length === 10 || so.length === 11 ? `55${so}` : so
+
+    const texto =
+      `Olá! Segue a proposta comercial do Delivery OS` +
+      `${d.razaoSocial ? ` para ${d.razaoSocial}` : ""}.\n\n` +
+      `Neste link você lê a proposta inteira e, se estiver tudo certo, ` +
+      `já aceita por ali mesmo — não precisa imprimir nem assinar nada:\n${url}\n\n` +
+      `Qualquer dúvida, é só me chamar.`
+
+    window.open(
+      `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`,
+      "_blank",
+      "noopener",
+    )
   }
 
   function set<K extends keyof DadosProposta>(k: K, v: DadosProposta[K]) {
@@ -419,6 +455,14 @@ export function EditorProposta({
                       {copiado ? "Copiado" : "Copiar"}
                     </Button>
                   </div>
+                  <button
+                    onClick={whatsapp}
+                    className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-1.5 text-[11.5px] font-bold text-white transition-opacity hover:opacity-90"
+                  >
+                    <MessageCircle className="size-3.5" />
+                    Enviar pelo WhatsApp
+                    {d.contatoTelefone ? ` · ${d.contatoTelefone}` : ""}
+                  </button>
                   <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
                     Quem abrir lê a proposta e aceita na própria página. O
                     comprovante (nome, CPF, data, IP e hash) fica registrado
