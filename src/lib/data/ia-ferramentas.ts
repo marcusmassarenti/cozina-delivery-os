@@ -174,7 +174,7 @@ export function ferramentasDoNino(
           soma_top_10: somar(10),
           soma_top_20: somar(20),
           faturamento_de_todos_os_itens: somar(linhas.length),
-          ...(await coberturaDeItens(unitIds, year, month, alvo)),
+          ...(await coberturaDeItens(units, year, month, alvo)),
           top_20: linhas.slice(0, 20),
           // Quedas só valem com base de comparação; sem mês anterior a
           // variação é null e o item não deve aparecer como "caiu".
@@ -393,36 +393,45 @@ export function ferramentasDoNino(
  * parcial — e apresenta uma fatia do cardápio como se fosse o todo.
  */
 async function coberturaDeItens(
-  unitIds: string[],
+  units: Unidade[],
   year: number,
   month: number,
   plataformas: PlatformId[],
 ): Promise<Record<string, unknown>> {
+  if (units.length === 0) return {}
   try {
+    // ⚠️ USA AS `units` QUE JÁ CHEGARAM, não `getVisibleUnits()`.
+    //
+    // A primeira versão buscava de novo, e o aviso simplesmente não saiu na
+    // resposta ao Marcus. Buscar de novo é errado por dois motivos: repete um
+    // trabalho que o chat já fez, e — o que quebrou — ignora o escopo que o
+    // chat resolveu (a pergunta pode estar filtrada por loja, e aí a cobertura
+    // seria de um conjunto diferente do ranking que ela acompanha).
     const { getLojasCusto } = await import("@/lib/data/custo-itens")
-    const { getVisibleUnits } = await import("@/lib/data/units")
-    const todas = await getVisibleUnits()
-    const alvo = todas.filter(
-      (u) => u.active && (unitIds.length === 0 || unitIds.includes(u.id)),
+    const lojas = await getLojasCusto(
+      // `code` só existe pro link da tela de Ficha Técnica; aqui nada o lê.
+      units.map((u) => ({ id: u.id, code: u.id, name: u.name })),
+      year,
+      month,
     )
-    if (alvo.length === 0) return {}
 
-    const lojas = await getLojasCusto(alvo, year, month)
     const faturamento = lojas.reduce((s, l) => s + l.receitaMes, 0)
     const comItem = lojas.reduce((s, l) => s + l.receitaItens, 0)
     if (faturamento <= 0) return {}
 
+    const pct = (comItem / faturamento) * 100
     const semRelatorio = lojas
       .filter((l) => l.semItens.length > 0)
       .map((l) => ({ loja: l.nome, plataformas: l.semItens }))
 
     return {
       faturamento_total_do_periodo: r2(faturamento),
-      pct_do_faturamento_com_detalhe_de_item: r2((comItem / faturamento) * 100),
+      receita_com_detalhe_de_item: r2(comItem),
+      pct_do_faturamento_com_detalhe_de_item: r2(pct),
       // Instrução explícita: o modelo não infere sozinho que deve ressalvar.
       aviso_cobertura:
-        comItem / faturamento < 0.9
-          ? `ATENÇÃO: só ${Math.round((comItem / faturamento) * 100)}% do faturamento tem detalhamento por item. Os percentuais acima são sobre a receita COM ITEM (R$ ${r2(comItem)}), não sobre o faturamento total (R$ ${r2(faturamento)}). Diga isso ao usuário — o relatório de Cardápio do iFood e o da Keeta são importados à mão e podem cobrir só parte do mês.`
+        pct < 90
+          ? `OBRIGATORIO DIZER AO USUARIO: apenas ${Math.round(pct)}% do faturamento do periodo tem detalhamento por item. Os percentuais deste ranking sao sobre R$ ${r2(comItem)} (receita com item), NAO sobre o faturamento total de R$ ${r2(faturamento)}. Explique que o relatorio de Cardapio do iFood e o da Keeta sao importados a mao e podem cobrir so parte do mes ou faltar em algumas lojas.`
           : null,
       lojas_sem_relatorio_de_item: semRelatorio.length > 0 ? semRelatorio : null,
       plataformas_consultadas: plataformas,
