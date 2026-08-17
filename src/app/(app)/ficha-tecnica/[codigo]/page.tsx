@@ -79,9 +79,28 @@ export default async function FichaTecnicaLojaPage({
             <ChevronLeft className="size-3.5" />
             Ficha Técnica
           </Link>
-          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">
-            {loja.name}
-          </h1>
+          <div className="mt-0.5 flex items-center gap-2.5">
+            {/* Logo + código, igual à lista de Unidades: com 500 lojas, o nome
+                sozinho não diz qual das duas "Jardins" está aberta. */}
+            {loja.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={loja.logoUrl}
+                alt=""
+                className="size-9 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">
+                {loja.code}
+              </span>
+            )}
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {loja.name}
+            </h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
+              #{loja.code}
+            </span>
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {aba === "custos"
               ? "Digite o custo de cada item e veja quanto sobra depois da comissão"

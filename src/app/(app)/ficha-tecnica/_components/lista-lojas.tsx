@@ -173,7 +173,12 @@ export function ListaLojas({
                       </span>
                     )}
                     <span>
-                      <span className="block font-semibold">{l.nome}</span>
+                      <span className="block font-semibold">
+                        {l.nome}
+                        <span className="ml-1.5 font-mono text-[10.5px] font-normal tabular-nums text-muted-foreground">
+                          #{l.codigo}
+                        </span>
+                      </span>
                       {l.cidade && (
                         <span className="block text-[11px] text-muted-foreground">
                           {l.cidade}
