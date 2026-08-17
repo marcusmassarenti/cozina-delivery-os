@@ -118,10 +118,12 @@ export function ListaLojas({
             ))}
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-            Essas lojas <b>venderam</b> nessas plataformas neste mês, mas o
-            relatório que abre a venda item a item não entrou — no iFood ele vem
-            de planilha, não pela API. Sem ele, o custo desses itens não tem
-            onde ser preenchido e a receita deles fica fora da conta.{" "}
+            <b>A conexão não está com problema.</b> A API do iFood traz
+            faturamento, pedidos e avaliações — ela não traz <b>quais itens</b>{" "}
+            foram vendidos. Isso só existe no relatório de Cardápio, exportado à
+            mão no Portal do Parceiro. Enquanto ele não entra, o custo desses
+            itens não tem onde ser preenchido e a receita deles fica fora da
+            conta.{" "}
             <Link
               href="/importacao"
               className="font-semibold underline underline-offset-2"
