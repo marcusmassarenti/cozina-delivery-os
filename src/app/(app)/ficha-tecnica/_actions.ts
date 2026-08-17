@@ -326,3 +326,94 @@ export async function salvarCategoriasPadrao(
   revalidatePath("/ficha-tecnica")
   return { ok: true }
 }
+
+/**
+ * Ações em massa sobre as linhas selecionadas.
+ *
+ * Um só ponto de entrada porque as três operações (categoria, custo fixo e
+ * custo como % do preço) compartilham a mesma trava de escopo e o mesmo upsert.
+ * Separar em três actions triplicaria a checagem de permissão — e é sempre a
+ * terceira cópia que esquece de checar.
+ *
+ * ⚠️ `custoPctPreco` chega com o PREÇO de cada linha vindo do cliente, e isso é
+ * seguro porque preço não é dado de entrada: é receita ÷ quantidade, que o
+ * servidor recalcula em toda leitura. Se alguém forjar um preço aqui, grava um
+ * custo errado NA PRÓPRIA LOJA dele — não vaza nem altera dado de terceiro.
+ */
+export async function aplicarEmMassa(input: {
+  unitId: string
+  alvos: { platform: string; nomeItem: string; precoMedio: number }[]
+  categoria?: string | null
+  custo?: number | null
+  custoPctPreco?: number | null
+}): Promise<EstadoCusto & { gravados?: number }> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, erro: "Sem permissão." }
+  }
+  if (!(await lojaPermitida(input.unitId))) {
+    return { ok: false, erro: "Loja fora do seu acesso." }
+  }
+
+  const validos = input.alvos.filter(
+    (a) =>
+      PLATAFORMAS_CUSTO.includes(a.platform as never) && a.nomeItem.trim() !== "",
+  )
+  if (validos.length === 0) return { ok: true, gravados: 0 }
+
+  const mexeCusto =
+    input.custo !== undefined || input.custoPctPreco !== undefined
+  const mexeCategoria = input.categoria !== undefined
+  if (!mexeCusto && !mexeCategoria) {
+    return { ok: false, erro: "Nada para aplicar." }
+  }
+
+  if (
+    input.custoPctPreco !== undefined &&
+    input.custoPctPreco !== null &&
+    (!Number.isFinite(input.custoPctPreco) ||
+      input.custoPctPreco < 0 ||
+      input.custoPctPreco > 100)
+  ) {
+    return { ok: false, erro: "Percentual inválido." }
+  }
+  if (
+    input.custo !== undefined &&
+    input.custo !== null &&
+    (!Number.isFinite(input.custo) || input.custo < 0)
+  ) {
+    return { ok: false, erro: "Custo inválido." }
+  }
+
+  const user = await getAuthUser()
+  const agora = new Date().toISOString()
+
+  const linhas = validos.map((a) => {
+    const linha: Record<string, unknown> = {
+      unit_id: input.unitId,
+      platform: a.platform,
+      nome_item: a.nomeItem.trim(),
+      updated_by: user?.id ?? null,
+      updated_at: agora,
+    }
+    if (mexeCategoria) {
+      const cat = (input.categoria ?? "").trim().slice(0, 60)
+      linha.categoria = cat === "" ? null : cat
+    }
+    if (input.custoPctPreco !== undefined && input.custoPctPreco !== null) {
+      linha.custo = Math.round(a.precoMedio * (input.custoPctPreco / 100) * 100) / 100
+    } else if (input.custo !== undefined) {
+      linha.custo = input.custo
+    }
+    return linha
+  })
+
+  const { error } = await createAdminClient()
+    .from("item_custos")
+    .upsert(linhas, { onConflict: "unit_id,platform,nome_item" })
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/ficha-tecnica")
+  return { ok: true, gravados: linhas.length }
+}

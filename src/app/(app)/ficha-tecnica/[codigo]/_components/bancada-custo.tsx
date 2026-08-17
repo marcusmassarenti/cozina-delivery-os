@@ -10,9 +10,12 @@ import type { ItemCusto, ResumoCusto } from "@/lib/data/custo-itens"
 
 import {
   aplicarCustoEmLote,
+  aplicarEmMassa,
   salvarCategoriaItem,
   salvarCustoItem,
 } from "../../_actions"
+import { SeletorCategoria } from "./seletor-categoria"
+import { BarraMassa } from "./barra-massa"
 
 /**
  * A bancada: uma linha por item vendido, custo digitado direto nela.
@@ -45,6 +48,9 @@ export function BancadaCusto({
   const [soSemCusto, setSoSemCusto] = React.useState(false)
   const [plataforma, setPlataforma] = React.useState<string>("")
   const [categoria, setCategoria] = React.useState<string>("")
+  /** Linhas marcadas para ação em massa. Guardadas por chave, não por índice:
+   *  filtrar a lista não pode mudar quem está selecionado. */
+  const [selecao, setSelecao] = React.useState<Set<string>>(new Set())
   const [salvando, setSalvando] = React.useState<string | null>(null)
   const [erro, setErro] = React.useState<string | null>(null)
   const [oferta, setOferta] = React.useState<{
@@ -171,6 +177,37 @@ export function BancadaCusto({
     setOferta(null)
     if (!r.ok) setErro(r.erro ?? "Não deu.")
     else router.refresh()
+  }
+
+  async function aplicarMassa(input: {
+    categoria?: string | null
+    custo?: number | null
+    custoPctPreco?: number | null
+  }) {
+    const alvos = resumo.itens
+      .filter((i) => selecao.has(chave(i)))
+      .map((i) => ({
+        platform: i.platform,
+        nomeItem: i.nomeItem,
+        precoMedio: i.precoMedio,
+      }))
+    if (alvos.length === 0) return
+
+    setSalvando("massa")
+    setErro(null)
+    const r = await aplicarEmMassa({ unitId, alvos, ...input })
+    setSalvando(null)
+    if (!r.ok) {
+      setErro(r.erro ?? "Não deu.")
+      return
+    }
+    // A seleção some depois de aplicar: manter marcado convida a aplicar duas
+    // vezes sem perceber, e a segunda sobrescreve a primeira em silêncio.
+    setSelecao(new Set())
+    // O que foi gravado em massa passa a ser o valor de referência — senão o
+    // blur de uma linha ainda em foco regravaria o valor antigo.
+    enviado.current = {}
+    router.refresh()
   }
 
   /**
@@ -408,16 +445,33 @@ export function BancadaCusto({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
-          {/* Autocompletar com o que já existe: evita "Bebidas", "bebidas" e
-              "Bebida" virarem três categorias na mesma loja. */}
-          <datalist id="ft-categorias">
-            {opcoesCategoria.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
           <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                <th className="w-9 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todos os visíveis"
+                    checked={
+                      visiveis.length > 0 &&
+                      visiveis.every((i) => selecao.has(chave(i)))
+                    }
+                    onChange={(e) => {
+                      // Marca só o que ESTÁ FILTRADO. Marcar 150 itens quando a
+                      // tela mostra 12 é a forma mais rápida de aplicar custo
+                      // onde ninguém queria.
+                      setSelecao((p) => {
+                        const n = new Set(p)
+                        for (const i of visiveis) {
+                          if (e.target.checked) n.add(chave(i))
+                          else n.delete(chave(i))
+                        }
+                        return n
+                      })
+                    }}
+                    className="size-3.5 accent-primary"
+                  />
+                </th>
                 <th className="px-4 py-2.5 text-left font-medium">Item</th>
                 <th className="px-3 py-2.5 text-left font-medium">Categoria</th>
                 <th className="px-3 py-2.5 text-right font-medium">
@@ -444,6 +498,22 @@ export function BancadaCusto({
                     key={k}
                     className="border-b last:border-0 hover:bg-muted/40"
                   >
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar ${i.nomeItem}`}
+                        checked={selecao.has(k)}
+                        onChange={(e) =>
+                          setSelecao((p) => {
+                            const n = new Set(p)
+                            if (e.target.checked) n.add(k)
+                            else n.delete(k)
+                            return n
+                          })
+                        }
+                        className="size-3.5 accent-primary"
+                      />
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <PlatformLogo platform={i.platform} size="sm" />
@@ -454,13 +524,11 @@ export function BancadaCusto({
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        list="ft-categorias"
-                        defaultValue={i.categoria ?? ""}
-                        placeholder="—"
-                        onBlur={(e) => {
-                          const v = e.target.value.trim()
-                          if (v === (i.categoria ?? "")) return
+                      <SeletorCategoria
+                        valor={i.categoria}
+                        opcoes={opcoesCategoria}
+                        className="w-32"
+                        onEscolher={(v) => {
                           void salvarCategoriaItem({
                             unitId,
                             platform: i.platform,
@@ -471,7 +539,6 @@ export function BancadaCusto({
                             else setErro(r.erro ?? "Não deu.")
                           })
                         }}
-                        className="w-28 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs outline-none hover:border-border focus:border-ring"
                       />
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
@@ -548,6 +615,14 @@ export function BancadaCusto({
           </table>
         </div>
       )}
+
+      <BarraMassa
+        selecionados={resumo.itens.filter((i) => selecao.has(chave(i)))}
+        categorias={opcoesCategoria}
+        ocupado={salvando === "massa"}
+        onLimpar={() => setSelecao(new Set())}
+        onAplicar={(x) => void aplicarMassa(x)}
+      />
 
       {/* ── De onde vêm os percentuais ────────────────────────────── */}
       <div className="rounded-xl border bg-card p-4">
