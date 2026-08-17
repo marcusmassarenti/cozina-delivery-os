@@ -518,3 +518,41 @@ export async function getLojasCusto(
   // Loja sem venda no mês vai pro fim: ela não tem trabalho a fazer aqui.
   return [...acc.values()].sort((a, b) => b.receita - a.receita)
 }
+
+/**
+ * Quantos dias de relatório de Cardápio cada loja tem no mês, e quantas
+ * venderam sem relatório nenhum.
+ *
+ * ⚠️ Serve pra QUALQUER tela que some item de iFood entre lojas — o Top
+ * produtos da tela inicial, por exemplo. O relatório é exportado à mão, uma
+ * loja por arquivo, com período escolhido na hora: somar lojas com janelas
+ * diferentes é somar coisas diferentes, e quem tem mais dias pesa mais no
+ * ranking sem vender mais.
+ */
+export async function getJanelasIfood(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<{ dias: number; lojasSemRelatorio: number }[]> {
+  if (unitIds.length === 0) return []
+  const admin = createAdminClient()
+
+  const [{ data: janelas }, fin] = await Promise.all([
+    admin.rpc("ifood_janela_usada", {
+      p_unit_ids: unitIds,
+      p_year: year,
+      p_month: month,
+    }),
+    getFinanceiroResumoByUnits(unitIds, year, month),
+  ])
+
+  const linhas = (janelas ?? []) as { unit_id: string; dias: number }[]
+  const comRelatorio = new Set(linhas.map((l) => l.unit_id))
+
+  // Faturou no iFood e não tem relatório: some do ranking sem deixar rastro.
+  const lojasSemRelatorio = unitIds.filter(
+    (id) => (fin.get(id)?.bruto ?? 0) > 0 && !comRelatorio.has(id),
+  ).length
+
+  return linhas.map((l) => ({ dias: Number(l.dias), lojasSemRelatorio }))
+}
