@@ -10,23 +10,32 @@
 import { revalidatePath } from "next/cache"
 
 import { getAuthUser, getCurrentHoldingId } from "@/lib/auth/permissions"
-import { requireAdmin } from "@/lib/auth/guards"
+import { requireUnitWrite } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getVisibleUnits } from "@/lib/data/units"
 import { PLATAFORMAS_CUSTO } from "@/lib/data/custo-itens"
 
 export type EstadoCusto = { ok: boolean; erro?: string }
 
 /**
- * A loja tem que estar no escopo de quem está salvando.
+ * Pode escrever NESTA loja?
  *
- * ⚠️ O unitId chega do navegador. Sem esta checagem, um administrador de outro
- * cliente gravaria custo na loja do vizinho mandando o uuid na mão — a tela
- * nunca ofereceria a opção, mas a ação aceitaria.
+ * ⚠️ A permissão é por LOJA, não por cargo. Antes eram duas checagens em
+ * sequência — `requireAdmin()` e depois "a loja está no meu escopo?" — e a
+ * primeira barrava franqueado e gerente de mexerem na própria loja, que é
+ * justamente quem convive com o custo dela.
+ *
+ * `requireUnitWrite` é o guard desenhado pra isso (o comentário dele cita
+ * "custos" com todas as letras): resolve escopo, cross-tenant e ainda recusa
+ * loja emprestada em modo leitura. O unitId chega do navegador, então essa
+ * checagem é o que impede gravar na loja do vizinho mandando o uuid na mão.
  */
-async function lojaPermitida(unitId: string): Promise<boolean> {
-  const units = await getVisibleUnits()
-  return units.some((u) => u.id === unitId)
+async function podeEscrever(unitId: string): Promise<boolean> {
+  try {
+    await requireUnitWrite(unitId)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function salvarCustoItem(input: {
@@ -36,14 +45,8 @@ export async function salvarCustoItem(input: {
   /** Null apaga a linha — é como se volta pra "não preenchido". */
   custo: number | null
 }): Promise<EstadoCusto> {
-  try {
-    await requireAdmin()
-  } catch {
-    return { ok: false, erro: "Sem permissão." }
-  }
-
-  if (!(await lojaPermitida(input.unitId))) {
-    return { ok: false, erro: "Loja fora do seu acesso." }
+  if (!(await podeEscrever(input.unitId))) {
+    return { ok: false, erro: "Você não tem acesso a esta loja." }
   }
   if (!PLATAFORMAS_CUSTO.includes(input.platform as never)) {
     return { ok: false, erro: "Plataforma inválida." }
@@ -103,13 +106,8 @@ export async function aplicarCustoEmLote(input: {
   custo: number
   alvos: { platform: string; nomeItem: string }[]
 }): Promise<EstadoCusto & { gravados?: number }> {
-  try {
-    await requireAdmin()
-  } catch {
-    return { ok: false, erro: "Sem permissão." }
-  }
-  if (!(await lojaPermitida(input.unitId))) {
-    return { ok: false, erro: "Loja fora do seu acesso." }
+  if (!(await podeEscrever(input.unitId))) {
+    return { ok: false, erro: "Você não tem acesso a esta loja." }
   }
   if (!Number.isFinite(input.custo) || input.custo < 0) {
     return { ok: false, erro: "Custo inválido." }
@@ -155,13 +153,8 @@ export async function salvarCategoriaItem(input: {
   nomeItem: string
   categoria: string
 }): Promise<EstadoCusto> {
-  try {
-    await requireAdmin()
-  } catch {
-    return { ok: false, erro: "Sem permissão." }
-  }
-  if (!(await lojaPermitida(input.unitId))) {
-    return { ok: false, erro: "Loja fora do seu acesso." }
+  if (!(await podeEscrever(input.unitId))) {
+    return { ok: false, erro: "Você não tem acesso a esta loja." }
   }
   if (!PLATAFORMAS_CUSTO.includes(input.platform as never)) {
     return { ok: false, erro: "Plataforma inválida." }
@@ -213,13 +206,8 @@ export async function importarCustosPlanilha(input: {
     categoria: string | null
   }[]
 }): Promise<EstadoCusto & { gravados?: number; ignorados?: number }> {
-  try {
-    await requireAdmin()
-  } catch {
-    return { ok: false, erro: "Sem permissão." }
-  }
-  if (!(await lojaPermitida(input.unitId))) {
-    return { ok: false, erro: "Loja fora do seu acesso." }
+  if (!(await podeEscrever(input.unitId))) {
+    return { ok: false, erro: "Você não tem acesso a esta loja." }
   }
 
   const admin = createAdminClient()
@@ -291,10 +279,12 @@ export async function importarCustosPlanilha(input: {
 export async function salvarCategoriasPadrao(
   nomes: string[],
 ): Promise<EstadoCusto> {
+  // Esta continua de admin: a lista vale pra REDE inteira, não pra uma loja.
   try {
+    const { requireAdmin } = await import("@/lib/auth/guards")
     await requireAdmin()
   } catch {
-    return { ok: false, erro: "Sem permissão." }
+    return { ok: false, erro: "Apenas o administrador altera as categorias." }
   }
 
   const holdingId = await getCurrentHoldingId()
@@ -347,13 +337,8 @@ export async function aplicarEmMassa(input: {
   custo?: number | null
   custoPctPreco?: number | null
 }): Promise<EstadoCusto & { gravados?: number }> {
-  try {
-    await requireAdmin()
-  } catch {
-    return { ok: false, erro: "Sem permissão." }
-  }
-  if (!(await lojaPermitida(input.unitId))) {
-    return { ok: false, erro: "Loja fora do seu acesso." }
+  if (!(await podeEscrever(input.unitId))) {
+    return { ok: false, erro: "Você não tem acesso a esta loja." }
   }
 
   const validos = input.alvos.filter(

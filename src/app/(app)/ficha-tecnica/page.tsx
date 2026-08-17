@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ChefHat, ListChecks, Tags, Wallet } from "lucide-react"
 
-import { requireAdmin } from "@/lib/auth/guards"
+import { requireAuth } from "@/lib/auth/guards"
 import { isProPlan } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
@@ -94,14 +94,23 @@ export default async function FichaTecnicaPage({
     )
   }
 
-  let ok = false
-  try {
-    await requireAdmin()
-    ok = true
-  } catch {
-    // não-admin
-  }
-  if (!ok) redirect("/inicio")
+  /**
+   * ⚠️ SEM `requireAdmin()` AQUI — e a ausência é o conserto.
+   *
+   * Diego avisou que os usuários dele "não conseguem entrar, volta pra tela
+   * inicial em looping". Não era loop: eram 3 gerentes e 5 franqueados da DG
+   * FOODS batendo no `requireAdmin()` e sendo mandados pra /inicio — enquanto o
+   * menu continuava oferecendo a tela pra eles. Clica, volta; clica, volta.
+   *
+   * O gate veio copiado da ficha antiga, que era cadastro interno da Cozina e
+   * só de admin. Esta é uma ferramenta operacional, e era a ÚNICA page.tsx do
+   * sistema com esse guard: em todas as outras quem governa é o módulo RBAC
+   * (`financeiro`) mais o plano. Voltou a seguir o padrão.
+   *
+   * A escrita continua protegida por loja em `_actions.ts` (requireUnitWrite),
+   * que é onde a permissão realmente importa.
+   */
+  await requireAuth()
 
   const sp = await searchParams
   const { range: periodRange, year, month } = readPeriod(sp)
