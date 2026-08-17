@@ -515,9 +515,6 @@ export function BancadaCusto({
 
   const pct = Math.round(vivo.cobertura * 100)
 
-  /** TEMPORÁRIO — diagnóstico do carregamento. Sai junto com o `diag`. */
-  const diag = resumo.diag
-
   return (
     <div className="flex flex-col gap-3">
       {/* ── Cobertura ─────────────────────────────────────────────── */}
@@ -592,14 +589,6 @@ export function BancadaCusto({
           </p>
         )}
 
-        {/* TEMPORÁRIO — some assim que a causa aparecer. */}
-        {diag && (
-          <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-[10px] leading-relaxed text-muted-foreground">
-            {`diag · linhas=${diag.linhas} erro=${diag.erro ?? "nenhum"}
-mapas: custo=${diag.mapaCusto} categoria=${diag.mapaCategoria} preco=${diag.mapaPrecoVenda}
-${diag.chaves.join("\n")}`}
-          </pre>
-        )}
       </div>
 
       {/* ── Oferta de aplicar em lote ─────────────────────────────── */}

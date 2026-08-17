@@ -3,10 +3,14 @@
 import * as React from "react"
 import { FileDown } from "lucide-react"
 
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, rotuloPlataforma } from "@/components/platform-logo"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { forcarTemaClaroNoPrint } from "@/lib/print-tema-claro"
-import type { ItemCusto, ResumoCusto } from "@/lib/data/custo-itens"
+import type {
+  ItemCusto,
+  PlataformaCusto,
+  ResumoCusto,
+} from "@/lib/data/custo-itens"
 
 import {
   BarrasTabelaVsMedio,
@@ -117,6 +121,52 @@ export function PainelCusto({
     const custo = comCusto.reduce((s, i) => s + (i.custo ?? 0) * i.qtd, 0)
     const taxa = comCusto.reduce((s, i) => s + i.taxaValor * i.qtd, 0)
     return { receita, custo, taxa, lucro: receita - custo - taxa }
+  }, [comCusto])
+
+  /**
+   * A mesma conta, plataforma a plataforma.
+   *
+   * ── POR QUE ISSO NÃO É DETALHE (Marcus, 17/08/26) ────────────────────────
+   * "são distintas por conta das taxas e das margens." E são mesmo: o Cardápio
+   * Web não tem comissão de marketplace, então o MESMO hambúrguer, com o MESMO
+   * custo, sai com 70% de margem lá e 32% no iFood. Um número só, somando as
+   * quatro, esconde exatamente a decisão que o dono precisa tomar — pra onde
+   * empurrar o cliente.
+   *
+   * É também o que explicava a estranheza do quadrante: a Costela BBQ aparecia
+   * como Estrela e como Abacaxi ao mesmo tempo, porque eram canais diferentes.
+   */
+  const porPlataforma = React.useMemo(() => {
+    const acc = new Map<
+      PlataformaCusto,
+      { receita: number; custo: number; taxa: number; itens: number; qtd: number }
+    >()
+    for (const i of comCusto) {
+      const a = acc.get(i.platform) ?? {
+        receita: 0,
+        custo: 0,
+        taxa: 0,
+        itens: 0,
+        qtd: 0,
+      }
+      a.receita += i.receita
+      a.custo += (i.custo ?? 0) * i.qtd
+      a.taxa += i.taxaValor * i.qtd
+      a.itens += 1
+      a.qtd += i.qtd
+      acc.set(i.platform, a)
+    }
+    return [...acc.entries()]
+      .map(([platform, a]) => ({
+        platform,
+        ...a,
+        lucro: a.receita - a.custo - a.taxa,
+        cmvPct: a.receita > 0 ? a.custo / a.receita : 0,
+        taxaPct: a.receita > 0 ? a.taxa / a.receita : 0,
+        margemPct:
+          a.receita > 0 ? (a.receita - a.custo - a.taxa) / a.receita : 0,
+      }))
+      .sort((a, b) => b.receita - a.receita)
   }, [comCusto])
 
   /** Receita por categoria. Sem categoria vira "Sem categoria" em vez de sumir:
@@ -287,6 +337,100 @@ export function PainelCusto({
         </div>
       </div>
 
+      {/* ── Por plataforma ────────────────────────────────────────── */}
+      {porPlataforma.length > 1 && (
+        <div className="break-inside-avoid rounded-xl border bg-card p-4">
+          <h2 className="text-sm font-bold">O mesmo cardápio, por plataforma</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            Mesmo produto e mesmo custo, margem diferente: quem cobra comissão
+            come a diferença. É o que decide pra onde empurrar o cliente.
+          </p>
+
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[620px] text-[12.5px]">
+              <thead>
+                <tr className="border-b text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="py-2 pr-3 text-left font-medium">Plataforma</th>
+                  <th className="py-2 pr-3 text-right font-medium">Receita</th>
+                  <th className="py-2 pr-3 text-right font-medium">CMV</th>
+                  <th className="py-2 pr-3 text-right font-medium">Taxas</th>
+                  <th className="py-2 pr-3 text-right font-medium">Margem</th>
+                  <th className="py-2 text-right font-medium">Lucro bruto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {porPlataforma.map((p) => (
+                  <tr key={p.platform} className="border-b last:border-0">
+                    <td className="py-2 pr-3">
+                      <span className="flex items-center gap-1.5">
+                        <PlatformLogo platform={p.platform} size="sm" />
+                        {rotuloPlataforma(p.platform)}
+                        <span className="text-[10.5px] text-muted-foreground">
+                          {fmtNum(p.itens)} itens
+                        </span>
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {fmtBRL(p.receita)}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                      {fmtPct(p.cmvPct * 100, 1)}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                      {p.taxaPct > 0 ? fmtPct(p.taxaPct * 100, 1) : "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      <span
+                        className={
+                          p.margemPct >= 0
+                            ? "font-semibold tabular-nums text-emerald-600"
+                            : "font-semibold tabular-nums text-rose-600"
+                        }
+                      >
+                        {fmtPct(p.margemPct * 100, 1)}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right font-semibold tabular-nums">
+                      {fmtBRL(p.lucro)}
+                    </td>
+                  </tr>
+                ))}
+                {/* O total fecha com os KPIs do topo — se algum dia não fechar,
+                    é aqui que se vê primeiro. */}
+                <tr className="bg-muted/40 font-semibold">
+                  <td className="py-2 pr-3">Todas</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {fmtBRL(cascata.receita)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {fmtPct(cmvMedio * 100, 1)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {fmtPct(
+                      cascata.receita > 0
+                        ? (cascata.taxa / cascata.receita) * 100
+                        : 0,
+                      1,
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {fmtPct(
+                      cascata.receita > 0
+                        ? (cascata.lucro / cascata.receita) * 100
+                        : 0,
+                      1,
+                    )}
+                  </td>
+                  <td className="py-2 text-right tabular-nums">
+                    {fmtBRL(cascata.lucro)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Tabela × realizado ────────────────────────────────────── */}
       {comparativo.linhas.length > 0 && (
         <div className="break-inside-avoid rounded-xl border bg-card p-4">
@@ -456,8 +600,11 @@ export function PainelCusto({
                   key={`${i.platform}|${i.nomeItem}`}
                   className="flex items-center gap-2 text-[12.5px]"
                 >
-                  <span className="w-[38%] shrink-0 truncate" title={i.nomeItem}>
-                    {i.nomeItem}
+                  <span className="flex w-[38%] shrink-0 items-center gap-1.5">
+                    <PlatformLogo platform={i.platform} size="sm" />
+                    <span className="truncate" title={i.nomeItem}>
+                      {i.nomeItem}
+                    </span>
                   </span>
                   <div className="relative h-3.5 flex-1 rounded bg-muted/60">
                     <span
@@ -559,10 +706,17 @@ function Quadrante({
         {itens.slice(0, 5).map((i) => (
           <li
             key={`${i.platform}|${i.nomeItem}`}
-            className="flex items-baseline justify-between gap-2 text-[12.5px]"
+            className="flex items-center justify-between gap-2 text-[12.5px]"
           >
-            <span className="truncate" title={i.nomeItem}>
-              {i.nomeItem}
+            {/* ⚠️ O logo NÃO é enfeite. O mesmo produto cai em quadrantes
+                opostos conforme a plataforma — a Costela BBQ é ESTRELA no
+                Cardápio Web (sem comissão) e ABACAXI na Keeta. Sem dizer de
+                qual canal é a linha, a leitura vira contradição. */}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <PlatformLogo platform={i.platform} size="sm" />
+              <span className="truncate" title={i.nomeItem}>
+                {i.nomeItem}
+              </span>
             </span>
             <span className="shrink-0 tabular-nums text-muted-foreground">
               {fmtNum(i.qtd)} un · {fmtPct((i.lucroPct ?? 0) * 100, 0)}
