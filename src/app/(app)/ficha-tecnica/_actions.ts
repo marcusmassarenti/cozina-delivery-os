@@ -93,6 +93,72 @@ export async function salvarCustoItem(input: {
 }
 
 /**
+ * Salvar o PREÇO DE VENDA (de tabela) de um item.
+ *
+ * Gêmea de `salvarCustoItem`, e separada de propósito: preço e custo são
+ * preenchidos em momentos diferentes — o preço a operação sabe de cor, o custo
+ * depende da ficha — e um campo não pode ficar esperando o outro pra gravar.
+ *
+ * A linha é a MESMA (upsert por loja+plataforma+nome), então pode existir preço
+ * sem custo e vice-versa: os dois nascem NULL e cada um vira número quando
+ * alguém digita.
+ */
+export async function salvarPrecoVendaItem(input: {
+  unitId: string
+  platform: string
+  nomeItem: string
+  /** Null volta pra "não preenchido" — não apaga a linha. */
+  precoVenda: number | null
+}): Promise<EstadoCusto> {
+  if (!(await podeEscrever(input.unitId))) {
+    return { ok: false, erro: "Você não tem acesso a esta loja." }
+  }
+  if (!PLATAFORMAS_CUSTO.includes(input.platform as never)) {
+    return { ok: false, erro: "Plataforma inválida." }
+  }
+  const nome = input.nomeItem.trim()
+  if (!nome) return { ok: false, erro: "Item sem nome." }
+
+  const admin = createAdminClient()
+
+  if (input.precoVenda === null) {
+    const { error } = await admin
+      .from("item_custos")
+      .update({ preco_venda: null, updated_at: new Date().toISOString() })
+      .eq("unit_id", input.unitId)
+      .eq("platform", input.platform)
+      .eq("nome_item", nome)
+    if (error) return { ok: false, erro: error.message }
+    revalidatePath("/ficha-tecnica")
+    return { ok: true }
+  }
+
+  if (!Number.isFinite(input.precoVenda) || input.precoVenda < 0) {
+    return { ok: false, erro: "Preço inválido." }
+  }
+
+  const user = await getAuthUser()
+  const { error } = await admin.from("item_custos").upsert(
+    {
+      unit_id: input.unitId,
+      platform: input.platform,
+      nome_item: nome,
+      preco_venda: input.precoVenda,
+      // NÃO manda `custo`: na inserção ele fica NULL (= não preenchido).
+      // Mandar zero faria o item nascer "com custo" e entrar na cobertura com
+      // margem de 100% — o bug que a migration 0215 consertou.
+      updated_by: user?.id ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "unit_id,platform,nome_item" },
+  )
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/ficha-tecnica")
+  return { ok: true }
+}
+
+/**
  * Copia o custo de uma linha para as outras que parecem ser a mesma comida.
  *
  * ⚠️ NÃO É AUTOMÁTICO, e é por isso que ele existe como botão. Medimos que
@@ -204,7 +270,17 @@ export async function importarCustosPlanilha(input: {
     nomeItem: string
     custo: number | null
     categoria: string | null
+    precoVenda?: number | null
   }[]
+  /**
+   * A planilha TINHA a coluna "Preço de venda (R$)"?
+   *
+   * ⚠️ Não é firula. Planilhas exportadas antes da coluna existir (0217) não a
+   * trazem, e o upsert é uma escrita de linha inteira: sem esta trava, importar
+   * um arquivo antigo mandaria `preco_venda: null` e apagaria calado o preço de
+   * todos os itens. Ausência de coluna significa "não mexe", nunca "limpa".
+   */
+  incluiPrecoVenda?: boolean
 }): Promise<EstadoCusto & { gravados?: number; ignorados?: number }> {
   if (!(await podeEscrever(input.unitId))) {
     return { ok: false, erro: "Você não tem acesso a esta loja." }
@@ -242,7 +318,12 @@ export async function importarCustosPlanilha(input: {
     (l) =>
       PLATAFORMAS_CUSTO.includes(l.platform as never) &&
       existentes.has(`${l.platform}|${l.nomeItem}`) &&
-      (l.custo !== null || l.categoria !== null),
+      // Linha vazia nas TRÊS colunas editáveis não vira gravação. Sem incluir
+      // o preço aqui, uma planilha com só os preços preenchidos seria
+      // descartada inteira e voltaria como "ignorados".
+      (l.custo !== null ||
+        l.categoria !== null ||
+        (l.precoVenda ?? null) !== null),
   )
   const ignorados = input.linhas.length - validas.length
   if (validas.length === 0) return { ok: true, gravados: 0, ignorados }
@@ -254,6 +335,8 @@ export async function importarCustosPlanilha(input: {
       nome_item: l.nomeItem,
       custo: l.custo,
       categoria: l.categoria,
+      // Só entra na escrita se a planilha realmente tinha a coluna.
+      ...(input.incluiPrecoVenda ? { preco_venda: l.precoVenda ?? null } : {}),
       updated_by: user?.id ?? null,
       updated_at: agora,
     })),

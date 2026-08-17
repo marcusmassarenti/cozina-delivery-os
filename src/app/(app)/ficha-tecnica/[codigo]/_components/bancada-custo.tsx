@@ -13,6 +13,7 @@ import {
   aplicarEmMassa,
   salvarCategoriaItem,
   salvarCustoItem,
+  salvarPrecoVendaItem,
 } from "../../_actions"
 import { SeletorCategoria } from "./seletor-categoria"
 import { BarraMassa } from "./barra-massa"
@@ -76,6 +77,41 @@ export function BancadaCusto({
    */
   const enviado = React.useRef<Record<string, number | null>>({})
 
+  // Os mesmos dois mecanismos, para o preço de venda. Campos separados porque
+  // são gravações independentes: digitar o preço não pode arrastar o custo
+  // junto (nem o contrário), senão um campo em branco apagaria o outro.
+  const [localPreco, setLocalPreco] = React.useState<Record<string, string>>({})
+  const enviadoPreco = React.useRef<Record<string, number | null>>({})
+  const [salvandoPreco, setSalvandoPreco] = React.useState<string | null>(null)
+
+  /**
+   * O que já foi gravado mas o servidor ainda não devolveu.
+   *
+   * ── POR QUE ISSO EXISTE (Marcus, 17/08/26: "demora pra atualizar o valor") ─
+   * Salvar dispara `router.refresh()`, que re-renderiza a página INTEIRA no
+   * servidor: a RPC de itens vendidos mais os agregadores das quatro
+   * plataformas. Isso leva segundos — tempo demais pra quem está digitando uma
+   * coluna inteira e espera ver o resultado a cada linha.
+   *
+   * A saída não é acelerar o refresh, é parar de depender dele pra mostrar o
+   * que a pessoa acabou de digitar. Este mapa cobre a janela entre o "gravou" e
+   * o "servidor devolveu", e as colunas derivadas (desconto, lucro) são
+   * recalculadas aqui com as MESMAS fórmulas do servidor — ver `itensExibidos`.
+   * O refresh continua acontecendo, mas em segundo plano: ele deixou de ser o
+   * que a tela espera pra responder.
+   *
+   * ── COMO ELE SE DESFAZ SOZINHO ───────────────────────────────────────────
+   * Junto do valor guardamos o que o servidor mostrava NAQUELE instante
+   * (`base`). Quando o servidor passa a mostrar outra coisa — a nossa, ou a de
+   * outra pessoa —, o palpite é descartado por derivação, sem efeito nenhum.
+   * Sem essa âncora o overlay viraria uma segunda fonte de verdade permanente,
+   * escondendo pra sempre uma edição feita por outro usuário ou pela planilha.
+   */
+  type Palpite = { valor: number | null; base: number | null }
+  const [otimista, setOtimista] = React.useState<
+    Record<string, { custo?: Palpite; precoVenda?: Palpite }>
+  >({})
+
   const chave = (i: ItemCusto) => `${i.platform}|${i.nomeItem}`
 
   // Padrão da rede primeiro, depois o que só existe aqui — sem repetir.
@@ -92,9 +128,48 @@ export function BancadaCusto({
     [resumo.itens],
   )
 
+  /**
+   * Os itens com o que já foi digitado por cima, e as colunas derivadas
+   * refeitas na hora.
+   *
+   * As fórmulas são as mesmas de `getCustoItens` — se uma delas mudar lá, muda
+   * aqui. Duplicação assumida: a alternativa era esperar o servidor, que é
+   * exatamente o que tornava a tela lenta.
+   */
+  const itensExibidos = React.useMemo(() => {
+    if (Object.keys(otimista).length === 0) return resumo.itens
+    return resumo.itens.map((i) => {
+      const o = otimista[`${i.platform}|${i.nomeItem}`]
+      if (!o) return i
+      // Palpite só vale enquanto o servidor não se mexeu daquela base.
+      const vale = (p: Palpite | undefined, atual: number | null) =>
+        p !== undefined && atual === p.base
+      const custo = vale(o.custo, i.custo) ? (o.custo as Palpite).valor : i.custo
+      const precoVenda = vale(o.precoVenda, i.precoVenda)
+        ? (o.precoVenda as Palpite).valor
+        : i.precoVenda
+      const lucro = custo === null ? null : i.precoMedio - i.taxaValor - custo
+      const desconto = precoVenda === null ? null : precoVenda - i.precoMedio
+      return {
+        ...i,
+        custo,
+        precoVenda,
+        desconto,
+        descontoPct:
+          precoVenda === null || precoVenda <= 0
+            ? null
+            : (desconto as number) / precoVenda,
+        lucro,
+        lucroPct:
+          lucro === null || i.precoMedio <= 0 ? null : lucro / i.precoMedio,
+        lucroMes: lucro === null ? null : lucro * i.qtd,
+      }
+    })
+  }, [resumo.itens, otimista])
+
   const visiveis = React.useMemo(() => {
     const q = normalizar(busca)
-    return resumo.itens.filter((i) => {
+    return itensExibidos.filter((i) => {
       if (soSemCusto && i.custo !== null) return false
       if (plataforma && i.platform !== plataforma) return false
       if (categoria === "__sem__" && i.categoria) return false
@@ -103,7 +178,77 @@ export function BancadaCusto({
       if (q && !normalizar(i.nomeItem).includes(q)) return false
       return true
     })
-  }, [resumo.itens, busca, soSemCusto, plataforma, categoria])
+  }, [itensExibidos, busca, soSemCusto, plataforma, categoria])
+
+  /**
+   * Grava o preço de tabela. Espelha `salvar`, sem a oferta de lote.
+   *
+   * ⚠️ O VALOR DIGITADO SÓ SAI DO ESTADO LOCAL DEPOIS DA RESPOSTA.
+   *
+   * A primeira versão limpava `localPreco[k]` no próprio onBlur. O efeito era
+   * cruel: o campo voltava a ler `item.precoVenda`, que ainda é o antigo até o
+   * refresh do servidor chegar, então o número sumia da tela por um instante e
+   * o Marcus leu isso como "não salvou" (17/08/26) — enquanto o banco já tinha
+   * gravado. Otimismo que expira antes da confirmação é pior que nenhum.
+   *
+   * Quem limpa é esta função, quando já tem o dado novo pra colocar no lugar.
+   */
+  async function salvarPreco(item: ItemCusto, texto: string) {
+    const k = chave(item)
+    const limpo = texto.trim().replace(/\./g, "").replace(",", ".")
+    const valor = limpo === "" ? null : Number(limpo)
+
+    const limparLocal = () =>
+      setLocalPreco((p) => {
+        const n = { ...p }
+        delete n[k]
+        return n
+      })
+
+    if (valor !== null && (!Number.isFinite(valor) || valor < 0)) {
+      setErro(`Preço inválido em "${item.nomeItem}".`)
+      limparLocal()
+      return
+    }
+    const jaEnviado =
+      k in enviadoPreco.current ? enviadoPreco.current[k] : item.precoVenda
+    if (valor === jaEnviado) {
+      limparLocal()
+      return
+    }
+    enviadoPreco.current[k] = valor
+
+    // A linha inteira muda AGORA — desconto incluso. O servidor confirma depois.
+    setOtimista((p) => ({
+      ...p,
+      [k]: { ...p[k], precoVenda: { valor, base: item.precoVenda } },
+    }))
+    limparLocal()
+
+    setErro(null)
+    setSalvandoPreco(k)
+    const r = await salvarPrecoVendaItem({
+      unitId,
+      platform: item.platform,
+      nomeItem: item.nomeItem,
+      precoVenda: valor,
+    })
+    setSalvandoPreco(null)
+
+    if (!r.ok) {
+      setErro(r.erro ?? "Não deu para salvar o preço.")
+      // Desfaz o otimismo: mostrar um valor que o banco recusou é pior que
+      // mostrar o antigo.
+      setOtimista((p) => {
+        const n = { ...p }
+        if (n[k]) delete n[k].precoVenda
+        if (n[k] && Object.keys(n[k]).length === 0) delete n[k]
+        return n
+      })
+      return
+    }
+    router.refresh()
+  }
 
   async function salvar(item: ItemCusto, texto: string) {
     const k = chave(item)
@@ -121,6 +266,17 @@ export function BancadaCusto({
     if (valor === jaEnviado) return
     enviado.current[k] = valor
 
+    // Lucro bruto e taxas mudam na hora; o refresh só confirma. Ver `otimista`.
+    setOtimista((p) => ({
+      ...p,
+      [k]: { ...p[k], custo: { valor, base: item.custo } },
+    }))
+    setLocal((p) => {
+      const n = { ...p }
+      delete n[k]
+      return n
+    })
+
     setErro(null)
     setSalvando(k)
     const r = await salvarCustoItem({
@@ -133,6 +289,12 @@ export function BancadaCusto({
 
     if (!r.ok) {
       setErro(r.erro ?? "Não deu para salvar.")
+      setOtimista((p) => {
+        const n = { ...p }
+        if (n[k]) delete n[k].custo
+        if (n[k] && Object.keys(n[k]).length === 0) delete n[k]
+        return n
+      })
       return
     }
 
@@ -244,7 +406,46 @@ export function BancadaCusto({
     proximo?.select()
   }
 
-  const pct = Math.round(resumo.cobertura * 100)
+  /**
+   * Cobertura, lucro e "faltam N linhas" recalculados do overlay.
+   *
+   * O servidor manda esses números prontos, mas eles ficariam parados até o
+   * refresh chegar — e é justamente a barra de progresso que dá o retorno de
+   * "está andando" pra quem preenche linha a linha. Mesmas contas de
+   * `getCustoItens`; sem otimismo, cai no valor do servidor.
+   */
+  const vivo = React.useMemo(() => {
+    if (Object.keys(otimista).length === 0) {
+      return {
+        receitaComCusto: resumo.receitaComCusto,
+        cobertura: resumo.cobertura,
+        lucroMes: resumo.lucroMes,
+        faltamPara90: resumo.faltamPara90,
+      }
+    }
+    const receitaComCusto = itensExibidos
+      .filter((i) => i.custo !== null)
+      .reduce((s, i) => s + i.receita, 0)
+    const alvo = resumo.receitaTotal * 0.9
+    let acumulado = receitaComCusto
+    let faltamPara90 = 0
+    if (resumo.receitaTotal > 0 && acumulado < alvo) {
+      for (const i of itensExibidos.filter((x) => x.custo === null)) {
+        acumulado += i.receita
+        faltamPara90++
+        if (acumulado >= alvo) break
+      }
+    }
+    return {
+      receitaComCusto,
+      cobertura:
+        resumo.receitaTotal > 0 ? receitaComCusto / resumo.receitaTotal : 0,
+      lucroMes: itensExibidos.reduce((s, i) => s + (i.lucroMes ?? 0), 0),
+      faltamPara90,
+    }
+  }, [itensExibidos, otimista, resumo])
+
+  const pct = Math.round(vivo.cobertura * 100)
 
   return (
     <div className="flex flex-col gap-3">
@@ -261,10 +462,10 @@ export function BancadaCusto({
           <span className="text-sm font-bold tabular-nums text-emerald-600">
             {pct}% da receita
           </span>
-          {resumo.faltamPara90 > 0 ? (
+          {vivo.faltamPara90 > 0 ? (
             <span className="text-xs text-muted-foreground">
-              faltam {resumo.faltamPara90}{" "}
-              {resumo.faltamPara90 === 1 ? "linha" : "linhas"} pra 90%
+              faltam {vivo.faltamPara90}{" "}
+              {vivo.faltamPara90 === 1 ? "linha" : "linhas"} pra 90%
             </span>
           ) : (
             resumo.receitaTotal > 0 && (
@@ -277,12 +478,12 @@ export function BancadaCusto({
 
         <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 sm:grid-cols-4">
           <Kpi rot="Receita no mês" val={fmtBRL(resumo.receitaTotal)} />
-          <Kpi rot="Com custo preenchido" val={fmtBRL(resumo.receitaComCusto)} />
+          <Kpi rot="Com custo preenchido" val={fmtBRL(vivo.receitaComCusto)} />
           <Kpi
             rot="Lucro bruto do mês"
-            val={fmtBRL(resumo.lucroMes)}
+            val={fmtBRL(vivo.lucroMes)}
             forte
-            aviso={resumo.cobertura < 0.999}
+            aviso={vivo.cobertura < 0.999}
           />
           <Kpi rot="Itens vendidos" val={fmtNum(resumo.itens.length)} />
         </div>
@@ -312,7 +513,7 @@ export function BancadaCusto({
             )}
           </p>
         )}
-        {resumo.cobertura < 0.999 && resumo.receitaTotal > 0 && (
+        {vivo.cobertura < 0.999 && resumo.receitaTotal > 0 && (
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
             O lucro acima soma <b>só as linhas que já têm custo</b> — hoje {pct}%
             da receita. Não é o lucro da loja inteira enquanto essa barra não
@@ -503,7 +704,13 @@ export function BancadaCusto({
                 <th className="px-3 py-2.5 text-right font-medium">
                   Receita no mês
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium">Preço</th>
+                <th className="px-3 py-2.5 text-right font-medium">
+                  Preço de venda
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium">
+                  Preço médio
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium">Desconto</th>
                 <th className="px-3 py-2.5 text-right font-medium">Custo</th>
                 <th className="px-3 py-2.5 text-right font-medium">Taxas</th>
                 <th className="px-3 py-2.5 text-right font-medium">
@@ -570,8 +777,75 @@ export function BancadaCusto({
                     <td className="px-3 py-2 text-right tabular-nums">
                       {fmtBRL(i.receita)}
                     </td>
+                    {/* Preço de TABELA — digitado. Ver migration 0217: não
+                        existe em relatório nem API do iFood. */}
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {salvandoPreco === k && (
+                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                        )}
+                        {salvandoPreco !== k && i.precoVenda !== null && (
+                          <Check className="size-3 text-emerald-600" />
+                        )}
+                      <input
+                        inputMode="decimal"
+                        value={
+                          localPreco[k] ??
+                          (i.precoVenda === null
+                            ? ""
+                            : String(i.precoVenda).replace(".", ","))
+                        }
+                        placeholder="—"
+                        onChange={(e) =>
+                          setLocalPreco((p) => ({ ...p, [k]: e.target.value }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            void salvarPreco(i, e.currentTarget.value)
+                            e.currentTarget.blur()
+                          }
+                        }}
+                        onBlur={(e) => {
+                          void salvarPreco(i, e.target.value)
+                          setLocalPreco((p) => {
+                            const n = { ...p }
+                            delete n[k]
+                            return n
+                          })
+                        }}
+                        className="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums outline-none hover:border-border focus:border-ring"
+                      />
+                      </div>
+                    </td>
+
+                    {/* Preço MÉDIO — o que entrou de verdade. Só leitura. */}
                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                       {fmtBRL(i.precoMedio)}
+                    </td>
+
+                    {/* Desconto = tabela − médio. Traço enquanto não há preço:
+                        zero aqui afirmaria "vendeu sem desconto", que é uma
+                        informação que a tela ainda não tem. */}
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {i.desconto === null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span
+                          className={
+                            i.desconto > 0.005
+                              ? "text-amber-700 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          }
+                        >
+                          {i.desconto > 0.005 ? `−${fmtBRL(i.desconto)}` : fmtBRL(0)}
+                          {i.descontoPct !== null && i.desconto > 0.005 && (
+                            <span className="ml-1 text-[10px] opacity-70">
+                              {fmtPct(i.descontoPct * 100)}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -684,13 +958,18 @@ export function BancadaCusto({
       </div>
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        <b>Preço</b> é a receita dividida pela quantidade — já com a promoção
-        descontada. <b>Taxas</b> é tudo que a plataforma reteve da loja no mês
-        (comissão, entrega, taxa de serviço e demais descontos), aplicado como
-        percentual sobre o item. Como a entrega é cobrada por pedido e não por
-        item, ela está sendo <b>rateada por receita</b> — não existe, em
-        plataforma nenhuma, o dado de qual entrega pertence a qual item.{" "}
-        <b>Lucro bruto</b> é preço − taxas − custo.
+        <b>Preço de venda</b> é o preço de tabela do seu cardápio — você digita,
+        porque nenhuma plataforma manda esse número em relatório. <b>Preço
+        médio</b> é a receita dividida pela quantidade: o que entrou de verdade,
+        já com promoção e com qualquer mudança de preço no período. A diferença
+        entre os dois é o <b>desconto</b> que o item deu.{" "}
+        <b>Taxas</b> é tudo que a plataforma reteve da loja no mês (comissão,
+        entrega, taxa de serviço e demais descontos), aplicado como percentual
+        sobre o item. Como a entrega é cobrada por pedido e não por item, ela
+        está sendo <b>rateada por receita</b> — não existe, em plataforma
+        nenhuma, o dado de qual entrega pertence a qual item.{" "}
+        <b>Lucro bruto</b> é <b>preço médio</b> − taxas − custo: sai do dinheiro
+        que entrou, não do preço de tabela.
       </p>
     </div>
   )

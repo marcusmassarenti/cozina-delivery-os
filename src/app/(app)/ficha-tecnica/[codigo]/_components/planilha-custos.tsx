@@ -55,8 +55,11 @@ export function PlanilhaCustos({
         Plataforma: NOMES[i.platform] ?? i.platform,
         Item: i.nomeItem,
         Categoria: i.categoria ?? "",
+        // As duas colunas que a pessoa preenche vêm lado a lado, antes das de
+        // leitura — quem abre a planilha começa a digitar onde o olho para.
+        "Preço de venda (R$)": i.precoVenda ?? "",
         "Custo (R$)": i.custo ?? "",
-        "Preço praticado": Number(i.precoMedio.toFixed(2)),
+        "Preço médio": Number(i.precoMedio.toFixed(2)),
         "Qtd vendida": i.qtd,
         "Receita no mês": Number(i.receita.toFixed(2)),
       }))
@@ -65,8 +68,9 @@ export function PlanilhaCustos({
         { wch: 14 },
         { wch: 46 },
         { wch: 18 },
+        { wch: 20 },
         { wch: 12 },
-        { wch: 16 },
+        { wch: 14 },
         { wch: 12 },
         { wch: 16 },
       ]
@@ -94,34 +98,51 @@ export function PlanilhaCustos({
       const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
 
       const porNome = new Map(Object.entries(NOMES).map(([k, v]) => [v, k]))
+
+      // A coluna existe no ARQUIVO? Planilha exportada antes de 17/08/26 não
+      // tem, e nesse caso o preço não pode ser tocado — ver `incluiPrecoVenda`.
+      // Testa no cabeçalho, não nos valores: uma planilha nova com a coluna
+      // toda em branco é um pedido legítimo de limpar os preços.
+      const COL_PRECO = "Preço de venda (R$)"
+      const incluiPrecoVenda = linhas.some((l) =>
+        Object.prototype.hasOwnProperty.call(l, COL_PRECO),
+      )
       const payload: {
         platform: string
         nomeItem: string
         custo: number | null
         categoria: string | null
+        precoVenda: number | null
       }[] = []
+
+      // Aceita "22,40" e "22.40": a planilha vem do Excel em pt-BR, mas quem
+      // edita no Google Sheets às vezes salva com ponto.
+      const numero = (v: unknown): number | null => {
+        const bruto = String(v ?? "").trim()
+        if (bruto === "") return null
+        const n = Number(bruto.replace(/\./g, "").replace(",", "."))
+        return Number.isFinite(n) ? n : null
+      }
 
       for (const l of linhas) {
         const plataforma = String(l["Plataforma"] ?? "").trim()
         const nome = String(l["Item"] ?? "").trim()
         if (!nome) continue
         const key = porNome.get(plataforma) ?? plataforma
-        const bruto = String(l["Custo (R$)"] ?? "").trim()
-        // Aceita "22,40" e "22.40": a planilha vem do Excel em pt-BR, mas
-        // quem edita no Google Sheets às vezes salva com ponto.
-        const num =
-          bruto === ""
-            ? null
-            : Number(bruto.replace(/\./g, "").replace(",", "."))
         payload.push({
           platform: key,
           nomeItem: nome,
-          custo: num === null || !Number.isFinite(num) ? null : num,
+          custo: numero(l["Custo (R$)"]),
           categoria: String(l["Categoria"] ?? "").trim() || null,
+          precoVenda: numero(l[COL_PRECO]),
         })
       }
 
-      const r = await importarCustosPlanilha({ unitId, linhas: payload })
+      const r = await importarCustosPlanilha({
+        unitId,
+        linhas: payload,
+        incluiPrecoVenda,
+      })
       if (!r.ok) setErro(r.erro ?? "Não deu para importar.")
       else {
         setMsg(
@@ -193,9 +214,9 @@ export function PlanilhaCustos({
         <div className="mt-3 space-y-2 border-t pt-3 text-[12.5px] leading-relaxed text-muted-foreground">
           <p>
             <b className="text-foreground">1. Exporte a planilha.</b> Ela já sai
-            com todos os itens que a loja vendeu no mês, com o preço praticado e
-            a quantidade. Você só preenche a coluna <b>Custo (R$)</b> — e, se
-            quiser, a <b>Categoria</b>.
+            com todos os itens que a loja vendeu no mês, com o preço médio e a
+            quantidade. Você preenche <b>Preço de venda (R$)</b> — o preço do seu
+            cardápio — e <b>Custo (R$)</b>. A <b>Categoria</b> é opcional.
           </p>
           <p>
             <b className="text-foreground">2. Preencha o que importa primeiro.</b>{" "}

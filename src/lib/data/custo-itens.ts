@@ -57,6 +57,26 @@ export type ItemCusto = {
   receita: number
   /** Receita ÷ quantidade: o preço que saiu de verdade, já com promoção. */
   precoMedio: number
+  /**
+   * Preço de TABELA, digitado pela operação. Null = não preenchido.
+   *
+   * ⚠️ Não vem de plataforma nenhuma no iFood: o módulo Catalog responde 403
+   * pro nosso app e o relatório de Cardápio não tem coluna de preço (checado em
+   * 17/08/26). Por isso é digitado — ver migration 0217.
+   */
+  precoVenda: number | null
+  /**
+   * Quanto se deu de desconto por unidade: `precoVenda − precoMedio`.
+   *
+   * É a coluna que o Marcus pediu depois de comparar a tela com o portal e ver
+   * R$ 20,09 onde o cardápio dizia R$ 23,90. O desconto tem duas origens que a
+   * tela não consegue separar — promoção e mudança de preço no meio do período —
+   * mas o TAMANHO dele é o que interessa: na Ki Delícia era ele que estava
+   * comendo a margem inteira.
+   */
+  desconto: number | null
+  /** Desconto sobre o preço de tabela. Null sem preço de venda. */
+  descontoPct: number | null
   /** Null = ninguém preencheu ainda. Zero é um custo válido (cortesia). */
   custo: number | null
   /** Do cliente. Ver migration 0213: não vem das plataformas (salvo o CW). */
@@ -204,7 +224,7 @@ export async function getCustoItens(
     }),
     admin
       .from("item_custos")
-      .select("platform, nome_item, custo, categoria")
+      .select("platform, nome_item, custo, categoria, preco_venda")
       .eq("unit_id", unitId),
     taxasEfetivas(unitId, year, month),
   ])
@@ -229,17 +249,23 @@ export async function getCustoItens(
 
   const mapaCusto = new Map<string, number>()
   const mapaCategoria = new Map<string, string>()
+  const mapaPrecoVenda = new Map<string, number>()
   for (const c of (custos ?? []) as {
     platform: string
     nome_item: string
     custo: number | string | null
     categoria: string | null
+    preco_venda: number | string | null
   }[]) {
     // ⚠️ NULL é "não preenchido" e NÃO pode virar zero. `Number(null)` é 0, e
     // foi assim que classificar a categoria de um item o fez aparecer com
     // custo zero — logo, com lucro integral. Ver migration 0215.
     if (c.custo !== null) {
       mapaCusto.set(`${c.platform} ${c.nome_item}`, Number(c.custo))
+    }
+    // Mesma regra do custo (0217): zero é preço válido, NULL é não-preenchido.
+    if (c.preco_venda !== null) {
+      mapaPrecoVenda.set(`${c.platform} ${c.nome_item}`, Number(c.preco_venda))
     }
     if (c.categoria) {
       mapaCategoria.set(`${c.platform} ${c.nome_item}`, c.categoria)
@@ -265,7 +291,17 @@ export async function getCustoItens(
 
     const chave = `${platform} ${v.nome_item}`
     const custo = mapaCusto.has(chave) ? (mapaCusto.get(chave) as number) : null
+    const precoVenda = mapaPrecoVenda.has(chave)
+      ? (mapaPrecoVenda.get(chave) as number)
+      : null
+
+    // O lucro continua saindo do PREÇO MÉDIO, não do preço de venda. O preço de
+    // tabela é referência pra medir o desconto; o dinheiro que entrou foi o
+    // médio. Calcular margem sobre a tabela devolveria a margem que a loja ACHA
+    // que tem — que é justamente o erro que fez a Ki Delícia montar promoção no
+    // prejuízo sem perceber (17/08/26).
     const lucro = custo === null ? null : precoMedio - taxaValor - custo
+    const desconto = precoVenda === null ? null : precoVenda - precoMedio
 
     itens.push({
       platform,
@@ -276,6 +312,10 @@ export async function getCustoItens(
       qtd,
       receita,
       precoMedio,
+      precoVenda,
+      desconto,
+      descontoPct:
+        precoVenda === null || precoVenda <= 0 ? null : (desconto as number) / precoVenda,
       custo,
       taxaPct,
       taxaValor,
@@ -393,6 +433,32 @@ export type LojaCusto = {
   lucroMes: number | null
   /** Lucro ÷ receita coberta. É o número comparável entre lojas. */
   lucroPct: number | null
+  /**
+   * O custo da mercadoria vendida, em R$, das linhas que TÊM custo digitado.
+   *
+   * Soma o `custo × quantidade` do que foi preenchido — nada é estimado para o
+   * que falta. Por isso ele anda de mãos dadas com `cobertura`: CMV de uma loja
+   * com 20% preenchido é o CMV de 20% do cardápio, e o relatório precisa dizer
+   * isso em vez de mostrar um percentual redondo.
+   */
+  custoMes: number
+  /**
+   * O que as plataformas retiveram sobre a MESMA base coberta.
+   *
+   * Existe pra o relatório de CMV fechar a conta na tela: receita coberta −
+   * taxas − CMV = lucro bruto. Sem esta linha o dono vê um CMV de 30% e uma
+   * margem de 20% e não enxerga para onde foram os outros 50%.
+   */
+  taxaMes: number
+  /**
+   * CMV sobre a receita coberta. Null quando nada foi preenchido.
+   *
+   * ⚠️ O divisor é `receitaComCusto`, NÃO `receitaMes`. Dividir pelo
+   * faturamento do mês faria o CMV parecer minúsculo só porque falta cadastro —
+   * o número desceria conforme a pessoa preenchesse MENOS, que é exatamente o
+   * incentivo errado.
+   */
+  cmvPct: number | null
 }
 
 /**
@@ -480,6 +546,9 @@ export async function getLojasCusto(
       cobertura: 0,
       lucroMes: null,
       lucroPct: null,
+      custoMes: 0,
+      taxaMes: 0,
+      cmvPct: null,
     })
   }
 
@@ -523,8 +592,12 @@ export async function getLojasCusto(
     cur.receitaComCusto += receitaComCusto
 
     if (receitaComCusto > 0) {
-      const lucro = receitaComCusto - receitaComCusto * taxaPct - custoTotal
-      cur.lucroMes = (cur.lucroMes ?? 0) + lucro
+      const taxa = receitaComCusto * taxaPct
+      cur.lucroMes = (cur.lucroMes ?? 0) + (receitaComCusto - taxa - custoTotal)
+      // Guardadas separadas pro relatório de CMV conseguir mostrar a cascata
+      // (receita coberta − taxas − CMV = lucro) em vez de só o resultado.
+      cur.custoMes += custoTotal
+      cur.taxaMes += taxa
     }
   }
 
@@ -573,6 +646,12 @@ export async function getLojasCusto(
     l.lucroPct =
       l.lucroMes !== null && l.receitaComCusto > 0
         ? l.lucroMes / l.receitaComCusto
+        : null
+    // Null quando ninguém preencheu nada: zero aqui viraria "CMV de 0%", que a
+    // tela mostraria como a melhor loja da rede.
+    l.cmvPct =
+      l.lucroMes !== null && l.receitaComCusto > 0
+        ? l.custoMes / l.receitaComCusto
         : null
   }
 
