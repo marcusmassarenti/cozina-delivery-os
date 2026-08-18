@@ -133,10 +133,13 @@ export function DetalheLoja({
   // "% que fica" + "% de taxa" fecham 100%: a base é TODO o dinheiro que
   // circulou (o que a loja recebeu + a taxa da plataforma). O VR entra do lado
   // da loja; a taxa NÃO conta o recebido direto (não é taxa).
-  const taxaLoja = m.platforms.reduce(
-    (a, p) => a + Math.max(0, p.bruto - p.liquido - (p.recebidoDireto ?? 0)),
-    0,
-  )
+  // Mesma regra do detalhe por plataforma: sem extrato, o iFood fica FORA da
+  // soma de taxa em vez de entrar com o bruto inteiro. Era daqui que saíam os
+  // "R$ 26.089,82 · 82,4% do total" da Churrasco Royal no primeiro dia.
+  const taxaLoja = m.platforms.reduce((a, p) => {
+    if (p.id === "ifood" && m.ifoodBrutoDePedidos === true) return a
+    return a + Math.max(0, p.bruto - p.liquido - (p.recebidoDireto ?? 0))
+  }, 0)
   const totalDinheiro = resultadoLoja + taxaLoja
   const pctLoja =
     totalDinheiro > 0 ? (resultadoLoja / totalDinheiro) * 100 : 0
@@ -232,6 +235,24 @@ export function DetalheLoja({
               // iFood mandou mais do que mandou — foi o que o Diego apontou.
               const pctRepasseP = p.bruto > 0 ? (p.liquido / p.bruto) * 100 : 0
               const pctDiretaP = p.bruto > 0 ? (recDir / p.bruto) * 100 : 0
+              /**
+               * ⚠️ SEM EXTRATO, TAXA É DESCONHECIDA — NÃO É 100%.
+               *
+               * A conta da taxa é `bruto − líquido`. Quando o extrato do iFood
+               * ainda não chegou, o líquido é ZERO e a conta conclui que a
+               * plataforma ficou com tudo. Na Churrasco Royal, recém-conectada,
+               * a tela mostrou "R$ 26.089,82 de taxa · 82,4% do total · iFood
+               * 0% de repasse" — R$ 26 mil de taxa que não existem, no primeiro
+               * dia do cliente (18/08/26).
+               *
+               * `ifoodBrutoDePedidos` já dizia que o bruto veio dos pedidos e
+               * não do extrato; o card grande até escrevia "aguardando o
+               * extrato". Faltava esta caixa saber disso.
+               *
+               * Ausência de dado vira "—". Zero é uma afirmação, e afirmar que
+               * a loja não recebeu nada é pior do que não dizer.
+               */
+              const semExtrato = p.id === "ifood" && m.ifoodBrutoDePedidos === true
               const hasP = p.bruto > 0
               // Inteiro nesta caixa: são 4 percentuais competindo e a casa
               // decimal só somava ruído — 62,7% e 63% levam à mesma decisão.
@@ -269,7 +290,13 @@ export function DetalheLoja({
                       {fmtBRLShort(p.bruto)}
                     </span>
                   </div>
-                  {hasP ? (
+                  {hasP && semExtrato ? (
+                    /* Extrato ainda não chegou: mostra o estado, não um número
+                       inventado. Ver `semExtrato` acima. */
+                    <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+                      Repasse e taxa <b>—</b> · aguardando o extrato do iFood
+                    </p>
+                  ) : hasP ? (
                     <>
                       <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-muted">
                         <div
