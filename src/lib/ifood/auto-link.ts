@@ -678,6 +678,13 @@ const MAX_BACKFILL_POR_RODADA = 2
  * chances cobrem a falha passageira. Além disso, o que sobra é mês que a loja
  * não tem (abriu depois), e insistir nele é gastar 160s por rodada pra sempre.
  */
+/**
+ * Intervalo mínimo entre tentativas do backfill. 6h dá tempo do extrato
+ * assíncrono ficar pronto entre uma chance e a seguinte — ver o filtro em
+ * `lojasSemHistorico`.
+ */
+const HORAS_ENTRE_TENTATIVAS = 6
+
 const MAX_TENTATIVAS = 3
 
 export type AutoLinkBackfillResult = AutoLinkResult & {
@@ -818,6 +825,7 @@ export async function backfillPendentes(
         .from("unit_platforms")
         .update({
           historico_tentativas: tentativas,
+          historico_ultima_tentativa: new Date().toISOString(),
           // Carimba quando deu certo OU quando esgotou. Nos dois casos a loja
           // sai da fila — a diferença é que "esgotou" fica registrado na
           // resposta do cron, pra não virar buraco silencioso como o do Baião.
@@ -859,7 +867,9 @@ async function lojasSemHistorico(): Promise<
   const admin = createAdminClient()
   const { data } = await admin
     .from("unit_platforms")
-    .select("unit_id, historico_tentativas, units(code, name, active)")
+    .select(
+      "unit_id, historico_tentativas, historico_ultima_tentativa, units(code, name, active)",
+    )
     .eq("platform", "ifood")
     .eq("active", true)
     .not("api_store_id", "is", null)
@@ -868,11 +878,33 @@ async function lojasSemHistorico(): Promise<
   return ((data ?? []) as unknown as {
     unit_id: string
     historico_tentativas: number | null
+    historico_ultima_tentativa: string | null
     units: { code: string; name: string; active: boolean } | null
   }[])
     // Loja desativada não entra: puxar o ano de quem fechou as portas é gastar
     // chamada de API à toa — a mesma razão que tirou as inativas do sync.
     .filter((r) => r.units?.active)
+    /**
+     * ⚠️ INTERVALO ENTRE TENTATIVAS — sem isso o contador não significa nada.
+     *
+     * O extrato do iFood é ASSÍNCRONO: a gente pede, eles geram, o coletor
+     * busca depois. Tentar de novo em minutos não dá tempo do extrato existir,
+     * e o "não respondeu" é garantido.
+     *
+     * Foi o que aconteceu com a CR Poços em 18/08/26: o cron rodou 3 vezes em
+     * 7 minutos, as 3 tentativas queimaram, e a loja foi carimbada como
+     * concluída com 2 dos 8 meses — saindo da fila para sempre, com o
+     * histórico pela metade e sem ninguém saber.
+     *
+     * Três tentativas precisam ser três CHANCES REAIS, espaçadas o bastante
+     * pro extrato ter sido gerado no meio.
+     */
+    .filter((r) => {
+      const ultima = r.historico_ultima_tentativa
+      if (!ultima) return true
+      const horas = (Date.now() - Date.parse(ultima)) / 3_600_000
+      return horas >= HORAS_ENTRE_TENTATIVAS
+    })
     .map((r) => ({
       unitId: r.unit_id,
       unitCode: r.units?.code ?? "—",

@@ -23,6 +23,8 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
+import { ConexaoNovaAviso } from "@/components/dashboard/conexao-nova-aviso"
+import { getConexoesNovas } from "@/lib/data/conexoes-novas"
 import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
 import { AvisosConvite } from "@/components/dashboard/avisos-convite"
 import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
@@ -419,6 +421,8 @@ export default async function Home({
   // isso o card ficaria somando as 4 enquanto o resto da tela mostra uma.
   // Placar de resposta às avaliações — mesmo escopo do resto da tela.
   const placarResposta = await getPlacarResposta(activeUnitIds)
+
+  const conexoesNovas = await getConexoesNovas(activeUnitIds)
 
   const diaSemanaRede = await getVendasPorDiaSemana(
     activeUnitIds,
@@ -1161,6 +1165,9 @@ export default async function Home({
       {/* Cliente: falta aprovar no iFood / loja conectada. */}
       <IfoodClienteAviso
           solicitacoes={minhasSolicitacoesIfood} />
+
+      {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
+      <ConexaoNovaAviso conexoes={conexoesNovas} />
 
       {/* Dispensável aqui: quem abre a inicial veio ver o faturamento do dia,
           e prender um aviso de cadastro no caminho seria sequestrar a tela por
