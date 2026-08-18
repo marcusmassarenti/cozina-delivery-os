@@ -50,7 +50,32 @@ export async function GET(req: Request) {
   // mês atual + anterior (app roda em TZ America/Sao_Paulo)
   const now = new Date()
   const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const periodos = [
+  /**
+   * `?desde=YYYY-MM` puxa do mês indicado até o atual.
+   *
+   * O cron cobre só o mês corrente e o anterior — certo pro dia a dia, e
+   * insuficiente pra loja que ACABOU de vincular: o histórico dela fica em
+   * branco e ninguém tem como buscar. Era o caso da Royal Poços e da Brooklin,
+   * vinculadas em 18/08/26 com o ano inteiro pra trás faltando.
+   *
+   * Sem o parâmetro nada muda.
+   */
+  const desde = new URL(req.url).searchParams.get("desde")
+  const periodos = desde && /^\d{4}-\d{2}$/.test(desde)
+    ? (() => {
+        const [dy, dm] = desde.split("-").map(Number)
+        const out: { y: number; m: number }[] = []
+        const fim = new Date()
+        for (
+          let d = new Date(dy, dm - 1, 1);
+          d <= fim;
+          d.setMonth(d.getMonth() + 1)
+        ) {
+          out.push({ y: d.getFullYear(), m: d.getMonth() + 1 })
+        }
+        return out
+      })()
+    : [
     { y: now.getFullYear(), m: now.getMonth() + 1 },
     { y: prev.getFullYear(), m: prev.getMonth() + 1 },
   ]
