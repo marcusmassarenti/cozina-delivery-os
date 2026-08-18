@@ -25,8 +25,14 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
-import { ConexaoNovaAviso } from "@/components/dashboard/conexao-nova-aviso"
-import { getConexoesNovas } from "@/lib/data/conexoes-novas"
+import {
+  ConexaoNovaAviso,
+  PrimeiraAvaliacaoAviso,
+} from "@/components/dashboard/conexao-nova-aviso"
+import {
+  getConexoesNovas,
+  getPrimeirasAvaliacoes,
+} from "@/lib/data/conexoes-novas"
 import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
 import { AvisosConvite } from "@/components/dashboard/avisos-convite"
 import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
@@ -424,7 +430,10 @@ export default async function Home({
   // Placar de resposta às avaliações — mesmo escopo do resto da tela.
   const placarResposta = await getPlacarResposta(activeUnitIds)
 
-  const conexoesNovas = await getConexoesNovas(activeUnitIds)
+  const [conexoesNovas, primeirasAvaliacoes] = await Promise.all([
+    getConexoesNovas(activeUnitIds),
+    getPrimeirasAvaliacoes(activeUnitIds),
+  ])
 
   const diaSemanaRede = await getVendasPorDiaSemana(
     activeUnitIds,
@@ -1170,6 +1179,9 @@ export default async function Home({
 
       {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
       <ConexaoNovaAviso conexoes={conexoesNovas} />
+
+      {/* Avaliação tem rotina própria — ver o componente. */}
+      <PrimeiraAvaliacaoAviso itens={primeirasAvaliacoes} />
 
       {/* Dispensável aqui: quem abre a inicial veio ver o faturamento do dia,
           e prender um aviso de cadastro no caminho seria sequestrar a tela por

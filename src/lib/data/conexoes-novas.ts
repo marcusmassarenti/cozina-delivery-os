@@ -29,6 +29,71 @@ export type ConexaoNova = {
   temDado: boolean
 }
 
+export type PrimeiraAvaliacao = {
+  unitId: string
+  unitCode: string
+  unitName: string
+  /** Quando o sync de avaliações foi ligado pra esta loja. */
+  ligadoEm: string
+  quantas: number
+}
+
+/**
+ * Lojas que ligaram o sync de avaliações há pouco.
+ *
+ * ── POR QUE ISSO PRECISA DE AVISO PRÓPRIO (Marcus, 18/08/26) ─────────────
+ * "e avaliações? precisa colocar um aviso da primeira importação de avaliação,
+ *  o cliente vai achar que está com algum problema. nessa barra parece que
+ *  puxou tudo."
+ *
+ * A barra de cobertura fala de FATURAMENTO — quando ela diz "iFood até 18/ago",
+ * parece que veio tudo. Só que avaliação é outra rotina, com outro horário: o
+ * cron roda às 7h de Brasília, uma vez por dia. A CR Poços conectou às 18:36 e
+ * ficou a noite inteira com a tela de avaliações vazia parecendo defeito.
+ *
+ * O aviso vale por 3 dias — menos que o de conexão (7), porque a primeira carga
+ * de avaliação chega na primeira virada e o assunto morre aí.
+ */
+const DIAS_AVALIACAO = 3
+
+export async function getPrimeirasAvaliacoes(
+  unitIds: string[],
+): Promise<PrimeiraAvaliacao[]> {
+  if (unitIds.length === 0) return []
+  const admin = createAdminClient()
+  const corte = new Date(
+    Date.now() - DIAS_AVALIACAO * 86_400_000,
+  ).toISOString()
+
+  const { data: ligadas } = await admin
+    .from("unit_platforms")
+    .select("unit_id, review_enabled_at, units!inner(code, name)")
+    .eq("platform", "ifood")
+    .in("unit_id", unitIds)
+    .not("review_enabled_at", "is", null)
+    .gte("review_enabled_at", corte)
+
+  const out: PrimeiraAvaliacao[] = []
+  for (const r of (ligadas ?? []) as unknown as {
+    unit_id: string
+    review_enabled_at: string
+    units: { code: string; name: string }
+  }[]) {
+    const { count } = await admin
+      .from("ifood_avaliacoes")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", r.unit_id)
+    out.push({
+      unitId: r.unit_id,
+      unitCode: r.units.code,
+      unitName: r.units.name,
+      ligadoEm: r.review_enabled_at,
+      quantas: count ?? 0,
+    })
+  }
+  return out
+}
+
 const DIAS = 7
 
 export async function getConexoesNovas(

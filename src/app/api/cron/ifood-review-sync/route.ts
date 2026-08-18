@@ -20,12 +20,22 @@ export async function GET(req: Request) {
     return new Response("Unauthorized", { status: 401 })
   }
 
+  /**
+   * `?units=<uuid,uuid>` limita a lojas específicas.
+   *
+   * Existe pela regra do backfill imediato (Marcus, 18/08/26): loja que acabou
+   * de vincular não pode esperar a virada do dia pra ter avaliação. O cron
+   * diário continua rodando sem parâmetro, pra rede inteira.
+   */
+  const p = new URL(req.url).searchParams.get("units")
+  const unitIds = p ? p.split(",").map((x) => x.trim()).filter(Boolean) : null
+
   // Envelope de registro: deixa rastro em cron_runs pra o relatório
   // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
   return registrarCron("ifood-review-sync", async () => {
 
   try {
-    const r = await syncIfoodReviews(null)
+    const r = await syncIfoodReviews(unitIds)
 
     // Varredura dos e-mails de "conectado — olha o que já entrou", das TRÊS
     // plataformas, pendurada aqui de propósito.

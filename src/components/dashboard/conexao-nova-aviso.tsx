@@ -1,10 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { PartyPopper, X } from "lucide-react"
+import { PartyPopper, Star, X } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
-import type { ConexaoNova } from "@/lib/data/conexoes-novas"
+import type {
+  ConexaoNova,
+  PrimeiraAvaliacao,
+} from "@/lib/data/conexoes-novas"
 
 const ROTULO = {
   "99food": "99 Food",
@@ -99,6 +102,60 @@ export function ConexaoNovaAviso({ conexoes }: { conexoes: ConexaoNova[] }) {
           >
             <X className="size-4" />
           </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Primeira carga de avaliações.
+ *
+ * ⚠️ SEPARADO DO AVISO DE CONEXÃO DE PROPÓSITO. A barra de cobertura fala de
+ * faturamento; quando ela diz "iFood até 18/ago", o cliente lê "veio tudo" — e
+ * avaliação é outra rotina, com outro horário (cron às 7h). Sem dizer isso, a
+ * tela de avaliações vazia parece defeito, e é o tipo de silêncio que gera
+ * chamado no primeiro dia (Marcus, 18/08/26).
+ *
+ * A mensagem muda conforme já ter chegado: enquanto está zerada explica QUANDO
+ * chega; depois confirma o que entrou e que dali em diante é sozinho.
+ */
+export function PrimeiraAvaliacaoAviso({
+  itens,
+}: {
+  itens: PrimeiraAvaliacao[]
+}) {
+  if (itens.length === 0) return null
+  return (
+    <div className="space-y-2">
+      {itens.map((a) => (
+        <div
+          key={a.unitId}
+          className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3"
+        >
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+            <Star className="size-4 text-amber-600 dark:text-amber-400" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">
+              Avaliações de <b>{a.unitCode} · {a.unitName}</b>
+              {a.quantas > 0 ? " já estão aqui" : " a caminho"}
+            </p>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+              {a.quantas > 0 ? (
+                <>
+                  <b>{a.quantas}</b> avaliações importadas. A partir de agora
+                  entram sozinhas, uma vez por dia.
+                </>
+              ) : (
+                <>
+                  A avaliação vem numa rotina separada do faturamento, que roda{" "}
+                  <b>uma vez por dia, de manhã</b>. Se a tela de avaliações
+                  ainda estiver vazia, é isso — não é problema na conexão.
+                </>
+              )}
+            </p>
+          </div>
         </div>
       ))}
     </div>
