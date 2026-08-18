@@ -40,6 +40,20 @@ export async function GET(req: Request) {
     return new Response("Unauthorized", { status: 401 })
   }
 
+  /**
+   * `?forcar=1` reenvia mesmo já tendo saído hoje.
+   *
+   * Existe pra conferir mudança no relatório sem esperar o dia seguinte — foi
+   * o que faltou em 18/08/26, quando o bloco de "loja sumida" entrou e não
+   * havia como olhar o resultado. Fica atrás do mesmo CRON_SECRET, e o destino
+   * é interno (SAUDE_EMAIL), então o pior caso é um e-mail repetido pra nós.
+   *
+   * Pula as duas saídas antecipadas: a de "já saiu" e a de "rotina ainda
+   * rodando". A segunda também, senão de manhã o forçar não faria nada — e o
+   * assunto já avisa quando o retrato é parcial.
+   */
+  const forcar = new URL(req.url).searchParams.get("forcar") === "1"
+
   return registrarCron("saude-diaria", async () => {
     /**
      * ESPERA A ROTINA DO DIA FECHAR — mas nunca deixa de falar.
@@ -55,13 +69,13 @@ export async function GET(req: Request) {
      * abaixo são baratas de propósito: nas janelas em que não vai enviar, o
      * cron sai antes de montar o diagnóstico inteiro.
      */
-    if (await saudeJaSaiuHoje()) {
+    if (!forcar && (await saudeJaSaiuHoje())) {
       return Response.json({ ok: true, pulou: "já saiu hoje" })
     }
     const estado = await estadoDoPipeline()
     // Última janela (20h de Brasília = 23h UTC): manda do jeito que estiver.
     const ultimaJanela = new Date().getUTCHours() >= 23
-    if (!estado.concluido && !ultimaJanela) {
+    if (!forcar && !estado.concluido && !ultimaJanela) {
       return Response.json({
         ok: true,
         pulou: "rotina do dia ainda rodando",
@@ -162,6 +176,10 @@ export async function GET(req: Request) {
       ranAt: new Date().toISOString(),
       assunto,
       completo: estado.concluido,
+      // Sai na resposta pra conferir sem abrir o e-mail.
+      lojasSumidas: s.lojasSumidas.map(
+        (m) => `${m.empresa}/${m.unitName} (${m.dias}d)`,
+      ),
       bloqueadas: estado.bloqueadas.length,
       email: envio.ok ? "enviado" : `falhou: ${envio.erro}`,
       resumo: s.resumo,
