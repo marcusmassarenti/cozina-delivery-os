@@ -61,6 +61,8 @@ export type CreateUnitState = {
    */
   criada?: {
     unitId: string
+    /** Código da loja — endereço da esteira de conexão. */
+    codigo: string
     nome: string
     cnpj: string | null
     plataformas: PlatformId[]
@@ -297,7 +299,7 @@ export async function createUnit(
         data_encerramento: dataEncerramento,
         ...perfil,
       })
-      .select("id")
+      .select("id, code")
       .single()
 
     if (error) {
@@ -326,6 +328,9 @@ export async function createUnit(
       criada: unit
         ? {
             unitId: unit.id as string,
+            // O código vai junto porque a esteira de conexão é /conectar-loja/
+            // <codigo> — sem ele o "salvar e continuar" não tem pra onde ir.
+            codigo: (unit as { code?: string }).code ?? "",
             nome: name,
             cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
             plataformas: platforms,

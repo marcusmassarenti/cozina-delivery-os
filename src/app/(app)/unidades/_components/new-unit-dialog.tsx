@@ -337,26 +337,22 @@ function PassoConectar({
   criada: NonNullable<CreateUnitState["criada"]>
   onFechar: () => void
 }) {
-  const destinos: Record<string, { rotulo: string; href: string; como: string }> = {
-    ifood: {
-      rotulo: "iFood",
-      href: "/conectar-ifood",
-      como: "Solicita a conexão pelo CNPJ; o dono aprova no Portal do Parceiro.",
-    },
-    "99food": {
-      rotulo: "99 Food",
-      href: "/integracao/99food",
-      como: "Vincula a loja ao app da 99 pelo painel deles.",
-    },
-    cardapioweb: {
-      rotulo: "Cardápio Web",
-      href: "/integracao/cardapioweb",
-      como: "Liga a instalação do Cardápio Web a esta loja.",
-    },
-  }
-
-  const comConexao = criada.plataformas.filter((p) => destinos[p])
-  const keeta = criada.plataformas.includes("keeta")
+  /**
+   * Salvar deixou de ser o fim do fluxo.
+   *
+   * ── O QUE ISTO SUBSTITUI (Marcus, 18/08/26) ────────────────────────────
+   * Aqui havia um MENU de links, um por plataforma, cada um levando pra uma
+   * tela de integração diferente. Parecia resolver, mas empurrava o problema:
+   * quem clicava saía do cadastro e caía numa tela genérica, sem saber o que
+   * já tinha feito nem o que faltava — e quem não clicava fechava o diálogo e
+   * nunca mais voltava. "O cliente cadastra, escolhe as plataformas, aperta
+   * salvar e sai da tela."
+   *
+   * Agora existe uma esteira só, com estado por plataforma e um "já fiz" que
+   * avisa o nosso time. O diálogo apenas entrega o cliente nela.
+   */
+  const comConexao = criada.plataformas.filter((p) => p !== "keeta")
+  const soKeeta = criada.plataformas.length > 0 && comConexao.length === 0
 
   return (
     <div className="flex flex-col gap-3">
@@ -366,56 +362,61 @@ function PassoConectar({
 
       {!criada.cnpj && comConexao.length > 0 && (
         <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          Esta loja ficou <b>sem CNPJ</b>. É por ele que o iFood e a 99 acham a
-          loja — dá pra informar na própria tela de conexão, mas vale preencher
-          no cadastro pra não digitar duas vezes.
+          Esta loja ficou <b>sem CNPJ</b>. É por ele que o iFood acha a loja —
+          vale preencher antes de pedir a conexão.
         </p>
       )}
 
-      {comConexao.length > 0 ? (
-        <ul className="flex flex-col gap-2">
-          {comConexao.map((p) => (
-            <li
-              key={p}
-              className="flex items-center gap-3 rounded-lg border p-3"
-            >
-              <PlatformLogo platform={p} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-semibold">
-                  {destinos[p].rotulo}
-                </span>
-                <span className="block text-[11.5px] leading-snug text-muted-foreground">
-                  {destinos[p].como}
-                </span>
-              </span>
-              <Link
-                href={destinos[p].href}
-                onClick={onFechar}
-                className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-              >
-                Conectar
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {criada.plataformas.length > 0 ? (
+        <>
+          <div className="rounded-lg border p-3">
+            <p className="text-[13px] font-semibold">
+              Falta conectar {criada.plataformas.length}{" "}
+              {criada.plataformas.length === 1 ? "plataforma" : "plataformas"}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {criada.plataformas.map((p) => (
+                <PlatformLogo key={p} platform={p} />
+              ))}
+            </div>
+            <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
+              {soKeeta
+                ? "A Keeta entra por planilha — a próxima tela mostra como."
+                : "Cada uma conecta de um jeito. A próxima tela leva você por elas, uma de cada vez, e guarda o que já foi feito."}
+            </p>
+          </div>
+
+          <Link
+            href={`/conectar-loja/${encodeURIComponent(criada.codigo)}`}
+            onClick={onFechar}
+            className="w-full rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-bold text-primary-foreground"
+          >
+            Conectar agora
+          </Link>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="text-center text-[12px] text-muted-foreground hover:text-foreground"
+          >
+            Deixar pra depois
+          </button>
+        </>
       ) : (
-        <p className="text-[13px] text-muted-foreground">
-          Nenhuma das plataformas escolhidas tem conexão automática.
-        </p>
+        <>
+          <p className="text-[13px] text-muted-foreground">
+            Nenhuma plataforma foi marcada nesta loja. Dá pra escolher depois,
+            no cadastro dela.
+          </p>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="w-full rounded-lg border px-4 py-2 text-sm font-semibold"
+          >
+            Fechar
+          </button>
+        </>
       )}
-
-      {keeta && (
-        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-          <b>Keeta</b> não tem conexão por API — o dado dela entra pela
-          importação de planilha, em Importação.
-        </p>
-      )}
-
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onFechar}>
-          Conectar depois
-        </Button>
-      </DialogFooter>
     </div>
   )
 }
+

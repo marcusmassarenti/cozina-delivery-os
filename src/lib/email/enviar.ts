@@ -32,6 +32,13 @@ export type TipoEmail =
   /** Relatório interno de saúde — sai todo dia, não é régua de cliente. */
   | "saude-diaria"
   /**
+   * "Este cliente concluiu a parte dele na esteira de conexão." Interno, com
+   * `forcar: true`: uma loja gera vários avisos conforme o cliente vai
+   * concluindo cada plataforma, e a trava de duplicidade engoliria do segundo
+   * passo em diante — justo quando o quadro fica completo.
+   */
+  | "onboarding-conexao"
+  /**
    * Conexão iFood recusada. NÃO é régua: pode acontecer várias vezes pro mesmo
    * cliente (uma por CNPJ errado), então quem dispara manda `forcar: true` —
    * senão a trava de duplicidade engoliria da segunda recusa em diante.
