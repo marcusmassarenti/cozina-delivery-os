@@ -177,7 +177,14 @@ export function SuporteBolha() {
   // ---------------------------------------------------------------- fechado
   if (!aberto) {
     return (
-      <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2">
+      // data-print="hide": a bolha e fixed, entao ela nao "rola pra fora" da
+    // folha — aparecia carimbada por cima do conteudo no PDF exportado
+    // (Marcus, 17/08/26). A regra global de print ja esconde quem tem o
+    // atributo; faltava marcar aqui.
+    <div
+      data-print="hide"
+      className="fixed bottom-5 right-5 z-50 flex items-center gap-2"
+    >
         {/* Convite. Dispensável de propósito: um chamariz que não se cala vira
             estorvo em toda tela do sistema. */}
         {convite && !temNova && (
@@ -218,7 +225,10 @@ export function SuporteBolha() {
 
   // ----------------------------------------------------------------- aberto
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex h-[600px] max-h-[calc(100vh-2.5rem)] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
+    <div
+      data-print="hide"
+      className="fixed bottom-5 right-5 z-50 flex h-[600px] max-h-[calc(100vh-2.5rem)] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+    >
       <header className="flex items-center gap-2.5 bg-primary px-4 py-3.5 text-primary-foreground">
         <DeliveryOsMark className="size-6 shrink-0" />
         <p className="min-w-0 flex-1 truncate text-[15px] font-semibold">

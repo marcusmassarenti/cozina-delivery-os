@@ -135,6 +135,7 @@ function ProgressBar({ navigating }: { navigating: boolean }) {
   return (
     <div
       aria-hidden
+      data-print="hide"
       className="pointer-events-none fixed inset-x-0 top-0 z-[200] h-0.5"
       style={{ opacity: visible ? 1 : 0, transition: "opacity 0.3s ease" }}
     >
