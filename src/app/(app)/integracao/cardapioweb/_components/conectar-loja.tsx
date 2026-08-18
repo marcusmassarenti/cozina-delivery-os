@@ -42,9 +42,22 @@ export function ConectarLoja({
   const [unitId, setUnitId] = React.useState<string>("")
   const [indo, setIndo] = React.useState(false)
 
+  /**
+   * Manda pro DOMÍNIO CANÔNICO, sempre.
+   *
+   * ⚠️ Era `window.location.origin`. O painel responde em mais de um domínio
+   * (delivery.cozinafoods.com é um deles) e o fluxo herdava o de onde a pessoa
+   * estava — enquanto a `redirect_uri` registrada no Cardápio Web é fixa em
+   * deliveryos.food. Começar num domínio e voltar em outro é pedir pra
+   * autorização se perder no meio (Marcus, 18/08/26).
+   *
+   * Vai pela página pública `/conectar/cardapioweb` e não direto na rota de
+   * API: ela cuida do login quando a sessão não veio junto na troca de
+   * domínio, e devolve a pessoa pro mesmo ponto depois.
+   */
   function conectar() {
     setIndo(true)
-    const url = new URL("/api/cardapioweb/oauth/start", window.location.origin)
+    const url = new URL("https://deliveryos.food/conectar/cardapioweb")
     url.searchParams.set("ambiente", ambiente)
     if (unitId) url.searchParams.set("unit_id", unitId)
     window.location.href = url.toString()

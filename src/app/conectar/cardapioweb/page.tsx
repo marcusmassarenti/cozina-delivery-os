@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic"
 export default async function ConectarCardapioWebPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ambiente?: string }>
+  searchParams: Promise<{ ambiente?: string; unit_id?: string }>
 }) {
   const sp = await searchParams
   const supabase = await createClient()
@@ -39,10 +39,16 @@ export default async function ConectarCardapioWebPage({
       ? "sandbox"
       : "producao"
 
+  // A loja escolhida no botão viaja junto — inclusive pelo login, senão a
+  // instalação volta sem saber a qual unidade pertence e sobra pra vincular
+  // na mão.
+  const unitId = sp.unit_id ?? ""
+  const qs = `ambiente=${ambiente}${unitId ? `&unit_id=${encodeURIComponent(unitId)}` : ""}`
+
   if (!data.user) {
-    const volta = `/conectar/cardapioweb?ambiente=${ambiente}`
+    const volta = `/conectar/cardapioweb?${qs}`
     redirect(`/login?next=${encodeURIComponent(volta)}`)
   }
 
-  redirect(`/api/cardapioweb/oauth/start?ambiente=${ambiente}`)
+  redirect(`/api/cardapioweb/oauth/start?${qs}`)
 }
