@@ -28,6 +28,7 @@ import { logPedidosSync, syncPedidosDaLoja } from "./pedidos-sync"
 import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
 import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import { merchantsSumidos } from "@/lib/ifood/merchants-sumidos"
 
 export type UnitSyncResult = {
   unitId: string
@@ -107,10 +108,12 @@ async function listIfoodUnits(unitIds?: string[] | null) {
     .eq("active", true)
     .not("api_store_id", "is", null)
   if (unitIds) q = q.in("unit_id", unitIds)
-  const [{ data, error }, inativas] = await Promise.all([
+  const [{ data, error }, inativas, sumidos] = await Promise.all([
     q,
     idsDeUnidadesForaDoSync(),
+    merchantsSumidos(),
   ])
+  const idsSumidos = new Set(sumidos.map((m) => m.merchantId))
 
   if (error) throw new Error(`Falha ao listar unidades: ${error.message}`)
   return (data ?? [])
@@ -118,6 +121,23 @@ async function listIfoodUnits(unitIds?: string[] | null) {
     // PLATAFORMA — a conexão com o iFood continua válida depois que a loja
     // encerra, porque ninguém desvincula o merchant ao fechar as portas.
     .filter((r) => !inativas.has((r.units as unknown as { id: string }).id))
+    /**
+     * Merchant que o iFood parou de listar não é chamado.
+     *
+     * ── A REGRA (Marcus, 18/08/26): "cliente suspenso, cessa puxar dados" ───
+     * Pedir extrato de loja que não está mais na lista é gastar chamada pra
+     * receber 403 — e ainda enche o log de erro, escondendo falha de verdade.
+     * A Pizzaria Quero Mais (Vbfood) sumiu em 14/08 e o sync seguiu tentando
+     * por cinco dias, sem que nada disso virasse aviso.
+     *
+     * ⚠️ É PAUSA, NÃO CORTE. `merchants-sumidos` deixa escrito que sumir NÃO
+     * prova revogação: em 13/08 uma loja sumiu da lista e continuava "Ativo"
+     * no Portal do Parceiro. Então nada é desvinculado nem desativado aqui —
+     * a loja volta a sincronizar sozinha assim que reaparecer na varredura.
+     * Desvincular com base num sinal ambíguo transformaria um soluço do iFood
+     * em trabalho manual de reconexão pra todos os clientes.
+     */
+    .filter((r) => !idsSumidos.has(r.api_store_id as string))
     .map((r) => ({
       unitId: (r.units as unknown as { id: string }).id,
       unitCode: (r.units as unknown as { code: string }).code,

@@ -396,6 +396,24 @@ export function emailSaude(
   // Loja parada na fila de conexão não é "integração com defeito" — é conexão
   // que nunca começou. Entra nos mesmos blocos porque a pergunta é a mesma:
   // tem algo esperando alguém agir?
+  /**
+   * Loja vinculada que o iFood parou de listar.
+   *
+   * Sempre ALERTA: o dado dela parou de entrar e o cliente segue vendo os
+   * números do dia em que sumiu como se fossem os de hoje. A Pizzaria Quero
+   * Mais (Vbfood) passou cinco dias assim, em silêncio (18/08/26).
+   *
+   * ⚠️ O texto diz o FATO e manda CONFERIR — não acusa o lojista de ter
+   * removido o app. Já aconteceu de a loja sumir da lista e continuar "Ativo"
+   * no Portal do Parceiro; cobrar do cliente uma reautorização que ele já fez
+   * queima confiança à toa.
+   */
+  const linhaSumida = (m: (typeof s.lojasSumidas)[number]) =>
+    `<strong>${m.empresa} · ${m.unitName}</strong> <span style="font-size:12px;color:#71717a;">(sumiu da lista do iFood)</span><br/>` +
+    `Sem aparecer há ${m.dias} dia${m.dias === 1 ? "" : "s"} — o financeiro dela ` +
+    `parou de entrar e a sincronização foi pausada. Confira o CNPJ ${m.cnpj ?? "—"} ` +
+    `na aba Permissões do Portal do Parceiro: pode ser remoção do app ou falha do iFood em listar.`
+
   const filaRuim = s.filaIfood.filter((f) => f.gravidade === "alerta")
   const filaAviso = s.filaIfood.filter((f) => f.gravidade === "atencao")
   const linhaFila = (f: (typeof s.filaIfood)[number]) =>
@@ -441,7 +459,7 @@ export function emailSaude(
           g && g.totalSeguemParadas > 0 ? ` · ${g.totalSeguemParadas} de antes` : ""
         }${clientesNovos.length ? ` — ${clientesNovos.slice(0, 3).join(", ")}` : ""}`
       : // Sem novidade em loja, mas algo em rotina/conexão/extrato caiu.
-        `⚠️ ${cronsRuins.length + filaRuim.length + extratoRuins.length + (rodadaAlerta ? 1 : 0)} nas rotinas — ${placar(r)}`
+        `⚠️ ${cronsRuins.length + filaRuim.length + extratoRuins.length + s.lojasSumidas.length + (rodadaAlerta ? 1 : 0)} nas rotinas — ${placar(r)}`
     : emObservacao > 0
       ? `✅ Nada novo hoje — ${placar(r)}, ${emObservacao} em observação`
       : `✅ Tudo certo — ${placar(r)}`
@@ -501,6 +519,7 @@ export function emailSaude(
         ...cronsRuins.map(
           (c) => `<strong>${rotulo(c.nome).titulo}</strong><br/>${c.motivo}`,
         ),
+        ...s.lojasSumidas.map(linhaSumida),
         ...filaRuim.map(linhaFila),
         ...extratoRuins.map(linhaExtrato),
       ])}

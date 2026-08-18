@@ -19,6 +19,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { merchantsSumidos } from "@/lib/ifood/merchants-sumidos"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
 
@@ -91,9 +92,29 @@ export type FilaIfood = {
   motivo: string
 }
 
+/**
+ * Loja vinculada que o iFood parou de listar.
+ *
+ * ⚠️ Sumir NÃO prova revogação — ver o cabeçalho de `merchants-sumidos`. O
+ * aviso apresenta o FATO e manda conferir a aba Permissões do portal, em vez
+ * de acusar o lojista de ter removido o app.
+ */
+export type LojaSumida = {
+  merchantId: string
+  nome: string | null
+  cnpj: string | null
+  desde: string
+  unitCode: string
+  unitName: string
+  empresa: string
+  /** Dias sem aparecer na varredura. */
+  dias: number
+}
+
 export type SaudeIntegracoes = {
   geradoEm: string
   lojas: LojaSaude[]
+  lojasSumidas: LojaSumida[]
   filaIfood: FilaIfood[]
   crons: CronSaude[]
   resumo: {
@@ -474,15 +495,48 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     cronsProblema: crons.filter((c) => c.gravidade !== "ok").length,
   }
 
+  /**
+   * Loja vinculada que sumiu da lista do iFood.
+   *
+   * ── POR QUE ISSO PRECISAVA ESTAR AQUI (18/08/26) ────────────────────────
+   * A Pizzaria Quero Mais (Vbfood) sumiu em 14/08 e o financeiro dela parou no
+   * mesmo dia. Ninguém soube: o cliente seguiu vendo os números de 13/08 como
+   * se fossem os de hoje, e o sync seguiu pedindo extrato pra uma loja que o
+   * iFood não lista mais. A detecção já existia em `merchants-sumidos`; o que
+   * faltava era ela chegar em alguém.
+   *
+   * É sempre ALERTA, nunca "atenção": loja que para de dar dado é o tipo de
+   * silêncio que só piora com o tempo.
+   */
+  const lojasSumidas: LojaSumida[] = (await merchantsSumidos())
+    .filter((m) => m.loja !== null)
+    .map((m) => ({
+      merchantId: m.merchantId,
+      nome: m.nome,
+      cnpj: m.cnpj,
+      desde: m.desde,
+      unitCode: m.loja!.code,
+      unitName: m.loja!.name,
+      empresa: m.loja!.empresa,
+      dias: Math.max(
+        0,
+        Math.floor(
+          (Date.parse(agora) - Date.parse(m.desde)) / 86_400_000,
+        ),
+      ),
+    }))
+
   return {
     geradoEm: agora,
     lojas,
+    lojasSumidas,
     filaIfood,
     crons,
     resumo,
     // "Atenção" não acorda ninguém — só alerta. Loja conectada há 2 horas sem
     // dado é esperado, não é problema.
     tudoCerto:
+      lojasSumidas.length === 0 &&
       resumo.lojasAlerta === 0 &&
       crons.every((c) => c.gravidade !== "alerta") &&
       filaIfood.every((f) => f.gravidade !== "alerta"),
