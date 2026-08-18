@@ -142,6 +142,10 @@ export type CancelamentoMotivo = {
   motivo: string
   pedidos: number
   perdaFinanceira: number
+  /** Quantos destes pedidos foram cancelamento PARCIAL (o resto é total). */
+  pedidosParciais: number
+  /** Quanto da perda veio de parcial. Serve pra tela separar as duas coisas. */
+  perdaParcial: number
 }
 
 export type PedidoResumo = {
@@ -1667,11 +1671,18 @@ export async function getCancelamentoCestaByUnits(
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
 
-  const aplicaRange = <T extends { gte: any; lte: any }>(q: T): T => {
+  // Tipo mínimo do builder do Supabase pro que esta função usa. Estava como
+  // `any` e o lint acusava (erro pré-existente); descrever os dois métodos
+  // custa três linhas e mantém a checagem.
+  type ComRange = {
+    gte(coluna: string, valor: string): ComRange
+    lte(coluna: string, valor: string): ComRange
+  }
+  const aplicaRange = <T extends ComRange>(q: T): T => {
     if (!dateRange) return q
     return q
       .gte("data_criacao_pedido", dateRange.start)
-      .lte("data_criacao_pedido", `${dateRange.end}T23:59:59`) as T
+      .lte("data_criacao_pedido", `${dateRange.end}T23:59:59`) as unknown as T
   }
 
   const canc = await fetchAllRows<{
@@ -1769,7 +1780,13 @@ export async function getCancelamentosPorMotivo(
   // Parcial continua no valor do estorno (o pedido não foi perdido inteiro).
   const acc = new Map<
     string,
-    { pedidos: Set<string>; perdaFinanceira: number; totais: Set<string> }
+    {
+      pedidos: Set<string>
+      perdaFinanceira: number
+      perdaParcial: number
+      totais: Set<string>
+      parciais: Set<string>
+    }
   >()
   const totalPorUnidade = new Map<string, Set<string>>([[unitId, new Set()]])
   for (const r of data) {
@@ -1777,7 +1794,9 @@ export async function getCancelamentosPorMotivo(
     const cur = acc.get(motivo) ?? {
       pedidos: new Set<string>(),
       perdaFinanceira: 0,
+      perdaParcial: 0,
       totais: new Set<string>(),
+      parciais: new Set<string>(),
     }
     if (r.pedido_associado_ifood) {
       cur.pedidos.add(r.pedido_associado_ifood)
@@ -1786,8 +1805,19 @@ export async function getCancelamentosPorMotivo(
         totalPorUnidade.get(unitId)!.add(r.pedido_associado_ifood)
       }
     }
-    if (r.fato_gerador === "Cancelamento Parcial" && r.impacto_no_repasse)
-      cur.perdaFinanceira += Math.abs(Number(r.valor) || 0)
+    if (r.fato_gerador === "Cancelamento Parcial" && r.impacto_no_repasse) {
+      // ⚠️ NÃO É `Math.abs`. Um cancelamento parcial gera um CLUSTER de
+      // lançamentos: a Entrada Financeira NEGATIVA (o que voltou pro cliente)
+      // e as Cobranças POSITIVAS (comissão e taxa que o iFood devolve junto,
+      // proporcionais ao que foi cancelado). Somar o módulo de todos fazia o
+      // crédito entrar como perda — e ainda contado duas vezes, porque o sinal
+      // se perdia. Medido em 18/08/26: R$ 22.120,97 no lugar de R$ 13.941,91,
+      // uma perda 59% inflada. O que a loja perde é o líquido.
+      const v = Number(r.valor) || 0
+      cur.perdaFinanceira -= v
+      cur.perdaParcial -= v
+      if (r.pedido_associado_ifood) cur.parciais.add(r.pedido_associado_ifood)
+    }
     acc.set(motivo, cur)
   }
   const cesta = await cestaPorPedidoCancelado(totalPorUnidade, year, month)
@@ -1797,6 +1827,8 @@ export async function getCancelamentosPorMotivo(
     .map(([motivo, v]) => ({
       motivo,
       pedidos: v.pedidos.size,
+      pedidosParciais: v.parciais.size,
+      perdaParcial: Math.round(v.perdaParcial * 100) / 100,
       perdaFinanceira: Math.round(v.perdaFinanceira * 100) / 100,
     }))
     .sort((a, b) => b.pedidos - a.pedidos)
@@ -2274,7 +2306,13 @@ export async function getNetworkCancelamentosPorMotivo(
   // por unidade acima — mesma régua do DRE/heros).
   const acc = new Map<
     string,
-    { pedidos: Set<string>; perdaFinanceira: number; totais: Set<string> }
+    {
+      pedidos: Set<string>
+      perdaFinanceira: number
+      perdaParcial: number
+      totais: Set<string>
+      parciais: Set<string>
+    }
   >()
   const totalPorUnidade = new Map<string, Set<string>>()
   for (const r of data) {
@@ -2282,7 +2320,9 @@ export async function getNetworkCancelamentosPorMotivo(
     const cur = acc.get(motivo) ?? {
       pedidos: new Set<string>(),
       perdaFinanceira: 0,
+      perdaParcial: 0,
       totais: new Set<string>(),
+      parciais: new Set<string>(),
     }
     if (r.pedido_associado_ifood) {
       cur.pedidos.add(r.pedido_associado_ifood)
@@ -2293,8 +2333,19 @@ export async function getNetworkCancelamentosPorMotivo(
         totalPorUnidade.set(r.unit_id, set)
       }
     }
-    if (r.fato_gerador === "Cancelamento Parcial" && r.impacto_no_repasse)
-      cur.perdaFinanceira += Math.abs(Number(r.valor) || 0)
+    if (r.fato_gerador === "Cancelamento Parcial" && r.impacto_no_repasse) {
+      // ⚠️ NÃO É `Math.abs`. Um cancelamento parcial gera um CLUSTER de
+      // lançamentos: a Entrada Financeira NEGATIVA (o que voltou pro cliente)
+      // e as Cobranças POSITIVAS (comissão e taxa que o iFood devolve junto,
+      // proporcionais ao que foi cancelado). Somar o módulo de todos fazia o
+      // crédito entrar como perda — e ainda contado duas vezes, porque o sinal
+      // se perdia. Medido em 18/08/26: R$ 22.120,97 no lugar de R$ 13.941,91,
+      // uma perda 59% inflada. O que a loja perde é o líquido.
+      const v = Number(r.valor) || 0
+      cur.perdaFinanceira -= v
+      cur.perdaParcial -= v
+      if (r.pedido_associado_ifood) cur.parciais.add(r.pedido_associado_ifood)
+    }
     acc.set(motivo, cur)
   }
   const cesta = await cestaPorPedidoCancelado(totalPorUnidade, year, month)
@@ -2304,6 +2355,8 @@ export async function getNetworkCancelamentosPorMotivo(
     .map(([motivo, v]) => ({
       motivo,
       pedidos: v.pedidos.size,
+      pedidosParciais: v.parciais.size,
+      perdaParcial: Math.round(v.perdaParcial * 100) / 100,
       perdaFinanceira: Math.round(v.perdaFinanceira * 100) / 100,
     }))
     .sort((a, b) => b.pedidos - a.pedidos)

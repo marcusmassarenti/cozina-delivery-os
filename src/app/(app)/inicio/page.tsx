@@ -1580,6 +1580,8 @@ export default async function Home({
                             motivo: c.motivo,
                             pedidos: c.pedidos,
                             perda: c.perdaFinanceira,
+                            pedidosParciais: c.pedidosParciais,
+                            perdaParcial: c.perdaParcial,
                           }))}
                         />
                       ) : (
@@ -2580,7 +2582,14 @@ function EmptyMsg({ text }: { text: string }) {
 function CancelList({
   items,
 }: {
-  items: Array<{ motivo: string; pedidos: number; perda: number }>
+  items: Array<{
+    motivo: string
+    pedidos: number
+    perda: number
+    /** Só o iFood distingue parcial de total; as outras vêm sem estes. */
+    pedidosParciais?: number
+    perdaParcial?: number
+  }>
 }) {
   // Hero da perda (número acionável) + lista de motivos por perda R$. A perda
   // vem negativa do dado → usa o módulo.
@@ -2589,6 +2598,27 @@ function CancelList({
   )
   const totalPerda = ordenado.reduce((s, c) => s + Math.abs(c.perda), 0)
   const totalCancel = ordenado.reduce((s, c) => s + c.pedidos, 0)
+
+  /**
+   * Parcial × total.
+   *
+   * ── POR QUE SEPARAR (tarefa #33) ─────────────────────────────────────────
+   * As duas coisas estavam somadas num número só, e elas pedem reações
+   * diferentes. Cancelamento TOTAL é o pedido inteiro perdido — comida feita,
+   * entrega paga, cesta inteira no prejuízo. PARCIAL é o cliente devolvendo um
+   * item: a loja perde só aquele item, e o iFood devolve a comissão
+   * proporcional junto. Um pede olhar a operação; o outro, o cardápio e a
+   * disponibilidade.
+   *
+   * A perda parcial já vem líquida (devolvido − taxa estornada) da camada de
+   * dados — ver o comentário em `ifood-imported`.
+   */
+  const parciais = ordenado.reduce((s, c) => s + (c.pedidosParciais ?? 0), 0)
+  const perdaParcial = ordenado.reduce(
+    (s, c) => s + Math.abs(c.perdaParcial ?? 0),
+    0,
+  )
+  const temParcial = parciais > 0
   return (
     <div>
       <div className="mb-3 rounded-md bg-rose-50 px-3 py-2 dark:bg-rose-950/30">
@@ -2603,6 +2633,16 @@ function CancelList({
             · {fmtNum(totalCancel)} cancel.
           </span>
         </div>
+        {temParcial && (
+          <p className="mt-1 text-[10.5px] leading-snug text-rose-700/80 dark:text-rose-400/80">
+            Sendo <b>{fmtNum(Math.max(0, totalCancel - parciais))} total</b>{" "}
+            {fmtBRL(totalPerda - perdaParcial)} · <b>{fmtNum(parciais)} parcial</b>{" "}
+            {fmtBRL(perdaParcial)}
+            <span className="ml-1 opacity-70">
+              (parcial já desconta a comissão devolvida)
+            </span>
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         {ordenado.map((c, idx) => (
@@ -2618,6 +2658,14 @@ function CancelList({
             <span className="shrink-0 text-[11px] font-bold tabular-nums text-rose-700 dark:text-rose-400">
               −{fmtBRL(Math.abs(c.perda))}
             </span>
+            {(c.pedidosParciais ?? 0) > 0 && (
+              <span
+                className="shrink-0 rounded bg-rose-100 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                title={`${fmtNum(c.pedidosParciais ?? 0)} de ${fmtNum(c.pedidos)} foram cancelamento parcial (item devolvido, não o pedido todo)`}
+              >
+                {c.pedidosParciais === c.pedidos ? "parcial" : "c/ parcial"}
+              </span>
+            )}
             <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
               {fmtNum(c.pedidos)}×
             </span>
