@@ -49,6 +49,22 @@ export type CreateUnitState = {
   ok: boolean
   message?: string
   fieldErrors?: Record<string, string>
+  /**
+   * A loja recém-criada, pra tela emendar na conexão das plataformas.
+   *
+   * ── O FLUXO QUEBRADO QUE ISSO FECHA (Marcus, 18/08/26) ──────────────────
+   * O cliente cadastrava a loja, marcava iFood/99/Cardápio Web, salvava — e o
+   * diálogo simplesmente fechava. Pra conectar de verdade ele tinha que ADIVINHAR
+   * que precisava reabrir o cadastro e procurar a integração. Marcar a
+   * plataforma no cadastro só diz "esta loja vende aqui"; não conecta nada.
+   * Quem acabou de dizer onde vende é exatamente quem está pronto pra conectar.
+   */
+  criada?: {
+    unitId: string
+    nome: string
+    cnpj: string | null
+    plataformas: PlatformId[]
+  }
 }
 
 // Inclui o canal próprio: o form de unidade pergunta "por onde essa loja
@@ -305,7 +321,17 @@ export async function createUnit(
     revalidateTag("reports", "max")
     revalidatePath("/unidades")
     revalidatePath("/inicio")
-    return { ok: true }
+    return {
+      ok: true,
+      criada: unit
+        ? {
+            unitId: unit.id as string,
+            nome: name,
+            cnpj: cnpjRaw ? cleanCnpj(cnpjRaw) : null,
+            plataformas: platforms,
+          }
+        : undefined,
+    }
   } catch (err) {
     return {
       ok: false,

@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { validacaoPtBr } from "@/components/shared/form-validacao-ptbr"
+import Link from "next/link"
 import { createUnit, type CreateUnitState } from "../_actions"
 
 const UFs = [
@@ -68,6 +69,8 @@ export function NewUnitDialog({
   cadastroExigente?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
+  /** "cadastro" = formulário; "conectar" = o que fazer com o que foi salvo. */
+  const [etapa, setEtapa] = React.useState<"cadastro" | "conectar">("cadastro")
   const [state, formAction] = useActionState(createUnit, initial)
   const [cnpj, setCnpj] = React.useState("")
   const [uf, setUf] = React.useState("SP")
@@ -75,17 +78,33 @@ export function NewUnitDialog({
   const [cidade, setCidade] = React.useState("")
   const router = useRouter()
 
+  /**
+   * Salvou → NÃO fecha. Emenda no passo de conectar as plataformas.
+   *
+   * ── O FLUXO QUE ISSO CONSERTA (Marcus, 18/08/26) ────────────────────────
+   * O diálogo fechava no sucesso e o assunto morria ali. Pra conectar de fato,
+   * a pessoa tinha que descobrir sozinha que precisava reabrir o cadastro e
+   * caçar a integração — e marcar a plataforma no cadastro NÃO conecta nada,
+   * só declara "esta loja vende aqui". Quem acabou de dizer onde vende é
+   * exatamente quem está pronto pra conectar; mandar embora nessa hora é
+   * perder a única pessoa com o contexto na cabeça.
+   */
   React.useEffect(() => {
-    if (state.ok) {
-      setOpen(false)
-      setCnpj("")
-      setUf("SP")
+    if (state.ok && state.criada) {
+      setEtapa("conectar")
       router.refresh()
     }
   }, [state, router])
 
+  function fechar() {
+    setOpen(false)
+    setEtapa("cadastro")
+    setCnpj("")
+    setUf("SP")
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : fechar())}>
       <DialogTrigger
         render={
           <button
@@ -99,13 +118,19 @@ export function NewUnitDialog({
       />
       <DialogContent className="max-h-[calc(100dvh-6rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Nova unidade</DialogTitle>
+          <DialogTitle>
+            {etapa === "cadastro" ? "Nova unidade" : "Loja criada · conecte as plataformas"}
+          </DialogTitle>
           <DialogDescription>
-            Cadastre uma loja da sua operação. O código é gerado
-            automaticamente.
+            {etapa === "cadastro"
+              ? "Cadastre uma loja da sua operação. O código é gerado automaticamente."
+              : "Marcar a plataforma no cadastro diz onde a loja vende. Conectar é o que faz o dado entrar sozinho."}
           </DialogDescription>
         </DialogHeader>
 
+        {etapa === "conectar" && state.criada ? (
+          <PassoConectar criada={state.criada} onFechar={fechar} />
+        ) : (
         <form
           action={formAction}
           {...validacaoPtBr}
@@ -221,13 +246,14 @@ export function NewUnitDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={fechar}
             >
               Cancelar
             </Button>
             <SubmitButton />
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -289,5 +315,107 @@ function SubmitButton() {
     <Button type="submit" disabled={pending}>
       {pending ? "Salvando..." : "Criar unidade"}
     </Button>
+  )
+}
+
+
+/**
+ * Passo 2: o que fazer com a loja que acabou de ser criada.
+ *
+ * Cada plataforma escolhida vira uma linha com o caminho REAL da conexão —
+ * nada de "vá em Integrações e procure". A loja sem CNPJ ganha o aviso, porque
+ * é ele que o iFood e o 99 usam pra achar o merchant, e descobrir isso só na
+ * tela de conexão é voltar duas telas.
+ *
+ * Keeta fica de fora de propósito: não tem API de conexão — entra por
+ * planilha, e prometer um botão que não existe é pior que não falar nada.
+ */
+function PassoConectar({
+  criada,
+  onFechar,
+}: {
+  criada: NonNullable<CreateUnitState["criada"]>
+  onFechar: () => void
+}) {
+  const destinos: Record<string, { rotulo: string; href: string; como: string }> = {
+    ifood: {
+      rotulo: "iFood",
+      href: "/conectar-ifood",
+      como: "Solicita a conexão pelo CNPJ; o dono aprova no Portal do Parceiro.",
+    },
+    "99food": {
+      rotulo: "99 Food",
+      href: "/integracao/99food",
+      como: "Vincula a loja ao app da 99 pelo painel deles.",
+    },
+    cardapioweb: {
+      rotulo: "Cardápio Web",
+      href: "/integracao/cardapioweb",
+      como: "Liga a instalação do Cardápio Web a esta loja.",
+    },
+  }
+
+  const comConexao = criada.plataformas.filter((p) => destinos[p])
+  const keeta = criada.plataformas.includes("keeta")
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <b>{criada.nome}</b> foi cadastrada.
+      </p>
+
+      {!criada.cnpj && comConexao.length > 0 && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          Esta loja ficou <b>sem CNPJ</b>. É por ele que o iFood e a 99 acham a
+          loja — dá pra informar na própria tela de conexão, mas vale preencher
+          no cadastro pra não digitar duas vezes.
+        </p>
+      )}
+
+      {comConexao.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {comConexao.map((p) => (
+            <li
+              key={p}
+              className="flex items-center gap-3 rounded-lg border p-3"
+            >
+              <PlatformLogo platform={p} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold">
+                  {destinos[p].rotulo}
+                </span>
+                <span className="block text-[11.5px] leading-snug text-muted-foreground">
+                  {destinos[p].como}
+                </span>
+              </span>
+              <Link
+                href={destinos[p].href}
+                onClick={onFechar}
+                className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+              >
+                Conectar
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[13px] text-muted-foreground">
+          Nenhuma das plataformas escolhidas tem conexão automática.
+        </p>
+      )}
+
+      {keeta && (
+        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+          <b>Keeta</b> não tem conexão por API — o dado dela entra pela
+          importação de planilha, em Importação.
+        </p>
+      )}
+
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onFechar}>
+          Conectar depois
+        </Button>
+      </DialogFooter>
+    </div>
   )
 }
