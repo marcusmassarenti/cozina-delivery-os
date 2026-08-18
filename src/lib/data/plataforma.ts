@@ -46,6 +46,15 @@ export type HoldingUnit = {
   ifoodApi: boolean
   /** Conectada ao 99 via API (ninefood_store_links ativo). */
   ninefoodApi: boolean
+  /**
+   * Conectada ao Cardápio Web (instalação OAuth vinculada à loja).
+   *
+   * ⚠️ NÃO sai de `unit_platforms.api_store_id` como as outras duas: o CW
+   * guarda a conexão em `cardapioweb_installs`, uma por loja. Por não estar
+   * aqui, a CR Poços aparecia com o logo do Cardápio Web apagado e contava
+   * como "1 conectada via API" tendo três (Marcus, 18/08/26).
+   */
+  cardapiowebApi: boolean
 }
 export type HoldingPayment = {
   id: string
@@ -144,7 +153,7 @@ export async function getClientsOverview(): Promise<{
   if (!(await isSuperadmin())) return empty
 
   const admin = createAdminClient()
-  const [brandsRes, unitsRes, accessRes, paymentsRes, platRes, nineRes] =
+  const [brandsRes, unitsRes, accessRes, paymentsRes, platRes, nineRes, cwRes] =
     await Promise.all([
     admin.from("brands").select("id, holding_id"),
     admin.from("units").select("id, brand_id, active, name, code, city, state"),
@@ -159,6 +168,8 @@ export async function getClientsOverview(): Promise<{
       .select("unit_id, platform, active, api_store_id"),
     // Lojas com vínculo de API do 99.
     admin.from("ninefood_store_links").select("unit_id").eq("active", true),
+    // Lojas com instalação do Cardápio Web.
+    admin.from("cardapioweb_installs").select("unit_id"),
   ])
 
   // unit_id → { plataformas habilitadas, iFood via API }
@@ -178,6 +189,11 @@ export async function getClientsOverview(): Promise<{
     if (p.platform === "ifood" && p.active && p.api_store_id)
       ifoodApiUnits.add(p.unit_id)
   }
+  const cwApiUnits = new Set(
+    ((cwRes.data ?? []) as { unit_id: string | null }[])
+      .map((r) => r.unit_id)
+      .filter((id): id is string => !!id),
+  )
   const nineApiUnits = new Set(
     ((nineRes.data ?? []) as { unit_id: string | null }[])
       .map((r) => r.unit_id)
@@ -306,6 +322,7 @@ export async function getClientsOverview(): Promise<{
       platforms: PLAT_ORDER.filter((p) => platSet?.has(p)),
       ifoodApi: ifoodApiUnits.has(u.id),
       ninefoodApi: nineApiUnits.has(u.id),
+      cardapiowebApi: cwApiUnits.has(u.id),
     })
     unitsByHolding.set(h, list)
   }
@@ -623,7 +640,8 @@ export async function getClientDetail(
     : { data: [] as never[] }
   const unitIds = (unitRows ?? []).map((u) => u.id)
 
-  const [{ data: platRows }, { data: nineRows }] = await Promise.all([
+  const [{ data: platRows }, { data: nineRows }, { data: cwRows }] =
+    await Promise.all([
     unitIds.length
       ? admin
           .from("unit_platforms")
@@ -637,6 +655,7 @@ export async function getClientDetail(
           .eq("active", true)
           .in("unit_id", unitIds)
       : Promise.resolve({ data: [] as never[] }),
+      admin.from("cardapioweb_installs").select("unit_id"),
   ])
   const platsByUnit = new Map<string, Set<string>>()
   const ifoodApiUnits = new Set<string>()
@@ -654,6 +673,11 @@ export async function getClientDetail(
     if (p.platform === "ifood" && p.active && p.api_store_id)
       ifoodApiUnits.add(p.unit_id)
   }
+  const cwApiUnits = new Set(
+    ((cwRows ?? []) as { unit_id: string | null }[])
+      .map((r) => r.unit_id)
+      .filter((id): id is string => !!id),
+  )
   const nineApiUnits = new Set(
     ((nineRows ?? []) as { unit_id: string | null }[])
       .map((r) => r.unit_id)
@@ -674,6 +698,7 @@ export async function getClientDetail(
       ),
       ifoodApi: ifoodApiUnits.has(u.id as string),
       ninefoodApi: nineApiUnits.has(u.id as string),
+      cardapiowebApi: cwApiUnits.has(u.id as string),
     }))
     .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
 

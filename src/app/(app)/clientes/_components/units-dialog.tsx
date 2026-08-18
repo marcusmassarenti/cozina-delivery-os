@@ -19,7 +19,11 @@ import type { HoldingUnit } from "@/lib/data/plataforma"
 export function UnitsDialog({ name, units }: { name: string; units: HoldingUnit[] }) {
   const [open, setOpen] = React.useState(false)
   const active = units.filter((u) => u.active).length
-  const comApi = units.filter((u) => u.ifoodApi || u.ninefoodApi).length
+  // Cardápio Web entra na conta: canal próprio conectado é conexão via API
+  // como as outras, e ficar de fora fazia "1 conectada" numa loja com três.
+  const comApi = units.filter(
+    (u) => u.ifoodApi || u.ninefoodApi || u.cardapiowebApi,
+  ).length
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -76,7 +80,8 @@ export function UnitsDialog({ name, units }: { name: string; units: HoldingUnit[
                     {u.platforms.map((p) => {
                       const api =
                         (p === "ifood" && u.ifoodApi) ||
-                        (p === "99food" && u.ninefoodApi)
+                        (p === "99food" && u.ninefoodApi) ||
+                        (p === "cardapioweb" && u.cardapiowebApi)
                       return (
                         <span
                           key={p}

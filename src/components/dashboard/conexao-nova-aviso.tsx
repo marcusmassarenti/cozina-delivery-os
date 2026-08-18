@@ -1,4 +1,7 @@
-import { PartyPopper } from "lucide-react"
+"use client"
+
+import * as React from "react"
+import { PartyPopper, X } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import type { ConexaoNova } from "@/lib/data/conexoes-novas"
@@ -22,11 +25,43 @@ const ROTULO = {
  * ainda vazia seria prometer o que a pessoa não vê.
  */
 export function ConexaoNovaAviso({ conexoes }: { conexoes: ConexaoNova[] }) {
-  if (conexoes.length === 0) return null
+  /**
+   * Fechar é COMPLEMENTO do prazo de 7 dias, não substituto.
+   *
+   * O aviso do iFood já aprendeu isso: o "fechar" mora no localStorage, então
+   * some ao trocar de navegador ou de celular — a DG FOODS chegou a ter 47
+   * avisos voltando a cada aparelho novo. Por isso o sumiço definitivo continua
+   * sendo o prazo (servidor, vale em todo lugar) e o X serve pra quem quer
+   * limpar a tela agora.
+   */
+  const [fechados, setFechados] = React.useState<string[]>([])
+  React.useEffect(() => {
+    try {
+      setFechados(
+        JSON.parse(localStorage.getItem("conexao-nova-fechados") ?? "[]"),
+      )
+    } catch {
+      // localStorage indisponível (aba anônima, storage cheio): mostrar o
+      // aviso é o comportamento seguro.
+    }
+  }, [])
+
+  function fechar(chave: string) {
+    const novo = [...fechados, chave]
+    setFechados(novo)
+    try {
+      localStorage.setItem("conexao-nova-fechados", JSON.stringify(novo))
+    } catch {}
+  }
+
+  const visiveis = conexoes.filter(
+    (c) => !fechados.includes(`${c.plataforma}|${c.unitId}`),
+  )
+  if (visiveis.length === 0) return null
 
   return (
     <div className="space-y-2">
-      {conexoes.map((c) => (
+      {visiveis.map((c) => (
         <div
           key={`${c.plataforma}|${c.unitId}`}
           className="flex items-start gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40"
@@ -56,6 +91,14 @@ export function ConexaoNovaAviso({ conexoes }: { conexoes: ConexaoNova[] }) {
               )}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => fechar(`${c.plataforma}|${c.unitId}`)}
+            aria-label="Fechar aviso"
+            className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-emerald-600/10 hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
         </div>
       ))}
     </div>
