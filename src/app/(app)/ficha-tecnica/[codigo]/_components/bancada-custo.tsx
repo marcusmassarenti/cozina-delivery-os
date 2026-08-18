@@ -19,51 +19,59 @@ import { SeletorCategoria } from "./seletor-categoria"
 import { BarraMassa } from "./barra-massa"
 
 /**
- * A trava da vírgula nos campos de dinheiro.
+ * A trava da vírgula: os centavos entram primeiro.
  *
- * ── O ACIDENTE QUE ISSO IMPEDE (Marcus, 17/08/26) ────────────────────────
- * O parser antigo fazia `replace(/\./g, "")` — apagava TODO ponto antes de
- * converter. Quem digita no teclado numérico digita ponto, não vírgula: "17.81"
- * virava "1781", e a tela gravava R$ 1.781,00 de custo num lanche de R$ 23,00.
- * Cem vezes o valor certo, sem um aviso sequer — e como custo alto só faz a
- * margem despencar, o erro se disfarça de "esse item dá prejuízo".
+ * ── POR QUE ASSIM, E NÃO "FILTRANDO CARACTERE" (Marcus, 17/08/26) ────────
+ * A primeira versão só limpava o que era digitado — ponto virava vírgula, letra
+ * não entrava. Resolvia o "17.81 virou 1781", mas deixava passar "3232323",
+ * porque dígito sem vírgula é um número legítimo: quem digita "17" quer R$ 17.
+ * O Marcus mandou o print de novo, e com razão: enquanto existir um estado em
+ * que o valor está sem casa decimal, existe o erro de ordem de grandeza.
  *
- * A trava age na digitação, que é onde dá pra ser gentil: o ponto VIRA vírgula
- * enquanto se digita, letra não entra, e não existe segunda vírgula nem terceira
- * casa decimal. O que sai daqui já está no formato que `paraNumero` entende.
+ * A trava de verdade é esta — a vírgula NUNCA sai do lugar. Cada dígito empurra
+ * o anterior pra esquerda, a partir dos centavos:
+ *
+ *     1     →  0,01          1781   →  17,81
+ *     17    →  0,17          3232323 → 32.323,23
+ *
+ * Ninguém "esquece a vírgula", porque ela não depende de ser digitada. É como
+ * caixa eletrônico e maquininha funcionam, e é o gesto que a operação já tem no
+ * dedo. Apagar continua natural: backspace tira o último dígito e o valor
+ * inteiro desliza de volta.
  */
 function mascaraDinheiro(bruto: string): string {
-  // Ponto e vírgula são a mesma intenção: separar os centavos.
-  let t = bruto.replace(/\./g, ",").replace(/[^\d,]/g, "")
+  // 9 dígitos = até R$ 9.999.999,99. Passou disso, para de aceitar em vez de
+  // crescer sem fim.
+  const digitos = bruto.replace(/\D/g, "").slice(0, 9)
+  if (digitos === "") return ""
+  return (Number(digitos) / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
 
-  // Só a PRIMEIRA vírgula vale; as outras somem em vez de bloquear a digitação.
-  const i = t.indexOf(",")
-  if (i !== -1) {
-    t = t.slice(0, i + 1) + t.slice(i + 1).replace(/,/g, "")
-  }
-
-  // Centavos têm duas casas. Digitar a terceira não faz nada.
-  const [inteiro, decimais] = t.split(",")
-  if (decimais !== undefined) return `${inteiro},${decimais.slice(0, 2)}`
-  return inteiro
+/** Número → texto do campo, no mesmo formato que a máscara produz. */
+function paraCampo(n: number): string {
+  return n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 /**
- * Texto do campo → número. Espelha `mascaraDinheiro`: aqui a vírgula é o
- * separador decimal e ponto nenhum sobrevive à máscara.
+ * Texto do campo → número. O ponto aqui é SEMPRE milhar (a máscara o coloca) e
+ * a vírgula é sempre o decimal.
  *
- * Ainda trata o caso do COLAR, que escapa da digitação: "1.781,81" vem de
- * planilha com ponto de milhar, e aí o ponto é descartado — mas só quando existe
- * uma vírgula pra fazer o papel de decimal. Sem vírgula, "1.781" é ambíguo e o
- * ponto é lido como decimal, que é o palpite que erra menos: quem cola um
- * milhar sabe o que colou; quem digita ponto quer centavos.
+ * O caso do COLAR também cai aqui: "1.781,81" de planilha funciona igual. Sem
+ * vírgula — "1781" colado — o valor é lido como inteiro, e aí a segunda trava
+ * (`pareceEngano`) é quem pergunta.
  */
 function paraNumero(texto: string): number | null {
   const t = texto.trim()
   if (t === "") return null
   const normalizado = t.includes(",")
     ? t.replace(/\./g, "").replace(",", ".")
-    : t
+    : t.replace(/\./g, "")
   const n = Number(normalizado)
   return Number.isFinite(n) ? n : null
 }
@@ -954,9 +962,7 @@ export function BancadaCusto({
                 const k = chave(i)
                 const valor =
                   local[k] ??
-                  (i.custo === null
-                    ? ""
-                    : String(i.custo).replace(".", ","))
+                  (i.custo === null ? "" : paraCampo(i.custo))
                 return (
                   <tr
                     key={k}
@@ -1046,9 +1052,7 @@ export function BancadaCusto({
                         inputMode="decimal"
                         value={
                           localPreco[k] ??
-                          (i.precoVenda === null
-                            ? ""
-                            : String(i.precoVenda).replace(".", ","))
+                          (i.precoVenda === null ? "" : paraCampo(i.precoVenda))
                         }
                         placeholder="—"
                         onChange={(e) =>
