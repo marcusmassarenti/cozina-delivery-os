@@ -900,6 +900,21 @@ async function lojasSemHistorico(): Promise<
      * pro extrato ter sido gerado no meio.
      */
     .filter((r) => {
+      /**
+       * ⚠️ O INTERVALO VALE SÓ PRA RETENTATIVA, NUNCA PRA PRIMEIRA RODADA.
+       *
+       * Regra do Marcus (18/08/26): "loja vinculada tem que rodar backfill
+       * IMEDIATO de jan até a data corrente". Loja que acabou de conectar não
+       * pode esperar 6h pra pedir o histórico — o cliente está olhando a tela
+       * agora, e a tela está vazia agora.
+       *
+       * Eu já errei nos dois sentidos hoje: sem intervalo, três rodadas em sete
+       * minutos queimaram as chances da CR Poços; com intervalo aplicado desde
+       * a primeira, ela ficou parada esperando um relógio sem nunca ter tentado
+       * de verdade. Espaçar RETENTATIVA é proteção; espaçar a ESTREIA é atraso.
+       */
+      const tentativas = r.historico_tentativas ?? 0
+      if (tentativas === 0) return true
       const ultima = r.historico_ultima_tentativa
       if (!ultima) return true
       const horas = (Date.now() - Date.parse(ultima)) / 3_600_000
