@@ -7,6 +7,7 @@ import { isProPlan } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getCustoItens } from "@/lib/data/custo-itens"
+import { getCurrentUserContext } from "@/lib/auth/context"
 import { getCategoriasPadrao } from "@/lib/data/categorias-item"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { formatRangeLabel } from "@/lib/period"
@@ -68,10 +69,13 @@ export default async function FichaTecnicaLojaPage({
   // do vizinho na URL não descobre se ele existe.
   if (!loja) notFound()
 
-  const [resumo, periods, categoriasPadrao] = await Promise.all([
+  const [resumo, periods, categoriasPadrao, contexto] = await Promise.all([
     getCustoItens(loja.id, year, month),
     getAvailablePeriods(),
     getCategoriasPadrao(),
+    // Mesma fonte do `ReportBrandLogo` dos outros relatórios — que é server
+    // component e não dá pra usar dentro do painel, que é client.
+    getCurrentUserContext(),
   ])
 
   const aba = sp.aba === "painel" ? "painel" : "custos"
@@ -138,7 +142,14 @@ export default async function FichaTecnicaLojaPage({
           />
         </>
       ) : (
-        <PainelCusto lojaNome={loja.name} periodo={formatRangeLabel(periodRange)} resumo={resumo} />
+        <PainelCusto
+          lojaNome={loja.name}
+          lojaLogoUrl={loja.logoUrl}
+          clienteNome={contexto.companyName}
+          clienteLogoUrl={contexto.logoUrl}
+          periodo={formatRangeLabel(periodRange)}
+          resumo={resumo}
+        />
       )}
     </div>
   )

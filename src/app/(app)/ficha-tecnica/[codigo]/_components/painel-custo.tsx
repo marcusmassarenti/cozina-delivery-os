@@ -32,10 +32,18 @@ import {
  */
 export function PainelCusto({
   lojaNome,
+  lojaLogoUrl,
+  clienteNome,
+  clienteLogoUrl,
   periodo,
   resumo,
 }: {
   lojaNome: string
+  /** Logo da unidade. Aparece só no PDF, ao lado do nome dela. */
+  lojaLogoUrl?: string | null
+  /** Nome e logo do CLIENTE (a holding) — white-label do cabeçalho impresso. */
+  clienteNome?: string
+  clienteLogoUrl?: string | null
   periodo: string
   resumo: ResumoCusto
 }) {
@@ -259,12 +267,39 @@ export function PainelCusto({
         </button>
       </div>
 
-      {/* Só aparece no papel: sem isso o PDF sai sem dizer de quem é. */}
+      {/* ── Cabeçalho do papel ─────────────────────────────────────────
+          Só aparece no PDF. Leva o cliente (logo + nome) e a loja (logo +
+          nome), porque o relatório circula fora do sistema: numa conversa de
+          WhatsApp entre o Diego e a agência, "Pinheiros" sozinho não diz de
+          qual rede é — e há duas Pinheiros na base. */}
       <div className="hidden print:block">
-        <p className="text-lg font-bold">{lojaNome}</p>
-        <p className="text-xs text-zinc-500">
-          Ficha Técnica · {periodo} · Delivery OS
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            {clienteLogoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={clienteLogoUrl} alt="" className="h-9 w-auto" />
+            )}
+            {clienteNome && (
+              <span className="text-sm font-semibold">{clienteNome}</span>
+            )}
+          </div>
+          <span className="text-[10px] text-zinc-400">Delivery OS</span>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          {lojaLogoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={lojaLogoUrl}
+              alt=""
+              className="size-8 shrink-0 rounded-full object-cover"
+            />
+          )}
+          <div>
+            <p className="text-lg font-bold leading-tight">{lojaNome}</p>
+            <p className="text-xs text-zinc-500">Ficha Técnica · {periodo}</p>
+          </div>
+        </div>
       </div>
 
       {/* ── KPIs ──────────────────────────────────────────────────── */}
