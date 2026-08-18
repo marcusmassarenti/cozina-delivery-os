@@ -27,7 +27,10 @@ import { getAnticipations, summarizeAnticipations } from "./anticipations"
 import { logPedidosSync, syncPedidosDaLoja } from "./pedidos-sync"
 import { downloadReconciliationRows } from "./reconciliation"
 import { checkThrottle, recordCall } from "./throttle"
-import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import {
+  idsDeUnidadesForaDoSync,
+  idsDeUnidadesSuspensas,
+} from "@/lib/data/unidades-inativas"
 import { merchantsSumidos } from "@/lib/ifood/merchants-sumidos"
 
 export type UnitSyncResult = {
@@ -108,10 +111,11 @@ async function listIfoodUnits(unitIds?: string[] | null) {
     .eq("active", true)
     .not("api_store_id", "is", null)
   if (unitIds) q = q.in("unit_id", unitIds)
-  const [{ data, error }, inativas, sumidos] = await Promise.all([
+  const [{ data, error }, inativas, sumidos, suspensas] = await Promise.all([
     q,
     idsDeUnidadesForaDoSync(),
     merchantsSumidos(),
+    idsDeUnidadesSuspensas(),
   ])
   const idsSumidos = new Set(sumidos.map((m) => m.merchantId))
 
@@ -138,6 +142,13 @@ async function listIfoodUnits(unitIds?: string[] | null) {
      * em trabalho manual de reconexão pra todos os clientes.
      */
     .filter((r) => !idsSumidos.has(r.api_store_id as string))
+    /**
+     * Cliente com assinatura suspensa não puxa dado (Marcus, 18/08/26).
+     *
+     * Também é pausa e não corte: quando o pagamento entra, o webhook do Asaas
+     * enfileira a recuperação da lacuna inteira — ver `retomarSyncDoCliente`.
+     */
+    .filter((r) => !suspensas.has((r.units as unknown as { id: string }).id))
     .map((r) => ({
       unitId: (r.units as unknown as { id: string }).id,
       unitCode: (r.units as unknown as { code: string }).code,

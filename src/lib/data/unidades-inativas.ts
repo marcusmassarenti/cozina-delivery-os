@@ -75,3 +75,121 @@ export async function idsDeUnidadesForaDoSync(): Promise<Set<string>> {
   for (const id of encerradas) inativas.add(id)
   return inativas
 }
+
+/**
+ * Unidades de cliente com ASSINATURA SUSPENSA.
+ *
+ * ── A REGRA (Marcus, 18/08/26) ───────────────────────────────────────────
+ * "cliente suspenso, cessa puxar dados". Quem não está pagando não consome
+ * chamada de API nossa — e a conta do iFood/99 é por chamada, então isso é
+ * custo direto, não princípio.
+ *
+ * Suspenso = `suspend_on` preenchido e já vencido. A coluna é a data em que a
+ * suspensão passa a valer (vencimento + 7 dias de tolerância), e o webhook do
+ * Asaas a limpa no instante em que o pagamento entra.
+ *
+ * ⚠️ DE PROPÓSITO NÃO É `suspend_on IS NOT NULL`: entre o vencimento e o fim
+ * da tolerância o cliente está em atraso, não suspenso — cortar o dado dele aí
+ * seria punir quem vai pagar na sexta.
+ *
+ * Ao pausar, carimba `sync_pausado_em` no cliente. É esse carimbo que permite
+ * recuperar a lacuna quando ele voltar: `suspend_on` some no pagamento, e sem
+ * um segundo registro a gente não saberia de quando até quando ficou sem dado.
+ */
+export async function idsDeUnidadesSuspensas(): Promise<Set<string>> {
+  const admin = createAdminClient()
+  const hoje = new Date().toISOString().slice(0, 10)
+
+  const { data: suspensas } = await admin
+    .from("holdings")
+    .select("id, sync_pausado_em")
+    .not("suspend_on", "is", null)
+    .lte("suspend_on", hoje)
+
+  const ids = (suspensas ?? []) as { id: string; sync_pausado_em: string | null }[]
+  if (ids.length === 0) return new Set()
+
+  // Carimba a parada em quem ainda não tinha. Só a PRIMEIRA vez: se
+  // sobrescrevesse todo dia, a lacuna sempre pareceria de um dia só e a
+  // recuperação viria pela metade.
+  const semCarimbo = ids.filter((h) => !h.sync_pausado_em).map((h) => h.id)
+  if (semCarimbo.length > 0) {
+    await admin
+      .from("holdings")
+      .update({ sync_pausado_em: new Date().toISOString() })
+      .in("id", semCarimbo)
+  }
+
+  const { data: unidades } = await admin
+    .from("units")
+    .select("id, brands!inner(holding_id)")
+    .in(
+      "brands.holding_id",
+      ids.map((h) => h.id),
+    )
+
+  return new Set(((unidades ?? []) as { id: string }[]).map((u) => u.id))
+}
+
+/**
+ * Retoma o sync de um cliente que voltou a pagar, RECUPERANDO a lacuna.
+ *
+ * ── O PEDIDO (Marcus, 18/08/26) ──────────────────────────────────────────
+ * "retomando da data que parou até o dia da retomada para colocar os dados
+ * 100% íntegros". Voltar a sincronizar só o dia de hoje deixaria um buraco no
+ * histórico — e buraco de dado não avisa que existe: o DRE do mês fecharia
+ * menor e ninguém saberia por quê.
+ *
+ * ⚠️ A recuperação NÃO refaz só a janela parada — ela recoloca a loja na fila
+ * de histórico (`historico_backfill_at = null`), que puxa desde jan/2026.
+ * Parece exagero e é de propósito:
+ *  • é a MESMA máquina que já traz o histórico de loja nova, testada e com
+ *    retentativa; uma rotina só pra "de X até Y" seria código novo no caminho
+ *    mais sensível do sistema, pra rodar poucas vezes por ano;
+ *  • janela calculada erra por um dia com facilidade (fuso, competência que
+ *    vira no dia 1º), e um dia faltando é exatamente o que ninguém percebe;
+ *  • o extrato é substituído por competência, então repuxar mês já existente
+ *    não duplica nada.
+ * O custo é chamada de API numa reativação, que é evento raro. A integridade
+ * vale mais que a economia.
+ */
+export async function retomarSyncDoCliente(holdingId: string): Promise<{
+  pausadoEm: string | null
+  lojas: number
+}> {
+  const admin = createAdminClient()
+
+  const { data: h } = await admin
+    .from("holdings")
+    .select("sync_pausado_em")
+    .eq("id", holdingId)
+    .maybeSingle()
+
+  const pausadoEm = (h?.sync_pausado_em as string | null) ?? null
+  // Sem carimbo não houve pausa — cliente que pagou em dia não tem lacuna, e
+  // enfileirar backfill aqui puxaria o ano inteiro à toa toda vez que alguém
+  // paga a mensalidade.
+  if (!pausadoEm) return { pausadoEm: null, lojas: 0 }
+
+  const { data: unidades } = await admin
+    .from("units")
+    .select("id, brands!inner(holding_id)")
+    .eq("brands.holding_id", holdingId)
+  const unitIds = ((unidades ?? []) as { id: string }[]).map((u) => u.id)
+
+  if (unitIds.length > 0) {
+    await admin
+      .from("unit_platforms")
+      .update({ historico_backfill_at: null, historico_tentativas: 0 })
+      .in("unit_id", unitIds)
+      .eq("platform", "ifood")
+      .not("api_store_id", "is", null)
+  }
+
+  await admin
+    .from("holdings")
+    .update({ sync_pausado_em: null })
+    .eq("id", holdingId)
+
+  return { pausadoEm, lojas: unitIds.length }
+}

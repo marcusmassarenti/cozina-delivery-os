@@ -15,6 +15,7 @@
  *  - ESTORNADO/removido         → paid=false.
  */
 import { timingSafeEqual } from "node:crypto"
+import { retomarSyncDoCliente } from "@/lib/data/unidades-inativas"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { valorAssinaturaDoPlano } from "@/lib/data/assinatura"
@@ -258,10 +259,14 @@ export async function POST(req: Request) {
       },
     }
 
+    let retomouPagamento = false
     if (CONFIRMADO.has(event)) {
       patch.paid = true
       patch.trial_ends_at = null // deixou de ser trial, virou pagante
       patch.suspend_on = null
+      // O sync volta com a lacuna a recuperar — ver `retomarSyncDoCliente`.
+      // Fora do patch de propósito: mexe em unit_platforms, não em holdings.
+      retomouPagamento = true
       patch.payment_method = "Asaas"
       if (payment.dueDate) patch.due_date = String(payment.dueDate)
       // Pagamento confirmado → CONCEDE o plano escolhido (pending → plan_tier).
@@ -281,6 +286,32 @@ export async function POST(req: Request) {
     }
 
     await admin.from("holdings").update(patch).eq("id", holdingId)
+
+    /**
+     * Pagou depois de suspenso: retoma o sync e recupera a lacuna.
+     *
+     * Depois do update de propósito — `suspend_on` precisa já estar limpo,
+     * senão a próxima rodada do sync leria "ainda suspenso" e carimbaria a
+     * pausa de novo, desfazendo a retomada.
+     *
+     * A função sai calada quando não há pausa carimbada, então chamar em todo
+     * pagamento confirmado é barato: só age em quem realmente ficou parado.
+     */
+    if (retomouPagamento) {
+      try {
+        const r = await retomarSyncDoCliente(holdingId)
+        if (r.pausadoEm) {
+          console.log(
+            `[asaas] sync retomado da holding ${holdingId}: parado desde ${r.pausadoEm}, ${r.lojas} loja(s) na fila de recuperação`,
+          )
+        }
+      } catch (e) {
+        // Falhar aqui NÃO pode derrubar o webhook: o Asaas reenviaria o evento
+        // e o cliente ficaria sem a confirmação de pagamento por causa de um
+        // backfill. A lacuna continua carimbada e a próxima confirmação tenta.
+        console.error("[asaas] falha ao retomar sync:", e)
+      }
+    }
 
     // Histórico de pagamento (dedupe pelo id da cobrança do Asaas).
     if (CONFIRMADO.has(event) && payment.id) {
