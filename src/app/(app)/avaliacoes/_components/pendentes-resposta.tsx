@@ -8,9 +8,11 @@ import {
 import { getIaStatus } from "@/lib/data/diagnostico-ia"
 import {
   getAvaliacoesPendentesResposta,
+  getPlacarResposta,
   PRAZO_RESPOSTA_DIAS,
 } from "@/lib/data/avaliacoes-pendentes"
 import { getVisibleUnits } from "@/lib/data/units"
+import { PlacarRespostaCard } from "./placar-resposta"
 import { ResponderAvaliacao } from "./responder-avaliacao"
 import { PendentesPainel } from "./pendentes-painel"
 
@@ -39,8 +41,21 @@ export async function PendentesResposta() {
   ])
 
   const units = await getVisibleUnits()
-  const pendentes = await getAvaliacoesPendentesResposta(units.map((u) => u.id))
-  if (pendentes.length === 0) return null
+  const ids = units.map((u) => u.id)
+  const [pendentes, placar] = await Promise.all([
+    getAvaliacoesPendentesResposta(ids),
+    // O placar vem junto: é ele que dá conta do que saiu da fila por prazo.
+    getPlacarResposta(ids),
+  ])
+  // ⚠️ Fila vazia não esconde mais o bloco: sem fila é justamente quando o
+  // placar importa — ou a operação zerou o trabalho, ou deixou tudo vencer, e
+  // as duas coisas parecem iguais numa tela em branco.
+  if (pendentes.length === 0)
+    return placar.respondiveis > 0 ? (
+      <div className="mb-3">
+        <PlacarRespostaCard placar={placar} />
+      </div>
+    ) : null
 
   const unitById = new Map(units.map((u) => [u.id, u]))
   const ordenadas = [...pendentes].sort(
@@ -50,6 +65,10 @@ export async function PendentesResposta() {
   const lojas = new Set(ordenadas.map((p) => p.unitId)).size
 
   return (
+    <>
+      <div className="mb-3">
+        <PlacarRespostaCard placar={placar} />
+      </div>
     <PendentesPainel
       total={ordenadas.length}
       lojas={lojas}
@@ -108,6 +127,7 @@ export async function PendentesResposta() {
         o cliente nunca a vê.
       </p>
     </PendentesPainel>
+    </>
   )
 }
 

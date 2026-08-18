@@ -121,6 +121,8 @@ import { criarCronometro } from "@/lib/perf"
 import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 import { getVendasPorDiaSemana } from "@/lib/data/dia-semana"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
+import { getPlacarResposta } from "@/lib/data/avaliacoes-pendentes"
+import { PlacarRespostaCard } from "../avaliacoes/_components/placar-resposta"
 
 async function checkSupabase() {
   try {
@@ -415,6 +417,9 @@ export default async function Home({
   // sozinho quando não há venda no período.
   // Respeita o filtro de plataforma que o dashboard já tem no topo — sem
   // isso o card ficaria somando as 4 enquanto o resto da tela mostra uma.
+  // Placar de resposta às avaliações — mesmo escopo do resto da tela.
+  const placarResposta = await getPlacarResposta(activeUnitIds)
+
   const diaSemanaRede = await getVendasPorDiaSemana(
     activeUnitIds,
     periodRange.start,
@@ -1712,6 +1717,15 @@ export default async function Home({
                 number={4}
                 label={`Satisfação dos clientes (${scopeLabel})`}
               />
+              {/* Placar de resposta — a leitura que a distribuição de notas
+                  não dá: quantas avaliações a rede respondeu e quantas deixou
+                  vencer. Fora do card de plataforma porque é só do iFood, que
+                  é a única com prazo e API de resposta. */}
+              {placarResposta && placarResposta.respondiveis > 0 && (
+                <div className="mb-4">
+                  <PlacarRespostaCard placar={placarResposta} compacto />
+                </div>
+              )}
               <div className="grid gap-4 lg:grid-cols-3">
                 {/* Avaliações — distribuição das notas 1-5 */}
                 <PlatformTabbedCard
