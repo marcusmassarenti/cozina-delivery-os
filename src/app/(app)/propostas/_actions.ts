@@ -11,7 +11,13 @@ import {
   type StatusProposta,
 } from "@/lib/data/propostas"
 
-export type PropostaState = { ok: boolean; message?: string; error?: string }
+export type PropostaState = {
+  ok: boolean
+  message?: string
+  error?: string
+  /** Dados já atualizados, pra quem chamou refletir na tela sem recarregar. */
+  dados?: DadosProposta
+}
 
 async function exigirDono(): Promise<string | null> {
   if (!(await isSuperadmin())) throw new Error("Apenas o admin da plataforma.")
@@ -203,5 +209,15 @@ export async function recarregarClienteDaProposta(
   if (error) return { ok: false, error: error.message }
 
   revalidatePath(`/propostas/${id}`)
-  return { ok: true, message: "Dados do cliente atualizados." }
+  // ⚠️ DEVOLVE OS DADOS, não só o "ok". O editor é client component e guarda o
+  // formulário em `useState(proposta.dados)` — que só lê a prop no primeiro
+  // render. Com `router.refresh()` sozinho o servidor atualizava e a TELA
+  // continuava mostrando o que estava digitado antes: em 18/08/26 o banco
+  // gravou o contato certo do Diego e o Marcus viu na tela o antigo, e
+  // concluiu (com razão) que "não puxou". Quem grava tem que devolver.
+  return {
+    ok: true,
+    message: "Dados do cliente atualizados.",
+    dados: novo as DadosProposta,
+  }
 }

@@ -230,8 +230,16 @@ export function EditorProposta({
                 setSalvando(true)
                 const r = await recarregarClienteDaProposta(proposta.id)
                 setSalvando(false)
-                if (r.ok) router.refresh()
-                else setErro(r.error ?? r.message ?? "Erro")
+                if (r.ok) {
+                  // O formulário vive em estado local, que ignora a prop nova
+                  // depois do primeiro render. Sem este `setD`, o refresh
+                  // atualizava o servidor e a tela seguia mostrando o que
+                  // estava digitado — foi assim que o "puxar" pareceu não
+                  // funcionar (Marcus, 18/08/26).
+                  if (r.dados) setD(r.dados)
+                  setMsg("Dados do cliente atualizados a partir do cadastro.")
+                  router.refresh()
+                } else setErro(r.error ?? r.message ?? "Erro")
               }}
               className="mb-2 inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-medium hover:bg-muted"
             >
