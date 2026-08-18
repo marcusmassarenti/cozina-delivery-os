@@ -39,6 +39,26 @@ import { DocumentoProposta } from "./documento-proposta"
  * negociando preço, e um valor intermediário gravado sozinho vira o número que
  * o cliente vê se ele abrir o link no meio da digitação.
  */
+/**
+ * O endereço público da proposta.
+ *
+ * ⚠️ NUNCA `window.location.origin` fora de localhost. O painel responde em
+ * mais de um domínio (delivery.cozinafoods.com é um deles) e o link herdava o
+ * de onde a pessoa estava — o Marcus copiou uma proposta pro cliente com o
+ * domínio interno da Cozina em 18/08/26. O que o cliente recebe é sempre a
+ * marca do produto.
+ *
+ * Em localhost a origem vale: link de produção não abre na máquina de quem
+ * está desenvolvendo, e era esse o motivo do código antigo.
+ */
+const SITE = "https://www.deliveryos.food"
+function linkPublico(caminho: string): string {
+  if (typeof window === "undefined") return `${SITE}${caminho}`
+  const h = window.location.hostname
+  const local = h === "localhost" || h === "127.0.0.1" || h.endsWith(".local")
+  return `${local ? window.location.origin : SITE}${caminho}`
+}
+
 export function EditorProposta({
   proposta,
   modelo,
@@ -56,7 +76,7 @@ export function EditorProposta({
   const [erro, setErro] = React.useState<string | null>(null)
   const [link, setLink] = React.useState<string | null>(
     proposta.tokenPublico
-      ? `${typeof window === "undefined" ? "" : window.location.origin}/proposta/${proposta.tokenPublico}`
+      ? linkPublico(`/proposta/${proposta.tokenPublico}`)
       : null,
   )
   const [copiado, setCopiado] = React.useState(false)
@@ -67,10 +87,8 @@ export function EditorProposta({
     setErro(null)
     const r = await gerarLinkAceite(proposta.id)
     if (r.ok && r.url) {
-      // A URL vem do servidor com o domínio de produção. Em localhost isso
-      // geraria um link que não abre aqui — troca pela origem da janela.
       const u = new URL(r.url)
-      setLink(`${window.location.origin}${u.pathname}`)
+      setLink(linkPublico(u.pathname))
       router.refresh()
     } else setErro(r.error ?? "Não deu.")
   }
@@ -96,7 +114,7 @@ export function EditorProposta({
   function whatsapp() {
     if (!link) return
     const caminho = new URL(link, window.location.origin).pathname
-    const url = `https://www.deliveryos.food${caminho}`
+    const url = `${SITE}${caminho}`
 
     // 11 dígitos = celular sem DDI. O WhatsApp exige o 55 na frente; com o
     // número já internacionalizado (12+), não mexe.

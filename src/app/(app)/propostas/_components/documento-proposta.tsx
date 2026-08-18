@@ -280,12 +280,15 @@ export function DocumentoProposta({
           <Linha rot="Endereço" val={d.endereco || "—"} />
           <Linha
             rot="Contato"
-            val={
-              [d.contatoNome, d.contatoEmail, d.contatoTelefone]
-                .filter(Boolean)
-                .join(" · ") || "—"
-            }
+            val={d.contatoNome || "—"}
           />
+          {/* E-mail e telefone em linhas próprias. Empilhados com "·" viravam
+              uma linha só, longa e difícil de ler — e é justamente por eles que
+              alguém procura numa proposta (Marcus, 18/08/26). */}
+          {d.contatoEmail && <Linha rot="E-mail" val={d.contatoEmail} />}
+          {d.contatoTelefone && (
+            <Linha rot="Telefone" val={d.contatoTelefone} />
+          )}
           {/* Quem assina é o dono; quem paga é o financeiro. Mandar boleto pro
               e-mail de quem assinou é como uma cobrança some por três semanas.
               Quando o cliente não tem financeiro separado, a linha sai fora —

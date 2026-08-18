@@ -215,6 +215,8 @@ export async function montarDoCadastro(
     lojas = count ?? 0
   }
 
+  const titular = await contatoTitular(holdingId)
+
   const plano = ((h.plan_tier as string) ?? "essencial") as PlanId
   const precos = await getDefaultPlan()
   const tabela = precos[plano] ?? precos.essencial
@@ -227,9 +229,11 @@ export async function montarDoCadastro(
     dados: {
       razaoSocial: (h.razao_social as string) || (h.name as string) || "",
       cnpj: (h.doc_cpf_cnpj as string) ?? "",
-      contatoNome: "",
-      contatoEmail: (h.nf_email as string) ?? "",
-      contatoTelefone: (h.nf_telefone as string) ?? "",
+      contatoNome: titular.nome,
+      // Fiscal como reserva: e-mail de nota é pior que o do titular, e melhor
+      // que campo vazio.
+      contatoEmail: titular.email || ((h.nf_email as string) ?? ""),
+      contatoTelefone: titular.telefone || ((h.nf_telefone as string) ?? ""),
       endereco: fmtEndereco(h as Record<string, unknown>),
       plano,
       planoLabel: PLANOS_META[plano]?.label ?? "Essencial",
@@ -441,4 +445,63 @@ export async function listarClientes(): Promise<
     id: h.id,
     nome: h.name,
   }))
+}
+
+/**
+ * O contato do cliente pra proposta: nome, e-mail e telefone do TITULAR.
+ *
+ * ── POR QUE NÃO ERA ASSIM (Marcus, 18/08/26) ─────────────────────────────
+ * "não puxou email e contato dele direto do sistema". E não puxava mesmo:
+ * `contatoNome` estava fixo em string vazia, e e-mail/telefone vinham de
+ * `nf_email`/`nf_telefone` — que são os dados FISCAIS, de quem recebe a nota.
+ * Na DG FOODS isso dava uma proposta sem nome nenhum, enquanto o sistema já
+ * sabia que o titular é o Diego, com e-mail e WhatsApp cadastrados.
+ *
+ * A fonte certa é a mesma da tela de cliente: o admin da holding (`role=admin`
+ * no escopo `holding`), com nome do `profiles` e e-mail/WhatsApp do `auth`.
+ * O fiscal fica como reserva — melhor um e-mail de nota do que campo vazio.
+ */
+async function contatoTitular(holdingId: string): Promise<{
+  nome: string
+  email: string
+  telefone: string
+}> {
+  const admin = createAdminClient()
+  const vazio = { nome: "", email: "", telefone: "" }
+
+  const { data: acessos } = await admin
+    .from("user_unit_access")
+    .select("user_id, role")
+    .eq("scope_type", "holding")
+    .eq("scope_id", holdingId)
+  if (!acessos?.length) return vazio
+
+  // Admin primeiro; sem admin, o primeiro que houver — a proposta precisa de
+  // um nome, e o gestor é melhor que campo em branco.
+  const escolhido =
+    acessos.find((a) => a.role === "admin") ?? acessos[0]
+  const userId = escolhido.user_id as string
+
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  let email = ""
+  let telefone = ""
+  try {
+    const { data: u } = await admin.auth.admin.getUserById(userId)
+    email = u.user?.email ?? ""
+    const meta = (u.user?.user_metadata ?? {}) as Record<string, unknown>
+    telefone = String(meta.whatsapp ?? "")
+  } catch {
+    // Sem auth admin o nome sozinho já ajuda; o resto cai no fiscal.
+  }
+
+  return {
+    nome: (prof?.full_name as string) ?? "",
+    email,
+    telefone,
+  }
 }
