@@ -596,37 +596,17 @@ export function DocumentoProposta({
           .
         </p>
 
-        {aceite ? (
-          <ComprovanteAceite a={aceite} />
-        ) : (
-          /* ── COMO SE ACEITA ─────────────────────────────────────────────
-             ⚠️ Aqui havia quatro linhas em branco pra assinar à mão (nome,
-             CNPJ, assinatura, data). Eram sobra de um fluxo de papel — e
-             CONTRADIZIAM o parágrafo logo acima, que diz que o "De acordo"
-             desta proposta já vincula as partes. O cliente lia "é só clicar" e
-             via um espaço pedindo caneta (Marcus, 18/08/26).
+        {/* ⚠️ Aqui NÃO entra instrução de como aceitar.
+            Primeiro havia quatro linhas em branco pra assinar à mão, sobra de
+            um fluxo de papel; troquei por um aviso "Como aceitar" e o Marcus
+            corrigiu de novo, com razão: o documento é o que vira PDF e fica com
+            o cliente. Instrução de tela suja o arquivo. Ela vive no painel de
+            aceite (`painel-aceite`), que é `data-print="hide"` e está
+            justamente onde a pessoa assina.
 
-             O aceite é nosso: link, IP, data/hora e hash do conteúdo, com
-             valor pelo art. 4º, I da Lei 14.063/2020 — o mesmo que o
-             `ComprovanteAceite` exibe depois de aceito. Então o lugar dessas
-             linhas é ocupado por quem explica o que fazer, não por um vazio. */
-          <div className="mt-6 rounded-lg border border-zinc-300 bg-zinc-50 p-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-700">
-              Como aceitar
-            </p>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-zinc-700">
-              Não é preciso imprimir nem assinar à mão. No fim desta página,
-              preencha <b>nome completo</b> e <b>CPF</b> de quem assina e clique
-              em <b>Aceitar proposta</b>.
-            </p>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-zinc-500">
-              O sistema registra quem aceitou, quando, o IP de origem e um hash
-              do conteúdo desta proposta — o que dá validade jurídica ao aceite
-              eletrônico (art. 4º, I, da Lei nº 14.063/2020). Esse comprovante
-              passa a constar aqui mesmo, no lugar deste aviso.
-            </p>
-          </div>
-        )}
+            Depois de aceito, o comprovante ENTRA no documento — aí sim é
+            conteúdo: quem, quando, de onde e o hash (Lei 14.063/2020). */}
+        {aceite && <ComprovanteAceite a={aceite} />}
       </div>
 
       {/* Protege contra "não usei, não pago" e contra o número mudar sem

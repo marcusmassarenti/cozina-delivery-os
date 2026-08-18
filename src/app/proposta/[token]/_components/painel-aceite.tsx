@@ -114,7 +114,18 @@ export function PainelAceite({
       <p className="mt-1 text-[13px] leading-relaxed text-zinc-600">
         O aceite aqui tem o mesmo efeito da assinatura no papel: vincula{" "}
         <b>{razaoSocial || "sua empresa"}</b> às condições descritas acima.
-        Preencha os dados de quem está aceitando.
+        <b> Não é preciso imprimir nem assinar à mão.</b> Preencha os dados de
+        quem está aceitando.
+      </p>
+      {/* O que fica registrado e por quê. Mora aqui, e não no documento, porque
+          o documento vira o PDF que fica com o cliente — instrução de tela
+          sujaria o arquivo (Marcus, 18/08/26). Este painel é
+          `data-print="hide"`. */}
+      <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+        Ao aceitar, ficam registrados o nome e o documento informados, a data e
+        hora, o IP de origem e um hash do conteúdo desta proposta — o que dá
+        validade jurídica ao aceite eletrônico (art. 4º, I, da Lei nº
+        14.063/2020). O comprovante passa a constar na própria proposta.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
