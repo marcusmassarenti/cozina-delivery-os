@@ -12,6 +12,7 @@
 import { syncNinefoodFinanceiro } from "@/lib/ninefood/sync-financeiro"
 import { syncNinefoodCardapio } from "@/lib/ninefood/sync-cardapio"
 import { registrarCron } from "@/lib/cron/registrar"
+import { sincronizarLojas99 } from "@/lib/ninefood/lojas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -27,6 +28,24 @@ export async function GET(req: Request) {
   // Envelope de registro: deixa rastro em cron_runs pra o relatório
   // diário saber a diferença entre "rodou e não achou nada" e "não rodou".
   return registrarCron("ninefood-sync", async () => {
+
+  /**
+   * ANTES do sync: pergunta ao 99 quem já autorizou.
+   *
+   * O vínculo só nascia no primeiro webhook com solicitação pendente casando
+   * por nome — quem autorizava fora desse caminho ficava invisível. A Royal
+   * Poços e a Brooklin estavam assim (18/08/26), e a Brooklin ainda aparecia
+   * no relatório de saúde como "sem API" por 13 dias.
+   *
+   * Não derruba o sync: lista indisponível é motivo pra não descobrir loja
+   * nova, não pra deixar de sincronizar as que já funcionam.
+   */
+  let lojas99: Awaited<ReturnType<typeof sincronizarLojas99>> | null = null
+  try {
+    lojas99 = await sincronizarLojas99()
+  } catch (e) {
+    console.error("[99] varredura de lojas falhou:", e)
+  }
 
   // mês atual + anterior (app roda em TZ America/Sao_Paulo)
   const now = new Date()
@@ -60,6 +79,7 @@ export async function GET(req: Request) {
   const card = await syncNinefoodCardapio()
 
   return Response.json({
+    lojas99,
     ok: true,
     ranAt: new Date().toISOString(),
     financeiro,

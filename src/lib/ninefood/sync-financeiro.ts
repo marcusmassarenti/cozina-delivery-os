@@ -75,6 +75,8 @@ type Admin = ReturnType<typeof createAdminClient>
 async function resolveUnitForLink(
   admin: Admin,
   link: StoreLink,
+  /** Mantido na assinatura: quem chama já calcula, e voltará a servir se um
+   *  dia existir criação de unidade COM dono definido. */
   cityHint: string | null,
 ): Promise<{ unitId: string | null; created: boolean }> {
   if (link.unit_id) return { unitId: link.unit_id, created: false }
@@ -99,36 +101,33 @@ async function resolveUnitForLink(
     }
   }
 
-  // sem match → auto-cria a unidade (Marcus revisa depois)
-  const { data: ref } = await admin
-    .from("units")
-    .select("brand_id")
-    .not("brand_id", "is", null)
-    .limit(1)
-    .maybeSingle()
-  const { data: allCodes } = await admin.from("units").select("code")
-  const maxCode = Math.max(
-    0,
-    ...((allCodes as any[]) ?? [])
-      .map((c) => parseInt(String(c.code), 10))
-      .filter((n) => !Number.isNaN(n)),
+  /**
+   * ⚠️ SEM MATCH, NÃO CRIA UNIDADE. DEIXA SEM VÍNCULO.
+   *
+   * Aqui existia um auto-provisionamento: quando o nome não casava, criava a
+   * unidade em `brand_id` pego assim —
+   *
+   *     .from("units").select("brand_id").not("brand_id","is",null).limit(1)
+   *
+   * — ou seja, o PRIMEIRO cliente que o banco devolvesse, sem nenhum contexto
+   * de dono. Não é hipótese: em 18/08/26 a `cozina-brooklin-01`, do Churrasco
+   * no Pote, foi criada dentro do **Churrasco Royal Poços**. Se o sync tivesse
+   * seguido, o faturamento da Brooklin apareceria no painel de outro cliente.
+   *
+   * Numa base multi-tenant, misturar dinheiro de dois lojistas é o pior erro
+   * possível — pior que ficar sem dado, porque sem dado se percebe. O caminho
+   * do webhook já aplicava essa régua ("ligar a loja errada mistura o
+   * faturamento de dois lojistas, e isso é bem pior que esperar alguém fazer à
+   * mão"); esta função não aplicava.
+   *
+   * Sem vínculo a loja aparece em `sincronizarLojas99().semVinculo` e no
+   * relatório de saúde, esperando um clique que diz de quem ela é.
+   */
+  void cityHint
+  console.warn(
+    `[99] loja ${link.app_shop_id} autorizada e sem unidade correspondente — precisa de vínculo manual`,
   )
-  const newCode = String(maxCode + 1).padStart(2, "0")
-  const { data: created, error } = await admin
-    .from("units")
-    .insert({
-      brand_id: (ref as any)?.brand_id ?? null,
-      code: newCode,
-      name: shortName || rawName || link.app_shop_id,
-      city: cityHint,
-      active: true,
-    })
-    .select("id")
-    .single()
-  if (error || !(created as any)?.id) return { unitId: null, created: false }
-  const id = (created as any).id as string
-  await admin.from("ninefood_store_links").update({ unit_id: id }).eq("app_shop_id", link.app_shop_id)
-  return { unitId: id, created: true }
+  return { unitId: null, created: false }
 }
 
 /**
