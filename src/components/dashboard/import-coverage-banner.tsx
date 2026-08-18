@@ -5,7 +5,7 @@ import Link from "next/link"
 
 import { LojasSemDadoAviso } from "@/components/dashboard/lojas-sem-dado-aviso"
 import type { LojaSemDado } from "@/lib/data/lojas-sem-dado"
-import { PlatformLogo, type MarketplaceId } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import {
   Tooltip,
   TooltipContent,
@@ -31,10 +31,11 @@ function parseYmd(s: string): Date {
   return new Date(y, m - 1, d)
 }
 
-const PLAT_LABEL: Record<MarketplaceId, string> = {
+const PLAT_LABEL: Record<PlatformId, string> = {
   ifood: "iFood",
   "99food": "99 Food",
   keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
 
 /**
@@ -63,7 +64,7 @@ export function ImportCoverageBanner({
   periodLabel: string
   /** Plataformas habilitadas no tenant (união de unit_platforms.active). Se
    *  omitido, mostra as 3 (compat). */
-  platformsEnabled?: MarketplaceId[]
+  platformsEnabled?: PlatformId[]
   /** Liga os botões de sync via API (só pra quem tem a integração habilitada). */
   apiSync?: boolean
   /** Quais plataformas têm ≥1 loja VINCULADA à API no escopo do usuário —
@@ -93,12 +94,15 @@ export function ImportCoverageBanner({
     return lag !== null && lag > ATRASO_TOLERANCIA_DIAS
   }
 
-  const platforms: { id: MarketplaceId; cov: PlatformCoverage }[] = (
+  const platforms: { id: PlatformId; cov: PlatformCoverage }[] = (
     [
       { id: "ifood", cov: coverage.ifood },
       { id: "99food", cov: coverage.ninefood },
       { id: "keeta", cov: coverage.keeta },
-    ] as { id: MarketplaceId; cov: PlatformCoverage }[]
+      // Canal próprio entra na barra como as outras: cliente que só vende no
+      // Cardápio Web via "falta importar" pra sempre, sem nada a importar.
+      { id: "cardapioweb", cov: coverage.cardapioweb },
+    ] as { id: PlatformId; cov: PlatformCoverage }[]
   ).filter((p) => !platformsEnabled || platformsEnabled.includes(p.id))
   const withData = platforms.filter((p) => p.cov.lastDay !== null)
   const noData = withData.length === 0
@@ -111,7 +115,7 @@ export function ImportCoverageBanner({
    * manhã, e o painel dela pedindo planilha à tarde.
    *
    * `vinculos` já diz quais plataformas têm ≥1 loja ligada de verdade. */
-  const conectada = (id: MarketplaceId) =>
+  const conectada = (id: PlatformId) =>
     id === "ifood"
       ? Boolean(vinculos?.ifood)
       : id === "99food"
@@ -250,7 +254,7 @@ function PillTooltip({
   behind,
   lag,
 }: {
-  platform: MarketplaceId
+  platform: PlatformId
   semDados: boolean
   behind: boolean
   lag: number | null

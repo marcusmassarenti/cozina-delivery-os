@@ -708,6 +708,24 @@ export default async function Home({
   const brutoDePedidos = unitsDisplay.some((u) => u.monthly.ifoodBrutoDePedidos)
   // Sem extrato não existe taxa nem repasse: exibir "0% fica na loja" diria
   // que o iFood ficou com tudo — pior mentira que não mostrar número nenhum.
+  /**
+   * ⚠️ A REGRA É POR PLATAFORMA, NÃO DA REDE INTEIRA.
+   *
+   * Era `brutoDePedidos && network.liquidoPraVoce <= 0` — exigia que a rede
+   * TODA estivesse sem repasse. Funcionou enquanto a loja só tinha iFood; com
+   * uma segunda plataforma que repassa, o zero nunca acontece e o guarda
+   * desliga.
+   *
+   * Aconteceu na Churrasco Royal (18/08/26): iFood sem extrato + Cardápio Web
+   * com R$ 5,6 mil de líquido. `liquidoPraVoce > 0` → guarda desligado → o
+   * card voltou a exibir "R$ 26.089,82 de taxa, 82,4% do total, iFood 100%".
+   * Vinte e seis mil reais de taxa que não existem, no painel de um cliente
+   * que tinha acabado de conectar.
+   *
+   * `ifoodSemExtrato` decide sozinho, olhando só o iFood. O `repasseDesconhecido`
+   * continua, mas só pro texto de estado vazio — que é quando NADA tem repasse.
+   */
+  const ifoodSemExtrato = brutoDePedidos
   const repasseDesconhecido = brutoDePedidos && network.liquidoPraVoce <= 0
 
   const periodQ = sp.periodo ? `?periodo=${sp.periodo}` : ""
@@ -1063,6 +1081,8 @@ export default async function Home({
     // o card diria "o iFood ficou com 100% do que você vendeu". A taxa existe;
     // ela só não chegou ainda.
     ...(repasseDesconhecido ? [] : platforms)
+      // iFood sem extrato sai da conta de taxa; as outras seguem normais.
+      .filter((p) => !(p.id === "ifood" && ifoodSemExtrato))
       .filter((p) => taxaReal(p) > 0)
       .map((p) => ({
         nome: `Taxas ${p.name}`,

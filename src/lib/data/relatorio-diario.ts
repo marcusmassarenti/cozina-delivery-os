@@ -42,6 +42,9 @@ export type ImportCoverage = {
   ifood: PlatformCoverage
   ninefood: PlatformCoverage
   keeta: PlatformCoverage
+  /** Canal próprio. Entrou depois das outras três e ficava de fora da barra —
+   *  o cliente com Cardápio Web conectado via "falta importar" pra sempre. */
+  cardapioweb: PlatformCoverage
 }
 
 function parseDay(iso: string | null | undefined): PlatformCoverage {
@@ -148,10 +151,22 @@ export async function getImportCoverageForMonth(
       .sort()
       .pop() ?? null
 
+  // Cardápio Web: o pedido é a fonte (não há relatório a importar — é API).
+  let qcw = admin
+    .from("cardapioweb_pedidos")
+    .select("data_pedido")
+    .gte("data_pedido", `${year}-${mm}-01`)
+    .lte("data_pedido", `${year}-${mm}-${String(lastDay).padStart(2, "0")}T23:59:59`)
+    .order("data_pedido", { ascending: false })
+    .limit(1)
+  if (filterUnitIds) qcw = qcw.in("unit_id", filterUnitIds)
+  const { data: dcw } = await qcw
+
   return {
     ifood: parseDay(ifoodLatest),
     ninefood: parseDay(ninefoodLatest),
     keeta: parseDay(dk?.[0]?.data as string | undefined),
+    cardapioweb: parseDay(dcw?.[0]?.data_pedido as string | undefined),
   }
 }
 
