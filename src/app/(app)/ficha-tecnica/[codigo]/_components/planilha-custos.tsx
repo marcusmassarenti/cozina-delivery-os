@@ -115,12 +115,23 @@ export function PlanilhaCustos({
         precoVenda: number | null
       }[] = []
 
-      // Aceita "22,40" e "22.40": a planilha vem do Excel em pt-BR, mas quem
-      // edita no Google Sheets às vezes salva com ponto.
+      /**
+       * Aceita "22,40" e "22.40": a planilha vem do Excel em pt-BR, mas quem
+       * edita no Google Sheets às vezes salva com ponto.
+       *
+       * ⚠️ Ponto só é milhar QUANDO EXISTE VÍRGULA na mesma célula. A versão
+       * anterior apagava todo ponto antes de converter, então "22.40" (que o
+       * Sheets escreve assim) virava 2240 — cem vezes o custo certo, gravado
+       * em silêncio. Mesma armadilha do campo digitado; ver `mascaraDinheiro`
+       * na bancada.
+       */
       const numero = (v: unknown): number | null => {
         const bruto = String(v ?? "").trim()
         if (bruto === "") return null
-        const n = Number(bruto.replace(/\./g, "").replace(",", "."))
+        const normalizado = bruto.includes(",")
+          ? bruto.replace(/\./g, "").replace(",", ".")
+          : bruto
+        const n = Number(normalizado)
         return Number.isFinite(n) ? n : null
       }
 

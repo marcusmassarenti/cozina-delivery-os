@@ -19,19 +19,73 @@ import { SeletorCategoria } from "./seletor-categoria"
 import { BarraMassa } from "./barra-massa"
 
 /**
- * A bancada: uma linha por item vendido, custo digitado direto nela.
+ * A trava da vírgula nos campos de dinheiro.
  *
- * ── AS DECISÕES QUE FAZEM ISSO SER RÁPIDO ────────────────────────────────
- * • Grava ao SAIR do campo, não num botão. Quem preenche cem linhas não pode
- *   perder tudo por fechar a aba antes de salvar.
- * • Enter pula pro próximo campo vazio, não pro próximo da lista: depois de
- *   preencher a linha 3, o trabalho está na 4, não em revisitar a 1.
- * • A ordem é a receita e não muda enquanto se digita. Reordenar a lista
- *   embaixo de quem está preenchendo é a forma mais rápida de perder o lugar.
- * • Quando um custo é salvo e existem linhas parecidas sem custo, aparece a
- *   oferta de aplicar nelas — com a lista à vista. É o substituto do de-para
- *   automático, que a gente mediu e não funciona (ver migration 0212).
+ * ── O ACIDENTE QUE ISSO IMPEDE (Marcus, 17/08/26) ────────────────────────
+ * O parser antigo fazia `replace(/\./g, "")` — apagava TODO ponto antes de
+ * converter. Quem digita no teclado numérico digita ponto, não vírgula: "17.81"
+ * virava "1781", e a tela gravava R$ 1.781,00 de custo num lanche de R$ 23,00.
+ * Cem vezes o valor certo, sem um aviso sequer — e como custo alto só faz a
+ * margem despencar, o erro se disfarça de "esse item dá prejuízo".
+ *
+ * A trava age na digitação, que é onde dá pra ser gentil: o ponto VIRA vírgula
+ * enquanto se digita, letra não entra, e não existe segunda vírgula nem terceira
+ * casa decimal. O que sai daqui já está no formato que `paraNumero` entende.
  */
+function mascaraDinheiro(bruto: string): string {
+  // Ponto e vírgula são a mesma intenção: separar os centavos.
+  let t = bruto.replace(/\./g, ",").replace(/[^\d,]/g, "")
+
+  // Só a PRIMEIRA vírgula vale; as outras somem em vez de bloquear a digitação.
+  const i = t.indexOf(",")
+  if (i !== -1) {
+    t = t.slice(0, i + 1) + t.slice(i + 1).replace(/,/g, "")
+  }
+
+  // Centavos têm duas casas. Digitar a terceira não faz nada.
+  const [inteiro, decimais] = t.split(",")
+  if (decimais !== undefined) return `${inteiro},${decimais.slice(0, 2)}`
+  return inteiro
+}
+
+/**
+ * Texto do campo → número. Espelha `mascaraDinheiro`: aqui a vírgula é o
+ * separador decimal e ponto nenhum sobrevive à máscara.
+ *
+ * Ainda trata o caso do COLAR, que escapa da digitação: "1.781,81" vem de
+ * planilha com ponto de milhar, e aí o ponto é descartado — mas só quando existe
+ * uma vírgula pra fazer o papel de decimal. Sem vírgula, "1.781" é ambíguo e o
+ * ponto é lido como decimal, que é o palpite que erra menos: quem cola um
+ * milhar sabe o que colou; quem digita ponto quer centavos.
+ */
+function paraNumero(texto: string): number | null {
+  const t = texto.trim()
+  if (t === "") return null
+  const normalizado = t.includes(",")
+    ? t.replace(/\./g, "").replace(",", ".")
+    : t
+  const n = Number(normalizado)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * O valor digitado é grande demais pra ser verdade?
+ *
+ * A máscara resolve o ponto do teclado numérico, mas não tem como julgar
+ * "1781818" — são sete dígitos válidos. O que denuncia o dedo escorregado é a
+ * ESCALA: um custo de R$ 1.781.818 num lanche que sai por R$ 23,12 não é uma
+ * loja com problema, é um zero a mais.
+ *
+ * O limite é generoso de propósito (10× o preço praticado). Item vendido no
+ * prejuízo existe — e a tela foi feita justamente pra mostrar isso —, então a
+ * trava não pode disparar em custo maior que o preço. Ela só quer pegar a ordem
+ * de grandeza absurda, e mesmo assim PERGUNTA em vez de recusar: quem sabe o
+ * que está fazendo confirma e segue.
+ */
+function pareceEngano(valor: number, precoMedio: number): boolean {
+  return precoMedio > 0 && valor > precoMedio * 10
+}
+
 /** Um valor digitado e a foto do que o servidor mostrava naquele instante. */
 type Palpite<T = number | null> = { valor: T; base: T }
 
@@ -47,6 +101,20 @@ function valeAinda<T>(p: Palpite<T> | undefined, atual: T): p is Palpite<T> {
   return p !== undefined && atual === p.base
 }
 
+/**
+ * A bancada: uma linha por item vendido, custo digitado direto nela.
+ *
+ * ── AS DECISÕES QUE FAZEM ISSO SER RÁPIDO ────────────────────────────────
+ * • Grava ao SAIR do campo, não num botão. Quem preenche cem linhas não pode
+ *   perder tudo por fechar a aba antes de salvar.
+ * • Enter pula pro próximo campo vazio, não pro próximo da lista: depois de
+ *   preencher a linha 3, o trabalho está na 4, não em revisitar a 1.
+ * • A ordem é a receita e não muda enquanto se digita. Reordenar a lista
+ *   embaixo de quem está preenchendo é a forma mais rápida de perder o lugar.
+ * • Quando um custo é salvo e existem linhas parecidas sem custo, aparece a
+ *   oferta de aplicar nelas — com a lista à vista. É o substituto do de-para
+ *   automático, que a gente mediu e não funciona (ver migration 0212).
+ */
 export function BancadaCusto({
   unitId,
   lojaNome,
@@ -220,8 +288,7 @@ export function BancadaCusto({
    */
   async function salvarPreco(item: ItemCusto, texto: string) {
     const k = chave(item)
-    const limpo = texto.trim().replace(/\./g, "").replace(",", ".")
-    const valor = limpo === "" ? null : Number(limpo)
+    const valor = paraNumero(texto)
 
     const limparLocal = () =>
       setLocalPreco((p) => {
@@ -232,6 +299,19 @@ export function BancadaCusto({
 
     if (valor !== null && (!Number.isFinite(valor) || valor < 0)) {
       setErro(`Preço inválido em "${item.nomeItem}".`)
+      limparLocal()
+      return
+    }
+    if (
+      valor !== null &&
+      pareceEngano(valor, item.precoMedio) &&
+      !window.confirm(
+        `Preço de tabela de ${fmtBRL(valor)} em "${item.nomeItem}", que saiu a ` +
+          `${fmtBRL(item.precoMedio)} em média.\n\nO valor está muito acima do ` +
+          `que foi praticado — costuma ser um zero a mais.\n\n` +
+          `Confirma que o preço é esse mesmo?`,
+      )
+    ) {
       limparLocal()
       return
     }
@@ -277,11 +357,29 @@ export function BancadaCusto({
 
   async function salvar(item: ItemCusto, texto: string) {
     const k = chave(item)
-    const limpo = texto.trim().replace(/\./g, "").replace(",", ".")
-    const valor = limpo === "" ? null : Number(limpo)
+    const valor = paraNumero(texto)
+    const limparLocalCusto = () =>
+      setLocal((p) => {
+        const n = { ...p }
+        delete n[k]
+        return n
+      })
 
     if (valor !== null && (!Number.isFinite(valor) || valor < 0)) {
       setErro(`Custo inválido em "${item.nomeItem}".`)
+      return
+    }
+    if (
+      valor !== null &&
+      pareceEngano(valor, item.precoMedio) &&
+      !window.confirm(
+        `Custo de ${fmtBRL(valor)} em "${item.nomeItem}", que é vendido por ` +
+          `${fmtBRL(item.precoMedio)}.\n\nO valor está muito acima do preço — ` +
+          `costuma ser um zero a mais ou a vírgula no lugar errado.\n\n` +
+          `Confirma que o custo é esse mesmo?`,
+      )
+    ) {
+      limparLocalCusto()
       return
     }
     // Não vai ao servidor se não mudou nada — sair do campo sem digitar é o
@@ -954,7 +1052,10 @@ export function BancadaCusto({
                         }
                         placeholder="—"
                         onChange={(e) =>
-                          setLocalPreco((p) => ({ ...p, [k]: e.target.value }))
+                          setLocalPreco((p) => ({
+                            ...p,
+                            [k]: mascaraDinheiro(e.target.value),
+                          }))
                         }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
@@ -1021,7 +1122,10 @@ export function BancadaCusto({
                           value={valor}
                           placeholder="0,00"
                           onChange={(e) =>
-                            setLocal((p) => ({ ...p, [k]: e.target.value }))
+                            setLocal((p) => ({
+                              ...p,
+                              [k]: mascaraDinheiro(e.target.value),
+                            }))
                           }
                           onKeyDown={(e) => aoTeclar(e, i, idx)}
                           onBlur={(e) => {
