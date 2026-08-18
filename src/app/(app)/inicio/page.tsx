@@ -15,6 +15,8 @@ import {
   ThumbsDown,
   ThumbsUp,
   XCircle,
+  ExternalLink,
+  Upload,
 } from "lucide-react"
 
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
@@ -1556,9 +1558,7 @@ export default async function Home({
                           </div>
                         </>
                       ) : (
-                        <p className="py-6 text-center text-xs text-muted-foreground">
-                          Sem Cardápio iFood neste mês
-                        </p>
+                        <VazioCardapioIfood />
                       ),
                     },
                     // 99 e Keeta entram como abas pra manter o padrão visual
@@ -1683,7 +1683,7 @@ export default async function Home({
                           janela={janelaRankingIfood}
                         />
                       ) : (
-                        <EmptyMsg text="Sem Cardápio iFood neste mês" />
+                        <VazioCardapioIfood />
                       ),
                     },
                     ...(unitsWith99 > 0
@@ -2612,6 +2612,55 @@ function FunnelBar({
 }
 
 /** Mensagem de empty state padronizada (centralizada + pequena) */
+/**
+ * Vazio do Cardápio iFood — com o caminho pra sair do vazio.
+ *
+ * ── POR QUE NÃO BASTA "Sem Cardápio iFood neste mês" (Marcus, 18/08/26) ──
+ * O funil (visitas → pedido) só existe no relatório de Cardápio do iFood, que
+ * é exportação MANUAL — não vem por API. Dizer só "sem dado" deixa a pessoa
+ * sem saber se é problema do sistema, da loja ou dela: o card fica vazio e não
+ * há nada a fazer na tela.
+ *
+ * Os dois links são os dois passos reais, na ordem: baixar no portal do iFood
+ * e subir aqui. Sem os dois, quem clica em "importar" chega numa tela pedindo
+ * um arquivo que ele não tem.
+ *
+ * ⚠️ O relatório é POR LOJA, uma de cada vez. Pelo portal de redes vem só o
+ * consolidado, sem item por loja — está escrito no guia de download e repetido
+ * aqui de propósito, porque é o erro que faz a pessoa importar e não ver nada.
+ */
+function VazioCardapioIfood() {
+  return (
+    <div className="py-6 text-center">
+      <p className="text-xs text-muted-foreground">
+        Sem Cardápio iFood neste mês
+      </p>
+      <p className="mx-auto mt-1.5 max-w-[36ch] text-[11px] leading-relaxed text-muted-foreground">
+        Este funil vem do relatório de <b>Cardápio</b> do iFood, que é
+        exportado à mão — uma loja por vez.
+      </p>
+      <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+        <a
+          href="https://portal.ifood.com.br/reports-for-merchant"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold hover:bg-muted"
+        >
+          <ExternalLink className="size-3" />
+          Baixar no iFood
+        </a>
+        <Link
+          href="/importacao"
+          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold hover:bg-muted"
+        >
+          <Upload className="size-3" />
+          Importar aqui
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 function EmptyMsg({ text }: { text: string }) {
   return (
     <p className="py-6 text-center text-xs text-muted-foreground">{text}</p>
