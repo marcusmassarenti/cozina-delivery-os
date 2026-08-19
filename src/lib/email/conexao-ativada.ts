@@ -146,23 +146,90 @@ export async function resumoDaLoja(
   }
 
   if (plataforma === "99food") {
-    const { data } = await admin
-      .from("ninefood_daily_loja")
-      // ⚠️ Era `faturamento_bruto`, coluna que NUNCA existiu nesta tabela: o
-      // select falhava calado e o e-mail da 99 saía sem número nenhum desde
-      // sempre. O nome certo é `bruto`.
-      .select("data, bruto, pedidos")
+    /**
+     * ⚠️ O 99 TEM DUAS FONTES, e este e-mail lia só uma.
+     *
+     * `ninefood_daily_loja` é o agregado da PLANILHA. Loja conectada por API
+     * grava em `ninefood_api_bill` e nunca escreve ali — então a CR Poços,
+     * conectada em 18/08/26, tinha 2 meses de extrato no banco e o e-mail
+     * enxergava zero: a varredura devolvia o carimbo e o cliente nunca seria
+     * avisado de que o 99 está conectado. Silenciosamente, porque tabela vazia
+     * não avisa que está vazia.
+     *
+     * (Este é o segundo erro na MESMA função pelo mesmo motivo — antes era a
+     * coluna `faturamento_bruto`, que nunca existiu. Ler a fonte errada falha
+     * calado nas duas vezes.)
+     *
+     * A API vem primeiro: quando existe extrato, ele é a fonte da tela. A
+     * planilha fica de reserva pra quem ainda não conectou.
+     */
+    const { data: links } = await admin
+      .from("ninefood_store_links")
+      .select("app_shop_id")
       .eq("unit_id", unitId)
-      .order("data")
-    const rows = data ?? []
-    if (rows.length) {
-      const bruto = rows.reduce((s, r) => s + Number(r.bruto ?? 0), 0)
-      const pedidos = rows.reduce((s, r) => s + Number(r.pedidos ?? 0), 0)
+      .eq("active", true)
+    const shops = ((links ?? []) as { app_shop_id: string }[]).map(
+      (l) => l.app_shop_id,
+    )
+
+    let bruto = 0
+    let pedidos = 0
+    let de: string | null = null
+    let ate: string | null = null
+
+    if (shops.length > 0) {
+      const { data: bill } = await admin
+        .from("ninefood_api_bill")
+        .select("order_id, meal_original_amount, business_date")
+        .in("app_shop_id", shops)
+        .order("business_date")
+      const rows = (bill ?? []) as {
+        order_id: string | null
+        meal_original_amount: number | null
+        business_date: string | null
+      }[]
+      // Mesma regra do painel: um pedido conta uma vez, mesmo com várias
+      // linhas de extrato (reembolso, pós-venda, taxa).
+      const vistos = new Set<string>()
+      for (const r of rows) {
+        if (r.order_id) {
+          if (vistos.has(r.order_id)) continue
+          vistos.add(r.order_id)
+        }
+        pedidos += 1
+        bruto += Number(r.meal_original_amount ?? 0)
+        if (r.business_date) {
+          if (!de || r.business_date < de) de = r.business_date
+          if (!ate || r.business_date > ate) ate = r.business_date
+        }
+      }
+    }
+
+    if (pedidos === 0) {
+      const { data } = await admin
+        .from("ninefood_daily_loja")
+        // ⚠️ Era `faturamento_bruto`, coluna que NUNCA existiu nesta tabela: o
+        // select falhava calado e o e-mail da 99 saía sem número nenhum desde
+        // sempre. O nome certo é `bruto`.
+        .select("data, bruto, pedidos")
+        .eq("unit_id", unitId)
+        .order("data")
+      const rows = (data ?? []) as {
+        data: string
+        bruto: number | null
+        pedidos: number | null
+      }[]
+      if (rows.length) {
+        bruto = rows.reduce((s, r) => s + Number(r.bruto ?? 0), 0)
+        pedidos = rows.reduce((s, r) => s + Number(r.pedidos ?? 0), 0)
+        de = String(rows[0]!.data)
+        ate = String(rows[rows.length - 1]!.data)
+      }
+    }
+
+    if (pedidos > 0 || bruto > 0) {
       if (bruto) linhas.push({ rotulo: "Faturamento", valor: fmtBRL(bruto) })
-      const p = periodo(
-        String(rows[0]!.data),
-        String(rows[rows.length - 1]!.data),
-      )
+      const p = de && ate ? periodo(de, ate) : null
       if (p) linhas.push({ rotulo: "Período", valor: p })
       if (pedidos) linhas.push({ rotulo: "Pedidos", valor: String(pedidos) })
     }
