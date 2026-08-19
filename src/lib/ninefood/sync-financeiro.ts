@@ -215,6 +215,35 @@ export async function syncNinefoodFinanceiro(opts: {
         .filter((r) => r.order_type === 1)
         .reduce((s, r) => s + r.meal_original_amount, 0)
       res.liquido = records.reduce((s, r) => s + r.settlement_amount, 0)
+
+      /**
+       * Deixa rastro no Histórico de Importações — o iFood e o Cardápio Web já
+       * deixavam, o 99 não deixava nenhum.
+       *
+       * Não é só a tela. `source: "api"` é a ÚNICA prova de que a plataforma
+       * respondeu de verdade, e é nela que a varredura do e-mail "sua loja está
+       * conectada" se apoia (vínculo não prova nada: o Marmitex Faisão tinha
+       * vínculo e a API devolvia 403). Sem esta linha, loja do 99 conectava e
+       * o cliente nunca era avisado — silenciosamente, que é o pior jeito.
+       *
+       * Só grava quando ALGO entrou: linha de "0 registros" todo dia vira ruído
+       * e enterra o que importa.
+       */
+      if (unitId && records.length > 0) {
+        const ini = opts.startDate
+        await admin.from("platform_imports").insert({
+          unit_id: unitId,
+          platform: "99food",
+          report_type: "api",
+          cadencia: "mensal",
+          ref_year: Number(ini.slice(0, 4)),
+          ref_month: Number(ini.slice(4, 6)),
+          rows_imported: records.length,
+          status: "success",
+          source: "api",
+          source_filename: null,
+        })
+      }
     } catch (e) {
       res.error = e instanceof Error ? e.message : String(e)
     }
