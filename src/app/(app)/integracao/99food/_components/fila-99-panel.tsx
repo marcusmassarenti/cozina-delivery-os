@@ -2,15 +2,17 @@
 
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { Check, Copy, Link2 } from "lucide-react"
+import { Check, Copy, Link2, RefreshCw } from "lucide-react"
 import * as React from "react"
 
 import { Button } from "@/components/ui/button"
 
 import {
   atualizarSolicitacao99,
+  verificarLojas99,
   vincularLoja99,
   type Solicitacao99State,
+  type Verificacao99,
 } from "../_actions"
 
 export type Solicitacao99 = {
@@ -124,6 +126,8 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
         </p>
       )}
 
+      <VerificarNo99 />
+
       {itens.map((s) => (
         <div key={s.id} className="rounded-lg border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -199,6 +203,85 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * "O cliente já autorizou?" — perguntado AO 99, não ao cliente.
+ *
+ * O `app_shop_id` era digitado à mão num campo livre, e os slugs do 99 se
+ * parecem entre lojas do mesmo cliente ("dg-acaiepastelaria-01" vs
+ * "dg-donnatatta-01"). Errar a colagem aponta o financeiro de uma loja pra
+ * outra, e o sistema só reclama se o id já tiver dono.
+ *
+ * A lista aqui já vem filtrada pelo que NÃO tem unidade — é o conjunto de onde
+ * a resposta pode sair. Clicar copia o id pro campo certo em vez de digitar.
+ */
+function VerificarNo99() {
+  const [r, setR] = React.useState<Verificacao99 | null>(null)
+  const [carregando, setCarregando] = React.useState(false)
+
+  async function verificar() {
+    setCarregando(true)
+    try {
+      setR(await verificarLojas99())
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" onClick={verificar} disabled={carregando}>
+          <RefreshCw className={`size-3.5 ${carregando ? "animate-spin" : ""}`} />
+          {carregando ? "Perguntando ao 99..." : "Verificar quem já autorizou"}
+        </Button>
+        <span className="text-[11px] text-muted-foreground">
+          Consulta o portal do 99 e mostra as lojas autorizadas que ainda não
+          têm unidade. Uma consulta a cada 20 segundos.
+        </span>
+      </div>
+
+      {r?.error && (
+        <p className="mt-2 text-xs text-destructive">{r.error}</p>
+      )}
+      {r?.ok && (
+        <div className="mt-2">
+          <p className="text-xs text-muted-foreground">{r.message}</p>
+          {(r.livres ?? []).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(r.livres ?? []).map((l) => (
+                <button
+                  key={l.appShopId}
+                  type="button"
+                  onClick={() => {
+                    // Preenche TODOS os campos de vínculo da fila: quem clica
+                    // já sabe de qual card é, e digitar de novo é onde o erro
+                    // acontecia.
+                    document
+                      .querySelectorAll<HTMLInputElement>('input[name="app_shop_id"]')
+                      .forEach((i) => {
+                        i.value = l.appShopId
+                      })
+                  }}
+                  title="Usar este id nos campos de vínculo"
+                  className="rounded-md border bg-background px-2 py-1 font-mono text-[11px] transition-colors hover:bg-muted"
+                >
+                  {l.appShopId}
+                </button>
+              ))}
+            </div>
+          )}
+          {(r.livres ?? []).length === 0 && (
+            <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+              Nada novo autorizado. O caminho agora é o cliente: peça pra ele
+              autorizar o Delivery OS no portal do 99 e verifique de novo.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

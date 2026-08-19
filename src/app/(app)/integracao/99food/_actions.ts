@@ -77,6 +77,74 @@ export async function atualizarSolicitacao99(
  * merece erro claro — repontar sem avisar faria o financeiro de uma loja
  * aparecer na outra.
  */
+export type Verificacao99 = {
+  ok: boolean
+  /** Lojas que o 99 já autorizou e que ainda não estão apontadas pra ninguém. */
+  livres?: { appShopId: string; shopId: string }[]
+  /** Quantas o portal devolveu no total (autorizadas, vinculadas ou não). */
+  total?: number
+  message?: string
+  error?: string
+}
+
+/**
+ * Pergunta AO 99 quem já autorizou — em vez de esperar o cliente avisar.
+ *
+ * ── POR QUE (Marcus, 19/08/26): "aqui não apareceu pra mim" ──────────────
+ * O único caminho era digitar o `app_shop_id` à mão num campo livre, e o id do
+ * 99 é um slug parecido entre lojas do mesmo cliente ("dg-acaiepastelaria-01"
+ * vs "dg-donnatatta-01"). Colar o da loja errada aponta o financeiro de uma
+ * pra outra — e a mensagem de erro só aparece se o id já estiver em uso.
+ *
+ * Aqui a lista vem do portal e já sai FILTRADA pelo que ainda não tem dono, que
+ * é exatamente o conjunto de onde a resposta pode sair. Vazio é resposta útil
+ * também: significa que o cliente ainda não autorizou, e aí o que falta é
+ * cutucar ele, não procurar id.
+ *
+ * ⚠️ Uma chamada por vez: o `/v1/shop/list` do 99 aceita ~1 a cada 20 s.
+ */
+export async function verificarLojas99(): Promise<Verificacao99> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Só o dono da plataforma pode fazer isso." }
+  }
+
+  let lojas: { appShopId: string; shopId: string }[]
+  try {
+    const { listarLojas99 } = await import("@/lib/ninefood/lojas")
+    lojas = await listarLojas99()
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Não consegui falar com o 99: ${
+        e instanceof Error ? e.message : "erro desconhecido"
+      }`,
+    }
+  }
+
+  const admin = createAdminClient()
+  const { data: links } = await admin
+    .from("ninefood_store_links")
+    .select("app_shop_id, unit_id")
+  const comDono = new Set(
+    ((links ?? []) as { app_shop_id: string; unit_id: string | null }[])
+      .filter((l) => l.unit_id)
+      .map((l) => l.app_shop_id),
+  )
+
+  const livres = lojas.filter((l) => !comDono.has(l.appShopId))
+  return {
+    ok: true,
+    livres,
+    total: lojas.length,
+    message:
+      livres.length > 0
+        ? `O 99 devolveu ${lojas.length} loja(s) autorizada(s); ${livres.length} ainda sem unidade.`
+        : `O 99 devolveu ${lojas.length} loja(s), todas já vinculadas. A loja nova ainda não foi autorizada — peça ao cliente pra autorizar o Delivery OS no portal do 99.`,
+  }
+}
+
 export async function vincularLoja99(
   _prev: Solicitacao99State,
   formData: FormData,
