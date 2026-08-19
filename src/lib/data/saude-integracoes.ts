@@ -178,8 +178,25 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     idsDeUnidadesDemo(),
     idsDeUnidadesEncerradas(),
   ])
+  /**
+   * ⚠️ SÓ LOJA COM API VINCULADA. (Marcus, 19/08/26)
+   *
+   * "Esse e-mail tem que ser correspondente apenas às lojas que têm API
+   * vinculada. As outras não dependem do nosso trabalho — não preciso saber se
+   * a pessoa importou ou não planilha."
+   *
+   * A regra antiga media o DADO, não o caminho: loja sem API que ficasse dias
+   * sem planilha virava "alerta". Só que planilha é tarefa do cliente, e o
+   * relatório existe pra dizer o que a NOSSA operação precisa consertar. Com
+   * 78 lojas de iFood no placar e 60 em dia, as 18 restantes eram, na maioria,
+   * gente que simplesmente não subiu arquivo — ruído que faz parar de ler o
+   * alerta que importa.
+   *
+   * Efeito colateral esperado e correto: a Keeta some do relatório inteiro.
+   * Ela não tem API, então nenhuma loja dela jamais dependeu de nós.
+   */
   const linhas = ((sinais ?? []) as Sinal[]).filter(
-    (s) => !demo.has(s.unit_id) && !encerradas.has(s.unit_id),
+    (s) => s.conectada && !demo.has(s.unit_id) && !encerradas.has(s.unit_id),
   )
 
   const unitIds = [...new Set(linhas.map((s) => s.unit_id))]

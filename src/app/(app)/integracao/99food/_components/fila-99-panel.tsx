@@ -171,11 +171,24 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
 
             {/* Quando a loja não aparece no portal, a conclusão é uma só: o
                 lojista não autorizou. Este botão manda o e-mail E acende a
-                faixa na tela de Início dele — um canal só não basta. */}
+                faixa na tela de Início dele — um canal só não basta.
+                
+                CONTINUA DEPOIS DE CLICADO, e é de propósito: avisar uma vez não
+                garante que a pessoa fez. O que muda é o peso — vira "de novo",
+                em tom secundário, pra não parecer ação pendente nem sugerir que
+                o clique anterior não funcionou. Quem confirma que o aviso saiu
+                é o selo "Pedido ao 99" no topo do card. */}
             {s.status !== "ativa" && s.status !== "recusada" && (
               <form action={avisarAction} className="contents">
                 <input type="hidden" name="id" value={s.id} />
-                <Botao rotulo="Avisar cliente pra autorizar" variante="default" />
+                <Botao
+                  rotulo={
+                    s.status === "solicitada"
+                      ? "Avisar de novo"
+                      : "Avisar cliente pra autorizar"
+                  }
+                  variante={s.status === "solicitada" ? undefined : "default"}
+                />
               </form>
             )}
 
