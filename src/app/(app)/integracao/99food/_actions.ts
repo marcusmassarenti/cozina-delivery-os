@@ -283,6 +283,28 @@ export async function vincularLoja99(
   )
   if (errLink) return { ok: false, error: errLink.message }
 
+  /**
+   * Backfill NA HORA — a regra do Marcus (18/08/26): "loja vinculada tem que
+   * rodar backfill imediato". Sem isto o vínculo nasce mudo e a loja fica
+   * zerada até o cron das 5h; foi o que aconteceu com a Donna Tatta e a Açaí
+   * RG Estilo em 19/08, vinculadas de tarde e sem uma linha à noite.
+   *
+   * Não derruba o vínculo se falhar: o que ficar sem carimbo o cron recolhe.
+   */
+  let historico = ""
+  try {
+    const { backfillDeUmaLoja99 } = await import("@/lib/ninefood/backfill")
+    const r = await backfillDeUmaLoja99(appShopId)
+    if (r) {
+      historico = r.concluido
+        ? ` Histórico: ${r.meses} meses, ${r.linhas} linhas.`
+        : ` ⚠️ O histórico veio incompleto (${r.erros.join(" · ")}) — o cron tenta de novo.`
+    }
+  } catch (e) {
+    console.error("[99] backfill ao vincular:", e)
+    historico = " O histórico entra na próxima rodada."
+  }
+
   const { error } = await admin
     .from("ninefood_activation_requests")
     .update({ status: "ativa", updated_at: new Date().toISOString() })
@@ -294,7 +316,6 @@ export async function vincularLoja99(
   revalidatePath("/unidades")
   return {
     ok: true,
-    message:
-      "Loja vinculada! O cron diário já passa a trazer o financeiro dela — o histórico entra na próxima rodada.",
+    message: `Loja vinculada! O cron diário já traz o financeiro dela.${historico}`,
   }
 }

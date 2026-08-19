@@ -99,12 +99,27 @@ export async function confirmeiAutorizacao99(
       .from("ninefood_activation_requests")
       .update({ status: "ativa", updated_at: agora })
       .eq("id", id)
+
+    // Backfill na hora, mesma regra do vínculo pelo painel: o lojista acabou
+    // de clicar e vai olhar a tela AGORA. Sem isto ele veria "conectado" com
+    // zero pedido e concluiria que não funcionou.
+    let historico = ""
+    try {
+      const { backfillDeUmaLoja99 } = await import("@/lib/ninefood/backfill")
+      const r = await backfillDeUmaLoja99(alvo.appShopId)
+      if (r?.concluido && r.linhas > 0) {
+        historico = ` Já trouxemos ${r.linhas} lançamento(s) de ${r.meses} mês(es).`
+      }
+    } catch (e) {
+      console.error("[99] backfill ao confirmar:", e)
+    }
+
     revalidatePath("/inicio")
     revalidatePath("/integracao/99food")
     return {
       ok: true,
       conectou: true,
-      message: "Conectado! Já estamos trazendo o histórico dessa loja.",
+      message: `Conectado!${historico || " Já estamos trazendo o histórico dessa loja."}`,
     }
   }
 

@@ -38,6 +38,39 @@ export type Backfill99 = {
 /** Teto por rodada. O cron tem 300s e cada mês é uma ida à API do 99. */
 const MAX_LOJAS_POR_RODADA = 2
 
+/**
+ * BACKFILL DE UMA LOJA, NA HORA DE VINCULAR.
+ *
+ * ── A REGRA (Marcus, 18/08/26) ───────────────────────────────────────────
+ * "Loja vinculada tem que rodar backfill IMEDIATO." Sem isto o vínculo nasce
+ * mudo: em 19/08/26 a Donna Tatta e a Açaí RG Estilo foram vinculadas às 14h e
+ * 16h e ficaram com ZERO linha, esperando o cron das 5h da manhã seguinte. O
+ * cliente autoriza, a gente vincula, e a tela dele continua vazia por 13 horas
+ * — que é exatamente quando ele abre pra conferir se funcionou.
+ *
+ * Não lança: o vínculo já está feito e vale mais que a carga. O que falhar
+ * fica sem carimbo e o cron pega na próxima rodada.
+ */
+export async function backfillDeUmaLoja99(
+  appShopId: string,
+): Promise<Backfill99 | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ninefood_store_links")
+    .select("app_shop_id, name, created_at, historico_backfill_at")
+    .eq("app_shop_id", appShopId)
+    .maybeSingle()
+  const l = data as {
+    app_shop_id: string
+    name: string | null
+    created_at: string
+    historico_backfill_at: string | null
+  } | null
+  if (!l || l.historico_backfill_at) return null
+  const [r] = await rodar(admin, [l])
+  return r ?? null
+}
+
 export async function backfillHistorico99(): Promise<Backfill99[]> {
   const admin = createAdminClient()
 
@@ -49,12 +82,16 @@ export async function backfillHistorico99(): Promise<Backfill99[]> {
     .order("created_at", { ascending: true })
     .limit(MAX_LOJAS_POR_RODADA)
 
-  const pendentes = (data ?? []) as {
-    app_shop_id: string
-    name: string | null
-    created_at: string
-  }[]
+  return rodar(admin, (data ?? []) as Loja[])
+}
 
+type Loja = { app_shop_id: string; name: string | null; created_at: string }
+
+/** O miolo, compartilhado pelo cron e pelo vínculo — uma regra, um lugar. */
+async function rodar(
+  admin: ReturnType<typeof createAdminClient>,
+  pendentes: Loja[],
+): Promise<Backfill99[]> {
   const out: Backfill99[] = []
   for (const l of pendentes) {
     const meses = mesesDoBackfill("99food", new Date(l.created_at))
