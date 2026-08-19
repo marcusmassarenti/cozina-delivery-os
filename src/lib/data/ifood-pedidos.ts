@@ -346,6 +346,65 @@ export async function getVrValorByUnits(
   return out
 }
 
+/**
+ * Os cinco números do iFood que o DRE usa por loja — somados NO BANCO.
+ *
+ * Substitui `getVrByUnits` no caminho da rede. Aquele baixava 15 colunas de
+ * TODOS os pedidos do mês (24.895 em agosto/26) em páginas de 1.000 pra somar
+ * em memória — e sem índice por competência cada página fazia seq scan da
+ * tabela inteira mais um sort em disco: ~350 ms × 25 páginas, além dos 8 s do
+ * PostgREST. Foi um dos três timeouts da Início em 19/08/26.
+ *
+ * Pior que a lentidão: `pageAll` faz `break` quando a página falha e devolve o
+ * que já tinha. O VR da rede saía pela METADE com cara de total.
+ *
+ * `getVrByUnits` continua existindo pra tela Pedidos, que precisa do painel de
+ * bandeiras/turnos e olha uma loja por vez.
+ */
+export type IfoodPedidosResumo = {
+  unitId: string
+  totalPedidos: number
+  totalValor: number
+  valorItens: number
+  valorLiquido: number
+  vrPedidos: number
+  vrValor: number
+}
+
+export async function getIfoodPedidosResumoByUnits(
+  year: number,
+  month: number,
+  unitIds: string[],
+  dateRange?: { start: string; end: string },
+): Promise<IfoodPedidosResumo[]> {
+  if (unitIds.length === 0) return []
+  const { data, error } = await createAdminClient().rpc(
+    "ifood_pedidos_resumo_by_units",
+    {
+      p_unit_ids: unitIds,
+      p_year: year,
+      p_month: month,
+      p_start: dateRange?.start ?? null,
+      p_end: dateRange?.end ?? null,
+    },
+  )
+  if (error) {
+    // Nunca devolve parcial: erro aqui some com o fallback de faturamento de
+    // quem não tem Conciliação, e um zero é mais honesto que meio número.
+    console.error("ifood_pedidos_resumo_by_units:", error.message)
+    return []
+  }
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    unitId: String(r.unit_id),
+    totalPedidos: Number(r.total_pedidos) || 0,
+    totalValor: Number(r.total_valor) || 0,
+    valorItens: Number(r.valor_itens) || 0,
+    valorLiquido: Number(r.valor_liquido) || 0,
+    vrPedidos: Number(r.vr_pedidos) || 0,
+    vrValor: Number(r.vr_valor) || 0,
+  }))
+}
+
 export async function getVrByUnits(
   year: number,
   month: number,

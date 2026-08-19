@@ -248,7 +248,7 @@ import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
-import { getVrByUnits } from "@/lib/data/ifood-pedidos"
+import { getIfoodPedidosResumoByUnits } from "@/lib/data/ifood-pedidos"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
 
 const VR_TAXA = 0.08
@@ -364,7 +364,7 @@ export async function getRealMonthlyForUnits(
     //     fallback de 3 dias, inflando o lado "mês passado" das setas do herói;
     //   • tempo: 27.764 linhas (28 idas ao banco) onde 2.936 (3 idas) bastavam.
     unitIds.length > 0
-      ? getVrByUnits(year, month, unitIds, dateRange)
+      ? getIfoodPedidosResumoByUnits(year, month, unitIds, dateRange)
       : Promise.resolve([]),
     // MESMO problema latente aqui: esta busca o mês inteiro e não aceita
     // recorte. Não corrigi junto porque hoje não afeta ninguém -- as 10 lojas
