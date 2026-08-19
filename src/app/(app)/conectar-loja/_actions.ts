@@ -43,6 +43,53 @@ async function unidadeDoUsuario(unitId: string) {
   return units.find((u) => u.id === unitId) ?? null
 }
 
+/**
+ * Põe a loja na fila do 99 quando não deu pra vincular sozinho.
+ *
+ * A esteira só sabia fazer duas coisas: vincular na hora (quando existe
+ * exatamente uma loja nova no portal) ou dizer "vamos confirmar". No segundo
+ * caso não sobrava registro nenhum — a Donna Tatta e a Açaí RG Estilo
+ * concluíram em 19/08/26 e ficaram invisíveis, do mesmo jeito que as do iFood.
+ * "Vamos confirmar" precisa ter onde confirmar.
+ */
+async function registrarPedido99(
+  admin: ReturnType<typeof createAdminClient>,
+  unitId: string,
+  cnpjBruto: string | null | undefined,
+) {
+  const cnpj = (cnpjBruto ?? "").replace(/\D/g, "")
+  if (cnpj.length !== 14) return
+  const holdingId = await holdingDaUnidade(admin, unitId)
+  if (!holdingId) return
+  const { data: jaTem } = await admin
+    .from("ninefood_activation_requests")
+    .select("id")
+    .eq("unit_id", unitId)
+    .in("status", ["pendente", "solicitada", "ativa"])
+    .limit(1)
+  if ((jaTem ?? []).length > 0) return
+  const { error } = await admin
+    .from("ninefood_activation_requests")
+    .insert({ holding_id: holdingId, unit_id: unitId, cnpj })
+  // Não derruba o passo do cliente, mas DEIXA RASTRO: foi a falta disso que
+  // fez o pedido do iFood sumir sem ninguém notar.
+  if (error) console.error("[conectar-loja] pedido 99:", error.message)
+}
+
+/** A conta dona da loja. `ifood_activation_requests.holding_id` é NOT NULL. */
+async function holdingDaUnidade(
+  admin: ReturnType<typeof createAdminClient>,
+  unitId: string,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("units")
+    .select("brands(holding_id)")
+    .eq("id", unitId)
+    .maybeSingle()
+  const b = (data as { brands?: { holding_id?: string } | null } | null)?.brands
+  return b?.holding_id ?? null
+}
+
 export async function concluirPasso(
   unitId: string,
   platform: PlatformId,
@@ -110,10 +157,12 @@ export async function concluirPasso(
         conectouAgora = true
         mensagem = "Conectado! Já estamos trazendo o histórico."
       } else {
+        await registrarPedido99(admin, unitId, loja.cnpj)
         mensagem =
           "Recebemos! Vamos confirmar a sua loja no 99 e avisar quando estiver ligada."
       }
     } catch {
+      await registrarPedido99(admin, unitId, loja.cnpj)
       mensagem =
         "Recebemos! Vamos confirmar a sua loja no 99 e avisar quando estiver ligada."
     }
@@ -128,6 +177,32 @@ export async function concluirPasso(
           "Falta o CNPJ desta loja no cadastro — é ele que o iFood usa pra liberar o acesso.",
       }
     }
+    /**
+     * ⚠️ ESTE INSERT É O QUE FAZ A LOJA EXISTIR PRA NÓS.
+     *
+     * `ifood_activation_requests` é a fila de trabalho do iFood: é dela que
+     * saem o contador de `/clientes/conexoes` e a lista de
+     * `/integracao/ifood-merchants`. Sem a linha aqui, a loja fica invisível
+     * pro time — o cliente lê "vamos cadastrar sua loja" e ninguém tem o que
+     * cadastrar.
+     *
+     * Foi o que aconteceu em 19/08/26: `holding_id` é NOT NULL e o insert não
+     * mandava. Ele estourava, o erro não era conferido, e a função seguia reto
+     * gravando o passo e disparando o e-mail. Seis lojas da DG FOODS
+     * concluíram a esteira e a fila ficou VAZIA — sem nenhum sinal de erro em
+     * lugar nenhum.
+     *
+     * Por isso o erro agora VOLTA pro cliente. Dizer "recebemos" sem ter
+     * recebido é pior que dizer "deu ruim, tenta de novo".
+     */
+    const holdingId = await holdingDaUnidade(admin, unitId)
+    if (!holdingId) {
+      return {
+        ok: false,
+        erro: "Não consegui identificar a conta desta loja. Fale com a gente.",
+      }
+    }
+
     const { data: jaTem } = await admin
       .from("ifood_activation_requests")
       .select("id")
@@ -135,9 +210,17 @@ export async function concluirPasso(
       .in("status", ["pendente", "solicitada", "ativa"])
       .limit(1)
     if ((jaTem ?? []).length === 0) {
-      await admin
+      const { error } = await admin
         .from("ifood_activation_requests")
-        .insert({ unit_id: unitId, cnpj })
+        .insert({ holding_id: holdingId, unit_id: unitId, cnpj })
+      if (error) {
+        console.error("[conectar-loja] solicitação iFood:", error.message)
+        return {
+          ok: false,
+          erro:
+            "Não consegui registrar o pedido agora. Tente de novo em instantes — se persistir, fale com a gente.",
+        }
+      }
     }
     mensagem =
       "Recebemos! Vamos cadastrar sua loja no iFood e avisar quando for a sua vez de autorizar."
