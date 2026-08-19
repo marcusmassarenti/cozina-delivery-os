@@ -111,6 +111,15 @@ export type LojaSumida = {
   dias: number
 }
 
+export type OportunidadeConexao = {
+  cliente: string
+  /** Quantas marcações de plataforma sem API, por plataforma. */
+  ifood: number
+  noveNove: number
+  cardapioWeb: number
+  total: number
+}
+
 export type SaudeIntegracoes = {
   geradoEm: string
   lojas: LojaSaude[]
@@ -129,6 +138,14 @@ export type SaudeIntegracoes = {
     cronsOk: number
     cronsProblema: number
   }
+  /**
+   * Lojas que vendem na plataforma e AINDA NÃO conectaram a nossa API.
+   *
+   * Fica fora da saúde de propósito (Marcus, 19/08/26): não é falha nossa nem
+   * do cliente — é oportunidade. Misturado ao alerta, virava ruído; separado,
+   * é a lista de quem ligar pra tirar do trabalho manual.
+   */
+  oportunidades: OportunidadeConexao[]
   /** true = nada exige ação. Define o assunto do e-mail. */
   tudoCerto: boolean
   /** Há itens em observação (não são falha, mas ainda não são "ok"). */
@@ -199,7 +216,26 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     (s) => s.conectada && !demo.has(s.unit_id) && !encerradas.has(s.unit_id),
   )
 
-  const unitIds = [...new Set(linhas.map((s) => s.unit_id))]
+  /**
+   * Quem ainda não conectou — por cliente, e só das plataformas que TÊM API.
+   *
+   * A Keeta fica de fora porque não existe API dela: listar as lojas dela como
+   * "oportunidade" seria oferecer o que não temos pra vender.
+   *
+   * Sai dos sinais CRUS (antes do filtro de conectada), que é justamente o
+   * conjunto que a saúde deixou de olhar.
+   */
+  const semApi = ((sinais ?? []) as Sinal[]).filter(
+    (s) =>
+      !s.conectada &&
+      s.plataforma !== "keeta" &&
+      !demo.has(s.unit_id) &&
+      !encerradas.has(s.unit_id),
+  )
+
+  const unitIds = [
+    ...new Set([...linhas, ...semApi].map((s) => s.unit_id)),
+  ]
   const { data: units } = await admin
     .from("units")
     .select("id, code, name, brand_id, active")
@@ -224,6 +260,24 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
           cliente: nomeHolding.get(holdingDaBrand.get(u.brand_id) ?? "") ?? "—",
         },
       ]),
+  )
+
+  const porCliente = new Map<string, OportunidadeConexao>()
+  for (const s of semApi) {
+    const info = unitInfo.get(s.unit_id)
+    if (!info || !info.ativa) continue
+    const atual =
+      porCliente.get(info.cliente) ??
+      { cliente: info.cliente, ifood: 0, noveNove: 0, cardapioWeb: 0, total: 0 }
+    if (s.plataforma === "ifood") atual.ifood += 1
+    else if (s.plataforma === "99food") atual.noveNove += 1
+    else if (s.plataforma === "cardapioweb") atual.cardapioWeb += 1
+    atual.total += 1
+    porCliente.set(info.cliente, atual)
+  }
+  // Maior primeiro: quem tem 12 lojas soltas rende mais que quem tem 1.
+  const oportunidades = [...porCliente.values()].sort(
+    (a, b) => b.total - a.total || a.cliente.localeCompare(b.cliente, "pt-BR"),
   )
 
   const lojas: LojaSaude[] = []
@@ -549,6 +603,7 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     lojasSumidas,
     filaIfood,
     crons,
+    oportunidades,
     resumo,
     // "Atenção" não acorda ninguém — só alerta. Loja conectada há 2 horas sem
     // dado é esperado, não é problema.

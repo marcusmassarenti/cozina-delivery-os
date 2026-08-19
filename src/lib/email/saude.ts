@@ -10,7 +10,10 @@
  */
 import "server-only"
 
-import type { SaudeIntegracoes } from "@/lib/data/saude-integracoes"
+import type {
+  OportunidadeConexao,
+  SaudeIntegracoes,
+} from "@/lib/data/saude-integracoes"
 import type { RodadaDiaria } from "@/lib/data/rodada-diaria"
 import type { LojaAgrupada, SaudeAgrupada } from "@/lib/data/saude-agrupada"
 import type { PlatformId } from "@/components/platform-logo"
@@ -208,16 +211,64 @@ function blocoSeguemParadas(g: SaudeAgrupada): string {
  * loja que marcou a plataforma no cadastro e nunca autorizou. Vira contagem
  * com link, e o e-mail volta a ser sobre o que quebrou.
  */
-function blocoNuncaConectou(g: SaudeAgrupada): string {
-  const n = g.nuncaConectou
+/**
+ * "Quem ainda não conectou" — oportunidade, não alerta.
+ *
+ * ── POR QUE É UM BLOCO À PARTE (Marcus, 19/08/26) ────────────────────────
+ * Estas lojas saíram da saúde no mesmo dia: "as outras não dependem do nosso
+ * trabalho, não preciso saber se a pessoa importou ou não planilha". Misturado
+ * ao alerta, isto era ruído — cobrava de nós uma tarefa do cliente e enterrava
+ * a falha de verdade.
+ *
+ * Só que a lista em si vale: cada linha é uma loja rodando na planilha que
+ * poderia estar na API. Por isso volta com outra função — não é "consertar", é
+ * "ligar pra esse cliente". Tom neutro e ordenado pelo tamanho: quem tem 12
+ * lojas soltas rende mais que quem tem 1.
+ *
+ * A Keeta não entra: não existe API dela, e oferecer o que não temos é pior
+ * que não oferecer nada.
+ */
+function blocoOportunidades(itens: OportunidadeConexao[]): string {
+  const total = itens.reduce((a, o) => a + o.total, 0)
+  const linhas = itens
+    .slice(0, 12)
+    .map((o) => {
+      const detalhe = [
+        o.ifood ? `${o.ifood} iFood` : null,
+        o.noveNove ? `${o.noveNove} 99 Food` : null,
+        o.cardapioWeb ? `${o.cardapioWeb} Cardápio Web` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+      return `<tr>
+        <td style="padding:7px 10px 7px 0;font-size:13px;color:#3f3f46;border-bottom:1px solid #f4f4f5;">${o.cliente}</td>
+        <td style="padding:7px 10px;font-size:13px;color:#71717a;border-bottom:1px solid #f4f4f5;">${detalhe}</td>
+        <td style="padding:7px 0;font-size:13px;font-weight:700;color:#3f3f46;text-align:right;border-bottom:1px solid #f4f4f5;white-space:nowrap;">${o.total}</td>
+      </tr>`
+    })
+    .join("")
+  const resto = itens.length > 12 ? itens.length - 12 : 0
+
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
-    <tr><td style="background:#fafafa;border-left:4px solid #d4d4d8;border-radius:0 8px 8px 0;padding:14px 18px;">
-      <p style="margin:0;font-size:13px;line-height:1.6;color:#52525b;">
-        <strong>${n.total} marcaç${n.total === 1 ? "ão" : "ões"} de plataforma sem integração ligada</strong>,
-        em ${n.clientes} cliente${n.clientes === 1 ? "" : "s"}.
-        Não é falha do sistema — é loja que nunca autorizou a conexão.
-        <a href="${SITE}/saude" style="color:${LARANJA};text-decoration:none;font-weight:700;">Ver a fila →</a>
+    <tr><td style="background:#f0f9ff;border-left:4px solid #0ea5e9;border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#0c4a6e;">
+        Dá pra conectar mais ${total} loja${total === 1 ? "" : "s"}
+      </p>
+      <p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:#52525b;">
+        Vendem na plataforma e ainda entram por planilha. Não é falha —
+        é onde a API tira trabalho manual de alguém.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+        ${linhas}
+      </table>
+      ${
+        resto > 0
+          ? `<p style="margin:10px 0 0;font-size:12px;color:#71717a;">+ ${resto} outro${resto === 1 ? "" : "s"} cliente${resto === 1 ? "" : "s"}.</p>`
+          : ""
+      }
+      <p style="margin:12px 0 0;font-size:13px;">
+        <a href="${SITE}/clientes/conexoes" style="color:${LARANJA};text-decoration:none;font-weight:700;">Ver as conexões →</a>
       </p>
     </td></tr>
   </table>`
@@ -532,7 +583,7 @@ export function emailSaude(
         ...extratoAviso.map(linhaExtrato),
       ])}
 
-      ${g && g.nuncaConectou.total > 0 ? blocoNuncaConectou(g) : ""}
+      ${s.oportunidades.length > 0 ? blocoOportunidades(s.oportunidades) : ""}
 
       ${
         tudoCerto && emObservacao === 0
