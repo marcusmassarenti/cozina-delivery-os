@@ -5,7 +5,7 @@
  * - Linha 1: "iFood" · Linha 2: seção · Linha 3: CABEÇALHO (por isso range:2)
  * - Linha 4+: 1 linha por (loja, DIA). No modo rede vêm todas as lojas.
  *
- * Colunas: Nome da loja, Id loja, Cidade, Estado, Período (data do dia),
+ * Colunas: Nome da loja, Id loja, Cidade, Estado, Período (SEMANA, "17/08 - 23/08"),
  * Nível super, Pedidos totais, Valor total do cancelamento com entrega (R$),
  * Negociações super, % Negociações super, % Respostas nas negociações,
  * Cancelamentos super, % Cancelamentos super, Pedidos atrasados 5 min+,
@@ -15,7 +15,20 @@
  * Tempo fechamentos e pausas por ações (min), Variação vs período anterior (x4),
  * Top motivos de cancelamento (R$), Top motivos de chamados com cancelamento (R$).
  *
- * Percentuais no XLSX vêm como FRAÇÃO (0.994 = 99,4%) — guardamos em 0-100.
+ * ⚠️ AS UNIDADES DESTE ARQUIVO NÃO SÃO TODAS IGUAIS. Medido no relatório de
+ * 13/jul a 23/ago/26 (12 lojas, 63 linhas), depois de o import quebrar com
+ * `numeric field overflow` na JK e na SJC:
+ *
+ *  • `% ...` (aguardo, negociações, tempo online real vs planejado) vêm como
+ *    FRAÇÃO (0.994 = 99,4%) → multiplicamos por 100.
+ *  • `Média tempo online / dia` vem em HORAS (3,5 a 13,73). Multiplicar por
+ *    100 dava 1.165 e estourava `numeric(6,3)` em quem passava de 10h — e nas
+ *    outras dez lojas gravou 860 calado, que ninguém leria como 8,6h.
+ *  • `Variação vs período anterior` JÁ VEM EM PONTOS PERCENTUAIS (−20 a +24),
+ *    e a das avaliações vem em ESTRELAS (−5 a +5). Nenhuma multiplica por 100.
+ *
+ * A regra que sobra: só multiplica por 100 o que está entre −1 e 1 por
+ * definição. O resto é grandeza com unidade própria.
  * Agregação diário→período: contagens somam; percentuais são recompostos a
  * partir das somas (ex.: % cancelamento = Σcancelamentos / Σpedidos) ou
  * ponderados pelo volume do dia; Nível super e variações vêm do dia mais recente.
@@ -64,14 +77,24 @@ export function parseIfoodQualidade(workbook: XLSX.WorkBook): ParsedQualidade {
 // ─── Agregação de um grupo (loja) ────────────────────────────────────
 
 function aggregate(storeId: string, dias: Row[]): ParsedQualidadeLoja {
-  // Ordena por data desc → primeiro = dia mais recente (Nível super, variações)
-  const withDate = dias
-    .map((r) => ({ r, d: parseDate(pick(r, "Período")) }))
-    .sort((a, b) => (b.d?.getTime() ?? 0) - (a.d?.getTime() ?? 0))
-  const recente = withDate[0].r
-  const datas = withDate.map((x) => x.d).filter((d): d is Date => !!d)
-  const min = datas.reduce((a, d) => (d < a ? d : a), datas[0] ?? new Date(0))
-  const max = datas.reduce((a, d) => (d > a ? d : a), datas[0] ?? new Date(0))
+  // Ordena por fim da semana desc → primeiro = semana mais recente (Nível
+  // super, variações, que são sempre "vs o período anterior").
+  const comSemana = dias
+    .map((r) => ({ r, s: parseSemana(pick(r, "Período")) }))
+    .sort((a, b) => (b.s?.fim.getTime() ?? 0) - (a.s?.fim.getTime() ?? 0))
+  const recente = comSemana[0].r
+  const semanas = comSemana
+    .map((x) => x.s)
+    .filter((x): x is { ini: Date; fim: Date } => !!x)
+  if (semanas.length === 0) {
+    // Sem período não há o que gravar: a chave da tabela é (loja, início,
+    // fim), e inventar uma data faz a próxima importação sobrescrever esta.
+    throw new Error(
+      `Loja ${storeId}: não consegui ler a coluna "Período" (esperado algo como "17/08 - 23/08")`,
+    )
+  }
+  const min = semanas.reduce((a, s) => (s.ini < a ? s.ini : a), semanas[0]!.ini)
+  const max = semanas.reduce((a, s) => (s.fim > a ? s.fim : a), semanas[0]!.fim)
 
   // Somatórios
   let pedidos = 0
@@ -120,7 +143,8 @@ function aggregate(storeId: string, dias: Row[]): ParsedQualidadeLoja {
     const tOnDia = pick(r, "Média tempo online / dia")
     if (tOn != null || tOnDia != null) {
       tempoOnlineSum += frac(tOn)
-      tempoOnlineDiaSum += frac(tOnDia)
+      // HORAS por dia, não fração. Ver o bloco de unidades no topo.
+      tempoOnlineDiaSum += toNumber(tOnDia, 0)
       tempoOnlineDias += 1
     }
 
@@ -159,15 +183,14 @@ function aggregate(storeId: string, dias: Row[]): ParsedQualidadeLoja {
     mediaAvaliacoes: avaliacoes > 0 ? round2(mediaAvalNum / avaliacoes) : null,
     pctTempoOnline:
       tempoOnlineDias > 0 ? round3((tempoOnlineSum / tempoOnlineDias) * 100) : null,
+    // Horas por dia (média das semanas), sem ×100.
     mediaTempoOnlineDia:
-      tempoOnlineDias > 0
-        ? round3((tempoOnlineDiaSum / tempoOnlineDias) * 100)
-        : null,
+      tempoOnlineDias > 0 ? round3(tempoOnlineDiaSum / tempoOnlineDias) : null,
     tempoPausasMin: round2(pausas),
-    varCancelamentos: fracOrNull(pick(recente, "Variação vs período anterior - cancelamentos")),
-    varChamados: fracOrNull(pick(recente, "Variação vs período anterior - pedidos com c")),
-    varAvaliacoes: fracOrNull(pick(recente, "Variação vs período anterior - média")),
-    varTempoOnline: fracOrNull(pick(recente, "Variação vs período anterior - tempo online")),
+    varCancelamentos: variacao(pick(recente, "Variação vs período anterior - cancelamentos")),
+    varChamados: variacao(pick(recente, "Variação vs período anterior - pedidos com c")),
+    varAvaliacoes: variacao(pick(recente, "Variação vs período anterior - média")),
+    varTempoOnline: variacao(pick(recente, "Variação vs período anterior - tempo online")),
     topMotivosCancelamento: dedupJoin(motivosCancel),
     topMotivosChamados: dedupJoin(motivosChamado),
   }
@@ -200,10 +223,19 @@ function strOrNull(v: unknown): string | null {
 function frac(v: unknown): number {
   return toNumber(v, 0)
 }
-function fracOrNull(v: unknown): number | null {
+/**
+ * Variação vs período anterior: o número JÁ está na unidade final.
+ *
+ * As três colunas com "(%)" no título vêm em pontos percentuais (−20 a +24 no
+ * arquivo medido) e a das avaliações vem em estrelas (−5 a +5). Multiplicar
+ * por 100 gravava "−500%" de variação de nota, que é um número impossível
+ * numa escala de 0 a 5 — e ninguém tinha como saber, porque não havia tela
+ * mostrando esse campo.
+ */
+function variacao(v: unknown): number | null {
   if (v == null || v === "" || v === "-") return null
   const n = Number(v)
-  return Number.isFinite(n) ? round3(n * 100) : null
+  return Number.isFinite(n) ? round3(n) : null
 }
 
 /** "Nivel 5" fica; "-" ou vazio vira null. */
@@ -224,12 +256,49 @@ function dedupJoin(list: string[]): string | null {
   return uniq.length > 0 ? uniq.slice(0, 5).join(" · ") : null
 }
 
-/** Aceita Date (cellDates) ou "dd/mm/yyyy". */
-function parseDate(v: unknown): Date | null {
-  if (v instanceof Date) return v
+/**
+ * A coluna "Período" é uma SEMANA sem ano: "17/08 - 23/08".
+ *
+ * Era lida por um regex de `dd/mm/yyyy`, que nunca casava — então toda linha
+ * virava `null`, o mínimo e o máximo caíam no fallback `new Date(0)` e as dez
+ * lojas que "importaram com sucesso" ficaram gravadas com período
+ * 01/01/1970 a 01/01/1970. Pior: a chave única é (unit_id, period_start,
+ * period_end), então toda importação futura colidiria nessa mesma data e
+ * sobrescreveria a anterior. Falha calada, com carimbo de sucesso.
+ *
+ * O ano não está no arquivo. Assume o ano corrente e recua um quando a data
+ * cairia no futuro — é o que acontece com relatório tirado em janeiro sobre
+ * as semanas de dezembro. Pela mesma razão, faixa que termina antes de
+ * começar (27/12 - 02/01) tem o fim no ano seguinte.
+ */
+function parseSemana(
+  v: unknown,
+  hoje = new Date(),
+): { ini: Date; fim: Date } | null {
+  if (v instanceof Date) return { ini: v, fim: v }
   const s = str(v)
-  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/)
-  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))
+
+  const faixa = s.match(/(\d{1,2})\/(\d{1,2})\s*[-–a]+\s*(\d{1,2})\/(\d{1,2})/)
+  if (faixa) {
+    const ano = hoje.getFullYear()
+    let ini = new Date(ano, Number(faixa[2]) - 1, Number(faixa[1]))
+    let fim = new Date(ano, Number(faixa[4]) - 1, Number(faixa[3]))
+    // Margem de 2 dias: o relatório pode incluir a semana corrente, cujo fim
+    // é "amanhã" sem que isso signifique ano errado.
+    const futuro = new Date(hoje.getTime() + 2 * 86400_000)
+    if (ini > futuro) {
+      ini = new Date(ano - 1, ini.getMonth(), ini.getDate())
+      fim = new Date(ano - 1, fim.getMonth(), fim.getDate())
+    }
+    if (fim < ini) fim = new Date(fim.getFullYear() + 1, fim.getMonth(), fim.getDate())
+    return { ini, fim }
+  }
+
+  const dia = s.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (dia) {
+    const d = new Date(Number(dia[3]), Number(dia[2]) - 1, Number(dia[1]))
+    return { ini: d, fim: d }
+  }
   return null
 }
 

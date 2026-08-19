@@ -1289,7 +1289,44 @@ async function saveQualidade(
   const { error } = await admin
     .from("ifood_operacao_periodo")
     .upsert(payload, { onConflict: "unit_id,period_start,period_end" })
-  if (error) throw new Error(`Falha ao gravar Qualidade: ${error.message}`)
+  if (error) {
+    /**
+     * "numeric field overflow" não diz QUAL campo, e sem isso o erro é uma
+     * parede: em 18/08/26 a JK e a SJC falharam com essa frase e as outras
+     * dez "importaram com sucesso" gravando 860 onde eram 8,6 horas. O erro
+     * apontou o dedo pra duas lojas quando o defeito era do arquivo inteiro.
+     *
+     * Os tetos abaixo são a precisão declarada na migration 0074.
+     */
+    const TETO: Record<string, number> = {
+      pct_negociacoes: 999.999,
+      pct_respostas_negociacoes: 999.999,
+      pct_cancelamento: 999.999,
+      pct_atrasados: 999.999,
+      pct_entregador_aguardo_5: 999.999,
+      pct_entregador_aguardo_15: 999.999,
+      pct_tempo_online: 999.999,
+      media_tempo_online_dia: 999.999,
+      media_avaliacoes: 99.99,
+      tempo_medio_atraso_min: 999_999.99,
+      tempo_medio_preparo_min: 999_999.99,
+      var_cancelamentos: 99_999.999,
+      var_chamados: 99_999.999,
+      var_avaliacoes: 99_999.999,
+      var_tempo_online: 99_999.999,
+    }
+    const bruto = payload as unknown as Record<string, unknown>
+    const estourados = Object.entries(TETO)
+      .filter(([campo, teto]) => {
+        const v = bruto[campo]
+        return typeof v === "number" && Math.abs(v) > teto
+      })
+      .map(([campo]) => `${campo}=${String(bruto[campo])}`)
+    throw new Error(
+      `Falha ao gravar Qualidade: ${error.message}` +
+        (estourados.length > 0 ? ` (fora da faixa: ${estourados.join(", ")})` : ""),
+    )
+  }
 
   return { substituido }
 }
