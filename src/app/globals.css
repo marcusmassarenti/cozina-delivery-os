@@ -760,3 +760,14 @@
 [data-plat-slot][data-plat-inativo] {
   display: none;
 }
+
+/* Entrada do conteúdo ACIMA DA DOBRA (Reveal `imediato`).
+   Só transform: a opacidade nunca é tocada, então o navegador pinta o texto e
+   o print do herói no primeiro quadro e o LCP não espera JavaScript nenhum. */
+@keyframes subir {
+  from { transform: translateY(var(--subir-y, 28px)) }
+  to   { transform: none }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes subir { from { transform: none } to { transform: none } }
+}

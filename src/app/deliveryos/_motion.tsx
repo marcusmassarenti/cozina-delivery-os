@@ -18,17 +18,36 @@ export function Reveal({
   y = 28,
   className,
   style,
+  imediato = false,
 }: {
   children: ReactNode
   delay?: number
   y?: number
   className?: string
   style?: CSSProperties
+  /**
+   * ACIMA DA DOBRA, USE ISTO.
+   *
+   * O Reveal normal nasce com `opacity: 0` e só acende depois de baixar o JS,
+   * hidratar, o IntersectionObserver disparar e a transição de 0,75s rodar.
+   * Isso é certo pra quem ROLA até a seção — e desastroso pro que já está na
+   * tela: em 19/08/26 o HTML da landing saía com 73 elementos invisíveis,
+   * incluindo o <h1> e o print do herói. O visitante ficava olhando um fundo
+   * escuro vazio até 244 KB de JS terminarem de carregar, e era isso que
+   * segurava o LCP e o Speed Index do PageSpeed.
+   *
+   * Com `imediato`, o conteúdo é PINTADO JÁ VISÍVEL — a opacidade nunca é
+   * tocada — e a entrada acontece só no `transform`, por CSS puro. O
+   * movimento continua lá, mas nada do que o navegador precisa medir depende
+   * de JavaScript.
+   */
+  imediato?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(false)
 
   useEffect(() => {
+    if (imediato) return
     const el = ref.current
     if (!el) return
     const io = new IntersectionObserver(
@@ -42,7 +61,24 @@ export function Reveal({
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [])
+  }, [imediato])
+
+  if (imediato) {
+    return (
+      <div
+        className={className}
+        style={{
+          // `subir` mexe só no transform. Se o CSS não carregar ou o usuário
+          // pedir menos movimento, o conteúdo já está no lugar certo e opaco.
+          animation: `subir .75s cubic-bezier(.22,1,.36,1) ${delay}ms both`,
+          ["--subir-y" as string]: `${y}px`,
+          ...style,
+        }}
+      >
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div

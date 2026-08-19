@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import Lenis from "lenis"
 import {
@@ -482,12 +483,52 @@ function IgIcon({ className }: { className?: string }) {
   )
 }
 
+/**
+ * Dimensões reais dos prints, pra `next/image` reservar o espaço e gerar o
+ * srcset. São 8 PNGs de 1600px que somavam 2,3 MB servidos crus — o celular
+ * baixava a versão de desktop inteira. Pelo `next/image` a Vercel entrega
+ * AVIF/WebP no tamanho do viewport.
+ */
+const PRINT: Record<string, { w: number; h: number }> = {
+  "/landing/avaliacoes.png": { w: 1600, h: 1079 },
+  "/landing/cardapio.png": { w: 1600, h: 1087 },
+  "/landing/dashboard.png": { w: 1600, h: 851 },
+  "/landing/diagnostico.png": { w: 1600, h: 1033 },
+  "/landing/dre.png": { w: 1600, h: 829 },
+  "/landing/dre1.png": { w: 1600, h: 1351 },
+  "/landing/financeiro.png": { w: 1600, h: 877 },
+  "/landing/relatorios.png": { w: 1600, h: 980 },
+}
+
 /** Print real do sistema numa moldura leve (borda + sombra). */
-function Shot({ src, alt }: { src: string; alt: string }) {
+function Shot({
+  src,
+  alt,
+  prioridade = false,
+}: {
+  src: string
+  alt: string
+  /**
+   * Só o print do HERÓI. Ele é o elemento de LCP da página e estava com
+   * `loading="lazy"` — ou seja, a gente pedia ao navegador pra deixar pra
+   * depois justamente a imagem que ele ia cronometrar.
+   */
+  prioridade?: boolean
+}) {
+  const d = PRINT[src] ?? { w: 1600, h: 900 }
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_30px_60px_-30px_rgba(40,20,10,.5)]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} loading="lazy" className="block w-full" />
+      <Image
+        src={src}
+        alt={alt}
+        width={d.w}
+        height={d.h}
+        priority={prioridade}
+        fetchPriority={prioridade ? "high" : undefined}
+        loading={prioridade ? "eager" : "lazy"}
+        sizes="(min-width: 1024px) 55vw, 100vw"
+        className="block h-auto w-full"
+      />
     </div>
   )
 }
@@ -517,8 +558,15 @@ function ShotBrowser({
             {url}
           </span>
         </div>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={alt} loading="lazy" className="block w-full" />
+        <Image
+          src={src}
+          alt={alt}
+          width={PRINT[src]?.w ?? 1600}
+          height={PRINT[src]?.h ?? 900}
+          loading="lazy"
+          sizes="(min-width: 1024px) 50vw, 100vw"
+          className="block h-auto w-full"
+        />
       </div>
       {callout ? (
         <span className="absolute -right-2 top-16 hidden items-center gap-1.5 rounded-xl bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white shadow-[0_10px_24px_-8px_oklch(0.65_0.21_35/.8)] lg:inline-flex">
@@ -1512,19 +1560,19 @@ export function LandingV3({
         <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-start gap-x-8 px-5 lg:grid-cols-[1fr_1.2fr] lg:gap-x-10">
           {/* Intro — texto (no mobile fica ANTES da tela) */}
           <div className="text-center lg:col-start-1 lg:row-start-1 lg:self-center lg:text-left">
-            <Reveal>
+            <Reveal imediato>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-[oklch(0.85_0.05_60)]">
                 <span className="size-1.5 rounded-full bg-[var(--brand)]" />
                 Para donos de delivery
               </span>
             </Reveal>
-            <Reveal delay={80}>
+            <Reveal imediato delay={80}>
               <h1 className="mt-5 text-balance text-[2rem] font-medium leading-[1.08] tracking-tight sm:mt-6 sm:text-6xl sm:leading-[1.05]">
                 Descomplique os relatórios das plataformas — e veja quanto você{" "}
                 <span className="text-[oklch(0.78_0.16_50)]">realmente ganha</span>
               </h1>
             </Reveal>
-            <Reveal delay={160}>
+            <Reveal imediato delay={160}>
               <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-[oklch(0.78_0.012_60)] sm:text-lg lg:mx-0">
                 Cada plataforma manda uma planilha diferente. Você sobe, a gente
                 lê todas e mostra o lucro real de cada loja e cada plataforma. Na
@@ -1535,14 +1583,21 @@ export function LandingV3({
 
           {/* Tela (print) — no mobile ENTRE o texto e os botões; no desktop, coluna da direita */}
           <Reveal
-            delay={420}
+            imediato
+            /* Era 420ms. Com `imediato` o print já nasce visível, mas 420ms de
+               atraso no movimento ainda daria a impressão de tela travada. */
+            delay={120}
             y={40}
             className="mt-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:self-center"
           >
             <div className="relative w-full">
               <div className="glow-blob left-1/2 top-1/2 h-[115%] w-[115%] -translate-x-1/2 -translate-y-1/2 opacity-90" />
               <div className="relative rounded-[20px] bg-white/10 p-1.5 shadow-[0_50px_100px_-30px_rgba(0,0,0,.8)] ring-1 ring-white/15">
-                <Shot src="/landing/dre.png" alt="Resultado da sua loja no Delivery OS" />
+                <Shot
+                  src="/landing/dre.png"
+                  alt="Resultado da sua loja no Delivery OS"
+                  prioridade
+                />
               </div>
               <p className="relative mt-4 text-center text-xs text-[oklch(0.62_0.01_60)] lg:text-left">
                 A sua loja — faturamento, taxas e o que sobra em cada plataforma.
@@ -1552,7 +1607,7 @@ export function LandingV3({
 
           {/* Botões + garantia (no mobile, DEPOIS da tela) */}
           <div className="mt-8 text-center lg:col-start-1 lg:row-start-2 lg:mt-9 lg:text-left">
-            <Reveal delay={240}>
+            <Reveal imediato delay={240}>
               <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <a href="#experimente" className="btn-brand grp inline-flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-medium">
                   <Upload className="size-[18px]" strokeWidth={2.2} />
