@@ -869,8 +869,10 @@ export function conexaoSolicitada99(d: {
             <p style="margin:10px 0 0;font-size:14px;">É uma autorização <strong>por loja</strong>: autorizar numa não vale para as outras.</p>
           </td></tr>
         </table>
-        <p style="margin:0 0 14px;">Assim que você autorizar, a loja aparece pra nós e o faturamento passa a entrar sozinho, todo dia — com o histórico junto na primeira carga.</p>
+        <p style="margin:0 0 14px;">Autorizou? <strong>Volte aqui e clique em "Já autorizei"</strong> no aviso do topo da tela inicial. A gente confere no 99 na hora e, se já estiver lá, a loja conecta na mesma hora — o 99 não avisa a gente sozinho, então esse clique é o que fecha o ciclo.</p>
+        <p style="margin:0 0 14px;">Conectada, o faturamento passa a entrar todo dia — com o histórico junto na primeira carga.</p>
         <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Não achou onde autorizar? Me responde aqui que eu te mostro o caminho.</p>`,
+      cta: { texto: "Abrir o Delivery OS", url: `${SITE}/inicio` },
       ps: `Depois de autorizar, acompanhe por aqui: ${SITE}/unidades`,
     }),
   }
