@@ -4,6 +4,7 @@ import * as React from "react"
 import { PartyPopper, Star, X } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
+import { fecharAviso } from "@/app/(app)/_actions-avisos"
 import type {
   ConexaoNova,
   PrimeiraAvaliacao,
@@ -27,39 +28,43 @@ const ROTULO = {
  * está trazendo, "já trazendo dado" quando chegou. Dizer "pronto!" com a tela
  * ainda vazia seria prometer o que a pessoa não vê.
  */
-export function ConexaoNovaAviso({ conexoes }: { conexoes: ConexaoNova[] }) {
+export function ConexaoNovaAviso({
+  conexoes,
+  fechados: fechadosDoServidor = [],
+}: {
+  conexoes: ConexaoNova[]
+  /** Chaves já fechadas por esta pessoa, vindas do banco. */
+  fechados?: string[]
+}) {
   /**
    * Fechar é COMPLEMENTO do prazo de 7 dias, não substituto.
    *
-   * O aviso do iFood já aprendeu isso: o "fechar" mora no localStorage, então
-   * some ao trocar de navegador ou de celular — a DG FOODS chegou a ter 47
-   * avisos voltando a cada aparelho novo. Por isso o sumiço definitivo continua
-   * sendo o prazo (servidor, vale em todo lugar) e o X serve pra quem quer
-   * limpar a tela agora.
+   * ⚠️ O X JÁ MOROU NO localStorage E NÃO FUNCIONAVA. localStorage é por
+   * navegador E por origem: fechar no desktop não fechava no celular, sumia ao
+   * limpar dados e não existia em aba anônima. A DG FOODS chegou a ter 47
+   * avisos voltando a cada aparelho novo, e em 19/08/26 o Marcus fechou o aviso
+   * da Brooklin e ele voltou toda vez. Agora o fechamento vai pro banco, por
+   * usuário — vale em qualquer lugar em que ele entrar.
+   *
+   * O estado local existe só pra sumir na hora do clique, sem esperar a
+   * ida ao servidor.
    */
-  const [fechados, setFechados] = React.useState<string[]>([])
-  React.useEffect(() => {
-    try {
-      setFechados(
-        JSON.parse(localStorage.getItem("conexao-nova-fechados") ?? "[]"),
-      )
-    } catch {
-      // localStorage indisponível (aba anônima, storage cheio): mostrar o
-      // aviso é o comportamento seguro.
-    }
-  }, [])
+  const [fechadosAgora, setFechadosAgora] = React.useState<string[]>([])
 
   function fechar(chave: string) {
-    const novo = [...fechados, chave]
-    setFechados(novo)
-    try {
-      localStorage.setItem("conexao-nova-fechados", JSON.stringify(novo))
-    } catch {}
+    setFechadosAgora((atual) => [...atual, chave])
+    // Sem await: se falhar, o aviso volta no próximo carregamento — que é o
+    // lado certo de errar num aviso de "sua loja conectou".
+    void fecharAviso(`conexao-nova|${chave}`)
   }
 
-  const visiveis = conexoes.filter(
-    (c) => !fechados.includes(`${c.plataforma}|${c.unitId}`),
-  )
+  const visiveis = conexoes.filter((c) => {
+    const chave = `${c.plataforma}|${c.unitId}`
+    return (
+      !fechadosAgora.includes(chave) &&
+      !fechadosDoServidor.includes(`conexao-nova|${chave}`)
+    )
+  })
   if (visiveis.length === 0) return null
 
   return (

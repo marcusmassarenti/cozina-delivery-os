@@ -130,6 +130,7 @@ import { createClient } from "@/lib/supabase/server"
 import { criarCronometro } from "@/lib/perf"
 import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 import { getVendasPorDiaSemana } from "@/lib/data/dia-semana"
+import { getAvisosFechados } from "@/lib/data/avisos-fechados"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { getPlacarResposta } from "@/lib/data/avaliacoes-pendentes"
 import { PlacarRespostaCard } from "../avaliacoes/_components/placar-resposta"
@@ -430,10 +431,12 @@ export default async function Home({
   // Placar de resposta às avaliações — mesmo escopo do resto da tela.
   const placarResposta = await getPlacarResposta(activeUnitIds)
 
-  const [conexoesNovas, primeirasAvaliacoes] = await Promise.all([
+  const [conexoesNovas, primeirasAvaliacoes, fechadosSet] = await Promise.all([
     getConexoesNovas(activeUnitIds),
     getPrimeirasAvaliacoes(activeUnitIds),
+    getAvisosFechados(),
   ])
+  const avisosFechados = [...fechadosSet]
 
   const diaSemanaRede = await getVendasPorDiaSemana(
     activeUnitIds,
@@ -1178,7 +1181,7 @@ export default async function Home({
           solicitacoes={minhasSolicitacoesIfood} />
 
       {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
-      <ConexaoNovaAviso conexoes={conexoesNovas} />
+      <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />
 
       {/* Avaliação tem rotina própria — ver o componente. */}
       <PrimeiraAvaliacaoAviso itens={primeirasAvaliacoes} />
