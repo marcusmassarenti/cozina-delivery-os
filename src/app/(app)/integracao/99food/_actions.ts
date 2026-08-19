@@ -77,6 +77,92 @@ export async function atualizarSolicitacao99(
  * merece erro claro — repontar sem avisar faria o financeiro de uma loja
  * aparecer na outra.
  */
+/**
+ * Pede AO CLIENTE que autorize o Delivery OS no portal do 99.
+ *
+ * ── POR QUE (Marcus, 19/08/26) ───────────────────────────────────────────
+ * Quando a loja não aparece no `/v1/shop/list`, a conclusão é uma só: o
+ * lojista não autorizou. Só que não havia como cutucá-lo de dentro do sistema
+ * — o jeito era sair, achar o contato e escrever à mão, e é aí que o
+ * onboarding para por dias sem ninguém perceber.
+ *
+ * Faz as duas coisas de uma vez: manda o e-mail E deixa o pedido em
+ * "solicitada", que é o estado que acende a faixa na tela de Início DELE. Um
+ * canal só não basta: e-mail some na caixa, faixa só aparece se ele entrar.
+ *
+ * Nunca derruba o status por causa do e-mail — o texto de retorno diz se o
+ * aviso saiu, pra quem clicou não ficar no escuro.
+ */
+export async function avisarClienteAutorizar99(
+  _prev: Solicitacao99State,
+  formData: FormData,
+): Promise<Solicitacao99State> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Só o dono da plataforma pode fazer isso." }
+  }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, error: "Solicitação não informada." }
+
+  const admin = createAdminClient()
+  const { data: req } = await admin
+    .from("ninefood_activation_requests")
+    .select("cnpj, holding_id, unit_id, units(name)")
+    .eq("id", id)
+    .maybeSingle()
+  if (!req) return { ok: false, error: "Solicitação não encontrada." }
+
+  await admin
+    .from("ninefood_activation_requests")
+    .update({ status: "solicitada", updated_at: new Date().toISOString() })
+    .eq("id", id)
+
+  let aviso = "Não avisei por e-mail: solicitação sem empresa."
+  const holdingId = (req as { holding_id: string | null }).holding_id
+  if (holdingId) {
+    try {
+      const { contatoDaHolding } = await import("@/lib/email/contato-holding")
+      const { enviarEmail } = await import("@/lib/email/enviar")
+      const { conexaoSolicitada99 } = await import("@/lib/email/templates")
+      const contato = await contatoDaHolding(holdingId)
+      if (!contato) {
+        aviso =
+          "Não avisei por e-mail: a empresa não tem administrador com e-mail confirmado."
+      } else {
+        const loja =
+          (req as { units?: { name?: string } | null }).units?.name ?? null
+        const { assunto, html } = conexaoSolicitada99({
+          nome: contato.nome,
+          loja,
+          cnpj: String((req as { cnpj: string }).cnpj ?? ""),
+        })
+        const r = await enviarEmail({
+          holdingId,
+          tipo: "conexao-solicitada-99",
+          para: contato.email,
+          assunto,
+          html,
+          // Um cliente com várias lojas tem um pedido por loja: sem forçar, o
+          // segundo seria engolido como repetido e ele nunca saberia.
+          forcar: true,
+        })
+        aviso = r.ok
+          ? `Avisei ${contato.email} por e-mail.`
+          : `Não consegui avisar por e-mail: ${r.erro ?? "falha no envio"}.`
+      }
+    } catch (e) {
+      console.error("avisarClienteAutorizar99", e)
+      aviso = "Não consegui avisar por e-mail (erro interno)."
+    }
+  }
+
+  revalidatePath("/integracao/99food")
+  revalidatePath("/inicio")
+  return { ok: true, message: `Pedido marcado como solicitado. ${aviso}` }
+}
+
 export type Verificacao99 = {
   ok: boolean
   /** Lojas que o 99 já autorizou e que ainda não estão apontadas pra ninguém. */

@@ -25,6 +25,7 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section"
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { IfoodSolicitacoesAviso } from "@/components/dashboard/ifood-solicitacoes-aviso"
 import { IfoodClienteAviso } from "@/components/dashboard/ifood-cliente-aviso"
+import { Autorizar99Aviso } from "@/components/dashboard/autorizar-99-aviso"
 import {
   ConexaoNovaAviso,
   PrimeiraAvaliacaoAviso,
@@ -131,6 +132,7 @@ import { criarCronometro } from "@/lib/perf"
 import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 import { getVendasPorDiaSemana } from "@/lib/data/dia-semana"
 import { getAvisosFechados } from "@/lib/data/avisos-fechados"
+import { getMinhasSolicitacoes99 } from "@/lib/data/minhas-solicitacoes-99"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { getPlacarResposta } from "@/lib/data/avaliacoes-pendentes"
 import { PlacarRespostaCard } from "../avaliacoes/_components/placar-resposta"
@@ -431,10 +433,12 @@ export default async function Home({
   // Placar de resposta às avaliações — mesmo escopo do resto da tela.
   const placarResposta = await getPlacarResposta(activeUnitIds)
 
-  const [conexoesNovas, primeirasAvaliacoes, fechadosSet] = await Promise.all([
+  const [conexoesNovas, primeirasAvaliacoes, fechadosSet, minhasSolicitacoes99] =
+    await Promise.all([
     getConexoesNovas(activeUnitIds),
     getPrimeirasAvaliacoes(activeUnitIds),
     getAvisosFechados(),
+    getMinhasSolicitacoes99(),
   ])
   const avisosFechados = [...fechadosSet]
 
@@ -1179,6 +1183,10 @@ export default async function Home({
       {/* Cliente: falta aprovar no iFood / loja conectada. */}
       <IfoodClienteAviso
           solicitacoes={minhasSolicitacoesIfood} />
+
+      {/* Pendência do cliente no 99: a loja só aparece pra nós depois que ele
+          autoriza o app no portal dele. */}
+      <Autorizar99Aviso itens={minhasSolicitacoes99} />
 
       {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
       <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />

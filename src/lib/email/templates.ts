@@ -835,6 +835,48 @@ export function conexaoSolicitada(d: {
 }
 
 /**
+ * "Falta você autorizar no 99" — irmã de `conexaoSolicitada`, do iFood.
+ *
+ * O passo do 99 é OUTRO e por isso o texto não podia ser reaproveitado: lá o
+ * lojista aprova dois aplicativos no Portal do Parceiro; aqui ele autoriza o
+ * Delivery OS uma vez no portal do 99. Descrever o passo errado faz a pessoa
+ * procurar uma tela que não existe e concluir que o problema é nosso.
+ *
+ * Nasceu em 19/08/26: a Donna Tatta e a Açaí RG Estilo concluíram a esteira,
+ * mas o `/v1/shop/list` do 99 seguia devolvendo só as 10 de sempre — sinal de
+ * que a autorização nunca foi dada. Não havia como pedir sem sair do sistema.
+ */
+export function conexaoSolicitada99(d: {
+  nome: string | null
+  loja: string | null
+  cnpj: string
+}) {
+  const cnpjFmt =
+    d.cnpj.length === 14
+      ? `${d.cnpj.slice(0, 2)}.${d.cnpj.slice(2, 5)}.${d.cnpj.slice(5, 8)}/${d.cnpj.slice(8, 12)}-${d.cnpj.slice(12)}`
+      : d.cnpj
+  const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
+  return {
+    assunto: `Falta você autorizar no 99 Food${d.loja ? ` — ${d.loja}` : ""}`,
+    html: layout({
+      titulo: "Pedi a conexão no 99 Food. Agora falta você autorizar.",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Pedimos ao 99 Food a conexão${daLoja}, com o CNPJ <strong style="white-space:nowrap;">${cnpjFmt}</strong>. O último passo é seu — e leva menos de um minuto.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+          <tr><td style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+            No <strong>portal do 99 Food</strong>, autorize o aplicativo <strong>Delivery OS</strong> para esta loja.
+            <p style="margin:10px 0 0;font-size:14px;">Precisa estar logado com o usuário <strong>dono da loja</strong> — outros perfis não enxergam essa tela.</p>
+            <p style="margin:10px 0 0;font-size:14px;">É uma autorização <strong>por loja</strong>: autorizar numa não vale para as outras.</p>
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;">Assim que você autorizar, a loja aparece pra nós e o faturamento passa a entrar sozinho, todo dia — com o histórico junto na primeira carga.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Não achou onde autorizar? Me responde aqui que eu te mostro o caminho.</p>`,
+      ps: `Depois de autorizar, acompanhe por aqui: ${SITE}/unidades`,
+    }),
+  }
+}
+
+/**
  * Fechamento do mês com dias faltando (só planilha).
  *
  * O assunto e a primeira linha falam de DINHEIRO, não de tarefa. "Faltam 4

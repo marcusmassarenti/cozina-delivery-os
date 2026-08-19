@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 
 import {
   atualizarSolicitacao99,
+  avisarClienteAutorizar99,
   verificarLojas99,
   vincularLoja99,
   type Solicitacao99State,
@@ -98,8 +99,12 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
     vincularLoja99,
     { ok: false },
   )
-  const aviso = vincState.error ?? statusState.error
-  const sucesso = vincState.message ?? statusState.message
+  const [avisoState, avisarAction] = useActionState<Solicitacao99State, FormData>(
+    avisarClienteAutorizar99,
+    { ok: false },
+  )
+  const aviso = vincState.error ?? statusState.error ?? avisoState.error
+  const sucesso = vincState.message ?? statusState.message ?? avisoState.message
 
   if (itens.length === 0) {
     return (
@@ -161,6 +166,16 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
                 <input type="hidden" name="id" value={s.id} />
                 <input type="hidden" name="status" value="solicitada" />
                 <Botao rotulo="Pedi a autorização ao 99" />
+              </form>
+            )}
+
+            {/* Quando a loja não aparece no portal, a conclusão é uma só: o
+                lojista não autorizou. Este botão manda o e-mail E acende a
+                faixa na tela de Início dele — um canal só não basta. */}
+            {s.status !== "ativa" && s.status !== "recusada" && (
+              <form action={avisarAction} className="contents">
+                <input type="hidden" name="id" value={s.id} />
+                <Botao rotulo="Avisar cliente pra autorizar" variante="default" />
               </form>
             )}
 

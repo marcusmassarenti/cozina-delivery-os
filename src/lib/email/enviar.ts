@@ -51,6 +51,7 @@ export type TipoEmail =
    * repetido e o dono nunca saberia que tem outra loja esperando.
    */
   | "conexao-solicitada"
+  | "conexao-solicitada-99"
   /**
    * "Conectado — olha o que já entrou", com o primeiro resultado. Uma vez por
    * loja × plataforma (o carimbo mora em unit_platforms.email_conectado_at).
