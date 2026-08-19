@@ -1551,6 +1551,12 @@ export function LandingV3({
         </div>
       </nav>
 
+      {/* Ponto de referência principal.
+          A página não tinha nenhum: o leitor de tela não conseguia pular a
+          navegação e ia lendo tudo desde o começo. Foi o que o Lighthouse
+          apontou como "o documento não tem um ponto de referência principal". */}
+      <main>
+
       {/* ══════════════ ATO 1 — DONO DE LOJA ══════════════ */}
 
       {/* HERO */}
@@ -2421,6 +2427,8 @@ export function LandingV3({
       </section>
 
       {/* FOOTER */}
+      </main>
+
       <footer className="bg-[var(--ink2)] py-8 pb-24 text-white/70 sm:pb-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 px-5 sm:flex-row">
           <div className="flex flex-col items-center gap-3 sm:items-start">
