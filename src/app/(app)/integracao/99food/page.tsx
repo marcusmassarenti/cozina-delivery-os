@@ -23,7 +23,7 @@ export default async function Fila99Page() {
   const { data } = await admin
     .from("ninefood_activation_requests")
     .select(
-      "id, cnpj, loja_99, status, nota, created_at, holdings(name), units(code, name)",
+      "id, cnpj, loja_99, status, nota, created_at, cliente_confirmou_at, holdings(name), units(code, name)",
     )
     .order("created_at", { ascending: false })
     .limit(200)
@@ -36,6 +36,7 @@ export default async function Fila99Page() {
       status: Solicitacao99["status"]
       nota: string | null
       created_at: string
+      cliente_confirmou_at: string | null
       holdings: { name: string } | null
       units: { code: string | null; name: string } | null
     }>
@@ -50,6 +51,7 @@ export default async function Fila99Page() {
       ? `${r.units.code ? `${r.units.code} · ` : ""}${r.units.name}`
       : null,
     createdAt: r.created_at,
+    clienteConfirmouEm: r.cliente_confirmou_at,
   }))
 
   // Em aberto primeiro: a fila serve pra AGIR, e o resolvido é histórico.

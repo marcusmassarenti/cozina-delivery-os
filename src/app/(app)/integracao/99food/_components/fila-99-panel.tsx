@@ -25,6 +25,8 @@ export type Solicitacao99 = {
   holdingName: string
   unitLabel: string | null
   createdAt: string
+  /** Quando o lojista clicou em "Já autorizei" no aviso da tela dele. */
+  clienteConfirmouEm: string | null
 }
 
 function fmtCnpj(d: string): string {
@@ -145,6 +147,14 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
                   {ROTULO[s.status].txt}
                 </span>
               </div>
+              {/* O cliente avisou que autorizou: é a NOSSA vez. Sem este selo
+                  o carimbo cairia no vazio e ele ficaria esperando de novo. */}
+              {s.clienteConfirmouEm && s.status !== "ativa" && (
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+                  Cliente diz que autorizou em{" "}
+                  {new Date(s.clienteConfirmouEm).toLocaleDateString("pt-BR")}
+                </p>
+              )}
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {s.unitLabel ?? "sem unidade"} · <CopiarCnpj cnpj={s.cnpj} />
                 {s.loja99 ? ` · "${s.loja99}"` : ""}

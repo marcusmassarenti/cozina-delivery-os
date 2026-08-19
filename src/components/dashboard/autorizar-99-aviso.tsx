@@ -1,6 +1,16 @@
 "use client"
 
-import { AlertCircle } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useActionState } from "react"
+import { useFormStatus } from "react-dom"
+import * as React from "react"
+import { AlertCircle, CheckCircle2 } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import {
+  confirmeiAutorizacao99,
+  type Confirmacao99,
+} from "@/app/(app)/_actions-conexao-99"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import type { MinhaSolicitacao99 } from "@/lib/data/minhas-solicitacoes-99"
@@ -56,9 +66,63 @@ export function Autorizar99Aviso({
               autorizar numa não vale para as outras. Assim que sair, o
               faturamento passa a entrar sozinho.
             </p>
+            <ConfirmeiBotao id={s.id} />
           </div>
         </div>
       ))}
     </div>
+  )
+}
+
+function Submit() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" size="sm" variant="outline" disabled={pending}>
+      {pending ? "Conferindo no 99..." : "Já autorizei"}
+    </Button>
+  )
+}
+
+/**
+ * O botão que fecha o ciclo do lado do cliente.
+ *
+ * ⚠️ NÃO É SÓ UM "AVISEI". O 99 responde na hora, então o clique já pergunta ao
+ * portal e conecta sozinho quando dá. Um botão que só registra a intenção
+ * devolveria a bola pra nós sem ninguém saber — que era exatamente o problema.
+ *
+ * A resposta é honesta nos três casos, inclusive no chato: se o 99 ainda não
+ * mostra a autorização, o texto diz isso e o que conferir, em vez de um "tudo
+ * certo!" que não se confirma.
+ */
+function ConfirmeiBotao({ id }: { id: string }) {
+  const router = useRouter()
+  const [state, action] = useActionState<Confirmacao99, FormData>(
+    confirmeiAutorizacao99,
+    { ok: false },
+  )
+  React.useEffect(() => {
+    if (state.conectou) router.refresh()
+  }, [state.conectou, router])
+
+  if (state.message) {
+    return (
+      <p className="mt-2 flex items-start gap-1.5 text-[12.5px] text-muted-foreground">
+        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <span>{state.message}</span>
+      </p>
+    )
+  }
+
+  return (
+    <form action={action} className="mt-2.5 flex flex-wrap items-center gap-2">
+      <input type="hidden" name="id" value={id} />
+      <Submit />
+      <span className="text-[11px] text-muted-foreground">
+        Conferimos no 99 na hora — se já estiver lá, conecta na mesma hora.
+      </span>
+      {state.error && (
+        <span className="text-[11px] text-destructive">{state.error}</span>
+      )}
+    </form>
   )
 }
