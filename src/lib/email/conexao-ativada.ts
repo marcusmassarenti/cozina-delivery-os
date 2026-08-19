@@ -194,6 +194,76 @@ export async function resumoDaLoja(
 }
 
 /**
+ * O HISTÓRICO JÁ FECHOU? Enquanto não fechou, este e-mail não sai.
+ *
+ * ── NASCEU DE UM ERRO, EM 18/08/26 ───────────────────────────────────────
+ * A CR Poços recebeu "Pronto: o iFood está conectado" com R$ 22.225,18, fev a
+ * ago/26, 337 pedidos. Poucas horas depois o backfill fechou e o número real
+ * era R$ 69.353,77, jan a ago/26, 1.247 pedidos. O e-mail não estava errado no
+ * momento em que saiu — ele fotografou o meio da carga e apresentou como o ano
+ * inteiro. E como sai UMA VEZ SÓ, não existe segunda mensagem pra corrigir: o
+ * cliente fica com a impressão de que a rede dele fatura um terço do que fatura.
+ *
+ * A regra, então: número que apresenta o histórico só pode sair depois que o
+ * histórico existe. Esperar algumas horas custa muito menos que mentir uma vez.
+ *
+ * ── O SINAL É DIFERENTE EM CADA PLATAFORMA ───────────────────────────────
+ *  • iFood — `unit_platforms.historico_backfill_at`, carimbado por
+ *    `backfillPendentes` quando TODOS os meses chegaram (o extrato é
+ *    assíncrono; mês faltando não avisa que falta).
+ *  • Cardápio Web — `cardapioweb_sync_state.backfill_concluido`. O histórico
+ *    vem em janelas de 30 dias por rodada, então leva algumas noites.
+ *  • 99 Food — `ninefood_store_links.historico_backfill_at`, carimbado pelo
+ *    cron do 99 depois de puxar do limite mais antigo da API até hoje.
+ *
+ * Loja sem nenhum vínculo na plataforma devolve `false`: sem vínculo não há
+ * backfill pra fechar, e sem backfill não há e-mail.
+ */
+async function historicoFechado(
+  admin: ReturnType<typeof createAdminClient>,
+  unitId: string,
+  plataforma: PlataformaConexao,
+): Promise<boolean> {
+  if (plataforma === "ifood") {
+    const { data } = await admin
+      .from("unit_platforms")
+      .select("historico_backfill_at")
+      .eq("unit_id", unitId)
+      .eq("platform", "ifood")
+      .maybeSingle()
+    return Boolean(data?.historico_backfill_at)
+  }
+
+  if (plataforma === "99food") {
+    const { data } = await admin
+      .from("ninefood_store_links")
+      .select("historico_backfill_at")
+      .eq("unit_id", unitId)
+      .eq("active", true)
+    const links = (data ?? []) as { historico_backfill_at: string | null }[]
+    // Uma unidade pode ter mais de um app_shop_id. Fechou = todos fecharam.
+    return links.length > 0 && links.every((l) => l.historico_backfill_at)
+  }
+
+  const { data: inst } = await admin
+    .from("cardapioweb_installs")
+    .select("id")
+    .eq("unit_id", unitId)
+    .eq("active", true)
+  const ids = ((inst ?? []) as { id: string }[]).map((i) => i.id)
+  if (ids.length === 0) return false
+
+  const { data: est } = await admin
+    .from("cardapioweb_sync_state")
+    .select("install_id")
+    .in("install_id", ids)
+    .eq("backfill_concluido", true)
+  // Instalação sem linha de estado é instalação que nunca sincronizou: conta
+  // como não-fechada, e é por isso que a comparação é por quantidade.
+  return ((est ?? []) as unknown[]).length === ids.length
+}
+
+/**
  * Avisa o cliente, uma vez, que a plataforma está conectada e trazendo dado.
  *
  * NUNCA LANÇA: isto roda dentro do sync. Falhar o e-mail não pode derrubar a
@@ -226,6 +296,15 @@ export async function avisarConexaoAtivada(
       const previa = await resumoDaLoja(unitId, plataforma)
       if (!previa.temDado || previa.pendencias.length > 0) return
     }
+
+    // O portão do histórico, e ele NÃO é opcional.
+    //
+    // De propósito não virou `opts`: todo caller quer o mesmo — mandar quando
+    // o número for verdadeiro. Deixar como flag é convidar o próximo caller a
+    // esquecer, e o custo do esquecimento é o e-mail com um terço da receita.
+    // Quem chega cedo não perde nada: continua sem carimbo e cai na varredura
+    // seguinte da própria plataforma, já com o histórico inteiro.
+    if (!(await historicoFechado(admin, unitId, plataforma))) return
 
     // Carimba ANTES de enviar, e só segue se a marcação for minha.
     //
@@ -314,17 +393,31 @@ export async function avisarConexaoAtivada(
  * Loja que conectou mas ainda não trouxe nada não recebe nada e continua na
  * fila -- `avisarConexaoAtivada` devolve o carimbo quando não acha dado.
  */
-export async function varrerConexoesNovas(): Promise<{
+export async function varrerConexoesNovas(
+  opts: { apenas?: PlataformaConexao } = {},
+): Promise<{
   avaliadas: number
   enviados: number
 }> {
   const admin = createAdminClient()
+  /**
+   * `apenas` existe pra varrer no fim do cron da própria plataforma.
+   *
+   * A janela das 7h resolve o problema do iFood (financeiro 6h, avaliações
+   * 7h), mas prendia as outras duas a ela: loja do 99 cujo histórico fecha às
+   * 5h05 esperaria mais 26 horas por um e-mail que já era verdade. Filtrando
+   * pela plataforma, cada cron avisa o seu logo depois de fechar o histórico —
+   * e o iFood continua saindo só às 7h, quando as duas pontas já rodaram.
+   */
   const { data } = await admin
     .from("unit_platforms")
     .select("unit_id, platform, api_store_id")
     .is("email_conectado_at", null)
     .eq("active", true)
-    .in("platform", ["ifood", "99food", "cardapioweb"])
+    .in(
+      "platform",
+      opts.apenas ? [opts.apenas] : ["ifood", "99food", "cardapioweb"],
+    )
 
   const candidatos = (data ?? []) as {
     unit_id: string

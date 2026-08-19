@@ -294,10 +294,12 @@ export async function linkMerchantToUnit(
      * dado começava a entrar e o cliente só descobria se abrisse o painel por
      * conta própria — justo no momento em que ele está esperando notícia.
      *
-     * `soSeCompleto` segura o envio enquanto não há dado. O e-mail sai UMA vez
-     * por (loja, plataforma) e leva os números dentro; mandá-lo vazio queimaria
-     * a única chance pra dizer "conectado" sem mostrar nada. Se ainda não
-     * entrou nada, a varredura das 7h manda quando entrar.
+     * Na prática esta chamada quase nunca envia agora, e é de propósito: o
+     * e-mail leva os números dentro e sai UMA vez, então ele espera o
+     * histórico FECHAR (ver `historicoFechado`). Quem vincula agora recebe
+     * quando o backfill terminar — pelo cron do backfill, ou pela varredura
+     * das 7h. A chamada fica porque a loja que já tem histórico fechado (um
+     * revínculo, por exemplo) merece o aviso na hora.
      *
      * Não derruba o vínculo se falhar: a loja conectada vale mais que o aviso.
      */
@@ -307,7 +309,8 @@ export async function linkMerchantToUnit(
         "@/lib/email/conexao-ativada"
       )
       await avisarConexaoAtivada(unitId, "ifood", { soSeCompleto: true })
-      aviso = " O cliente foi avisado por e-mail (ou será, quando o primeiro dado entrar)."
+      aviso =
+        " O cliente é avisado por e-mail quando o histórico terminar de entrar."
     } catch (e) {
       console.error("[link-merchant] aviso de conexão:", e)
     }

@@ -17,6 +17,7 @@
  */
 import { sincronizarTodas } from "@/lib/cardapioweb/sync"
 import { registrarCron } from "@/lib/cron/registrar"
+import { varrerConexoesNovas } from "@/lib/email/conexao-ativada"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -43,6 +44,21 @@ export async function GET(req: Request) {
       const naFila = rs.reduce((s, r) => s + (r.detalhe?.restantes ?? 0), 0)
       const comErro = rs.filter((r) => r.erro).length
 
+      /**
+       * Avisa quem fechou o histórico nesta rodada.
+       *
+       * O Cardápio Web traz o ano em janelas de 30 dias, uma por noite — o
+       * e-mail "está conectado" leva os números dentro e sai uma vez só, então
+       * ele espera `backfill_concluido`. `apenas` deixa o iFood de fora: o
+       * cron dele às 6h ainda não passou pelas avaliações das 7h.
+       */
+      let avisos = { avaliadas: 0, enviados: 0 }
+      try {
+        avisos = await varrerConexoesNovas({ apenas: "cardapioweb" })
+      } catch (e) {
+        console.error("[cardapioweb] aviso de conexão:", e)
+      }
+
       return Response.json({
         ok: true,
         ranAt: new Date().toISOString(),
@@ -52,6 +68,7 @@ export async function GET(req: Request) {
         naFila,
         // Quantas já puxaram o ano inteiro e esvaziaram a fila.
         concluidas: rs.filter((r) => r.concluido).length,
+        avisos,
         comErro,
         detalhe: rs.map((r) => ({
           loja: r.loja,

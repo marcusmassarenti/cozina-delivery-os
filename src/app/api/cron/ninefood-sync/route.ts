@@ -13,6 +13,8 @@ import { syncNinefoodFinanceiro } from "@/lib/ninefood/sync-financeiro"
 import { syncNinefoodCardapio } from "@/lib/ninefood/sync-cardapio"
 import { registrarCron } from "@/lib/cron/registrar"
 import { sincronizarLojas99 } from "@/lib/ninefood/lojas"
+import { backfillHistorico99 } from "@/lib/ninefood/backfill"
+import { varrerConexoesNovas } from "@/lib/email/conexao-ativada"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -101,13 +103,45 @@ export async function GET(req: Request) {
     })
   }
 
+  /**
+   * Loja nova: o histórico inteiro, uma vez.
+   *
+   * Depois do sync do dia a dia de propósito — o mês corrente é o que o
+   * cliente olha primeiro, e o backfill pode levar rodadas. Quem já foi
+   * carimbado nem é lido.
+   */
+  let backfill: Awaited<ReturnType<typeof backfillHistorico99>> = []
+  try {
+    backfill = await backfillHistorico99()
+  } catch (e) {
+    console.error("[99] backfill do histórico falhou:", e)
+  }
+
   const card = await syncNinefoodCardapio()
+
+  /**
+   * Só agora o e-mail "sua loja está conectada" pode sair: o histórico do 99
+   * acabou de fechar nesta mesma rodada. `apenas: "99food"` mantém o iFood na
+   * janela das 7h, quando o cron das avaliações dele já rodou.
+   */
+  let avisos = { avaliadas: 0, enviados: 0 }
+  try {
+    avisos = await varrerConexoesNovas({ apenas: "99food" })
+  } catch (e) {
+    console.error("[99] aviso de conexão:", e)
+  }
 
   return Response.json({
     lojas99,
     ok: true,
     ranAt: new Date().toISOString(),
     financeiro,
+    backfill: backfill.map(
+      (b) =>
+        `${b.loja ?? b.appShopId}: ${b.meses} meses, ${b.linhas} linhas` +
+        (b.concluido ? "" : ` ⚠️ ${b.erros.join(" · ")}`),
+    ),
+    avisos,
     cardapio: {
       lojas: card.results.length,
       erros: card.results.filter((x) => x.error).length,

@@ -240,8 +240,10 @@ export async function vincularUnidadeAction(
   }
 
   // Mesmo aviso do iFood: vincular é conectar, e o cliente merece saber com
-  // os números na mão. `soSeCompleto` segura enquanto não há dado — o e-mail
-  // sai uma vez só por (loja, plataforma) e mandá-lo vazio queima a chance.
+  // os números na mão — mas com o histórico FECHADO, não no meio da carga. O
+  // Cardápio Web traz o ano em janelas de 30 dias, então quem acabou de
+  // instalar só recebe daqui a algumas noites, pelo cron. A chamada fica pra
+  // quem revincula uma instalação cujo histórico já está completo.
   //
   // Só no VÍNCULO, nunca no desvínculo: unitId vazio é a pessoa desfazendo, e
   // "sua loja foi conectada" ali seria o oposto do que aconteceu.
