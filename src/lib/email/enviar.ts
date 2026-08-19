@@ -164,6 +164,46 @@ export type ResultadoEnvio = {
   erro?: string
   /** Não enviou porque já tinha sido enviado antes. */
   jaEnviado?: boolean
+  /**
+   * O e-mail saiu mas NÃO foi registrado no log.
+   *
+   * Sobe até a tela de propósito: sem a linha em `email_enviados` a trava de
+   * duplicidade não segura o próximo envio, então quem clicou precisa saber
+   * que o cliente pode receber de novo.
+   */
+  logErro?: string
+}
+
+/**
+ * Grava no log de envios — e RECLAMA quando não consegue.
+ *
+ * ⚠️ ESTE INSERT NÃO PODE FALHAR CALADO. Descoberto em 19/08/26: cinco e-mails
+ * "Falta você aprovar no iFood" e dois do 99 foram ENTREGUES pelo Resend e não
+ * deixaram uma linha aqui. A tela dizia "Avisei fulano por e-mail" e o log
+ * dizia que nada tinha saído.
+ *
+ * O estrago não é só o relatório errado: `email_enviados` é a trava de
+ * duplicidade. Log que não grava faz a régua achar que nunca mandou — e o
+ * cliente recebe o mesmo e-mail de novo, todo dia, até alguém reparar.
+ */
+async function registrar(
+  admin: ReturnType<typeof createAdminClient>,
+  linha: {
+    holding_id: string | null
+    tipo: TipoEmail
+    destinatario: string
+    resend_id?: string | null
+    erro?: string | null
+    forcado: boolean
+  },
+): Promise<string | undefined> {
+  const { error } = await admin.from("email_enviados").insert(linha)
+  if (!error) return undefined
+  console.error(
+    `[email] NÃO REGISTREI o envio (${linha.tipo} → ${linha.destinatario}): ${error.message}. ` +
+      "O e-mail pode ter saído mesmo assim — e sem esta linha a trava de duplicidade não segura o próximo.",
+  )
+  return error.message
 }
 
 /**
@@ -177,7 +217,15 @@ export async function enviarEmail(input: {
   para: string
   assunto: string
   html: string
-  /** Ignora a trava de duplicidade (só pra teste manual). */
+  /**
+   * Ignora a trava de duplicidade — para o que é "um por LOJA", não por
+   * cliente (aprovação do iFood/99, loja conectada, comprovante de proposta).
+   *
+   * ⚠️ ISTO PRECISA CHEGAR AO BANCO. O índice `email_enviados_unico` também
+   * trava por (holding, tipo), então até 19/08/26 o forçado enviava e não
+   * registrava: o e-mail saía e o log rejeitava calado. A coluna `forcado`
+   * tira essas linhas do índice.
+   */
   forcar?: boolean
 }): Promise<ResultadoEnvio> {
   const admin = createAdminClient()
@@ -197,11 +245,12 @@ export async function enviarEmail(input: {
   if (!chave) {
     // Sem chave o sistema segue: registra a intenção pra ficar visível que a
     // régua está montada mas não sai do lugar.
-    await admin.from("email_enviados").insert({
+    await registrar(admin, {
       holding_id: input.holdingId,
       tipo: input.tipo,
       destinatario: input.para,
       erro: "RESEND_API_KEY ausente",
+      forcado: input.forcar === true,
     })
     return { ok: false, erro: "RESEND_API_KEY ausente" }
   }
@@ -229,29 +278,32 @@ export async function enviarEmail(input: {
 
     if (!r.ok) {
       const erro = body.message ?? `HTTP ${r.status}`
-      await admin.from("email_enviados").insert({
+      await registrar(admin, {
         holding_id: input.holdingId,
         tipo: input.tipo,
         destinatario: input.para,
         erro,
+        forcado: input.forcar === true,
       })
       return { ok: false, erro }
     }
 
-    await admin.from("email_enviados").insert({
+    const logErro = await registrar(admin, {
       holding_id: input.holdingId,
       tipo: input.tipo,
       destinatario: input.para,
       resend_id: body.id ?? null,
+      forcado: input.forcar === true,
     })
-    return { ok: true, id: body.id }
+    return { ok: true, id: body.id, logErro }
   } catch (e) {
     const erro = e instanceof Error ? e.message : String(e)
-    await admin.from("email_enviados").insert({
+    await registrar(admin, {
       holding_id: input.holdingId,
       tipo: input.tipo,
       destinatario: input.para,
       erro,
+      forcado: input.forcar === true,
     })
     return { ok: false, erro }
   }

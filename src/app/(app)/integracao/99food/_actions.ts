@@ -149,7 +149,9 @@ export async function avisarClienteAutorizar99(
           forcar: true,
         })
         aviso = r.ok
-          ? `Avisei ${contato.email} por e-mail.`
+          ? `Avisei ${contato.email} por e-mail.${
+              r.logErro ? ` ⚠️ Não registrei no log: ${r.logErro}` : ""
+            }`
           : `Não consegui avisar por e-mail: ${r.erro ?? "falha no envio"}.`
       }
     } catch (e) {
