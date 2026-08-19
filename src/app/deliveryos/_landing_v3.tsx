@@ -1400,12 +1400,28 @@ function EsteiraClientes() {
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-white to-transparent sm:w-28" />
       <div className="esteira flex w-max items-center gap-10 sm:gap-14">
         {fila.map((l, i) => (
-          <img
+          /**
+           * ⚠️ 30 LOGOS × 2 (a fila é duplicada pro loop) = 60 imagens.
+           *
+           * Eram PNG crus de 240px, 1,6 MB no total, pra aparecer com 44px de
+           * altura. `loading="lazy"` não salvava: no 4G lento o Chrome carrega
+           * o que está a pouco mais de uma tela de distância, então as 60
+           * disputavam banda com o print do herói — e o LCP do celular ficava
+           * em 4,3 s mesmo com o herói já corrigido. Era também o "573 KiB de
+           * imagens" e o "sem width e height" do Lighthouse.
+           *
+           * Pelo next/image cada um vira WebP de ~112px. As dimensões reais
+           * vêm de `logos-clientes.ts`.
+           */
+          <Image
             key={`${l.src}-${i}`}
             src={l.src}
             alt={l.nome}
             title={l.nome}
+            width={l.w}
+            height={l.h}
             loading="lazy"
+            sizes="(min-width: 640px) 56px, 44px"
             // Altura fixa e largura automática: os logos vêm em proporções
             // diferentes e forçar um quadrado esmagaria os deitados.
             className="h-11 w-auto shrink-0 object-contain opacity-70 grayscale transition duration-300 hover:opacity-100 hover:grayscale-0 sm:h-14"
