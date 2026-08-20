@@ -23,36 +23,44 @@ import { Search, X } from "lucide-react"
 
 export type Aba = "pendencias" | "conectadas" | "ignoradas"
 
+const TOM: Record<Aba, string> = {
+  pendencias:
+    "data-[ativo=true]:border-amber-500 data-[ativo=true]:text-amber-700 dark:data-[ativo=true]:text-amber-400",
+  conectadas:
+    "data-[ativo=true]:border-emerald-500 data-[ativo=true]:text-emerald-700 dark:data-[ativo=true]:text-emerald-400",
+  ignoradas:
+    "data-[ativo=true]:border-muted-foreground data-[ativo=true]:text-foreground",
+}
+
+const ROTULO: Record<Aba, string> = {
+  pendencias: "Pendências",
+  conectadas: "Conectadas",
+  ignoradas: "Ignoradas",
+}
+
 export function Abas({
   contagens,
   children,
+  /**
+   * Quais abas existem. O 99 e o Cardápio Web não têm "ignoradas" — lá não há
+   * merchant solto pra arquivar —, e aba com zero permanente é ruído: ensina a
+   * pessoa a ignorar a régua de abas inteira.
+   */
+  abas = ["pendencias", "conectadas", "ignoradas"],
+  placeholder = "Loja, CNPJ, cliente ou razão social",
 }: {
-  contagens: Record<Aba, number>
+  contagens: Partial<Record<Aba, number>>
   /** Recebe a aba ativa e o texto da busca (minúsculo, sem acento). */
   children: (aba: Aba, busca: string) => React.ReactNode
+  abas?: Aba[]
+  placeholder?: string
 }) {
-  const [aba, setAba] = React.useState<Aba>("pendencias")
+  const [aba, setAba] = React.useState<Aba>(abas[0] ?? "pendencias")
   const [busca, setBusca] = React.useState("")
 
   const normalizada = React.useMemo(() => normalizar(busca), [busca])
 
-  const itens: { id: Aba; rotulo: string; tom: string }[] = [
-    {
-      id: "pendencias",
-      rotulo: "Pendências",
-      tom: "data-[ativo=true]:border-amber-500 data-[ativo=true]:text-amber-700 dark:data-[ativo=true]:text-amber-400",
-    },
-    {
-      id: "conectadas",
-      rotulo: "Conectadas",
-      tom: "data-[ativo=true]:border-emerald-500 data-[ativo=true]:text-emerald-700 dark:data-[ativo=true]:text-emerald-400",
-    },
-    {
-      id: "ignoradas",
-      rotulo: "Ignoradas",
-      tom: "data-[ativo=true]:border-muted-foreground data-[ativo=true]:text-foreground",
-    },
-  ]
+  const itens = abas.map((id) => ({ id, rotulo: ROTULO[id], tom: TOM[id] }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,7 +75,7 @@ export function Abas({
           >
             {i.rotulo}
             <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-              {contagens[i.id]}
+              {contagens[i.id] ?? 0}
             </span>
           </button>
         ))}
@@ -80,7 +88,7 @@ export function Abas({
           <input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Loja, CNPJ, cliente ou razão social"
+            placeholder={placeholder}
             className="w-full rounded-md border bg-background py-1.5 pl-8 pr-7 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
           />
           {busca && (

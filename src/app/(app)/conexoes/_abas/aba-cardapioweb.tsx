@@ -231,26 +231,26 @@ export async function AbaCardapioWeb({
   // sistema. Some pro cliente; pra mim aparece com ?sandbox=1.
   const mostrarAmbiente = superadmin && sp.sandbox === "1"
 
+  /**
+   * MESMO PADRÃO DO iFOOD (Marcus, 20/08/26).
+   *
+   * O cabeçalho próprio saiu: a aba já diz onde você está, e "voltar para
+   * importação" não faz mais sentido — a tela não é mais um beco, é uma aba
+   * ao lado das outras.
+   *
+   * Aqui só existem "conectadas": no Cardápio Web não há fila de solicitação
+   * (o lojista autoriza sozinho pelo link) nem merchant solto pra ignorar. A
+   * régua de sub-abas com uma aba só seria enfeite, então fica a busca — que
+   * é o que resolve com 11 instalações na tela.
+   */
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div>
-        <Link
-          href="/importacao"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Voltar para importação
-        </Link>
-        <h1 className="text-xl font-semibold tracking-tight">
-          Integração Cardápio Web
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {/* Antes: "o histórico entra em lotes — o sync é retomável". Descreve
-              como NÓS construímos, não o que o lojista precisa saber. */}
-          Conecte sua loja e os pedidos passam a entrar sozinhos. O histórico
-          antigo vem aos poucos: pode fechar a página e continuar depois.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        {/* Antes: "o histórico entra em lotes — o sync é retomável". Descreve
+            como NÓS construímos, não o que o lojista precisa saber. */}
+        Conecte a loja e os pedidos passam a entrar sozinhos. O histórico antigo
+        vem aos poucos: pode fechar a página e continuar depois.
+      </p>
 
       <ConectarLoja
         unidades={opcoesUnidade}

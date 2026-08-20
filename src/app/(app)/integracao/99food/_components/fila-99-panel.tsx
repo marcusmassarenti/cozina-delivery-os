@@ -2,10 +2,14 @@
 
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { Check, Copy, Link2, RefreshCw } from "lucide-react"
+import { Check, ChevronRight, Copy, Link2, RefreshCw } from "lucide-react"
 import * as React from "react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Abas,
+  combina,
+} from "@/app/(app)/integracao/ifood-merchants/_components/abas"
 
 import {
   atualizarSolicitacao99,
@@ -18,6 +22,8 @@ import {
 
 export type Solicitacao99 = {
   id: string
+  /** Loja já vinculada — alimenta a aba "Conectadas". */
+  appShopId?: string | null
   cnpj: string
   loja99: string | null
   status: "pendente" | "solicitada" | "ativa" | "recusada"
@@ -92,22 +98,58 @@ const ROTULO: Record<Solicitacao99["status"], { txt: string; cls: string }> = {
   },
 }
 
-export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
-  const [statusState, statusAction] = useActionState<
-    Solicitacao99State,
-    FormData
-  >(atualizarSolicitacao99, { ok: false })
-  const [vincState, vincAction] = useActionState<Solicitacao99State, FormData>(
-    vincularLoja99,
-    { ok: false },
+/**
+ * MESMO PADRÃO DO iFOOD (Marcus, 20/08/26: "siga exatamente o mesmo padrão").
+ *
+ * Antes esta tela era uma lista plana de cards: sem abas, sem busca e sem
+ * agrupar por cliente. Com 15 lojas de uma rede só, ela virava uma régua de
+ * rolagem — e era um jeito diferente de trabalhar a cada plataforma, o que
+ * obriga a reaprender a tela toda vez que se troca de aba.
+ *
+ * Agora: Pendências / Conectadas, busca que filtra as duas, e a fila agrupada
+ * por cliente com os blocos "Comigo" e "Com o cliente". "Ignoradas" não existe
+ * aqui — no 99 não há merchant solto pra arquivar.
+ */
+export function Fila99Panel({ itens: todos }: { itens: Solicitacao99[] }) {
+  return (
+    <Abas
+      abas={["pendencias", "conectadas"]}
+      placeholder="Loja, CNPJ ou cliente"
+      contagens={{
+        pendencias: todos.filter(
+          (s) => s.status === "pendente" || s.status === "solicitada",
+        ).length,
+        conectadas: todos.filter((s) => s.status === "ativa").length,
+      }}
+    >
+      {(aba, busca) => (
+        <Fila99Conteudo
+          busca={busca}
+          itens={todos
+            .filter((s) =>
+              aba === "conectadas"
+                ? s.status === "ativa"
+                : s.status !== "ativa",
+            )
+            .filter((s) => combina(busca, s.unitLabel, s.cnpj, s.holdingName, s.loja99))}
+          aba={aba}
+        />
+      )}
+    </Abas>
   )
-  const [avisoState, avisarAction] = useActionState<Solicitacao99State, FormData>(
-    avisarClienteAutorizar99,
-    { ok: false },
-  )
-  const aviso = vincState.error ?? statusState.error ?? avisoState.error
-  const sucesso = vincState.message ?? statusState.message ?? avisoState.message
+}
 
+function Fila99Conteudo({
+  itens,
+  aba,
+  busca,
+}: {
+  itens: Solicitacao99[]
+  aba: "pendencias" | "conectadas" | "ignoradas"
+  busca: string
+}) {
+  // O feedback de cada ação mora na LINHA (ver `Linha99`): aqui em cima ele
+  // aparecia em todas as linhas do grupo ao mesmo tempo.
   if (itens.length === 0) {
     return (
       <div className="rounded-lg border bg-card p-6 text-center">
@@ -122,25 +164,114 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {aviso && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
-          {aviso}
+      {aba === "pendencias" && <VerificarNo99 />}
+
+      {/* AGRUPADO POR CLIENTE, igual ao iFood. Com 15 lojas de uma rede só, a
+          lista plana obrigava a ler cliente por cliente pra achar a que
+          interessa — e some a noção de "esta rede toda está esperando". */}
+      {[...new Map(itens.map((s) => [s.holdingName, true])).keys()].map(
+        (cliente) => {
+          const doCliente = itens.filter((s) => s.holdingName === cliente)
+          const comigo = doCliente.filter((s) => s.status === "pendente")
+          const comCliente = doCliente.filter((s) => s.status === "solicitada")
+          const resto = doCliente.filter(
+            (s) => s.status !== "pendente" && s.status !== "solicitada",
+          )
+          return (
+            /* FECHADO por padrão (Marcus, 20/08/26: "quero que feche as abas e
+               eu abra quando precisar"). Com uma rede de 15 lojas aberta, o
+               segundo cliente já nasce fora da tela — o resumo na linha diz o
+               que tem dentro sem precisar abrir. Mesmo comportamento do iFood. */
+            <details
+              key={cliente}
+              // Buscando, abre: quem digitou um nome quer VER o resultado, não
+              // um bloco fechado com a contagem certa. Igual ao iFood.
+              open={Boolean(busca)}
+              className="group/cliente rounded-lg border bg-card"
+            >
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
+                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cliente:rotate-90" />
+                <span className="font-semibold">{cliente}</span>
+                <span className="text-xs text-muted-foreground">
+                  {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
+                  {comigo.length > 0 && ` · ${comigo.length} comigo`}
+                  {comCliente.length > 0 &&
+                    ` · ${comCliente.length} com o cliente`}
+                </span>
+              </summary>
+              <div className="border-t p-3">
+                <Grupo titulo="Comigo" itens={comigo} />
+                <Grupo titulo="Com o cliente" itens={comCliente} />
+                <Grupo titulo="Resolvidas" itens={resto} />
+              </div>
+            </details>
+          )
+        },
+      )}
+    </div>
+  )
+}
+
+/** Um bloco do agrupamento. Vazio não desenha — ver a nota do iFood. */
+function Grupo({ titulo, itens }: { titulo: string; itens: Solicitacao99[] }) {
+  if (itens.length === 0) return null
+  return (
+    <div className="mb-3 last:mb-0">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {titulo} · {itens.length}
+      </p>
+      <div className="space-y-2">
+        {itens.map((s) => (
+          <Linha99 key={s.id} s={s} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Uma solicitação do 99. Cada linha carrega os PRÓPRIOS estados de ação —
+ * mesmo desenho da `Linha` do iFood: com os hooks no pai, o retorno de uma
+ * ação aparecia em todas as linhas do grupo ao mesmo tempo.
+ */
+function Linha99({ s }: { s: Solicitacao99 }) {
+  const [statusState, statusAction] = useActionState<
+    Solicitacao99State,
+    FormData
+  >(atualizarSolicitacao99, { ok: false })
+  const [vincState, vincAction] = useActionState<Solicitacao99State, FormData>(
+    vincularLoja99,
+    { ok: false },
+  )
+  const [avisoState, avisarAction] = useActionState<
+    Solicitacao99State,
+    FormData
+  >(avisarClienteAutorizar99, { ok: false })
+  const erro = vincState.error ?? statusState.error ?? avisoState.error
+  const ok = vincState.message ?? statusState.message ?? avisoState.message
+
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      {erro && (
+        <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+          {erro}
         </p>
       )}
-      {sucesso && (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
-          {sucesso}
+      {ok && (
+        <p className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+          {ok}
         </p>
       )}
 
-      <VerificarNo99 />
-
-      {itens.map((s) => (
-        <div key={s.id} className="rounded-lg border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
+              {/* O cliente NÃO se repete aqui: já está no cabeçalho do
+                  agrupamento. Repetir empurra o nome da loja pra segunda
+                  linha, e é a loja que se procura. */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{s.holdingName}</span>
+                <span className="text-[13px] font-semibold">
+                  {s.unitLabel ?? "(loja sem nome)"}
+                </span>
                 <span
                   className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${ROTULO[s.status].cls}`}
                 >
@@ -156,7 +287,7 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
                 </p>
               )}
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {s.unitLabel ?? "sem unidade"} · <CopiarCnpj cnpj={s.cnpj} />
+                <CopiarCnpj cnpj={s.cnpj} />
                 {s.loja99 ? ` · "${s.loja99}"` : ""}
               </p>
               {s.nota && (
@@ -240,8 +371,6 @@ export function Fila99Panel({ itens }: { itens: Solicitacao99[] }) {
             )}
           </div>
         </div>
-      ))}
-    </div>
   )
 }
 
