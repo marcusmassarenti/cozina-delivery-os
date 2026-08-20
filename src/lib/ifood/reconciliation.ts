@@ -94,6 +94,40 @@ async function pedidoVigente(
  * viraria a causa do problema. Esquecer devolve o comportamento antigo: a
  * próxima tentativa pede um extrato novo.
  */
+/**
+ * Marca uma competência como SEM MOVIMENTO — e nunca mais pede o extrato dela.
+ *
+ * Ver a nota na migration `ifood_competencia_vazia`: sem essa memória o coletor
+ * redescobre o vazio a cada rodada e fica pedindo pra sempre um mês em que a
+ * loja não existia.
+ */
+export async function marcarCompetenciaVazia(
+  merchantId: string,
+  competencia: string,
+): Promise<void> {
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("ifood_competencia_vazia")
+    .upsert(
+      { merchant_id: merchantId, competencia },
+      { onConflict: "merchant_id,competencia" },
+    )
+  if (error) console.error("marcarCompetenciaVazia:", error.message)
+}
+
+/** As competências já confirmadas como sem movimento — pra pular na fila. */
+export async function competenciasVazias(): Promise<Set<string>> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ifood_competencia_vazia")
+    .select("merchant_id, competencia")
+  return new Set(
+    ((data ?? []) as { merchant_id: string; competencia: string }[]).map(
+      (r) => `${r.merchant_id}|${r.competencia}`,
+    ),
+  )
+}
+
 export async function esquecerPedido(
   merchantId: string,
   competencia: string,
@@ -328,6 +362,12 @@ export type ReconciliationRowsResult =
     }
   | {
       ok: false
+      /**
+       * A loja não teve movimento nesta competência — resposta DEFINITIVA do
+       * iFood, não falha transitória. Quem chama deve encerrar o mês, não
+       * reagendar. Ver a nota no ponto onde é setado.
+       */
+      vazio?: boolean
       linkStatus: number
       linkRaw?: string
       downloadUrl?: string
@@ -422,11 +462,31 @@ export async function downloadReconciliationRows(
     }
     if (s === "failed" || s === "error" || s === "expired") {
       await esquecerPedido(merchantId, competencia)
+      /**
+       * "No financial entries exist" NÃO É FALHA — é resposta definitiva.
+       *
+       * O iFood devolve isso quando a loja simplesmente não teve movimento na
+       * competência pedida: loja que abriu esse mês, mês anterior à
+       * inauguração, período em que ficou fechada. Não há nada pra buscar
+       * agora nem daqui a seis horas.
+       *
+       * Tratando como erro comum, o coletor repetia o mesmo pedido de 4 em 4
+       * minutos por horas — foi o caso da Magic Açaí em 20/08/26, vinculada às
+       * 18:30 e ainda martelando os meses de janeiro a julho às 19h. O teto de
+       * chamadas do iFood é POR APLICATIVO, então essa insistência inútil
+       * rouba banda das outras 60 lojas.
+       *
+       * `vazio: true` diz a quem chamou: encerre esta competência e siga.
+       */
+      const vazio = /no financial entries exist/i.test(st.raw ?? "")
       return {
         ok: false,
+        vazio,
         linkStatus: st.status,
         linkRaw: st.raw,
-        linkError: `Geração do extrato falhou (status "${s}")`,
+        linkError: vazio
+          ? "A loja não teve movimento no iFood nesta competência."
+          : `Geração do extrato falhou (status "${s}")`,
         retries: 0,
         durationMs: Date.now() - t0,
       }

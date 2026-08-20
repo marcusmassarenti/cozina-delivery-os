@@ -46,6 +46,9 @@ import {
   getReconciliationRequest,
   pedidosVigentes,
   requestReconciliation,
+  competenciasVazias,
+  marcarCompetenciaVazia,
+  esquecerPedido,
 } from "./reconciliation"
 import { syncReconciliationCompetencia } from "./sync"
 
@@ -67,6 +70,8 @@ export type ResultadoColeta = {
   prontos: number
   coletados: { loja: string; competencia: string; linhas: number }[]
   aindaGerando: number
+  /** Competências em que o iFood confirmou que a loja não vendeu. */
+  semMovimento: number
   falhas: { loja: string; competencia: string; erro: string }[]
   /** Prontos que não couberam nesta rodada — vão na próxima. */
   aBaixar: number
@@ -161,6 +166,7 @@ export async function coletarExtratosPendentes(
     prontos: 0,
     coletados: [],
     aindaGerando: 0,
+    semMovimento: 0,
     falhas: [],
     aBaixar: 0,
   }
@@ -197,6 +203,17 @@ export async function coletarExtratosPendentes(
     vigentes.set(`${p.merchantId}|${p.competencia}`, p.requestId)
   }
 
+  /**
+   * Competências que o iFood já confirmou VAZIAS não voltam pra fila.
+   *
+   * Ele responde "No financial entries exist ... in the requested time frame"
+   * quando a loja não vendeu no período — mês anterior à inauguração, por
+   * exemplo. Isso é definitivo, não transitório: pedir de novo daqui a quatro
+   * minutos dá exatamente a mesma resposta. Como o teto de chamadas do iFood é
+   * por APLICATIVO, insistir aqui rouba banda de todas as outras lojas.
+   */
+  const vazias = await competenciasVazias()
+
   // ── FASE 1: varredura de status (barata) ────────────────────────────────
   const prontos: { loja: Loja; competencia: string }[] = []
   for (const item of fila) {
@@ -206,6 +223,10 @@ export async function coletarExtratosPendentes(
       continue
     }
     const chave = `${item.loja.merchantId}|${item.competencia}`
+    if (vazias.has(chave)) {
+      out.semMovimento++
+      continue
+    }
     const requestId = vigentes.get(chave)
     out.conferidos++
 
@@ -227,8 +248,16 @@ export async function coletarExtratosPendentes(
 
       const st = await getReconciliationRequest(item.loja.merchantId, requestId)
       const s = (st.data?.status ?? "").toLowerCase()
-      if (st.ok && s === "processed") prontos.push(item)
-      else out.aindaGerando++
+      if (st.ok && s === "processed") {
+        prontos.push(item)
+      } else if (/no financial entries exist/i.test(st.raw ?? "")) {
+        // Definitivo: encerra a competência aqui e nunca mais pede.
+        await marcarCompetenciaVazia(item.loja.merchantId, item.competencia)
+        await esquecerPedido(item.loja.merchantId, item.competencia)
+        out.semMovimento++
+      } else {
+        out.aindaGerando++
+      }
     } catch (e) {
       out.falhas.push({
         loja: `${item.loja.unitCode} ${item.loja.unitName}`,
