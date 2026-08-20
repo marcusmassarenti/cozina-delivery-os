@@ -704,6 +704,93 @@ export async function setAppHabilitado(
  * sozinha não diz se você já lançou aquela ou se ela ainda está esperando você
  * — e é exatamente aí que uma some.
  */
+/**
+ * "Não achei essa loja no portal do iFood" — avisa o cliente e registra.
+ *
+ * ── POR QUE (Marcus, 20/08/26) ───────────────────────────────────────────
+ * Ao lançar o CNPJ no Portal do Desenvolvedor, às vezes a loja não está lá:
+ * CNPJ em processo de abertura, loja não publicada, ou cadastrada sob outro
+ * CNPJ. Não é recusa — a solicitação continua válida — mas a bola passa a ser
+ * do cliente, e sem avisar ela ficava parada em "sua vez" com cara de
+ * esquecimento nosso.
+ *
+ * Por isso NÃO recusa: muda para `solicitada` (bola com o cliente) e grava a
+ * nota. Recusar apagaria o pedido do aviso da home dele, que é justamente
+ * onde ele precisa continuar vendo que tem algo pendente.
+ */
+export async function avisarLojaNaoEncontrada(
+  _prev: SolicitacaoUpdateState,
+  formData: FormData,
+): Promise<SolicitacaoUpdateState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Só o dono da plataforma pode fazer isso." }
+  }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, error: "Solicitação não informada." }
+
+  const admin = createAdminClient()
+  const { data: req } = await admin
+    .from("ifood_activation_requests")
+    .select("cnpj, holding_id, status, units(name)")
+    .eq("id", id)
+    .maybeSingle()
+  if (!req) return { ok: false, error: "Solicitação não encontrada." }
+
+  const agora = new Date().toISOString()
+  await admin
+    .from("ifood_activation_requests")
+    .update({
+      status: "solicitada",
+      status_anterior: (req as { status?: string }).status ?? null,
+      nota: "Não encontrada no Portal do Desenvolvedor — cliente precisa confirmar o CNPJ ou avisar quando publicar",
+      updated_at: agora,
+    })
+    .eq("id", id)
+
+  let aviso = "Não avisei por e-mail: solicitação sem empresa."
+  const holdingId = (req as { holding_id: string | null }).holding_id
+  if (holdingId) {
+    try {
+      const { contatoDaHolding } = await import("@/lib/email/contato-holding")
+      const { enviarEmail } = await import("@/lib/email/enviar")
+      const { lojaNaoEncontradaIfood } = await import("@/lib/email/templates")
+      const contato = await contatoDaHolding(holdingId)
+      if (!contato) {
+        aviso =
+          "Não avisei por e-mail: a empresa não tem administrador com e-mail confirmado."
+      } else {
+        const { assunto, html } = lojaNaoEncontradaIfood({
+          nome: contato.nome,
+          loja: (req as { units?: { name?: string } | null }).units?.name ?? null,
+          cnpj: String((req as { cnpj: string }).cnpj ?? ""),
+        })
+        const r = await enviarEmail({
+          holdingId,
+          tipo: "ifood-nao-encontrada",
+          para: contato.email,
+          assunto,
+          html,
+          // Uma por LOJA: um cliente pode ter várias nessa situação.
+          forcar: true,
+        })
+        aviso = r.ok
+          ? `Avisei ${contato.email} por e-mail.`
+          : `Não consegui avisar por e-mail: ${r.erro ?? "falha no envio"}.`
+      }
+    } catch (e) {
+      console.error("avisarLojaNaoEncontrada", e)
+      aviso = "Não consegui avisar por e-mail (erro interno)."
+    }
+  }
+
+  revalidatePath("/integracao/ifood-merchants")
+  revalidatePath("/inicio")
+  return { ok: true, message: `Marcada como não encontrada. ${aviso}` }
+}
+
 export async function marcarLancadoNoPortal(
   _prev: SolicitacaoUpdateState,
   formData: FormData,

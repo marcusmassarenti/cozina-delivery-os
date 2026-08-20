@@ -35,6 +35,14 @@ export async function pedirConexaoEmLote(opts: {
   nota?: string
   /** Não manda e-mail — para quando quem chamou já vai avisar de outro jeito. */
   semAviso?: boolean
+  /**
+   * Manda o resumo mesmo que nenhuma solicitação seja NOVA.
+   *
+   * Serve pro caso que originou este módulo: as 30 já estavam gravadas (por
+   * SQL) e o que faltava era só o aviso. Sem isto, a guarda de "criadas === 0"
+   * engoliria justamente o e-mail que se quer recuperar.
+   */
+  avisarMesmoSemNovas?: boolean
 }): Promise<{ criadas: number; avisado: string }> {
   const admin = createAdminClient()
   const nota = opts.nota ?? "Cadastro em lote"
@@ -72,7 +80,7 @@ export async function pedirConexaoEmLote(opts: {
     }
   }
 
-  if (opts.semAviso || criadas === 0) {
+  if (opts.semAviso || (criadas === 0 && !opts.avisarMesmoSemNovas)) {
     return { criadas, avisado: "sem aviso" }
   }
 

@@ -51,6 +51,7 @@ export async function GET(req: Request) {
     })),
     plataformas: ["ifood", "99food"],
     nota: "Cadastro em lote de 15 lojas (19/08)",
+    avisarMesmoSemNovas: true,
   })
 
   return NextResponse.json({ ok: true, lojas: lojas.length, ...r })

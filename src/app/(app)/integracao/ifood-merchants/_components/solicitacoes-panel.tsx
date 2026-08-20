@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { combina } from "./abas"
 import {
   atualizarSolicitacaoIfood,
+  avisarLojaNaoEncontrada,
   compartilharLojaExistente,
   conferirLojasAutorizadas,
   desfazerStatusIfood,
@@ -251,6 +252,13 @@ function Linha({
             <CopiarCnpj cnpj={s.cnpj} />
             {podeMarcarLancado && (
               <BotaoLancado id={s.id} lancado={s.lancadoNoPortal} />
+            )}
+            {/* A loja pode simplesmente NÃO estar no portal — CNPJ em abertura,
+                loja não publicada, ou cadastrada sob outro CNPJ. Fica ao lado
+                do CNPJ porque é ali que a descoberta acontece: o operador acaba
+                de colar e não achou. */}
+            {s.status === "pendente" && (
+              <BotaoNaoEncontrada id={s.id} />
             )}
           </div>
         </div>
@@ -788,11 +796,36 @@ function Grupo({
                       conexão se fecha sozinha (checamos a cada 15 min).
                     </p>
                   )}
-                <div className="space-y-2">
-                  {doCliente.map((s) => (
-                    <Linha key={s.id} s={s} lojasDaRede={lojasDaRede} />
-                  ))}
-                </div>
+                {/* SEPARADO POR DE QUEM É A BOLA (Marcus, 20/08/26).
+                    Com 15 lojas de um cliente, "sua vez" e "com o cliente"
+                    intercaladas viravam uma lista só pra rolar: pra saber o que
+                    fazer era preciso ler selo por selo. Em dois blocos, o
+                    trabalho do dia é o primeiro bloco e acabou. */}
+                {(() => {
+                  const minhas = doCliente.filter((x) => vezDe(x) === "voce" || vezDe(x) === "confirmou")
+                  const delas = doCliente.filter((x) => vezDe(x) === "cliente")
+                  const outras = doCliente.filter((x) => vezDe(x) === "recusada")
+                  const Bloco = ({ titulo, itens }: { titulo: string; itens: SolicitacaoAdmin[] }) =>
+                    itens.length === 0 ? null : (
+                      <div className="mb-3 last:mb-0">
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {titulo} · {itens.length}
+                        </p>
+                        <div className="space-y-2">
+                          {itens.map((x) => (
+                            <Linha key={x.id} s={x} lojasDaRede={lojasDaRede} />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  return (
+                    <>
+                      <Bloco titulo="Comigo" itens={minhas} />
+                      <Bloco titulo="Com o cliente" itens={delas} />
+                      <Bloco titulo="Recusadas" itens={outras} />
+                    </>
+                  )
+                })()}
                 </div>
               </details>
             )
@@ -970,5 +1003,47 @@ function CompartilharLoja({
       {erro && <p className="text-[10px] text-rose-600">{erro}</p>}
       {msg && <p className="text-[10px] text-emerald-700">{msg}</p>}
     </div>
+  )
+}
+
+/**
+ * "Não achei essa loja no portal do iFood."
+ *
+ * Não é recusa: a solicitação continua válida e passa a esperar o cliente
+ * confirmar o CNPJ certo (ou avisar quando publicar a loja). Recusar apagaria
+ * o pedido do aviso da home dele — que é onde ele precisa continuar vendo a
+ * pendência.
+ */
+function BotaoNaoEncontrada({ id }: { id: string }) {
+  const [state, action] = useActionState<SolicitacaoUpdateState, FormData>(
+    avisarLojaNaoEncontrada,
+    { ok: false },
+  )
+  if (state.ok) {
+    return (
+      <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
+        avisado
+      </span>
+    )
+  }
+  return (
+    <form action={action} className="inline">
+      <input type="hidden" name="id" value={id} />
+      <SubmitNaoEncontrada />
+    </form>
+  )
+}
+
+function SubmitNaoEncontrada() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      title="A loja não aparece no Portal do Desenvolvedor — avisa o cliente e passa a bola pra ele"
+      className="text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-50"
+    >
+      {pending ? "avisando..." : "não achei no portal"}
+    </button>
   )
 }

@@ -879,6 +879,53 @@ export function conexaoSolicitada99(d: {
 }
 
 /**
+ * "Não achei sua loja no portal do iFood."
+ *
+ * ── POR QUE (Marcus, 20/08/26) ───────────────────────────────────────────
+ * Pra conectar, a gente lança o CNPJ no Portal do Desenvolvedor. Às vezes a
+ * loja simplesmente NÃO ESTÁ lá — CNPJ novo em processo de abertura, loja
+ * ainda não publicada, ou cadastrada no iFood sob outro CNPJ. Não é recusa
+ * nossa e não é erro do cliente; é uma pendência que só ele resolve, e sem
+ * avisar a solicitação ficava parada com cara de esquecimento.
+ *
+ * O texto NÃO acusa. Diz o que aconteceu, lista as três causas prováveis em
+ * ordem de probabilidade e pede a informação que destrava — sem essa lista, a
+ * resposta típica é "mas está tudo certo aqui", e o assunto morre.
+ */
+export function lojaNaoEncontradaIfood(d: {
+  nome: string | null
+  loja: string | null
+  cnpj: string
+}) {
+  const cnpjFmt =
+    d.cnpj.length === 14
+      ? `${d.cnpj.slice(0, 2)}.${d.cnpj.slice(2, 5)}.${d.cnpj.slice(5, 8)}/${d.cnpj.slice(8, 12)}-${d.cnpj.slice(12)}`
+      : d.cnpj
+  const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
+  return {
+    assunto: `Não achei sua loja no iFood${d.loja ? ` — ${d.loja}` : ""}`,
+    html: layout({
+      titulo: "Não encontrei essa loja no portal do iFood",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Fui cadastrar a conexão${daLoja} com o CNPJ <strong style="white-space:nowrap;">${cnpjFmt}</strong> e o portal do iFood não devolveu nenhuma loja com esse CNPJ.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+          <tr><td style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+            Costuma ser um destes três:
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;font-size:15px;line-height:1.7;">
+              <tr><td style="padding-right:8px;">1.</td><td>a loja <strong>ainda está em abertura</strong> no iFood e não foi publicada;</td></tr>
+              <tr><td style="padding-right:8px;">2.</td><td>ela está no iFood sob <strong>outro CNPJ</strong> (o da matriz, por exemplo);</td></tr>
+              <tr><td style="padding-right:8px;">3.</td><td>houve troca recente de titularidade e o cadastro antigo ainda consta.</td></tr>
+            </table>
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;">Me responde com o <strong>CNPJ que aparece no seu Portal do Parceiro</strong> — ou me avisa quando a loja for publicada — que eu cadastro na hora. É a única coisa que falta.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Enquanto isso, o resto da sua operação segue normal: isso vale só pra essa loja.</p>`,
+      ps: `Suas conexões ficam em ${SITE}/unidades`,
+    }),
+  }
+}
+
+/**
  * Fechamento do mês com dias faltando (só planilha).
  *
  * O assunto e a primeira linha falam de DINHEIRO, não de tarefa. "Faltam 4
