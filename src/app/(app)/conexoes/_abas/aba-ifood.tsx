@@ -4,9 +4,9 @@ import { ArrowLeft, Shield, Store } from "lucide-react"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhadas"
 
-import { RefreshButton, RunSyncButton } from "./_components/link-row"
-import { PainelMerchants } from "./_components/painel"
-import type { SolicitacaoAdmin } from "./_components/solicitacoes-panel"
+import { RefreshButton, RunSyncButton } from "@/app/(app)/integracao/ifood-merchants/_components/link-row"
+import { PainelMerchants } from "@/app/(app)/integracao/ifood-merchants/_components/painel"
+import type { SolicitacaoAdmin } from "@/app/(app)/integracao/ifood-merchants/_components/solicitacoes-panel"
 
 type MerchantRow = {
   id: string
@@ -225,7 +225,8 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
   })
 }
 
-export default async function IfoodMerchantsPage() {
+/** Fila do iFood dentro da tela de Conexões. Ver `abas.tsx` pro porquê. */
+export async function AbaIfood() {
   const { getAvisosFechados } = await import("@/lib/data/avisos-fechados")
   const { merchantsSumidos } = await import("@/lib/ifood/merchants-sumidos")
   const [
@@ -334,6 +335,27 @@ export default async function IfoodMerchantsPage() {
           e Financial Events (últimos 7 dias) com throttle de 6h.
         </p>
       </div>
+
+      {/* Homologação: ferramenta de certificação, não de operação diária.
+          Fechada por padrão — ela não pode competir com a fila, que é o que
+          se olha todo dia, mas some da lista de telas se virar link solto. */}
+      <details className="mt-6 rounded-xl border bg-card">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
+          Diagnóstico da API do iFood
+        </summary>
+        <div className="border-t px-4 py-3">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Console de chamadas cruas, pra quando uma resposta do iFood precisar
+            ser olhada por dentro — token, merchants, conciliação.
+          </p>
+          <Link
+            href="/integracao/ifood-homolog"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Abrir o console
+          </Link>
+        </div>
+      </details>
     </div>
   )
 }

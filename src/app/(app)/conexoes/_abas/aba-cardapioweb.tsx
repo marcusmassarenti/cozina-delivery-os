@@ -23,11 +23,11 @@ import { getVisibleUnits } from "@/lib/data/units"
 import { isSuperadmin } from "@/lib/auth/roles"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 
-import { CatalogoButton } from "./_components/catalogo-button"
-import { ClientesButton } from "./_components/clientes-button"
-import { ConectarLoja } from "./_components/conectar-loja"
-import { SyncButton } from "./_components/sync-button"
-import { VinculoUnidade } from "./_components/vinculo-unidade"
+import { CatalogoButton } from "@/app/(app)/integracao/cardapioweb/_components/catalogo-button"
+import { ClientesButton } from "@/app/(app)/integracao/cardapioweb/_components/clientes-button"
+import { ConectarLoja } from "@/app/(app)/integracao/cardapioweb/_components/conectar-loja"
+import { SyncButton } from "@/app/(app)/integracao/cardapioweb/_components/sync-button"
+import { VinculoUnidade } from "@/app/(app)/integracao/cardapioweb/_components/vinculo-unidade"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
@@ -140,7 +140,7 @@ async function carregar(
   return { installs, porInstall, porStats }
 }
 
-export default async function CardapioWebPage({
+export async function AbaCardapioWeb({
   searchParams,
 }: {
   searchParams: Promise<{ loja?: string; sandbox?: string; cw?: string }>

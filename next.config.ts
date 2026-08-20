@@ -97,6 +97,21 @@ const nextConfig: NextConfig = {
       { source: "/plataforma", destination: "/clientes", permanent: true },
       { source: "/plataforma/:path*", destination: "/clientes/:path*", permanent: true },
       { source: "/financeiro/aging", destination: "/financeiro/a-pagar-receber", permanent: true },
+
+      /**
+       * As SEIS telas de integração viraram uma, com abas (Marcus, 20/08/26:
+       * "muita tela pra poder ficar trabalhando"). Quatro delas nem estavam no
+       * menu — só se chegava por link de dentro de outra.
+       *
+       * Os endereços velhos continuam vivos porque estão em e-mail já enviado,
+       * em favorito e em link dentro do próprio sistema. `permanent: false`
+       * (307) de propósito: são telas de admin, e se um dia a organização mudar
+       * de novo, não quero navegador nenhum guardando isso pra sempre.
+       */
+      { source: "/integracao/ifood-merchants", destination: "/conexoes?aba=ifood", permanent: false },
+      { source: "/integracao/99food", destination: "/conexoes?aba=99food", permanent: false },
+      { source: "/integracao/cardapioweb", destination: "/conexoes?aba=cardapioweb", permanent: false },
+      { source: "/clientes/conexoes", destination: "/conexoes?aba=geral", permanent: false },
     ]
   },
 
