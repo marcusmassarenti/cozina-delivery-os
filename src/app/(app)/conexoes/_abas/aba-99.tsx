@@ -1,3 +1,4 @@
+import { PlatformLogo } from "@/components/platform-logo"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 
@@ -114,6 +115,19 @@ export async function Aba99() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Mesmo cabeçalho das outras abas: o que se faz aqui, e o que acontece
+          depois. Ver a nota em `aba-ifood.tsx`. */}
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <PlatformLogo platform="99food" size="md" />
+          Lojas no 99
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Ligue cada loja à unidade dela na rede. Só depois disso o faturamento
+          começa a entrar sozinho, todo dia.
+        </p>
+      </div>
+
       <p className="max-w-3xl text-sm text-muted-foreground">
         {emAberto > 0
           ? `${emAberto} loja${emAberto > 1 ? "s" : ""} esperando conexão. `

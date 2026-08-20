@@ -320,24 +320,20 @@ export async function AbaIfood() {
           pra tela de homologação — que era o caminho quando a integração ainda
           estava sendo homologada com o iFood, e virou um beco: quem clicava
           caía numa bateria de testes de endpoint sem entender por quê. */}
-      <Link
-        href="/clientes/conexoes"
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Voltar para conexões
-      </Link>
 
       <div className="flex items-end justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Store className="size-6 text-orange-500" />
-            Merchants iFood
+            Lojas no iFood
           </h1>
+          {/* O título dizia "Merchants iFood" e o texto citava o endpoint do
+              cron. "Merchant" é palavra da API deles, não do trabalho — e o
+              caminho do cron só diz algo pra quem escreveu o código. O que
+              importa pra quem usa é o que acontece DEPOIS de vincular. */}
           <p className="mt-1 text-sm text-muted-foreground">
-            Vincule cada loja retornada pela Merchant API a uma unidade da rede.
-            Isso destrava o cron diário <code className="font-mono">/api/cron/ifood-sync</code> em
-            produção.
+            Ligue cada loja à unidade dela na rede. Só depois disso o
+            faturamento e as avaliações começam a entrar sozinhos, todo dia.
           </p>
         </div>
         <div className="flex items-start gap-2">

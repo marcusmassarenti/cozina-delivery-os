@@ -9,6 +9,7 @@ import {
   Wallet,
 } from "lucide-react"
 
+import { PlatformLogo } from "@/components/platform-logo"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 import {
@@ -292,6 +293,12 @@ export async function AbaCardapioWeb({
    */
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <PlatformLogo platform="cardapioweb" size="md" />
+          Lojas no Cardápio Web
+        </h1>
+      </div>
       <p className="text-sm text-muted-foreground">
         {/* Antes: "o histórico entra em lotes — o sync é retomável". Descreve
             como NÓS construímos, não o que o lojista precisa saber. */}
