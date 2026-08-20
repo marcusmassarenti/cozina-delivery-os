@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 
 import {
   Fila99Panel,
@@ -33,9 +34,10 @@ export async function lojasConectadas99(): Promise<
   { id: string; unitLabel: string; holdingName: string; appShopId: string }[]
 > {
   const admin = createAdminClient()
+  const fora = await clientesForaDaOperacao()
   const { data } = await admin
     .from("ninefood_store_links")
-    .select("app_shop_id, name, units(code, name, brands(holdings(name)))")
+    .select("app_shop_id, name, units(code, name, brands(holding_id, holdings(name)))")
     .eq("active", true)
     .not("unit_id", "is", null)
 
@@ -45,9 +47,18 @@ export async function lojasConectadas99(): Promise<
     units: {
       code: string | null
       name: string
-      brands: { holdings: { name: string } | null } | null
+      brands: {
+        holding_id: string | null
+        holdings: { name: string } | null
+      } | null
     } | null
-  }[]).map((l) => ({
+  }[])
+    // Suspenso, encerrado e conta de demonstração não são operação viva.
+    .filter((l) => {
+      const h = l.units?.brands?.holding_id
+      return !h || !fora.has(h)
+    })
+    .map((l) => ({
     id: l.app_shop_id,
     appShopId: l.app_shop_id,
     unitLabel: l.units

@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, Shield, Store } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { computeBillingStatus } from "@/lib/data/billing"
+import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhadas"
 
 import { RefreshButton, RunSyncButton } from "@/app/(app)/integracao/ifood-merchants/_components/link-row"
@@ -94,27 +94,11 @@ async function getData() {
    * Vale a mesma lógica do resto: `computeBillingStatus` num lugar só, em vez
    * de mais uma cópia da regra aqui dentro.
    */
-  const suspensos = new Set<string>()
-  for (const h of (holdingsRes.data ?? []) as {
-    id: string
-    name: string
-    trial_ends_at: string | null
-    suspend_on: string | null
-    paid: boolean | null
-    due_date: string | null
-    encerrado_em: string | null
-  }[]) {
+  // A regra de "não é operação viva" mora em `clientesForaDaOperacao`:
+  // suspenso, encerrado e conta interna, num lugar só.
+  const suspensos = await clientesForaDaOperacao()
+  for (const h of (holdingsRes.data ?? []) as { id: string; name: string }[])
     holdingName.set(h.id, h.name)
-    const st = computeBillingStatus({
-      paid: h.paid ?? false,
-      trialEndsAt: h.trial_ends_at,
-      suspendOn: h.suspend_on,
-      dueDate: h.due_date,
-      paymentMethod: null,
-      monthlyFee: null,
-    })
-    if (st === "suspended" || h.encerrado_em) suspensos.add(h.id)
-  }
 
   const units: UnitRow[] = (
     (unitsRes.data ?? []) as {
@@ -153,6 +137,14 @@ async function getData() {
       name: string
       finOn: boolean
       reviewOn: boolean
+      /**
+       * Cliente fora da operação (suspenso, encerrado ou conta interna).
+       *
+       * Marcado AQUI e não cruzando por nome: a chave do agrupamento é o nome
+       * da holding, e casar strings entre duas listas diferentes falha calado
+       * quando uma delas não tem a loja (ex.: cliente só com loja inativa).
+       */
+      holdingFora: boolean
       /** De qual cliente é a loja — o merchant sozinho não diz. */
       holdingName: string
       /** Unidade desativada na rede, mas ainda vinculada ao merchant. */
@@ -163,10 +155,12 @@ async function getData() {
   // de unidades ativas: loja desativada continua vinculada (Niterói é o caso)
   // e caía num grupo sem nome, como se fosse de cliente nenhum.
   const holdingPorUnidade = new Map<string, string>()
+  const foraPorUnidade = new Map<string, boolean>()
   for (const l of linkedRaw) {
     if (!l.units) continue
     const hId = brandHolding.get(l.units.brand_id ?? "") ?? ""
     holdingPorUnidade.set(l.units.id, holdingName.get(hId) ?? "—")
+    foraPorUnidade.set(l.units.id, suspensos.has(hId))
   }
   for (const l of linkedRaw) {
     if (l.api_store_id && l.units) {
@@ -177,6 +171,7 @@ async function getData() {
         finOn: !!l.fin_enabled_at,
         reviewOn: !!l.review_enabled_at,
         holdingName: holdingPorUnidade.get(l.units.id) ?? "—",
+        holdingFora: foraPorUnidade.get(l.units.id) ?? false,
         unidadeInativa: l.units.active === false,
       }
     }
@@ -280,7 +275,17 @@ export async function AbaIfood() {
     merchantsSumidos(),
     getAvisosFechados(),
   ])
-  const linkedCount = Object.keys(byMerchant).length
+  /**
+   * A contagem tem que bater com o que a lista MOSTRA.
+   *
+   * Ela dizia 88 enquanto a tela desenhava 61: o filtro de cliente fora da
+   * operação (suspenso, encerrado, conta interna) rodava só na renderização.
+   * Número que não bate com a lista logo abaixo é pior que número nenhum —
+   * ensina a não confiar em nenhum dos dois.
+   */
+  const linkedCount = Object.values(byMerchant).filter(
+    (v) => !v.holdingFora,
+  ).length
   const ignorados = merchants.filter((m) => m.ignorado_em).length
   const semVinculo = merchants.filter(
     (m) => !m.ignorado_em && !byMerchant[m.id],

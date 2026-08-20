@@ -36,8 +36,6 @@ type UnitOption = {
   name: string
   holdingId: string
   holdingName: string
-  /** Cliente suspenso (trial vencido / cobrança). Ver a nota no agrupamento. */
-  suspenso?: boolean
 }
 type Linked = {
   unitId: string
@@ -47,6 +45,8 @@ type Linked = {
   finOn: boolean
   reviewOn: boolean
   holdingName: string
+  /** Cliente fora da operação: suspenso, encerrado ou conta interna. */
+  holdingFora?: boolean
   unidadeInativa: boolean
 }
 
@@ -227,9 +227,11 @@ export function MerchantsTable({
   const suspensos = React.useMemo(
     () =>
       new Set(
-        units.filter((u) => u.suspenso).map((u) => u.holdingName),
+        Object.values(byMerchant)
+          .filter((v) => v.holdingFora)
+          .map((v) => v.holdingName),
       ),
-    [units],
+    [byMerchant],
   )
 
   const grupos = React.useMemo(() => {

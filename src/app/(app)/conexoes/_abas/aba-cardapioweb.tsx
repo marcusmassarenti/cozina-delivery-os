@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 import {
   getFaturamentoCardapioWeb,
   getTopProdutos,
@@ -111,7 +112,15 @@ async function carregar(
       ),
   ])
 
-  const installs = (instRes.data ?? []) as unknown as InstallRow[]
+  /**
+   * Fora da operação não entra: suspenso, encerrado e conta de demonstração.
+   * Ver `clientesForaDaOperacao` — a regra mora num lugar só porque em três
+   * dias três telas mostraram cliente que não devia estar ali.
+   */
+  const fora = await clientesForaDaOperacao()
+  const installs = ((instRes.data ?? []) as unknown as InstallRow[]).filter(
+    (i) => !i.holding_id || !fora.has(i.holding_id),
+  )
   const states = (stRes.data ?? []) as StateRow[]
   const porInstall = new Map(states.map((s) => [s.install_id, s]))
 
@@ -221,10 +230,27 @@ export async function AbaCardapioWeb({
   // erro, e tinha um efeito pior: como a loja DELE não estava na lista, o
   // seletor não conseguia exibir o vínculo que já existia e mostrava "Sem
   // unidade" com o banco correto. A tela mentia sobre o próprio estado.
+  /**
+   * Nome do cliente de cada instalação — pro agrupamento.
+   *
+   * (Marcus, 20/08/26: "organize por cliente da mesma maneira da 99 e iFood".)
+   * Sem isto a lista era uma pilha de cards por instalação: com 11 já custa
+   * achar a loja de um cliente, e é a mesma pergunta que as outras duas telas
+   * já respondem agrupando.
+   */
   const holdingsDasInstalls = [
     ...new Set(installs.map((i) => i.holding_id).filter(Boolean)),
   ] as string[]
   const opcoesPorHolding = new Map<string, typeof opcoesUnidade>()
+  const nomeDoCliente = new Map<string, string>()
+  if (holdingsDasInstalls.length > 0) {
+    const { data: hs } = await createAdminClient()
+      .from("holdings")
+      .select("id, name")
+      .in("id", holdingsDasInstalls)
+    for (const h of (hs ?? []) as { id: string; name: string }[])
+      nomeDoCliente.set(h.id, h.name)
+  }
   if (holdingsDasInstalls.length > 0) {
     const { data: us } = await createAdminClient()
       .from("units")
@@ -288,8 +314,47 @@ export async function AbaCardapioWeb({
           </p>
         </div>
       ) : (
-        <div className="grid gap-6">
-          {installs.map((i) => {
+        /* AGRUPADO POR CLIENTE, igual ao 99 e ao iFood. Fechado por padrão:
+           com uma rede de 15 lojas aberta, o segundo cliente já nasce fora da
+           tela. O resumo na linha diz o que tem dentro. */
+        <div className="flex flex-col gap-3">
+          {[
+            ...new Map(
+              installs.map((i) => [
+                nomeDoCliente.get(i.holding_id ?? "") ?? "Sem cliente",
+                true,
+              ]),
+            ).keys(),
+          ].map((cliente) => {
+            const doCliente = installs.filter(
+              (i) =>
+                (nomeDoCliente.get(i.holding_id ?? "") ?? "Sem cliente") ===
+                cliente,
+            )
+            const pedidosDoCliente = doCliente.reduce(
+              (a, i) => a + (porStats.get(i.id)?.pedidos ?? 0),
+              0,
+            )
+            const temAberta = doCliente.some((i) => i.id === lojaAberta)
+            return (
+              <details
+                key={cliente}
+                // Abre sozinho quando a loja aberta é deste cliente: quem
+                // clicou pra ver o detalhe não pode encontrar o bloco fechado.
+                open={temAberta}
+                className="group/cliente rounded-lg border bg-card"
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cliente:rotate-90" />
+                  <span className="font-semibold">{cliente}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
+                    {pedidosDoCliente > 0 &&
+                      ` · ${fmtNum(pedidosDoCliente)} pedidos`}
+                  </span>
+                </summary>
+                <div className="grid gap-6 border-t p-3">
+          {doCliente.map((i) => {
             const st = porInstall.get(i.id)
             const s = porStats.get(i.id)
             const pct =
@@ -542,6 +607,10 @@ export async function AbaCardapioWeb({
                   </p>
                 )}
               </div>
+            )
+          })}
+                </div>
+              </details>
             )
           })}
         </div>
