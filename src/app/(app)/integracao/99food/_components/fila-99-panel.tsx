@@ -110,7 +110,26 @@ const ROTULO: Record<Solicitacao99["status"], { txt: string; cls: string }> = {
  * por cliente com os blocos "Comigo" e "Com o cliente". "Ignoradas" não existe
  * aqui — no 99 não há merchant solto pra arquivar.
  */
-export function Fila99Panel({ itens: todos }: { itens: Solicitacao99[] }) {
+export type LojaConectada99 = {
+  id: string
+  unitLabel: string
+  holdingName: string
+  appShopId: string
+}
+
+export function Fila99Panel({
+  itens: todos,
+  conectadas,
+}: {
+  itens: Solicitacao99[]
+  /**
+   * As lojas REALMENTE vinculadas (ninefood_store_links), não as solicitações
+   * com status "ativa". Ver a nota em `lojasConectadas99` — a maioria das
+   * lojas nunca passou por solicitação, e contá-las por ali mostrava 3 onde
+   * havia 21.
+   */
+  conectadas: LojaConectada99[]
+}) {
   return (
     <Abas
       abas={["pendencias", "conectadas"]}
@@ -119,23 +138,87 @@ export function Fila99Panel({ itens: todos }: { itens: Solicitacao99[] }) {
         pendencias: todos.filter(
           (s) => s.status === "pendente" || s.status === "solicitada",
         ).length,
-        conectadas: todos.filter((s) => s.status === "ativa").length,
+        conectadas: conectadas.length,
       }}
     >
-      {(aba, busca) => (
-        <Fila99Conteudo
-          busca={busca}
-          itens={todos
-            .filter((s) =>
-              aba === "conectadas"
-                ? s.status === "ativa"
-                : s.status !== "ativa",
-            )
-            .filter((s) => combina(busca, s.unitLabel, s.cnpj, s.holdingName, s.loja99))}
-          aba={aba}
-        />
-      )}
+      {(aba, busca) =>
+        aba === "conectadas" ? (
+          <Conectadas99
+            itens={conectadas.filter((c) =>
+              combina(busca, c.unitLabel, c.holdingName, c.appShopId),
+            )}
+            busca={busca}
+          />
+        ) : (
+          <Fila99Conteudo
+            busca={busca}
+            itens={todos
+              .filter((s) => s.status !== "ativa")
+              .filter((s) =>
+                combina(busca, s.unitLabel, s.cnpj, s.holdingName, s.loja99),
+              )}
+            aba={aba}
+          />
+        )
+      }
     </Abas>
+  )
+}
+
+/** As lojas que já sincronizam — consulta, não trabalho. Agrupadas por cliente. */
+function Conectadas99({
+  itens,
+  busca,
+}: {
+  itens: LojaConectada99[]
+  busca: string
+}) {
+  if (itens.length === 0) {
+    return (
+      <div className="rounded-lg border bg-card p-6 text-center">
+        <p className="text-sm font-medium">Nenhuma loja conectada</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Assim que uma loja for vinculada, ela aparece aqui.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {[...new Map(itens.map((c) => [c.holdingName, true])).keys()].map(
+        (cliente) => {
+          const doCliente = itens.filter((c) => c.holdingName === cliente)
+          return (
+            <details
+              key={cliente}
+              open={Boolean(busca)}
+              className="group/cliente rounded-lg border bg-card"
+            >
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
+                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cliente:rotate-90" />
+                <span className="font-semibold">{cliente}</span>
+                <span className="text-xs text-muted-foreground">
+                  {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
+                </span>
+              </summary>
+              <div className="space-y-1.5 border-t p-3">
+                {doCliente.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+                  >
+                    <span className="font-medium">{c.unitLabel}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {c.appShopId}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )
+        },
+      )}
+    </div>
   )
 }
 

@@ -15,6 +15,48 @@ export async function pendencias99(): Promise<number> {
   return count ?? 0
 }
 
+/**
+ * ⚠️ "CONECTADA" NÃO É SOLICITAÇÃO ATIVA. (Marcus, 20/08/26: "tem mais lojas
+ * conectadas na 99")
+ *
+ * A aba mostrava 3 e a realidade eram 21. O motivo: eu contava
+ * `ninefood_activation_requests.status = 'ativa'`, mas 18 das 21 lojas foram
+ * VINCULADAS DIRETO — pelo painel, pelo botão "já autorizei" do lojista ou
+ * pela varredura que descobre loja nova no portal. Nenhuma delas passou por
+ * uma solicitação, e por isso não existiam pra essa conta.
+ *
+ * A fonte da verdade de "está conectada" é `ninefood_store_links` com unidade:
+ * é ele que faz o sync acontecer. Solicitação é o PEDIDO, não o vínculo — e
+ * confundir os dois é o mesmo erro de medir intenção em vez de resultado.
+ */
+export async function lojasConectadas99(): Promise<
+  { id: string; unitLabel: string; holdingName: string; appShopId: string }[]
+> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ninefood_store_links")
+    .select("app_shop_id, name, units(code, name, brands(holdings(name)))")
+    .eq("active", true)
+    .not("unit_id", "is", null)
+
+  return ((data ?? []) as unknown as {
+    app_shop_id: string
+    name: string | null
+    units: {
+      code: string | null
+      name: string
+      brands: { holdings: { name: string } | null } | null
+    } | null
+  }[]).map((l) => ({
+    id: l.app_shop_id,
+    appShopId: l.app_shop_id,
+    unitLabel: l.units
+      ? `${l.units.code ? `${l.units.code} · ` : ""}${l.units.name}`
+      : (l.name ?? l.app_shop_id),
+    holdingName: l.units?.brands?.holdings?.name ?? "—",
+  }))
+}
+
 export async function Aba99() {
   const admin = createAdminClient()
 
@@ -76,7 +118,7 @@ export async function Aba99() {
         ela já usa outro integrador, confirme com o cliente antes de pedir a
         troca — a conexão atual dele pode parar.
       </p>
-      <Fila99Panel itens={itens} />
+      <Fila99Panel itens={itens} conectadas={await lojasConectadas99()} />
     </div>
   )
 }

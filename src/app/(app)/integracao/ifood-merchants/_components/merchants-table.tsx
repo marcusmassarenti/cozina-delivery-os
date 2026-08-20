@@ -36,6 +36,8 @@ type UnitOption = {
   name: string
   holdingId: string
   holdingName: string
+  /** Cliente suspenso (trial vencido / cobrança). Ver a nota no agrupamento. */
+  suspenso?: boolean
 }
 type Linked = {
   unitId: string
@@ -210,6 +212,26 @@ export function MerchantsTable({
 
   // Agrupa por cliente; sem vínculo vai pra um balde próprio que renderiza
   // primeiro. Ordena os clientes por nome, mas o balde fura a fila.
+  /**
+   * Clientes SUSPENSOS somem de "Conectadas". (Marcus, 20/08/26)
+   *
+   * A Vbfood aparecia com as duas lojas vinculadas mesmo com o trial vencido
+   * em 14/08 — a régua de cobrança já dizia "suspended" e a tela de Clientes
+   * já escondia, só esta tabela não olhava. Loja de cliente sem acesso não é
+   * operação viva: ela infla o "88 conectadas" e some da conta de quem
+   * realmente está pagando.
+   *
+   * Continuam visíveis em "Pendências" de propósito — se um merchant suspenso
+   * aparecer sem vínculo, é coisa pra resolver, não pra esconder.
+   */
+  const suspensos = React.useMemo(
+    () =>
+      new Set(
+        units.filter((u) => u.suspenso).map((u) => u.holdingName),
+      ),
+    [units],
+  )
+
   const grupos = React.useMemo(() => {
     const map = new Map<string, MerchantRow[]>()
     for (const m of merchants) {
@@ -224,7 +246,9 @@ export function MerchantsTable({
           ? chave === IGNORADAS
           : aba === "pendencias"
             ? chave === SEM_VINCULO
-            : chave !== IGNORADAS && chave !== SEM_VINCULO
+            : chave !== IGNORADAS &&
+              chave !== SEM_VINCULO &&
+              !suspensos.has(chave)
       if (!daAba) continue
 
       // A busca varre os quatro jeitos de a mesma loja ser chamada: o nome no
@@ -240,7 +264,7 @@ export function MerchantsTable({
     return [...map.entries()].sort(([a], [b]) =>
       peso(a) !== peso(b) ? peso(a) - peso(b) : a.localeCompare(b, "pt-BR"),
     )
-  }, [merchants, byMerchant, aba, busca])
+  }, [merchants, byMerchant, aba, busca, suspensos])
 
   const nomeCliente =
     cliente === "todos"

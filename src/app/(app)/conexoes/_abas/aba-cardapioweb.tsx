@@ -63,7 +63,14 @@ type Stats = {
   installId: string
   pedidos: number
   detalhados: number
-  faturamento: FaturamentoAnalytics
+  /** Total faturado — vem do agregado, sempre presente e barato. */
+  total: number
+  /**
+   * O detalhamento (canais, pagamento, próprio × marketplace) só é buscado da
+   * loja ABERTA: são as consultas caras, e com 500 lojas na tela elas seriam
+   * 500 varreduras pra mostrar o que ninguém está olhando.
+   */
+  faturamento: FaturamentoAnalytics | null
   /** null quando a loja está fechada na lista — não foi buscado. */
   clientes: ResumoClientes | null
   produtos: ProdutoRank[]
@@ -108,33 +115,47 @@ async function carregar(
   const states = (stRes.data ?? []) as StateRow[]
   const porInstall = new Map(states.map((s) => [s.install_id, s]))
 
-  const stats: Stats[] = await Promise.all(
-    installs.map(async (i) => {
-      const aberta = i.id === lojaAberta
-      const [tot, det, faturamento, clientes, produtos] = await Promise.all([
-        admin
-          .from("cardapioweb_pedidos")
-          .select("id", { count: "exact", head: true })
-          .eq("install_id", i.id),
-        admin
-          .from("cardapioweb_pedidos")
-          .select("id", { count: "exact", head: true })
-          .eq("install_id", i.id)
-          .eq("detalhe_ok", true),
-        getFaturamentoCardapioWeb(i.id),
-        aberta ? getResumoClientes(i.id) : Promise.resolve(null),
-        aberta ? getTopProdutos(i.id) : Promise.resolve([]),
-      ])
-      return {
-        installId: i.id,
-        pedidos: tot.count ?? 0,
-        detalhados: det.count ?? 0,
-        faturamento,
-        clientes,
-        produtos,
-      }
-    }),
+  /**
+   * UMA consulta agregada, não três por instalação.
+   *
+   * Antes isto era um N+1: pra cada install, dois `count` e um SELECT de TODAS
+   * as linhas de pedidos pra somar o faturamento em JS. Com 11 lojas custa
+   * 0,05s e ninguém percebe; com 500 seriam ~1.500 consultas e ~2 milhões de
+   * linhas atravessando a rede pra virar uma soma — a mesma doença que
+   * derrubou a tela de Início em 19/08.
+   *
+   * O detalhe pesado (clientes, produtos) continua sob demanda: só da loja que
+   * o operador abrir. É o que mantém a tela leve com qualquer número de lojas.
+   */
+  const { data: resumo } = await admin.rpc("cardapioweb_resumo_installs")
+  const porResumo = new Map(
+    ((resumo ?? []) as {
+      install_id: string
+      pedidos: number
+      detalhados: number
+      faturamento: number
+    }[]).map((r) => [r.install_id, r]),
   )
+
+  const abertaId = installs.find((i) => i.id === lojaAberta)?.id
+  const [clientesAberta, produtosAberta, fatAberta] = await Promise.all([
+    abertaId ? getResumoClientes(abertaId) : Promise.resolve(null),
+    abertaId ? getTopProdutos(abertaId) : Promise.resolve([]),
+    abertaId ? getFaturamentoCardapioWeb(abertaId) : Promise.resolve(null),
+  ])
+
+  const stats: Stats[] = installs.map((i) => {
+    const r = porResumo.get(i.id)
+    return {
+      installId: i.id,
+      pedidos: Number(r?.pedidos ?? 0),
+      detalhados: Number(r?.detalhados ?? 0),
+      total: Number(r?.faturamento ?? 0),
+      faturamento: i.id === abertaId ? fatAberta : null,
+      clientes: i.id === abertaId ? clientesAberta : null,
+      produtos: i.id === abertaId ? produtosAberta : [],
+    }
+  })
   const porStats = new Map(stats.map((s) => [s.installId, s]))
 
   return { installs, porInstall, porStats }
@@ -366,13 +387,15 @@ export async function AbaCardapioWeb({
                   ) : (
                     <Metrica
                       label="Ticket médio"
-                      valor={fmtBRL(fat?.ticket ?? 0)}
+                      valor={fmtBRL(
+                        s && s.pedidos > 0 ? (s.total ?? 0) / s.pedidos : 0,
+                      )}
                       nota="por pedido"
                     />
                   )}
                   <Metrica
                     label="Faturamento"
-                    valor={fmtBRL(fat?.faturamento ?? 0)}
+                    valor={fmtBRL(s?.total ?? 0)}
                     nota="do que já entrou"
                   />
                   <Metrica

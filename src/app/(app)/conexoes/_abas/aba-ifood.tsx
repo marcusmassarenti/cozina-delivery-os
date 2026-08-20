@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, Shield, Store } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { computeBillingStatus } from "@/lib/data/billing"
 import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhadas"
 
 import { RefreshButton, RunSyncButton } from "@/app/(app)/integracao/ifood-merchants/_components/link-row"
@@ -67,7 +68,12 @@ async function getData() {
       .eq("active", true)
       .order("code"),
     admin.from("brands").select("id, holding_id"),
-    admin.from("holdings").select("id, name"),
+    // trial_ends_at e suspend_on entram porque a tabela de merchants precisa
+    // saber quem está SUSPENSO: cliente sem acesso não pode continuar
+    // ocupando a lista de "conectadas" como se fosse operação viva.
+    admin
+      .from("holdings")
+      .select("id, name, trial_ends_at, suspend_on, paid, due_date, encerrado_em"),
   ])
   const merchants = (merchantsRes.data ?? []) as MerchantRow[]
   const linkedRaw = (linkedRes.data ?? []) as unknown as LinkedRow[]
@@ -77,8 +83,38 @@ async function getData() {
   for (const b of (brandsRes.data ?? []) as { id: string; holding_id: string }[])
     brandHolding.set(b.id, b.holding_id)
   const holdingName = new Map<string, string>()
-  for (const h of (holdingsRes.data ?? []) as { id: string; name: string }[])
+  /**
+   * Clientes SUSPENSOS (Marcus, 20/08/26: "aqui aparece mas cliente está
+   * suspenso").
+   *
+   * A Vbfood continuava listada em "Conectadas" com as duas lojas vinculadas,
+   * mesmo com o trial vencido em 14/08. A régua de cobrança já dizia
+   * "suspended" e a tela de Clientes já escondia — só esta tabela não olhava.
+   *
+   * Vale a mesma lógica do resto: `computeBillingStatus` num lugar só, em vez
+   * de mais uma cópia da regra aqui dentro.
+   */
+  const suspensos = new Set<string>()
+  for (const h of (holdingsRes.data ?? []) as {
+    id: string
+    name: string
+    trial_ends_at: string | null
+    suspend_on: string | null
+    paid: boolean | null
+    due_date: string | null
+    encerrado_em: string | null
+  }[]) {
     holdingName.set(h.id, h.name)
+    const st = computeBillingStatus({
+      paid: h.paid ?? false,
+      trialEndsAt: h.trial_ends_at,
+      suspendOn: h.suspend_on,
+      dueDate: h.due_date,
+      paymentMethod: null,
+      monthlyFee: null,
+    })
+    if (st === "suspended" || h.encerrado_em) suspensos.add(h.id)
+  }
 
   const units: UnitRow[] = (
     (unitsRes.data ?? []) as {
@@ -95,6 +131,8 @@ async function getData() {
       name: u.name,
       holdingId: hId,
       holdingName: holdingName.get(hId) ?? "—",
+      /** Cliente sem acesso: a tabela marca e tira da contagem de conectadas. */
+      suspenso: suspensos.has(hId),
     }
   })
 
