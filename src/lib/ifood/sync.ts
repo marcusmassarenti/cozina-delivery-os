@@ -233,6 +233,31 @@ export async function syncReconciliationCompetencia(
       const aindaGerando = /enqueued|processing|created|not ready|202|tempo esgotado/i.test(
         `${recon.linkError ?? ""} ${recon.linkStatus ?? ""}`,
       )
+      /**
+       * "A loja não vendeu nesta competência" É RESPOSTA, NÃO FALHA.
+       *
+       * O iFood devolve `No financial entries exist ... in the requested time
+       * frame` quando o mês pedido é anterior à operação da loja. A pergunta
+       * foi respondida — não há o que puxar, agora nem nunca.
+       *
+       * Marcar como `ok: false` fazia o backfill nunca fechar: ele exige que
+       * TODAS as competências respondam, então loja nova ficava presa até
+       * esgotar as 3 tentativas, com 6h entre elas — 18 horas pra concluir que
+       * janeiro não existe. Foi o caso da Magic Açaí em 20/08/26, e antes dela
+       * o da Koike Bistrô, que a nota abaixo já descrevia sem resolver a causa.
+       *
+       * Com `ok: true` e zero linha, o mês fecha na primeira passada e o
+       * cliente recebe o "sua loja está conectada" no mesmo dia.
+       */
+      if (recon.vazio) {
+        return {
+          competencia,
+          ok: true,
+          status: recon.linkStatus,
+          rowCount: 0,
+          persisted: 0,
+        }
+      }
       return {
         competencia,
         ok: false,
