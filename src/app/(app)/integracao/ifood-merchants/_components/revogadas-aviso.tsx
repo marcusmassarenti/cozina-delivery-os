@@ -1,6 +1,9 @@
 "use client"
 
-import { AlertTriangle, Unplug } from "lucide-react"
+import * as React from "react"
+import { AlertTriangle, Unplug, X } from "lucide-react"
+
+import { fecharAviso } from "@/app/(app)/_actions-avisos"
 
 import type { MerchantSumido } from "@/lib/ifood/merchants-sumidos"
 
@@ -16,10 +19,47 @@ import type { MerchantSumido } from "@/lib/ifood/merchants-sumidos"
  * dado AGORA. As que ainda não tinham vínculo entram em âmbar: ali o efeito é
  * só a conexão não fechar, o que já aparece na lista de solicitações.
  */
-export function RevogadasAviso({ sumidos }: { sumidos: MerchantSumido[] }) {
+export function RevogadasAviso({
+  sumidos,
+  fechados = [],
+}: {
+  sumidos: MerchantSumido[]
+  /** Chaves já fechadas por esta pessoa (do banco, não do navegador). */
+  fechados?: string[]
+}) {
+  /**
+   * O X guarda no SERVIDOR, e a chave inclui QUEM sumiu.
+   *
+   * Duas razões pra não ser localStorage: ele é por navegador (some no
+   * celular) e some ao limpar dados — foi o defeito que o aviso de conexão
+   * teve em 19/08. E a chave leva os ids porque fechar "as 2 revogadas de
+   * hoje" não pode esconder a terceira que revogar amanhã: aviso que se cala
+   * sozinho pra um caso novo é pior que aviso nenhum.
+   */
+  const chave = React.useMemo(
+    () => `revogadas|${sumidos.map((m) => m.merchantId).sort().join(",")}`,
+    [sumidos],
+  )
+  const [fechadoAgora, setFechadoAgora] = React.useState(false)
+
   if (sumidos.length === 0) return null
+  if (fechadoAgora || fechados.includes(chave)) return null
   const conectadas = sumidos.filter((m) => m.loja)
   const soltas = sumidos.filter((m) => !m.loja)
+
+  const Fechar = () => (
+    <button
+      type="button"
+      onClick={() => {
+        setFechadoAgora(true)
+        void fecharAviso(chave)
+      }}
+      aria-label="Fechar aviso"
+      className="ml-auto shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+    >
+      <X className="size-4" />
+    </button>
+  )
 
   return (
     <div className="flex flex-col gap-2">
@@ -32,6 +72,7 @@ export function RevogadasAviso({ sumidos }: { sumidos: MerchantSumido[] }) {
                 ? "1 loja conectada foi revogada no iFood"
                 : `${conectadas.length} lojas conectadas foram revogadas no iFood`}
             </p>
+            <Fechar />
           </div>
           <p className="mt-1 pl-6 text-xs text-rose-800 dark:text-rose-300">
             Elas continuam marcadas como conectadas aqui, mas o iFood parou de

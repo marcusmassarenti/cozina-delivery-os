@@ -918,9 +918,10 @@ export function lojaNaoEncontradaIfood(d: {
             </table>
           </td></tr>
         </table>
-        <p style="margin:0 0 14px;">Me responde com o <strong>CNPJ que aparece no seu Portal do Parceiro</strong> — ou me avisa quando a loja for publicada — que eu cadastro na hora. É a única coisa que falta.</p>
-        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Enquanto isso, o resto da sua operação segue normal: isso vale só pra essa loja.</p>`,
-      ps: `Suas conexões ficam em ${SITE}/unidades`,
+        <p style="margin:0 0 14px;">Quando a loja estiver publicada — ou se o CNPJ dela no iFood for outro — <strong>peça a conexão de novo</strong> na tela da unidade, com o CNPJ certo. Eu cadastro na hora.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Não precisa fazer mais nada agora: este pedido saiu da fila pra não ficar preso esperando algo que ainda não existe. O resto da sua operação segue normal.</p>`,
+      cta: { texto: "Pedir a conexão de novo", url: `${SITE}/unidades` },
+      ps: `Qualquer dúvida, é só responder este e-mail.`,
     }),
   }
 }
@@ -1006,9 +1007,10 @@ export function lojaNaoEncontradaLote(d: {
             </table>
           </td></tr>
         </table>
-        <p style="margin:0 0 14px;">Me responde com o <strong>CNPJ que aparece no seu Portal do Parceiro</strong> para cada uma — ou me avisa quando forem publicadas — que eu cadastro na hora.</p>
-        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Vale só para as lojas desta lista: o resto da sua operação segue normal.</p>`,
-      ps: `Suas conexões ficam em ${SITE}/unidades`,
+        <p style="margin:0 0 14px;">Conforme cada loja for publicada — ou se o CNPJ dela no iFood for outro — <strong>peça a conexão de novo</strong> na tela da unidade, com o CNPJ certo. Não precisa esperar todas: pode ir pedindo uma a uma.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Estes pedidos saíram da fila pra não ficarem presos esperando algo que ainda não existe. Vale só para as lojas desta lista — o resto da sua operação segue normal.</p>`,
+      cta: { texto: "Pedir a conexão de novo", url: `${SITE}/unidades` },
+      ps: `Qualquer dúvida, é só responder este e-mail.`,
     }),
   }
 }

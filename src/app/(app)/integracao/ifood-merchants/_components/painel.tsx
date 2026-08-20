@@ -21,11 +21,14 @@ type Props = React.ComponentProps<typeof MerchantsTable>
 
 export function PainelMerchants({
   sumidos,
+  avisosFechados = [],
   solicitacoes,
   contagens,
   ...tabela
 }: {
   sumidos: MerchantSumido[]
+  /** Avisos que esta pessoa já fechou (vem do banco). */
+  avisosFechados?: string[]
   solicitacoes: SolicitacaoAdmin[]
   contagens: Record<Aba, number>
 } & Omit<Props, "aba" | "busca">) {
@@ -39,7 +42,7 @@ export function PainelMerchants({
               consulta. */}
           {aba === "pendencias" && (
             <>
-              <RevogadasAviso sumidos={sumidos} />
+              <RevogadasAviso sumidos={sumidos} fechados={avisosFechados} />
               <SolicitacoesPanel
                 solicitacoes={solicitacoes}
                 lojasDaRede={tabela.units}

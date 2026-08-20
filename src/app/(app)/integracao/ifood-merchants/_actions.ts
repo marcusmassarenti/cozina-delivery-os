@@ -771,16 +771,20 @@ export async function acaoEmLoteIfood(
   }
 
   const agora = new Date().toISOString()
+  // "não achei" ARQUIVA (sai da fila, cliente recomeça); "aprovar" passa a
+  // bola pro cliente e continua na fila esperando ele. Ver a nota longa em
+  // `avisarLojaNaoEncontrada`.
   const nota =
     acao === "nao-encontrada"
-      ? "Não encontrada no Portal do Desenvolvedor — cliente precisa confirmar o CNPJ ou avisar quando publicar"
+      ? "Não encontrada no Portal do Desenvolvedor — cliente avisado; precisa solicitar de novo quando publicar a loja ou corrigir o CNPJ"
       : null
+  const novoStatus = acao === "nao-encontrada" ? "arquivada" : "solicitada"
 
   for (const r of linhas) {
     await admin
       .from("ifood_activation_requests")
       .update({
-        status: "solicitada",
+        status: novoStatus,
         status_anterior: r.status,
         ...(nota ? { nota } : {}),
         updated_at: agora,
@@ -866,13 +870,28 @@ export async function avisarLojaNaoEncontrada(
     .maybeSingle()
   if (!req) return { ok: false, error: "Solicitação não encontrada." }
 
+  /**
+   * ARQUIVA — não vira "solicitada". (Marcus, 20/08/26)
+   *
+   * "A régua é avisar o cliente e sair da minha tela de pendência, e o cliente
+   * precisa recomeçar o processo."
+   *
+   * Deixar como `solicitada` era errado nas duas pontas: ficava na minha fila
+   * como se houvesse algo acontecendo, e acendia no aviso da home do cliente
+   * um "falta você aprovar no Portal do Parceiro" — sendo que não há NADA pra
+   * ele aprovar, a loja nem existe no portal do iFood. Pedir uma ação
+   * impossível é o jeito mais rápido de ensinar alguém a ignorar os avisos.
+   *
+   * Arquivada sai da fila sem apagar o histórico, e o pedido novo nasce quando
+   * o cliente publicar a loja (ou corrigir o CNPJ) e solicitar de novo.
+   */
   const agora = new Date().toISOString()
   await admin
     .from("ifood_activation_requests")
     .update({
-      status: "solicitada",
+      status: "arquivada",
       status_anterior: (req as { status?: string }).status ?? null,
-      nota: "Não encontrada no Portal do Desenvolvedor — cliente precisa confirmar o CNPJ ou avisar quando publicar",
+      nota: "Não encontrada no Portal do Desenvolvedor — cliente avisado; precisa solicitar de novo quando publicar a loja ou corrigir o CNPJ",
       updated_at: agora,
     })
     .eq("id", id)

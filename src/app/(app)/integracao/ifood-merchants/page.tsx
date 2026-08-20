@@ -226,17 +226,20 @@ async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
 }
 
 export default async function IfoodMerchantsPage() {
+  const { getAvisosFechados } = await import("@/lib/data/avisos-fechados")
   const { merchantsSumidos } = await import("@/lib/ifood/merchants-sumidos")
   const [
     { merchants, units, holdings, byMerchant },
     solicitacoes,
     donoPorCnpj,
     sumidos,
+    avisosFechados,
   ] = await Promise.all([
     getData(),
     getSolicitacoes(),
     getDonoPorCnpj(),
     merchantsSumidos(),
+    getAvisosFechados(),
   ])
   const linkedCount = Object.keys(byMerchant).length
   const ignorados = merchants.filter((m) => m.ignorado_em).length
@@ -304,6 +307,7 @@ export default async function IfoodMerchantsPage() {
           lojas isso vira uma página que ninguém lê até o fim. */}
       <PainelMerchants
         sumidos={sumidos}
+        avisosFechados={[...avisosFechados]}
         solicitacoes={solicitacoes}
         contagens={{
           pendencias: solicitacoesAbertas + semVinculo + sumidos.length,
