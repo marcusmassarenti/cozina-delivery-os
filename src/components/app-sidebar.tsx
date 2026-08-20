@@ -24,6 +24,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useFavorites } from "@/hooks/use-favorites"
+import { useGruposMenu } from "@/hooks/use-grupos-menu"
 import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "@/lib/nav"
 import { OPEN_HELP_EVENT } from "@/app/(app)/ajuda/_components/help-dialog"
 
@@ -145,6 +146,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
+  const { estaAberto, alternar } = useGruposMenu()
   const { toggleSidebar, state } = useSidebar()
 
   const allowed = new Set(allowedModules)
@@ -257,7 +259,10 @@ export function AppSidebar({
           return (
             <Collapsible
               key={group.label}
-              defaultOpen={group.defaultOpen}
+              // Controlado, não `defaultOpen`: é isso que faz a categoria
+              // continuar fechada na próxima visita. Ver `useGruposMenu`.
+              open={estaAberto(group.label ?? "", group.defaultOpen ?? true)}
+              onOpenChange={(aberto) => alternar(group.label ?? "", aberto)}
               className="group/collapsible"
             >
               <SidebarGroup>
