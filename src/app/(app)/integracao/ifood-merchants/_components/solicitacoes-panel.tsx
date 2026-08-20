@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 
 import { combina } from "./abas"
 import {
+  acaoEmLoteIfood,
   atualizarSolicitacaoIfood,
   avisarLojaNaoEncontrada,
   compartilharLojaExistente,
@@ -157,9 +158,14 @@ function agruparPorMotivo(
 function Linha({
   s,
   lojasDaRede,
+  selecionada,
+  onSelecionar,
 }: {
   s: SolicitacaoAdmin
   lojasDaRede: LojaDaRede[]
+  /** undefined = bloco sem seleção. Só "Comigo" seleciona. */
+  selecionada?: boolean
+  onSelecionar?: (id: string, marcar: boolean) => void
 }) {
   const [state, action] = useActionState<SolicitacaoUpdateState, FormData>(
     atualizarSolicitacaoIfood,
@@ -231,6 +237,15 @@ function Linha({
           procura uma loja pelo CNPJ — procura pelo nome e usa o CNPJ pra
           colar no portal. A ordem agora reflete isso. */}
       <div className="flex items-start gap-2 text-xs">
+        {onSelecionar && (
+          <input
+            type="checkbox"
+            checked={selecionada ?? false}
+            onChange={(e) => onSelecionar(s.id, e.target.checked)}
+            aria-label={`Selecionar ${s.unitLabel ?? s.cnpj}`}
+            className="mt-0.5 size-3.5 shrink-0 cursor-pointer accent-primary"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <p
             className={`truncate text-[13px] font-semibold leading-tight ${
@@ -820,7 +835,7 @@ function Grupo({
                     )
                   return (
                     <>
-                      <Bloco titulo="Comigo" itens={minhas} />
+                      <BlocoComSelecao itens={minhas} lojasDaRede={lojasDaRede} />
                       <Bloco titulo="Com o cliente" itens={delas} />
                       <Bloco titulo="Recusadas" itens={outras} />
                     </>
@@ -1045,5 +1060,114 @@ function SubmitNaoEncontrada() {
     >
       {pending ? "avisando..." : "não achei no portal"}
     </button>
+  )
+}
+
+/**
+ * O bloco "Comigo", com seleção em massa.
+ *
+ * ── POR QUE (Marcus, 20/08/26) ───────────────────────────────────────────
+ * "Quando tem várias lojas teria uma forma de selecionar em massa? Se eu
+ * selecionar todas, aparece em um e-mail único para o cliente."
+ *
+ * Sim — e o ganho não é só o clique. Antes, 15 lojas viravam 15 e-mails
+ * idênticos com CNPJ diferente na caixa do lojista, e quinze avisos iguais não
+ * são quinze lembretes: ele lê o primeiro e os outros catorze viram ruído. Um
+ * e-mail com a lista É a lista de trabalho dele.
+ *
+ * Só este bloco seleciona: "com o cliente" e "recusadas" não têm ação de lote
+ * que faça sentido, e caixinha que não leva a nada é convite pra tentar.
+ */
+function BlocoComSelecao({
+  itens,
+  lojasDaRede,
+}: {
+  itens: SolicitacaoAdmin[]
+  lojasDaRede: LojaDaRede[]
+}) {
+  const [sel, setSel] = React.useState<string[]>([])
+  const [state, action] = useActionState<SolicitacaoUpdateState, FormData>(
+    acaoEmLoteIfood,
+    { ok: false },
+  )
+
+  // A seleção morre quando a ação conclui: manter marcado depois de agir
+  // convida a clicar de novo e mandar o mesmo e-mail duas vezes.
+  React.useEffect(() => {
+    if (state.ok) setSel([])
+  }, [state.ok])
+
+  if (itens.length === 0) return null
+  const todas = sel.length === itens.length && itens.length > 0
+
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Comigo · {itens.length}
+        </p>
+        {itens.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setSel(todas ? [] : itens.map((x) => x.id))}
+            className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            {todas ? "limpar seleção" : "selecionar todas"}
+          </button>
+        )}
+      </div>
+
+      {sel.length > 0 && (
+        <form
+          action={action}
+          className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2"
+        >
+          <input type="hidden" name="ids" value={sel.join(",")} />
+          <span className="text-xs font-medium">
+            {sel.length} selecionada{sel.length > 1 ? "s" : ""}
+          </span>
+          <Button type="submit" name="acao" value="aprovar" size="sm">
+            Avisar cliente pra aprovar
+          </Button>
+          <Button
+            type="submit"
+            name="acao"
+            value="nao-encontrada"
+            size="sm"
+            variant="outline"
+          >
+            Não achei no portal
+          </Button>
+          <span className="text-[11px] text-muted-foreground">
+            um e-mail só, com a lista
+          </span>
+        </form>
+      )}
+
+      {state.error && (
+        <p className="mb-2 text-[11px] text-destructive">{state.error}</p>
+      )}
+      {state.ok && state.message && (
+        <p className="mb-2 text-[11px] text-emerald-700 dark:text-emerald-400">
+          {state.message}
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {itens.map((x) => (
+          <Linha
+            key={x.id}
+            s={x}
+            lojasDaRede={lojasDaRede}
+            selecionada={sel.includes(x.id)}
+            onSelecionar={(id, marcar) =>
+              setSel((atual) =>
+                marcar ? [...atual, id] : atual.filter((y) => y !== id),
+              )
+            }
+          />
+        ))}
+      </div>
+    </div>
   )
 }

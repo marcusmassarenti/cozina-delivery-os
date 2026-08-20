@@ -718,6 +718,133 @@ export async function setAppHabilitado(
  * nota. Recusar apagaria o pedido do aviso da home dele, que é justamente
  * onde ele precisa continuar vendo que tem algo pendente.
  */
+/**
+ * AÇÃO EM LOTE: N lojas selecionadas, UM e-mail.
+ *
+ * ── POR QUE (Marcus, 20/08/26) ───────────────────────────────────────────
+ * Uma rede que conecta 15 lojas recebia 15 e-mails iguais com CNPJ diferente.
+ * Quinze avisos idênticos não são quinze lembretes: a pessoa lê o primeiro,
+ * entende que tem trabalho, e os catorze seguintes viram ruído — ou pior, ela
+ * aprova uma e acha que resolveu tudo. Num e-mail só, a lista É a lista de
+ * trabalho dela.
+ *
+ * Agrupa por CLIENTE porque a seleção pode cruzar redes: cada dono recebe só
+ * as lojas dele. Mandar a lista inteira pra todo mundo vazaria uma carteira de
+ * clientes pra outra.
+ */
+export async function acaoEmLoteIfood(
+  _prev: SolicitacaoUpdateState,
+  formData: FormData,
+): Promise<SolicitacaoUpdateState> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Só o dono da plataforma pode fazer isso." }
+  }
+
+  const ids = String(formData.get("ids") ?? "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+  const acao = String(formData.get("acao") ?? "")
+  if (ids.length === 0) return { ok: false, error: "Nenhuma loja selecionada." }
+  if (acao !== "aprovar" && acao !== "nao-encontrada") {
+    return { ok: false, error: "Ação inválida." }
+  }
+
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("ifood_activation_requests")
+    .select("id, cnpj, holding_id, status, units(code, name)")
+    .in("id", ids)
+
+  type Linha = {
+    id: string
+    cnpj: string
+    holding_id: string | null
+    status: string
+    units: { code: string | null; name: string } | null
+  }
+  const linhas = ((data ?? []) as unknown as Linha[]).filter((r) => r.holding_id)
+  if (linhas.length === 0) {
+    return { ok: false, error: "Não achei as solicitações selecionadas." }
+  }
+
+  const agora = new Date().toISOString()
+  const nota =
+    acao === "nao-encontrada"
+      ? "Não encontrada no Portal do Desenvolvedor — cliente precisa confirmar o CNPJ ou avisar quando publicar"
+      : null
+
+  for (const r of linhas) {
+    await admin
+      .from("ifood_activation_requests")
+      .update({
+        status: "solicitada",
+        status_anterior: r.status,
+        ...(nota ? { nota } : {}),
+        updated_at: agora,
+      })
+      .eq("id", r.id)
+  }
+
+  // Um e-mail por cliente — a seleção pode cruzar redes.
+  const porHolding = new Map<string, Linha[]>()
+  for (const r of linhas) {
+    const k = r.holding_id!
+    porHolding.set(k, [...(porHolding.get(k) ?? []), r])
+  }
+
+  const avisos: string[] = []
+  for (const [holdingId, lista] of porHolding) {
+    try {
+      const { contatoDaHolding } = await import("@/lib/email/contato-holding")
+      const { enviarEmail } = await import("@/lib/email/enviar")
+      const tpl = await import("@/lib/email/templates")
+      const contato = await contatoDaHolding(holdingId)
+      if (!contato) {
+        avisos.push("um cliente não tem administrador com e-mail confirmado")
+        continue
+      }
+      const lojas = lista.map((r) => ({
+        nome: `${r.units?.code ? `${r.units.code} · ` : ""}${r.units?.name ?? "loja"}`,
+        cnpj: r.cnpj,
+      }))
+      const { assunto, html } =
+        acao === "nao-encontrada"
+          ? tpl.lojaNaoEncontradaLote({ nome: contato.nome, lojas })
+          : tpl.conexaoSolicitadaLote({ nome: contato.nome, lojas })
+
+      const r2 = await enviarEmail({
+        holdingId,
+        tipo:
+          acao === "nao-encontrada"
+            ? "ifood-nao-encontrada-lote"
+            : "conexao-solicitada-lote",
+        para: contato.email,
+        assunto,
+        html,
+        forcar: true,
+      })
+      avisos.push(
+        r2.ok
+          ? `${contato.email} (${lojas.length})`
+          : `falhou pra ${contato.email}: ${r2.erro ?? "erro no envio"}`,
+      )
+    } catch (e) {
+      console.error("acaoEmLoteIfood", e)
+      avisos.push("erro interno ao avisar um dos clientes")
+    }
+  }
+
+  revalidatePath("/integracao/ifood-merchants")
+  revalidatePath("/inicio")
+  return {
+    ok: true,
+    message: `${linhas.length} loja(s) atualizada(s). Avisei: ${avisos.join(" · ")}.`,
+  }
+}
+
 export async function avisarLojaNaoEncontrada(
   _prev: SolicitacaoUpdateState,
   formData: FormData,

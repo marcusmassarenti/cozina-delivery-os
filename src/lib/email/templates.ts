@@ -925,6 +925,94 @@ export function lojaNaoEncontradaIfood(d: {
   }
 }
 
+/** Lista de lojas para os e-mails em lote: "02 · Gravataí — 63.415.846/0001-02". */
+function listaDeLojas(lojas: { nome: string; cnpj: string }[]): string {
+  return lojas
+    .map((l) => {
+      const c = l.cnpj.replace(/\D/g, "")
+      const fmt =
+        c.length === 14
+          ? `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}`
+          : l.cnpj
+      return `<tr><td style="padding:6px 14px 6px 0;border-bottom:1px solid #f4f4f5;">${l.nome}</td><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;white-space:nowrap;color:#71717a;font-size:14px;">${fmt}</td></tr>`
+    })
+    .join("")
+}
+
+/**
+ * "Falta você aprovar ESTAS lojas no iFood" — versão de várias de uma vez.
+ *
+ * ── POR QUE (Marcus, 20/08/26) ───────────────────────────────────────────
+ * Uma rede que conecta 15 lojas recebia 15 e-mails iguais, cada um com um
+ * CNPJ diferente. Quinze avisos idênticos não são quinze lembretes: a pessoa
+ * lê o primeiro, entende que tem trabalho a fazer, e os outros catorze viram
+ * ruído — ou pior, ela aprova uma e acha que resolveu tudo.
+ *
+ * Num e-mail só, a lista É a lista de trabalho dela: dá pra ir riscando.
+ */
+export function conexaoSolicitadaLote(d: {
+  nome: string | null
+  lojas: { nome: string; cnpj: string }[]
+}) {
+  const n = d.lojas.length
+  return {
+    assunto: `Falta você aprovar ${n} lojas no iFood`,
+    html: layout({
+      titulo: `Pedi a conexão de ${n} lojas no iFood. Agora falta você aprovar.`,
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Solicitei ao iFood a conexão das lojas abaixo. O último passo é seu — e é o mesmo para todas.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;font-size:15px;">
+          ${listaDeLojas(d.lojas)}
+        </table>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+          <tr><td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+            No <strong>Portal do Parceiro do iFood</strong>, vá em <strong>Aplicativos</strong> e autorize <strong>os dois</strong>:
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;font-size:15px;line-height:1.7;">
+              <tr><td style="padding-right:8px;">1.</td><td><strong>Financial</strong> — traz o faturamento</td></tr>
+              <tr><td style="padding-right:8px;">2.</td><td><strong>Avaliações</strong> — traz as notas e os comentários</td></tr>
+            </table>
+            <p style="margin:10px 0 0;font-size:14px;">É <strong>uma autorização por loja</strong> — precisa repetir em cada uma da lista, com o usuário <strong>Proprietário</strong>.</p>
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;">Conforme você for aprovando, cada loja conecta sozinha (conferimos a cada 15 min) e o histórico entra junto na primeira carga.</p>`,
+      cta: { texto: "Abrir o Portal do Parceiro", url: "https://portal.ifood.com.br/apps" },
+      ps: `Acompanhe o andamento em ${SITE}/unidades`,
+    }),
+  }
+}
+
+/** "Não achei estas lojas no portal do iFood" — várias de uma vez. */
+export function lojaNaoEncontradaLote(d: {
+  nome: string | null
+  lojas: { nome: string; cnpj: string }[]
+}) {
+  const n = d.lojas.length
+  return {
+    assunto: `Não achei ${n} lojas no iFood`,
+    html: layout({
+      titulo: `Não encontrei ${n} lojas no portal do iFood`,
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Fui cadastrar a conexão das lojas abaixo e o portal do iFood não devolveu nenhuma loja com esses CNPJs.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;font-size:15px;">
+          ${listaDeLojas(d.lojas)}
+        </table>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+          <tr><td style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
+            Costuma ser um destes três:
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;font-size:15px;line-height:1.7;">
+              <tr><td style="padding-right:8px;">1.</td><td>a loja <strong>ainda está em abertura</strong> no iFood e não foi publicada;</td></tr>
+              <tr><td style="padding-right:8px;">2.</td><td>ela está no iFood sob <strong>outro CNPJ</strong> (o da matriz, por exemplo);</td></tr>
+              <tr><td style="padding-right:8px;">3.</td><td>houve troca recente de titularidade e o cadastro antigo ainda consta.</td></tr>
+            </table>
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;">Me responde com o <strong>CNPJ que aparece no seu Portal do Parceiro</strong> para cada uma — ou me avisa quando forem publicadas — que eu cadastro na hora.</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#71717a;">Vale só para as lojas desta lista: o resto da sua operação segue normal.</p>`,
+      ps: `Suas conexões ficam em ${SITE}/unidades`,
+    }),
+  }
+}
+
 /**
  * Fechamento do mês com dias faltando (só planilha).
  *

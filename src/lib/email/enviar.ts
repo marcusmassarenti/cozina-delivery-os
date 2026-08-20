@@ -56,6 +56,9 @@ export type TipoEmail =
   | "conexao-lote"
   /** "Não achei sua loja no portal do iFood" — pendência que só o cliente resolve. */
   | "ifood-nao-encontrada"
+  /** Versões em lote: N lojas num e-mail só, em vez de N e-mails iguais. */
+  | "conexao-solicitada-lote"
+  | "ifood-nao-encontrada-lote"
   /**
    * "Conectado — olha o que já entrou", com o primeiro resultado. Uma vez por
    * loja × plataforma (o carimbo mora em unit_platforms.email_conectado_at).
