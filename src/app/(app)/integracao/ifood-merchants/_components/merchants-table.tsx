@@ -356,7 +356,7 @@ export function MerchantsTable({
                   : "bg-card"
             }`}
           >
-            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 border-b px-4 py-2.5 transition-colors hover:bg-muted/40">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 border-b px-3 py-2.5 transition-colors hover:bg-muted/40 sm:px-4">
               <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cli:rotate-90" />
               {semVinculo ? (
                 <AlertTriangle className="size-4 text-amber-600" />
@@ -410,9 +410,13 @@ export function MerchantsTable({
                 return (
                   <li
                     key={m.id}
-                    className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3"
+                    className="flex flex-wrap items-start gap-x-4 gap-y-2 px-3 py-3 sm:px-4"
                   >
-                    <div className="min-w-[220px] flex-1">
+                    {/* No celular a coluna ocupa a linha inteira. Com
+                        `min-w-[220px]` fixo ela ficava mais larga que o cartão
+                        (que é overflow-hidden) e a loja simplesmente sumia da
+                        tela — não dava nem pra rolar até ela. */}
+                    <div className="w-full min-w-0 flex-1 sm:min-w-[220px]">
                       <p className="text-sm font-medium">
                         {m.name ?? m.corporate_name ?? "—"}
                       </p>
@@ -443,7 +447,7 @@ export function MerchantsTable({
                       </div>
                     </div>
 
-                    <div className="min-w-[260px]">
+                    <div className="w-full min-w-0 sm:w-auto sm:min-w-[260px]">
                       {linked ? (
                         <div className="flex flex-col gap-1.5">
                           <div className="flex flex-wrap items-center gap-2">

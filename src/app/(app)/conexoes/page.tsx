@@ -50,7 +50,7 @@ export default async function ConexoesPage({
   ])
 
   return (
-    <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-6">
+    <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-4 sm:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <Cable className="size-6 text-muted-foreground" />
@@ -67,7 +67,7 @@ export default async function ConexoesPage({
       />
 
       {/* O conteúdo herda a borda da aba ativa, pra leitura de "pasta". */}
-      <div className="rounded-b-xl rounded-tr-xl border bg-card p-5">
+      <div className="rounded-b-xl rounded-tr-xl border bg-card p-3 sm:p-5">
         {aba === "geral" && <AbaGeral />}
         {aba === "ifood" && <AbaIfood />}
         {aba === "99food" && <Aba99 />}

@@ -95,7 +95,7 @@ export function LinkRow({
         value={selectedUnit}
         onValueChange={(v) => setSelectedUnit(v ?? "")}
       >
-        <SelectTrigger className="h-7 w-[200px] text-xs">
+        <SelectTrigger className="h-7 w-full text-xs sm:w-[200px]">
           <SelectValue placeholder="Escolher unidade…" />
         </SelectTrigger>
         <SelectContent>
