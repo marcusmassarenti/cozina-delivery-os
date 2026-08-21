@@ -307,7 +307,24 @@ export function ClientDetailView({
                     + {c.billableUnits - 1} × {fmtBRL(c.planoAdd)}
                   </>
                 ) : null}{" "}
-                = <b className="text-foreground">{fmtBRL(c.computedMonthly)}/mês</b>
+                ={" "}
+                {/* Com desconto, o cheio fica riscado ao lado: sem isso o
+                    número muda e não dá pra saber se foi o desconto ou se
+                    alguém mexeu no plano. */}
+                {c.mensalCheio > c.computedMonthly ? (
+                  <>
+                    <span className="line-through opacity-60">
+                      {fmtBRL(c.mensalCheio)}
+                    </span>{" "}
+                    <b className="text-emerald-700 dark:text-emerald-400">
+                      {fmtBRL(c.computedMonthly)}/mês
+                    </b>
+                  </>
+                ) : (
+                  <b className="text-foreground">
+                    {fmtBRL(c.computedMonthly)}/mês
+                  </b>
+                )}
                 <span className="ml-1 opacity-70">
                   · recalcula sozinho quando ele abre ou fecha loja
                 </span>
@@ -338,7 +355,8 @@ export function ClientDetailView({
               valor={c.descontoValor}
               ate={c.descontoAte}
               nota={c.descontoNota}
-              mensalCheio={c.computedMonthly}
+              mensalCheio={c.mensalCheio}
+              onChanged={onChanged}
             />
             {!c.contaInterna && (
               <div className="mt-2 border-t pt-2">

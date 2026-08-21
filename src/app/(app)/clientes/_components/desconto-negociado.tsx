@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { Percent, Tag } from "lucide-react"
@@ -39,6 +40,7 @@ export function DescontoNegociado({
   ate,
   nota,
   mensalCheio,
+  onChanged,
 }: {
   holdingId: string
   tipo: "percentual" | "valor" | null
@@ -47,7 +49,10 @@ export function DescontoNegociado({
   nota: string | null
   /** Valor do plano antes do desconto — pra mostrar o efeito na hora. */
   mensalCheio: number | null
+  /** Recarrega a ficha do cliente depois de salvar. */
+  onChanged?: () => void
 }) {
+  const router = useRouter()
   const [aberto, setAberto] = React.useState(false)
   const [state, action] = useActionState<Estado, FormData>(
     setDescontoNegociado,
@@ -58,9 +63,18 @@ export function DescontoNegociado({
     valor != null ? String(valor).replace(".", ",") : "",
   )
 
+  /**
+   * Fecha E RECARREGA. O `revalidatePath` do servidor não basta: esta ficha é
+   * um drawer que já está montado com os dados antigos, então sem o refresh o
+   * desconto aparecia como salvo na mensagem e "Sem desconto negociado" logo
+   * acima — e sumia ao reabrir. Foi o que o Marcus viu em 21/08/26.
+   */
   React.useEffect(() => {
-    if (state.ok) setAberto(false)
-  }, [state.ok])
+    if (!state.ok) return
+    setAberto(false)
+    onChanged?.()
+    router.refresh()
+  }, [state.ok, onChanged, router])
 
   const vigente =
     tipo != null && valor != null && (!ate || ate >= new Date().toISOString().slice(0, 10))

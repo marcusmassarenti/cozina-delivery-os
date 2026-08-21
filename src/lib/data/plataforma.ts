@@ -1,5 +1,15 @@
 import "server-only"
 
+/** Hoje em Brasília, "YYYY-MM-DD". O corte do desconto é por DIA, não por hora. */
+function hojeBR(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSuperadmin } from "@/lib/auth/permissions"
 import {
@@ -90,7 +100,9 @@ export type ClientOverview = {
   includedUnits: number
   billableUnits: number // lojas cobradas (ativas)
   extraUnits: number // lojas além das inclusas
-  computedMonthly: number // base + extras × valor/loja
+  computedMonthly: number // base + extras × valor/loja, JÁ com desconto
+  /** O mesmo valor SEM o desconto negociado. */
+  mensalCheio: number
   /**
    * true = preço NEGOCIADO (monthly_fee preenchido à mão), fora da tabela.
    * false = veio do plano. A tela mostra isso porque um valor fora da tabela
@@ -394,11 +406,38 @@ export async function getClientsOverview(): Promise<{
     const extraUnits = Math.max(0, billableUnits - includedUnits)
     const planoDoCliente = (hh.plan_tier ?? null) as PlanId | null
     const precoNegociado = billing.monthlyFee != null
-    const computedMonthly = precoNegociado
+    const mensalCheio = precoNegociado
       ? (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
       : planoDoCliente
         ? precoDoPlano(precos, planoDoCliente, activeUnits)
         : 0
+
+    /**
+     * O DESCONTO NEGOCIADO ENTRA NO VALOR — em toda a plataforma.
+     *
+     * Aplicado em 21/08/26 o desconto de 20% da Tech Assessoria e a tela
+     * seguiu mostrando R$ 545: o valor era calculado sem olhar o desconto. Não
+     * é só a etiqueta do cliente — `computedMonthly` alimenta o MRR, a receita
+     * média por cliente e o convite de cobrança do Asaas. Ignorar o desconto
+     * aqui infla o faturamento previsto e faz a gente cobrar o valor errado.
+     *
+     * A fatura mensal calcula o desconto por conta própria (ver `faturas.ts`),
+     * de propósito: lá entra também o cupom de indicação, que é de uma vez só
+     * e não pode virar preço recorrente.
+     */
+    const dAte = (hh.desconto_ate as string | null) ?? null
+    const dTipo = (hh.desconto_tipo as "percentual" | "valor" | null) ?? null
+    const dValor = hh.desconto_valor != null ? Number(hh.desconto_valor) : 0
+    const descontoVale =
+      dTipo != null && dValor > 0 && (!dAte || dAte >= hojeBR())
+    const computedMonthly = !descontoVale
+      ? mensalCheio
+      : Math.max(
+          0,
+          dTipo === "percentual"
+            ? Math.round(mensalCheio * (100 - dValor)) / 100
+            : Math.round((mensalCheio - dValor) * 100) / 100,
+        )
     // Último acesso = max last_sign_in_at dos usuários da empresa.
     let lastLogin: string | null = null
     // Só marca como travado quando SABEMOS de algum usuário e NENHUM confirmou
@@ -432,6 +471,8 @@ export async function getClientsOverview(): Promise<{
       billableUnits,
       extraUnits,
       computedMonthly,
+      /** Antes do desconto — pra tela mostrar "de X por Y". */
+      mensalCheio,
       precoNegociado,
       contaInterna: Boolean(hh.conta_interna),
       contaInternaNota: (hh.conta_interna_nota as string | null) ?? null,
