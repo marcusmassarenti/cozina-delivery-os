@@ -68,8 +68,12 @@ export async function AbaGeral() {
       a.unitName.localeCompare(b.unitName, "pt-BR"),
   )
 
+  /* Sem padding nem fundo próprios: estas abas nasceram como telas inteiras e
+   * trouxeram o `p-6` junto quando viraram conteúdo do cartão de Conexões. No
+   * desktop era só um quadrado cinza dentro do branco; no celular, 24px de cada
+   * lado eram justamente o que faltava pro conteúdo caber. */
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div className="flex flex-1 flex-col gap-6">
       {/* O cabeçalho saiu: as ABAS já dizem onde você está, e os atalhos pra
           iFood/99/Cardápio Web viraram as próprias abas. Repetir os dois seria
           oferecer dois caminhos pro mesmo lugar na mesma tela. */}

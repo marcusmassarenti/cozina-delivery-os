@@ -314,14 +314,21 @@ export async function AbaIfood() {
     }))
   }
 
+  /* Sem padding nem fundo próprios: estas abas nasceram como telas inteiras e
+   * trouxeram o `p-6` junto quando viraram conteúdo do cartão de Conexões. No
+   * desktop era só um quadrado cinza dentro do branco; no celular, 24px de cada
+   * lado eram justamente o que faltava pro conteúdo caber. */
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div className="flex flex-1 flex-col gap-6">
       {/* Volta pra Conexões de API, que é de onde se chega aqui hoje. Apontava
           pra tela de homologação — que era o caminho quando a integração ainda
           estava sendo homologada com o iFood, e virou um beco: quem clicava
           caía numa bateria de testes de endpoint sem entender por quê. */}
 
-      <div className="flex items-end justify-between">
+      {/* Empilhado no celular: os dois botões não encolhem, e lado a lado com
+          o texto eles espremiam o parágrafo numa coluna de ~200px e ainda
+          jogavam a página inteira pra fora da tela. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Store className="size-6 text-orange-500" />
@@ -336,7 +343,7 @@ export async function AbaIfood() {
             faturamento e as avaliações começam a entrar sozinhos, todo dia.
           </p>
         </div>
-        <div className="flex items-start gap-2">
+        <div className="flex flex-wrap items-start gap-2 sm:shrink-0">
           <RunSyncButton />
           <RefreshButton />
         </div>

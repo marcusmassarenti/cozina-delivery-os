@@ -87,8 +87,14 @@ export function LinkRow({
     )
   }
 
+  /* flex-wrap + min-w-0: o select tem largura total no celular, e sem permitir
+   * quebra ele empurrava o botão e o "1 de N" pra fora do cartão — que é
+   * overflow-hidden, então sumiam de vez. */
   return (
-    <form action={linkAction} className="flex items-center gap-2">
+    <form
+      action={linkAction}
+      className="flex w-full min-w-0 flex-wrap items-center gap-2"
+    >
       <input type="hidden" name="merchantId" value={merchantId} />
       <input type="hidden" name="unitId" value={selectedUnit} />
       <Select
@@ -256,9 +262,22 @@ export function RunSyncButton() {
         })
       }
     } catch (e) {
+      /* Falha de REDE, não do servidor. No celular é o caso comum: a
+       * sincronização pode levar minutos, e o Safari corta a conexão bem antes
+       * (mais ainda se a tela apagar ou a aba for pro fundo). A mensagem crua
+       * dele é "Load failed", que não diz nada e faz parecer que a
+       * sincronização não aconteceu — quando ela segue rodando no servidor até
+       * o fim, porque a função não morre junto com a conexão.
+       *
+       * O texto precisa dizer as duas coisas: que o trabalho continua, e que o
+       * resultado se confere atualizando a tela. */
+      const cru = e instanceof Error ? e.message : String(e)
       setResult({
         ok: false,
-        error: e instanceof Error ? e.message : String(e),
+        error:
+          "A conexão caiu antes da resposta chegar — comum no celular, porque a sincronização leva alguns minutos. " +
+          "Ela continua rodando no servidor: espere um pouco e atualize a tela pra ver o resultado. " +
+          `(${cru})`,
       })
     } finally {
       setPending(false)

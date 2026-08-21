@@ -283,7 +283,7 @@ export function ClientsTable({
             )
           })}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -315,7 +315,7 @@ export function ClientsTable({
           <span className="font-medium">
             {selected.size} selecionado{selected.size !== 1 ? "s" : ""}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}

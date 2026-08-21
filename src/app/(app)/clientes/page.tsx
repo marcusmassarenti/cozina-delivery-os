@@ -104,7 +104,7 @@ export default async function PlataformaPage() {
   ]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -124,7 +124,7 @@ export default async function PlataformaPage() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* "Conexões" saiu daqui: virou a tela /conexoes no menu, com abas
               por plataforma. Dois caminhos pro mesmo lugar era metade do
               motivo de existirem seis telas de integração. */}

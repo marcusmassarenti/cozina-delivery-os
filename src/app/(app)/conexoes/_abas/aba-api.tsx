@@ -41,8 +41,12 @@ export async function AbaApi() {
     },
   ]
 
+  /* Sem padding nem fundo próprios: estas abas nasceram como telas inteiras e
+   * trouxeram o `p-6` junto quando viraram conteúdo do cartão de Conexões. No
+   * desktop era só um quadrado cinza dentro do branco; no celular, 24px de cada
+   * lado eram justamente o que faltava pro conteúdo caber. */
   return (
-    <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
+    <div className="flex flex-1 flex-col gap-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <Cable className="size-6 text-muted-foreground" />
