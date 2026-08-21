@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 
 import { createClient } from "@/lib/supabase/server"
+import { aplicarDescontos } from "@/lib/data/descontos"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import {
@@ -177,7 +178,9 @@ export async function assinar(
   const cupomDigitado = String(formData.get("cupom") ?? "").trim()
   const { data: hRow } = await admin
     .from("holdings")
-    .select("desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id, asaas_billing_type")
+    .select(
+      "desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id, asaas_billing_type, desconto_tipo, desconto_valor, desconto_ate",
+    )
     .eq("id", holdingId)
     .maybeSingle()
   const jaAssinou = !!(hRow as { asaas_subscription_id?: string } | null)
@@ -207,10 +210,37 @@ export async function assinar(
   // fatura" em cliente que já pagou várias.
   if (jaAssinou) descontoPct = 0
 
+  /* ── DESCONTO NEGOCIADO ────────────────────────────────────────────────
+   * Ele valia SÓ na cobrança manual. Quem tinha 20% acordado e assinava aqui
+   * voltava a pagar cheio, sem aviso nenhum — e a conta do Asaas é a que
+   * renova sozinha todo mês, então o erro se repetiria pra sempre.
+   *
+   * A regra (e o motivo de cupom e negociado não somarem) mora em
+   * @/lib/data/descontos, o mesmo módulo que a emissão de faturas usa. */
+  const hd = hRow as {
+    desconto_tipo?: "percentual" | "valor" | null
+    desconto_valor?: number | string | null
+    desconto_ate?: string | null
+  } | null
+  const negociado = {
+    tipo: (hd?.desconto_tipo ?? null) as "percentual" | "valor" | null,
+    valor: Number(hd?.desconto_valor ?? 0),
+    ate: (hd?.desconto_ate ?? null) as string | null,
+  }
+
   const valorCheio = valor
-  const valorComDesconto =
-    descontoPct > 0 ? Math.round(valor * (100 - descontoPct)) / 100 : valor
-  const temDesconto = valorComDesconto < valorCheio
+  const res = aplicarDescontos(valorCheio, negociado, descontoPct, todayISO())
+  // O 1º mês leva o melhor desconto; a assinatura recorrente segue com o
+  // negociado (que é o que vale "enquanto ele for cliente").
+  const valorComDesconto = res.valor
+  const valorRecorrente = res.valorNegociado ?? valorCheio
+  const temDesconto = valorComDesconto < valorRecorrente
+  const rotuloDesconto =
+    res.origem === "cupom"
+      ? `com cupom de indicação (${descontoPct}%)`
+      : res.origem === "negociado"
+        ? `com desconto negociado`
+        : ""
 
   try {
     // 1) Cliente no Asaas (só pede nome/documento na primeira vez).
@@ -275,7 +305,7 @@ export async function assinar(
           customer: customerId,
           value: valorComDesconto,
           dueDate: nextDueDate,
-          description: `Delivery OS — 1ª mensalidade com desconto de ${descontoPct}% (de R$ ${valorCheio.toFixed(2)} por R$ ${valorComDesconto.toFixed(2)})`,
+          description: `Delivery OS — 1ª mensalidade ${rotuloDesconto} (de R$ ${valorCheio.toFixed(2)} por R$ ${valorComDesconto.toFixed(2)})`,
           externalReference: holdingId,
           ...(base
             ? { callback: { successUrl: `${base}/?assinou=1`, autoRedirect: true } }
@@ -290,7 +320,9 @@ export async function assinar(
 
       const sub = await asaasCreateSubscription({
         customer: customerId,
-        value: valor,
+        // Valor que RENOVA: já com o desconto negociado, que vale enquanto ele
+        // for cliente. O do cupom fica só na avulsa acima, uma vez só.
+        value: valorRecorrente,
         // Forma de cobrança do cliente (nulo = cartão, o padrão). PIX e BOLETO
         // NÃO debitam sozinhos: o Asaas emite uma cobrança por ciclo e o
         // cliente paga cada uma. Combinado assim com a DG FOODS.
@@ -346,7 +378,7 @@ export async function assinar(
         return {
           ok: true,
           checkoutUrl: linkPrimeiraCobranca,
-          message: `Desconto de ${descontoPct}% aplicado na 1ª mensalidade: R$ ${valorComDesconto.toFixed(2)} em vez de R$ ${valorCheio.toFixed(2)}. A partir do próximo ciclo, o valor normal.`,
+          message: `1ª mensalidade ${rotuloDesconto}: R$ ${valorComDesconto.toFixed(2)} em vez de R$ ${valorCheio.toFixed(2)}. A partir do próximo ciclo, R$ ${valorRecorrente.toFixed(2)}.`,
         }
       }
     }

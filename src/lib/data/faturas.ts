@@ -8,6 +8,8 @@
  */
 import "server-only"
 
+import { aplicarDescontos } from "@/lib/data/descontos"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   getDefaultPlan,
@@ -202,71 +204,23 @@ export async function emitirFaturasDoMes(
 
     let notaFatura: string | null = null
 
-    /**
-     * OS DOIS DESCONTOS, E POR QUE NÃO SOMAM.
-     *
-     * São coisas diferentes e podem coexistir: o NEGOCIADO é o que foi
-     * combinado com o cliente (vale todo mês), e o CUPOM de indicação vale só
-     * na primeira fatura. O cliente fica com o MELHOR dos dois no mês em que
-     * os dois existem — nunca com os dois somados.
-     *
-     * ── POR QUE (Marcus, 21/08/26) ─────────────────────────────────────────
-     * Somar transformava "20% + metade no primeiro mês" em 60,4% de desconto
-     * (545 → 436 → 218,40), um número que não sai de nenhuma conversa e que
-     * ninguém consegue explicar pro cliente. "Metade no primeiro mês" quer
-     * dizer metade do preço — R$ 272,50 —, e é isso que a fatura precisa
-     * mostrar.
-     *
-     * `desconto_ate` no passado não desliga o desconto no banco — só para de
-     * valer. Assim o histórico de "o que foi combinado" continua legível
-     * depois que a promoção acaba.
-     */
+    /* Desconto negociado + cupom de indicação: a regra (e o porquê de ela
+     * não somar os dois) mora em @/lib/data/descontos. */
     const cheio = valor
-    const dTipo = h.desconto_tipo as "percentual" | "valor" | null
-    const dValor = Number(h.desconto_valor ?? 0)
-    const dAte = h.desconto_ate as string | null
-    const dVigente =
-      dTipo != null && dValor > 0 && (!dAte || dAte >= hojeISO())
-
-    const valorNegociado =
-      dVigente && cheio > 0
-        ? Math.max(
-            0,
-            dTipo === "percentual"
-              ? Math.round(cheio * (100 - dValor)) / 100
-              : Math.round((cheio - dValor) * 100) / 100,
-          )
-        : null
-
-    // Cupom de indicação: vale uma vez só, e a marca é consumida logo abaixo —
-    // se ficasse gravada, o desconto se repetiria todo mês e viraria preço,
-    // não promoção.
     const descontoPct = Number(h.desconto_primeira_fatura_pct ?? 0)
-    const doCupom =
-      descontoPct > 0 && cheio > 0
-        ? Math.round(cheio * (100 - descontoPct)) / 100
-        : null
-
-    const candidatos = [valorNegociado, doCupom].filter(
-      (v): v is number => v != null,
+    const res = aplicarDescontos(
+      cheio,
+      {
+        tipo: h.desconto_tipo as "percentual" | "valor" | null,
+        valor: Number(h.desconto_valor ?? 0),
+        ate: h.desconto_ate as string | null,
+      },
+      descontoPct,
+      hojeISO(),
+      h.desconto_nota as string | null,
     )
-    if (candidatos.length) valor = Math.min(...candidatos)
-
-    const rotuloNeg =
-      dTipo === "percentual" ? `${dValor}%` : `R$ ${dValor.toFixed(2)}`
-    if (doCupom != null && valor === doCupom) {
-      notaFatura = `Cupom de indicação: ${descontoPct}% na 1ª fatura (de ${cheio.toFixed(2)} por ${valor.toFixed(2)}).`
-      if (valorNegociado != null)
-        notaFatura += ` A partir da próxima, vale o desconto negociado de ${rotuloNeg} (R$ ${valorNegociado.toFixed(2)}).`
-    } else if (valorNegociado != null && valor === valorNegociado) {
-      notaFatura = `Desconto negociado: ${rotuloNeg}${
-        dAte ? ` (até ${dAte.split("-").reverse().join("/")})` : ""
-      } — de ${cheio.toFixed(2)} por ${valor.toFixed(2)}.${
-        h.desconto_nota ? ` ${h.desconto_nota}` : ""
-      }`
-      if (doCupom != null)
-        notaFatura += ` (O cupom de ${descontoPct}% na 1ª fatura daria ${doCupom.toFixed(2)}; vale o maior desconto, não os dois.)`
-    }
+    valor = res.valor
+    notaFatura = res.nota
 
     if (valor <= 0) {
       out.puladas.push({
