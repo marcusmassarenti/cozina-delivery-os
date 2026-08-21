@@ -14,6 +14,8 @@
 import "server-only"
 
 import { asaasUpdateSubscription } from "@/lib/asaas/client"
+import { aplicarDescontos } from "@/lib/data/descontos"
+import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { contarLojasCompartilhadas } from "@/lib/data/lojas-compartilhadas"
 import {
@@ -46,7 +48,7 @@ export async function sincronizarValorAssinatura(
     const { data: h } = await admin
       .from("holdings")
       .select(
-        "id, name, plan_tier, monthly_fee, price_per_unit, included_units, asaas_subscription_id, conta_interna, asaas_sub_valor",
+        "id, name, plan_tier, monthly_fee, price_per_unit, included_units, asaas_subscription_id, conta_interna, asaas_sub_valor, billing_cycle, desconto_tipo, desconto_valor, desconto_ate",
       )
       .eq("id", holdingId)
       .maybeSingle()
@@ -90,10 +92,35 @@ export async function sincronizarValorAssinatura(
       valor = Number(h.monthly_fee) + extras * Number(h.price_per_unit ?? 0)
     } else if (plano) {
       const precos = await getDefaultPlan()
-      valor = precoDoPlano(precos, plano, ativas)
+      // Ciclo mensal custa +30% sobre a base (que é a do plano anual).
+      valor = valorMensalExibido(
+        precoDoPlano(precos, plano, ativas),
+        (h.billing_cycle as BillingCycle | null) ?? "anual",
+      )
     } else {
       return { ok: false, motivo: "sem plano definido" }
     }
+
+    /* Desconto negociado: a MESMA regra da fatura e do checkout, no módulo
+     * @/lib/data/descontos.
+     *
+     * ── POR QUE (Marcus, 21/08/26) ─────────────────────────────────────────
+     * Esta rotina roda a cada loja cadastrada e no cron diário, e mandava pro
+     * Asaas o preço de tabela puro. Ou seja: ela DESFAZIA o desconto e o ciclo
+     * toda vez que rodasse — inclusive por cima de um valor corrigido à mão no
+     * painel do Asaas, sem deixar rastro. Cupom fica de fora de propósito: ele
+     * vale só na 1ª fatura, e isto aqui é o valor que se repete pra sempre. */
+    valor = aplicarDescontos(
+      valor,
+      {
+        tipo: (h.desconto_tipo ?? null) as "percentual" | "valor" | null,
+        valor: Number(h.desconto_valor ?? 0),
+        ate: (h.desconto_ate ?? null) as string | null,
+      },
+      0,
+      new Date().toISOString().slice(0, 10),
+    ).valor
+
     if (valor <= 0) return { ok: false, motivo: "valor zerado" }
 
     // Não bate na API à toa: só quando o valor realmente mudou.

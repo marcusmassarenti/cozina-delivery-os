@@ -490,7 +490,20 @@ export function ClientsTable({
                             </span>
                           </span>
                         ) : c.computedMonthly > 0 ? (
-                          `${fmtBRL(c.computedMonthly)}/mês`
+                          <>
+                            {fmtBRL(c.computedMonthly)}/mês
+                            {/* Mensal custa +30% sobre a base anual. Sem essa
+                                marca, o valor da linha não bate com o preço de
+                                tabela e parece erro de cálculo. */}
+                            {c.billingCycle === "mensal" && !c.precoNegociado ? (
+                              <span
+                                className="ml-1 opacity-70"
+                                title="Ciclo mensal: +30% sobre a base do plano anual."
+                              >
+                                · mensal
+                              </span>
+                            ) : null}
+                          </>
                         ) : (
                           "—"
                         )}

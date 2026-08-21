@@ -9,6 +9,7 @@
 import "server-only"
 
 import { aplicarDescontos } from "@/lib/data/descontos"
+import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
@@ -155,7 +156,7 @@ export async function emitirFaturasDoMes(
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
+      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, billing_cycle, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
     )
 
   // Lojas ATIVAS por cliente — é a base do preço por loja.
@@ -199,7 +200,13 @@ export async function emitirFaturasDoMes(
       const extras = Math.max(0, ativas - inclusas)
       valor = Number(h.monthly_fee) + extras * Number(h.price_per_unit ?? 0)
     } else if (plano) {
-      valor = precoDoPlano(precos, plano, ativas)
+      // Ciclo mensal custa +30% sobre a base (o preço de tabela é o do plano
+      // anual, por mês). `billing_cycle` só existe pra quem assinou pelo
+      // self-service; nulo = cobrança manual, que sempre usou a base.
+      valor = valorMensalExibido(
+        precoDoPlano(precos, plano, ativas),
+        (h.billing_cycle as BillingCycle | null) ?? "anual",
+      )
     }
 
     let notaFatura: string | null = null

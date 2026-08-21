@@ -30,6 +30,7 @@ import {
   getAuditoriaDoCliente,
   type EntradaAuditoria,
 } from "@/lib/data/auditoria"
+import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
 import { getFaturasDoCliente, type Fatura } from "@/lib/data/faturas"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
@@ -109,6 +110,8 @@ export type ClientOverview = {
    * que ninguém sabe explicar é a origem de discussão de fatura.
    */
   precoNegociado: boolean
+  /** "mensal" custa +30% sobre a base (que é a do plano anual). */
+  billingCycle: BillingCycle
   /** Conta da própria casa: fora do MRR/ARPA e da emissão de faturas. */
   contaInterna: boolean
   contaInternaNota: string | null
@@ -252,7 +255,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -415,6 +418,7 @@ export async function getClientsOverview(): Promise<{
       nino_trial_ends_at: string | null
       asaas_subscription_id: string | null
       asaas_last_event: { event?: string; at?: string } | null
+      billing_cycle: "mensal" | "anual" | null
     }
     const billing = {
       paymentMethod: hh.payment_method ?? null,
@@ -439,10 +443,31 @@ export async function getClientsOverview(): Promise<{
     const extraUnits = Math.max(0, billableUnits - includedUnits)
     const planoDoCliente = (hh.plan_tier ?? null) as PlanId | null
     const precoNegociado = billing.monthlyFee != null
+
+    /**
+     * CICLO: quem paga mês a mês paga +30%.
+     *
+     * ── POR QUE (Marcus, 21/08/26) ─────────────────────────────────────────
+     * O preço da tabela é o do plano ANUAL, por mês. Esta tela mostrava sempre
+     * essa base, então cliente no ciclo mensal aparecia 30% mais barato do que
+     * realmente paga: a Tech Assessoria constava R$ 436 enquanto a cobrança
+     * saía de R$ 708,50. Não é só a etiqueta — `computedMonthly` alimenta o
+     * MRR, que ficava subestimado nesses casos.
+     *
+     * Preço NEGOCIADO não leva multiplicador: ali o valor foi combinado à mão,
+     * já é o que o cliente paga (a DG FOODS é mensal e paga R$ 3.500 redondos).
+     *
+     * `billing_cycle` só é preenchido por quem assina pelo self-service. Nulo
+     * = cobrança manual, que sempre usou a base anual — e continua usando.
+     */
+    const ciclo = (hh.billing_cycle ?? "anual") as BillingCycle
     const mensalCheio = precoNegociado
       ? (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
       : planoDoCliente
-        ? precoDoPlano(precos, planoDoCliente, activeUnits)
+        ? valorMensalExibido(
+            precoDoPlano(precos, planoDoCliente, activeUnits),
+            ciclo,
+          )
         : 0
 
     /**
@@ -506,6 +531,7 @@ export async function getClientsOverview(): Promise<{
       computedMonthly,
       /** Antes do desconto — pra tela mostrar "de X por Y". */
       mensalCheio,
+      billingCycle: ciclo,
       precoNegociado,
       contaInterna: Boolean(hh.conta_interna),
       contaInternaNota: (hh.conta_interna_nota as string | null) ?? null,

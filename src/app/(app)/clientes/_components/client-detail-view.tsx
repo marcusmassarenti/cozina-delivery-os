@@ -309,6 +309,26 @@ export function ClientDetailView({
                   </>
                 ) : null}{" "}
                 ={" "}
+                {/* Ciclo mensal custa +30% sobre a base (que é a do plano
+                    anual). Sem mostrar esse passo, a conta "149 + 4×99"
+                    simplesmente não fecha com o total. */}
+                {c.billingCycle === "mensal" ? (
+                  <>
+                    <span className="opacity-60">
+                      {fmtBRL(
+                        (c.planoFirst ?? 0) +
+                          Math.max(0, c.billableUnits - 1) * (c.planoAdd ?? 0),
+                      )}
+                    </span>
+                    <span
+                      className="opacity-70"
+                      title="O preço de tabela é o do plano anual, por mês. Quem paga mês a mês paga 30% a mais."
+                    >
+                      {" "}
+                      × 1,3 (mensal) ={" "}
+                    </span>
+                  </>
+                ) : null}
                 {/* Com desconto, o cheio fica riscado ao lado: sem isso o
                     número muda e não dá pra saber se foi o desconto ou se
                     alguém mexeu no plano. */}
