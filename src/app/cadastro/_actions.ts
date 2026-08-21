@@ -6,7 +6,13 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { todayISO } from "@/lib/data/billing"
-import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
+import {
+  acharIndicadorPorCodigo,
+  nomeDoIndicador,
+  normalizarCodigo,
+} from "@/lib/data/indicacoes"
+import { enviarEmail } from "@/lib/email/enviar"
+import { novoClienteInterno } from "@/lib/email/templates"
 
 export type SignUpState = {
   ok: boolean
@@ -176,6 +182,33 @@ export async function signUp(
     .from("profiles")
     .update({ full_name: nome, perfil: "administrador", onboarded: false })
     .eq("user_id", userId)
+
+  /* Avisa a casa que entrou gente. O teste são 7 dias: descobrir o cadastro
+   * dois dias depois já queimou um terço da janela de conversar com a pessoa.
+   *
+   * Nunca derruba o cadastro: se o e-mail falhar, o cliente entra do mesmo
+   * jeito e nós perdemos o aviso — nunca o contrário. */
+  try {
+    const { assunto, html } = novoClienteInterno({
+      empresa,
+      nome,
+      email,
+      whatsapp: whatsapp || null,
+      cupom: indicador ? normalizarCodigo(cupom) : null,
+      indicador: indicador ? await nomeDoIndicador(indicador.id) : null,
+      diasDeTeste: 7,
+    })
+    await enviarEmail({
+      holdingId: holding.id,
+      tipo: "cliente-novo",
+      para: process.env.SAUDE_EMAIL ?? "marcus@massarenti.me",
+      assunto,
+      html,
+      forcar: true,
+    })
+  } catch (e) {
+    console.error("[cadastro] aviso de cliente novo falhou:", e)
+  }
 
   // Se o projeto NÃO exige confirmação de e-mail, o Supabase já devolve sessão
   // → entra direto. Se exige, não há sessão → tela "confira seu e-mail".

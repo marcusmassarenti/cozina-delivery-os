@@ -14,13 +14,11 @@
 import "server-only"
 
 import { asaasUpdateSubscription } from "@/lib/asaas/client"
-import { aplicarDescontos } from "@/lib/data/descontos"
-import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
+import { mensalidadeDoCliente } from "@/lib/data/mensalidade"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { contarLojasCompartilhadas } from "@/lib/data/lojas-compartilhadas"
 import {
   getDefaultPlan,
-  precoDoPlano,
   PLANOS_META,
   type PlanId,
 } from "@/lib/data/assinatura"
@@ -85,39 +83,22 @@ export async function sincronizarValorAssinatura(
     ativas += compartilhadas
 
     const plano = (h.plan_tier as PlanId | null) ?? null
-    let valor: number
-    if (h.monthly_fee != null) {
-      const inclusas = Number(h.included_units ?? 1)
-      const extras = Math.max(0, ativas - inclusas)
-      valor = Number(h.monthly_fee) + extras * Number(h.price_per_unit ?? 0)
-    } else if (plano) {
-      const precos = await getDefaultPlan()
-      // Ciclo mensal custa +30% sobre a base (que é a do plano anual).
-      valor = valorMensalExibido(
-        precoDoPlano(precos, plano, ativas),
-        (h.billing_cycle as BillingCycle | null) ?? "anual",
-      )
-    } else {
+    if (h.monthly_fee == null && !plano)
       return { ok: false, motivo: "sem plano definido" }
-    }
 
-    /* Desconto negociado: a MESMA regra da fatura e do checkout, no módulo
-     * @/lib/data/descontos.
+    /* Ciclo (mensal custa +30%) e desconto negociado saem do mesmo lugar que a
+     * fatura e o checkout — @/lib/data/mensalidade.
      *
      * ── POR QUE (Marcus, 21/08/26) ─────────────────────────────────────────
      * Esta rotina roda a cada loja cadastrada e no cron diário, e mandava pro
      * Asaas o preço de tabela puro. Ou seja: ela DESFAZIA o desconto e o ciclo
      * toda vez que rodasse — inclusive por cima de um valor corrigido à mão no
-     * painel do Asaas, sem deixar rastro. Cupom fica de fora de propósito: ele
-     * vale só na 1ª fatura, e isto aqui é o valor que se repete pra sempre. */
-    valor = aplicarDescontos(
-      valor,
-      {
-        tipo: (h.desconto_tipo ?? null) as "percentual" | "valor" | null,
-        valor: Number(h.desconto_valor ?? 0),
-        ate: (h.desconto_ate ?? null) as string | null,
-      },
-      0,
+     * painel do Asaas, sem deixar rastro. */
+    const precos = await getDefaultPlan()
+    const valor = mensalidadeDoCliente(
+      h as Parameters<typeof mensalidadeDoCliente>[0],
+      ativas,
+      precos,
       new Date().toISOString().slice(0, 10),
     ).valor
 

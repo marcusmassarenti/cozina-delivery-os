@@ -80,6 +80,21 @@ export async function acharIndicadorPorCodigo(
   }
 }
 
+/** Nome de quem indicou — pro aviso interno dizer de quem veio o cliente. */
+export async function nomeDoIndicador(id: string): Promise<string | null> {
+  try {
+    const admin = createAdminClient()
+    const { data } = await admin
+      .from("indicadores")
+      .select("nome")
+      .eq("id", id)
+      .maybeSingle()
+    return (data as { nome?: string } | null)?.nome ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function listarIndicadores(): Promise<Indicador[]> {
   const admin = createAdminClient()
   const [{ data: inds }, { data: holds }, { data: coms }] = await Promise.all([

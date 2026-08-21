@@ -281,7 +281,36 @@ async function avisarTime(unitId: string, lojaNome: string, lojaCode: string) {
     cardapioweb: "confira a instalação",
   }
 
+  // De quem é a loja. O aviso sem o cliente obriga a ir procurar em outra tela
+  // justamente quem já está com a tarefa na mão.
+  let cliente: string | null = null
+  {
+    const { data: u } = await admin
+      .from("units")
+      .select("brand_id")
+      .eq("id", unitId)
+      .maybeSingle()
+    const brandId = (u as { brand_id?: string } | null)?.brand_id
+    if (brandId) {
+      const { data: b } = await admin
+        .from("brands")
+        .select("holding_id")
+        .eq("id", brandId)
+        .maybeSingle()
+      const holdingId = (b as { holding_id?: string } | null)?.holding_id
+      if (holdingId) {
+        const { data: h } = await admin
+          .from("holdings")
+          .select("name")
+          .eq("id", holdingId)
+          .maybeSingle()
+        cliente = (h as { name?: string } | null)?.name ?? null
+      }
+    }
+  }
+
   const { assunto, html } = conexaoEsperando({
+    cliente,
     lojaCode,
     lojaNome,
     pendentes: pendentes.map((p) => ({

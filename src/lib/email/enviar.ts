@@ -109,6 +109,20 @@ export type TipoEmail =
    */
   | "loja-compartilhada"
   /**
+   * Cliente novo entrou pelo self-service. Interno, com `forcar: true`: são
+   * vários cadastros por semana e a trava é por (holding, tipo) — como cada
+   * cadastro cria uma holding nova ela nem morderia, mas forçar deixa claro
+   * que repetição aqui é esperada, não acidente.
+   */
+  | "cliente-novo"
+  /**
+   * Acesso cortado por falta de pagamento. A DATA da suspensão faz parte do
+   * tipo pelo mesmo motivo das faturas: um cliente pode ser suspenso, voltar e
+   * cair de novo meses depois, e com tipo fixo o segundo corte seria silencioso.
+   */
+  | `conta-suspensa-${string}`
+  | `cliente-suspenso-interno-${string}`
+  /**
    * Fechamento do mês com dias faltando. Mensal, então quem dispara manda
    * `forcar: true` e faz a própria trava por janela de dias — a trava padrão
    * é "uma vez e nunca mais", que aqui significaria avisar só no primeiro mês.

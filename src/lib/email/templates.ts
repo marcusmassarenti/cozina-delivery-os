@@ -1350,6 +1350,8 @@ export function propostaAceita(d: {
  * O e-mail que manda VOCÊ trabalhar é justamente o que não pode ser ignorável.
  */
 export function conexaoEsperando(d: {
+  /** De QUEM é a loja. Sem isso o aviso não diz com quem falar. */
+  cliente: string | null
   lojaCode: string
   lojaNome: string
   /** O que falta, já em português: { plataforma, acao }. */
@@ -1370,19 +1372,143 @@ export function conexaoEsperando(d: {
     .join("")
 
   const corpo =
-    `<p style="margin:0 0 18px;">O cliente concluiu a parte dele em <b>${d.lojaCode} · ${d.lojaNome}</b>. Falta a sua:</p>` +
+    `<p style="margin:0 0 18px;">${
+      d.cliente ? `<b>${d.cliente}</b> concluiu` : "O cliente concluiu"
+    } a parte dele em <b>${d.lojaCode} · ${d.lojaNome}</b>. Falta a sua:</p>` +
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid ${LINHA};border-radius:12px;overflow:hidden;">${itens}</table>` +
     (d.prontas.length > 0
       ? `<p style="margin:18px 0 0;font-size:14px;color:${SUAVE};">Já conectaram sozinhas: ${d.prontas.join(", ")}.</p>`
       : "")
 
   return {
-    assunto: `Conexão esperando por você — ${d.lojaCode} · ${d.lojaNome}`,
+    assunto: `Conexão esperando por você — ${
+      d.cliente ? `${d.cliente} · ` : ""
+    }${d.lojaCode} · ${d.lojaNome}`,
     html: layout({
       titulo: "Uma loja está esperando por você",
       corpo,
       cta: { texto: "Abrir as conexões", url: `${SITE}/conexoes` },
       ps: "Enquanto isso não acontece, a loja fica sem dado nenhum — e o cliente já fez a parte dele.",
+    }),
+  }
+}
+
+/**
+ * Aviso INTERNO: entrou cliente novo pela porta da frente.
+ *
+ * Cadastro self-service é a única coisa que acontece na plataforma sem ninguém
+ * da casa saber. O cliente entra, começa o teste de 7 dias e o relógio corre —
+ * e quem podia ligar pra ele só descobre quando olha a lista por acaso. Este
+ * e-mail existe pra encurtar isso: o teste é curto demais pra ser percebido
+ * tarde.
+ *
+ * Traz o contato inteiro de propósito (e-mail e WhatsApp): a ação óbvia ao
+ * ler é falar com a pessoa, e ir buscar o telefone noutra tela é o atrito que
+ * faz não acontecer.
+ */
+export function novoClienteInterno(d: {
+  empresa: string
+  nome: string | null
+  email: string
+  whatsapp: string | null
+  /** Cupom usado no cadastro, quando veio por indicação. */
+  cupom: string | null
+  /** Quem indicou, se o cupom for de alguém. */
+  indicador: string | null
+  diasDeTeste: number
+}): { assunto: string; html: string } {
+  const linha = (rotulo: string, valor: string) =>
+    `<tr>
+       <td style="padding:10px 16px;border-bottom:1px solid ${LINHA};font-size:13px;color:${SUAVE};width:34%;">${rotulo}</td>
+       <td style="padding:10px 16px;border-bottom:1px solid ${LINHA};font-size:15px;color:${TINTA};font-weight:600;">${valor}</td>
+     </tr>`
+
+  const corpo =
+    `<p style="margin:0 0 18px;">Alguém abriu conta agora e já está no teste de <b>${d.diasDeTeste} dias</b>.</p>` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid ${LINHA};border-radius:12px;overflow:hidden;">` +
+    linha("Empresa", d.empresa) +
+    linha("Responsável", d.nome ?? "—") +
+    linha("E-mail", `<a href="mailto:${d.email}" style="color:${LARANJA};text-decoration:none;">${d.email}</a>`) +
+    linha(
+      "WhatsApp",
+      d.whatsapp
+        ? `<a href="https://wa.me/55${d.whatsapp.replace(/\D/g, "")}" style="color:${LARANJA};text-decoration:none;">${d.whatsapp}</a>`
+        : "não informado",
+    ) +
+    (d.cupom
+      ? linha(
+          "Indicação",
+          `${d.cupom}${d.indicador ? ` · ${d.indicador}` : ""}`,
+        )
+      : "") +
+    `</table>`
+
+  return {
+    assunto: `Cliente novo — ${d.empresa}`,
+    html: layout({
+      titulo: "Entrou um cliente novo",
+      corpo,
+      cta: { texto: "Ver na plataforma", url: `${SITE}/clientes` },
+      ps: "O teste é curto: uma mensagem nos primeiros dias é o que costuma virar assinatura.",
+    }),
+  }
+}
+
+/**
+ * O acesso foi cortado por falta de pagamento — pro CLIENTE.
+ *
+ * Chega no dia em que a suspensão de fato acontece, não antes: os avisos de
+ * "vai vencer" e "está em atraso" já existem e são outra conversa. Este é o
+ * que explica uma tela que mudou embaixo do pé dele.
+ *
+ * Diz explicitamente que o dado não some. É a primeira pergunta de quem é
+ * suspenso, e a resposta boa ("está tudo aqui, volta no ato") é justamente o
+ * que faz a pessoa pagar em vez de desistir.
+ */
+export function contaSuspensa(
+  d: DadosEmail & { vencimento: string | null },
+): { assunto: string; html: string } {
+  return {
+    assunto: `Acesso suspenso — ${d.empresa}`,
+    html: layout({
+      titulo: "Seu acesso está suspenso",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} A mensalidade${
+          d.valorMensal ? ` de <strong>${brl(d.valorMensal)}</strong>` : ""
+        }${
+          d.vencimento ? `, que venceu em <strong>${d.vencimento}</strong>,` : ""
+        } não foi regularizada, e o acesso do ${
+          d.empresa
+        } ficou suspenso hoje.</p>
+        <p style="margin:0 0 14px;"><strong>Seus dados continuam aqui.</strong> Nada foi apagado — histórico, relatórios e configurações estão intactos, e o acesso volta assim que o pagamento cair.</p>
+        <p style="margin:0 0 14px;">O que para enquanto isso é a sincronização automática com as plataformas: os dias em que a conta ficar suspensa entram depois, mas não entram sozinhos.</p>
+        <p style="margin:0 0 14px;">Se já pagou nos últimos dias, me responde que eu confirmo por aqui e libero na hora.</p>`,
+      cta: { texto: "Regularizar e liberar o acesso", url: `${SITE}/assinatura` },
+    }),
+  }
+}
+
+/** O mesmo fato, pro nosso lado: quem caiu, de quanto era e desde quando. */
+export function clienteSuspensoInterno(d: {
+  empresa: string
+  valorMensal: number | null
+  vencimento: string | null
+  lojas: number
+}): { assunto: string; html: string } {
+  return {
+    assunto: `Cliente suspenso — ${d.empresa}`,
+    html: layout({
+      titulo: "Um cliente foi suspenso",
+      corpo: `
+        <p style="margin:0 0 14px;"><b>${d.empresa}</b> perdeu o acesso hoje por falta de pagamento${
+          d.vencimento ? ` — venceu em <b>${d.vencimento}</b>` : ""
+        }.</p>
+        ${destaque(
+          d.valorMensal ? brl(d.valorMensal) : "—",
+          `de mensalidade fora do caixa · ${d.lojas} loja${d.lojas === 1 ? "" : "s"}`,
+        )}
+        <p style="margin:18px 0 0;">Ele já recebeu o aviso com o link de regularização.</p>`,
+      cta: { texto: "Abrir a ficha do cliente", url: `${SITE}/clientes` },
     }),
   }
 }
