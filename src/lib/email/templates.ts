@@ -1340,3 +1340,49 @@ export function propostaAceita(d: {
     }),
   }
 }
+
+/**
+ * Aviso INTERNO: o cliente terminou a parte dele e a bola está com a gente.
+ *
+ * Usa o mesmo layout dos e-mails que vão pro cliente de propósito. Era HTML
+ * cru montado na mão dentro da action — chegava sem cabeçalho, sem botão e sem
+ * assinatura, parecendo aviso de sistema quebrado no meio da caixa de entrada.
+ * O e-mail que manda VOCÊ trabalhar é justamente o que não pode ser ignorável.
+ */
+export function conexaoEsperando(d: {
+  lojaCode: string
+  lojaNome: string
+  /** O que falta, já em português: { plataforma, acao }. */
+  pendentes: readonly { plataforma: string; acao: string }[]
+  /** Plataformas que se resolveram sozinhas. */
+  prontas: readonly string[]
+}): { assunto: string; html: string } {
+  const itens = d.pendentes
+    .map(
+      (p) =>
+        `<tr>
+           <td style="padding:14px 16px;border-bottom:1px solid ${LINHA};">
+             <div style="font-size:15px;font-weight:700;color:${TINTA};">${p.plataforma}</div>
+             <div style="margin-top:3px;font-size:14px;line-height:1.5;color:${TEXTO};">${p.acao}</div>
+           </td>
+         </tr>`,
+    )
+    .join("")
+
+  const corpo =
+    `<p style="margin:0 0 18px;">O cliente concluiu a parte dele em <b>${d.lojaCode} · ${d.lojaNome}</b>. Falta a sua:</p>` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid ${LINHA};border-radius:12px;overflow:hidden;">${itens}</table>` +
+    (d.prontas.length > 0
+      ? `<p style="margin:18px 0 0;font-size:14px;color:${SUAVE};">Já conectaram sozinhas: ${d.prontas.join(", ")}.</p>`
+      : "")
+
+  return {
+    assunto: `Conexão esperando por você — ${d.lojaCode} · ${d.lojaNome}`,
+    html: layout({
+      titulo: "Uma loja está esperando por você",
+      corpo,
+      cta: { texto: "Abrir as conexões", url: `${SITE}/conexoes` },
+      ps: "Enquanto isso não acontece, a loja fica sem dado nenhum — e o cliente já fez a parte dele.",
+    }),
+  }
+}

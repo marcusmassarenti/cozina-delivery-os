@@ -312,6 +312,10 @@ export async function setDescontoNegociado(
         })
         .eq("id", holdingId)
       if (error) return { ok: false, error: error.message }
+      // Desconto mexe no valor que RENOVA: sem empurrar pro Asaas, o cliente
+      // seguiria sendo debitado no valor antigo todo mês, e o painel diria uma
+      // coisa enquanto a cobrança faz outra.
+      await sincronizarValorAssinatura(holdingId)
       revalidatePath("/clientes")
       return { ok: true, message: "Desconto removido." }
     }
@@ -348,6 +352,7 @@ export async function setDescontoNegociado(
       .eq("id", holdingId)
     if (error) return { ok: false, error: error.message }
 
+    await sincronizarValorAssinatura(holdingId)
     revalidatePath("/clientes")
     return {
       ok: true,

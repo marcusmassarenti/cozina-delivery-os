@@ -20,6 +20,7 @@ import { revalidatePath } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getVisibleUnits } from "@/lib/data/units"
+import { conexaoEsperando } from "@/lib/email/templates"
 import { enviarEmail } from "@/lib/email/enviar"
 import { listarLojas99 } from "@/lib/ninefood/lojas"
 import type { PlatformId } from "@/components/platform-logo"
@@ -280,26 +281,22 @@ async function avisarTime(unitId: string, lojaNome: string, lojaCode: string) {
     cardapioweb: "confira a instalação",
   }
 
+  const { assunto, html } = conexaoEsperando({
+    lojaCode,
+    lojaNome,
+    pendentes: pendentes.map((p) => ({
+      plataforma: ROTULO[p.platform] ?? p.platform,
+      acao: acao[p.platform] ?? "conferir",
+    })),
+    prontas: prontas.map((p) => ROTULO[p.platform] ?? p.platform),
+  })
+
   await enviarEmail({
     holdingId: null,
     tipo: "onboarding-conexao",
     para: process.env.SAUDE_EMAIL ?? "marcus@massarenti.me",
-    assunto: `Conexão esperando por você — ${lojaCode} · ${lojaNome}`,
-    html:
-      `<p>O cliente concluiu a parte dele em <b>${lojaCode} · ${lojaNome}</b>.</p>` +
-      `<p><b>Falta você:</b></p><ul>` +
-      pendentes
-        .map(
-          (p) =>
-            `<li><b>${ROTULO[p.platform] ?? p.platform}</b> — ${acao[p.platform] ?? "conferir"}</li>`,
-        )
-        .join("") +
-      `</ul>` +
-      (prontas.length > 0
-        ? `<p style="color:#666">Já conectadas sozinhas: ${prontas
-            .map((p) => ROTULO[p.platform] ?? p.platform)
-            .join(", ")}.</p>`
-        : ""),
+    assunto,
+    html,
     forcar: true,
   })
 
