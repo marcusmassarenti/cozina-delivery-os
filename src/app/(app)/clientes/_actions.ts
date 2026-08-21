@@ -201,6 +201,88 @@ export async function criarCliente(
 
 export type BillingActionState = { ok: boolean; message?: string }
 
+/**
+ * Desconto NEGOCIADO do cliente — as três formas num controle só.
+ *
+ * (Marcus, 21/08/26: "preciso poder fazer um ajuste manual de valor com um
+ * cupom específico".)
+ *
+ * Não confundir com `desconto_primeira_fatura_pct`: aquele é o cupom de
+ * INDICAÇÃO, cujo percentual quem define é o cliente que indicou, e que vale
+ * uma vez só. Este é o que a gente combina na negociação.
+ *
+ * Os dois podem coexistir e a fatura aplica o negociado primeiro — ver a nota
+ * em `faturas.ts`.
+ */
+export async function setDescontoNegociado(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, error: "Cliente não informado." }
+
+    const tipo = String(formData.get("descontoTipo") ?? "").trim()
+    // Vazio = tirar o desconto. Limpa tudo junto: valor órfão sem tipo viraria
+    // desconto fantasma na próxima vez que alguém mexesse aqui.
+    if (!tipo) {
+      const { error } = await admin
+        .from("holdings")
+        .update({
+          desconto_tipo: null,
+          desconto_valor: null,
+          desconto_ate: null,
+          desconto_nota: null,
+        })
+        .eq("id", holdingId)
+      if (error) return { ok: false, error: error.message }
+      revalidatePath("/clientes")
+      return { ok: true, message: "Desconto removido." }
+    }
+
+    if (tipo !== "percentual" && tipo !== "valor") {
+      return { ok: false, error: "Tipo de desconto inválido." }
+    }
+
+    const bruto = String(formData.get("descontoValor") ?? "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .trim()
+    const valor = bruto ? Number(bruto) : NaN
+    if (!Number.isFinite(valor) || valor <= 0) {
+      return { ok: false, error: "Informe o valor do desconto." }
+    }
+    // 100% é doar o plano — é uma decisão possível, mas acima disso é erro de
+    // digitação, e desconto maior que o preço não vira crédito pro cliente.
+    if (tipo === "percentual" && valor > 100) {
+      return { ok: false, error: "Percentual não pode passar de 100." }
+    }
+
+    const ate = String(formData.get("descontoAte") ?? "").trim() || null
+    const nota = String(formData.get("descontoNota") ?? "").trim() || null
+
+    const { error } = await admin
+      .from("holdings")
+      .update({
+        desconto_tipo: tipo,
+        desconto_valor: valor,
+        desconto_ate: ate,
+        desconto_nota: nota,
+      })
+      .eq("id", holdingId)
+    if (error) return { ok: false, error: error.message }
+
+    revalidatePath("/clientes")
+    return {
+      ok: true,
+      message: `Desconto de ${
+        tipo === "percentual" ? `${valor}%` : `R$ ${valor.toFixed(2)}`
+      } aplicado${ate ? ` até ${ate.split("-").reverse().join("/")}` : " (sem prazo)"}.`,
+    }
+  })
+}
+
 /** Salva o preço POR LOJA dos planos Essencial/Pro do self-service (super-admin). */
 export async function setPlatformPlan(
   _prev: BillingActionState,

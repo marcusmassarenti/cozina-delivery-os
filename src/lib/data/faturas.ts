@@ -153,7 +153,7 @@ export async function emitirFaturasDoMes(
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, desconto_primeira_fatura_pct",
+      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
     )
 
   // Lojas ATIVAS por cliente — é a base do preço por loja.
@@ -200,15 +200,51 @@ export async function emitirFaturasDoMes(
       valor = precoDoPlano(precos, plano, ativas)
     }
 
+    let notaFatura: string | null = null
+
+    /**
+     * DESCONTO NEGOCIADO — o que foi combinado com o cliente.
+     *
+     * Vem ANTES do cupom de indicação de propósito: são coisas diferentes e
+     * podem coexistir (cliente indicado que também negociou desconto). Aplicar
+     * o negociado primeiro faz o cupom incidir sobre o valor já acordado, que
+     * é o que a pessoa espera ao ler "20% na primeira fatura".
+     *
+     * `desconto_ate` no passado não desliga o desconto no banco — só para de
+     * valer. Assim o histórico de "o que foi combinado" continua legível
+     * depois que a promoção acaba.
+     */
+    const dTipo = h.desconto_tipo as "percentual" | "valor" | null
+    const dValor = Number(h.desconto_valor ?? 0)
+    const dAte = h.desconto_ate as string | null
+    const dVigente =
+      dTipo != null && dValor > 0 && (!dAte || dAte >= hojeISO())
+    if (dVigente && valor > 0) {
+      const cheio = valor
+      valor =
+        dTipo === "percentual"
+          ? Math.round(valor * (100 - dValor)) / 100
+          : Math.round((valor - dValor) * 100) / 100
+      // Desconto maior que o valor não vira crédito: o piso é zero.
+      if (valor < 0) valor = 0
+      const rotulo =
+        dTipo === "percentual" ? `${dValor}%` : `R$ ${dValor.toFixed(2)}`
+      notaFatura = `Desconto negociado: ${rotulo}${
+        dAte ? ` (até ${dAte.split("-").reverse().join("/")})` : ""
+      } — de ${cheio.toFixed(2)} por ${valor.toFixed(2)}.${
+        h.desconto_nota ? ` ${h.desconto_nota}` : ""
+      }`
+    }
+
     // Cupom de indicação: desconto na PRIMEIRA fatura. Vale uma vez só, e a
     // marca é consumida logo abaixo — se ficasse gravada, o desconto se
     // repetiria todo mês e viraria preço, não promoção.
     const descontoPct = Number(h.desconto_primeira_fatura_pct ?? 0)
-    let notaFatura: string | null = null
     if (descontoPct > 0 && valor > 0) {
       const cheio = valor
       valor = Math.round(valor * (100 - descontoPct)) / 100
-      notaFatura = `Cupom de indicação: ${descontoPct}% na 1ª fatura (de ${cheio.toFixed(2)} por ${valor.toFixed(2)}).`
+      const doCupom = `Cupom de indicação: ${descontoPct}% na 1ª fatura (de ${cheio.toFixed(2)} por ${valor.toFixed(2)}).`
+      notaFatura = notaFatura ? `${notaFatura} ${doCupom}` : doCupom
     }
 
     if (valor <= 0) {

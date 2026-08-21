@@ -112,6 +112,11 @@ export type ClientOverview = {
   billingStatus: BillingStatus
   // Assinatura Asaas
   planTier: "essencial" | "pro" | "ai" | null
+  /** Desconto negociado (não confundir com o cupom de indicação). */
+  descontoTipo: "percentual" | "valor" | null
+  descontoValor: number | null
+  descontoAte: string | null
+  descontoNota: string | null
   /** Fim da degustação do Nino AI (cortesia). null = sem degustação. */
   ninoTrialEndsAt: string | null
   asaasActive: boolean // tem assinatura recorrente no Asaas
@@ -204,7 +209,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -230,6 +235,10 @@ export async function getClientsOverview(): Promise<{
         suspend_on: null,
         trial_ends_at: null,
         plan_tier: null,
+        desconto_tipo: null,
+        desconto_valor: null,
+        desconto_ate: null,
+        desconto_nota: null,
         nino_trial_ends_at: null,
         asaas_subscription_id: null,
         asaas_last_event: null,
@@ -430,6 +439,11 @@ export async function getClientsOverview(): Promise<{
       planoFirst: planoDoCliente ? precos[planoDoCliente].first : null,
       planoAdd: planoDoCliente ? precos[planoDoCliente].add : null,
       billingStatus: computeBillingStatus(billing),
+      descontoTipo: (h.desconto_tipo as "percentual" | "valor" | null) ?? null,
+      descontoValor:
+        h.desconto_valor != null ? Number(h.desconto_valor) : null,
+      descontoAte: (h.desconto_ate as string | null) ?? null,
+      descontoNota: (h.desconto_nota as string | null) ?? null,
       planTier:
         hh.plan_tier === "essencial" ||
         hh.plan_tier === "pro" ||

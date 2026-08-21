@@ -32,11 +32,20 @@ const RANK: Record<Tier, number> = { essencial: 0, pro: 1, ai: 2 }
 export function PlanControls({
   holdingId,
   planTier,
+  compacto = false,
   ninoTrialEndsAt,
   onChanged,
 }: {
   holdingId: string
   planTier: Tier | null
+  /**
+   * Modo enxuto pro card de Cobrança: só o botão de escolher plano.
+   *
+   * O card "Plano & Nino AI" continua mostrando trial do Nino, sugestão de
+   * upgrade e consumo — aquilo é acompanhamento. Aqui a pergunta é só "qual
+   * plano ele tem", que é o que o aviso ao lado pede pra responder.
+   */
+  compacto?: boolean
   ninoTrialEndsAt: string | null
   /** No drawer, re-busca o detalhe (router.refresh não atualiza o drawer). */
   onChanged?: () => void
@@ -189,8 +198,8 @@ export function PlanControls({
         </div>
       )}
 
-      {/* Sugestão de upgrade */}
-      {!editing && proximo && (
+      {/* Sugestão de upgrade — só no card completo. */}
+      {!compacto && !editing && proximo && (
         <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
           <ArrowUpRight className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
           <span className="flex-1 text-muted-foreground">
@@ -208,8 +217,9 @@ export function PlanControls({
         </div>
       )}
 
-      {/* Degustação do Nino AI (Essencial/Pro) */}
-      {podeDegustar && (
+      {/* Degustação do Nino AI — só no card completo: em Cobrança a pergunta
+          é "quanto ele paga", e um convite de brinde no meio disso desvia. */}
+      {!compacto && podeDegustar && (
         <div className="rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />

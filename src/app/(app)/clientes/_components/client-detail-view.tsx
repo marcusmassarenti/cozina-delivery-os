@@ -25,6 +25,7 @@ import { AvisoPushDialog } from "./aviso-push-dialog"
 import { VerComoBotao } from "./ver-como-botao"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
+import { DescontoNegociado } from "./desconto-negociado"
 
 /** Dias de hoje até uma data ISO (fuso SP). Inline pra não puxar server-only. */
 function daysUntil(dateISO: string): number {
@@ -318,7 +319,27 @@ export function ClientDetailView({
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <EditBillingDialog client={c} />
+              {/* O seletor de plano vivia num card lá embaixo ("Plano & Nino
+                  AI"), enquanto o aviso "Escolha o plano abaixo" ficava aqui.
+                  Quem lia o aviso não achava o controle. Agora estão juntos —
+                  plano, preço e desconto respondem à mesma pergunta. */}
+              <PlanControls
+                holdingId={c.id}
+                planTier={c.planTier}
+                ninoTrialEndsAt={c.ninoTrialEndsAt}
+                onChanged={onChanged}
+                compacto
+              />
             </div>
+
+            <DescontoNegociado
+              holdingId={c.id}
+              tipo={c.descontoTipo}
+              valor={c.descontoValor}
+              ate={c.descontoAte}
+              nota={c.descontoNota}
+              mensalCheio={c.computedMonthly}
+            />
             {!c.contaInterna && (
               <div className="mt-2 border-t pt-2">
                 <ConviteAsaasButton
