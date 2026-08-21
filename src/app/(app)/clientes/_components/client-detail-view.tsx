@@ -26,6 +26,7 @@ import { VerComoBotao } from "./ver-como-botao"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
 import { DescontoNegociado } from "./desconto-negociado"
+import { IndicadoPor } from "./indicado-por"
 
 /** Dias de hoje até uma data ISO (fuso SP). Inline pra não puxar server-only. */
 function daysUntil(dateISO: string): number {
@@ -358,6 +359,13 @@ export function ClientDetailView({
               mensalCheio={c.mensalCheio}
               onChanged={onChanged}
             />
+            {!c.contaInterna && (
+              <IndicadoPor
+                holdingId={c.id}
+                indicadoPorNome={c.indicadoPorNome}
+                onChanged={onChanged}
+              />
+            )}
             {!c.contaInterna && (
               <div className="mt-2 border-t pt-2">
                 <ConviteAsaasButton

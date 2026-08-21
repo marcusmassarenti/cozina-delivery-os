@@ -129,6 +129,9 @@ export type ClientOverview = {
   descontoValor: number | null
   descontoAte: string | null
   descontoNota: string | null
+  /** Cupom/indicação que trouxe o cliente — é daqui que sai a comissão. */
+  indicadoPor: string | null
+  indicadoPorNome: string | null
   /** Fim da degustação do Nino AI (cortesia). null = sem degustação. */
   ninoTrialEndsAt: string | null
   asaasActive: boolean // tem assinatura recorrente no Asaas
@@ -217,11 +220,20 @@ export async function getClientsOverview(): Promise<{
       .filter((id): id is string => !!id),
   )
 
+  // Nome de quem indicou cada cliente. São poucos indicadores (é o cupom que
+  // eles espalham), então cabe tudo num Map e não custa uma query por cliente.
+  const nomeIndicador = new Map<string, string>()
+  {
+    const { data: inds } = await admin.from("indicadores").select("id, nome, codigo")
+    for (const i of (inds ?? []) as { id: string; nome: string; codigo: string }[])
+      nomeIndicador.set(String(i.id), `${i.nome} (${i.codigo})`)
+  }
+
   // holdings com colunas de cobrança — fallback se a migration ainda não rodou
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -238,6 +250,7 @@ export async function getClientsOverview(): Promise<{
         conta_interna: false,
         conta_interna_nota: null,
         convite_asaas_em: null,
+        indicado_por: null,
         payment_method: null,
         monthly_fee: null,
         price_per_unit: null,
@@ -485,6 +498,8 @@ export async function getClientsOverview(): Promise<{
         h.desconto_valor != null ? Number(h.desconto_valor) : null,
       descontoAte: (h.desconto_ate as string | null) ?? null,
       descontoNota: (h.desconto_nota as string | null) ?? null,
+      indicadoPor: (h.indicado_por as string | null) ?? null,
+      indicadoPorNome: nomeIndicador.get(String(h.indicado_por ?? "")) ?? null,
       planTier:
         hh.plan_tier === "essencial" ||
         hh.plan_tier === "pro" ||

@@ -214,6 +214,63 @@ export type BillingActionState = { ok: boolean; message?: string }
  * Os dois podem coexistir e a fatura aplica o negociado primeiro — ver a nota
  * em `faturas.ts`.
  */
+/**
+ * Quem indicou este cliente — o cupom, fora do convite do Asaas.
+ *
+ * ── POR QUE (Marcus, 21/08/26) ───────────────────────────────────────────
+ * O cupom só existia dentro do "Convidar a pagar no Asaas". Cliente que fica
+ * FORA do Asaas (cobrança manual, como a Tech Assessoria) não tinha por onde
+ * receber o cupom — o campo nem aparecia. Resultado: a indicação do Diego
+ * ficou sem dono e a comissão dele nunca nasceu, embora o programa já
+ * existisse e funcionasse.
+ *
+ * Aqui o vínculo é o mesmo `indicado_por` de sempre: quem paga a comissão é a
+ * apuração da tela de Indicações, e ela só olha pra este campo.
+ */
+export async function setIndicadoPor(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, error: "Cliente não informado." }
+
+    const cupom = String(formData.get("cupom") ?? "").trim()
+    if (!cupom) {
+      const { error } = await admin
+        .from("holdings")
+        .update({ indicado_por: null, indicado_em: null })
+        .eq("id", holdingId)
+      if (error) return { ok: false, error: error.message }
+      await auditar("indicacao.removida", holdingId, {})
+      revalidatePath("/clientes")
+      return { ok: true, message: "Indicação removida." }
+    }
+
+    const indicador = await acharIndicadorPorCodigo(cupom)
+    if (!indicador)
+      return { ok: false, error: `Cupom "${cupom}" não existe ou está inativo.` }
+
+    const { error } = await admin
+      .from("holdings")
+      .update({
+        indicado_por: indicador.id,
+        indicado_em: new Date().toISOString(),
+      })
+      .eq("id", holdingId)
+    if (error) return { ok: false, error: error.message }
+
+    await auditar("indicacao.definida", holdingId, { cupom })
+    revalidatePath("/clientes")
+    revalidatePath("/indicacoes")
+    return {
+      ok: true,
+      message: "Indicação registrada — a comissão passa a ser apurada nas faturas pagas.",
+    }
+  })
+}
+
 export async function setDescontoNegociado(
   _prev: BillingActionState,
   formData: FormData,

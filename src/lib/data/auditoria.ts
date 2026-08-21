@@ -23,6 +23,8 @@ export type AcaoAuditada =
   | "cliente.removido"
   | "conta_interna.alterada"
   | "convite_asaas.alterado"
+  | "indicacao.definida"
+  | "indicacao.removida"
   | "assinatura.valor_sincronizado"
   | "nino.degustacao_alterada"
   | "trial.iniciado"
