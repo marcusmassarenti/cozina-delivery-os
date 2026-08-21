@@ -22,6 +22,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { isApiSyncEnabled } from "@/lib/data/units"
 import { autoLinkIfoodMerchants } from "@/lib/ifood/auto-link"
 import { syncIfoodAll } from "@/lib/ifood/sync"
+import { pegarTrava } from "@/lib/sync-lock"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -120,6 +121,22 @@ export async function POST(req: Request) {
     }
   }
 
+  /* Uma execução por vez. Ver @/lib/sync-lock: no celular o navegador desiste
+   * antes do servidor, e quem vê "Load failed" clica de novo — cada clique
+   * abre outra varredura da base inteira por cima da anterior. */
+  const trava = await pegarTrava(
+    todos ? "ifood-sync-todos" : "ifood-sync",
+    "botao",
+  )
+  if (!trava.pegou) {
+    return Response.json({
+      ok: false,
+      error: `Já tem uma sincronização rodando (começou há ${
+        trava.desdeMin < 1 ? "menos de um minuto" : `${trava.desdeMin} min`
+      }). Espere ela terminar — rodar duas ao mesmo tempo deixa a plataforma inteira lenta.`,
+    })
+  }
+
   try {
     // Antes do sync: só CASA lojas recém-autorizadas do escopo (rápido — o
     // botão precisa responder em segundos). O backfill do histórico (pesado,
@@ -163,5 +180,7 @@ export async function POST(req: Request) {
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 },
     )
+  } finally {
+    await trava.liberar()
   }
 }
