@@ -25,10 +25,18 @@ type Estado = { ok: boolean; message?: string; error?: string }
 export function IndicadoPor({
   holdingId,
   indicadoPorNome,
+  indicadoPorCodigo,
+  cupomDescontoPct,
+  primeiraFaturaPct,
   onChanged,
 }: {
   holdingId: string
   indicadoPorNome: string | null
+  indicadoPorCodigo: string | null
+  /** O que o cupom dá na 1ª fatura — mesmo que ainda não esteja aplicado. */
+  cupomDescontoPct: number | null
+  /** Desconto do cupom que AINDA não foi usado. null = já saiu na 1ª fatura. */
+  primeiraFaturaPct: number | null
   onChanged?: () => void
 }) {
   const router = useRouter()
@@ -52,19 +60,40 @@ export function IndicadoPor({
         <span className="text-muted-foreground">Indicado por</span>
         <span className="font-medium">{indicadoPorNome}</span>
         <span className="text-muted-foreground">
-          — comissão apurada quando a fatura é paga
+          {primeiraFaturaPct
+            ? `— ${primeiraFaturaPct}% na próxima fatura (uma vez só) · comissão apurada quando a fatura é paga`
+            : "— comissão apurada quando a fatura é paga"}
         </span>
-        <form action={action} className="contents">
-          <input type="hidden" name="holdingId" value={holdingId} />
-          <input type="hidden" name="cupom" value="" />
-          <button
-            type="submit"
-            className="ml-auto inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted"
-          >
-            <X className="size-3" />
-            remover
-          </button>
-        </form>
+        <span className="ml-auto flex items-center gap-1.5">
+          {/* Vínculo antigo, feito antes de o cupom passar a carregar o
+              desconto junto: em vez de obrigar a desvincular e vincular de
+              novo, o botão reaplica o mesmo cupom. */}
+          {!primeiraFaturaPct && cupomDescontoPct
+            ? indicadoPorCodigo && (
+                <form action={action}>
+                  <input type="hidden" name="holdingId" value={holdingId} />
+                  <input type="hidden" name="cupom" value={indicadoPorCodigo} />
+                  <button
+                    type="submit"
+                    className="rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors hover:bg-muted"
+                  >
+                    aplicar {cupomDescontoPct}% na próxima fatura
+                  </button>
+                </form>
+              )
+            : null}
+          <form action={action}>
+            <input type="hidden" name="holdingId" value={holdingId} />
+            <input type="hidden" name="cupom" value="" />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <X className="size-3" />
+              remover
+            </button>
+          </form>
+        </span>
       </div>
     )
   }

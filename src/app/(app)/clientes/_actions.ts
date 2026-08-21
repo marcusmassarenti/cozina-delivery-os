@@ -240,7 +240,13 @@ export async function setIndicadoPor(
     if (!cupom) {
       const { error } = await admin
         .from("holdings")
-        .update({ indicado_por: null, indicado_em: null })
+        .update({
+          indicado_por: null,
+          indicado_em: null,
+          // O desconto da 1ª fatura vem do cupom: tirar a indicação sem tirar
+          // o desconto deixaria uma promoção órfã que ninguém sabe explicar.
+          desconto_primeira_fatura_pct: null,
+        })
         .eq("id", holdingId)
       if (error) return { ok: false, error: error.message }
       await auditar("indicacao.removida", holdingId, {})
@@ -257,16 +263,28 @@ export async function setIndicadoPor(
       .update({
         indicado_por: indicador.id,
         indicado_em: new Date().toISOString(),
+        // O cupom traz DOIS efeitos: comissão pra quem indicou e desconto na
+        // 1ª fatura de quem foi indicado. Guardar só o primeiro era metade da
+        // negociação — e a metade que o cliente vê.
+        ...(indicador.descontoPct > 0
+          ? { desconto_primeira_fatura_pct: indicador.descontoPct }
+          : {}),
       })
       .eq("id", holdingId)
     if (error) return { ok: false, error: error.message }
 
-    await auditar("indicacao.definida", holdingId, { cupom })
+    await auditar("indicacao.definida", holdingId, {
+      cupom,
+      descontoPrimeiraFatura: indicador.descontoPct,
+    })
     revalidatePath("/clientes")
     revalidatePath("/indicacoes")
     return {
       ok: true,
-      message: "Indicação registrada — a comissão passa a ser apurada nas faturas pagas.",
+      message:
+        indicador.descontoPct > 0
+          ? `Indicação registrada — ${indicador.descontoPct}% na 1ª fatura, e a comissão passa a ser apurada nas faturas pagas.`
+          : "Indicação registrada — a comissão passa a ser apurada nas faturas pagas.",
     }
   })
 }

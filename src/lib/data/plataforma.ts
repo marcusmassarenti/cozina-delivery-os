@@ -132,6 +132,11 @@ export type ClientOverview = {
   /** Cupom/indicação que trouxe o cliente — é daqui que sai a comissão. */
   indicadoPor: string | null
   indicadoPorNome: string | null
+  indicadoPorCodigo: string | null
+  /** Quanto o cupom dá na 1ª fatura, mesmo que ainda não tenha sido aplicado. */
+  cupomDescontoPct: number | null
+  /** Desconto do cupom ainda NÃO usado. Some quando a 1ª fatura sai. */
+  descontoPrimeiraFaturaPct: number | null
   /** Fim da degustação do Nino AI (cortesia). null = sem degustação. */
   ninoTrialEndsAt: string | null
   asaasActive: boolean // tem assinatura recorrente no Asaas
@@ -222,18 +227,32 @@ export async function getClientsOverview(): Promise<{
 
   // Nome de quem indicou cada cliente. São poucos indicadores (é o cupom que
   // eles espalham), então cabe tudo num Map e não custa uma query por cliente.
-  const nomeIndicador = new Map<string, string>()
+  const nomeIndicador = new Map<
+    string,
+    { nome: string; codigo: string; descontoPct: number }
+  >()
   {
-    const { data: inds } = await admin.from("indicadores").select("id, nome, codigo")
-    for (const i of (inds ?? []) as { id: string; nome: string; codigo: string }[])
-      nomeIndicador.set(String(i.id), `${i.nome} (${i.codigo})`)
+    const { data: inds } = await admin
+      .from("indicadores")
+      .select("id, nome, codigo, desconto_pct")
+    for (const i of (inds ?? []) as {
+      id: string
+      nome: string
+      codigo: string
+      desconto_pct: number | string | null
+    }[])
+      nomeIndicador.set(String(i.id), {
+        nome: `${i.nome} (${i.codigo})`,
+        codigo: String(i.codigo),
+        descontoPct: Number(i.desconto_pct ?? 0),
+      })
   }
 
   // holdings com colunas de cobrança — fallback se a migration ainda não rodou
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por",
+      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -251,6 +270,7 @@ export async function getClientsOverview(): Promise<{
         conta_interna_nota: null,
         convite_asaas_em: null,
         indicado_por: null,
+        desconto_primeira_fatura_pct: null,
         payment_method: null,
         monthly_fee: null,
         price_per_unit: null,
@@ -499,7 +519,16 @@ export async function getClientsOverview(): Promise<{
       descontoAte: (h.desconto_ate as string | null) ?? null,
       descontoNota: (h.desconto_nota as string | null) ?? null,
       indicadoPor: (h.indicado_por as string | null) ?? null,
-      indicadoPorNome: nomeIndicador.get(String(h.indicado_por ?? "")) ?? null,
+      indicadoPorNome:
+        nomeIndicador.get(String(h.indicado_por ?? ""))?.nome ?? null,
+      indicadoPorCodigo:
+        nomeIndicador.get(String(h.indicado_por ?? ""))?.codigo ?? null,
+      cupomDescontoPct:
+        nomeIndicador.get(String(h.indicado_por ?? ""))?.descontoPct ?? null,
+      descontoPrimeiraFaturaPct:
+        h.desconto_primeira_fatura_pct != null
+          ? Number(h.desconto_primeira_fatura_pct)
+          : null,
       planTier:
         hh.plan_tier === "essencial" ||
         hh.plan_tier === "pro" ||

@@ -363,6 +363,9 @@ export function ClientDetailView({
               <IndicadoPor
                 holdingId={c.id}
                 indicadoPorNome={c.indicadoPorNome}
+                indicadoPorCodigo={c.indicadoPorCodigo}
+                cupomDescontoPct={c.cupomDescontoPct}
+                primeiraFaturaPct={c.descontoPrimeiraFaturaPct}
                 onChanged={onChanged}
               />
             )}
