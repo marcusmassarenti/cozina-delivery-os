@@ -10,6 +10,8 @@
  */
 import "server-only"
 
+import type { AlertaVenda } from "@/lib/data/alertas-venda"
+
 import type {
   OportunidadeConexao,
   SaudeIntegracoes,
@@ -440,6 +442,15 @@ export function emailSaude(
    * falhar, o relatório sai sem o bloco — nunca deixa de sair por causa dele.
    */
   infra?: InfraMetricas | null,
+  /**
+   * Lojas vendendo menos do que elas mesmas vendiam.
+   *
+   * Vai NESTE e-mail de propósito, e não num alerta próprio: as duas seções
+   * respondem à mesma pergunta do dia — "o que precisa de mim?" — e um segundo
+   * e-mail competiria com este pela mesma atenção. A diferença é que as de
+   * cima são problema NOSSO e esta é problema do CLIENTE.
+   */
+  quedas: AlertaVenda[] = [],
 ): { assunto: string; html: string } {
   const r = s.resumo
   const cronsRuins = s.crons.filter((c) => c.gravidade === "alerta")
@@ -616,6 +627,34 @@ export function emailSaude(
           <span style="font-size:12px;color:#71717a;">(${c.plataforma})</span><br/>
           API ${c.pedidosApi} pedidos · planilha ${c.pedidosPlanilha}<br/>
           <span style="color:#71717a;">${c.provavelMotivo}</span>
+        </td></tr>
+      </table>`,
+        )
+        .join("")}`
+          : ""
+      }
+
+      ${
+        quedas.length > 0
+          ? `
+      <hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0 16px;" />
+      <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#18181b;">Vendendo menos que o normal — ${quedas.length} loja(s)</p>
+      <p style="margin:0 0 12px;font-size:12px;line-height:1.6;color:#71717a;">
+        Cada loja comparada com ELA MESMA: os últimos 7 dias contra a média semanal das 4 semanas anteriores.
+        Ordenado por pedidos a menos, não por porcentagem — 100 pedidos a menos numa loja grande pesa mais que 80% a menos numa que fazia 10.
+      </p>
+      ${quedas
+        .map(
+          (q) => `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;background:${q.estado === "parou" ? "#fef2f2" : "#fffbeb"};border-radius:10px;">
+        <tr><td style="padding:10px 12px;font-size:13px;line-height:1.6;color:#3f3f46;">
+          <strong>${q.cliente} · ${q.code} ${q.loja}</strong>
+          <span style="font-size:12px;font-weight:700;color:${q.estado === "parou" ? "#b91c1c" : "#b45309"};">
+            ${q.estado === "parou" ? "PAROU" : `−${q.quedaPct}%`}
+          </span><br/>
+          ${q.pedidosRecentes} pedidos nos últimos 7 dias · normal seria ~${q.pedidosBase}
+          <strong>(${q.pedidosAMenos} a menos)</strong><br/>
+          <span style="font-size:12px;color:#71717a;">dado desta loja até ${q.ancora.slice(8, 10)}/${q.ancora.slice(5, 7)}</span>
         </td></tr>
       </table>`,
         )

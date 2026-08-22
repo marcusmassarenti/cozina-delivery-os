@@ -19,6 +19,7 @@
  */
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
 import { emailSaude, type ConferenciaResumo } from "@/lib/email/saude"
+import { alertasDeVenda } from "@/lib/data/alertas-venda"
 import { resumoDaRodada, type RodadaDiaria } from "@/lib/data/rodada-diaria"
 import { agruparSaude } from "@/lib/data/saude-agrupada"
 import { conferirFontes } from "@/lib/data/conferencia-fontes"
@@ -139,7 +140,12 @@ export async function GET(req: Request) {
       console.error("medirInfra:", e)
     }
 
-    const msg = emailSaude(s, conferencia, rodada, g, infra)
+    /* Quedas de venda entram no relatório interno antes de virarem aviso ao
+     * cliente: primeiro a gente olha a lista alguns dias e vê se ela é
+     * acionável, depois decide se ela vai pra fora. Foi assim com a régua de
+     * "loja sem dado", e foi por isso que ela nasceu confiável. */
+    const quedas = await alertasDeVenda()
+    const msg = emailSaude(s, conferencia, rodada, g, infra, quedas)
 
     // Quem lê precisa saber que está vendo um retrato parcial — senão vai
     // tratar "faltam 12 lojas" como problema, quando é só a fila do iFood
