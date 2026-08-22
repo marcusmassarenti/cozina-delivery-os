@@ -1192,7 +1192,10 @@ export default async function Home({
       <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />
 
       {/* Avaliação tem rotina própria — ver o componente. */}
-      <PrimeiraAvaliacaoAviso itens={primeirasAvaliacoes} />
+      <PrimeiraAvaliacaoAviso
+        itens={primeirasAvaliacoes}
+        fechados={avisosFechados}
+      />
 
       {/* Dispensável aqui: quem abre a inicial veio ver o faturamento do dia,
           e prender um aviso de cadastro no caminho seria sequestrar a tela por

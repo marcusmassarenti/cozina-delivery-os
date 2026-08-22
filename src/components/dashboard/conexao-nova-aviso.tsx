@@ -127,10 +127,91 @@ export function ConexaoNovaAviso({
  */
 export function PrimeiraAvaliacaoAviso({
   itens,
+  fechados: fechadosDoServidor = [],
 }: {
   itens: PrimeiraAvaliacao[]
+  fechados?: string[]
 }) {
+  const [fechadosAgora, setFechadosAgora] = React.useState<string[]>([])
+
   if (itens.length === 0) return null
+
+  const chegaram = itens.filter((a) => a.quantas > 0)
+  const aCaminho = itens.filter((a) => a.quantas <= 0)
+  const total = chegaram.reduce((s, a) => s + a.quantas, 0)
+
+  /**
+   * TRÊS OU MAIS VIRAM UM CARD SÓ.
+   *
+   * ── POR QUE (Marcus, 22/08/26) ─────────────────────────────────────────
+   * O Churrasco Royal conectou sete lojas de uma vez e o Início virou uma
+   * pilha: um card por loja, seis seguidos, dizendo quase a mesma frase. A
+   * conexão já tinha essa regra (ver VariasAtivasCard em ifood-cliente-aviso)
+   * e a avaliação não — então o aviso que existe pra tranquilizar acabava
+   * enterrando o resto da tela.
+   *
+   * O corte é o mesmo de lá, pelo mesmo motivo: com uma ou duas lojas o NOME é
+   * a informação que a pessoa espera ver; a partir de três ele vira lista, e o
+   * que importa passa a ser o número e o "não precisa fazer nada".
+   *
+   * A chave inclui a contagem: conectou mais uma, o aviso volta com o número
+   * novo — quem fechou com seis fica sabendo da sétima.
+   */
+  if (itens.length >= 3) {
+    const chave = `primeira-avaliacao-lote|${itens.length}`
+    if (
+      fechadosAgora.includes(chave) ||
+      fechadosDoServidor.includes(`conexao-nova|${chave}`)
+    )
+      return null
+
+    return (
+      <div className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+          <Star className="size-4 text-amber-600 dark:text-amber-400" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">
+            Avaliações de <b>{itens.length} lojas</b>
+            {chegaram.length > 0 && aCaminho.length === 0
+              ? " já estão aqui"
+              : chegaram.length === 0
+                ? " a caminho"
+                : ""}
+          </p>
+          <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+            {chegaram.length > 0 && (
+              <>
+                <b>{total}</b> avaliação{total === 1 ? "" : "ões"} importada
+                {total === 1 ? "" : "s"} em {chegaram.length} loja
+                {chegaram.length === 1 ? "" : "s"}.{" "}
+              </>
+            )}
+            {aCaminho.length > 0 && (
+              <>
+                {aCaminho.length} ainda sem avaliação — ela vem numa rotina
+                separada do faturamento, que roda <b>uma vez por dia, de
+                manhã</b>. Tela vazia até lá não é problema na conexão.{" "}
+              </>
+            )}
+            A partir de agora entram sozinhas.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setFechadosAgora((a) => [...a, chave])
+            void fecharAviso(`conexao-nova|${chave}`)
+          }}
+          aria-label="Fechar aviso"
+          className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       {itens.map((a) => (
