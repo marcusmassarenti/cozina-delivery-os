@@ -24,7 +24,13 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
 
-export type EstadoVenda = "parou" | "caiu" | "ok" | "baixo-volume"
+export type EstadoVenda =
+  | "parou"
+  | "caiu"
+  | "ok"
+  | "baixo-volume"
+  /** Uma plataforma relevante está com o dado parado — não dá pra opinar. */
+  | "dado-incompleto"
 
 export type AlertaVenda = {
   unitId: string
@@ -40,6 +46,8 @@ export type AlertaVenda = {
   quedaPct: number
   /** Pedidos a menos na semana — o número que dói, em unidade que se entende. */
   pedidosAMenos: number
+  /** Plataformas com dado parado, quando houver. */
+  defasadas: string | null
 }
 
 /**
@@ -72,6 +80,7 @@ export async function alertasDeVenda(
     pedidos_base: number
     queda_pct: number
     estado: EstadoVenda
+    plataformas_defasadas: string | null
   }[]).filter(
     (l) =>
       (l.estado === "parou" || l.estado === "caiu") &&
@@ -121,6 +130,7 @@ export async function alertasDeVenda(
             0,
             Math.round(Number(l.pedidos_base) - Number(l.pedidos_recentes)),
           ),
+          defasadas: l.plataformas_defasadas,
         },
       ]
     })
