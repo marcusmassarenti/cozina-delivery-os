@@ -224,6 +224,18 @@ export async function coletarExtratosPendentes(
     }
     const chave = `${item.loja.merchantId}|${item.competencia}`
     if (vazias.has(chave)) {
+      /* Competência que já sabemos vazia. Carimba MESMO ASSIM, toda rodada.
+       *
+       * ── POR QUE (Marcus, 22/08/26) ────────────────────────────────────
+       * Este é o caso MAIS COMUM de "a loja não vendeu", e era justamente o
+       * único que não deixava rastro: a competência é marcada vazia uma vez,
+       * e a partir daí o coletor pula o item antes de qualquer carimbo. Sem
+       * renovar a data, o carimbo envelhece, o diagnóstico volta a achar que
+       * a loja parou de sincronizar, e o conserto de hoje duraria 30 horas.
+       *
+       * Pular a chamada ao iFood é o certo (não há o que pedir); o que não
+       * pode é pular o registro de que nós sabemos o estado dela. */
+      await carimbarExtratoLido(admin, item.loja.unitId, item.competencia, 0)
       out.semMovimento++
       continue
     }
