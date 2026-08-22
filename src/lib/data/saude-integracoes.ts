@@ -204,13 +204,30 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
    * Só a competência CORRENTE interessa: é ela que responde "o caminho está
    * funcionando hoje?". */
   const compAtual = agora.slice(0, 7)
-  const [demo, encerradas, extratos] = await Promise.all([
+  const desde30h = new Date(Date.now() - 30 * 3600_000).toISOString()
+  const [demo, encerradas, extratos, importados] = await Promise.all([
     idsDeUnidadesDemo(),
     idsDeUnidadesEncerradas(),
     admin
       .from("ifood_extrato_lido")
       .select("unit_id, lido_em, linhas")
       .eq("competencia", compAtual),
+    /* A OUTRA METADE DA PROVA.
+     *
+     * `ifood_extrato_lido` nasceu pro caso que não deixava rastro nenhum: o
+     * extrato lido e VAZIO. Mas o extrato lido COM linhas sempre deixou —
+     * `platform_imports` guarda cada carga bem-sucedida, e é dela que o
+     * coletor já se serve pra saber o que não precisa buscar de novo.
+     *
+     * Usar as duas evita esperar a tabela nova encher pra responder uma
+     * pergunta que o banco já sabia responder. */
+    admin
+      .from("platform_imports")
+      .select("unit_id, imported_at")
+      .eq("platform", "ifood")
+      .eq("report_type", "financeiro")
+      .eq("status", "success")
+      .gte("imported_at", desde30h),
   ])
   const extratoLido = new Map<string, { lidoEm: string; linhas: number }>()
   for (const e of (extratos.data ?? []) as {
@@ -219,6 +236,17 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     linhas: number
   }[]) {
     extratoLido.set(e.unit_id, { lidoEm: e.lido_em, linhas: e.linhas })
+  }
+  // Carga bem-sucedida é leitura provada. Fica com a data MAIS RECENTE entre
+  // as duas fontes — elas dizem a mesma coisa por caminhos diferentes.
+  for (const i of (importados.data ?? []) as {
+    unit_id: string
+    imported_at: string
+  }[]) {
+    const atual = extratoLido.get(i.unit_id)
+    if (!atual || i.imported_at > atual.lidoEm) {
+      extratoLido.set(i.unit_id, { lidoEm: i.imported_at, linhas: 1 })
+    }
   }
   /**
    * ⚠️ SÓ LOJA COM API VINCULADA. (Marcus, 19/08/26)
