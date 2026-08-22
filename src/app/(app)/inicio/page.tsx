@@ -39,6 +39,7 @@ import { AvisosConvite } from "@/components/dashboard/avisos-convite"
 import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
 import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
 import { CadastroIncompletoAviso } from "@/app/(app)/unidades/_components/cadastro-incompleto-aviso"
+import { NovidadesConexoes } from "@/components/dashboard/novidades-conexoes"
 import { getLojasSemDado } from "@/lib/data/lojas-sem-dado"
 import { getMinhasSolicitacoesIfood } from "@/app/(app)/unidades/_actions-ifood-ativacao"
 import { getConsumoIaPorCliente } from "@/lib/data/ia-custos"
@@ -1188,14 +1189,21 @@ export default async function Home({
           autoriza o app no portal dele. */}
       <Autorizar99Aviso itens={minhasSolicitacoes99} />
 
-      {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
-      <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />
-
-      {/* Avaliação tem rotina própria — ver o componente. */}
-      <PrimeiraAvaliacaoAviso
-        itens={primeirasAvaliacoes}
+      {/* As NOTÍCIAS de conexão numa linha só quando são muitas — ver o
+          componente. Pendência não entra aqui: ela é tarefa, não notícia. */}
+      <NovidadesConexoes
+        total={conexoesNovas.length + (primeirasAvaliacoes.length > 0 ? 1 : 0)}
         fechados={avisosFechados}
-      />
+      >
+        {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
+        <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />
+
+        {/* Avaliação tem rotina própria — ver o componente. */}
+        <PrimeiraAvaliacaoAviso
+          itens={primeirasAvaliacoes}
+          fechados={avisosFechados}
+        />
+      </NovidadesConexoes>
 
       {/* Dispensável aqui: quem abre a inicial veio ver o faturamento do dia,
           e prender um aviso de cadastro no caminho seria sequestrar a tela por
@@ -1208,34 +1216,6 @@ export default async function Home({
         faltando={panoramaConexao.faltando.length}
         totalComIfood={panoramaConexao.totalComIfood}
       />
-
-      {/* Dono: quanto a IA custou na plataforma neste mês. */}
-      {consumoIaPlataforma.totalMensagens > 0 && (
-        <Link
-          href="/clientes/consumo-ia"
-          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-3 py-2 text-xs transition-colors hover:bg-muted/50"
-        >
-          <span className="inline-flex items-center gap-1.5 font-medium">
-            <Sparkles className="size-3.5 text-primary" />
-            Nino AI no mês
-          </span>
-          <span className="text-muted-foreground">
-            <b className="tabular-nums text-foreground">
-              {fmtNum(consumoIaPlataforma.totalMensagens)}
-            </b>{" "}
-            mensagens
-          </span>
-          <span className="text-muted-foreground">
-            custo de API{" "}
-            <b className="tabular-nums text-foreground">
-              US$ {consumoIaPlataforma.totalUsd.toFixed(2)}
-            </b>
-          </span>
-          <span className="ml-auto text-[11px] font-semibold text-primary">
-            ver por cliente →
-          </span>
-        </Link>
-      )}
 
       {onboarding && onboarding.done < onboarding.total && (
         <OnboardingChecklist
@@ -1257,18 +1237,7 @@ export default async function Home({
           dia. Some sozinho quando a pessoa liga ou dispensa. */}
       <AvisosConvite />
 
-      {status.ok ? (
-        <ImportCoverageBanner
-          coverage={importCoverage}
-          year={year}
-          month={month}
-          periodLabel={formatPeriodLabel({ year, month })}
-          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
-          apiSync={apiSync}
-          vinculos={apiVinculos}
-          semDado={lojasSemDado}
-        />
-      ) : (
+      {!status.ok && (
         <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
           <span className="size-2 rounded-full bg-rose-500" />
           <span className="font-medium">{status.message}</span>
@@ -2162,7 +2131,57 @@ export default async function Home({
           </DashboardSection>
         </>
       )}
+
+      {/* ── ESTADO, NÃO AVISO ──────────────────────────────────────────────
+          Cobertura de importação e consumo do Nino não pedem ação e não somem
+          nunca — são números de consulta. No topo eles disputavam espaço e
+          peso visual com o que EXIGE ação, e foi isso que fez a tela de treze
+          blocos parecer cheia mesmo quando quase nada precisava ser feito
+          (Marcus, 22/08/26).
+
+          Aqui embaixo continuam inteiros, com os botões de sincronizar — só
+          deixaram de competir com a manchete. */}
+      {status.ok && (
+        <ImportCoverageBanner
+          coverage={importCoverage}
+          year={year}
+          month={month}
+          periodLabel={formatPeriodLabel({ year, month })}
+          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
+          apiSync={apiSync}
+          vinculos={apiVinculos}
+          semDado={lojasSemDado}
+        />
+      )}
+      {/* Dono: quanto a IA custou na plataforma neste mês. */}
+      {consumoIaPlataforma.totalMensagens > 0 && (
+        <Link
+          href="/clientes/consumo-ia"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-3 py-2 text-xs transition-colors hover:bg-muted/50"
+        >
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <Sparkles className="size-3.5 text-primary" />
+            Nino AI no mês
+          </span>
+          <span className="text-muted-foreground">
+            <b className="tabular-nums text-foreground">
+              {fmtNum(consumoIaPlataforma.totalMensagens)}
+            </b>{" "}
+            mensagens
+          </span>
+          <span className="text-muted-foreground">
+            custo de API{" "}
+            <b className="tabular-nums text-foreground">
+              US$ {consumoIaPlataforma.totalUsd.toFixed(2)}
+            </b>
+          </span>
+          <span className="ml-auto text-[11px] font-semibold text-primary">
+            ver por cliente →
+          </span>
+        </Link>
+      )}
     </div>
+
   )
 }
 
@@ -2998,6 +3017,8 @@ function TopItemsList({
           </div>
         ))}
       </div>
+
+
     </div>
   )
 }
