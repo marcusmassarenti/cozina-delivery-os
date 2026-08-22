@@ -162,6 +162,40 @@ async function listIfoodUnits(unitIds?: string[] | null) {
     .filter((r) => !!r.merchantId)
 }
 
+/**
+ * Carimba que o extrato desta loja/competência FOI LIDO — inclusive vazio.
+ *
+ * ── POR QUE (Marcus, 22/08/26) ───────────────────────────────────────────
+ * Sem isto, "não buscamos o arquivo" e "buscamos e a loja não vendeu" viram o
+ * mesmo silêncio no banco, e o diagnóstico de saúde acusa defeito nos dois
+ * casos. São situações opostas: uma pede conserto, a outra é um fato sobre o
+ * negócio do cliente. Das 6 lojas "atrasadas" em 22/08, cinco só não tinham
+ * vendido.
+ *
+ * Nunca derruba o sync: carimbo que falha custa um diagnóstico pior, não o
+ * dado — e perder o dado por causa do carimbo seria o pior dos dois mundos.
+ */
+export async function carimbarExtratoLido(
+  admin: Admin,
+  unitId: string,
+  competencia: string,
+  linhas: number,
+): Promise<void> {
+  try {
+    await admin.from("ifood_extrato_lido").upsert(
+      {
+        unit_id: unitId,
+        competencia,
+        lido_em: new Date().toISOString(),
+        linhas,
+      },
+      { onConflict: "unit_id,competencia" },
+    )
+  } catch (e) {
+    console.error("carimbarExtratoLido:", e)
+  }
+}
+
 type ReconLine = UnitSyncResult["reconciliation"][number]
 type UnitLite = {
   unitId: string
@@ -250,6 +284,7 @@ export async function syncReconciliationCompetencia(
        * cliente recebe o "sua loja está conectada" no mesmo dia.
        */
       if (recon.vazio) {
+        await carimbarExtratoLido(admin, u.unitId, competencia, 0)
         return {
           competencia,
           ok: true,
@@ -270,6 +305,7 @@ export async function syncReconciliationCompetencia(
     }
     // Mês sem operação devolve CSV vazio (só cabeçalho) — sucesso, 0 linhas.
     if (recon.rows.length === 0) {
+      await carimbarExtratoLido(admin, u.unitId, competencia, 0)
       return { competencia, ok: true, status: recon.linkStatus, rowCount: 0, persisted: 0 }
     }
     // Mesmo parser/persistência da importação manual (dedupe por competência).
@@ -298,6 +334,7 @@ export async function syncReconciliationCompetencia(
       }
     }
 
+    await carimbarExtratoLido(admin, u.unitId, competencia, recon.rows.length)
     return {
       competencia,
       ok: true,

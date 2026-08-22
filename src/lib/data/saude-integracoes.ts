@@ -191,10 +191,35 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   // eternamente na lista de "parou de mandar dado" — acusando como falha
   // justamente o que a gente decidiu que devia acontecer. Suspenso por
   // cobrança NÃO sai: ali o silêncio ainda é informação, o cliente pode voltar.
-  const [demo, encerradas] = await Promise.all([
+  /* Carimbo de leitura do extrato — ver ifood_extrato_lido.
+   *
+   * ── POR QUE (Marcus, 22/08/26) ─────────────────────────────────────────
+   * Este diagnóstico deduzia o estado pela AUSÊNCIA do dado, e com isso dava o
+   * mesmo alarme para duas coisas opostas: "não conseguimos ler o extrato" e
+   * "lemos, e a loja não vendeu". Das 6 lojas que apareciam atrasadas em
+   * 22/08, cinco simplesmente não tinham vendido — a Chapa Quente estava sem
+   * pedido desde 17/jul. Alarme que não distingue defeito de fato do negócio
+   * ensina a ignorar alarme.
+   *
+   * Só a competência CORRENTE interessa: é ela que responde "o caminho está
+   * funcionando hoje?". */
+  const compAtual = agora.slice(0, 7)
+  const [demo, encerradas, extratos] = await Promise.all([
     idsDeUnidadesDemo(),
     idsDeUnidadesEncerradas(),
+    admin
+      .from("ifood_extrato_lido")
+      .select("unit_id, lido_em, linhas")
+      .eq("competencia", compAtual),
   ])
+  const extratoLido = new Map<string, { lidoEm: string; linhas: number }>()
+  for (const e of (extratos.data ?? []) as {
+    unit_id: string
+    lido_em: string
+    linhas: number
+  }[]) {
+    extratoLido.set(e.unit_id, { lidoEm: e.lido_em, linhas: e.linhas })
+  }
   /**
    * ⚠️ SÓ LOJA COM API VINCULADA. (Marcus, 19/08/26)
    *
@@ -317,10 +342,25 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       if (horasLigada < CARENCIA_PRIMEIRO_DADO_H) {
         gravidade = "atencao"
         motivo = "conectada há pouco — primeira carga ainda não veio"
+      } else if (lidoRecentemente(extratoLido.get(s.unit_id)?.lidoEm, agora)) {
+        // Lemos o extrato e ele veio vazio: a conexão funciona, a loja é que
+        // não vendeu nada ainda. Conversa comercial, não conserto técnico.
+        gravidade = "atencao"
+        motivo = `conectada há ${Math.floor(horasLigada / 24)} dias; o extrato é lido normalmente, mas ainda não houve venda`
       } else {
         gravidade = "alerta"
         motivo = `conectada há ${Math.floor(horasLigada / 24)} dias e nunca trouxe dado`
       }
+    } else if (
+      /* O extrato do mês foi lido há pouco: o caminho está de pé, e o que
+       * falta depois da última data é ausência de VENDA, não de sincronização.
+       * Antes desta linha as duas coisas produziam o mesmo alerta. */
+      s.plataforma === "ifood" &&
+      lidoRecentemente(extratoLido.get(s.unit_id)?.lidoEm, agora) &&
+      qtd7d === 0
+    ) {
+      gravidade = "ok"
+      motivo = `extrato lido ${quando(extratoLido.get(s.unit_id)!.lidoEm, agora)}; a loja não vendeu no período`
     } else if (pedido) {
       // A régua: financeiro atrasado EM RELAÇÃO ao próprio movimento da loja.
       const atraso = horasEntre(fin, `${pedido}T23:59:59-03:00`)
@@ -625,4 +665,17 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
 function fmt(iso: string): string {
   const d = iso.slice(0, 10).split("-")
   return `${d[2]}/${d[1]}`
+}
+
+/** Leitura de até 30h atrás ainda prova que o caminho está de pé (o cron é diário). */
+function lidoRecentemente(lidoEm: string | undefined, agora: string): boolean {
+  if (!lidoEm) return false
+  return horasEntre(lidoEm, agora) <= 30
+}
+
+function quando(lidoEm: string, agora: string): string {
+  const h = horasEntre(lidoEm, agora)
+  if (h < 1) return "há minutos"
+  if (h < 24) return `há ${Math.floor(h)}h`
+  return `há ${Math.floor(h / 24)} dia(s)`
 }

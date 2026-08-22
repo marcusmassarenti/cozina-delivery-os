@@ -50,7 +50,7 @@ import {
   marcarCompetenciaVazia,
   esquecerPedido,
 } from "./reconciliation"
-import { syncReconciliationCompetencia } from "./sync"
+import { carimbarExtratoLido, syncReconciliationCompetencia } from "./sync"
 
 /** Margem pra rodada terminar antes da seguinte começar. */
 const RESERVA_FINAL_MS = 25_000
@@ -252,8 +252,13 @@ export async function coletarExtratosPendentes(
         prontos.push(item)
       } else if (/no financial entries exist/i.test(st.raw ?? "")) {
         // Definitivo: encerra a competência aqui e nunca mais pede.
+        //
+        // Carimba a LEITURA junto: "perguntamos e o iFood disse que não há
+        // movimento" é uma resposta, não silêncio. Sem o carimbo, o
+        // diagnóstico de saúde leria essa loja como quem parou de sincronizar.
         await marcarCompetenciaVazia(item.loja.merchantId, item.competencia)
         await esquecerPedido(item.loja.merchantId, item.competencia)
+        await carimbarExtratoLido(admin, item.loja.unitId, item.competencia, 0)
         out.semMovimento++
       } else {
         out.aindaGerando++
