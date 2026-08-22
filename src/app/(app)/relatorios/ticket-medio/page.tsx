@@ -3,6 +3,8 @@ import { ArrowLeft, Receipt } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -83,6 +85,9 @@ export default async function TicketMedioPage({
       <span className="text-muted-foreground/50">—</span>
     )
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoRange(periodRange.start, periodRange.end, scoped.map((u) => u.id))
+
   return (
     <div
       data-print="page"
@@ -109,7 +114,12 @@ export default async function TicketMedioPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={periodRange}
@@ -118,6 +128,8 @@ export default async function TicketMedioPage({
           />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {!isFullMonth && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">

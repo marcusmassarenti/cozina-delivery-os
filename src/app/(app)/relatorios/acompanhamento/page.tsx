@@ -3,6 +3,8 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoPeriodo } from "@/lib/data/procedencia"
 import { PlatformLogo, type PlatformId,
   PLATAFORMAS,
 } from "@/components/platform-logo"
@@ -143,6 +145,9 @@ export default async function AcompanhamentoPage({
     )
   }
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoPeriodo(year, month, undefined, new Date().toISOString().slice(0, 10))
+
   return (
     <div
       data-print="page"
@@ -169,9 +174,16 @@ export default async function AcompanhamentoPage({
           </div>
         </div>
         <div data-print="hide">
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {/* Alerta: até qual data cada plataforma está sincronizada */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">

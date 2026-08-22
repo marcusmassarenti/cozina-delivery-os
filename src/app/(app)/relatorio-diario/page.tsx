@@ -36,7 +36,9 @@ import { RelatorioFilters } from "./_components/relatorio-filters"
 import { RelatorioKpis } from "./_components/relatorio-kpis"
 import { UnitsRanking, type RankingUnit } from "./_components/units-ranking"
 import { WeeklyMatrix } from "./_components/weekly-matrix"
-import { ExportPdfButton } from "./_components/export-pdf-button"
+import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 
 const PLATFORM_LABEL: Record<ReportPlatform, string> = {
   todas: "Todas as plataformas",
@@ -208,6 +210,9 @@ export default async function RelatorioDiarioPage({
     }))
     .sort((a, b) => b.value - a.value)
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoRange(periodRange.start, periodRange.end, unitsForMatrix.map((u) => u.id))
+
   return (
     <div
       data-print="page"
@@ -238,7 +243,12 @@ export default async function RelatorioDiarioPage({
             Infos Diária Venda (metas)
           </Link>
           <LojaFilter units={activeUnits} />
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
           <PeriodSelector
             current={periodRange}
             options={availablePeriods}
@@ -246,6 +256,8 @@ export default async function RelatorioDiarioPage({
           />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {!isFullMonth && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400 print:hidden">

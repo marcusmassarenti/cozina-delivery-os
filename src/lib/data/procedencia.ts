@@ -201,3 +201,23 @@ export async function procedenciaDoPeriodo(
     geradoEm,
   }
 }
+
+/**
+ * Mesma coisa, para relatórios que trabalham com INTERVALO em vez de mês.
+ *
+ * A cobertura é apurada por mês (é assim que o extrato do iFood chega), então
+ * o que vale é o mês do FIM do intervalo: é ele que responde "até onde este
+ * relatório enxerga". Um intervalo que termina em julho não deve reclamar de
+ * agosto, e é isso que o alvo abaixo garante.
+ */
+export async function procedenciaDoRange(
+  inicio: string,
+  fim: string,
+  unitIds: string[] | undefined,
+): Promise<Procedencia> {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const ano = Number(fim.slice(0, 4))
+  const mes = Number(fim.slice(5, 7))
+  // O alvo é o fim do intervalo, ou hoje se o intervalo ainda não terminou.
+  return procedenciaDoPeriodo(ano, mes, unitIds, fim < hoje ? fim : hoje)
+}

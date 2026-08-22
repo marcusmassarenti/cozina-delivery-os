@@ -3,6 +3,8 @@ import { ArrowLeft, Trophy } from "lucide-react"
 
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -147,6 +149,9 @@ export default async function RankingPage({
         100
       : null
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoRange(range.start, range.end, scopedUnits.map((u) => u.id))
+
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -173,7 +178,12 @@ export default async function RankingPage({
               estado do React, não <details>, então o usuário escolhe o que
               detalhar antes de exportar. Forçar as 13 abertas geraria um PDF
               longo demais pra servir de ranking. */}
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
           <LojaFilter units={allUnits} />
           <PeriodSelector
             current={range}
@@ -184,6 +194,8 @@ export default async function RankingPage({
           />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {!data.marginAvailable && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">

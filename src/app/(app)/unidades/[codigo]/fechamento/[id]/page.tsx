@@ -3,6 +3,8 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getUnitByCode } from "@/lib/data/units"
@@ -89,6 +91,11 @@ export default async function FechamentoPrintPage({
   const vinMeio = Math.ceil(vinRows.length / 2)
   const vinCols = [vinRows.slice(0, vinMeio), vinRows.slice(vinMeio)]
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  /* O fechamento é de uma SEMANA. A procedência olha o mês em que ela
+   * termina — é ali que uma importação atrasada esconderia dias. */
+  const proc = await procedenciaDoRange(f.periodoInicio, f.periodoFim, [unit.id])
+
   return (
     <div className="min-h-screen bg-muted/30 p-6">
       {/* Impressão: 1 página A4 retrato, compacta (sobrepõe o landscape global) */}
@@ -107,7 +114,12 @@ export default async function FechamentoPrintPage({
             <ArrowLeft className="size-4" />
             Voltar
           </Link>
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
 
         {/* Cabeçalho: logo Cozina + plataformas (entram no PDF) */}
@@ -267,6 +279,8 @@ export default async function FechamentoPrintPage({
           Cozina Foods · documento gerado pelo Delivery OS
         </p>
       </div>
+
+      <ProcedenciaDados p={proc} />
     </div>
   )
 }

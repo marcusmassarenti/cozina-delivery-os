@@ -2,6 +2,8 @@ import Link from "next/link"
 import { ArrowLeft, ArrowRight, Percent, Sigma } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
@@ -148,6 +150,9 @@ export default async function CmvPage({
   ]
   const semNada = lojas.filter((l) => l.cmvPct === null && l.receitaItens > 0)
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoRange(periodRange.start, periodRange.end, scopedUnits.map((u) => u.id))
+
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -171,11 +176,18 @@ export default async function CmvPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2" data-print="hide">
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
           <LojaFilter units={allUnits} />
           <PeriodSelector current={periodRange} options={periods} enableRange />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {comCusto.length === 0 ? (
         <VazioTotal lojas={lojas} />

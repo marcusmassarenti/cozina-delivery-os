@@ -16,6 +16,8 @@ import { MapaCalor } from "./_components/mapa-calor"
 import { PeriodoSelector } from "./_components/periodo-selector"
 import { DiaSemanaCard } from "@/components/shared/dia-semana-card"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoPeriodo } from "@/lib/data/procedencia"
 import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
 
 /**
@@ -115,6 +117,17 @@ export default async function RelatorioDiaSemanaPage({
 
   const foraDoPadrao = linhas.filter((l) => l.d.foraDoPadrao)
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  /* Janela móvel (90 dias por padrão): a procedência descreve o mês
+   * corrente, que é o único que ainda pode estar chegando. */
+  const _hoje = new Date()
+  const proc = await procedenciaDoPeriodo(
+    _hoje.getFullYear(),
+    _hoje.getMonth() + 1,
+    ids,
+    _hoje.toISOString().slice(0, 10),
+  )
+
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
       <div className="flex flex-wrap items-center gap-2">
@@ -130,9 +143,16 @@ export default async function RelatorioDiaSemanaPage({
           </p>
         </div>
         <div className="ml-auto" data-print="hide">
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       <div className="flex flex-col gap-2" data-print="hide">
         <PeriodoSelector atual={periodo} mesesFechados={mesesFechados} />

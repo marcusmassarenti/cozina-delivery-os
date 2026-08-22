@@ -2,6 +2,8 @@ import Link from "next/link"
 import { ArrowLeft, Minus, TrendingDown, TrendingUp } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoPeriodo } from "@/lib/data/procedencia"
 import { PlatformLogo, type PlatformId,
   PLATAFORMAS,
 } from "@/components/platform-logo"
@@ -129,6 +131,18 @@ export default async function EvolucaoPage({
       ? "rede toda"
       : `${selectedUnits.length} loja${selectedUnits.length === 1 ? "" : "s"}`
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  /* Relatório de vários meses: a procedência descreve o mês MAIS
+   * RECENTE do recorte — os anteriores estão fechados, e é o último
+   * que ainda pode estar chegando. */
+  const _hojeProc = new Date()
+  const proc = await procedenciaDoPeriodo(
+    _hojeProc.getFullYear(),
+    _hojeProc.getMonth() + 1,
+    allUnits.map((u) => u.id),
+    new Date().toISOString().slice(0, 10),
+  )
+
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -152,9 +166,16 @@ export default async function EvolucaoPage({
           </p>
         </div>
         <div data-print="hide">
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       <div data-print="hide">
         <EvolucaoFilters

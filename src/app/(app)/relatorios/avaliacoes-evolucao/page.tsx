@@ -4,6 +4,8 @@ import { ArrowLeft, AlertTriangle, LineChart } from "lucide-react"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getAvailablePeriods } from "@/lib/data/ifood-imported"
 import { getAvaliacoesByUnitForMonth } from "@/lib/data/avaliacoes-network"
@@ -90,6 +92,9 @@ export default async function AvaliacoesEvolucaoPage({
   const delta =
     last?.nota != null && prev?.nota != null ? last.nota - prev.nota : null
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoRange(periodRange.start, periodRange.end, scoped.map((u) => u.id))
+
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -120,9 +125,16 @@ export default async function AvaliacoesEvolucaoPage({
             options={availablePeriods}
             enableRange
           />
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {!isFullMonth && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">

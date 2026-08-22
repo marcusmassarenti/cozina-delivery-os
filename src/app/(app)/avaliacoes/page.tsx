@@ -4,6 +4,8 @@ import { AvaliacoesCwTab } from "@/app/(app)/unidades/[codigo]/_components/avali
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { PeriodSelector } from "@/components/shared/period-selector"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { AvaliacoesTab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-tab"
 import { Avaliacoes99Tab } from "@/app/(app)/unidades/[codigo]/_components/avaliacoes-99-tab"
@@ -113,6 +115,13 @@ export default async function AvaliacoesPage({
       ? plataformaParam
       : (availableForUnit[0] ?? null)
 
+  /* De onde vem cada número — na tela e dentro do PDF. */
+  const proc = await procedenciaDoRange(
+    periodRange.start,
+    periodRange.end,
+    networkUnitIds,
+  )
+
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -136,9 +145,16 @@ export default async function AvaliacoesPage({
             options={availablePeriods}
             enableRange
           />
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {!isFullMonth && (
         <div
