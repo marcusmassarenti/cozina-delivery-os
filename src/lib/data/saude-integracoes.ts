@@ -36,7 +36,16 @@ import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
  * pode atrasar dez dias sem virar emergência, dado de API que depende do
  * calendário da plataforma também pode.
  */
-const TOLERANCIA_HORAS = 48
+/* 72h desde 22/08/26, medido e não chutado.
+ *
+ * A distribuição real da defasagem entre o último pedido e o último lançamento
+ * nas 89 lojas com API: 43 em dia, 24 com 1 dia, 19 com 2 dias, 2 com 3+.
+ * Com folga de 48h, as 19 de dois dias caíam no alerta TODO DIA — e dois dias
+ * é a cadência normal do extrato do iFood, não defeito. O e-mail saía com 20
+ * lojas diariamente, o que ensina a não ler o e-mail.
+ *
+ * O custo é conhecido e aceito: loja que travar hoje aparece um dia depois. */
+const TOLERANCIA_HORAS = 72
 /** Horas depois de conectar antes de cobrar o primeiro dado. */
 const CARENCIA_PRIMEIRO_DADO_H = 24
 /**
