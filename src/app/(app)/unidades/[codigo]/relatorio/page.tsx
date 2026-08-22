@@ -3,6 +3,8 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoPeriodo } from "@/lib/data/procedencia"
 import { PlatformLogo } from "@/components/platform-logo"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { getUnitByCode, getUnitPlatforms } from "@/lib/data/units"
@@ -76,6 +78,16 @@ export default async function RelatorioMensalUnidade({
       // Cesta dos cancelados iFood — o bruto exibido é o TOTAL (portal).
       getCancelamentoCestaForMonth(unit.id, year, month),
     ])
+
+  /* De onde vem cada número deste relatório. Vai pra tela E pro PDF — foi
+   * justamente um PDF deste tipo, com a Keeta parada, que chegou ao cliente de
+   * um gestor sem nenhuma ressalva. */
+  const proc = await procedenciaDoPeriodo(
+    year,
+    month,
+    [unit.id],
+    new Date().toISOString().slice(0, 10),
+  )
 
   // monthly enriquecido (igual ao detalhe da loja) — alimenta o Financeiro.
   const m = mergeMonthly(monthlyMap.get(unit.id) ?? emptyMonthly, fin, nine, keeta)
@@ -151,9 +163,17 @@ export default async function RelatorioMensalUnidade({
               <PlatformLogo key={p} platform={p} size="sm" />
             ))}
           </span>
-          <ExportPdfButton label="Salvar PDF" />
+          <ExportPdfButton
+            label="Salvar PDF"
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
+
+      <ProcedenciaDados p={proc} />
 
       {/* Resumo (KPIs) */}
       <Secao titulo="Resumo do mês">

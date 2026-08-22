@@ -16,6 +16,8 @@ import {
 
 import { ImportCoverageBanner } from "@/components/dashboard/import-coverage-banner"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
+import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { procedenciaDoPeriodo } from "@/lib/data/procedencia"
 import { KpiCard, type Kpi } from "@/components/shared/kpi-card"
 import { LojaFilter } from "@/components/shared/loja-filter"
 import { PeriodSelector } from "@/components/shared/period-selector"
@@ -111,6 +113,17 @@ export default async function RelatoriosPage({
   const years = [
     ...new Set((await getAvailablePeriods()).map((p) => p.year)),
   ].sort((a, b) => b - a)
+
+  /* Procedência dos números — mesma informação na tela e dentro do PDF.
+   * O ImportCoverageBanner abaixo continua: ele é a barra OPERACIONAL, com
+   * botão de sincronizar e o que falta importar. Este aqui é a ficha técnica
+   * do relatório, e é o único que viaja junto com o arquivo. */
+  const proc = await procedenciaDoPeriodo(
+    refMonth.year,
+    refMonth.month,
+    filterIds,
+    new Date().toISOString().slice(0, 10),
+  )
 
   // O DRE consolidado é MENSAL (CMV/operação por mês) e a apuração por plataforma
   // do iFood é pesada (~1,5s/mês). Mostra o mês de referência (mais recente do
@@ -280,7 +293,12 @@ export default async function RelatoriosPage({
             enableYear
             years={years}
           />
-          <ExportPdfButton />
+          <ExportPdfButton
+            aviso={{
+              faltando: proc.comLacuna.map((p) => p.rotulo),
+              linha: proc.linha,
+            }}
+          />
         </div>
       </div>
 
@@ -298,6 +316,8 @@ export default async function RelatoriosPage({
           </span>
         </div>
       )}
+
+      <ProcedenciaDados p={proc} />
 
       {!multiMonth && (
         <ImportCoverageBanner
