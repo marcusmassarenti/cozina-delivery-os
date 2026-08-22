@@ -46,8 +46,42 @@ export type AlertaVenda = {
   quedaPct: number
   /** Pedidos a menos na semana — o número que dói, em unidade que se entende. */
   pedidosAMenos: number
-  /** Plataformas com dado parado, quando houver. */
-  defasadas: string | null
+  /** Plataformas com dado parado: quem, há quantos dias, e que fatia era. */
+  defasadas: PlataformaDefasada[]
+}
+
+export type PlataformaDefasada = {
+  plat: string
+  dias: number
+  /** Fatia do movimento da loja que essa plataforma representava (0–1). */
+  peso: number
+}
+
+/**
+ * Dias de atraso que ainda são ROTINA em cada plataforma.
+ *
+ * ── POR QUE ISTO NÃO MORA NA RPC (Marcus, 22/08/26) ──────────────────────
+ * A função responde "dá pra julgar a venda?" — e ali qualquer buraco de mais
+ * de 3 dias invalida a janela de 7, independente de ser normal. Já "isso
+ * merece um aviso?" depende da cadência: a Keeta entra por planilha semanal,
+ * então 5 dias ali é rotina; no iFood, que é diário, 5 dias é problema.
+ *
+ * Usar o limiar técnico pra avisar produziria 23 lojas em alerta permanente —
+ * e alerta permanente ninguém lê. É a mesma folga da procedência
+ * (@/lib/data/procedencia), pelo mesmo motivo.
+ */
+const CADENCIA_DIAS: Record<string, number> = {
+  iFood: 3,
+  "99 Food": 5,
+  Keeta: 7,
+  "Cardapio Web": 3,
+}
+
+/** Só o que passou da cadência da própria plataforma. */
+export function defasagensQueImportam(
+  defasadas: PlataformaDefasada[],
+): PlataformaDefasada[] {
+  return defasadas.filter((d) => d.dias > (CADENCIA_DIAS[d.plat] ?? 3))
 }
 
 /**
@@ -80,10 +114,12 @@ export async function alertasDeVenda(
     pedidos_base: number
     queda_pct: number
     estado: EstadoVenda
-    plataformas_defasadas: string | null
+    defasadas: PlataformaDefasada[] | null
   }[]).filter(
     (l) =>
-      (l.estado === "parou" || l.estado === "caiu") &&
+      (l.estado === "parou" ||
+        l.estado === "caiu" ||
+        l.estado === "dado-incompleto") &&
       // A demo tem venda fabricada e para sempre que o seed envelhece; cliente
       // encerrado parou de propósito. Os dois entupiriam a lista com alarme
       // que ninguém vai agir.
@@ -130,7 +166,7 @@ export async function alertasDeVenda(
             0,
             Math.round(Number(l.pedidos_base) - Number(l.pedidos_recentes)),
           ),
-          defasadas: l.plataformas_defasadas,
+          defasadas: l.defasadas ?? [],
         },
       ]
     })

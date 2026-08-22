@@ -10,7 +10,7 @@
  */
 import "server-only"
 
-import type { AlertaVenda } from "@/lib/data/alertas-venda"
+import { defasagensQueImportam, type AlertaVenda } from "@/lib/data/alertas-venda"
 
 import type {
   OportunidadeConexao,
@@ -635,15 +635,58 @@ export function emailSaude(
       }
 
       ${
-        quedas.length > 0
+        (() => {
+          /* Plataforma que parou de importar: dinheiro que o cliente não está
+           * vendo no painel. Separado das quedas de propósito — aqui o
+           * problema é NOSSO (ou da planilha que ninguém subiu), lá é da
+           * operação dele. Misturar os dois faria o gestor procurar causa
+           * comercial pra buraco de importação. */
+          const paradas = quedas
+            .filter((q) => q.estado === "dado-incompleto")
+            .map((q) => ({ q, plats: defasagensQueImportam(q.defasadas) }))
+            .filter((x) => x.plats.length > 0)
+            .sort(
+              (a, b) =>
+                Math.max(...b.plats.map((p) => p.dias)) -
+                Math.max(...a.plats.map((p) => p.dias)),
+            )
+          if (paradas.length === 0) return ""
+          return `
+      <hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0 16px;" />
+      <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#18181b;">Plataforma parada de importar — ${paradas.length} loja(s)</p>
+      <p style="margin:0 0 12px;font-size:12px;line-height:1.6;color:#71717a;">
+        O painel do cliente está mostrando MENOS do que a loja vendeu. A folga considerada é a cadência de cada plataforma (iFood 3 dias, 99 Food 5, Keeta 7) — só entra quem passou dela.
+      </p>
+      ${paradas
+        .map(
+          ({ q, plats }) => `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;background:#eff6ff;border-radius:10px;">
+        <tr><td style="padding:10px 12px;font-size:13px;line-height:1.6;color:#3f3f46;">
+          <strong>${q.cliente} · ${q.code} ${q.loja}</strong><br/>
+          ${plats
+            .map(
+              (p) =>
+                `<strong>${p.plat}</strong> sem dado há <strong>${p.dias} dias</strong> — era ${Math.round(p.peso * 100)}% do movimento desta loja`,
+            )
+            .join("<br/>")}
+        </td></tr>
+      </table>`,
+        )
+        .join("")}`
+        })()
+      }
+
+      ${
+        quedas.filter((q) => q.estado !== "dado-incompleto").length > 0
           ? `
       <hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0 16px;" />
-      <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#18181b;">Vendendo menos que o normal — ${quedas.length} loja(s)</p>
+      <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#18181b;">Vendendo menos que o normal — ${quedas.filter((q) => q.estado !== "dado-incompleto").length} loja(s)</p>
       <p style="margin:0 0 12px;font-size:12px;line-height:1.6;color:#71717a;">
         Cada loja comparada com ELA MESMA: os últimos 7 dias contra a média semanal das 4 semanas anteriores.
         Ordenado por pedidos a menos, não por porcentagem — 100 pedidos a menos numa loja grande pesa mais que 80% a menos numa que fazia 10.
       </p>
       ${quedas
+        .filter((q) => q.estado !== "dado-incompleto")
         .map(
           (q) => `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;background:${q.estado === "parou" ? "#fef2f2" : "#fffbeb"};border-radius:10px;">
