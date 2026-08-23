@@ -1,7 +1,7 @@
 import "server-only"
 
 /**
- * Lojas que passaram a ter 99 Food ou Cardápio Web conectados.
+ * Lojas que ganharam uma plataforma conectada nos últimos dias.
  *
  * ── POR QUE ISSO EXISTE (Marcus, 18/08/26) ───────────────────────────────
  * "precisa avisar o cliente que a 99 está conectada e cardapio web também
@@ -19,7 +19,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export type ConexaoNova = {
-  plataforma: "99food" | "cardapioweb"
+  plataforma: "ifood" | "99food" | "cardapioweb"
   unitId: string
   unitCode: string
   unitName: string
@@ -164,6 +164,44 @@ export async function getConexoesNovas(
       unitCode: u.code,
       unitName: u.name,
       conectadaEm: i.created_at,
+      temDado: (count ?? 0) > 0,
+    })
+  }
+
+  /* ── iFood ────────────────────────────────────────────────────────────
+   * Ele já tinha aviso próprio, vindo da máquina de solicitação. Entrou aqui
+   * junto (Marcus, 22/08/26) porque a loja que conecta nas três plataformas
+   * ganhava TRÊS cards seguidos dizendo a mesma coisa sobre a mesma loja — e a
+   * pessoa não pensa "minha loja no 99", pensa "minha loja".
+   *
+   * O sinal é `fin_enabled_at`: o carimbo de quando o financeiro foi ligado
+   * pra aquela loja. Serve pros dois caminhos (vínculo manual e auto-vínculo),
+   * enquanto a solicitação só existe quando o cliente pediu pela tela. */
+  const { data: ifood } = await admin
+    .from("unit_platforms")
+    .select("unit_id, fin_enabled_at")
+    .eq("platform", "ifood")
+    .eq("active", true)
+    .not("api_store_id", "is", null)
+    .not("fin_enabled_at", "is", null)
+    .gte("fin_enabled_at", corte)
+    .in("unit_id", unitIds)
+  for (const f of (ifood ?? []) as {
+    unit_id: string
+    fin_enabled_at: string
+  }[]) {
+    const u = porId.get(f.unit_id)
+    if (!u) continue
+    const { count } = await admin
+      .from("ifood_financeiro_lancamentos")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", f.unit_id)
+    out.push({
+      plataforma: "ifood",
+      unitId: f.unit_id,
+      unitCode: u.code,
+      unitName: u.name,
+      conectadaEm: f.fin_enabled_at,
       temDado: (count ?? 0) > 0,
     })
   }

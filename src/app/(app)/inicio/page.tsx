@@ -1189,21 +1189,23 @@ export default async function Home({
           autoriza o app no portal dele. */}
       <Autorizar99Aviso itens={minhasSolicitacoes99} />
 
-      {/* As NOTÍCIAS de conexão numa linha só quando são muitas — ver o
-          componente. Pendência não entra aqui: ela é tarefa, não notícia. */}
-      <NovidadesConexoes
-        total={conexoesNovas.length + (primeirasAvaliacoes.length > 0 ? 1 : 0)}
-        fechados={avisosFechados}
-      >
-        {/* 99 Food e Cardápio Web: mesma notícia, que antes só o iFood dava. */}
-        <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />
-
-        {/* Avaliação tem rotina própria — ver o componente. */}
-        <PrimeiraAvaliacaoAviso
-          itens={primeirasAvaliacoes}
+      {/* Muitas novidades = UM aviso de três linhas. Com uma ou duas, o card
+          completo, que é a confirmação que a pessoa espera. Ver o componente. */}
+      {conexoesNovas.length + primeirasAvaliacoes.length >= 3 ? (
+        <NovidadesConexoes
+          conexoes={conexoesNovas}
+          avaliacoes={primeirasAvaliacoes}
           fechados={avisosFechados}
         />
-      </NovidadesConexoes>
+      ) : (
+        <>
+          <ConexaoNovaAviso conexoes={conexoesNovas} fechados={avisosFechados} />
+          <PrimeiraAvaliacaoAviso
+            itens={primeirasAvaliacoes}
+            fechados={avisosFechados}
+          />
+        </>
+      )}
 
       {/* Dispensável aqui: quem abre a inicial veio ver o faturamento do dia,
           e prender um aviso de cadastro no caminho seria sequestrar a tela por

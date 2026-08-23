@@ -11,6 +11,7 @@ import {
   ExternalLink,
   PartyPopper,
   RefreshCw,
+  Store,
   X,
   XCircle,
 } from "lucide-react"
@@ -67,14 +68,28 @@ export function IfoodClienteAviso({
   // validade de 7 dias como a comemoração: enquanto o dado não chega, o aviso
   // é a única explicação pro dashboard estar vazio, e tirá-lo do ar deixaria a
   // pessoa só com a tela em branco.
+  /* "Ainda buscando" e "buscamos e não havia venda" são estados DIFERENTES.
+   *
+   * ── POR QUE (Marcus, 22/08/26) ─────────────────────────────────────────
+   * O aviso media a chegada do dado, e dado que não existe nunca chega: a
+   * Araraquara ficaria com "estamos baixando o histórico…" para sempre. Ela
+   * está autorizada, vinculada e DESABILITADA no iFood — não há venda nenhuma
+   * pra trazer, e dizer que ainda estamos procurando é mentira que gera
+   * chamado.
+   *
+   * O carimbo do backfill é quem separa os dois. */
   const sincronizando = solicitacoes.filter(
-    (s) => s.status === "ativa" && !s.temDado,
+    (s) => s.status === "ativa" && !s.temDado && !s.historicoFechado,
+  )
+  const semVendaAinda = solicitacoes.filter(
+    (s) => s.status === "ativa" && !s.temDado && s.historicoFechado,
   )
   const prontas = ativas.filter((s) => s.temDado)
 
   if (
     prontas.length === 0 &&
     sincronizando.length === 0 &&
+    semVendaAinda.length === 0 &&
     pendentesAprovacao.length === 0 &&
     recusadas.length === 0
   ) {
@@ -94,11 +109,15 @@ export function IfoodClienteAviso({
           qualquer comemoração: é o caso em que o cliente mais precisa de
           notícia, porque o dashboard dele está vazio neste exato momento. */}
       {sincronizando.length > 0 && <SincronizandoCard lojas={sincronizando} />}
-      {prontas.length > 2 ? (
-        <VariasAtivasCard lojas={prontas} />
-      ) : (
-        prontas.map((s) => <AtivaCard key={s.id} s={s} />)
-      )}
+      {semVendaAinda.length > 0 && <SemVendaAindaCard lojas={semVendaAinda} />}
+      {/* "Loja conectada ao iFood" MUDOU DE CASA (Marcus, 22/08/26).
+          Agora sai junto com 99 e Cardápio Web, agrupado POR LOJA, em
+          ConexaoNovaAviso. A loja que conectou nas três dava três cards
+          seguidos com a mesma frase; a pessoa não pensa "minha loja no
+          iFood", pensa "minha loja".
+
+          O que ficou aqui é o que só o iFood tem: a máquina de solicitação
+          (pendente, recusada) e a primeira carga rodando. */}
       {/* Com mais de uma loja esperando, um card só: eram 7 avisos idênticos
           na home, cada um pedindo a mesma ação e cobrando um clique. */}
       {pendentesAprovacao.length > 1 ? (
@@ -146,6 +165,48 @@ export function IfoodClienteAviso({
  * Sai sozinho da tela quando o primeiro lançamento chega (`temDado`), dando
  * lugar à comemoração — que aí sim tem número por trás.
  */
+/**
+ * Conectada, histórico buscado, e nenhuma venda pra mostrar.
+ *
+ * Não é erro nem espera: é o retrato de uma loja que ainda não vendeu no
+ * período — normalmente porque está desabilitada ou nem abriu. O tom é de
+ * informação, não de alerta, e por isso ele não pulsa nem pede nada.
+ */
+function SemVendaAindaCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
+  const uma = lojas.length === 1
+  return (
+    <div className="flex items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm">
+      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+        <Store className="size-4 text-muted-foreground" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-foreground">
+          {uma ? (
+            <>
+              <b>
+                {lojas[0].unitCode ? `${lojas[0].unitCode} · ` : ""}
+                {lojas[0].unitName}
+              </b>{" "}
+              está conectada, mas ainda não vendeu
+            </>
+          ) : (
+            <>
+              <b>{lojas.length} lojas</b> estão conectadas, mas ainda não
+              venderam
+            </>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Já buscamos o histórico e o iFood não devolveu venda nenhuma — o
+          normal quando a loja está desabilitada no app ou ainda não abriu.{" "}
+          <b>Não é problema na conexão</b>: no dia em que ela vender, o dado
+          entra sozinho.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function SincronizandoCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
   const uma = lojas.length === 1
   return (

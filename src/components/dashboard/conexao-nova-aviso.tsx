@@ -11,6 +11,7 @@ import type {
 } from "@/lib/data/conexoes-novas"
 
 const ROTULO = {
+  ifood: "iFood",
   "99food": "99 Food",
   cardapioweb: "Cardápio Web",
 } as const
@@ -67,48 +68,87 @@ export function ConexaoNovaAviso({
   })
   if (visiveis.length === 0) return null
 
+  /**
+   * UM CARD POR LOJA, não por plataforma.
+   *
+   * ── POR QUE (Marcus, 22/08/26) ─────────────────────────────────────────
+   * A CR Poços conectou no iFood, no 99 e no Cardápio Web e a home mostrou
+   * três cards seguidos, com a mesma frase e o mesmo nome de loja, mudando só
+   * o logo. Ninguém pensa "minha loja no 99" — pensa "minha loja". Agrupado, a
+   * notícia é a loja e as plataformas viram o detalhe dela.
+   */
+  const porLoja = new Map<string, typeof visiveis>()
+  for (const c of visiveis) {
+    const atual = porLoja.get(c.unitId) ?? []
+    atual.push(c)
+    porLoja.set(c.unitId, atual)
+  }
+
   return (
     <div className="space-y-2">
-      {visiveis.map((c) => (
-        <div
-          key={`${c.plataforma}|${c.unitId}`}
-          className="flex items-start gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40"
-        >
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-600/10">
-            <PartyPopper className="size-4 text-emerald-700 dark:text-emerald-400" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
-              <span>
-                Sua loja <b>{c.unitCode} · {c.unitName}</b> foi conectada ao
-              </span>
-              <PlatformLogo platform={c.plataforma} size="sm" />
-              <span>{ROTULO[c.plataforma]}! 🎉</span>
-            </p>
-            <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
-              {c.temDado ? (
-                <>
-                  Faturamento e pedidos <b>já estão entrando sozinhos</b> pela
-                  API — sem planilha.
-                </>
-              ) : (
-                <>
-                  Estamos trazendo o histórico agora. Os números aparecem aqui
-                  assim que a primeira carga terminar — não precisa fazer nada.
-                </>
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => fechar(`${c.plataforma}|${c.unitId}`)}
-            aria-label="Fechar aviso"
-            className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-emerald-600/10 hover:text-foreground"
+      {[...porLoja.values()].map((grupo) => {
+        const c = grupo[0]
+        const todasComDado = grupo.every((g) => g.temDado)
+        return (
+          <div
+            key={c.unitId}
+            className="flex items-start gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40"
           >
-            <X className="size-4" />
-          </button>
-        </div>
-      ))}
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-600/10">
+              <PartyPopper className="size-4 text-emerald-700 dark:text-emerald-400" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                <span>
+                  Sua loja <b>{c.unitCode} · {c.unitName}</b> foi conectada
+                  {grupo.length > 1 ? " a" : " ao"}
+                </span>
+                {grupo.map((g, i) => (
+                  <span
+                    key={g.plataforma}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <PlatformLogo platform={g.plataforma} size="sm" />
+                    <span>
+                      {ROTULO[g.plataforma]}
+                      {i < grupo.length - 2
+                        ? ","
+                        : i === grupo.length - 2
+                          ? " e"
+                          : "! 🎉"}
+                    </span>
+                  </span>
+                ))}
+              </p>
+              <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                {todasComDado ? (
+                  <>
+                    Faturamento e pedidos <b>já estão entrando sozinhos</b> pela
+                    API — sem planilha.
+                  </>
+                ) : (
+                  <>
+                    Estamos trazendo o histórico agora. Os números aparecem aqui
+                    assim que a primeira carga terminar — não precisa fazer nada.
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                // Fecha a loja inteira: dispensar plataforma por plataforma
+                // seria devolver os três cliques que o agrupamento tirou.
+                for (const g of grupo) fechar(`${g.plataforma}|${g.unitId}`)
+              }}
+              aria-label="Fechar aviso"
+              className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-emerald-600/10 hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

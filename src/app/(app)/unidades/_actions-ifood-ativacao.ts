@@ -224,6 +224,18 @@ export type MinhaSolicitacao = {
    * óbvia é que quebrou, não que está a caminho.
    */
   temDado: boolean
+  /**
+   * O histórico já terminou de ser buscado?
+   *
+   * Sem isso, loja conectada e sem venda ficava com "estamos baixando o
+   * histórico…" PARA SEMPRE — o aviso mede a chegada do dado, e dado que não
+   * existe nunca chega. Foi o caso da Araraquara em 22/08/26: autorizada,
+   * vinculada, e desabilitada no iFood, então não há venda nenhuma pra trazer.
+   *
+   * Com o carimbo dá pra dizer a verdade: "perguntamos e não havia venda"
+   * é uma resposta, e é bem diferente de "ainda estamos procurando".
+   */
+  historicoFechado: boolean
 }
 
 /**
@@ -303,6 +315,19 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     }
   }
 
+  /* Quem já teve o histórico buscado — ver `historicoFechado` no tipo. */
+  const backfillFeito = new Set<string>()
+  if (ativas.length > 0) {
+    const { data: bf } = await db
+      .from("unit_platforms")
+      .select("unit_id, historico_backfill_at")
+      .eq("platform", "ifood")
+      .in("unit_id", ativas)
+      .not("historico_backfill_at", "is", null)
+    for (const r of (bf ?? []) as { unit_id: string }[])
+      backfillFeito.add(r.unit_id)
+  }
+
   return linhas.map((s) => ({
     id: s.id,
     unitId: s.unit_id,
@@ -313,6 +338,7 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
     atualizadaEm: s.updated_at,
     nota: s.nota ?? null,
     temDado: comDado.has(s.unit_id),
+    historicoFechado: backfillFeito.has(s.unit_id),
   }))
 }
 
