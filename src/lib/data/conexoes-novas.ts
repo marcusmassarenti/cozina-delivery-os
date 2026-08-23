@@ -192,10 +192,23 @@ export async function getConexoesNovas(
   }[]) {
     const u = porId.get(f.unit_id)
     if (!u) continue
-    const { count } = await admin
-      .from("ifood_financeiro_lancamentos")
-      .select("id", { count: "exact", head: true })
+    /* `temDado` do iFood sai do CARIMBO do backfill, não da contagem.
+     *
+     * ── POR QUE (Marcus, 23/08/26) ──────────────────────────────────────
+     * Contando linha, loja conectada e sem venda ficava eternamente com
+     * "Estamos trazendo o histórico agora" no card — a Araraquara, conectada
+     * e desabilitada no iFood, nunca sairia desse texto. O carimbo diz que a
+     * busca TERMINOU, com ou sem venda, que é o que a frase promete. */
+    const { data: bf } = await admin
+      .from("unit_platforms")
+      .select("historico_backfill_at")
       .eq("unit_id", f.unit_id)
+      .eq("platform", "ifood")
+      .maybeSingle()
+    const count = (bf as { historico_backfill_at?: string } | null)
+      ?.historico_backfill_at
+      ? 1
+      : 0
     out.push({
       plataforma: "ifood",
       unitId: f.unit_id,

@@ -56,6 +56,22 @@ export async function getOnboardingProgress(): Promise<OnboardingProgress | null
       .select("id", { count: "exact", head: true })
       .in("unit_id", unitIds)
     hasImported = (count ?? 0) > 0
+
+    /* Conectar por API JÁ É "trazer os dados" (Marcus, 23/08/26).
+     *
+     * `platform_imports` só ganha linha quando há o que gravar. Cliente novo
+     * que conecta a loja e ainda não vendeu ficava com o passo aberto pra
+     * sempre, sendo cobrado de fazer algo que ele já fez -- e que, no caminho
+     * da API, ele nem faria (não há planilha pra subir). */
+    if (!hasImported) {
+      const { count: comApi } = await admin
+        .from("unit_platforms")
+        .select("unit_id", { count: "exact", head: true })
+        .in("unit_id", unitIds)
+        .eq("active", true)
+        .not("api_store_id", "is", null)
+      hasImported = (comApi ?? 0) > 0
+    }
   }
 
   const done = [hasLogo, hasUnits, hasImported].filter(Boolean).length

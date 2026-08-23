@@ -829,11 +829,51 @@ function coberturaDoMes(
  * Custo zero de consulta: `units` já traz o que está habilitado e o
  * monthlyMap já traz o que faturou. É a diferença entre os dois conjuntos.
  */
+/**
+ * Pares `unitId|plataforma` conectados por API — ver `plataformasSemDado`.
+ *
+ * O iFood vem de `unit_platforms.api_store_id` — a primeira versão deste
+ * helper leu um `apiStoreId` que NÃO existe no tipo de `units`, e o TypeScript
+ * deixou passar por ser campo opcional: o conjunto ficava vazio pro iFood e o
+ * conserto não fazia nada. Buscar de verdade custa uma consulta.
+ *
+ * O 99 vem dos links. Cardápio Web é API por natureza: não existe planilha
+ * dele, então toda loja com ele habilitado entra.
+ */
+function paresViaApi(
+  units: { id: string; platforms?: string[] }[],
+  links99: unknown,
+  ifoodComApi: unknown,
+): Set<string> {
+  const out = new Set<string>()
+  for (const u of units)
+    if ((u.platforms ?? []).includes("cardapioweb"))
+      out.add(`${u.id}|cardapioweb`)
+  for (const l of ((links99 ?? []) as { unit_id: string | null }[]))
+    if (l.unit_id) out.add(`${l.unit_id}|99food`)
+  for (const f of ((ifoodComApi ?? []) as { unit_id: string | null }[]))
+    if (f.unit_id) out.add(`${f.unit_id}|ifood`)
+  return out
+}
+
 function plataformasSemDado(
   units: { id: string; name: string; platforms?: string[] }[],
   monthlyMap: Map<string, import("@/lib/mock-monthly").UnitMonthly>,
-  /** Lojas cujo 99 entra por API — essas NUNCA precisam de planilha. */
-  noveNoveViaApi: Set<string>,
+  /**
+   * Pares `unitId|plataforma` que entram por API — esses NUNCA precisam de
+   * planilha.
+   *
+   * ── POR QUE ISTO EXISTE E POR QUE CRESCEU (Marcus, 23/08/26) ───────────
+   * Nasceu só pro 99. Mas a mesma armadilha valia pro iFood: loja conectada
+   * por API que não vendeu no mês caía em "sem_dado", e o Nino mandava o dono
+   * procurar uma planilha que o sistema puxa sozinho — sendo que o problema
+   * dela não é dado faltando, é venda que não houve.
+   *
+   * É a mesma confusão entre "não chegou" e "não vendeu" que a gente vinha
+   * consertando no relatório de saúde e nos alertas, agora dentro da resposta
+   * da IA — onde ela vira conselho errado em vez de número errado.
+   */
+  viaApi: Set<string>,
 ) {
   const NOME: Record<string, string> = {
     ifood: "iFood",
@@ -852,10 +892,10 @@ function plataformasSemDado(
       const temDado = (m?.platforms ?? []).some(
         (b) => b.id === p && (b.bruto > 0 || b.liquido > 0),
       )
-      // Loja com o 99 conectado por API entra sozinha e não deve aparecer numa
-      // lista de "falta subir planilha" — mandar o dono procurar um arquivo que
-      // o sistema puxa sozinho é pior que não responder.
-      const porApi = p === "99food" && noveNoveViaApi.has(u.id)
+      // Loja conectada por API entra sozinha e não deve aparecer numa lista de
+      // "falta subir planilha" — mandar o dono procurar um arquivo que o
+      // sistema puxa sozinho é pior que não responder.
+      const porApi = viaApi.has(`${u.id}|${p}`)
       porPlataforma[rotulo][temDado || porApi ? "com_dado" : "sem_dado"].push(
         porApi && !temDado ? `${u.name} (via API, sem venda no mês)` : u.name,
       )
@@ -1457,6 +1497,7 @@ export async function perguntarConsultor(
       cestaMap,
       promoMap,
       links99,
+      ifoodComApi,
       coverage,
     ] = await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
@@ -1474,6 +1515,14 @@ export async function perguntarConsultor(
           .from("ninefood_store_links")
           .select("unit_id")
           .eq("active", true),
+        // Mesma ideia pro iFood: loja com merchant vinculado puxa sozinha, e
+        // aparecer como "falta planilha" num mês sem venda é conselho errado.
+        createAdminClient()
+          .from("unit_platforms")
+          .select("unit_id")
+          .eq("platform", "ifood")
+          .eq("active", true)
+          .not("api_store_id", "is", null),
         // O que falta importar. Pede DOIS meses de uma vez (a função aceita
         // range): no dia 5 do mês corrente quase toda loja está "faltando"
         // porque o relatório nem foi baixado ainda — pendência ali é ruído. O
@@ -1521,7 +1570,7 @@ export async function perguntarConsultor(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))), coberturaLojas)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, paresViaApi(units, links99.data, ifoodComApi.data)), coberturaLojas)
 
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
@@ -1662,6 +1711,7 @@ export async function* perguntarConsultorStream(
       cestaMap,
       promoMap,
       links99,
+      ifoodComApi,
       coverage,
     ] = await Promise.all([
         getRealMonthlyForUnits(unitIds, year, month),
@@ -1679,6 +1729,14 @@ export async function* perguntarConsultorStream(
           .from("ninefood_store_links")
           .select("unit_id")
           .eq("active", true),
+        // Mesma ideia pro iFood: loja com merchant vinculado puxa sozinha, e
+        // aparecer como "falta planilha" num mês sem venda é conselho errado.
+        createAdminClient()
+          .from("unit_platforms")
+          .select("unit_id")
+          .eq("platform", "ifood")
+          .eq("active", true)
+          .not("api_store_id", "is", null),
         // O que falta importar. Pede DOIS meses de uma vez (a função aceita
         // range): no dia 5 do mês corrente quase toda loja está "faltando"
         // porque o relatório nem foi baixado ainda — pendência ali é ruído. O
@@ -1726,7 +1784,7 @@ export async function* perguntarConsultorStream(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, new Set(((links99.data ?? []) as { unit_id: string | null }[]).map((l) => l.unit_id).filter((v): v is string => !!v))), coberturaLojas)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, paresViaApi(units, links99.data, ifoodComApi.data)), coberturaLojas)
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),

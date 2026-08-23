@@ -138,8 +138,20 @@ export async function resumoDaLoja(
         .select("id", { count: "exact", head: true })
         .eq("unit_id", unitId)
       if ((count ?? 0) === 0) {
+        /* Loja SEM VENDA não vai ganhar avaliação amanhã -- nem depois.
+         *
+         * Prometer "entram na próxima sincronização" pra quem não vendeu é
+         * marcar um encontro que não acontece, e o cliente volta amanhã achando
+         * que quebrou. O carimbo do backfill distingue: se a busca terminou e
+         * não veio venda nenhuma, o que falta é a loja vender. */
+        const { count: vendas } = await admin
+          .from("ifood_financeiro_lancamentos")
+          .select("id", { count: "exact", head: true })
+          .eq("unit_id", unitId)
         aCaminho.push(
-          "As <strong>avaliações</strong> entram na próxima sincronização, amanhã de manhã — a autorização já está de pé, é só o histórico de notas e comentários que ainda está sendo baixado.",
+          (vendas ?? 0) > 0
+            ? "As <strong>avaliações</strong> entram na próxima sincronização, amanhã de manhã — a autorização já está de pé, é só o histórico de notas e comentários que ainda está sendo baixado."
+            : "As <strong>avaliações</strong> vão aparecer junto com os primeiros pedidos: a conexão já está de pé e a loja ainda não registrou venda no período.",
         )
       }
     }
