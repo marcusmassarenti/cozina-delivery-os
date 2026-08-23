@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react"
 
+import { fecharAviso } from "@/app/(app)/_actions-avisos"
 import {
   confirmarAprovacaoIfood,
   confirmarTodasAprovacoesIfood,
@@ -174,6 +175,19 @@ export function IfoodClienteAviso({
  */
 function SemVendaAindaCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
   const uma = lojas.length === 1
+
+  /* Dispensável, e vai pro BANCO (Marcus, 22/08/26).
+   *
+   * Este é o único aviso da tela que descreve um estado que pode durar meses:
+   * loja desabilitada no iFood fica assim até alguém reabrir. Sem X, ele
+   * viraria moldura permanente da home — e moldura ninguém lê.
+   *
+   * A chave carrega as lojas: se outra entrar no mesmo estado, o aviso volta
+   * com a lista nova em vez de ficar dispensado pra sempre. */
+  const chave = `sem-venda|${lojas.map((l) => l.unitId).sort().join(",")}`
+  const [dispensado, setDispensado] = React.useState(false)
+  if (dispensado) return null
+
   return (
     <div className="flex items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm">
       <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -203,6 +217,17 @@ function SemVendaAindaCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
           entra sozinho.
         </p>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          setDispensado(true)
+          void fecharAviso(`conexao-nova|${chave}`)
+        }}
+        aria-label="Dispensar aviso"
+        className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <X className="size-4" />
+      </button>
     </div>
   )
 }

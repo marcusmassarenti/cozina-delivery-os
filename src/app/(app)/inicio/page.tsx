@@ -1217,6 +1217,7 @@ export default async function Home({
       <IfoodConectarAviso
         faltando={panoramaConexao.faltando.length}
         totalComIfood={panoramaConexao.totalComIfood}
+        fechados={avisosFechados}
       />
 
       {onboarding && onboarding.done < onboarding.total && (
