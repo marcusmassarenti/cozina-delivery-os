@@ -106,6 +106,31 @@ export async function estadoDoPipeline(): Promise<EstadoDoDia> {
   const fecharam = new Set(
     ((fresco ?? []) as { unit_id: string }[]).map((r) => r.unit_id),
   )
+
+  /* EXTRATO LIDO E VAZIO TAMBÉM FECHA O DIA.
+   *
+   * ── POR QUE (Marcus, 23/08/26) ─────────────────────────────────────────
+   * `platform_imports` só ganha linha quando há o que gravar. Loja conectada
+   * que não vendeu nunca aparece ali — e como este gate media a CHEGADA do
+   * dado, ela ficava eternamente na conta de "faltam fechar".
+   *
+   * O efeito não era cosmético: o relatório de saúde ESPERA a rotina fechar
+   * pra sair. Com a Araraquara conectada e desabilitada no iFood, o e-mail
+   * ficaria preso até a última janela (20h) e sairia marcado como incompleto
+   * — todo dia, para sempre, por causa de uma loja que não tem venda pra
+   * trazer. Foi o que aconteceu em 23/08: duas janelas puladas com
+   * "faltamExtrato: 1".
+   *
+   * O carimbo responde a pergunta certa: perguntamos ao iFood e ele disse que
+   * não há movimento. Isso é rotina cumprida, não rotina pendente. */
+  const compAtual = new Date().toISOString().slice(0, 7)
+  const { data: lidos } = await admin
+    .from("ifood_extrato_lido")
+    .select("unit_id")
+    .eq("competencia", compAtual)
+    .gte("lido_em", inicio)
+  for (const l of (lidos ?? []) as { unit_id: string }[])
+    fecharam.add(l.unit_id)
   const pendentes = lojas.filter((l) => !fecharam.has(l.unit_id))
   const bloqueadas = pendentes
     .filter((l) => merchantsNegados.has(l.api_store_id))
