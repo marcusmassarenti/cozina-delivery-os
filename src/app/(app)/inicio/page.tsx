@@ -1247,6 +1247,31 @@ export default async function Home({
         </div>
       )}
 
+      {/* A COBERTURA VOLTA PRO TOPO (Marcus, 22/08/26).
+       *
+       * Ela desceu junto com o consumo do Nino quando a gente tirou "estado"
+       * da pilha de avisos — e foi erro meu misturar as duas. O Nino é
+       * consulta pura: um número que se olha quando se quer. A cobertura
+       * QUALIFICA os números que vêm logo abaixo dela: diz até quando o dado
+       * alcança, quantas lojas estão sem nada, e carrega os botões de
+       * sincronizar.
+       *
+       * É o mesmo princípio da procedência nos relatórios: o aviso sobre o
+       * número anda junto do número. No rodapé ela vira exatamente o oposto —
+       * a pessoa lê os KPIs e só descobre depois que estavam incompletos. */}
+      {status.ok && (
+        <ImportCoverageBanner
+          coverage={importCoverage}
+          year={year}
+          month={month}
+          periodLabel={formatPeriodLabel({ year, month })}
+          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
+          apiSync={apiSync}
+          vinculos={apiVinculos}
+          semDado={lojasSemDado}
+        />
+      )}
+
       {/* LINHA 1: os 9 números juntos (manchete + operação), cada card com os
           logos das 3 plataformas (apagadas as sem dado). */}
       {status.ok && allUnits.length > 0 && (
@@ -2135,27 +2160,6 @@ export default async function Home({
         </>
       )}
 
-      {/* ── ESTADO, NÃO AVISO ──────────────────────────────────────────────
-          Cobertura de importação e consumo do Nino não pedem ação e não somem
-          nunca — são números de consulta. No topo eles disputavam espaço e
-          peso visual com o que EXIGE ação, e foi isso que fez a tela de treze
-          blocos parecer cheia mesmo quando quase nada precisava ser feito
-          (Marcus, 22/08/26).
-
-          Aqui embaixo continuam inteiros, com os botões de sincronizar — só
-          deixaram de competir com a manchete. */}
-      {status.ok && (
-        <ImportCoverageBanner
-          coverage={importCoverage}
-          year={year}
-          month={month}
-          periodLabel={formatPeriodLabel({ year, month })}
-          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
-          apiSync={apiSync}
-          vinculos={apiVinculos}
-          semDado={lojasSemDado}
-        />
-      )}
       {/* Dono: quanto a IA custou na plataforma neste mês. */}
       {consumoIaPlataforma.totalMensagens > 0 && (
         <Link
