@@ -34,9 +34,7 @@ import {
   getConexoesNovas,
   getPrimeirasAvaliacoes,
 } from "@/lib/data/conexoes-novas"
-import { IfoodConectarAviso } from "@/components/dashboard/ifood-conectar-aviso"
 import { AvisosConvite } from "@/components/dashboard/avisos-convite"
-import { getPanoramaConexaoIfood } from "@/lib/data/conectar-ifood"
 import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
 import { CadastroIncompletoAviso } from "@/app/(app)/unidades/_components/cadastro-incompleto-aviso"
 import { NovidadesConexoes } from "@/components/dashboard/novidades-conexoes"
@@ -301,7 +299,6 @@ export default async function Home({
     minhasSolicitacoesIfood,
     consumoIaPlataforma,
     lojasSemDado,
-    panoramaConexao,
     cadastroIncompleto,
   ] = await Promise.all([
     getTenantPlatforms(activeUnitIds),
@@ -318,7 +315,6 @@ export default async function Home({
     // discreto na faixa de cobertura, com a saída "não vendo nessa plataforma".
     getLojasSemDado(activeUnitIds),
     // Lojas do iFood que nunca pediram conexão — faixa "conectar".
-    getPanoramaConexaoIfood(),
     // Cadastro pela metade: desde 09/08/26 salvar edição exige tudo preenchido,
     // e descobrir isso no meio de outra tarefa é o pior momento.
     getCadastroIncompleto(),
@@ -1213,12 +1209,11 @@ export default async function Home({
           permanente — lá é onde se resolve. */}
       <CadastroIncompletoAviso dados={cadastroIncompleto} />
 
-      {/* Cliente: lojas que nunca pediram conexão nenhuma. */}
-      <IfoodConectarAviso
-        faltando={panoramaConexao.faltando.length}
-        totalComIfood={panoramaConexao.totalComIfood}
-        fechados={avisosFechados}
-      />
+      {/* "N lojas ainda dependem de planilha" SAIU DAQUI (Marcus, 22/08/26).
+          Ele não é notícia nem tarefa do dia: é uma oportunidade comercial, e
+          fica na tela de quem já decidiu não conectar aquelas lojas. Quem quer
+          conectar tem a tela de Conexões; quem não quer não precisa ser
+          lembrado toda vez que abre o painel. */}
 
       {onboarding && onboarding.done < onboarding.total && (
         <OnboardingChecklist

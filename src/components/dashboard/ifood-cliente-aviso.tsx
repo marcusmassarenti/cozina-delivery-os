@@ -11,7 +11,6 @@ import {
   ExternalLink,
   PartyPopper,
   RefreshCw,
-  Store,
   X,
   XCircle,
 } from "lucide-react"
@@ -82,15 +81,17 @@ export function IfoodClienteAviso({
   const sincronizando = solicitacoes.filter(
     (s) => s.status === "ativa" && !s.temDado && !s.historicoFechado,
   )
-  const semVendaAinda = solicitacoes.filter(
-    (s) => s.status === "ativa" && !s.temDado && s.historicoFechado,
-  )
+  /* Sem card próprio, de propósito (Marcus, 22/08/26): o cliente não precisa
+   * ser avisado de que a loja dele não vendeu — ele sabe. O relatório interno
+   * já separa esse caso, e é lá que a informação serve pra alguma coisa.
+   *
+   * O FILTRO acima continua sendo o que importa: é ele que impede a loja de
+   * ficar com "estamos baixando o histórico…" pra sempre. */
   const prontas = ativas.filter((s) => s.temDado)
 
   if (
     prontas.length === 0 &&
     sincronizando.length === 0 &&
-    semVendaAinda.length === 0 &&
     pendentesAprovacao.length === 0 &&
     recusadas.length === 0
   ) {
@@ -110,7 +111,6 @@ export function IfoodClienteAviso({
           qualquer comemoração: é o caso em que o cliente mais precisa de
           notícia, porque o dashboard dele está vazio neste exato momento. */}
       {sincronizando.length > 0 && <SincronizandoCard lojas={sincronizando} />}
-      {semVendaAinda.length > 0 && <SemVendaAindaCard lojas={semVendaAinda} />}
       {/* "Loja conectada ao iFood" MUDOU DE CASA (Marcus, 22/08/26).
           Agora sai junto com 99 e Cardápio Web, agrupado POR LOJA, em
           ConexaoNovaAviso. A loja que conectou nas três dava três cards
@@ -166,72 +166,6 @@ export function IfoodClienteAviso({
  * Sai sozinho da tela quando o primeiro lançamento chega (`temDado`), dando
  * lugar à comemoração — que aí sim tem número por trás.
  */
-/**
- * Conectada, histórico buscado, e nenhuma venda pra mostrar.
- *
- * Não é erro nem espera: é o retrato de uma loja que ainda não vendeu no
- * período — normalmente porque está desabilitada ou nem abriu. O tom é de
- * informação, não de alerta, e por isso ele não pulsa nem pede nada.
- */
-function SemVendaAindaCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
-  const uma = lojas.length === 1
-
-  /* Dispensável, e vai pro BANCO (Marcus, 22/08/26).
-   *
-   * Este é o único aviso da tela que descreve um estado que pode durar meses:
-   * loja desabilitada no iFood fica assim até alguém reabrir. Sem X, ele
-   * viraria moldura permanente da home — e moldura ninguém lê.
-   *
-   * A chave carrega as lojas: se outra entrar no mesmo estado, o aviso volta
-   * com a lista nova em vez de ficar dispensado pra sempre. */
-  const chave = `sem-venda|${lojas.map((l) => l.unitId).sort().join(",")}`
-  const [dispensado, setDispensado] = React.useState(false)
-  if (dispensado) return null
-
-  return (
-    <div className="flex items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm">
-      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
-        <Store className="size-4 text-muted-foreground" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-foreground">
-          {uma ? (
-            <>
-              <b>
-                {lojas[0].unitCode ? `${lojas[0].unitCode} · ` : ""}
-                {lojas[0].unitName}
-              </b>{" "}
-              está conectada, mas ainda não vendeu
-            </>
-          ) : (
-            <>
-              <b>{lojas.length} lojas</b> estão conectadas, mas ainda não
-              venderam
-            </>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Já buscamos o histórico e o iFood não devolveu venda nenhuma — o
-          normal quando a loja está desabilitada no app ou ainda não abriu.{" "}
-          <b>Não é problema na conexão</b>: no dia em que ela vender, o dado
-          entra sozinho.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          setDispensado(true)
-          void fecharAviso(`conexao-nova|${chave}`)
-        }}
-        aria-label="Dispensar aviso"
-        className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <X className="size-4" />
-      </button>
-    </div>
-  )
-}
-
 function SincronizandoCard({ lojas }: { lojas: MinhaSolicitacao[] }) {
   const uma = lojas.length === 1
   return (
