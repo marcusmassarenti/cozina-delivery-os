@@ -21,7 +21,6 @@ import { getPacoteConfig } from "@/lib/data/ia-chat"
 import { daysUntil } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
 
-import { NfSetupButton } from "./_components/nf-setup-button"
 import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
 import { AvisoPushDialog } from "./_components/aviso-push-dialog"
 import { PlanSettingsDialog } from "./_components/plan-settings-dialog"
@@ -197,7 +196,6 @@ export default async function PlataformaPage() {
 
       <ClientsTable clients={clients} myHoldingId={myHoldingId} nowMs={nowMs} />
 
-      <NfSetupButton />
 
       <p className="text-xs text-muted-foreground">
         Quando um cliente está <strong>sem pagar</strong> e passa da{" "}

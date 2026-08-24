@@ -14,9 +14,7 @@ import { quitarFaturaComPagamento } from "@/lib/data/faturas"
 import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
 import {
   asaasIsMock,
-  asaasSetSubscriptionInvoiceSettings,
 } from "@/lib/asaas/client"
-import { fiscalInvoiceSettings } from "@/lib/asaas/fiscal"
 
 export type CriarClienteState = {
   ok: boolean
@@ -720,71 +718,6 @@ export async function deleteClient(
   }
 }
 
-export type NfSetupState = {
-  ok: boolean
-  message?: string
-}
-
-/**
- * Liga a emissão automática de NF nas assinaturas que JÁ existem.
- *
- * Assinatura nova já nasce configurada (ver /assinatura/_actions.ts); esta
- * ação é pras que foram criadas antes disso, ou pra reaplicar quando os dados
- * fiscais mudam (troca de código de serviço, de alíquota…). É idempotente:
- * rodar de novo só sobrescreve com a mesma config.
- */
-export async function configurarNfAutomatica(): Promise<NfSetupState> {
-  try {
-    const { admin } = await requireSuperadmin()
-
-    if (asaasIsMock()) {
-      return { ok: false, message: "ASAAS_API_KEY não configurada." }
-    }
-
-    const { data: holdings } = await admin
-      .from("holdings")
-      .select("id, name, asaas_subscription_id")
-      .not("asaas_subscription_id", "is", null)
-
-    if (!holdings?.length) {
-      return { ok: false, message: "Nenhuma assinatura pra configurar." }
-    }
-
-    const settings = fiscalInvoiceSettings()
-    let ok = 0
-    const falhou: string[] = []
-
-    for (const h of holdings) {
-      try {
-        await asaasSetSubscriptionInvoiceSettings(
-          h.asaas_subscription_id as string,
-          settings,
-        )
-        ok++
-      } catch (e) {
-        falhou.push(
-          `${h.name as string}: ${e instanceof Error ? e.message : String(e)}`,
-        )
-      }
-    }
-
-    if (falhou.length) {
-      return {
-        ok: false,
-        message: `${ok} configurada(s), ${falhou.length} com erro — ${falhou.join(" · ")}`,
-      }
-    }
-    return {
-      ok: true,
-      message: `${ok} assinatura(s) emitindo nota automático a cada pagamento confirmado.`,
-    }
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Erro ao configurar a NF.",
-    }
-  }
-}
 
 /** Busca o detalhe de um cliente sob demanda (pro drawer da lista). */
 export async function fetchClientDetail(id: string) {

@@ -19,7 +19,10 @@ import "server-only"
  * mas o catálogo da prefeitura (GET /invoices/municipalServices) devolve
  * "2660 | 1.01 - Análise e desenvolvimento de sistemas" — é esse o valor que
  * a API reconhece. Mandar "02660" arrisca a nota não ser emitida.
- * Confira em /api/integracao/nf-setup → codigoConfere.
+ * ⚠️ NÃO ESTÁ EM USO desde 24/08/26 — a emissão automática de NF foi
+ * desligada (ver src/app/assinatura/_actions.ts). Estes dados ficam aqui
+ * porque são a configuração fiscal correta, provada com nota real em prod:
+ * religar é voltar a chamar asaasSetSubscriptionInvoiceSettings com eles.
  */
 export const FISCAL_SERVICE_CODE = process.env.ASAAS_NF_SERVICE_CODE ?? "2660"
 
