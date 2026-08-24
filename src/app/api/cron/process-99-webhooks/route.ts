@@ -191,14 +191,32 @@ export async function GET(req: Request) {
     }
     const createDate = tsToDate(info.create_time)
     const horarioPedido = createDate ?? tsToDate(info.pay_time) ?? new Date(e.received_at)
-    const dataDia = horarioPedido.toISOString().slice(0, 10)
+
+    /* O DIA DO PEDIDO É EM BRASÍLIA, NÃO EM UTC.
+     *
+     * ── POR QUE (Marcus, 24/08/26) ─────────────────────────────────────
+     * `toISOString()` corta o dia em UTC, e a Vercel roda em UTC: pedido
+     * feito entre 21h e meia-noite no Brasil caía no dia SEGUINTE. Medido:
+     * as linhas de `data = '2026-08-01'` começavam às 21:49 de 31/07.
+     *
+     * O efeito não é cosmético — é a contagem de pedidos por dia da loja
+     * ficar errada nas duas pontas, todo dia, e sem sintoma visível: o total
+     * do mês fecha, então ninguém desconfia.
+     *
+     * Mesma armadilha que `inicioDoDiaBR` já resolve no coletor do iFood. */
+    const emBR = new Date(
+      horarioPedido.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+    )
+    const dataDia = `${emBR.getFullYear()}-${String(emBR.getMonth() + 1).padStart(2, "0")}-${String(emBR.getDate()).padStart(2, "0")}`
 
     newRows.push({
       unit_id: unitId,
       pedido_id: orderId,
       data: dataDia,
-      ref_year: horarioPedido.getUTCFullYear(),
-      ref_month: horarioPedido.getUTCMonth() + 1,
+      // Competência pelo MESMO dia BRT — senão o pedido da virada do mês
+      // conta num mês e aparece no outro.
+      ref_year: emBR.getFullYear(),
+      ref_month: emBR.getMonth() + 1,
       horario_pedido: horarioPedido.toISOString(),
       receita_vendas: cents(price.order_price),
       preco_original_item: cents(price.order_price),
@@ -256,8 +274,42 @@ export async function GET(req: Request) {
   // recente descreve melhor o estado atual do pedido.
   const porChave = new Map<string, Record<string, unknown>>()
   for (const r of newRows) porChave.set(`${r.unit_id}|${r.pedido_id}`, r)
-  const newRowsUnicos = [...porChave.values()]
+  let newRowsUnicos = [...porChave.values()]
   const duplicadosDescartados = newRows.length - newRowsUnicos.length
+
+  /* A LINHA DA PLANILHA NÃO PODE SER SOBRESCRITA PELO WEBHOOK.
+   *
+   * ── POR QUE (Marcus, 24/08/26) ─────────────────────────────────────────
+   * Desde que o id parou de truncar (03/08), o webhook passou a cair na MESMA
+   * chave da planilha — e o upsert escrevia por cima. As duas descrevem o
+   * mesmo pedido, mas não com a mesma riqueza: a planilha traz avaliação,
+   * tempos, motivo de cancelamento e os rótulos por extenso; o webhook traz o
+   * código cru ("1" no lugar de "Pagamento online") e nada do pós-venda.
+   *
+   * A regra "planilha vence" já existia na LEITURA (ver lib/data/
+   * ninefood-pedidos.ts) — só não existia na escrita, então o dado bom era
+   * apagado antes de alguém ler. */
+  let ignoradosPorPlanilha = 0
+  if (newRowsUnicos.length > 0) {
+    const chaves = newRowsUnicos.map((r) => String(r.pedido_id))
+    const { data: jaImportados } = await admin
+      .from("ninefood_pedidos")
+      .select("unit_id, pedido_id")
+      .in("pedido_id", chaves)
+      .not("import_id", "is", null)
+    const daPlanilha = new Set(
+      ((jaImportados ?? []) as { unit_id: string; pedido_id: string }[]).map(
+        (r) => `${r.unit_id}|${r.pedido_id}`,
+      ),
+    )
+    if (daPlanilha.size > 0) {
+      const antes = newRowsUnicos.length
+      newRowsUnicos = newRowsUnicos.filter(
+        (r) => !daPlanilha.has(`${r.unit_id}|${r.pedido_id}`),
+      )
+      ignoradosPorPlanilha = antes - newRowsUnicos.length
+    }
+  }
 
   let upsertedNew = 0
   if (newRowsUnicos.length > 0) {
@@ -355,6 +407,7 @@ export async function GET(req: Request) {
       auto_vinculadas: autoVinculadas,
       orderNew_upserted: upsertedNew,
       orderNew_duplicados: duplicadosDescartados,
+      orderNew_ja_na_planilha: ignoradosPorPlanilha,
       orderNew_skipped: skippedNew.length,
       itens_gravados: itensGravados,
       orderFinish: finished,

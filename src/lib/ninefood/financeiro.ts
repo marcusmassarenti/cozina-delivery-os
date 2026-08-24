@@ -230,18 +230,44 @@ export async function getAllShopBillDetail(opts: {
   startDate: string
   endDate: string
 }): Promise<NinefoodBillRow[]> {
+  const TAMANHO = 200 // teto documentado do page_size
   const all: NinefoodBillRow[] = []
   let pageNo = 1
+  let esperado: number | null = null
   for (;;) {
-    const { rows, totalPage } = await getShopBillDetail({
+    const { rows, totalNum, totalPage } = await getShopBillDetail({
       ...opts,
       pageNo,
-      pageSize: 200,
+      pageSize: TAMANHO,
     })
+    if (esperado === null && Number.isFinite(totalNum)) esperado = totalNum
     all.push(...rows)
-    if (rows.length === 0 || pageNo >= (totalPage || 1)) break
+
+    /* A PARADA NÃO PODE DEPENDER SÓ DE `total_page`.
+     *
+     * ── POR QUE (Marcus, 24/08/26) ─────────────────────────────────────
+     * Era `pageNo >= (totalPage || 1)`. Se a 99 omitisse o campo — e ela já
+     * omite outros —, o `|| 1` fazia o laço parar na PÁGINA 1: 200 linhas,
+     * sem erro nenhum, e o mês inteiro daquela loja entrava truncado. Falha
+     * silenciosa que só apareceria numa conferência contra a planilha.
+     *
+     * Agora a página cheia manda continuar mesmo sem `total_page`, e o fim é
+     * página incompleta ou vazia — que é o sinal que não depende da API
+     * cooperar. */
+    if (rows.length === 0 || rows.length < TAMANHO) break
+    if (totalPage && pageNo >= totalPage) break
     pageNo++
     if (pageNo > 1000) break // trava de segurança
+  }
+
+  /* Confere o acumulado contra o que a própria API disse ser o total. Não
+   * derruba a carga — só deixa rastro, porque um mês a menos entrando calado é
+   * exatamente o que não pode acontecer de novo. */
+  if (esperado !== null && esperado > 0 && all.length < esperado) {
+    console.error(
+      `[99food] extrato incompleto: ${all.length} de ${esperado} linhas ` +
+        `(loja ${opts.appShopId}, ${opts.startDate}–${opts.endDate})`,
+    )
   }
   return all
 }

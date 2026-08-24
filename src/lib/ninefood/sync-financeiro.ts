@@ -65,6 +65,14 @@ function toRecord(appShopId: string, r: NinefoodBillRow) {
     settlement_amount: cents(r.settlementAmount),
     payment_method: r.paymentMethod ?? null,
     raw: r,
+    /* Sem isto, `synced_at` guardava a data do INSERT e nunca mais mudava — o
+     * ON CONFLICT só escreve as colunas enviadas. O campo parecia dizer
+     * "última verificação" e dizia "primeira vez que vi".
+     *
+     * Custou um diagnóstico errado em 24/08/26: li "nenhum dia foi revisitado
+     * desde 19/08" e conclui que o sync tinha congelado, quando ele roda todo
+     * dia. Carimbo que mente é pior que carimbo que falta. */
+    synced_at: new Date().toISOString(),
   }
 }
 
@@ -132,7 +140,15 @@ async function resolveUnitForLink(
 
 /**
  * Sincroniza o financeiro do 99 das lojas vinculadas, num período.
- * Datas em YYYYMMDD (a API filtra por DATA DE REPASSE / expectSettleDate).
+ *
+ * Datas em YYYYMMDD. O filtro da API é pela DATA DO PEDIDO (businessDateTime),
+ * não pela do repasse — o comentário aqui dizia o contrário e estava errado.
+ * Verificado em 24/08/26 chamando a API: pedir 20260803→20260803 devolve 20
+ * linhas, todas com businessDateTime de 03/08 e expectSettleDate de 12/08.
+ *
+ * ⚠️ Limites documentados da API: janela máxima de 31 DIAS por chamada
+ * (errno 110005) e histórico de 3 MESES (errno 110004). Pedir o mês inteiro
+ * fica exatamente no teto num mês de 31 dias — sem folga nenhuma.
  */
 export async function syncNinefoodFinanceiro(opts: {
   startDate: string
