@@ -91,11 +91,21 @@ export type Sincronizacao99 = {
 /**
  * Reconcilia a lista do 99 com a nossa tabela de vínculos.
  *
- * ⚠️ NÃO ADIVINHA A LOJA. Cria a linha com `unit_id` nulo e deixa a escolha pra
- * um humano. O `app_shop_id` é um slug livre ("royal-pocos-01") e casar por
- * semelhança de nome erraria em rede com lojas parecidas — e ligar a loja
- * errada MISTURA o faturamento de dois lojistas, que é bem pior que esperar um
- * clique. É a mesma régua que o webhook já aplica.
+ * ⚠️ NÃO ADIVINHA A LOJA POR NOME. O `app_shop_id` é um slug livre
+ * ("royal-pocos-01") e casar por semelhança erraria em rede com lojas
+ * parecidas — e ligar a loja errada MISTURA o faturamento de dois lojistas,
+ * que é bem pior que esperar um clique. É a mesma régua que o webhook aplica.
+ *
+ * O QUE ELA PODE FAZER SOZINHA é casar pelo `shop_id`: o número que o 99
+ * devolve e o número do 99 cadastrado na unidade são o MESMO campo, não uma
+ * semelhança. Quando bate em exatamente uma unidade, o vínculo nasce pronto e
+ * o histórico já vem junto.
+ *
+ * Isso existe porque a versão anterior descobria a loja e parava ali: a
+ * Marmitex Faisão autorizou em 24/08/26 e ficou num ponto cego — a tela de
+ * vincular parte de uma SOLICITAÇÃO de ativação, e quem autoriza sem ter
+ * solicitação registrada não aparece em lugar nenhum. Descobrir sem conseguir
+ * ligar é meio caminho que não entrega nada.
  *
  * Também não desativa quem sumiu da lista: no iFood a gente aprendeu que sumir
  * não prova revogação.
@@ -116,19 +126,85 @@ export async function sincronizarLojas99(): Promise<Sincronizacao99> {
     ),
   )
 
-  const novas: string[] = []
-  for (const l of lojas) {
-    if (porSlug.has(l.appShopId)) continue
-    const { error } = await admin.from("ninefood_store_links").insert({
-      app_shop_id: l.appShopId,
-      id_loja: l.shopId,
-      active: true,
-    })
-    if (!error) novas.push(l.appShopId)
+  /**
+   * shop_id → unidade, pelo id do 99 cadastrado na própria unidade.
+   *
+   * Só serve quando bate em UMA unidade. Dois cadastros com o mesmo id do 99 é
+   * erro de cadastro, e nesse caso ficar sem vínculo é melhor que escolher.
+   */
+  const { data: plats } = await admin
+    .from("unit_platforms")
+    .select("unit_id, external_store_id")
+    .eq("platform", "99food")
+    .not("external_store_id", "is", null)
+  const porShopId = new Map<string, string[]>()
+  for (const p of (plats ?? []) as {
+    unit_id: string
+    external_store_id: string
+  }[]) {
+    const atual = porShopId.get(p.external_store_id)
+    if (atual) atual.push(p.unit_id)
+    else porShopId.set(p.external_store_id, [p.unit_id])
+  }
+  const unidadeDe = (shopId: string): string | null => {
+    const ids = porShopId.get(shopId)
+    return ids && ids.length === 1 ? ids[0]! : null
   }
 
+  const novas: string[] = []
+  /** Vínculos que nasceram (ou foram completados) com unidade nesta rodada. */
+  const casadas: string[] = []
+
+  for (const l of lojas) {
+    const unitId = unidadeDe(l.shopId)
+
+    if (!porSlug.has(l.appShopId)) {
+      const { error } = await admin.from("ninefood_store_links").insert({
+        app_shop_id: l.appShopId,
+        id_loja: l.shopId,
+        unit_id: unitId,
+        active: true,
+      })
+      if (error) continue
+      novas.push(l.appShopId)
+      if (unitId) casadas.push(l.appShopId)
+      continue
+    }
+
+    // Link que já existia sem dono: se o id do 99 apareceu na unidade depois,
+    // aproveita agora em vez de esperar alguém reparar.
+    if (porSlug.get(l.appShopId) == null && unitId) {
+      const { error } = await admin
+        .from("ninefood_store_links")
+        .update({ unit_id: unitId, id_loja: l.shopId })
+        .eq("app_shop_id", l.appShopId)
+        .is("unit_id", null)
+      if (!error) casadas.push(l.appShopId)
+    }
+  }
+
+  /**
+   * Backfill NA HORA, mesma regra dos outros caminhos de vínculo (Marcus,
+   * 18/08/26): "loja vinculada tem que rodar backfill imediato". Sem isto o
+   * vínculo nasce mudo e a loja fica zerada até o cron da madrugada.
+   *
+   * Não derruba a varredura se falhar — o que ficar sem carimbo o
+   * `backfillHistorico99` recolhe depois.
+   */
+  for (const appShopId of casadas) {
+    try {
+      const { backfillDeUmaLoja99 } = await import("./backfill")
+      await backfillDeUmaLoja99(appShopId)
+    } catch (e) {
+      console.error(`[99] backfill de ${appShopId} falhou:`, e)
+    }
+  }
+
+  const comDono = new Set(casadas)
   const semVinculo = lojas.filter(
-    (l) => novas.includes(l.appShopId) || porSlug.get(l.appShopId) == null,
+    (l) =>
+      !comDono.has(l.appShopId) &&
+      (novas.includes(l.appShopId) || porSlug.get(l.appShopId) == null),
   )
 
   return { autorizadas: lojas.length, novas, semVinculo }

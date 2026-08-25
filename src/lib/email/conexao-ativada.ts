@@ -579,24 +579,30 @@ export async function varrerConexoesNovas(
   const conectada = (c: (typeof candidatos)[number]) =>
     temVinculo(c) && jaVeioPelaApi.has(`${c.unit_id}|${c.platform}`)
 
-  // Quem não é conexão de API sai da fila de vez: sem isto, cada varredura
-  // reavaliaria as mesmas ~160 linhas todo dia pra sempre.
-  //
-  // ⚠️ O corte é por VÍNCULO, não por `conectada`. Loja vinculada que ainda
-  // não recebeu dado da API não está fora de escopo — está esperando. Carimbar
-  // ela aqui a tiraria da fila pra sempre, e no dia em que a API destravasse
-  // o cliente nunca receberia o aviso. É o caso das lojas travadas hoje no
-  // 403: elas TÊM vínculo e não podem ser descartadas.
-  const foraDeEscopo = candidatos.filter((c) => !temVinculo(c))
-  for (const c of foraDeEscopo) {
-    await admin
-      .from("unit_platforms")
-      .update({ email_conectado_at: new Date().toISOString() })
-      .eq("unit_id", c.unit_id)
-      .eq("platform", c.platform)
-      .is("email_conectado_at", null)
-  }
-
+  /**
+   * ⚠️ AQUI EXISTIA UM CARIMBO QUE MENTIA, E ELE CUSTOU 13 AVISOS (24/08/26).
+   *
+   * A loja sem vínculo era carimbada com `email_conectado_at` "pra sair da
+   * fila de vez", com a justificativa de não reavaliar ~160 linhas por dia.
+   * Só que essa coluna já significava OUTRA coisa — "o cliente foi avisado" —
+   * e a varredura só olha linha com ela nula.
+   *
+   * Ou seja: a loja que ainda não tinha vínculo ganhava, em silêncio, o
+   * carimbo de "já avisado". No dia em que ela conectasse de verdade, o aviso
+   * nunca sairia. Não é hipótese: as quatro lojas da Tech Assessoria foram
+   * carimbadas em 14/08 sem terem vínculo no 99, conectaram em 24/08, e o
+   * cliente não receberia nada. Com elas, 13 conexões de 4 clientes.
+   *
+   * O comentário antigo já protegia o caso "tem vínculo e a API ainda não
+   * respondeu" — a lição estava meio aprendida. Faltou ver que "não tem
+   * vínculo HOJE" também é um fato temporário, e que uma decisão permanente
+   * não pode nascer dele.
+   *
+   * O conserto é não decidir nada: quem não é conexão de API simplesmente não
+   * entra em `alvos` nesta rodada, e volta a ser avaliado na próxima. O custo
+   * é um SELECT sobre algumas centenas de linhas por dia — barato demais pra
+   * justificar uma coluna com dois significados.
+   */
   const alvos = candidatos.filter(conectada)
 
   let enviados = 0
