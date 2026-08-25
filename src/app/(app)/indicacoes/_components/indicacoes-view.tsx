@@ -15,6 +15,56 @@ import { marcarComissoesPagas, salvarIndicador, type IndicacaoState } from "../_
 
 const inicial: IndicacaoState = { ok: false }
 
+/**
+ * Junta os cupons da MESMA pessoa num cartão só.
+ *
+ * ⚠️ O AGRUPAMENTO É POR CONVENÇÃO DE NOME, não por chave. O Diego tem três
+ * códigos ("Diego Azevedo", "Diego Azevedo — 50% na 1ª", "Diego Azevedo — 1ª
+ * mensalidade DG FOODS") e cada um era um cartão inteiro na tela: uma pessoa
+ * só ocupava a página toda, e o "a pagar" aparecia fatiado por cupom quando o
+ * Pix é um só.
+ *
+ * O nome antes de " — " é o que separa. Funciona porque é assim que os
+ * códigos foram nomeados, e quebra se alguém fugir do padrão — nesse caso o
+ * cupom aparece como pessoa separada, que é errar pro lado visível.
+ *
+ * O certo seria uma tabela de PESSOA com os cupons pendurados nela. Enquanto
+ * o número de indicadores couber numa tela, isto resolve sem migration.
+ */
+type Pessoa = {
+  nome: string
+  cupons: Indicador[]
+  aPagar: number
+  jaPago: number
+  pixChave: string | null
+  indicados: string[]
+}
+
+function agruparPorPessoa(indicadores: Indicador[]): Pessoa[] {
+  const mapa = new Map<string, Pessoa>()
+  for (const i of indicadores) {
+    const nome = i.nome.split(" — ")[0]!.trim() || i.nome
+    const p = mapa.get(nome) ?? {
+      nome,
+      cupons: [],
+      aPagar: 0,
+      jaPago: 0,
+      pixChave: null,
+      indicados: [],
+    }
+    p.cupons.push(i)
+    p.aPagar += i.aPagar
+    p.jaPago += i.jaPago
+    p.pixChave = p.pixChave ?? i.pixChave
+    for (const c of i.indicados) {
+      p.indicados.push(`${c.nome}${c.pagante ? "" : " (não pagante)"}`)
+    }
+    mapa.set(nome, p)
+  }
+  // Quem tem dinheiro a receber primeiro: é a linha que pede ação.
+  return [...mapa.values()].sort((a, b) => b.aPagar - a.aPagar)
+}
+
 export function IndicacoesView({
   indicadores,
   comissoes,
@@ -87,57 +137,86 @@ export function IndicacoesView({
         )}
 
         <div className="divide-y">
-          {indicadores.map((i) => (
-            <div key={i.id} className="flex flex-wrap items-start gap-4 px-5 py-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{i.nome}</span>
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">
-                    {i.codigo}
-                  </code>
-                  {!i.ativo && (
+          {agruparPorPessoa(indicadores).map((pessoa) => (
+            <div key={pessoa.nome} className="px-5 py-4">
+              {/* Cabeçalho da PESSOA — o dinheiro é dela, não do cupom */}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{pessoa.nome}</span>
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                      inativo
+                      {pessoa.cupons.length} cupom
+                      {pessoa.cupons.length === 1 ? "" : "s"}
                     </span>
+                    {pessoa.pixChave ? (
+                      <span className="text-[11px] text-muted-foreground">
+                        Pix {pessoa.pixChave}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                        sem chave Pix
+                      </span>
+                    )}
+                  </div>
+                  {pessoa.indicados.length > 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Trouxe: {pessoa.indicados.join(", ")}
+                    </p>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Ganha {i.comissaoPct}% da mensalidade · indicado leva {i.descontoPct}% na 1ª
-                  fatura
-                  {i.pixChave ? ` · Pix ${i.pixChave}` : " · sem chave Pix cadastrada"}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <LinkCopiavel url={`${site}/cadastro?ref=${encodeURIComponent(i.codigo)}`} />
-                </div>
-                {i.indicados.length > 0 && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Trouxe:{" "}
-                    {i.indicados.map((c) => `${c.nome}${c.pagante ? "" : " (não pagante)"}`).join(", ")}
+                <div className="text-right">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    a pagar
                   </p>
-                )}
+                  <p
+                    className={`text-lg font-semibold tabular-nums ${
+                      pessoa.aPagar > 0 ? "text-amber-600 dark:text-amber-400" : ""
+                    }`}
+                  >
+                    {fmtBRL(pessoa.aPagar)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    já pago: {fmtBRL(pessoa.jaPago)}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  a pagar
-                </p>
-                <p
-                  className={`text-lg font-semibold tabular-nums ${i.aPagar > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}
-                >
-                  {fmtBRL(i.aPagar)}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  já pago: {fmtBRL(i.jaPago)}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNovo(false)
-                    setEditando(i)
-                  }}
-                  className="mt-1 text-xs underline underline-offset-2 hover:opacity-80"
-                >
-                  editar
-                </button>
+
+              {/* Os cupons, compactos. Eram um cartão inteiro cada um e a
+                  tela crescia sem fim com uma pessoa só. */}
+              <div className="mt-3 space-y-1.5">
+                {pessoa.cupons.map((i) => (
+                  <div
+                    key={i.id}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2"
+                  >
+                    <code className="rounded bg-background px-1.5 py-0.5 font-mono text-xs font-semibold">
+                      {i.codigo}
+                    </code>
+                    <span className="text-xs text-muted-foreground">
+                      ganha {i.comissaoPct}% · indicado leva {i.descontoPct}% na 1ª
+                    </span>
+                    {!i.ativo && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        inativo
+                      </span>
+                    )}
+                    <div className="ml-auto flex items-center gap-2">
+                      <LinkCopiavel
+                        url={`${site}/cadastro?ref=${encodeURIComponent(i.codigo)}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNovo(false)
+                          setEditando(i)
+                        }}
+                        className="text-xs underline underline-offset-2 hover:opacity-80"
+                      >
+                        editar
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
