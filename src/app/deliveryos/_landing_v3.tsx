@@ -1859,19 +1859,27 @@ export function LandingV3({
 
         <Reveal delay={80}>
           <div className="mt-6 text-center">
+            {/* ⚠️ ERA "R$ 45", digitado. Vem do mesmo cálculo diário do resto
+                da página — e o dado real é mais específico do que o chute era:
+                não é "podem sumir 45", é "somem 35 na conta de todas as lojas
+                que já passaram por aqui". */}
             <p className="text-5xl font-semibold tracking-tight text-[var(--brand)] sm:text-6xl">
-              R$ 45
+              R$ {numeros.porCem.total.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </p>
             <p className="mx-auto mt-2.5 max-w-md text-[15px] text-[oklch(0.5_0.01_48)]">
-              de cada R$ 100 podem sumir em taxas, entrega e promoção antes de
-              virar lucro. Sem o número real, é tudo no achismo.
+              é o que some de cada R$ 100 em taxas, entrega e promoção antes de
+              virar lucro — medido nas {numeros.lojas} lojas que já passaram
+              pelo sistema. Sem o número da sua, é tudo no achismo.
             </p>
           </div>
         </Reveal>
 
         <Reveal delay={120} y={36}>
           <div className="mx-auto mt-7 max-w-3xl">
-            <PainBreakdown />
+            <PainBreakdown porCem={numeros.porCem} />
           </div>
         </Reveal>
 

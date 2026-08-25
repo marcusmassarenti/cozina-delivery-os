@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import type { PorCem } from "@/lib/data/landing-numeros"
 import {
   AlertTriangle,
   ArrowRight,
@@ -834,7 +835,17 @@ export function DashboardScroll() {
 
 /* ─── "Onde seu dinheiro vai": barra animada das taxas (a dor) ───────────── */
 
-export function PainBreakdown() {
+/** "31.5" → "31,50"; "1" → "1". Reais com vírgula, sem centavo inútil. */
+function brl(v: number): string {
+  return Number.isInteger(v)
+    ? String(v)
+    : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** Do vermelho ao amarelo: a ordem dos segmentos já vem do maior pro menor. */
+const CORES_SEG = ["#e2483f", "#ee7536", "#ef8f2e", "#efb12a", "#e3c238", "#d9cc4a", "#cdd06a"]
+
+export function PainBreakdown({ porCem }: { porCem: PorCem }) {
   const ref = useRef<HTMLDivElement>(null)
   const [show, setShow] = useState(false)
   useEffect(() => {
@@ -853,15 +864,22 @@ export function PainBreakdown() {
     return () => io.disconnect()
   }, [])
 
-  const segs = [
-    { l: "Comissão", v: 23, c: "#e2483f" },
-    { l: "Taxa de entrega", v: 7, c: "#ee7536" },
-    { l: "Cupom", v: 6, c: "#ef8f2e" },
-    { l: "Frete grátis", v: 6, c: "#efb12a" },
-    { l: "Taxa de transação", v: 3, c: "#e3c238" },
-  ]
-  const taxas = 45
-  const sobra = 55
+  /**
+   * ⚠️ ESTES NÚMEROS ERAM ESCRITOS À MÃO (comissão 23, entrega 7, cupom 6,
+   * frete grátis 6, transação 3 = R$ 45).
+   *
+   * Agora vêm do mesmo cálculo diário dos outros números da página. E o
+   * medido saiu MAIS FORTE que o inventado: a composição real mostra que a
+   * maior sangria depois da comissão é a PROMOÇÃO QUE A LOJA BANCOU — algo
+   * que o lojista escolhe e quase nunca soma. "Cupom" e "frete grátis" eram
+   * duas linhas chutadas; a real é uma só, e maior que as duas juntas.
+   */
+  const segs = porCem.segmentos.map((s, i) => ({
+    ...s,
+    c: CORES_SEG[i % CORES_SEG.length]!,
+  }))
+  const taxas = porCem.total
+  const sobra = porCem.sobra
 
   return (
     <div
@@ -889,17 +907,22 @@ export function PainBreakdown() {
           className="flex h-full min-w-0 flex-1 items-center justify-center"
           style={{ background: "oklch(0.5 0.15 150)" }}
         >
-          <span className="px-2 text-sm font-medium text-white">sobra R$ {sobra}</span>
+          <span className="px-2 text-sm font-medium text-white">sobra R$ {brl(sobra)}</span>
         </div>
       </div>
 
       <p className="mt-6 text-center text-2xl font-medium leading-snug sm:text-3xl">
-        As taxas levam{" "}
-        <span className="text-[oklch(0.76_0.17_28)]">R$ {taxas}</span>. Sobra só{" "}
-        <span className="text-[oklch(0.82_0.16_150)]">R$ {sobra}</span>.
+        Somem{" "}
+        <span className="text-[oklch(0.76_0.17_28)]">R$ {brl(taxas)}</span>. Sobram{" "}
+        <span className="text-[oklch(0.82_0.16_150)]">R$ {brl(sobra)}</span>.
       </p>
+      {/* A média esconde o caso que dói. A mediana diz como é a loja típica; o
+          p90 diz quantas estão muito pior — e é esse par que faz o leitor se
+          perguntar em qual metade ele está. */}
       <p className="mt-1.5 text-center text-sm text-[oklch(0.6_0_0)]">
-        E na maioria das lojas, ninguém percebe.
+        Na loja típica somem R$ {brl(porCem.mediana)}. Mas em{" "}
+        <span className="text-white">uma a cada dez</span>, passa de R${" "}
+        {brl(Math.floor(porCem.p90))} — e quase ninguém percebe.
       </p>
 
       <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-x-10 gap-y-3 text-[13px] sm:grid-cols-2">
@@ -915,7 +938,7 @@ export function PainBreakdown() {
               />
               <span className="truncate">{s.l}</span>
             </span>
-            <span className="shrink-0 tabular-nums text-white">−R$ {s.v}</span>
+            <span className="shrink-0 tabular-nums text-white">−R$ {brl(s.v)}</span>
           </span>
         ))}
       </div>
