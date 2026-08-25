@@ -55,6 +55,14 @@ export const CHANGELOG: Release[] = [
         items: [
           {
             kind: "correcao",
+            title: "O quanto fica na loja estava menor do que é",
+            antes:
+              "Quando o líquido do relatório diário vinha furado (maior que o próprio faturamento), o sistema descartava a coluna e fazia a conta na mão: faturamento menos comissão, taxa e promoções. Só que a 'despesa de ofertas' do relatório inclui promoção que o 99 bancou e frete — coisas que não saem do bolso da loja. O erro tinha sempre o mesmo sinal: para baixo. Uma loja aparecia ficando com 45% do que vende, quando fica com 86%.",
+            depois:
+              "Agora o valor sai do relatório de pedido, que traz o líquido real pedido a pedido — o mesmo número que a API do 99 devolve. A conta antiga só é usada quando não há relatório de pedido para o período.",
+          },
+          {
+            kind: "correcao",
             title: "Bruto e líquido do 99 estavam em outra régua",
             antes:
               "Loja que aparecia pelo extrato da API mostrava o preço de tabela no lugar do bruto e o repasse no lugar do líquido. Quanto isso distorcia dependia de cada loja: numa delas o bruto aparecia R$ 10 mil acima do real. Ao lado de uma loja medida pela planilha, os dois números não podiam ser comparados.",

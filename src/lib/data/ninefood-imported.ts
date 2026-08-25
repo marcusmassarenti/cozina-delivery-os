@@ -97,49 +97,57 @@ export type NinefoodResumo = {
 
 // ─── getNinefoodResumoByUnits ────────────────────────────────────────
 
+/** Um dia de uma loja no relatório "Dados do pedido". */
+type DiaPedidos = {
+  /** Σ `receita_real_loja` — o LÍQUIDO de verdade, o que fica com a loja. */
+  liquido: number
+  /** Σ do que o cliente pagou em DINHEIRO na porta. */
+  direto: number
+}
+
 /**
- * Venda direta do 99: soma do que o cliente pagou em DINHEIRO na porta.
+ * O relatório de pedido do 99 por loja/dia (RPC `ninefood_pedidos_diario`).
  *
- * Esse valor fica no caixa da loja e não passa pelo repasse — o 99 cobra a
- * comissão depois (confirmado pelo cliente em ago/26). Sem contá-lo, o "% que
- * fica na loja" do 99 aparece MENOR do que é, exatamente o problema que o
- * cliente apontou no iFood.
+ * Traz duas coisas que a planilha diária não tem confiáveis:
  *
- * Aceita os dois vocabulários da coluna: o texto da planilha e o código do
- * `pay_method` que o webhook grava cru ("2" = dinheiro).
+ *  • a VENDA DIRETA — dinheiro pago na porta, que fica no caixa da loja e não
+ *    passa pelo repasse (confirmado pelo cliente em ago/26). Sem contá-la, o
+ *    "% que fica na loja" aparece menor do que é;
+ *  • o LÍQUIDO real (`receita_real_loja`), usado quando o líquido da planilha
+ *    vem furado. Ver a migration 0228 pra medição.
  */
-async function getNinefoodVendaDiretaByUnits(
+async function getNinefoodPedidosPorDia(
   unitIds: string[],
-  year: number,
-  month: number,
-  dateRange?: { start: string; end: string },
-): Promise<Map<string, Map<string, number>>> {
-  const out = new Map<string, Map<string, number>>()
+  de: string,
+  ate: string,
+): Promise<Map<string, Map<string, DiaPedidos>>> {
+  const out = new Map<string, Map<string, DiaPedidos>>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
-  const rows = await fetchAllRows<{
+  const { data, error } = await admin.rpc("ninefood_pedidos_diario", {
+    p_unit_ids: unitIds,
+    p_de: de,
+    p_ate: ate,
+  })
+  if (error) {
+    console.error("getNinefoodPedidosPorDia:", error.message)
+    return out
+  }
+  for (const r of (data ?? []) as {
     unit_id: string
-    data: string | null
-    receita_vendas: number | string | null
-  }>((from, to) => {
-    let q = admin
-      .from("ninefood_pedidos")
-      .select("unit_id, data, receita_vendas")
-      .in("unit_id", unitIds)
-      .in("forma_pagamento", ["Pagamento em dinheiro", "2"])
-    q = dateRange
-      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
-      : q.eq("ref_year", year).eq("ref_month", month)
-    return q.order("id").range(from, to)
-  }, "ninefood:venda-direta")
-  for (const r of rows) {
-    if (!r.data) continue
+    dia: string
+    receita_real_loja: number | string
+    recebido_direto: number | string
+  }[]) {
     let porDia = out.get(r.unit_id)
     if (!porDia) {
-      porDia = new Map<string, number>()
+      porDia = new Map<string, DiaPedidos>()
       out.set(r.unit_id, porDia)
     }
-    porDia.set(r.data, (porDia.get(r.data) ?? 0) + (Number(r.receita_vendas) || 0))
+    porDia.set(r.dia, {
+      liquido: Number(r.receita_real_loja) || 0,
+      direto: Number(r.recebido_direto) || 0,
+    })
   }
   return out
 }
@@ -154,12 +162,10 @@ export async function getNinefoodResumoByUnits(
   if (unitIds.length === 0) return out
 
   const admin = createAdminClient()
-  const diretoPorDia = await getNinefoodVendaDiretaByUnits(
-    unitIds,
-    year,
-    month,
-    dateRange,
-  )
+  const mm = String(month).padStart(2, "0")
+  const de = dateRange?.start ?? `${year}-${mm}-01`
+  const ate = dateRange?.end ?? isoDate(new Date(year, month, 0))
+  const pedidosPorDia = await getNinefoodPedidosPorDia(unitIds, de, ate)
   // Pagina: ninefood_daily_loja é 1 linha por loja por dia; com a rede
   // crescendo (~35 lojas × 30 dias = 1050) passa do cap de 1000 do Supabase e
   // descartaria dias silenciosamente. fetchAllRows + .order('id') resolve.
@@ -208,6 +214,8 @@ export async function getNinefoodResumoByUnits(
     aceitacoes: number[]
     tempos: number[]
     dias: Set<string>
+    /** Dias de planilha com venda — a régua de cobertura do relatório de pedido. */
+    diasComVenda: Set<string>
   }
   const accs = new Map<string, Acc>()
 
@@ -226,6 +234,7 @@ export async function getNinefoodResumoByUnits(
         aceitacoes: [],
         tempos: [],
         dias: new Set(),
+        diasComVenda: new Set(),
       }
       accs.set(row.unit_id, acc)
     }
@@ -241,7 +250,12 @@ export async function getNinefoodResumoByUnits(
       acc.aceitacoes.push(Number(row.taxa_aceitacao_pct))
     if (row.tempo_medio_preparo_min != null)
       acc.tempos.push(row.tempo_medio_preparo_min)
-    if (row.data) acc.dias.add(row.data)
+    if (row.data) {
+      acc.dias.add(row.data)
+      if (Number(row.bruto ?? 0) > 0 || (row.pedidos ?? 0) > 0) {
+        acc.diasComVenda.add(row.data)
+      }
+    }
   }
 
   /**
@@ -281,6 +295,7 @@ export async function getNinefoodResumoByUnits(
         aceitacoes: [],
         tempos: [],
         dias: new Set(),
+        diasComVenda: new Set(),
       }
       accs.set(unitId, acc)
     }
@@ -299,18 +314,60 @@ export async function getNinefoodResumoByUnits(
   }
 
   for (const [unitId, acc] of accs) {
-    // Prefere o líquido GRAVADO (settlement_amount real do 99) quando ele
-    // existir e estiver no range plausível (0 < liquido < bruto). Esse é o
-    // valor que efetivamente entra na conta da loja.
-    //
-    // Fallback (deriva = bruto − comissão − taxa pgto − promo) só pra dados
-    // antigos onde liquido vinha de XLSX e às vezes saía > bruto ou zero
-    // (incluía taxa de entrega, gerando repasse > 100%).
+    /**
+     * DE ONDE SAI O LÍQUIDO — três fontes, nesta ordem.
+     *
+     * 1. O GRAVADO na planilha diária, quando é plausível (0 < líquido ≤
+     *    bruto). É o repasse que o próprio 99 declarou.
+     *
+     * 2. O RELATÓRIO DE PEDIDO (`receita_real_loja`), quando o gravado vem
+     *    furado. Não é estimativa: é o mesmo campo que a API do 99 chama de
+     *    `orderAmount` — em 456 dias cobertos pelas duas fontes, 74% batem
+     *    dentro de R$ 1 e o total difere 1,2%.
+     *
+     * 3. A DERIVAÇÃO `bruto − comissão − taxa − promoção`, último recurso.
+     *
+     * ⚠️ POR QUE O PASSO 2 PRECISOU EXISTIR (24/08/26) ────────────────────
+     * A derivação era o único fallback, e ela ERRA SEMPRE PARA BAIXO: a
+     * "despesa de ofertas" da planilha inclui promoção que o 99 bancou e
+     * frete, que não saem do bolso do lojista. Descontar tudo como se fosse
+     * dele fazia a Marmitex Faisão aparecer ficando com 45% do que vende,
+     * quando fica com 86%. Em 69 meses-loja de 4 clientes faltavam R$ 132 mil
+     * de líquido — e o erro tem SINAL: nunca para cima.
+     *
+     * Um lojista que lê 45% conclui que o 99 é um canal ruim. A conclusão era
+     * do sistema, não da realidade.
+     *
+     * ⚠️ A TRAVA DE COBERTURA. O passo 2 só vale se o relatório de pedido
+     * cobrir TODOS os dias com venda do mês. Faltando um dia, a soma seria
+     * parcial apresentada como total — que é pior que o número errado de
+     * antes, porque ninguém tem como desconfiar. Sem cobertura, cai no 3.
+     */
+    const pedidosDaLoja = pedidosPorDia.get(unitId)
+    const diasDaApi = diasViaApi.get(unitId)
+    const cobreOsDias =
+      acc.diasComVenda.size > 0 &&
+      [...acc.diasComVenda].every((d) => pedidosDaLoja?.has(d))
+    const liquidoDoRelatorio = cobreOsDias
+      ? [...acc.dias].reduce(
+          (soma, dia) =>
+            soma +
+            (diasDaApi?.has(dia)
+              ? apiPorDia.get(unitId)?.get(dia)?.liquido ?? 0
+              : pedidosDaLoja?.get(dia)?.liquido ?? 0),
+          0,
+        )
+      : null
+
     const liquidoGravado = acc.liquido
     const liquidoUsar =
       liquidoGravado > 0 && liquidoGravado <= acc.bruto
         ? liquidoGravado
-        : Math.max(0, acc.bruto - acc.comissao - acc.taxaPgto - acc.promo)
+        : liquidoDoRelatorio != null &&
+            liquidoDoRelatorio > 0 &&
+            liquidoDoRelatorio <= acc.bruto
+          ? liquidoDoRelatorio
+          : Math.max(0, acc.bruto - acc.comissao - acc.taxaPgto - acc.promo)
     const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
     const pctLoja = acc.bruto > 0 ? (liquidoUsar / acc.bruto) * 100 : 0
     out.set(unitId, {
@@ -330,8 +387,8 @@ export async function getNinefoodResumoByUnits(
       recebidoDireto: vendaDiretaDoMes(
         unitId,
         acc.dias,
-        diasViaApi.get(unitId),
-        diretoPorDia,
+        diasDaApi,
+        pedidosPorDia,
         apiPorDia,
       ),
       hasData: acc.bruto > 0 || acc.pedidos > 0,
@@ -357,16 +414,16 @@ function vendaDiretaDoMes(
   unitId: string,
   dias: Set<string>,
   diasDaApi: Set<string> | undefined,
-  diretoPorDia: Map<string, Map<string, number>>,
+  pedidosPorDia: Map<string, Map<string, DiaPedidos>>,
   apiPorDia: Map<string, Map<string, DiaApi>>,
 ): number {
-  const planilha = diretoPorDia.get(unitId)
+  const planilha = pedidosPorDia.get(unitId)
   const api = apiPorDia.get(unitId)
   let total = 0
   for (const dia of dias) {
     total += diasDaApi?.has(dia)
       ? api?.get(dia)?.recebidoDireto ?? 0
-      : planilha?.get(dia) ?? 0
+      : planilha?.get(dia)?.direto ?? 0
   }
   return total
 }
