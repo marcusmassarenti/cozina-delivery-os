@@ -127,6 +127,7 @@ export function IndicacoesView({
           <div className="border-b bg-muted/30 p-5">
             <FormIndicador
               indicador={editando}
+              todos={indicadores}
               onDone={() => {
                 setNovo(false)
                 setEditando(null)
@@ -194,6 +195,9 @@ export function IndicacoesView({
                     </code>
                     <span className="text-xs text-muted-foreground">
                       ganha {i.comissaoPct}% · indicado leva {i.descontoPct}% na 1ª
+                      {i.padrinhoNome && i.padrinhoPct > 0
+                        ? ` · ${i.padrinhoNome} leva ${i.padrinhoPct}%`
+                        : ""}
                     </span>
                     {!i.ativo && (
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
@@ -278,7 +282,16 @@ export function IndicacoesView({
                     )}
                   </td>
                   <td className="px-3 py-2.5">
-                    <div className="font-medium">{c.indicador}</div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium">{c.indicador}</span>
+                      {/* Sem isto o padrinho vê dinheiro de um cliente que ele
+                          nunca ouviu falar e acha que é erro. */}
+                      {c.viaIndicador && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          via {c.viaIndicador}
+                        </span>
+                      )}
+                    </div>
                     {c.pixChave && (
                       <div className="font-mono text-[11px] text-muted-foreground">
                         {c.pixChave}
@@ -348,15 +361,29 @@ function LinkCopiavel({ url }: { url: string }) {
 
 function FormIndicador({
   indicador,
+  todos,
   onDone,
 }: {
   indicador: Indicador | null
+  /** Candidatos a padrinho — qualquer outro indicador. */
+  todos: Indicador[]
   onDone: () => void
 }) {
   const [state, action] = useActionState(salvarIndicador, inicial)
   React.useEffect(() => {
     if (state.ok) onDone()
   }, [state.ok, onDone])
+
+  // O total é o que sai do NOSSO bolso. Mostrar ao vivo evita o erro de
+  // subir a fatia do padrinho achando que ela é por fora.
+  const [comissao, setComissao] = React.useState(
+    String(indicador?.comissaoPct ?? 20),
+  )
+  const [padPct, setPadPct] = React.useState(
+    String(indicador?.padrinhoPct ?? 0),
+  )
+  const [padId, setPadId] = React.useState(indicador?.padrinhoId ?? "")
+  const total = (Number(comissao) || 0) + (padId ? Number(padPct) || 0 : 0)
 
   return (
     <form action={action} className="flex flex-col gap-3">
@@ -386,7 +413,8 @@ function FormIndicador({
         <Campo
           label="Comissão (% da mensalidade)"
           name="comissao"
-          defaultValue={String(indicador?.comissaoPct ?? 20)}
+          value={comissao}
+          onChange={setComissao}
           placeholder="20"
         />
         <Campo
@@ -396,6 +424,62 @@ function FormIndicador({
           placeholder="50"
         />
       </div>
+      {/* ── Padrinho ────────────────────────────────────────────────
+          Quem trouxe ESTE indicador ganha uma fatia de tudo que ele indicar,
+          pra sempre. Um nível só: não sobe pro padrinho do padrinho.
+
+          A divisão fica aqui, no cadastro, porque muda quando o Marcus
+          quiser — e vale da PRÓXIMA apuração em diante. O que já foi apurado
+          guarda o percentual do dia: comissão apurada é dívida com data. */}
+      <div className="rounded-lg border bg-background p-3">
+        <p className="text-xs font-semibold">Quem trouxe este indicador</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          Ganha uma fatia de tudo que ele indicar, todo mês. A fatia sai de
+          dentro da comissão — não é custo a mais.
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs font-medium text-muted-foreground">
+              Padrinho
+            </span>
+            <select
+              name="padrinho"
+              value={padId}
+              onChange={(e) => setPadId(e.target.value)}
+              className="h-9 rounded-md border bg-background px-2 text-sm outline-none focus:border-ring"
+            >
+              <option value="">— ninguém —</option>
+              {todos
+                .filter((o) => o.id !== indicador?.id)
+                .map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.nome} ({o.codigo})
+                  </option>
+                ))}
+            </select>
+          </label>
+          <Campo
+            label="Fatia do padrinho (%)"
+            name="padrinhoPct"
+            value={padPct}
+            onChange={setPadPct}
+            placeholder="5"
+            required={false}
+          />
+        </div>
+        <p
+          className={`mt-2 text-xs ${
+            total > 20
+              ? "font-medium text-amber-600 dark:text-amber-400"
+              : "text-muted-foreground"
+          }`}
+        >
+          Custo total da indicação: <strong>{total}%</strong> da mensalidade
+          {padId ? ` (${comissao || 0}% + ${padPct || 0}%)` : ""}
+          {total > 20 ? " — acima dos 20% de sempre." : ""}
+        </p>
+      </div>
+
       <Campo
         label="Observação"
         name="nota"
@@ -436,16 +520,25 @@ function Salvar() {
   )
 }
 
+/**
+ * Campo de texto. Aceita os dois modos: solto (`defaultValue`) e controlado
+ * (`value` + `onChange`) — os percentuais precisam do segundo pra a linha do
+ * "custo total" reagir enquanto se digita.
+ */
 function Campo({
   label,
   name,
   defaultValue,
+  value,
+  onChange,
   placeholder,
   required = true,
 }: {
   label: string
   name: string
   defaultValue?: string
+  value?: string
+  onChange?: (v: string) => void
   placeholder?: string
   required?: boolean
 }) {
@@ -454,7 +547,22 @@ function Campo({
       <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </label>
-      <Input name={name} defaultValue={defaultValue} placeholder={placeholder} required={required} />
+      {onChange ? (
+        <Input
+          name={name}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          required={required}
+        />
+      ) : (
+        <Input
+          name={name}
+          defaultValue={defaultValue}
+          placeholder={placeholder}
+          required={required}
+        />
+      )}
     </div>
   )
 }

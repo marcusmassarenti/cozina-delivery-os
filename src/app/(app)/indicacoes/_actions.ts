@@ -23,6 +23,16 @@ export async function salvarIndicador(
     if (!nome || !codigo) return { ok: false, message: "Nome e código são obrigatórios." }
     if (codigo.length < 3) return { ok: false, message: "Código muito curto." }
 
+    const padrinhoId = String(formData.get("padrinho") ?? "").trim() || null
+    /**
+     * ⚠️ NINGUÉM É PADRINHO DE SI MESMO. Sem esta trava, a apuração criaria
+     * duas comissões pro mesmo indicador no mesmo cliente — uma direta e uma
+     * "indireta" vinda dele próprio.
+     */
+    if (padrinhoId && id && padrinhoId === id) {
+      return { ok: false, message: "Um indicador não pode ser padrinho de si mesmo." }
+    }
+
     const dados = {
       nome,
       codigo,
@@ -32,6 +42,12 @@ export async function salvarIndicador(
       desconto_pct: Number(String(formData.get("desconto") ?? "50").replace(",", ".")) || 0,
       ativo: String(formData.get("ativo") ?? "") === "on",
       nota: String(formData.get("nota") ?? "").trim() || null,
+      // Quem trouxe ESTE indicador. Sem padrinho, a fatia vai a zero junto —
+      // senão sobraria um percentual órfão esperando alguém ser escolhido.
+      padrinho_id: padrinhoId,
+      padrinho_pct: padrinhoId
+        ? Number(String(formData.get("padrinhoPct") ?? "0").replace(",", ".")) || 0
+        : 0,
     }
 
     const { error } = id

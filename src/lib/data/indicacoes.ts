@@ -23,6 +23,10 @@ export type Indicador = {
   contato: string | null
   comissaoPct: number
   descontoPct: number
+  /** Quem trouxe ESTE indicador. Ganha `padrinhoPct` de tudo que ele indicar. */
+  padrinhoId: string | null
+  padrinhoNome: string | null
+  padrinhoPct: number
   ativo: boolean
   holdingId: string | null
   nota: string | null
@@ -45,6 +49,11 @@ export type Comissao = {
   valor: number
   status: string
   pagoEm: string | null
+  /**
+   * Só na comissão INDIRETA: de quem veio o cliente. Sem isso o padrinho abre
+   * a tela e vê dinheiro de um cliente que ele nunca ouviu falar.
+   */
+  viaIndicador: string | null
 }
 
 /** Normaliza o código: ninguém digita cupom com o mesmo capricho duas vezes. */
@@ -116,6 +125,13 @@ export async function listarIndicadores(): Promise<Indicador[]> {
     })
   }
 
+  const nomePorId = new Map(
+    ((inds ?? []) as Record<string, unknown>[]).map((i) => [
+      String(i.id),
+      String(i.nome),
+    ]),
+  )
+
   const soma = (id: string, status: string) =>
     ((coms ?? []) as Record<string, unknown>[])
       .filter((c) => c.indicador_id === id && c.status === status)
@@ -129,6 +145,11 @@ export async function listarIndicadores(): Promise<Indicador[]> {
     contato: (i.contato as string | null) ?? null,
     comissaoPct: Number(i.comissao_pct ?? 0),
     descontoPct: Number(i.desconto_pct ?? 0),
+    padrinhoId: (i.padrinho_id as string | null) ?? null,
+    padrinhoNome: i.padrinho_id
+      ? nomePorId.get(String(i.padrinho_id)) ?? null
+      : null,
+    padrinhoPct: Number(i.padrinho_pct ?? 0),
     ativo: Boolean(i.ativo),
     holdingId: (i.holding_id as string | null) ?? null,
     nota: (i.nota as string | null) ?? null,
@@ -147,9 +168,15 @@ export async function listarComissoes(limite = 100): Promise<Comissao[]> {
     .order("competencia", { ascending: false })
     .limit(limite)
 
-  const ids = [...new Set(((data ?? []) as Record<string, unknown>[]).flatMap((c) => [
-    String(c.indicador_id),
-  ]))]
+  const ids = [
+    ...new Set(
+      ((data ?? []) as Record<string, unknown>[]).flatMap((c) =>
+        [String(c.indicador_id), c.origem_indicador_id as string | null].filter(
+          (v): v is string => Boolean(v),
+        ),
+      ),
+    ),
+  ]
   const hids = [...new Set(((data ?? []) as Record<string, unknown>[]).map((c) => String(c.holding_id)))]
 
   const [{ data: inds }, { data: holds }] = await Promise.all([
@@ -178,6 +205,9 @@ export async function listarComissoes(limite = 100): Promise<Comissao[]> {
     valor: Number(c.valor ?? 0),
     status: String(c.status),
     pagoEm: (c.pago_em as string | null) ?? null,
+    viaIndicador: c.origem_indicador_id
+      ? nomeInd.get(String(c.origem_indicador_id))?.nome ?? null
+      : null,
   }))
 }
 
@@ -211,7 +241,9 @@ export async function apurarComissoes(): Promise<{
         .select("holding_id, competencia, valor, pago_valor, status")
         .in("holding_id", hids)
         .eq("status", "paga"),
-      admin.from("indicadores").select("id, nome, comissao_pct, ativo"),
+      admin
+        .from("indicadores")
+        .select("id, nome, comissao_pct, ativo, padrinho_id, padrinho_pct"),
       admin.from("comissoes").select("indicador_id, holding_id, competencia, status"),
     ])
 
@@ -233,8 +265,18 @@ export async function apurarComissoes(): Promise<{
       const ind = indPorId.get(indId)
       if (!ind || !ind.ativo) continue
 
+      /**
+       * ⚠️ SEM `continue` AQUI. A linha do padrinho é INDEPENDENTE da direta.
+       *
+       * Existia um `continue`: comissão direta já apurada, pula o cliente
+       * inteiro. Isso engolia a fatia do padrinho no caso mais provável de
+       * todos — o padrinho é ligado DEPOIS de a comissão daquele mês já ter
+       * nascido, e a fatia dele simplesmente não aparecia nunca.
+       *
+       * O teste pegou em 25/08/26: liguei um padrinho e a apuração devolveu
+       * lista vazia. Cada linha decide sozinha se já existe.
+       */
       const chave = `${indId}|${hid}|${f.competencia}`
-      if (existe.has(chave)) continue
 
       /**
        * A BASE É O QUE ENTROU, NÃO O QUE FOI FATURADO (Marcus, 25/08/26).
@@ -253,21 +295,72 @@ export async function apurarComissoes(): Promise<{
       const pct = Number(ind.comissao_pct ?? 0)
       const valor = Math.round(base * pct) / 100
 
-      const { error } = await admin.from("comissoes").insert({
-        indicador_id: indId,
+      if (!existe.has(chave)) {
+        const { error } = await admin.from("comissoes").insert({
+          indicador_id: indId,
+          holding_id: hid,
+          competencia: String(f.competencia),
+          base_valor: base,
+          pct,
+          valor,
+        })
+        if (!error) {
+          existe.add(chave)
+          out.criadas.push({
+            indicador: String(ind.nome),
+            cliente: nomeHold.get(hid) ?? "—",
+            competencia: String(f.competencia),
+            valor,
+          })
+        }
+      }
+
+      /**
+       * A FATIA DO PADRINHO — quem trouxe o indicador ganha junto, pra sempre.
+       *
+       * ── A REGRA (Marcus, 25/08/26) ────────────────────────────────────
+       * O João indica clientes e leva 15%; o Diego, que trouxe o João, leva
+       * 5%. Os 20% de custo não mudaram — mudou entre quem se dividem.
+       *
+       * ⚠️ UM NÍVEL SÓ, e isso é decisão, não limitação: não sobe pro
+       * padrinho do padrinho. Dois níveis viram esquema de pirâmide e
+       * ninguém consegue auditar de quem é cada centavo.
+       *
+       * ⚠️ E A DIVISÃO MUDA QUANDO O MARCUS QUISER. Por isso ela mora no
+       * cadastro do indicador, e por isso a linha da comissão guarda `pct` e
+       * `valor` do dia: mexer no cadastro vale da PRÓXIMA apuração em diante
+       * e não reescreve o que já foi apurado. Comissão apurada é dívida com
+       * data — mudar o passado porque a régua de hoje é outra seria alterar
+       * quanto alguém já ganhou.
+       *
+       * Padrinho inativo não recebe: mesma régua do indicador direto.
+       */
+      const padId = (ind.padrinho_id as string | null) ?? null
+      const padPct = Number(ind.padrinho_pct ?? 0)
+      if (!padId || padPct <= 0) continue
+      const pad = indPorId.get(padId)
+      if (!pad || !pad.ativo) continue
+
+      const chavePad = `${padId}|${hid}|${f.competencia}`
+      if (existe.has(chavePad)) continue
+
+      const valorPad = Math.round(base * padPct) / 100
+      const { error: errPad } = await admin.from("comissoes").insert({
+        indicador_id: padId,
         holding_id: hid,
         competencia: String(f.competencia),
         base_valor: base,
-        pct,
-        valor,
+        pct: padPct,
+        valor: valorPad,
+        origem_indicador_id: indId,
       })
-      if (!error) {
-        existe.add(chave)
+      if (!errPad) {
+        existe.add(chavePad)
         out.criadas.push({
-          indicador: String(ind.nome),
+          indicador: `${String(pad.nome)} (via ${String(ind.nome)})`,
           cliente: nomeHold.get(hid) ?? "—",
           competencia: String(f.competencia),
-          valor,
+          valor: valorPad,
         })
       }
     }
