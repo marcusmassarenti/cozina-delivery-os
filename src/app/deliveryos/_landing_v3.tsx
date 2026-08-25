@@ -2273,11 +2273,29 @@ export function LandingV3({
             </p>
           </Reveal>
 
+          {/* ── DE ONDE SAEM ESTES NÚMEROS (medidos em 24/08/26) ──────────
+              Sempre EXCLUINDO a rede de demonstração (holding `de0d…0001`),
+              cujos dados são fictícios — contá-los seria inventar prova
+              social.
+
+                vendas   R$ 19,9 mi = iFood 15,85 mi (RPC
+                         `ifood_financeiro_resumo_by_units`, jan→ago/26)
+                         + 99 1,03 mi (planilha) + 0,37 mi (dias que só a API
+                         cobre) + Keeta 2,60 mi + Cardápio Web 0,05 mi
+                pedidos  349 mil = 283.903 iFood + 19.965 + 8.112 (99) +
+                         35.484 Keeta + 1.373 Cardápio Web
+                lojas    93 = unidades ATIVAS e COM DADO. Cadastradas são 120;
+                         usar esse número contaria loja que ainda não rodou.
+
+              Ao atualizar: refazer a conta, não estimar por cima. O número
+              anterior (R$ 9,4 mi / 164 mil / 83) ficou meses parado enquanto o
+              real dobrou — subestimar a própria prova é o erro barato de
+              cometer e caro de perceber. */}
           <div className="mt-16 grid gap-5 sm:grid-cols-3">
             {[
-              { icon: Coins, valor: "R$ 9,4 mi", label: "em vendas já processados", sub: "iFood, 99 Food e Keeta somados" },
-              { icon: FileSpreadsheet, valor: "164 mil", label: "pedidos lidos e conferidos", sub: "taxa por taxa, sem digitação" },
-              { icon: Store, valor: "83", label: "lojas rodando no sistema", sub: "de rede grande a loja única" },
+              { icon: Coins, valor: "R$ 19,9 mi", label: "em vendas já processados", sub: "iFood, 99 Food, Keeta e Cardápio Web somados" },
+              { icon: FileSpreadsheet, valor: "349 mil", label: "pedidos lidos e conferidos", sub: "taxa por taxa, sem digitação" },
+              { icon: Store, valor: "93", label: "lojas rodando no sistema", sub: "de rede grande a loja única" },
             ].map((k, i) => (
               <Reveal key={k.label} delay={i * 90}>
                 <div className="lift relative h-full rounded-2xl border border-black/[0.06] bg-white px-6 pb-7 pt-12 text-center">
