@@ -814,9 +814,28 @@ export async function backfillPendentes(
       // O contador de tentativas desfaz o dilema: exige TODOS os meses, mas
       // desiste depois de `MAX_TENTATIVAS`. Falha transitória ganha várias
       // chances; mês que não vai existir nunca para de segurar a fila.
+      //
+      // ⚠️ E ERROU UMA TERCEIRA VEZ, POR UM MOTIVO NOVO (24/08/26).
+      //
+      // `every(ok)` só olha a resposta DESTA rodada. Mês que já foi coletado
+      // numa rodada anterior conta como não-respondido — e o extrato do iFood
+      // é assíncrono, então é comum um mês voltar "Tempo esgotado esperando a
+      // geração do extrato" mesmo com o dado inteiro no banco.
+      //
+      // A THE SALAD é o caso: recebeu o histórico completo em 14/08 (8 meses,
+      // 9.477 linhas, jan→ago sem buraco) e mesmo assim nunca foi carimbada.
+      // Seria carimbada por ESGOTAMENTO, na terceira tentativa, saindo
+      // marcada como "incompleta" — sendo que está completa. Cada rodada
+      // dessas custa 8 competências de chamada de API por nada.
+      //
+      // É a mesma doença de sempre: ler "não respondeu AGORA" como "não tem
+      // dado". A pergunta certa não é "a API respondeu?", é "eu tenho esse
+      // mês?" — e essa a gente responde olhando o próprio banco.
       const porCompetencia = u?.reconciliation ?? []
+      const jaTenho = await competenciasQueJaTenho(v.unitId, comps)
       const respondeu =
-        porCompetencia.length > 0 && porCompetencia.every((x) => x.ok === true)
+        porCompetencia.length > 0 &&
+        porCompetencia.every((x) => x.ok === true || jaTenho.has(x.competencia))
 
       const tentativas = (v.tentativas ?? 0) + 1
       const desistiu = !respondeu && tentativas >= MAX_TENTATIVAS
@@ -855,6 +874,46 @@ export async function backfillPendentes(
 }
 
 /**
+ * As competências que a loja JÁ TEM no banco, venha de onde vier.
+ *
+ * Duas evidências, e as duas valem: o carimbo de "extrato lido" (que existe
+ * justamente pra registrar leitura com zero linha) e a presença de lançamentos
+ * da competência. A segunda cobre o histórico anterior ao carimbo — a THE
+ * SALAD recebeu o dela em 14/08, antes de `ifood_extrato_lido` existir.
+ *
+ * Não distingue dado de API e dado de planilha DE PROPÓSITO: a pergunta aqui é
+ * "preciso pedir esse mês de novo?", e a resposta é não nos dois casos. Quem
+ * cuida de "a API está mesmo funcionando" é o `platform_imports.source`, que é
+ * o que libera o e-mail pro cliente.
+ */
+async function competenciasQueJaTenho(
+  unitId: string,
+  competencias: string[],
+): Promise<Set<string>> {
+  const admin = createAdminClient()
+  const [lidas, lancamentos] = await Promise.all([
+    admin
+      .from("ifood_extrato_lido")
+      .select("competencia")
+      .eq("unit_id", unitId)
+      .in("competencia", competencias),
+    admin
+      .from("ifood_financeiro_lancamentos")
+      .select("competencia")
+      .eq("unit_id", unitId)
+      .in("competencia", competencias),
+  ])
+  const out = new Set<string>()
+  for (const r of (lidas.data ?? []) as { competencia: string }[]) {
+    out.add(r.competencia)
+  }
+  for (const r of (lancamentos.data ?? []) as { competencia: string }[]) {
+    out.add(r.competencia)
+  }
+  return out
+}
+
+/**
  * Lojas do iFood conectadas e sem histórico completo — a fila do backfill.
  *
  * Independe de quem vinculou e de quando: basta ter `api_store_id` e não ter
@@ -862,7 +921,13 @@ export async function backfillPendentes(
  * vinculada por um caminho que não é o cron.
  */
 async function lojasSemHistorico(): Promise<
-  { unitId: string; unitCode: string; unitName: string; tentativas: number }[]
+  {
+    unitId: string
+    unitCode: string
+    unitName: string
+    tentativas: number
+    ultima: string | null
+  }[]
 > {
   const admin = createAdminClient()
   const { data } = await admin
@@ -925,5 +990,27 @@ async function lojasSemHistorico(): Promise<
       unitCode: r.units?.code ?? "—",
       unitName: r.units?.name ?? "—",
       tentativas: r.historico_tentativas ?? 0,
+      ultima: r.historico_ultima_tentativa,
     }))
+    /**
+     * ⚠️ ORDEM EXPLÍCITA, PRA NINGUÉM FICAR PERMANENTEMENTE NO FIM.
+     *
+     * A lista vinha na ordem que o Postgres devolvesse, e só as duas
+     * primeiras são servidas por rodada. Ordem não declarada é estável na
+     * prática, então quem cai no fim depende de sorte e pode não andar —
+     * principalmente uma loja que já falhou e volta pra fila junto com um
+     * lote novo, como aconteceu em 24/08/26 (23 lojas esperando).
+     *
+     * Não é o problema de 14/08 (aquele era orçamento de tempo, e o conserto
+     * foi separar o cron). Aqui é só a falta de um critério: sem ele o
+     * comportamento da fila é acidente do banco.
+     *
+     * Menos tentativas primeiro, e entre iguais quem esperou mais.
+     */
+    .sort(
+      (a, b) =>
+        a.tentativas - b.tentativas ||
+        Date.parse(a.ultima ?? "1970-01-01") -
+          Date.parse(b.ultima ?? "1970-01-01"),
+    )
 }
