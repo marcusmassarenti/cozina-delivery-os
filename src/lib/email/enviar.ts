@@ -167,10 +167,10 @@ export type TipoEmail =
    */
   | "suporte-chamado"
   /**
-   * Backfill de comandas do 99 terminou de drenar a fila. INTERNO e SEM
-   * `forcar`: a graça é justamente sair UMA vez. A fila volta a encher com
-   * pedido novo de loja sem webhook, e avisar a cada esvaziada viraria ruído
-   * — o número pra acompanhar depois disso é o `restantes` do cron.
+   * Backfill de comandas do 99 terminou de drenar a fila. INTERNO, sem
+   * cliente — e por isso a trava de duplicidade daqui NÃO o protege: ela só
+   * roda quando existe `holding_id`. Quem garante o "uma vez só" é a própria
+   * rota do cron, que confere `email_enviados` antes de mandar.
    */
   | "ninefood-comandas-fim"
   /**
