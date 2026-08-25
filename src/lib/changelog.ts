@@ -51,6 +51,19 @@ export const CHANGELOG: Release[] = [
     destaque: true,
     areas: [
       {
+        area: "Dashboard",
+        items: [
+          {
+            kind: "correcao",
+            title: "A venda do canal próprio voltou pro faturamento",
+            antes:
+              "O card de Faturamento Bruto somava plataforma por plataforma, e a receita própria lançada à mão (balcão, WhatsApp) não tem plataforma — então ficava de fora. O DRE, a página da unidade e o Nino já a incluíam, e por isso mostravam um número diferente do dashboard.",
+            depois:
+              "As quatro telas passam a mostrar o mesmo faturamento. A venda de balcão entra inteira, no bruto e no que fica na loja — ela não paga comissão.",
+          },
+        ],
+      },
+      {
         area: "99 Food",
         items: [
           {
