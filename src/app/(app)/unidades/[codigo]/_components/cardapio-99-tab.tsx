@@ -7,13 +7,14 @@
  * NENHUMA planilha responde — a "Dados do item" é agregada por dia e não sabe
  * o que estava no mesmo pedido.
  */
-import { Layers, ShoppingBasket, TrendingUp, Utensils } from "lucide-react"
+import { ShoppingBasket, TrendingUp, Utensils } from "lucide-react"
 
 import {
   getNinefoodComposicaoTicket,
   getNinefoodItensRankingForMonth,
   getNinefoodResumoForMonth,
 } from "@/lib/data/ninefood-imported"
+import { ComposicaoTicket } from "./composicao-ticket"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 
 export async function Cardapio99Tab({
@@ -139,108 +140,6 @@ export async function Cardapio99Tab({
       </div>
 
       {ticket && <ComposicaoTicket t={ticket} />}
-    </div>
-  )
-}
-
-/**
- * O que vem em cada pedido, e o que vem junto.
- *
- * A pergunta que isto responde — "o que o cliente leva junto com o carro-chefe"
- * — não tem resposta em relatório nenhum da 99: a planilha soma por dia e
- * perde o pedido. Só a comanda sabe.
- */
-function ComposicaoTicket({
-  t,
-}: {
-  t: NonNullable<Awaited<ReturnType<typeof getNinefoodComposicaoTicket>>>
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <Layers className="size-4 text-muted-foreground" />
-          Composição do ticket
-        </h3>
-        <span className="text-[10px] text-muted-foreground">
-          {fmtNum(t.pedidos)} pedidos com comanda
-        </span>
-      </div>
-
-      <div className="grid gap-px bg-border sm:grid-cols-3">
-        <Numero
-          label="Itens por pedido"
-          valor={t.itensPorPedido.toLocaleString("pt-BR", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-          hint={`${fmtPct(t.pctMultiItem)} levam mais de um`}
-        />
-        <Numero
-          label="Pedidos com complemento"
-          valor={fmtPct(t.pctComComplemento)}
-          hint={`${t.complementosPorPedido.toLocaleString("pt-BR", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })} por pedido`}
-        />
-        <Numero
-          label="Pares que se repetem"
-          valor={fmtNum(t.pares.length)}
-          hint="combinações vistas 3+ vezes"
-        />
-      </div>
-
-      {t.pares.length === 0 ? (
-        <p className="px-4 py-5 text-center text-xs text-muted-foreground">
-          Nenhuma combinação se repetiu o bastante no mês. Com quase todo
-          pedido levando um item só, não há par pra contar — e isso já é a
-          resposta.
-        </p>
-      ) : (
-        <ul className="divide-y">
-          {t.pares.map((p) => (
-            <li
-              key={`${p.base}|${p.junto}`}
-              className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 px-4 py-2.5 text-xs"
-            >
-              <span className="text-muted-foreground">Quem leva</span>
-              <span className="font-medium">{p.base}</span>
-              <span className="text-muted-foreground">também leva</span>
-              <span className="font-medium">{p.junto}</span>
-              <span className="ml-auto shrink-0 tabular-nums">
-                <span className="font-semibold">{fmtPct(p.pct)}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {fmtNum(p.juntos)} de {fmtNum(p.pedidosBase)}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-function Numero({
-  label,
-  valor,
-  hint,
-}: {
-  label: string
-  valor: string
-  hint: string
-}) {
-  return (
-    <div className="bg-card p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-lg font-bold tracking-tight tabular-nums">
-        {valor}
-      </p>
-      <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>
     </div>
   )
 }

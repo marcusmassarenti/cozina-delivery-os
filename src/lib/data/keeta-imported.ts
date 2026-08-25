@@ -1082,3 +1082,74 @@ export async function getKeetaCoverageMatrix(
     }),
   }
 }
+
+// ─── Composição do ticket (Pedidos recentes) ─────────────────────────
+
+export type KeetaComposicaoTicket = {
+  pedidos: number
+  itensPorPedido: number
+  pctMultiItem: number
+  pares: {
+    base: string
+    junto: string
+    juntos: number
+    pedidosBase: number
+    pct: number
+  }[]
+}
+
+/**
+ * O que vem em cada pedido da Keeta, e o que vem junto.
+ *
+ * A fonte é a coluna `itens` do relatório "Pedidos recentes" — uma lista de
+ * nomes separada por `;`. Não é comanda de API (a Keeta não tem integração
+ * ainda), mas responde a mesma pergunta: o que estava no MESMO pedido.
+ *
+ * ⚠️ Sem complemento. O relatório da Keeta lista só o item; o que o cliente
+ * escolheu dentro dele não vem. Por isso o resumo não devolve
+ * `pctComComplemento` — e a tela mostra outro número no lugar, em vez de
+ * exibir zero, que afirmaria que ninguém pede complemento.
+ *
+ * `null` quando não há pedido com item no mês: a tela precisa distinguir "não
+ * vendeu" de "esta loja não importou o relatório de pedidos".
+ */
+export async function getKeetaComposicaoTicket(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<KeetaComposicaoTicket | null> {
+  const admin = createAdminClient()
+  const [resumo, pares] = await Promise.all([
+    admin.rpc("keeta_ticket_resumo", {
+      p_unit_id: unitId,
+      p_year: year,
+      p_month: month,
+    }),
+    admin.rpc("keeta_ticket_pares", {
+      p_unit_id: unitId,
+      p_year: year,
+      p_month: month,
+      p_limite: 8,
+    }),
+  ])
+  if (resumo.error) {
+    console.error("getKeetaComposicaoTicket:", resumo.error.message)
+    return null
+  }
+  const r = ((resumo.data ?? []) as Record<string, unknown>[])[0]
+  const pedidos = Number(r?.pedidos) || 0
+  if (pedidos === 0) return null
+
+  return {
+    pedidos,
+    itensPorPedido: Number(r?.itens_por_pedido) || 0,
+    pctMultiItem: Number(r?.pct_multi_item) || 0,
+    pares: ((pares.data ?? []) as Record<string, unknown>[]).map((p) => ({
+      base: String(p.item_base ?? ""),
+      junto: String(p.item_junto ?? ""),
+      juntos: Number(p.juntos) || 0,
+      pedidosBase: Number(p.pedidos_base) || 0,
+      pct: Number(p.pct) || 0,
+    })),
+  }
+}

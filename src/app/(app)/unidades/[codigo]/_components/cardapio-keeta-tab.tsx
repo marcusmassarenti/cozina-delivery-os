@@ -5,8 +5,12 @@
  */
 import { ShoppingBasket, TrendingUp, Utensils } from "lucide-react"
 
-import { getKeetaItensRankingForMonth } from "@/lib/data/keeta-imported"
+import {
+  getKeetaComposicaoTicket,
+  getKeetaItensRankingForMonth,
+} from "@/lib/data/keeta-imported"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
+import { ComposicaoTicket } from "./composicao-ticket"
 
 export async function CardapioKeetaTab({
   unitId,
@@ -17,7 +21,25 @@ export async function CardapioKeetaTab({
   year: number
   month: number
 }) {
-  const itens = await getKeetaItensRankingForMonth(unitId, year, month, 30)
+  const [itens, ticket] = await Promise.all([
+    getKeetaItensRankingForMonth(unitId, year, month, 30),
+    getKeetaComposicaoTicket(unitId, year, month),
+  ])
+
+  // Sem ranking MAS com pedidos: a loja importou "Pedidos recentes" e não o
+  // "Itens diário". Mostrar só o vazio esconderia o que já temos.
+  if (itens.length === 0 && ticket) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-dashed bg-card p-4 text-center text-xs text-muted-foreground">
+          O ranking de itens vem do relatório &quot;Itens diário&quot;, que
+          ainda não foi importado neste mês. O que está abaixo vem do relatório
+          de Pedidos recentes.
+        </div>
+        <ComposicaoTicket t={ticket} />
+      </div>
+    )
+  }
 
   if (itens.length === 0) {
     return (
@@ -113,6 +135,8 @@ export async function CardapioKeetaTab({
           })}
         </div>
       </div>
+
+      {ticket && <ComposicaoTicket t={ticket} />}
     </div>
   )
 }
