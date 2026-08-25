@@ -121,7 +121,7 @@ export async function resumoDoAnoIfood(
   unitId: string,
   hoje = new Date(),
 ): Promise<{ linhas: LinhaResumo[]; temDado: boolean }> {
-  const { getFinanceiroResumoByUnits } = await import(
+  const { getFinanceiroResumoByUnitsOuErro } = await import(
     "@/lib/data/ifood-imported"
   )
   const ano = hoje.getFullYear()
@@ -132,13 +132,27 @@ export async function resumoDoAnoIfood(
   let primeiroMes: number | null = null
 
   for (let m = 1; m <= ateMes; m++) {
-    const [resumo, cesta] = await Promise.all([
-      getFinanceiroResumoByUnits([unitId], ano, m),
+    const [{ resumo, erro }, cesta] = await Promise.all([
+      getFinanceiroResumoByUnitsOuErro([unitId], ano, m),
       getCancelamentoCestaForMonth(unitId, ano, m).catch(() => ({
         qtd: 0,
         valor: 0,
       })),
     ])
+    /**
+     * ⚠️ MÊS QUE FALHOU NÃO É MÊS VAZIO — E AQUI ERA.
+     *
+     * O `continue` abaixo pula os dois casos igual, e o e-mail segue somando
+     * os que sobraram e chamando o resultado de "Faturamento no ano". Em
+     * 24/08/26 isso mandou pra Prime Gestão R$ 35.031,80 · "Período: ago/26"
+     * quando a verdade era R$ 111.304 em jul+ago: a consulta de julho falhou
+     * e o mês sumiu sem deixar rastro no texto.
+     *
+     * Número parcial apresentado como total é pior que número nenhum — o
+     * cliente não tem como desconfiar. Falhou, desiste: o e-mail não sai e a
+     * varredura tenta de novo amanhã, quando o dado estiver de pé.
+     */
+    if (erro) return { linhas: [], temDado: false }
     const r = resumo.get(unitId)
     if (!r) continue
     const brutoMes = (r.bruto ?? 0) + (cesta?.valor ?? 0)

@@ -1479,6 +1479,35 @@ async function resumoRpc(
   }))
 }
 
+/**
+ * Igual ao `getFinanceiroResumoByUnits`, mas DIZENDO se a consulta falhou.
+ *
+ * ⚠️ POR QUE ISTO PRECISOU EXISTIR (24/08/26) ─────────────────────────────
+ * A versão que devolve só o Map trata falha e mês vazio da mesma forma: um
+ * Map sem a loja. Numa tela isso vira um card zerado que a pessoa estranha e
+ * recarrega — irritante, não perigoso. Num E-MAIL vira outra coisa.
+ *
+ * O e-mail de "conectado" soma o ano mês a mês e pula o mês que não voltou.
+ * Com a consulta falhando, ele mandou pra Prime Gestão "Faturamento no ano:
+ * R$ 35.031,80 · Período: ago/26" quando a verdade era R$ 111.304 e jul+ago:
+ * julho foi engolido em silêncio e o e-mail apresentou o pedaço como o total.
+ *
+ * Quem precisa AFIRMAR um número tem que conseguir distinguir "não tem" de
+ * "não consegui" — e desistir no segundo caso. É a mesma lição do extrato do
+ * iFood e do carimbo do 99, na terceira roupa diferente.
+ */
+export async function getFinanceiroResumoByUnitsOuErro(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<{ resumo: Map<string, FinanceiroResumo>; erro: string | null }> {
+  if (unitIds.length === 0) return { resumo: new Map(), erro: null }
+  const { data, error } = await resumoRpc(unitIds, year, month, dateRange)
+  if (error) return { resumo: new Map(), erro: error }
+  return { resumo: mapearResumo(data), erro: null }
+}
+
 export async function getFinanceiroResumoByUnits(
   unitIds: string[],
   year: number,
@@ -1493,7 +1522,12 @@ export async function getFinanceiroResumoByUnits(
     console.error("getFinanceiroResumoByUnits RPC error:", error)
     return out
   }
+  return mapearResumo(data)
+}
 
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+function mapearResumo(data: any): Map<string, FinanceiroResumo> {
+  const out = new Map<string, FinanceiroResumo>()
   for (const row of (data ?? []) as Array<{
     unit_id: string
     pedidos_unicos: number
