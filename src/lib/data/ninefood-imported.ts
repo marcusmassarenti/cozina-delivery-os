@@ -5,8 +5,9 @@
  * - "Month" = (ref_year, ref_month) — usado pelo Financeiro (loja)
  * - "data" = date dia-a-dia
  *
- * Estrutura simples comparada ao iFood: o XLSX do 99 Food já vem agregado
- * por dia, então não precisamos de RPC. SELECT direto + agg em JS é leve.
+ * O XLSX do 99 Food já vem agregado por dia, então a planilha é SELECT direto
+ * + agg em JS. O financeiro da API é o oposto (uma linha por pedido) e sai
+ * agregado do Postgres, pela RPC `ninefood_api_diario` — ver a migration 0227.
  */
 
 import "server-only"
@@ -112,17 +113,18 @@ async function getNinefoodVendaDiretaByUnits(
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
-): Promise<Map<string, number>> {
-  const out = new Map<string, number>()
+): Promise<Map<string, Map<string, number>>> {
+  const out = new Map<string, Map<string, number>>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
   const rows = await fetchAllRows<{
     unit_id: string
+    data: string | null
     receita_vendas: number | string | null
   }>((from, to) => {
     let q = admin
       .from("ninefood_pedidos")
-      .select("unit_id, receita_vendas")
+      .select("unit_id, data, receita_vendas")
       .in("unit_id", unitIds)
       .in("forma_pagamento", ["Pagamento em dinheiro", "2"])
     q = dateRange
@@ -131,10 +133,13 @@ async function getNinefoodVendaDiretaByUnits(
     return q.order("id").range(from, to)
   }, "ninefood:venda-direta")
   for (const r of rows) {
-    out.set(
-      r.unit_id,
-      (out.get(r.unit_id) ?? 0) + (Number(r.receita_vendas) || 0),
-    )
+    if (!r.data) continue
+    let porDia = out.get(r.unit_id)
+    if (!porDia) {
+      porDia = new Map<string, number>()
+      out.set(r.unit_id, porDia)
+    }
+    porDia.set(r.data, (porDia.get(r.data) ?? 0) + (Number(r.receita_vendas) || 0))
   }
   return out
 }
@@ -149,7 +154,7 @@ export async function getNinefoodResumoByUnits(
   if (unitIds.length === 0) return out
 
   const admin = createAdminClient()
-  const diretoByUnit = await getNinefoodVendaDiretaByUnits(
+  const diretoPorDia = await getNinefoodVendaDiretaByUnits(
     unitIds,
     year,
     month,
@@ -239,6 +244,60 @@ export async function getNinefoodResumoByUnits(
     if (row.data) acc.dias.add(row.data)
   }
 
+  /**
+   * DIAS QUE SÓ A API TEM — completa o mês em vez de deixar buraco.
+   *
+   * ── POR QUE VIROU DIA A DIA (24/08/26) ────────────────────────────────
+   * O fallback anterior era tudo-ou-nada por loja: só entrava quando NÃO
+   * havia nenhum dia de planilha no mês. Bastava um dia importado pra que
+   * todo o resto do mês, já disponível na API, fosse ignorado — foi o caso
+   * da Marmitex Faisão, com planilha até 13/ago e a API até 22/ago.
+   *
+   * Misturar as duas fontes no mesmo mês só é honesto porque a régua é a
+   * MESMA: em 24/08/26 casei 263 pedidos da Faisão pedido a pedido e
+   * `receita_vendas` (planilha) == `commissionBaseAmount` (API), centavo a
+   * centavo. Ver a migration 0227.
+   *
+   * A planilha ganha o dia quando existe nos dois lados: ela é mais rica
+   * (avaliação, aceitação, tempo de preparo — que a API não tem).
+   */
+  const apiPorDia = await ninefoodApiPorDia(unitIds, year, month, dateRange)
+  /** unit → dias cujo número veio da API (e não da planilha). */
+  const diasViaApi = new Map<string, Set<string>>()
+  for (const [unitId, dias] of apiPorDia) {
+    const viaApi = new Set<string>()
+    diasViaApi.set(unitId, viaApi)
+    let acc = accs.get(unitId)
+    if (!acc) {
+      acc = {
+        pedidos: 0,
+        bruto: 0,
+        liquido: 0,
+        comissao: 0,
+        taxaPgto: 0,
+        promo: 0,
+        cancel: 0,
+        avaliacoes: [],
+        aceitacoes: [],
+        tempos: [],
+        dias: new Set(),
+      }
+      accs.set(unitId, acc)
+    }
+    for (const [dia, v] of dias) {
+      if (acc.dias.has(dia)) continue
+      acc.pedidos += v.pedidos
+      acc.bruto += v.bruto
+      acc.liquido += v.liquido
+      acc.comissao += v.comissao
+      acc.taxaPgto += v.taxaCanal
+      acc.promo += v.promo
+      acc.cancel += v.cancelados
+      acc.dias.add(dia)
+      viaApi.add(dia)
+    }
+  }
+
   for (const [unitId, acc] of accs) {
     // Prefere o líquido GRAVADO (settlement_amount real do 99) quando ele
     // existir e estiver no range plausível (0 < liquido < bruto). Esse é o
@@ -268,143 +327,142 @@ export async function getNinefoodResumoByUnits(
       diasComDados: acc.dias.size,
       ticketMedio,
       pctLoja,
-      recebidoDireto: diretoByUnit.get(unitId) ?? 0,
+      recebidoDireto: vendaDiretaDoMes(
+        unitId,
+        acc.dias,
+        diasViaApi.get(unitId),
+        diretoPorDia,
+        apiPorDia,
+      ),
       hasData: acc.bruto > 0 || acc.pedidos > 0,
     })
-  }
-
-  // Fallback: lojas SEM relatório diário (`ninefood_daily_loja`) importado, mas
-  // que já têm o financeiro da API (`ninefood_api_bill`, via ninefood_store_links).
-  // Igual ao Keeta, deriva bruto/líquido/pedidos do settlement real da 99 pra
-  // que a receita apareça mesmo antes de subir o XLSX diário. O relatório diário,
-  // quando existir, sempre tem prioridade (é mais rico: avaliação, aceitação, etc).
-  const faltam = unitIds.filter((id) => !out.get(id)?.hasData)
-  if (faltam.length > 0) {
-    const viaApi = await deriveNinefoodFromApiBill(faltam, year, month, dateRange)
-    for (const [unitId, resumo] of viaApi) out.set(unitId, resumo)
   }
 
   return out
 }
 
-// ─── Fallback via financeiro da API (ninefood_api_bill) ─────────────
-//
-// Deriva o resumo do mês a partir do settlement real da 99, agregado por loja
-// (app_shop_id ← ninefood_store_links). Usado só quando o relatório diário não
-// foi importado. Dedup por order_id: o api_bill às vezes traz >1 linha por
-// pedido (ajustes), e somar sem dedup infla o bruto.
-async function deriveNinefoodFromApiBill(
+/**
+ * Dinheiro pago na porta, somado DIA A DIA e sem contar duas vezes.
+ *
+ * Cada dia pertence a UMA fonte. Dia que veio da planilha soma o
+ * `ninefood_pedidos` (relatório de pedidos ou webhook); dia que veio da API
+ * soma o `recebido_direto` do extrato. Sem essa separação a loja que tem as
+ * duas fontes no mesmo dia contaria o mesmo pedido duas vezes.
+ *
+ * A equivalência foi medida: em 24/08/26, dos 263 pedidos da Faisão, os 21 que
+ * a planilha marca "Pagamento em dinheiro" são exatamente os 21 que a API
+ * marca `paymentMethod = 2`. As duas fontes falam a mesma coisa.
+ */
+function vendaDiretaDoMes(
+  unitId: string,
+  dias: Set<string>,
+  diasDaApi: Set<string> | undefined,
+  diretoPorDia: Map<string, Map<string, number>>,
+  apiPorDia: Map<string, Map<string, DiaApi>>,
+): number {
+  const planilha = diretoPorDia.get(unitId)
+  const api = apiPorDia.get(unitId)
+  let total = 0
+  for (const dia of dias) {
+    total += diasDaApi?.has(dia)
+      ? api?.get(dia)?.recebidoDireto ?? 0
+      : planilha?.get(dia) ?? 0
+  }
+  return total
+}
+
+// ─── Financeiro da API do 99, por loja e por dia ─────────────────────
+
+/** Um dia de uma loja no extrato da API do 99, na régua do relatório diário. */
+type DiaApi = {
+  pedidos: number
+  bruto: number
+  liquido: number
+  comissao: number
+  taxaCanal: number
+  promo: number
+  cancelados: number
+  recebidoDireto: number
+}
+
+/**
+ * Lê o extrato da API agregado por loja/dia (RPC `ninefood_api_diario`).
+ *
+ * ── POR QUE UMA RPC ───────────────────────────────────────────────────────
+ * A versão anterior baixava CADA LINHA do `ninefood_api_bill` pelo PostgREST
+ * pra somar em JS — milhares de linhas por mês pra virar meia dúzia de
+ * totais. Agora o Postgres soma e devolve no máximo uma linha por loja/dia.
+ *
+ * ── E POR QUE OS CAMPOS MUDARAM ───────────────────────────────────────────
+ * O bruto vinha de `mealOriginalAmount` (o preço de TABELA) e o líquido de
+ * `settlementAmount` (o repasse, já descontado canal de pagamento e
+ * vale-refeição). Nenhum dos dois é o que o relatório diário chama de bruto e
+ * líquido — a loja no fallback aparecia com ~17% de bruto a mais e ~20% de
+ * líquido a menos que a loja ao lado, medida pela planilha.
+ *
+ * A régua certa foi medida pedido a pedido (ver a migration 0227): o bruto é
+ * `commissionBaseAmount` e o líquido é `orderAmount`.
+ */
+async function ninefoodApiPorDia(
   unitIds: string[],
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
-): Promise<Map<string, NinefoodResumo>> {
-  const out = new Map<string, NinefoodResumo>()
+): Promise<Map<string, Map<string, DiaApi>>> {
+  const out = new Map<string, Map<string, DiaApi>>()
   if (unitIds.length === 0) return out
 
-  const admin = createAdminClient()
+  const mm = String(month).padStart(2, "0")
+  const de = dateRange?.start ?? `${year}-${mm}-01`
+  // Último dia do mês: dia 0 do mês seguinte.
+  const ate = dateRange?.end ?? isoDate(new Date(year, month, 0))
 
-  // unit_id → app_shop_id
-  const { data: links, error: linkErr } = await admin
-    .from("ninefood_store_links")
-    .select("unit_id, app_shop_id")
-    .in("unit_id", unitIds)
-  if (linkErr) {
-    console.error("deriveNinefoodFromApiBill links error:", linkErr.message)
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc("ninefood_api_diario", {
+    p_unit_ids: unitIds,
+    p_de: de,
+    p_ate: ate,
+  })
+  if (error) {
+    console.error("ninefoodApiPorDia:", error.message)
     return out
   }
-  const shopToUnit = new Map<string, string>()
-  for (const l of links ?? []) {
-    if (l.app_shop_id && l.unit_id) shopToUnit.set(l.app_shop_id, l.unit_id)
-  }
-  const shopIds = [...shopToUnit.keys()]
-  if (shopIds.length === 0) return out
 
-  // Janela do mês (business_date é date). dateRange custom tem prioridade.
-  const mm = String(month).padStart(2, "0")
-  const startIso = dateRange?.start ?? `${year}-${mm}-01`
-  const nextMonth = month === 12 ? 1 : month + 1
-  const nextYear = month === 12 ? year + 1 : year
-  const endExclIso = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
-
-  const rows = await pageAll<{
-    app_shop_id: string
-    order_id: string
-    meal_original_amount: number | null
-    settlement_amount: number | null
-    pay_commission_amount: number | null
-    business_date: string
-  }>((from, to) => {
-    let q = admin
-      .from("ninefood_api_bill")
-      .select(
-        "app_shop_id, order_id, meal_original_amount, settlement_amount, pay_commission_amount, business_date",
-      )
-      .in("app_shop_id", shopIds)
-      .gte("business_date", startIso)
-    q = dateRange?.end
-      ? q.lte("business_date", dateRange.end)
-      : q.lt("business_date", endExclIso)
-    return q.order("order_id").range(from, to)
-  })
-
-  type Acc = {
+  for (const r of (data ?? []) as {
+    unit_id: string
+    dia: string
     pedidos: number
-    bruto: number
-    liquido: number
-    comissao: number
-    dias: Set<string>
-  }
-  const accs = new Map<string, Acc>()
-  const seenOrders = new Set<string>()
-
-  for (const row of rows) {
-    if (row.order_id && seenOrders.has(row.order_id)) continue
-    if (row.order_id) seenOrders.add(row.order_id)
-    const unitId = shopToUnit.get(row.app_shop_id)
-    if (!unitId) continue
-    let acc = accs.get(unitId)
-    if (!acc) {
-      acc = { pedidos: 0, bruto: 0, liquido: 0, comissao: 0, dias: new Set() }
-      accs.set(unitId, acc)
+    bruto: number | string
+    liquido: number | string
+    comissao: number | string
+    taxa_canal: number | string
+    promo: number | string
+    cancelados: number
+    recebido_direto: number | string
+  }[]) {
+    let porDia = out.get(r.unit_id)
+    if (!porDia) {
+      porDia = new Map<string, DiaApi>()
+      out.set(r.unit_id, porDia)
     }
-    acc.pedidos += 1
-    acc.bruto += Number(row.meal_original_amount ?? 0)
-    acc.liquido += Number(row.settlement_amount ?? 0)
-    // Comissão vem negativa no api_bill (débito) — guarda em valor absoluto.
-    acc.comissao += Math.abs(Number(row.pay_commission_amount ?? 0))
-    if (row.business_date) acc.dias.add(row.business_date)
-  }
-
-  for (const [unitId, acc] of accs) {
-    const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
-    const pctLoja = acc.bruto > 0 ? (acc.liquido / acc.bruto) * 100 : 0
-    out.set(unitId, {
-      // 0 de propósito: este é o caminho do extrato da API, que não separa
-      // forma de pagamento por pedido. Loja só-API fica sem venda direta até
-      // o relatório de pedidos ser importado — melhor zero declarado aqui do
-      // que um número derivado de dado que a fonte não tem.
-      recebidoDireto: 0,
-      pedidos: acc.pedidos,
-      bruto: acc.bruto,
-      liquido: acc.liquido,
-      comissaoRs: acc.comissao,
-      // api_bill não separa taxa de canal / promoções — só comissão e settlement.
-      taxaCanalPagamentoRs: 0,
-      promocoesRs: 0,
-      cancelamentosQtd: 0,
-      // Métricas de qualidade não existem no financeiro da API.
-      avaliacaoMedia: null,
-      taxaAceitacaoMedia: null,
-      tempoPreparoMedio: null,
-      diasComDados: acc.dias.size,
-      ticketMedio,
-      pctLoja,
-      hasData: acc.bruto > 0 || acc.pedidos > 0,
+    porDia.set(r.dia, {
+      pedidos: Number(r.pedidos) || 0,
+      bruto: Number(r.bruto) || 0,
+      liquido: Number(r.liquido) || 0,
+      comissao: Number(r.comissao) || 0,
+      taxaCanal: Number(r.taxa_canal) || 0,
+      promo: Number(r.promo) || 0,
+      cancelados: Number(r.cancelados) || 0,
+      recebidoDireto: Number(r.recebido_direto) || 0,
     })
   }
-
   return out
+}
+
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`
 }
 
 // ─── getNinefoodResumoForMonth (1 unidade, mesmo formato) ───────────
@@ -1395,16 +1453,18 @@ export async function getNetworkNinefoodAvaliacoesForMonth(
 }
 
 /**
- * Mesmo fallback do `deriveNinefoodFromApiBill`, mas quebrado POR DIA — pro
- * Relatório Diário, que precisa do valor de cada dia e não do total do mês.
+ * O financeiro da API por DIA DO MÊS — pro Relatório Diário, que precisa do
+ * valor de cada dia e não do total.
  *
  * Existe porque a tela lia só `ninefood_daily_loja` (o XLSX). Loja que ainda
  * não subiu o relatório diário mas já tem o financeiro da API aparecia com
  * ZERO de 99Food ali, enquanto o resto do sistema (dashboard, DRE, Nino)
  * mostrava a receita certa. Na Santana isso escondia R$ 16 mil em julho/26.
  *
- * Dedup por order_id: o api_bill às vezes traz mais de uma linha por pedido
- * (ajustes), e somar sem dedup infla o bruto.
+ * ⚠️ ERA UMA SEGUNDA CÓPIA da mesma leitura, com a mesma régua errada
+ * (`mealOriginalAmount` como bruto, sem filtrar `order_type`). Duas cópias do
+ * mesmo conceito significam que consertar uma deixa a outra mentindo — e foi
+ * o que quase aconteceu em 24/08/26. Agora as duas saem da mesma RPC.
  */
 export async function getNinefoodApiBillDiarioByUnits(
   unitIds: string[],
@@ -1413,59 +1473,18 @@ export async function getNinefoodApiBillDiarioByUnits(
   dateRange?: { start: string; end: string },
 ): Promise<Map<string, Map<number, { bruto: number; pedidos: number }>>> {
   const out = new Map<string, Map<number, { bruto: number; pedidos: number }>>()
-  if (unitIds.length === 0) return out
-  const admin = createAdminClient()
-
-  const { data: links } = await admin
-    .from("ninefood_store_links")
-    .select("unit_id, app_shop_id")
-    .in("unit_id", unitIds)
-  const shopToUnit = new Map<string, string>()
-  for (const l of (links ?? []) as { unit_id: string; app_shop_id: string }[]) {
-    if (l.app_shop_id && l.unit_id) shopToUnit.set(l.app_shop_id, l.unit_id)
-  }
-  if (shopToUnit.size === 0) return out
-
-  const mm = String(month).padStart(2, "0")
-  const startIso = dateRange?.start ?? `${year}-${mm}-01`
-  const nextMonth = month === 12 ? 1 : month + 1
-  const nextYear = month === 12 ? year + 1 : year
-  const endExclIso = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
-
-  const rows = await pageAll<{
-    app_shop_id: string
-    order_id: string
-    meal_original_amount: number | null
-    business_date: string
-  }>((from, to) => {
-    let q = admin
-      .from("ninefood_api_bill")
-      .select("app_shop_id, order_id, meal_original_amount, business_date")
-      .in("app_shop_id", [...shopToUnit.keys()])
-      .gte("business_date", startIso)
-    q = dateRange?.end
-      ? q.lte("business_date", dateRange.end)
-      : q.lt("business_date", endExclIso)
-    return q.order("order_id").range(from, to)
-  })
-
-  const vistos = new Set<string>()
-  for (const r of rows) {
-    if (r.order_id && vistos.has(r.order_id)) continue
-    if (r.order_id) vistos.add(r.order_id)
-    const unitId = shopToUnit.get(r.app_shop_id)
-    if (!unitId) continue
-    const dia = Number(String(r.business_date).slice(8, 10))
-    if (!dia) continue
-    let porDia = out.get(unitId)
-    if (!porDia) {
-      porDia = new Map()
-      out.set(unitId, porDia)
+  const porDia = await ninefoodApiPorDia(unitIds, year, month, dateRange)
+  for (const [unitId, dias] of porDia) {
+    const m = new Map<number, { bruto: number; pedidos: number }>()
+    for (const [iso, v] of dias) {
+      const dia = Number(iso.slice(8, 10))
+      if (!dia) continue
+      const atual = m.get(dia) ?? { bruto: 0, pedidos: 0 }
+      atual.bruto += v.bruto
+      atual.pedidos += v.pedidos
+      m.set(dia, atual)
     }
-    const atual = porDia.get(dia) ?? { bruto: 0, pedidos: 0 }
-    atual.bruto += Number(r.meal_original_amount ?? 0)
-    atual.pedidos += 1
-    porDia.set(dia, atual)
+    if (m.size > 0) out.set(unitId, m)
   }
   return out
 }

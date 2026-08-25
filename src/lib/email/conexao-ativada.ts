@@ -3,6 +3,14 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fmtBRL } from "@/lib/format"
 
+/** Hoje em ISO, no fuso do app (TZ=America/Sao_Paulo). */
+function hojeISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`
+}
+
 /**
  * "Conectado — olha o que já entrou." Um e-mail, uma vez, por loja × plataforma.
  *
@@ -190,30 +198,33 @@ export async function resumoDaLoja(
     let ate: string | null = null
 
     if (shops.length > 0) {
-      const { data: bill } = await admin
-        .from("ninefood_api_bill")
-        .select("order_id, meal_original_amount, business_date")
-        .in("app_shop_id", shops)
-        .order("business_date")
-      const rows = (bill ?? []) as {
-        order_id: string | null
-        meal_original_amount: number | null
-        business_date: string | null
-      }[]
-      // Mesma regra do painel: um pedido conta uma vez, mesmo com várias
-      // linhas de extrato (reembolso, pós-venda, taxa).
-      const vistos = new Set<string>()
-      for (const r of rows) {
-        if (r.order_id) {
-          if (vistos.has(r.order_id)) continue
-          vistos.add(r.order_id)
-        }
-        pedidos += 1
-        bruto += Number(r.meal_original_amount ?? 0)
-        if (r.business_date) {
-          if (!de || r.business_date < de) de = r.business_date
-          if (!ate || r.business_date > ate) ate = r.business_date
-        }
+      /**
+       * ⚠️ O BRUTO AQUI É O MESMO DO PAINEL — e por um tempo não foi.
+       *
+       * Este bloco somava `mealOriginalAmount`, que é o preço de TABELA do
+       * pedido, ~17% acima do bruto que o relatório diário chama de bruto
+       * (medido pedido a pedido em 24/08/26; ver a migration 0227). Num e-mail
+       * que diz ao cliente "trouxemos R$ X de histórico", ler a coluna errada
+       * é pior que em qualquer tela: ele compara com o portal do 99 e a
+       * diferença vira desconfiança na integração inteira.
+       *
+       * A RPC devolve a régua certa (`commissionBaseAmount`) e já filtra
+       * `order_type = 1` — ajuste e taxa mensal não são pedido.
+       */
+      const { data: dias } = await admin.rpc("ninefood_api_diario", {
+        p_unit_ids: [unitId],
+        p_de: "2020-01-01",
+        p_ate: hojeISO(),
+      })
+      for (const d of (dias ?? []) as {
+        dia: string
+        pedidos: number
+        bruto: number | string
+      }[]) {
+        pedidos += Number(d.pedidos) || 0
+        bruto += Number(d.bruto) || 0
+        if (!de || d.dia < de) de = d.dia
+        if (!ate || d.dia > ate) ate = d.dia
       }
     }
 

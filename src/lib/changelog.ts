@@ -42,6 +42,38 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.22.0",
+    date: "2026-08-24",
+    tag: "Correções",
+    title: "99 Food: o faturamento agora aparece sem esperar a planilha",
+    summary:
+      "As lojas conectadas por API no 99 passam a mostrar receita direto do extrato da plataforma — e na mesma régua do relatório diário.",
+    destaque: true,
+    areas: [
+      {
+        area: "99 Food",
+        items: [
+          {
+            kind: "correcao",
+            title: "Bruto e líquido do 99 estavam em outra régua",
+            antes:
+              "Loja que aparecia pelo extrato da API mostrava o preço de tabela no lugar do bruto (cerca de 17% a mais) e o repasse no lugar do líquido (cerca de 20% a menos). Ao lado de uma loja medida pela planilha, os dois números não podiam ser comparados.",
+            depois:
+              "As duas fontes usam a mesma régua, conferida pedido a pedido. Comissão, taxa de canal de pagamento e promoções também passaram a aparecer separadas, em vez de tudo cair numa linha só.",
+          },
+          {
+            kind: "melhoria",
+            title: "O mês não para mais no último dia importado",
+            antes:
+              "Bastava um dia de planilha no mês pra que todo o resto, já disponível na API, fosse ignorado.",
+            depois:
+              "Cada dia usa a melhor fonte que existe pra ele: a planilha quando ela cobre o dia, o extrato da API quando não cobre.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.21.0",
     date: "2026-08-16",
     tag: "Grande novidade",
