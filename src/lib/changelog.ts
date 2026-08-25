@@ -57,7 +57,7 @@ export const CHANGELOG: Release[] = [
             kind: "correcao",
             title: "Bruto e líquido do 99 estavam em outra régua",
             antes:
-              "Loja que aparecia pelo extrato da API mostrava o preço de tabela no lugar do bruto (cerca de 17% a mais) e o repasse no lugar do líquido (cerca de 20% a menos). Ao lado de uma loja medida pela planilha, os dois números não podiam ser comparados.",
+              "Loja que aparecia pelo extrato da API mostrava o preço de tabela no lugar do bruto e o repasse no lugar do líquido. Quanto isso distorcia dependia de cada loja: numa delas o bruto aparecia R$ 10 mil acima do real. Ao lado de uma loja medida pela planilha, os dois números não podiam ser comparados.",
             depois:
               "As duas fontes usam a mesma régua, conferida pedido a pedido. Comissão, taxa de canal de pagamento e promoções também passaram a aparecer separadas, em vez de tudo cair numa linha só.",
           },
