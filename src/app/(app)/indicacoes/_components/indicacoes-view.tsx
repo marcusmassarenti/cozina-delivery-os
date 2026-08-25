@@ -168,7 +168,12 @@ export function IndicacoesView({
                 <th className="px-3 py-2.5 font-semibold">Indicador</th>
                 <th className="px-3 py-2.5 font-semibold">Cliente</th>
                 <th className="px-3 py-2.5 font-semibold">Mês</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Base</th>
+                {/* "Base" sozinho não dizia base do quê. Desde 25/08/26 é o
+                    valor PAGO, não o faturado — e essa distinção vale dinheiro
+                    quando o indicador oferece desconto. */}
+                <th className="px-3 py-2.5 text-right font-semibold">
+                  Valor pago
+                </th>
                 <th className="px-3 py-2.5 text-right font-semibold">Comissão</th>
                 <th className="px-3 py-2.5 font-semibold">Situação</th>
               </tr>

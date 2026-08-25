@@ -208,7 +208,7 @@ export async function apurarComissoes(): Promise<{
     const [{ data: faturas }, { data: inds }, { data: jaTem }] = await Promise.all([
       admin
         .from("holding_invoices")
-        .select("holding_id, competencia, valor, status")
+        .select("holding_id, competencia, valor, pago_valor, status")
         .in("holding_id", hids)
         .eq("status", "paga"),
       admin.from("indicadores").select("id, nome, comissao_pct, ativo"),
@@ -236,7 +236,20 @@ export async function apurarComissoes(): Promise<{
       const chave = `${indId}|${hid}|${f.competencia}`
       if (existe.has(chave)) continue
 
-      const base = Number(f.valor ?? 0)
+      /**
+       * A BASE É O QUE ENTROU, NÃO O QUE FOI FATURADO (Marcus, 25/08/26).
+       *
+       * O código de indicação dá desconto ao cliente: o DGFOODS50 corta a
+       * primeira mensalidade pela metade. A Tech Assessoria foi faturada em
+       * R$ 669,76 e pagou R$ 272,50. Comissionar sobre o faturado pagaria ao
+       * indicador 20% de um dinheiro que nunca entrou — e quanto MAIOR o
+       * desconto que ele ofereceu, maior seria a conta pra nós.
+       *
+       * `pago_valor` só existe quando a fatura foi quitada por um pagamento
+       * de verdade. Quando falta (quitação antiga, acerto manual), cai no
+       * valor faturado, que era o comportamento anterior.
+       */
+      const base = Number(f.pago_valor ?? f.valor ?? 0)
       const pct = Number(ind.comissao_pct ?? 0)
       const valor = Math.round(base * pct) / 100
 
