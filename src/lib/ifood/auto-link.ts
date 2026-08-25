@@ -997,13 +997,15 @@ async function lojasSemHistorico(): Promise<
      *
      * A lista vinha na ordem que o Postgres devolvesse, e só as duas
      * primeiras são servidas por rodada. Ordem não declarada é estável na
-     * prática, então quem cai no fim depende de sorte e pode não andar —
-     * principalmente uma loja que já falhou e volta pra fila junto com um
-     * lote novo, como aconteceu em 24/08/26 (23 lojas esperando).
+     * prática, então quem cai no fim depende de sorte — e o caso que dói é o
+     * da loja que já falhou e volta pra fila junto com um lote novo, como a
+     * THE SALAD.
      *
      * Não é o problema de 14/08 (aquele era orçamento de tempo, e o conserto
-     * foi separar o cron). Aqui é só a falta de um critério: sem ele o
-     * comportamento da fila é acidente do banco.
+     * foi separar o cron), nem uma fila entupida hoje: em 24/08/26 havia só
+     * duas lojas esperando. É a falta de um critério — sem ele o
+     * comportamento da fila é acidente do banco, e só vira visível quando o
+     * volume aparece.
      *
      * Menos tentativas primeiro, e entre iguais quem esperou mais.
      */
