@@ -1529,6 +1529,49 @@ export function contaSuspensa(
 }
 
 /** O mesmo fato, pro nosso lado: quem caiu, de quanto era e desde quando. */
+/**
+ * "O backfill de comandas do 99 acabou." Interno, uma vez só.
+ *
+ * Backfill longo termina em silêncio: não tem tela, e ninguém fica de olho no
+ * `restantes` de um cron. Sem este aviso, "acabou" vira suposição de quem
+ * lembrar de conferir — e a diferença entre a fila ter drenado e a fila ter
+ * TRAVADO é exatamente a que não dá pra adivinhar de longe.
+ */
+export function backfillComandasConcluido(d: {
+  pedidos: number
+  itens: number
+  promoLoja: number
+  lojas: number
+  de: string | null
+  ate: string | null
+}): { assunto: string; html: string } {
+  const periodo = d.de && d.ate ? ` · ${d.de} a ${d.ate}` : ""
+  return {
+    assunto: "Comandas do 99: histórico completo",
+    html: layout({
+      titulo: "O backfill de comandas do 99 terminou.",
+      corpo: `
+        <p style="margin:0 0 14px;">A fila zerou. Todo pedido do 99 que passou
+        pelo extrato agora tem a comanda item a item — o que foi vendido, com
+        que complemento e com quanto de promoção.</p>
+        ${destaque(
+          brl(d.promoLoja),
+          `de promoção bancada pela loja, agora quebrada por prato`,
+        )}
+        <p style="margin:18px 0 8px;">O que entrou:</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px;">
+          <tr><td style="padding:4px 16px 4px 0;color:#71717a;">Itens</td><td style="padding:4px 0;font-weight:600;">${d.itens.toLocaleString("pt-BR")}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0;color:#71717a;">Pedidos</td><td style="padding:4px 0;font-weight:600;">${d.pedidos.toLocaleString("pt-BR")}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0;color:#71717a;">Lojas</td><td style="padding:4px 0;font-weight:600;">${d.lojas}${periodo}</td></tr>
+        </table>
+        <p style="margin:0;color:#71717a;font-size:14px;">A fila continua rodando
+        de 5 em 5 minutos: loja vinculada sem webhook segue produzindo pedido
+        sem comanda, e ela recolhe. Este aviso sai uma vez só.</p>`,
+      cta: { texto: "Ver no painel", url: `${SITE}/inicio` },
+    }),
+  }
+}
+
 export function clienteSuspensoInterno(d: {
   empresa: string
   valorMensal: number | null

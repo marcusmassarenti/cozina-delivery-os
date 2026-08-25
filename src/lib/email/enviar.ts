@@ -167,6 +167,13 @@ export type TipoEmail =
    */
   | "suporte-chamado"
   /**
+   * Backfill de comandas do 99 terminou de drenar a fila. INTERNO e SEM
+   * `forcar`: a graça é justamente sair UMA vez. A fila volta a encher com
+   * pedido novo de loja sem webhook, e avisar a cada esvaziada viraria ruído
+   * — o número pra acompanhar depois disso é o `restantes` do cron.
+   */
+  | "ninefood-comandas-fim"
+  /**
    * "Respondemos seu chamado." Mesmo raciocínio, do outro lado: um cliente
    * abre vários chamados ao longo do tempo e cada um merece a sua resposta.
    */

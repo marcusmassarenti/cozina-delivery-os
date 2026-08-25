@@ -39,6 +39,49 @@ export async function GET(req: Request) {
 
   return registrarCron("ninefood-comandas", async () => {
     const r = await backfillComandas99({ limite: 200, deadlineMs: 240_000 })
+
+    /**
+     * A fila zerou — avisa, uma vez só.
+     *
+     * Backfill longo termina em silêncio: não tem tela e ninguém fica olhando
+     * o `restantes` de um cron. O aviso existe pra que "acabou" seja um fato
+     * com hora, e não uma suposição de quem lembrar de conferir.
+     *
+     * Sem `forcar` de propósito: a trava por (holding, tipo) garante que sai
+     * UMA vez na vida. A fila volta a encher com pedido de loja sem webhook, e
+     * avisar a cada esvaziada viraria ruído.
+     */
+    if (r.restantes === 0 && r.pedidosLidos > 0) {
+      try {
+        const { enviarEmail } = await import("@/lib/email/enviar")
+        const { backfillComandasConcluido } = await import(
+          "@/lib/email/templates"
+        )
+        const { createAdminClient } = await import("@/lib/supabase/admin")
+        const { data: resumo } = await createAdminClient().rpc(
+          "ninefood_comandas_resumo",
+        )
+        const t = ((resumo ?? []) as Record<string, unknown>[])[0] ?? {}
+        const { assunto, html } = backfillComandasConcluido({
+          pedidos: Number(t.pedidos) || 0,
+          itens: Number(t.itens) || 0,
+          promoLoja: Number(t.promo_loja) || 0,
+          lojas: Number(t.lojas) || 0,
+          de: (t.de as string | null) ?? null,
+          ate: (t.ate as string | null) ?? null,
+        })
+        await enviarEmail({
+          holdingId: null,
+          tipo: "ninefood-comandas-fim",
+          para: process.env.SAUDE_EMAIL ?? "marcus@massarenti.me",
+          assunto,
+          html,
+        })
+      } catch (e) {
+        console.error("[ninefood-comandas] aviso de fim:", e)
+      }
+    }
+
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
