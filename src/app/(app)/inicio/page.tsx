@@ -2247,6 +2247,8 @@ function networkTotalsMerged(
   // A taxa da plataforma = bruto − repasse − venda direta.
   let recebidoDiretoRede = 0
   let vrRede = 0
+  /** Venda do canal próprio lançada à mão — não pertence a plataforma nenhuma. */
+  let receitaPropriaRede = 0
   const recebidoIfood = (u: (typeof active)[number]) =>
     u.monthly.platforms.find((p) => p.id === "ifood")?.recebidoDireto ?? 0
   const vrIfood = (u: (typeof active)[number]) =>
@@ -2340,8 +2342,40 @@ function networkTotalsMerged(
       pedidos += u.monthly.pedidos
       cancelados += u.monthly.pedidosCancelados ?? 0
     }
+
+    /**
+     * ⚠️ A RECEITA PRÓPRIA SUMIA DESTE CARD — E SÓ DESTE.
+     *
+     * É a venda do canal próprio lançada à mão (balcão, WhatsApp): não tem
+     * plataforma, então o laço acima, que soma plataforma por plataforma,
+     * nunca a via. O `getRealMonthlyForUnits` sempre a somou, e por isso o
+     * DRE, a página da unidade e o Nino mostravam um número e o card do
+     * dashboard mostrava outro.
+     *
+     * Marcus achou em 24/08/26: R$ 900.559,26 no Nino contra R$ 898,0 mil no
+     * dashboard, do mesmo mês e sem filtro nenhum. A diferença era exatamente
+     * R$ 2.600 de uma loja. Três telas contra uma, e a sozinha era a que
+     * apagava venda de verdade.
+     *
+     * Entra no bruto E no líquido, como nas outras telas: venda de balcão não
+     * paga comissão, fica inteira com a loja. Assim `taxasPlataforma`
+     * (bruto − líquido − venda direta) continua fechando.
+     *
+     * Só sem filtro de plataforma: com "iFood" marcado, essa receita não
+     * pertence ao recorte — somá-la atribuiria ao iFood uma venda que não é
+     * dele.
+     */
+    if (platformFilter.length === 0) {
+      receitaPropriaRede += u.monthly.receitaPropria ?? 0
+    }
   }
+
+  // Ticket médio fica na base que TEM pedido: a receita própria entra no
+  // faturamento sem trazer contagem, e dividir por pedidos que não existem
+  // inflaria o ticket de todo mundo.
   const mediaTicket = pedidos > 0 ? bruto / pedidos : 0
+  bruto += receitaPropriaRede
+  liquido += receitaPropriaRede
   // Denominador = dias do mês selecionado (mês corrente = dias decorridos),
   // não 30 fixo — senão fev e o mês corrente parcial saem errados.
   const divisor = diasComDado ?? daysElapsedInMonth({ year, month })
