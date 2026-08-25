@@ -323,18 +323,69 @@ export async function POST(req: Request) {
         .eq("note", note)
         .maybeSingle()
       if (!exists) {
-        await admin.from("holding_payments").insert({
-          holding_id: holdingId,
-          paid_on: String(
-            payment.paymentDate ??
-              payment.confirmedDate ??
-              payment.dueDate ??
-              new Date().toISOString().slice(0, 10),
-          ),
-          amount: Number(payment.value ?? 0),
-          method: `Asaas${payment.billingType ? ` (${payment.billingType})` : ""}`,
-          note,
-        })
+        const pagoEm = String(
+          payment.paymentDate ??
+            payment.confirmedDate ??
+            payment.dueDate ??
+            new Date().toISOString().slice(0, 10),
+        )
+        const valor = Number(payment.value ?? 0)
+        const { data: novo } = await admin
+          .from("holding_payments")
+          .insert({
+            holding_id: holdingId,
+            paid_on: pagoEm,
+            amount: valor,
+            method: `Asaas${payment.billingType ? ` (${payment.billingType})` : ""}`,
+            note,
+          })
+          .select("id")
+          .maybeSingle()
+
+        /**
+         * ⚠️ QUITAR A FATURA — ISTO FALTAVA, E TINHA DOIS CUSTOS.
+         *
+         * O webhook gravava o pagamento em `holding_payments` e marcava a
+         * holding como paga, mas nunca mexia em `holding_invoices`. Só o
+         * caminho MANUAL (registrar pagamento na tela de clientes) quitava a
+         * fatura. Quem paga pelo Asaas — que é o caminho self-service, o
+         * principal — deixava a fatura aberta pra sempre.
+         *
+         * O que isso quebrava, medido em 25/08/26:
+         *
+         *  1. A COMISSÃO DE INDICAÇÃO NUNCA NASCIA. Ela é criada a partir de
+         *     `holding_invoices.status = 'paga'`. A Tech Assessoria, indicada
+         *     pelo Diego, pagou em 21/08 e a fatura seguia aberta — então o
+         *     painel de Indicações mostrava R$ 0,00 e "nenhuma comissão
+         *     ainda", com o cliente pagante em dia.
+         *
+         *  2. INADIMPLÊNCIA INFLADA. R$ 5.065,76 em faturas "abertas", das
+         *     quais R$ 4.371,50 já tinham sido pagos.
+         *
+         * Não derruba o webhook se falhar: o pagamento em si já está
+         * registrado e a conta do cliente já foi liberada, que é o que não
+         * pode faltar. Fatura por quitar a gente conserta; cliente barrado
+         * depois de pagar, não.
+         */
+        if (novo?.id) {
+          try {
+            const { quitarFaturaComPagamento } = await import(
+              "@/lib/data/faturas"
+            )
+            const q = await quitarFaturaComPagamento(
+              holdingId,
+              novo.id,
+              pagoEm,
+              valor,
+            )
+            if (q.ok) {
+              const { apurarComissoes } = await import("@/lib/data/indicacoes")
+              await apurarComissoes()
+            }
+          } catch (e) {
+            console.error("[asaas] quitar fatura / apurar comissão:", e)
+          }
+        }
       }
     }
   } catch (e) {
