@@ -1553,3 +1553,74 @@ function mean(values: number[]): number | null {
   const sum = values.reduce((s, v) => s + v, 0)
   return Math.round((sum / values.length) * 100) / 100
 }
+
+// ─── Composição do ticket (comanda) ──────────────────────────────────
+
+export type ComposicaoTicket = {
+  pedidos: number
+  itensPorPedido: number
+  pctComComplemento: number
+  pctMultiItem: number
+  complementosPorPedido: number
+  pares: {
+    base: string
+    junto: string
+    juntos: number
+    pedidosBase: number
+    pct: number
+  }[]
+}
+
+/**
+ * O que vem em cada pedido do 99, e o que vem junto.
+ *
+ * Sai da COMANDA (`ninefood_pedido_itens`), que é a única fonte que sabe o
+ * que estava no MESMO pedido — a planilha "Dados do item" é agregada por dia
+ * e nunca vai responder isso.
+ *
+ * Devolve `null` quando a loja não tem comanda no mês: a tela precisa
+ * distinguir "não vendeu" de "esta loja ainda não tem a comanda", e um objeto
+ * zerado diria a primeira coisa quando a verdade é a segunda.
+ */
+export async function getNinefoodComposicaoTicket(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<ComposicaoTicket | null> {
+  const admin = createAdminClient()
+  const [resumo, pares] = await Promise.all([
+    admin.rpc("ninefood_ticket_resumo", {
+      p_unit_id: unitId,
+      p_year: year,
+      p_month: month,
+    }),
+    admin.rpc("ninefood_ticket_pares", {
+      p_unit_id: unitId,
+      p_year: year,
+      p_month: month,
+      p_limite: 8,
+    }),
+  ])
+  if (resumo.error) {
+    console.error("getNinefoodComposicaoTicket:", resumo.error.message)
+    return null
+  }
+  const r = ((resumo.data ?? []) as Record<string, unknown>[])[0]
+  const pedidos = Number(r?.pedidos) || 0
+  if (pedidos === 0) return null
+
+  return {
+    pedidos,
+    itensPorPedido: Number(r?.itens_por_pedido) || 0,
+    pctComComplemento: Number(r?.pct_com_complemento) || 0,
+    pctMultiItem: Number(r?.pct_multi_item) || 0,
+    complementosPorPedido: Number(r?.complementos_por_pedido) || 0,
+    pares: ((pares.data ?? []) as Record<string, unknown>[]).map((p) => ({
+      base: String(p.item_base ?? ""),
+      junto: String(p.item_junto ?? ""),
+      juntos: Number(p.juntos) || 0,
+      pedidosBase: Number(p.pedidos_base) || 0,
+      pct: Number(p.pct) || 0,
+    })),
+  }
+}
