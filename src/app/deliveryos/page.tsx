@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { getDefaultPlan } from "@/lib/data/assinatura"
+import { getLandingNumeros } from "@/lib/data/landing-numeros"
 import { LandingV3 } from "./_landing_v3"
 
 const TITLE = "Delivery OS — veja quanto você realmente ganha no delivery"
@@ -43,6 +44,11 @@ export const metadata: Metadata = {
 export default async function DeliveryOsLandingPage() {
   // Preços vêm do /plataforma (platform_settings) — landing e checkout sempre
   // iguais. Muda num lugar só.
-  const precos = await getDefaultPlan()
-  return <LandingV3 precos={precos} />
+  const [precos, numeros] = await Promise.all([
+    getDefaultPlan(),
+    // Recalculados uma vez por dia pelo cron da régua. Aqui é só uma linha
+    // lida — a conta leva ~45s e não pode acontecer no render.
+    getLandingNumeros(),
+  ])
+  return <LandingV3 precos={precos} numeros={numeros} />
 }

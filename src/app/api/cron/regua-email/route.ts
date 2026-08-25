@@ -16,6 +16,7 @@ import { enviarNovidades } from "@/lib/email/novidades"
 import { rodarReguaEmail } from "@/lib/data/regua-email"
 import { rodarReguaFechamento } from "@/lib/data/regua-fechamento"
 import { registrarCron } from "@/lib/cron/registrar"
+import { recalcularLandingNumeros } from "@/lib/data/landing-numeros"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -93,10 +94,29 @@ export async function GET(req: Request) {
     console.error("enviarNovidades:", e)
   }
 
+  /**
+   * Os números da landing, recalculados uma vez por dia.
+   *
+   * Pega carona aqui porque este cron roda uma vez ao dia e DEPOIS de todos os
+   * syncs (99 às 5h, iFood às 6h, Cardápio Web às 6h05) — o retrato sai com o
+   * dia anterior inteiro dentro.
+   *
+   * Não derruba a régua se falhar: e-mail de cliente vale mais que número de
+   * página de marketing, e o valor de ontem continua no ar (que é o
+   * comportamento certo — ver `landing-numeros.ts`).
+   */
+  let landing: Awaited<ReturnType<typeof recalcularLandingNumeros>> | null = null
+  try {
+    landing = await recalcularLandingNumeros()
+  } catch (e) {
+    console.error("recalcularLandingNumeros:", e)
+  }
+
   return Response.json({
     ok: true,
     ranAt: new Date().toISOString(),
     temChave: Boolean(process.env.RESEND_API_KEY),
+    landing,
     ...r,
     fechamento,
     novidades,

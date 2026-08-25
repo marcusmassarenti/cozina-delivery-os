@@ -28,6 +28,7 @@ import {
   CalendarClock,
   CornerDownRight,
   Scale,
+  MapPin,
   ShieldCheck,
   Sparkles,
   Star,
@@ -48,6 +49,7 @@ import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
 import { LOGOS_CLIENTES } from "@/lib/logos-clientes"
 import { reportsByPlatform } from "@/lib/reports-catalog"
 import { precoStr, valorMensalExibido } from "@/lib/pricing"
+import type { LandingNumeros } from "@/lib/data/landing-numeros"
 
 const STYLES = `
 .dos-root{--brand:oklch(0.65 0.21 35);--brand-strong:oklch(0.57 0.2 33);--ink:oklch(0.2 0.01 48);--ink2:oklch(0.27 0.014 48);--cream:oklch(0.99 0.005 75);--brand-soft:oklch(0.96 0.035 55);color:oklch(0.22 0.01 48);background-color:var(--cream);background-image:radial-gradient(oklch(0.65 0.21 35/.045) 1px,transparent 1px);background-size:24px 24px;}
@@ -1086,6 +1088,34 @@ function PorDentroTabs() {
   )
 }
 
+/**
+ * R$ em milhões, com uma casa: "R$ 19,9 mi".
+ *
+ * Abaixo de um milhão cai pra milhares, senão um número novo apareceria como
+ * "R$ 0,4 mi" — que lê como pouco mesmo quando não é.
+ */
+function milhoes(v: number): string {
+  if (v >= 1_000_000) {
+    return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })} mi`
+  }
+  return `R$ ${Math.round(v / 1000).toLocaleString("pt-BR")} mil`
+}
+
+/** Contagem grande, arredondada: "349 mil", "11,2 mil", "840". */
+function milhares(v: number): string {
+  if (v >= 100_000) return `${Math.round(v / 1000).toLocaleString("pt-BR")} mil`
+  if (v >= 10_000) {
+    return `${(v / 1000).toLocaleString("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })} mil`
+  }
+  return v.toLocaleString("pt-BR")
+}
+
 /* ── Nino AI — seção dedicada (spotlight do consultor de IA) ── */
 
 /** Bolhas de exemplo da conversa (números fictícios, só pra mostrar o tom). */
@@ -1515,6 +1545,7 @@ function EsteiraClientes() {
 
 export function LandingV3({
   precos,
+  numeros,
 }: {
   /** Preços vindos do /plataforma: 1ª loja + adicional por plano. */
   precos: {
@@ -1522,6 +1553,8 @@ export function LandingV3({
     pro: PrecoPlanoLanding
     ai: PrecoPlanoLanding
   }
+  /** Prova social calculada pelo cron — ver `lib/data/landing-numeros.ts`. */
+  numeros: LandingNumeros
 }) {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
@@ -2351,32 +2384,24 @@ export function LandingV3({
             </p>
           </Reveal>
 
-          {/* ── DE ONDE SAEM ESTES NÚMEROS (medidos em 24/08/26) ──────────
-              Sempre EXCLUINDO a rede de demonstração (holding `de0d…0001`),
-              cujos dados são fictícios — contá-los seria inventar prova
-              social.
+          {/* ── ESTES NÚMEROS NÃO SÃO DIGITADOS ───────────────────────────
+              Vêm de `landing_numeros`, recalculada uma vez por dia pelo cron
+              da régua (`lib/data/landing-numeros.ts`), sempre EXCLUINDO a rede
+              de demonstração — prova social com loja fictícia dentro não é
+              prova.
 
-                vendas   R$ 19,9 mi = iFood 15,85 mi (RPC
-                         `ifood_financeiro_resumo_by_units`, jan→ago/26)
-                         + 99 1,03 mi (planilha) + 0,37 mi (dias que só a API
-                         cobre) + Keeta 2,60 mi + Cardápio Web 0,05 mi
-                pedidos  349 mil = 283.903 iFood + 19.965 + 8.112 (99) +
-                         35.484 Keeta + 1.373 Cardápio Web
-                lojas    123 = TODAS as unidades de clientes reais, ativas ou
-                         não (decisão do Marcus, 24/08/26: "pode colocar
-                         todas"). O banco tem 133, mas 10 são a rede de
-                         demonstração — essas ficam fora sempre, senão a prova
-                         social passa a incluir loja que não existe.
-
-              Ao atualizar: refazer a conta, não estimar por cima. O número
-              anterior (R$ 9,4 mi / 164 mil / 83) ficou meses parado enquanto o
-              real dobrou — subestimar a própria prova é o erro barato de
-              cometer e caro de perceber. */}
-          <div className="mt-16 grid gap-5 sm:grid-cols-3">
+              Passaram a ser calculados porque o conjunto anterior (R$ 9,4 mi /
+              164 mil / 83 lojas) ficou MESES no ar enquanto o real dobrava.
+              Número velho não dá erro: ele só vende menos do que a empresa é,
+              em silêncio, e ninguém percebe. */}
+          <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { icon: Coins, valor: "R$ 19,9 mi", label: "em vendas já processados", sub: "iFood, 99 Food, Keeta e Cardápio Web somados" },
-              { icon: FileSpreadsheet, valor: "349 mil", label: "pedidos lidos e conferidos", sub: "taxa por taxa, sem digitação" },
-              { icon: Store, valor: "123", label: "lojas cadastradas no sistema", sub: "de rede grande a loja única" },
+              { icon: Coins, valor: milhoes(numeros.vendas), label: "em vendas já processados", sub: "iFood, 99 Food, Keeta e Cardápio Web somados" },
+              { icon: FileSpreadsheet, valor: milhares(numeros.pedidos), label: "pedidos lidos e conferidos", sub: "taxa por taxa, sem digitação" },
+              { icon: Scale, valor: milhoes(numeros.taxas), label: "em taxas identificadas", sub: "comissão, entrega, transação e serviço" },
+              { icon: Store, valor: String(numeros.lojas), label: "lojas cadastradas", sub: "de rede grande a loja única" },
+              { icon: Star, valor: milhares(numeros.avaliacoes), label: "avaliações lidas", sub: "com o texto da reclamação, não só a nota" },
+              { icon: MapPin, valor: String(numeros.estados), label: "estados atendidos", sub: "de capital a cidade do interior" },
             ].map((k, i) => (
               <Reveal key={k.label} delay={i * 90}>
                 <div className="lift relative h-full rounded-2xl border border-black/[0.06] bg-white px-6 pb-7 pt-12 text-center">
