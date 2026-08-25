@@ -33,6 +33,8 @@ export type Indicador = {
   criadoEm: string
   /** Clientes que entraram por este código. */
   indicados: { holdingId: string; nome: string; em: string; pagante: boolean }[]
+  /** Indicados que saíram da carteira (assinatura suspensa). Só a contagem. */
+  saidos: number
   aPagar: number
   jaPago: number
 }
@@ -106,16 +108,39 @@ export async function nomeDoIndicador(id: string): Promise<string | null> {
 
 export async function listarIndicadores(): Promise<Indicador[]> {
   const admin = createAdminClient()
-  const [{ data: inds }, { data: holds }, { data: coms }] = await Promise.all([
-    admin.from("indicadores").select("*").order("criado_em", { ascending: false }),
-    admin.from("holdings").select("id, name, indicado_por, indicado_em, paid"),
-    admin.from("comissoes").select("indicador_id, valor, status"),
-  ])
+  const [{ data: inds }, { data: holds }, { data: coms }, suspensas] =
+    await Promise.all([
+      admin.from("indicadores").select("*").order("criado_em", { ascending: false }),
+      admin.from("holdings").select("id, name, indicado_por, indicado_em, paid"),
+      admin.from("comissoes").select("indicador_id, valor, status"),
+      (async () => {
+        const { idsDeHoldingsSuspensas } = await import(
+          "@/lib/data/unidades-inativas"
+        )
+        return idsDeHoldingsSuspensas()
+      })(),
+    ])
 
+  /**
+   * ⚠️ CLIENTE SUSPENSO SAI DA LISTA "Trouxe:" (Marcus, 25/08/26).
+   *
+   * O Vbfood aparecia como "(não pagante)" ao lado dos clientes ativos do
+   * Diego. Ele saiu da carteira em 22/08 — não é um cliente que está devendo,
+   * é um que não existe mais aqui.
+   *
+   * NÃO some sem deixar rastro: a linha passa a dizer "1 saiu" no fim. Quem
+   * indicou fez o trabalho, e apagar isso da tela seria reescrever o
+   * histórico dele. Some da lista, não da contagem.
+   */
   const porIndicador = new Map<string, Indicador["indicados"]>()
+  const saidosPorIndicador = new Map<string, number>()
   for (const h of (holds ?? []) as Record<string, unknown>[]) {
     const ind = h.indicado_por as string | null
     if (!ind) continue
+    if (suspensas.has(String(h.id))) {
+      saidosPorIndicador.set(ind, (saidosPorIndicador.get(ind) ?? 0) + 1)
+      continue
+    }
     if (!porIndicador.has(ind)) porIndicador.set(ind, [])
     porIndicador.get(ind)!.push({
       holdingId: String(h.id),
@@ -155,6 +180,7 @@ export async function listarIndicadores(): Promise<Indicador[]> {
     nota: (i.nota as string | null) ?? null,
     criadoEm: String(i.criado_em),
     indicados: porIndicador.get(String(i.id)) ?? [],
+    saidos: saidosPorIndicador.get(String(i.id)) ?? 0,
     aPagar: soma(String(i.id), "a_pagar"),
     jaPago: soma(String(i.id), "paga"),
   }))

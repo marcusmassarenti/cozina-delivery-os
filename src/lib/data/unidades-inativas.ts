@@ -193,3 +193,40 @@ export async function retomarSyncDoCliente(holdingId: string): Promise<{
 
   return { pausadoEm, lojas: unitIds.length }
 }
+
+/**
+ * Clientes com a assinatura SUSPENSA — os que somem do acompanhamento.
+ *
+ * ── A REGRA (Marcus, 25/08/26) ───────────────────────────────────────────
+ * "tirar do e-mail também; não precisa mais aparecer a partir do momento que
+ * o cliente está suspenso."
+ *
+ * O sync já parava de puxar dado deles (`idsDeUnidadesSuspensas`), mas o
+ * RELATÓRIO continuava cobrando: o e-mail de saúde de 25/08 abria com "Vbfood
+ * · Pizzaria Quero Mais sumiu da lista do iFood — confira o CNPJ na aba
+ * Permissões", pedindo providência sobre a loja de um cliente que saiu três
+ * dias antes. Isso é pior que ruído: manda alguém trabalhar à toa.
+ *
+ * Suspenso = `suspend_on` preenchido e já vencido. Mesma régua do sync, de
+ * propósito — se um dia mudar, muda nos dois. Entre o vencimento e o fim da
+ * tolerância o cliente está em ATRASO, não suspenso: aí ele continua no
+ * relatório, porque provavelmente volta.
+ *
+ * Devolve HOLDINGS, não unidades: quem usa isto pergunta "este cliente ainda
+ * está na carteira?", e não "esta loja sincroniza?".
+ */
+export async function idsDeHoldingsSuspensas(): Promise<Set<string>> {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const { data, error } = await createAdminClient()
+    .from("holdings")
+    .select("id")
+    .not("suspend_on", "is", null)
+    .lte("suspend_on", hoje)
+  if (error) {
+    // Na dúvida, MOSTRA. Um cliente suspenso aparecendo no relatório é ruído;
+    // um cliente ativo sumindo dele é um problema que ninguém vai ver.
+    console.error("idsDeHoldingsSuspensas:", error.message)
+    return new Set()
+  }
+  return new Set(((data ?? []) as { id: string }[]).map((h) => h.id))
+}

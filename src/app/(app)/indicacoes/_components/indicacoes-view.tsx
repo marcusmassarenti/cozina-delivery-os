@@ -38,6 +38,8 @@ type Pessoa = {
   jaPago: number
   pixChave: string | null
   indicados: string[]
+  /** Quantos saíram da carteira. Some da lista, não da contagem. */
+  saidos: number
 }
 
 function agruparPorPessoa(indicadores: Indicador[]): Pessoa[] {
@@ -51,6 +53,7 @@ function agruparPorPessoa(indicadores: Indicador[]): Pessoa[] {
       jaPago: 0,
       pixChave: null,
       indicados: [],
+      saidos: 0,
     }
     p.cupons.push(i)
     p.aPagar += i.aPagar
@@ -59,6 +62,7 @@ function agruparPorPessoa(indicadores: Indicador[]): Pessoa[] {
     for (const c of i.indicados) {
       p.indicados.push(`${c.nome}${c.pagante ? "" : " (não pagante)"}`)
     }
+    p.saidos += i.saidos
     mapa.set(nome, p)
   }
   // Quem tem dinheiro a receber primeiro: é a linha que pede ação.
@@ -159,9 +163,18 @@ export function IndicacoesView({
                       </span>
                     )}
                   </div>
-                  {pessoa.indicados.length > 0 && (
+                  {(pessoa.indicados.length > 0 || pessoa.saidos > 0) && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Trouxe: {pessoa.indicados.join(", ")}
+                      Trouxe: {pessoa.indicados.join(", ") || "—"}
+                      {/* Quem indicou fez o trabalho: o cliente sai da lista,
+                          não da contagem. */}
+                      {pessoa.saidos > 0 && (
+                        <span className="text-muted-foreground/70">
+                          {" · "}
+                          {pessoa.saidos} saiu
+                          {pessoa.saidos === 1 ? "" : "ram"} da carteira
+                        </span>
+                      )}
                     </p>
                   )}
                 </div>

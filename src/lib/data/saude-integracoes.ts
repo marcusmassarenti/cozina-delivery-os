@@ -22,6 +22,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { merchantsSumidos } from "@/lib/ifood/merchants-sumidos"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
+import { idsDeUnidadesSuspensas } from "@/lib/data/unidades-inativas"
 
 /**
  * Atraso do financeiro em relação ao último pedido.
@@ -214,9 +215,21 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
    * funcionando hoje?". */
   const compAtual = agora.slice(0, 7)
   const desde30h = new Date(Date.now() - 30 * 3600_000).toISOString()
-  const [demo, encerradas, extratos, importados] = await Promise.all([
+  const [demo, encerradas, suspensas, extratos, importados] = await Promise.all([
     idsDeUnidadesDemo(),
     idsDeUnidadesEncerradas(),
+    /**
+     * ⚠️ CLIENTE SUSPENSO SAI DO RELATÓRIO (Marcus, 25/08/26).
+     *
+     * O sync já parava de puxar dado dele. O relatório é que continuava
+     * cobrando: o e-mail de 25/08 abria com "Vbfood · Pizzaria Quero Mais
+     * sumiu da lista do iFood — confira o CNPJ na aba Permissões", pedindo
+     * providência sobre a loja de um cliente que tinha saído três dias antes.
+     *
+     * Isso é pior que ruído: manda alguém trabalhar à toa, e enterra o
+     * alerta de quem está pagando no meio do de quem não está.
+     */
+    idsDeUnidadesSuspensas(),
     admin
       .from("ifood_extrato_lido")
       .select("unit_id, lido_em, linhas")
@@ -275,7 +288,11 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
    * Ela não tem API, então nenhuma loja dela jamais dependeu de nós.
    */
   const linhas = ((sinais ?? []) as Sinal[]).filter(
-    (s) => s.conectada && !demo.has(s.unit_id) && !encerradas.has(s.unit_id),
+    (s) =>
+      s.conectada &&
+      !demo.has(s.unit_id) &&
+      !encerradas.has(s.unit_id) &&
+      !suspensas.has(s.unit_id),
   )
 
   /**
@@ -292,7 +309,9 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       !s.conectada &&
       s.plataforma !== "keeta" &&
       !demo.has(s.unit_id) &&
-      !encerradas.has(s.unit_id),
+      !encerradas.has(s.unit_id) &&
+      // Não faz sentido oferecer conexão pra quem saiu da carteira.
+      !suspensas.has(s.unit_id),
   )
 
   const unitIds = [
@@ -658,6 +677,20 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
    */
   const lojasSumidas: LojaSumida[] = (await merchantsSumidos())
     .filter((m) => m.loja !== null)
+    /**
+     * ⚠️ CLIENTE SUSPENSO NÃO ENTRA — e este era o pior caso de todos.
+     *
+     * O e-mail de 25/08 abria com "Vbfood · Pizzaria Quero Mais sumiu da lista
+     * do iFood · confira o CNPJ 34717646000106 na aba Permissões do Portal do
+     * Parceiro". Uma providência concreta, no topo do relatório, sobre a loja
+     * de um cliente que tinha saído da carteira três dias antes.
+     *
+     * O filtro dos outros blocos ficava lá em cima (nos `sinais`); este vem de
+     * outra fonte (`merchants-sumidos`) e passava por fora. Toda lista nova do
+     * relatório precisa lembrar da régua — é o custo de a régua ser aplicada
+     * lista a lista em vez de na saída.
+     */
+    .filter((m) => !suspensas.has(m.loja!.unitId))
     .map((m) => ({
       merchantId: m.merchantId,
       nome: m.nome,
