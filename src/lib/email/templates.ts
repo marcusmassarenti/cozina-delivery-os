@@ -728,6 +728,28 @@ export function conexaoAtivada(d: {
   pendencias: string[]
   /** Falta a NÓS buscar — informação, não tarefa. Ver `aCaminho` no resumo. */
   aCaminho?: string[]
+  /**
+   * Quando este e-mail CORRIGE um que já foi. O texto entra no lugar da
+   * abertura e o assunto avisa, pra pessoa ligar um no outro.
+   *
+   * Existe porque em 24/08/26 o e-mail de conexão da Barraz Caldos saiu com
+   * R$ 35.031,80 no lugar de R$ 111.304: a consulta de julho falhou e o mês
+   * foi somado como zero. Mandar o mesmo e-mail de novo, com outro número e
+   * sem uma palavra sobre o primeiro, faria a pessoa duvidar dos dois.
+   */
+  correcao?: string
+  /**
+   * A frase de fecho, na régua da plataforma: o que a API traz de fato.
+   *
+   * ⚠️ ANTES ERA FIXA: "entra sozinho, todo dia, sem planilha — você não
+   * precisa fazer mais nada". Falso nas duas plataformas. Quem lesse aquilo e
+   * parasse de subir relatório perderia cardápio, qualidade, promoções e
+   * avaliações sem nunca ser avisado, e concluiria — com razão — que o
+   * sistema quebrou.
+   */
+  oQueEntraSozinho?: string
+  /** O que continua vindo por planilha, com nome. Some quando não há nada. */
+  aindaPorPlanilha?: string
 }) {
   const emRota = d.aCaminho ?? []
   const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
@@ -755,28 +777,46 @@ export function conexaoAtivada(d: {
        </table>`
     : ""
   return {
-    assunto: `${d.plataforma} conectado${d.loja ? ` — ${d.loja}` : ""}`,
+    assunto: d.correcao
+      ? `Corrigindo o número — ${d.plataforma}${d.loja ? ` — ${d.loja}` : ""}`
+      : `${d.plataforma} conectado${d.loja ? ` — ${d.loja}` : ""}`,
     html: layout({
-      titulo: `Pronto: o ${d.plataforma} está conectado.`,
+      titulo: d.correcao
+        ? `Corrigindo o número que te mandei.`
+        : `Pronto: o ${d.plataforma} está conectado.`,
       corpo: `
-        <p style="margin:0 0 14px;">${oi(d.nome)} Deu certo. O ${d.plataforma}${daLoja} já está trazendo os dados sozinho — e o histórico veio junto:</p>
+        <p style="margin:0 0 14px;">${
+          d.correcao
+            ? `${oi(d.nome)} ${d.correcao}`
+            : `${oi(d.nome)} Deu certo. O ${d.plataforma}${daLoja} já está trazendo os dados sozinho — e o histórico veio junto:`
+        }</p>
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">${tabela}</table>
         ${avisos}
         ${emRotaHtml}
-        <p style="margin:0 0 14px;">Daqui pra frente entra sozinho, todo dia, sem planilha.${
+        <p style="margin:0 0 14px;">${
+          d.oQueEntraSozinho ??
+          `Daqui pra frente entra sozinho, todo dia, sem planilha.`
+        }${
           d.pendencias.length
             ? " Resolvendo o ponto acima, fica completo."
             : emRota.length
-              ? " Não precisa fazer nada — é só aguardar o que ainda está vindo."
-              : " Você não precisa fazer mais nada."
-        }</p>`,
+              ? " É só aguardar o que ainda está vindo."
+              : ""
+        }</p>
+        ${
+          d.aindaPorPlanilha
+            ? `<p style="margin:0 0 14px;color:${SUAVE};font-size:15px;line-height:1.6;">${d.aindaPorPlanilha}</p>`
+            : ""
+        }`,
       cta: { texto: "Ver no painel", url: `${SITE}/inicio` },
       // O "último e-mail" só vale quando REALMENTE acabou. Despedir-se com
       // algo ainda em rota deixava o cliente sem nenhuma explicação futura
       // pra tela que ele ia abrir vazia.
-      ps: emRota.length
-        ? "Quando o que falta terminar de entrar, você não precisa conferir nada — já vai estar no painel. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal."
-        : "Esse é o último e-mail sobre a conexão. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal.",
+      ps: d.correcao
+        ? "O painel sempre mostrou o número certo — quem errou foi o e-mail. Desculpa o retrabalho de ler duas vezes."
+        : emRota.length
+          ? "Quando o que falta terminar de entrar, você não precisa conferir nada — já vai estar no painel. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal."
+          : "Esse é o último e-mail sobre a conexão. Se alguma loja parar de mandar dado, eu te aviso no resumo semanal.",
     }),
   }
 }

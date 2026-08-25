@@ -443,6 +443,8 @@ export async function avisarConexaoAtivada(
     const contato = await contatoDaHolding(holdingId)
     if (!contato) return
 
+    const cobertura = await coberturaDaApi(holdingId, plataforma)
+
     const { assunto, html } = conexaoAtivada({
       nome: contato.nome,
       loja: (unidade?.name as string | null) ?? null,
@@ -450,6 +452,8 @@ export async function avisarConexaoAtivada(
       linhas: resumo.linhas,
       pendencias: resumo.pendencias,
       aCaminho: resumo.aCaminho,
+      oQueEntraSozinho: cobertura.entraSozinho,
+      aindaPorPlanilha: cobertura.porPlanilha,
     })
     await enviarEmail({
       holdingId,
@@ -464,6 +468,81 @@ export async function avisarConexaoAtivada(
     })
   } catch (e) {
     console.error("avisarConexaoAtivada", unitId, plataforma, e)
+  }
+}
+
+/**
+ * O que esta plataforma traz sozinha, e o que continua vindo por planilha.
+ *
+ * ── POR QUE (Marcus, 24/08/26): "falar que não precisa de planilha não é uma
+ * alegação falsa? conseguimos importar tudo?" ─────────────────────────────
+ * É falsa, sim. O e-mail fechava com "entra sozinho, todo dia, sem planilha —
+ * você não precisa fazer mais nada" em qualquer plataforma. Medido no banco:
+ *
+ *   iFood — API traz financeiro, pedidos e avaliações. NÃO traz cardápio
+ *           (funil e itens), qualidade, promoções, Super nem negociações.
+ *   99    — API traz financeiro e cardápio. NÃO traz nota da loja, taxa de
+ *           aceitação, tempo de preparo nem itens vendidos.
+ *
+ * Prometer o que a fonte não tem cria um buraco que o cliente descobre
+ * sozinho, semanas depois, abrindo uma tela vazia. E como o e-mail ainda se
+ * despede dizendo que é o último, não há segunda mensagem pra desmentir.
+ *
+ * Filtra pelos relatórios que O CLIENTE habilitou: listar o que ele desligou
+ * seria devolver como pendência uma escolha que ele já fez.
+ */
+async function coberturaDaApi(
+  holdingId: string,
+  plataforma: PlataformaConexao,
+): Promise<{ entraSozinho?: string; porPlanilha?: string }> {
+  // O Cardápio Web é canal próprio: a API é a única fonte, não existe planilha
+  // equivalente pra ficar faltando.
+  if (plataforma === "cardapioweb") {
+    return {
+      entraSozinho:
+        "Daqui pra frente entra sozinho, todo dia, sem planilha — o Cardápio Web vem inteiro pela integração.",
+    }
+  }
+
+  const { getEnabledReportsForHolding } = await import("@/lib/data/report-prefs")
+  const { REPORTS_CATALOG, relatoriosSoPorPlanilha, relatoriosComBuracoNaApi } =
+    await import("@/lib/reports-catalog")
+
+  const habilitados = await getEnabledReportsForHolding(holdingId)
+  const daApi = REPORTS_CATALOG.filter(
+    (r) => r.platform === plataforma && r.viaApi && habilitados.has(r.key),
+  )
+  const faltam = relatoriosSoPorPlanilha(plataforma, habilitados)
+  const buracos = relatoriosComBuracoNaApi(plataforma, habilitados)
+
+  const lista = (nomes: string[]) =>
+    nomes.length <= 1
+      ? nomes[0] ?? ""
+      : `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`
+
+  const entraSozinho = daApi.length
+    ? `Daqui pra frente ${lista(
+        daApi.map((r) => `<strong>${r.name}</strong>`),
+      )} ${daApi.length > 1 ? "entram sozinhos" : "entra sozinho"}, todo dia, sem planilha.`
+    : undefined
+
+  const partes: string[] = []
+  if (faltam.length) {
+    partes.push(
+      `${lista(faltam.map((r) => r.name))} ${
+        faltam.length > 1 ? "continuam vindo" : "continua vindo"
+      } por planilha — a API ${
+        plataforma === "ifood" ? "do iFood" : "da 99"
+      } não ${faltam.length > 1 ? "os oferece" : "o oferece"}.`,
+    )
+  }
+  for (const b of buracos) {
+    partes.push(`Em ${b.name}, a API não traz ${b.apiNaoCobre}.`)
+  }
+
+  return {
+    entraSozinho,
+    porPlanilha: partes.length ? partes.join(" ") : undefined,
   }
 }
 
