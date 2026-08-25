@@ -5,6 +5,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/ninefood-comandas",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/process-99-webhooks",
       "schedule": "0 10 * * *"
     },

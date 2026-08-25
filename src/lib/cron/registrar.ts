@@ -21,6 +21,7 @@ export type NomeCron =
   | "ifood-backfill"
   | "ifood-coletor"
   | "ninefood-sync"
+  | "ninefood-comandas"
   | "cardapioweb-sync"
   | "process-99-webhooks"
   | "billing-vencimentos"
