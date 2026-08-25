@@ -39,6 +39,7 @@ import {
   Wallet,
   Zap,
   type LucideIcon,
+  DatabaseBackup,
 } from "lucide-react"
 
 import { ExperimenteDemo } from "./_demo"
@@ -175,13 +176,39 @@ const POR_PLATAFORMA: Partial<
   },
 }
 
-type ItemRelatorio = { nome: string; hint: string }
+type ItemRelatorio = {
+  nome: string
+  hint: string
+  /**
+   * A plataforma entrega este relatório pela API, ou ele vem de planilha?
+   *
+   * ⚠️ A PÁGINA INTEIRA DIZIA "você só sobe o relatório" enquanto o sistema já
+   * puxava financeiro, pedidos e avaliações do iFood, financeiro e cardápio da
+   * 99 e o Cardápio Web inteiro sozinho. Vendia menos do que o produto faz.
+   *
+   * A correção não é trocar por "sem planilha", que seria falso do outro lado:
+   * cinco dos oito relatórios do iFood continuam vindo por importação. É
+   * MOSTRAR A DIFERENÇA, relatório por relatório — e é isso que este campo faz.
+   *
+   * Sai do `reports-catalog.ts`, a mesma fonte que o guia de importação e o
+   * e-mail de conexão usam. Assim a landing não pode divergir do sistema por
+   * esquecimento: no dia em que a Keeta integrar, muda num lugar só.
+   */
+  auto: boolean
+  /** O que a API não cobre num relatório que ela até traz. */
+  buraco?: string
+}
 
 function itensDaPlataforma(id: PlatId): ItemRelatorio[] {
   const especifico = POR_PLATAFORMA[id] ?? {}
   return reportsByPlatform(id).map((r) => {
     const nome = especifico[r.name]?.nome ?? LANDING_NOME[r.name] ?? r.name
-    return { nome, hint: especifico[r.name]?.hint ?? LANDING_HINT[nome] ?? "" }
+    return {
+      nome,
+      hint: especifico[r.name]?.hint ?? LANDING_HINT[nome] ?? "",
+      auto: r.viaApi,
+      buraco: r.apiNaoCobre,
+    }
   })
 }
 
@@ -203,19 +230,25 @@ const RELATORIOS: { id: PlatId; itens: ItemRelatorio[] }[] = [
    aniversário, fidelidade, cashback), mas ainda não existe tela que mostre —
    anunciar aqui seria prometer o que o cliente não acha ao entrar. */
 const CW_ITENS: ItemRelatorio[] = [
+  // Todos automáticos: o Cardápio Web não tem planilha nenhuma, entra inteiro
+  // por API.
   {
+    auto: true,
     nome: "Financeiro e canal",
     hint: "Faturamento do site, app, totem e WhatsApp separado do marketplace",
   },
   {
+    auto: true,
     nome: "Pedidos e pagamento",
     hint: "Pedido a pedido, taxa de entrega e serviço separadas, motivo do cancelamento",
   },
   {
+    auto: true,
     nome: "Cardápio",
     hint: "Itens com o código do PDV — a ponte pra ficha técnica e o CMV",
   },
   {
+    auto: true,
     nome: "Avaliações por dimensão",
     hint: "Notas de atendimento, produto, embalagem, tempo de entrega e custo/benefício",
   },
@@ -264,19 +297,36 @@ const REDE: { icon: LucideIcon; t: string; d: string; tag?: string }[] = [
   },
 ]
 
+/**
+ * O que a gente faz pra cuidar do dado — não só promessa, o que está de pé.
+ *
+ * ⚠️ ERA SÓ "não dá senha / criptografado / apague quando quiser". Tudo
+ * verdade e tudo genérico: qualquer SaaS escreve igual. O que separa a gente
+ * de uma planilha compartilhada é o que estava FALTANDO aqui — verificação em
+ * duas etapas, backup com hora marcada e, principalmente, o sistema DIZER de
+ * quando é cada número em vez de deixar você supor.
+ *
+ * O último item nasceu de um caso real: um gestor mandou o relatório do mês
+ * sem saber que a importação de uma plataforma tinha parado. Não é recurso de
+ * marketing — é a resposta a um jeito específico de perder a confiança no
+ * número, e por isso vale contar.
+ */
 const TRUST = [
-  { icon: ShieldCheck, t: "Conformidade com a LGPD" },
-  { icon: Lock, t: "Conexão criptografada" },
-  { icon: KeyRound, t: "Você não dá senha de nada" },
-  { icon: Trash2, t: "Apague seus dados quando quiser" },
+  { icon: KeyRound, t: "Você nunca dá senha", d: "A autorização é feita no portal da própria plataforma" },
+  { icon: ShieldCheck, t: "Verificação em duas etapas", d: "Opcional por usuário, com códigos de recuperação" },
+  { icon: Lock, t: "LGPD e conexão criptografada", d: "Cada conta isolada da outra, sem exceção" },
+  { icon: DatabaseBackup, t: "Backup diário", d: "Mais um retrato da configuração a cada 6 horas" },
+  { icon: CalendarClock, t: "Você vê de quando é o dado", d: "Cada relatório mostra a última importação de cada plataforma" },
+  { icon: Trash2, t: "Apague quando quiser", d: "Seus dados saem do ar quando você pedir" },
 ]
 
 const FAQ = [
-  { q: "Preciso dar a senha do meu iFood, 99 ou Keeta?", a: "Não. Você só sobe o relatório (XLSX) que já baixa hoje no portal de cada plataforma. A gente nunca pede senha nem acessa sua conta." },
+  { q: "Preciso dar a senha do meu iFood, 99 ou Keeta?", a: "Nunca. No iFood e na 99 você autoriza o Delivery OS dentro do portal da própria plataforma — como quem autoriza um aplicativo — e a partir dali o dado entra sozinho. No Cardápio Web é a mesma coisa. A gente não vê, não guarda e não pede a sua senha em nenhum momento." },
+  { q: "Ainda preciso subir planilha?", a: "Depende do relatório. Financeiro, pedidos e avaliações do iFood, financeiro e pedidos da 99 e o Cardápio Web inteiro entram automáticos depois que você autoriza. Cardápio, qualidade, promoções, Super e negociações do iFood, os itens vendidos da 99 e a Keeta inteira continuam por planilha — essas plataformas não oferecem esses dados por integração. Na seção \"O que o sistema lê\" cada relatório está marcado como automático ou planilha." },
   { q: "Funciona só pra minha loja?", a: "Sim. O Delivery OS foi feito pra você ver o lucro da sua loja. E se um dia você tiver mais de uma, ele consolida todas — mas isso é opcional." },
-  { q: "Quais relatórios eu preciso baixar?", a: "Os de financeiro / conciliação, pedidos, cardápio e avaliações de cada plataforma. Dentro do sistema tem um guia mostrando onde clicar em cada portal." },
+  { q: "Quais relatórios eu preciso baixar?", a: "Só os que a plataforma não entrega por integração — e o sistema te diz quais são, por loja. Dentro dele tem um guia mostrando onde clicar em cada portal, e uma tela de cobertura que mostra o que já entrou e o que está faltando no mês." },
   { q: "Meus dados ficam seguros?", a: "Sim. Ficam só na sua conta, isolados e criptografados, e você apaga quando quiser. Nunca compartilhamos com ninguém." },
-  { q: "Preciso instalar alguma coisa?", a: "Não. É tudo no navegador — abre, sobe a planilha e vê o painel na hora." },
+  { q: "Preciso instalar alguma coisa?", a: "Não. É tudo no navegador — conecta as plataformas, sobe o que sobrar de planilha e vê o painel na hora." },
   { q: "O que vem no plano Pro?", a: "Tudo do Essencial mais o financeiro completo: fluxo de caixa com contas a pagar e a receber, contas bancárias, cartões e categorias, importação OFX dos bancos pra conciliar o extrato e todos os módulos do sistema. É pra quem quer rodar todo o financeiro da operação num lugar só." },
   { q: "O que é o DeliveryOS AI?", a: "É a camada de inteligência do sistema. Ao abrir o diagnóstico de uma loja, a IA cruza funil, avaliações (com o texto das reclamações), cancelamentos, CMV, marketing e produtos, e escreve um plano de ação com as 3 prioridades do mês — o problema, o que está em jogo e como resolver. Você exporta tudo em PDF. E tem o Nino, seu consultor de IA: você pergunta como mandaria pro seu sócio (\"como está meu faturamento?\", \"qual loja vende mais?\", \"meu cancelamento subiu?\") e ele responde na hora com os seus números reais. Tudo no plano DeliveryOS AI, que inclui o Pro." },
   { q: "Posso cancelar quando quiser?", a: "Pode, sem multa nem fidelidade. Cancela e pronto." },
@@ -356,8 +406,17 @@ function CoberturaTabs() {
           <p className="mx-auto mt-8 max-w-2xl text-balance text-center text-[15px] leading-relaxed text-[oklch(0.4_0.01_48)]">
             O Delivery OS lê{" "}
             <span className="font-semibold text-[oklch(0.28_0.01_48)]">todos</span>{" "}
-            os relatórios que cada plataforma oferece. 99 e Keeta têm menos
-            porque disponibilizam menos — o iFood simplesmente abre mais dados.
+            os relatórios que cada plataforma oferece. O que está marcado como{" "}
+            <span className="font-semibold text-[var(--brand-strong)]">
+              automático
+            </span>{" "}
+            entra sozinho, todo dia, depois que você autoriza no portal da
+            plataforma. O resto continua vindo por planilha — porque a
+            plataforma não oferece de outro jeito, não porque a gente não fez.
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-balance text-center text-sm text-[oklch(0.55_0.01_48)]">
+            A Keeta ainda é toda por planilha: a integração está em negociação
+            com eles.
           </p>
         </div>
       ) : (
@@ -450,10 +509,23 @@ function CardCobertura({
             <span>
               <span className="font-medium text-[oklch(0.32_0.01_48)]">
                 {item.nome}
+              </span>{" "}
+              {/* Selo de ORIGEM. "Automático" em brand porque é a boa notícia;
+                  "planilha" em cinza, sem alarme — é o funcionamento normal de
+                  quem ainda não integrou, não um defeito. */}
+              <span
+                className={`ml-0.5 inline-block whitespace-nowrap rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${
+                  item.auto
+                    ? "bg-[var(--brand-soft)] text-[var(--brand-strong)]"
+                    : "bg-black/[0.055] text-[oklch(0.5_0.01_48)]"
+                }`}
+              >
+                {item.auto ? "automático" : "planilha"}
               </span>
               {item.hint && (
                 <span className="block text-xs leading-snug text-[oklch(0.58_0.01_48)]">
                   {item.hint}
+                  {item.buraco ? ` · a API não traz ${item.buraco}` : ""}
                 </span>
               )}
             </span>
@@ -1654,8 +1726,14 @@ export function LandingV3({
       <section className="border-y border-black/5 bg-white py-7">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5">
           <Reveal>
+            {/* ⚠️ ERA "Sem senha · sem conectar nada · você só sobe o relatório".
+                Ficou falso e, pior, vendia menos: o iFood, a 99 e o Cardápio
+                Web já entram sozinhos depois que o lojista autoriza no portal
+                deles. "Sem senha" continua verdade e fica — a autorização é no
+                portal da plataforma, a gente nunca vê credencial. */}
             <p className="text-xs font-medium uppercase tracking-wider text-[oklch(0.55_0.01_48)]">
-              Sem senha · sem conectar nada · você só sobe o relatório de
+              Você autoriza no portal · a gente nunca vê sua senha · funciona
+              com
             </p>
           </Reveal>
           <Reveal delay={100}>
@@ -2284,8 +2362,11 @@ export function LandingV3({
                          cobre) + Keeta 2,60 mi + Cardápio Web 0,05 mi
                 pedidos  349 mil = 283.903 iFood + 19.965 + 8.112 (99) +
                          35.484 Keeta + 1.373 Cardápio Web
-                lojas    93 = unidades ATIVAS e COM DADO. Cadastradas são 120;
-                         usar esse número contaria loja que ainda não rodou.
+                lojas    123 = TODAS as unidades de clientes reais, ativas ou
+                         não (decisão do Marcus, 24/08/26: "pode colocar
+                         todas"). O banco tem 133, mas 10 são a rede de
+                         demonstração — essas ficam fora sempre, senão a prova
+                         social passa a incluir loja que não existe.
 
               Ao atualizar: refazer a conta, não estimar por cima. O número
               anterior (R$ 9,4 mi / 164 mil / 83) ficou meses parado enquanto o
@@ -2295,7 +2376,7 @@ export function LandingV3({
             {[
               { icon: Coins, valor: "R$ 19,9 mi", label: "em vendas já processados", sub: "iFood, 99 Food, Keeta e Cardápio Web somados" },
               { icon: FileSpreadsheet, valor: "349 mil", label: "pedidos lidos e conferidos", sub: "taxa por taxa, sem digitação" },
-              { icon: Store, valor: "93", label: "lojas rodando no sistema", sub: "de rede grande a loja única" },
+              { icon: Store, valor: "123", label: "lojas cadastradas no sistema", sub: "de rede grande a loja única" },
             ].map((k, i) => (
               <Reveal key={k.label} delay={i * 90}>
                 <div className="lift relative h-full rounded-2xl border border-black/[0.06] bg-white px-6 pb-7 pt-12 text-center">
@@ -2355,19 +2436,30 @@ export function LandingV3({
                 Segurança de dados a gente leva a sério
               </h2>
               <p className="mt-1.5 text-sm text-white/60">
-                Você não dá senha nem conecta nada. Seus dados ficam só na sua conta — e você apaga quando quiser.
+                Você autoriza no portal da plataforma e nunca entrega uma senha.
+                Seus dados ficam só na sua conta, com backup diário — e você
+                apaga quando quiser.
               </p>
             </div>
           </div>
 
-          {/* 4 pontos — ícone + texto (feature, não pílula: não confunde com link) */}
-          <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+          {/* 6 pontos — ícone + texto + uma linha do que aquilo quer dizer.
+              Sem a linha de baixo, "verificação em duas etapas" e "backup
+              diário" viram selo decorativo; com ela, viram compromisso. */}
+          <div className="mt-8 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
             {TRUST.map((b) => (
-              <div key={b.t} className="flex items-center gap-3">
+              <div key={b.t} className="flex items-start gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[var(--brand)]">
                   <b.icon className="size-5" strokeWidth={2} />
                 </span>
-                <span className="text-sm font-medium text-white/85">{b.t}</span>
+                <span>
+                  <span className="block text-sm font-medium text-white/85">
+                    {b.t}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-white/50">
+                    {b.d}
+                  </span>
+                </span>
               </div>
             ))}
           </div>
