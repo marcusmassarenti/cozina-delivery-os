@@ -840,18 +840,48 @@ function RichResposta({ texto }: { texto: string }) {
   return <div className="flex flex-col gap-2">{blocos}</div>
 }
 
-/** Parser inline mínimo: transforma **trecho** em negrito. */
+/**
+ * Parser inline: transforma **trecho** em negrito.
+ *
+ * ⚠️ E AGUENTA ASTERISCO SOLTO. O modelo às vezes abre o negrito e não fecha
+ * ("= **R$ 1.268.950,39" no fim da linha), e a versão anterior — que só
+ * casava pares — imprimia os dois asteriscos na tela. Marcus viu isso numa
+ * resposta de projeção em 24/08/26.
+ *
+ * Markdown cru na cara do usuário é sempre defeito nosso, nunca do usuário:
+ * ele não escreveu aquilo e não tem o que fazer com aquilo. Então asterisco
+ * que sobra vira negrito até o fim da linha (a intenção evidente de quem
+ * abriu) e, no pior caso, some — o que não pode é aparecer.
+ */
 function inlineNegrito(s: string): React.ReactNode[] {
-  return s.split(/(\*\*[^*]+\*\*)/g).map((parte, i) => {
-    const m = parte.match(/^\*\*([^*]+)\*\*$/)
-    return m ? (
-      <strong key={i} className="font-semibold text-foreground">
-        {m[1]}
-      </strong>
-    ) : (
-      <React.Fragment key={i}>{parte}</React.Fragment>
-    )
-  })
+  const partes: React.ReactNode[] = []
+  let resto = s
+  let i = 0
+  while (resto.length > 0) {
+    const abre = resto.indexOf("**")
+    if (abre === -1) {
+      partes.push(<React.Fragment key={i++}>{resto}</React.Fragment>)
+      break
+    }
+    if (abre > 0) {
+      partes.push(
+        <React.Fragment key={i++}>{resto.slice(0, abre)}</React.Fragment>,
+      )
+    }
+    const depois = resto.slice(abre + 2)
+    const fecha = depois.indexOf("**")
+    // Sem fechamento: negrito até o fim, sem deixar o asterisco aparecer.
+    const conteudo = fecha === -1 ? depois : depois.slice(0, fecha)
+    if (conteudo.trim().length > 0) {
+      partes.push(
+        <strong key={i++} className="font-semibold text-foreground">
+          {conteudo}
+        </strong>,
+      )
+    }
+    resto = fecha === -1 ? "" : depois.slice(fecha + 2)
+  }
+  return partes
 }
 
 /** Ordena: favoritas primeiro, depois mais recentes. */
