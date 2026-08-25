@@ -97,6 +97,14 @@ export type ItemVendido = {
   nomeItem: string
   /** Total vendido no mês (somado nas lojas). */
   qtd: number
+  /**
+   * Quanto a LOJA bancou de promoção neste item no mês.
+   *
+   * `null` = não dá pra saber, não é zero. Só a comanda do 99 traz isso; item
+   * de iFood, Keeta ou de loja sem vínculo de API não tem como responder. Zero
+   * ali significaria "não deu desconto", que é afirmação diferente.
+   */
+  promoLoja: number | null
   pratoId: string | null
   pratoNome: string | null
   /** Ficha atual do item (insumos × qtd) — vazia se ainda sem ficha. */
@@ -130,6 +138,11 @@ type ItemSaleRow = {
   platform: Platform
   nomeItem: string
   qtd: number
+  /**
+   * Promoção que a LOJA bancou neste item. Só a comanda do 99 tem — a planilha
+   * "Dados do item" não traz promoção em nenhuma coluna.
+   */
+  promoLoja?: number
 }
 
 function monthBounds(year: number, month: number) {
@@ -157,6 +170,12 @@ async function getItemSalesByUnit(
   const admin = createAdminClient()
   const { start, end, startIso, endExcl } = monthBounds(year, month)
   const out: ItemSaleRow[] = []
+  /**
+   * A RPC da comanda exige a lista de lojas — ela não tem noção de escopo, e
+   * dar `null` a ela devolveria item de cliente que não é este. `SEM_DONO`
+   * quando não veio filtro: fail-closed, igual ao resto do arquivo.
+   */
+  const unitIdsParaComanda = filterUnitIds ?? []
 
   const ifood = await fetchAllRows<{
     unit_id: string
@@ -211,6 +230,50 @@ async function getItemSalesByUnit(
       nomeItem: r.nome_item,
       qtd: r.qtd_vendida ?? 0,
     })
+  }
+
+  /**
+   * A COMANDA do 99 — o que o cliente conectado por API não precisa mais subir.
+   *
+   * Até 25/08/26 esta tela lia só `ninefood_daily_item`, a planilha. Loja
+   * conectada por API tinha a comanda inteira no banco (item, complemento,
+   * quantidade) e mesmo assim aparecia sem item vendido enquanto ninguém
+   * exportasse o relatório do portal.
+   *
+   * ⚠️ A RPC devolve `qtd_extra`: SÓ o dia que a planilha não cobre. Somar as
+   * duas fontes no mesmo dia dobraria a venda, e aqui isso não é um número
+   * feio numa tela — é demanda de insumo inflada, que chega na cozinha.
+   *
+   * A promoção vem de todos os dias com comanda, porque a planilha não tem
+   * essa informação em dia nenhum: não há o que duplicar.
+   */
+  if (unitIdsParaComanda.length > 0) {
+    const { data: comanda, error: errComanda } = await admin.rpc(
+      "ninefood_comanda_itens_mes",
+      { p_unit_ids: unitIdsParaComanda, p_year: year, p_month: month },
+    )
+    if (errComanda) {
+      console.error("producao comanda 99:", errComanda.message)
+    } else {
+      for (const r of (comanda ?? []) as {
+        unit_id: string
+        nome_item: string | null
+        qtd_extra: number | string
+        promo_loja: number | string
+      }[]) {
+        if (!r.nome_item) continue
+        const qtd = Number(r.qtd_extra) || 0
+        const promo = Number(r.promo_loja) || 0
+        if (qtd === 0 && promo === 0) continue
+        out.push({
+          unitId: r.unit_id,
+          platform: "99food",
+          nomeItem: r.nome_item,
+          qtd,
+          promoLoja: promo,
+        })
+      }
+    }
   }
 
   const keeta = await fetchAllRows<{
@@ -468,11 +531,17 @@ export async function getItensVendidos(
       platform: s.platform,
       nomeItem: s.nomeItem,
       qtd: 0,
+      // null até alguma linha trazer promoção. Ver o comentário do tipo: null
+      // é "não dá pra saber", zero é "não deu desconto".
+      promoLoja: null as number | null,
       pratoId: null,
       pratoNome: null,
       ficha: [] as FichaLinha[],
     }
     cur.qtd += s.qtd
+    if (s.promoLoja != null) {
+      cur.promoLoja = (cur.promoLoja ?? 0) + s.promoLoja
+    }
     const m = dePara.get(k)
     if (m) {
       cur.pratoId = m.pratoId

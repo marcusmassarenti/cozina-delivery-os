@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Check, ChevronDown, Loader2, Plus, Save, Trash2, X } from "lucide-react"
 
 import { PlatformLogo } from "@/components/platform-logo"
-import { fmtNum } from "@/lib/format"
+import { fmtBRL, fmtNum } from "@/lib/format"
 import { removeItemFicha, setItemFicha } from "../_actions"
 import type { Insumo, ItemVendido } from "@/lib/data/producao"
 
@@ -138,6 +138,23 @@ function ItemCard({
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
           {fmtNum(item.qtd)} un
         </span>
+        {/* Promoção que a LOJA bancou neste item.
+            Só aparece quando existe — `null` é "não dá pra saber" (item de
+            outra plataforma, ou loja sem vínculo de API), e mostrar "R$ 0"
+            ali afirmaria que não houve desconto, que é outra coisa.
+            É o único número da lista que o lojista CONTROLA: comissão e taxa
+            de entrega ele não escolhe, promoção ele liga e desliga. */}
+        {/* No celular o selo fica escondido: com ele, o nome do item era
+            espremido a zero e a linha estourava o cartão. Lá a informação
+            aparece dentro do item aberto, logo abaixo. */}
+        {item.promoLoja != null && item.promoLoja > 0 && (
+          <span
+            className="hidden shrink-0 items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium tabular-nums text-orange-700 sm:inline-flex dark:bg-orange-950/40 dark:text-orange-300"
+            title="Promoção que a sua loja bancou neste item, no período — vem da comanda do 99"
+          >
+            {fmtBRL(item.promoLoja)} de promoção
+          </span>
+        )}
         {temFicha ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
             <Check className="size-3" /> {item.ficha.length} insumo(s)
@@ -151,6 +168,14 @@ function ItemCard({
 
       {open && (
         <div className="border-t px-3 py-3">
+          {item.promoLoja != null && item.promoLoja > 0 && (
+            <p className="mb-3 text-xs text-orange-700 sm:hidden dark:text-orange-300">
+              <span className="font-medium tabular-nums">
+                {fmtBRL(item.promoLoja)}
+              </span>{" "}
+              de promoção bancada pela sua loja neste item
+            </p>
+          )}
           <div className="space-y-1.5">
             {linhas.map((l, i) => (
               <div key={i} className="flex items-center gap-2">
