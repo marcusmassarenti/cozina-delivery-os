@@ -36,6 +36,21 @@ export type AcaoAuditada =
   /** Suporte entrou na visão somente-leitura de um cliente. Ver o dado de um
    *  cliente é justamente o ato que se precisa poder provar depois. */
   | "superadmin.ver_como"
+  /**
+   * Usuário criado, alterado ou removido — e principalmente a troca de
+   * PERFIL.
+   *
+   * ⚠️ NÃO EXISTIA, e a falta doeu em 25/08/26. O Thiago (Grupo Le Brunch)
+   * apareceu como "gerente" sendo o dono da conta, e a única pista de que ele
+   * tinha sido rebaixado era o `updated_at` do profile: 19/08 às 17:37, oito
+   * dias depois do cadastro. Quem fez e por quê, ninguém sabe.
+   *
+   * Permissão é exatamente o que se precisa poder provar depois — quem podia
+   * ver o quê, e desde quando.
+   */
+  | "usuario.criado"
+  | "usuario.alterado"
+  | "usuario.removido"
 
 /**
  * Grava uma entrada no log. Nunca lança: auditoria que quebra a operação é

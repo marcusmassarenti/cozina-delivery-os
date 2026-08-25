@@ -12,6 +12,7 @@ import {
   isSuperadmin,
 } from "@/lib/auth/permissions"
 import { getDefaultBrand } from "@/lib/data/units"
+import { auditar } from "@/lib/data/auditoria"
 
 /** Máximo de usuários por loja (franqueado + equipe da unidade). */
 const MAX_USERS_PER_UNIT = 5
@@ -192,6 +193,73 @@ function validatePassword(p: string): string | null {
  * superadmin) passando o userId alvo. Superadmin (dono do SaaS) fica isento.
  * Devolve string de erro se o alvo não for da empresa; null se estiver ok.
  */
+
+/**
+ * ⚠️ EMPRESA NÃO PODE FICAR SEM ADMINISTRADOR.
+ *
+ * ── POR QUE ISTO EXISTE (25/08/26) ───────────────────────────────────────
+ * Já existia a trava de auto-rebaixamento ("você não pode tirar seu próprio
+ * perfil de administrador"). Ela protege quem está clicando e não protege a
+ * EMPRESA: rebaixar o outro admin era permitido, e a conta ficava sem
+ * ninguém que possa gerir usuários.
+ *
+ * Não é hipótese. Levantei a base e havia DOIS clientes assim:
+ *
+ *   Grupo Le Brunch — 1 usuário, gerente. O dono da conta não conseguia
+ *   convidar a própria equipe e a única saída era pedir pra nós.
+ *   Churrasco no Pote — 7 usuários, TODOS gerentes.
+ *
+ * O do Churrasco no Pote passou meses invisível porque o Marcus é superadmin
+ * e atravessa a permissão — ninguém sente, até um cliente sentir.
+ *
+ * Devolve a mensagem de erro, ou null quando pode seguir.
+ */
+async function travaUltimoAdministrador(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  novoPerfil: string | null,
+): Promise<string | null> {
+  // Continuar admin (ou virar) nunca tira admin de ninguém.
+  if (novoPerfil === "administrador") return null
+
+  const { data: alvo } = await supabase
+    .from("profiles")
+    .select("perfil")
+    .eq("user_id", userId)
+    .maybeSingle()
+  // Só importa se ELE é admin hoje: rebaixar gerente não muda a conta.
+  if ((alvo?.perfil as string | null) !== "administrador") return null
+
+  const holdingId = await holdingDoUsuario(supabase, userId)
+  if (!holdingId) return null
+
+  const { data: acessos } = await supabase
+    .from("user_unit_access")
+    .select("user_id")
+    .eq("scope_type", "holding")
+    .eq("scope_id", holdingId)
+  const ids = [
+    ...new Set(
+      ((acessos ?? []) as { user_id: string }[])
+        .map((a) => a.user_id)
+        .filter((id) => id !== userId),
+    ),
+  ]
+  if (ids.length === 0) {
+    return "Esta empresa ficaria sem nenhum administrador. Promova outra pessoa antes."
+  }
+
+  const { data: outros } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .in("user_id", ids)
+    .eq("perfil", "administrador")
+
+  return (outros ?? []).length > 0
+    ? null
+    : "Esta empresa ficaria sem nenhum administrador. Promova outra pessoa antes."
+}
+
 async function assertTargetInCurrentHolding(
   supabase: ReturnType<typeof createAdminClient>,
   targetUserId: string,
@@ -428,6 +496,12 @@ export async function createUser(
     if (error) return { ok: false, message: mensagemDeErroAuth(error.message) }
 
     if (data.user) {
+      await auditar("usuario.criado", await getCurrentHoldingId(), {
+        userId: data.user.id,
+        nome: fullName,
+        email,
+        perfil,
+      })
       await supabase
         .from("profiles")
         .update({ full_name: fullName, perfil })
@@ -497,6 +571,18 @@ export async function updateUser(
     const targetErr = await assertTargetInCurrentHolding(supabase, userId)
     if (targetErr) return { ok: false, message: targetErr }
 
+    /* A trava roda ANTES de escrever: recusar depois de já ter gravado o
+     * perfil deixaria a conta no estado que a trava existe pra impedir. */
+    const semAdmin = await travaUltimoAdministrador(supabase, userId, perfil)
+    if (semAdmin) return { ok: false, message: semAdmin }
+
+    const { data: antes } = await supabase
+      .from("profiles")
+      .select("perfil")
+      .eq("user_id", userId)
+      .maybeSingle()
+    const perfilAnterior = (antes?.perfil as string | null) ?? null
+
     const { error: profileErr } = await supabase
       .from("profiles")
       .update({
@@ -526,6 +612,15 @@ export async function updateUser(
 
     const erroAcesso = await syncAccess(supabase, userId, perfil, unitIds)
     if (erroAcesso) return { ok: false, message: erroAcesso }
+
+    await auditar("usuario.alterado", await holdingDoUsuario(supabase, userId), {
+      userId,
+      nome: fullName,
+      perfilAntes: perfilAnterior,
+      perfilDepois: perfil,
+      trocouSenha: Boolean(password),
+      lojas: unitIds.length,
+    })
 
     revalidatePath("/administracao/usuarios")
     return { ok: true }
@@ -609,8 +704,34 @@ export async function deleteUser(userId: string): Promise<UserActionState> {
     const targetErr = await assertTargetInCurrentHolding(supabase, userId)
     if (targetErr) return { ok: false, message: targetErr }
 
+    /* Apagar o último admin deixa a conta no mesmo beco que rebaixá-lo — e
+     * pior, sem volta. Mesma trava; `null` de perfil = "não vai continuar
+     * administrador", que é a verdade pra quem está sendo removido. */
+    const semAdmin = await travaUltimoAdministrador(supabase, userId, null)
+    if (semAdmin) {
+      return {
+        ok: false,
+        message:
+          "Esta empresa ficaria sem nenhum administrador. Promova outra pessoa antes de remover.",
+      }
+    }
+
+    const holdingId = await holdingDoUsuario(supabase, userId)
+    const { data: quem } = await supabase
+      .from("profiles")
+      .select("full_name, perfil")
+      .eq("user_id", userId)
+      .maybeSingle()
+
     const { error } = await supabase.auth.admin.deleteUser(userId)
     if (error) return { ok: false, message: mensagemDeErroAuth(error.message) }
+
+    await auditar("usuario.removido", holdingId, {
+      userId,
+      nome: (quem?.full_name as string | null) ?? null,
+      perfil: (quem?.perfil as string | null) ?? null,
+    })
+
     revalidatePath("/administracao/usuarios")
     return { ok: true }
   } catch (err) {
