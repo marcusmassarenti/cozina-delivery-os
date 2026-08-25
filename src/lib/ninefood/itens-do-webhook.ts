@@ -50,6 +50,51 @@ function reais(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n) / 100 : null
 }
 
+/**
+ * A promoção do item: quanto o cliente viu de desconto e quanto a LOJA bancou.
+ *
+ * ⚠️ ISSO ERA JOGADO FORA. O payload sempre trouxe `promotion_detail`, e a
+ * extração lia nome, quantidade e preço e ignorava o resto. Só no que já
+ * estava guardado eram R$ 75.368,90 de promoção da loja, item a item.
+ *
+ * Importa porque a promoção bancada pela loja é a segunda maior sangria da
+ * operação (R$ 8,90 de cada R$ 100, atrás só da comissão) e a ÚNICA que o
+ * lojista escolhe. Ele via o total do mês; agora vê por prato.
+ *
+ * `promotion_detail` é o consolidado do item e `promo_list` é a mesma coisa
+ * quebrada por campanha. Usa o consolidado, e cai na soma da lista quando ele
+ * não vier — a 99 manda os dois, mas o consolidado é o que sempre esteve
+ * presente nos 9.088 itens medidos.
+ *
+ * SÓ NA LINHA DO ITEM, nunca no complemento: medido nos 11.991 complementos
+ * guardados, nenhum traz campo de promoção. O desconto do combo inteiro vem
+ * consolidado no item pai, então repetir no filho contaria duas vezes.
+ */
+function promocao(item: Record<string, unknown>): {
+  desconto: number | null
+  loja: number | null
+} {
+  const det = (item.promotion_detail ?? null) as Record<string, unknown> | null
+  if (det && (det.promo_discount != null || det.shop_subside_price != null)) {
+    return {
+      desconto: reais(det.promo_discount),
+      loja: reais(det.shop_subside_price),
+    }
+  }
+  const lista = item.promo_list
+  if (!Array.isArray(lista) || lista.length === 0) {
+    return { desconto: null, loja: null }
+  }
+  let desconto = 0
+  let loja = 0
+  for (const raw of lista) {
+    const p = (raw ?? {}) as Record<string, unknown>
+    desconto += Number(p.promo_discount ?? 0) || 0
+    loja += Number(p.shop_subside_price ?? 0) || 0
+  }
+  return { desconto: Math.round(desconto) / 100, loja: Math.round(loja) / 100 }
+}
+
 function texto(v: unknown): string | null {
   const s = v == null ? "" : String(v).trim()
   return s === "" ? null : s
@@ -92,6 +137,7 @@ export async function gravarItensDoWebhook(
       const item = (raw ?? {}) as Record<string, unknown>
       const nome = texto(item.name)
       if (!nome) return
+      const promo = promocao(item)
       linhas.push({
         unit_id: unitId,
         order_id: chave,
@@ -105,6 +151,8 @@ export async function gravarItensDoWebhook(
         preco_unitario: reais(item.sku_price),
         valor_total: reais(item.total_price),
         valor_pago: reais(item.real_price),
+        promo_desconto: promo.desconto,
+        promo_loja: promo.loja,
         data: dia,
         ref_year: ano,
         ref_month: mes,
