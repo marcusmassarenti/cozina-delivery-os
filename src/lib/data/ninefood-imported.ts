@@ -360,14 +360,56 @@ export async function getNinefoodResumoByUnits(
       : null
 
     const liquidoGravado = acc.liquido
+
+    /**
+     * ⚠️ "≤ BRUTO" NÃO BASTA COMO PLAUSIBILIDADE (medido em 26/08/26).
+     *
+     * A trava original só barrava líquido MAIOR que o bruto. Mas existe um
+     * caso pior porque é silencioso: líquido IGUAL ao bruto, num mês que tem
+     * comissão, taxa e promoção lançadas. Passa na trava e o painel afirma
+     * que a loja ficou com ~100% do que vendeu.
+     *
+     * A causa é que a coluna "Receita total" do relatório "Dados da loja"
+     * MUDOU DE SIGNIFICADO por volta de junho/26. Até maio, quem valia o preço
+     * de tabela era "Receita total de vendas"; de junho em diante é a "Receita
+     * total" — conferido dia a dia contra o `mealOriginalAmount` da API na
+     * Santana (6 de 6 dias batendo ao centavo). Ou seja: em parte da base, o
+     * campo que chamamos de líquido é o bruto ANTES do desconto.
+     *
+     * A régua nova compara o gravado com a derivação, que é a identidade
+     * contábil (bruto − comissão − taxa − promoção). Os números que
+     * justificam os 5%, sobre os 211 meses-loja que hoje usam o gravado:
+     *
+     *   mediana = p90 = p95 = 100,0%   ← o gravado É a derivação
+     *   acima de 105%:  6 meses
+     *   acima de 120%:  5 meses
+     *   máximo:       135,3%
+     *
+     * Existe um vazio entre 100,0% e 105,8%. A faixa de 5% absorve
+     * arredondamento sem deixar passar coluna com outro significado. Sem ela,
+     * 6 meses-loja de DG FOODS e Churrasco no Pote mostravam R$ 4.075,77 de
+     * líquido a mais do que existe — a Noquinha Paulo Marcondes dizia 99,1%
+     * de repasse em ago/26 onde o real é 76,8%.
+     *
+     * O sinal do erro importa: ao contrário da derivação, que erra PARA BAIXO
+     * e faz o lojista achar o canal ruim, este erra PARA CIMA — e ninguém
+     * reclama de um número bom. Por isso passou despercebido.
+     */
+    const derivado = Math.max(0, acc.bruto - acc.comissao - acc.taxaPgto - acc.promo)
+    const gravadoPlausivel =
+      liquidoGravado > 0 &&
+      liquidoGravado <= acc.bruto &&
+      // Sem custo lançado não há com o que comparar: mantém a régua antiga.
+      (derivado <= 0 || liquidoGravado <= derivado * 1.05)
+
     const liquidoUsar =
-      liquidoGravado > 0 && liquidoGravado <= acc.bruto
+      gravadoPlausivel
         ? liquidoGravado
         : liquidoDoRelatorio != null &&
             liquidoDoRelatorio > 0 &&
             liquidoDoRelatorio <= acc.bruto
           ? liquidoDoRelatorio
-          : Math.max(0, acc.bruto - acc.comissao - acc.taxaPgto - acc.promo)
+          : derivado
     const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
     const pctLoja = acc.bruto > 0 ? (liquidoUsar / acc.bruto) * 100 : 0
     out.set(unitId, {
