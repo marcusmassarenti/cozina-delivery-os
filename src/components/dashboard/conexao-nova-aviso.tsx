@@ -252,9 +252,32 @@ export function PrimeiraAvaliacaoAviso({
     )
   }
 
+  /**
+   * O X faltava AQUI, e só aqui.
+   *
+   * A versão em lote (3+ lojas) sempre teve, e a de conexão nova também — só o
+   * aviso individual de avaliação nascia sem jeito de fechar. Marcus reparou em
+   * 26/08/26, com o aviso da Churrasco no Pão - Itaim na tela.
+   *
+   * Some sozinho em 3 dias (DIAS_AVALIACAO), então não é aviso eterno. Mas
+   * "espera três dias" não é resposta pra quem já leu e entendeu: aviso que a
+   * pessoa não consegue dispensar ensina ela a ignorar a faixa inteira — e a
+   * próxima, que talvez precise de ação, morre junto.
+   *
+   * Mesma chave da versão em lote (`conexao-nova|…`), então o fechamento vai
+   * pro banco por usuário e vale em qualquer aparelho — a lição do localStorage
+   * que fez a Brooklin voltar toda vez.
+   */
+  const visiveis = itens.filter(
+    (a) =>
+      !fechadosAgora.includes(`primeira-avaliacao|${a.unitId}`) &&
+      !fechadosDoServidor.includes(`conexao-nova|primeira-avaliacao|${a.unitId}`),
+  )
+  if (visiveis.length === 0) return null
+
   return (
     <div className="space-y-2">
-      {itens.map((a) => (
+      {visiveis.map((a) => (
         <div
           key={a.unitId}
           className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3"
@@ -282,6 +305,18 @@ export function PrimeiraAvaliacaoAviso({
               )}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              const chave = `primeira-avaliacao|${a.unitId}`
+              setFechadosAgora((atual) => [...atual, chave])
+              void fecharAviso(`conexao-nova|${chave}`)
+            }}
+            aria-label="Fechar aviso"
+            className="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
         </div>
       ))}
     </div>
