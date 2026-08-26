@@ -1083,6 +1083,31 @@ export default async function Home({
     "99food": "#E0A400",
     keeta: "#0E9E96",
   }
+  /**
+   * Plataformas na faixa de cobertura — respeitando o filtro do topo.
+   *
+   * ── POR QUE (Marcus, 26/08/26) ──────────────────────────────────────────
+   * "Cobertura de importação deveria aparecer apenas a plataforma selecionada
+   * também". Com "Keeta" marcado, a faixa continuava com os três selos (iFood
+   * até 26/ago, 99 até 25/ago, Keeta até 25/ago) — a única parte da tela ainda
+   * falando das outras.
+   *
+   * ⚠️ O `filter(ehMarketplace)` tem que continuar: a faixa é de importação de
+   * marketplace, e o Cardápio Web não entra nela. Só que ele PODE estar no
+   * filtro — e aí o cruzamento fica vazio. Nesse caso volta pra lista completa
+   * em vez de renderizar uma faixa sem selo nenhum, que pareceria defeito.
+   */
+  /** Uma plataforma aparece quando não há filtro, ou quando está nele. */
+  const mostraPlat = (p: PlatformId) =>
+    plataformasFilter.length === 0 || plataformasFilter.includes(p)
+
+  const coberturaPlataformas = (() => {
+    const marketplaces = tenantPlatforms.filter(ehMarketplace)
+    if (plataformasFilter.length === 0) return marketplaces
+    const cruzado = marketplaces.filter((p) => plataformasFilter.includes(p))
+    return cruzado.length > 0 ? cruzado : marketplaces
+  })()
+
   const liquidoRede = platforms.reduce((s, p) => s + p.liquido, 0)
   // Taxa REAL da plataforma = bruto − líquido − recebido direto. Sem descontar
   // o recebido direto (dinheiro/PIX na entrega), o iFood aparecia com taxa
@@ -1260,7 +1285,7 @@ export default async function Home({
           year={year}
           month={month}
           periodLabel={formatPeriodLabel({ year, month })}
-          platformsEnabled={tenantPlatforms.filter(ehMarketplace)}
+          platformsEnabled={coberturaPlataformas}
           apiSync={apiSync}
           vinculos={apiVinculos}
           semDado={lojasSemDado}
@@ -1278,24 +1303,31 @@ export default async function Home({
           <div className="flex items-center justify-between gap-3">
             <SectionDivider number={1} label="Performance da Operação" />
             {hasAnyImported && (
+              /* Os selos seguem o filtro do topo, pelo mesmo motivo da faixa de
+                 cobertura: com "Keeta" marcado, "14/14 iFood" ao lado de um
+                 faturamento que é só da Keeta faz a pessoa somar coisas de
+                 recortes diferentes. `mostraPlat` centraliza a regra pros
+                 quatro. */
               <div className="flex flex-wrap gap-1.5">
+                {mostraPlat("ifood") && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
                   <Sparkles className="size-3" />
                   {unitsWithImported}/{habilitadasEm("ifood")} iFood
                 </span>
-                {unitsWith99 > 0 && (
+                )}
+                {mostraPlat("99food") && unitsWith99 > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
                     <Sparkles className="size-3" />
                     {unitsWith99}/{habilitadasEm("99food")} 99 Food
                   </span>
                 )}
-                {unitsWithKeeta > 0 && (
+                {mostraPlat("keeta") && unitsWithKeeta > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-100 px-2.5 py-1 text-[10px] font-semibold text-lime-800 dark:bg-lime-950/40 dark:text-lime-400">
                     <Sparkles className="size-3" />
                     {unitsWithKeeta}/{habilitadasEm("keeta")} Keeta
                   </span>
                 )}
-                {unitsWithCw > 0 && (
+                {mostraPlat("cardapioweb") && unitsWithCw > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-400">
                     <Sparkles className="size-3" />
                     {unitsWithCw}/{habilitadasEm("cardapioweb")} Cardápio Web
