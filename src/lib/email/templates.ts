@@ -966,6 +966,99 @@ export function lojaNaoEncontradaIfood(d: {
   }
 }
 
+/**
+ * Interno: "uma loja autorizou o app no 99".
+ *
+ * Mora aqui, e não solto no módulo que dispara, pelo motivo do cabeçalho deste
+ * arquivo: e-mail da mesma marca com cara diferente parece golpe. Vale também
+ * pro e-mail da casa — o Marcus lê os dois no mesmo celular, e o de fora tem
+ * que ser reconhecível de relance como sendo do sistema.
+ *
+ * A separação em dois blocos é o conteúdo, não enfeite: verde = já resolvido,
+ * não faça nada; laranja = só você pode resolver. Uma lista única faria o
+ * Marcus reler item por item pra descobrir onde tem trabalho.
+ */
+export function autorizacao99(d: {
+  autorizadas: number
+  comLoja: { loja: string; cliente: string; slug: string }[]
+  semLoja: { slug: string }[]
+}) {
+  const total = d.comLoja.length + d.semLoja.length
+  const plural = total === 1 ? "loja autorizou" : "lojas autorizaram"
+
+  /**
+   * Nome de loja é texto do cliente e vai pro meio do HTML: "Açaí & Sorveteria
+   * RG Estilo" existe de verdade na base. Sem escapar, o & fica ilegal e um <
+   * quebraria o e-mail inteiro.
+   */
+  const esc = (t: string) =>
+    t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+  const linha = (titulo: string, sub: string, cor: string) => `
+    <tr>
+      <td style="padding:0 0 8px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td style="background:#fafafa;border-left:3px solid ${cor};border-radius:0 8px 8px 0;padding:12px 16px;">
+              <p style="margin:0 0 2px;font-size:15px;font-weight:700;color:${TINTA};">${titulo}</p>
+              <p style="margin:0;font-size:13px;line-height:1.5;color:${SUAVE};">${sub}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`
+
+  const bloco = (
+    titulo: string,
+    explicacao: string,
+    itens: string,
+  ) => `
+    <p style="margin:28px 0 6px;font-size:15px;font-weight:700;color:${TINTA};">${titulo}</p>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:${TEXTO};">${explicacao}</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${itens}</table>`
+
+  const verde = d.comLoja.length
+    ? bloco(
+        `Já entraram sozinhas (${d.comLoja.length})`,
+        "Casaram pelo id do 99 que está cadastrado na unidade, e o histórico já foi puxado. Não precisa fazer nada.",
+        d.comLoja
+          .map((l) =>
+            linha(esc(l.loja), `${esc(l.cliente)} · ${esc(l.slug)}`, "#16a34a"),
+          )
+          .join(""),
+      )
+    : ""
+
+  const laranja = d.semLoja.length
+    ? bloco(
+        `Esperando você apontar a loja (${d.semLoja.length})`,
+        "Autorizaram no 99, mas o id não bateu com nenhuma unidade — ou bateu com mais de uma. Enquanto ninguém aponta, o faturamento delas não entra em lugar nenhum.",
+        d.semLoja
+          .map((l) => linha(esc(l.slug), "sem unidade apontada", LARANJA))
+          .join(""),
+      )
+    : ""
+
+  return {
+    assunto:
+      d.semLoja.length > 0
+        ? `99 Food: ${total} ${plural} — ${d.semLoja.length} esperando você`
+        : `99 Food: ${total} ${plural} e já entraram`,
+    html: layout({
+      titulo:
+        d.semLoja.length > 0
+          ? "Loja nova no 99 — uma precisa de você"
+          : "Loja nova entrou pelo 99",
+      corpo: `
+        <p style="margin:0;">A varredura diária perguntou ao 99 quem já autorizou o nosso app e achou <strong>${total}</strong> que ainda não estava aqui.</p>
+        ${verde}
+        ${laranja}`,
+      cta: { texto: "Abrir Conexões", url: `${SITE}/clientes/conexoes` },
+      ps: `O 99 devolveu ${d.autorizadas} loja(s) autorizadas no total. Este aviso sai uma vez por loja, quando ela aparece pela primeira vez.`,
+    }),
+  }
+}
+
 /** Lista de lojas para os e-mails em lote: "02 · Gravataí — 63.415.846/0001-02". */
 function listaDeLojas(lojas: { nome: string; cnpj: string }[]): string {
   return lojas

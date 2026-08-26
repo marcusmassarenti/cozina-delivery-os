@@ -35,11 +35,6 @@ import { enviarEmail } from "@/lib/email/enviar"
 import type { Sincronizacao99 } from "./lojas"
 
 const DESTINO = process.env.SAUDE_EMAIL ?? "marcus@massarenti.me"
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
-
-const esc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-
 /**
  * Monta o aviso sem mandar nada.
  *
@@ -135,53 +130,16 @@ export async function montarAviso99(
   const comLoja = linhas.filter((l) => l.unitId && nomes.has(l.unitId))
   const semLoja = linhas.filter((l) => !l.unitId || !nomes.has(l.unitId))
 
-  const item = (titulo: string, sub: string, cor: string) => `
-    <li style="margin:0 0 10px;padding:10px 12px;border-left:3px solid ${cor};background:#fafafa;">
-      <div style="font-size:14px;font-weight:600;color:#18181b;">${titulo}</div>
-      <div style="margin-top:2px;font-size:12px;color:#71717a;">${sub}</div>
-    </li>`
-
-  const blocoComLoja = comLoja.length
-    ? `<h2 style="margin:24px 0 10px;font-size:14px;color:#18181b;">Já vinculadas sozinhas (${comLoja.length})</h2>
-       <p style="margin:0 0 10px;font-size:12px;color:#71717a;">Casaram pelo id do 99 cadastrado na unidade. O histórico já foi puxado — não precisa fazer nada.</p>
-       <ul style="margin:0;padding:0;list-style:none;">
-       ${comLoja
-         .map((l) =>
-           item(
-             esc(nomes.get(l.unitId!)!.loja),
-             `${esc(nomes.get(l.unitId!)!.cliente)} · ${esc(l.slug)}`,
-             "#16a34a",
-           ),
-         )
-         .join("")}
-       </ul>`
-    : ""
-
-  const blocoSemLoja = semLoja.length
-    ? `<h2 style="margin:24px 0 10px;font-size:14px;color:#18181b;">Esperando você apontar a loja (${semLoja.length})</h2>
-       <p style="margin:0 0 10px;font-size:12px;color:#71717a;">Autorizaram no 99, mas o id da loja não bateu com nenhuma unidade — ou bateu com mais de uma. Sem apontar, o faturamento não entra em lugar nenhum.</p>
-       <ul style="margin:0;padding:0;list-style:none;">
-       ${semLoja.map((l) => item(esc(l.slug), "sem unidade apontada", "#f59e0b")).join("")}
-       </ul>`
-    : ""
-
-  const assunto =
-    semLoja.length > 0
-      ? `99 Food: ${r.novas.length} loja(s) autorizaram — ${semLoja.length} esperando você`
-      : `99 Food: ${r.novas.length} loja(s) autorizaram e já entraram`
-
-  const html = `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:24px;color:#18181b;max-width:560px;">
-  <p style="margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:1.4px;color:#71717a;text-transform:uppercase;">Delivery OS · 99 Food</p>
-  <h1 style="margin:0 0 8px;font-size:20px;">Loja nova autorizou o app</h1>
-  <p style="margin:0 0 4px;font-size:13px;color:#52525b;">A varredura diária perguntou ao 99 quem já autorizou e achou ${r.novas.length} loja(s) que ainda não estavam aqui.</p>
-  <p style="margin:0;font-size:12px;color:#a1a1aa;">O 99 devolveu ${r.autorizadas} loja(s) autorizadas no total.</p>
-  ${blocoComLoja}
-  ${blocoSemLoja}
-  <p style="margin:24px 0 0;">
-    <a href="${SITE}/clientes/conexoes" style="display:inline-block;padding:10px 16px;background:#18181b;color:#fff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:600;">Abrir Conexões</a>
-  </p>
-</div>`
+  const { autorizacao99 } = await import("@/lib/email/templates")
+  const { assunto, html } = autorizacao99({
+    autorizadas: r.autorizadas,
+    comLoja: comLoja.map((l) => ({
+      loja: nomes.get(l.unitId!)!.loja,
+      cliente: nomes.get(l.unitId!)!.cliente,
+      slug: l.slug,
+    })),
+    semLoja: semLoja.map((l) => ({ slug: l.slug })),
+  })
 
   return { assunto, html }
 }
