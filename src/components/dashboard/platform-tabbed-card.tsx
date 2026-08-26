@@ -43,16 +43,49 @@ export type PlatformTabbedSlot = {
 export function PlatformTabbedCard({
   title,
   icon,
-  slots,
+  slots: slotsRecebidos,
+  plataformas,
 }: {
   title: React.ReactNode
   icon?: React.ReactNode
   slots: PlatformTabbedSlot[]
+  /**
+   * Filtro de plataforma do dashboard. Vazio/ausente = todas.
+   *
+   * ── POR QUE (Marcus, 26/08/26) ───────────────────────────────────────
+   * "o filtro não pega o campo 3 cardápio e cancelamentos, 4 satisfação dos
+   * clientes e comentários e detalhamento por unidade".
+   *
+   * O cabeçalho do dashboard filtrava os KPIs e estes cards continuavam com as
+   * três abas. Com "Keeta" marcado, a tela mostrava faturamento só da Keeta e,
+   * logo abaixo, cancelamento e avaliação do iFood — dois recortes diferentes
+   * na mesma página, sem nada avisando.
+   *
+   * Filtrar AQUI e não em cada chamada: são quatro cards (funil, cancelamentos,
+   * top produtos, avaliações) e o defeito era o mesmo nos quatro. Um lugar só
+   * também garante que o próximo card criado já nasça filtrado.
+   */
+  plataformas?: PlatformId[]
 }) {
+  const slots =
+    plataformas && plataformas.length > 0
+      ? slotsRecebidos.filter((s) => plataformas.includes(s.platform))
+      : slotsRecebidos
+
   const firstWithData = slots.find((s) => !s.empty)
   const [active, setActive] = React.useState<PlatformId>(
     firstWithData?.platform ?? slots[0]?.platform ?? "ifood",
   )
+
+  /**
+   * A aba ativa some quando o filtro muda: o estado guarda a plataforma
+   * escolhida antes, e ela pode não estar mais na lista. Sem isto o card fica
+   * em branco — o `active` aponta pra uma aba que não existe mais.
+   */
+  const ativoValido = slots.some((s) => s.platform === active)
+  const efetivo = ativoValido
+    ? active
+    : (firstWithData?.platform ?? slots[0]?.platform ?? "ifood")
 
   if (slots.length === 0) return null
 
@@ -80,7 +113,7 @@ export function PlatformTabbedCard({
         ) : (
           <div data-plat-tabs className="flex shrink-0 items-center gap-0.5">
             {slots.map((s) => {
-              const isActive = s.platform === active
+              const isActive = s.platform === efetivo
               return (
                 <button
                   key={s.platform}
@@ -115,8 +148,8 @@ export function PlatformTabbedCard({
           // dois !important o layer declarado ANTES vence — então nem o print
           // conseguia reexibir a aba. Com atributo próprio, as duas regras
           // (esconder na tela, mostrar no PDF) ficam do nosso lado.
-          data-plat-inativo={s.platform !== active ? "" : undefined}
-          aria-hidden={s.platform !== active}
+          data-plat-inativo={s.platform !== efetivo ? "" : undefined}
+          aria-hidden={s.platform !== efetivo}
         >
           {s.content}
         </div>

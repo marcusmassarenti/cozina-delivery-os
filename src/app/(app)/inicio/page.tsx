@@ -1323,6 +1323,7 @@ export default async function Home({
               month={month}
               metricas={["faturamento", "ticket", "pedidos"]}
               escopo={daEscopo}
+              plataformas={plataformasFilter}
             />
           </Suspense>
           <ComposicaoBruto
@@ -1524,6 +1525,7 @@ export default async function Home({
               <div className="grid gap-4 lg:grid-cols-3">
                 {/* Funil — iFood-only */}
                 <PlatformTabbedCard
+                  plataformas={plataformasFilter}
                   title={`Funil de conversão · ${scopeLabel}`}
                   slots={[
                     {
@@ -1616,6 +1618,7 @@ export default async function Home({
 
                 {/* Top cancelamentos — iFood + 99 com switcher */}
                 <PlatformTabbedCard
+                  plataformas={plataformasFilter}
                   title={`Top cancelamentos · ${scopeLabel}`}
                   icon={
                     <AlertTriangle className="size-4 shrink-0 text-amber-600" />
@@ -1681,6 +1684,7 @@ export default async function Home({
 
                 {/* Top produtos — iFood + 99 com switcher */}
                 <PlatformTabbedCard
+                  plataformas={plataformasFilter}
                   title={`Top produtos · ${scopeLabel}`}
                   icon={
                     <Package className="size-4 shrink-0 text-emerald-600" />
@@ -1774,6 +1778,7 @@ export default async function Home({
               <div className="grid gap-4 lg:grid-cols-3">
                 {/* Avaliações — distribuição das notas 1-5 */}
                 <PlatformTabbedCard
+                  plataformas={plataformasFilter}
                   title="Avaliações"
                   slots={[
                     {
@@ -1841,6 +1846,7 @@ export default async function Home({
 
                 {/* O que elogiam */}
                 <PlatformTabbedCard
+                  plataformas={plataformasFilter}
                   title="O que elogiam"
                   icon={
                     <ThumbsUp className="size-4 shrink-0 text-emerald-600" />
@@ -1918,6 +1924,7 @@ export default async function Home({
 
                 {/* O que reclamam */}
                 <PlatformTabbedCard
+                  plataformas={plataformasFilter}
                   title="O que reclamam"
                   icon={
                     <ThumbsDown className="size-4 shrink-0 text-rose-600" />
@@ -2143,11 +2150,13 @@ export default async function Home({
                 <DetalheLoja
                   unit={unitsDisplay[0]}
                   brandLogoUrl={brandLogoUrl}
+                  plataformas={plataformasFilter}
                 />
               ) : (
                 <RankingDetalhado
                   units={unitsDisplay}
                   brandLogoUrl={brandLogoUrl}
+                  plataformas={plataformasFilter}
                 />
               )}
             </div>

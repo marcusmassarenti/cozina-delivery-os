@@ -94,6 +94,7 @@ export async function EvolucaoFaturamento({
   month,
   metricas,
   escopo = "da rede",
+  plataformas,
 }: {
   unitIds: string[]
   year: number
@@ -101,15 +102,35 @@ export async function EvolucaoFaturamento({
   metricas?: string[]
   /** Genitivo do escopo pro título: "da rede" | "da loja" | "das lojas". */
   escopo?: string
+  /**
+   * Filtro de plataforma do dashboard. Vazio/ausente = todas.
+   *
+   * ── POR QUE (Marcus, 26/08/26) ───────────────────────────────────────
+   * "quando seleciono só a keeta, na evolução tem que sair os logos 99 e
+   * ifood". O gráfico não recebia o filtro: o cabeçalho do dashboard filtrava
+   * tudo e ele continuava desenhando as três linhas, então a tela dizia duas
+   * coisas diferentes ao mesmo tempo.
+   *
+   * Filtrar aqui também CORTA CONSULTA: são (meses × plataformas) chamadas, e
+   * com uma plataforma selecionada isso cai a um terço.
+   */
+  plataformas?: PlatformId[]
 }) {
   const periods = Array.from({ length: month }, (_, i) => ({
     year,
     month: i + 1,
   }))
 
+  const platsAtivas =
+    plataformas && plataformas.length > 0
+      ? PLATS.filter((p) => plataformas.includes(p))
+      : PLATS
+
   // Uma tarefa por (mês × plataforma), com concorrência limitada.
   const tarefas: { i: number; plat: PlatformId }[] = []
-  periods.forEach((_, i) => PLATS.forEach((plat) => tarefas.push({ i, plat })))
+  periods.forEach((_, i) =>
+    platsAtivas.forEach((plat) => tarefas.push({ i, plat })),
+  )
 
   const [flat, avals] = await Promise.all([
     mapLimit(tarefas, 5, async (t) => {
@@ -173,10 +194,23 @@ export async function EvolucaoFaturamento({
     cancelamento: porPlat((m) =>
       m.pedidos > 0 ? r2((m.cancelados / m.pedidos) * 100) : null,
     ),
+    /**
+     * A NOTA PRECISA DO MESMO FILTRO, e por um motivo que não é óbvio: ela não
+     * vem de `byPlat` (que já nasce zerado pra plataforma não buscada) — vem de
+     * `avals`, que é uma consulta só, sem recorte de plataforma. Sem filtrar
+     * aqui, o gráfico escondia iFood e 99 em Faturamento/Ticket/Pedidos e as
+     * mostrava de volta ao clicar em Nota.
+     */
     nota: {
-      ifood: idxs.map((i) => notaMes(avals[i], "ifood")),
-      ninefood: idxs.map((i) => notaMes(avals[i], "99food")),
-      keeta: idxs.map((i) => notaMes(avals[i], "keeta")),
+      ifood: platsAtivas.includes("ifood")
+        ? idxs.map((i) => notaMes(avals[i], "ifood"))
+        : idxs.map(() => null),
+      ninefood: platsAtivas.includes("99food")
+        ? idxs.map((i) => notaMes(avals[i], "99food"))
+        : idxs.map(() => null),
+      keeta: platsAtivas.includes("keeta")
+        ? idxs.map((i) => notaMes(avals[i], "keeta"))
+        : idxs.map(() => null),
       // Cardápio Web não expõe avaliação — série sempre nula, e o filtro de
       // série vazia no gráfico a esconde da legenda de Nota.
       cardapioweb: idxs.map(() => null),

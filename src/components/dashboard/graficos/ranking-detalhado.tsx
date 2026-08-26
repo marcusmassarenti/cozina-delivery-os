@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { PlatformLogo } from "@/components/platform-logo"
+import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { Unit } from "@/lib/data/units"
 import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 
@@ -19,9 +19,12 @@ import { fmtBRL, fmtBRLShort, fmtNum, fmtPct } from "@/lib/format"
 export function RankingDetalhado({
   units,
   brandLogoUrl = null,
+  plataformas,
 }: {
   units: Unit[]
   brandLogoUrl?: string | null
+  /** Filtro de plataforma do dashboard. Vazio/ausente = todas. */
+  plataformas?: PlatformId[]
 }) {
   const ordenadas = React.useMemo(
     () =>
@@ -105,7 +108,13 @@ export function RankingDetalhado({
       </div>
 
       {/* ─── Detalhe da loja selecionada ──────────────────────── */}
-      {sel && <DetalheLoja unit={sel} brandLogoUrl={brandLogoUrl} />}
+      {sel && (
+        <DetalheLoja
+          unit={sel}
+          brandLogoUrl={brandLogoUrl}
+          plataformas={plataformas}
+        />
+      )}
     </div>
   )
 }
@@ -113,11 +122,34 @@ export function RankingDetalhado({
 export function DetalheLoja({
   unit,
   brandLogoUrl = null,
+  plataformas,
 }: {
   unit: Unit
   brandLogoUrl?: string | null
+  /**
+   * Filtro de plataforma do dashboard. Vazio/ausente = todas.
+   *
+   * ── POR QUE (Marcus, 26/08/26) ───────────────────────────────────────
+   * Com "Keeta" marcado, o card da loja mostrava BRUTO de R$ 127,6 mil (só
+   * Keeta, certo) e logo abaixo "Margem por plataforma" com iFood, 99 e Keeta
+   * somando R$ 253,1 mil. O topo respeitava o filtro e o detalhe não.
+   *
+   * ⚠️ O CORTE É AQUI, no `m.platforms`, e não só na lista da margem: o
+   * `recebidoDireto` e a `taxaLoja` também derivam dele. Filtrar só onde
+   * aparece a lista consertaria o visível e deixaria dois números errados
+   * logo acima, que é pior — ninguém desconfia de número que não mudou.
+   */
+  plataformas?: PlatformId[]
 }) {
-  const m = unit.monthly
+  const m = React.useMemo(() => {
+    if (!plataformas || plataformas.length === 0) return unit.monthly
+    return {
+      ...unit.monthly,
+      platforms: unit.monthly.platforms.filter((p) =>
+        plataformas.includes(p.id),
+      ),
+    }
+  }, [unit.monthly, plataformas])
   const hasData = m.pedidos > 0
   // O que FICA COM A LOJA não é só o repasse da plataforma: o recebido direto
   // (PIX/dinheiro/maquininha na entrega) já está no bolso do dono e o VR é pago
