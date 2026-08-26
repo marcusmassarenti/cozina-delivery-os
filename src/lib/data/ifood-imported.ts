@@ -124,8 +124,37 @@ export type FinanceiroResumo = {
   cancelamentoTotalQtd: number
   cancelamentoParcialQtd: number
   perdaCancelamento: number
-  /** Valor que entra no repasse iFood (impacto_no_repasse=true). */
+  /**
+   * O que sobrou da OPERAÇÃO: repasse do iFood com a antecipação somada de
+   * volta. Ver `antecipacao` logo abaixo pro motivo.
+   */
   liquido: number
+  /**
+   * Débito da antecipação (valor NEGATIVO, ou 0 na maioria das lojas).
+   *
+   * ── POR QUE ISTO PRECISOU EXISTIR (Marcus, 26/08/26) ────────────────────
+   * A Churras Popular — Itaim aparecia ficando com 1,9% do que vendia em
+   * ago/26 (R$ 595,41 de R$ 31.200,35), contra 47,4% da Santana e 56,8% do
+   * Jardins no mesmo mês parcial.
+   *
+   * Não era erro de importação. O `liquido` da RPC é literalmente
+   * `sum(valor) where impacto_no_repasse = true` — QUANTO O IFOOD TRANSFERIU,
+   * não quanto sobrou da venda. Pra loja que não antecipa dá no mesmo. Essa
+   * antecipa: recebe em D+1 e o iFood desconta do repasse normal. O débito vem
+   * com `impacto_no_repasse = true`, e está certo — ele impacta mesmo a
+   * transferência. Só que NÃO É CUSTO: o dinheiro já entrou na conta da loja
+   * um dia depois de cada pedido. Descontar de novo é contar duas vezes.
+   *
+   * Medido: jul/26 R$ 8.828,67 e ago/26 R$ 15.305,04. Somando de volta, a loja
+   * vai a 42,6% e 51,0% — a faixa das irmãs.
+   *
+   * ⚠️ NÃO ZERE ISTO PENSANDO EM "LIMPAR". O Fluxo de Caixa PRECISA da
+   * antecipação descontada, porque lá a pergunta é outra ("quanto ainda vou
+   * receber") e o dinheiro já veio. Ele não passa por aqui — usa RPC própria
+   * (migration 0150) lendo os lançamentos direto. As duas telas continuam
+   * certas justamente porque cada uma tem a sua régua.
+   */
+  antecipacao: number
   /**
    * Valores que entram direto no caixa da loja em pedidos do iFood —
    * dinheiro, PIX, VR/VA presencial, maquininha própria
@@ -1547,6 +1576,7 @@ function mapearResumo(data: any): Map<string, FinanceiroResumo> {
     liquido: number | string
     recebido_direto: number | string
     mensalidade: number | string
+    antecipacao?: number | string | null
   }>) {
     out.set(row.unit_id, {
       pedidosUnicos: row.pedidos_unicos,
@@ -1563,7 +1593,10 @@ function mapearResumo(data: any): Map<string, FinanceiroResumo> {
       cancelamentoTotalQtd: row.cancelamento_total_qtd,
       cancelamentoParcialQtd: row.cancelamento_parcial_qtd,
       perdaCancelamento: Number(row.perda_cancelamento),
-      liquido: Number(row.liquido),
+      // A antecipação vem NEGATIVA e já está dentro de `row.liquido`.
+      // Subtrair um negativo é somar de volta — ver o comentário do campo.
+      liquido: Number(row.liquido) - Number(row.antecipacao ?? 0),
+      antecipacao: Number(row.antecipacao ?? 0),
       recebidoDireto: Number(row.recebido_direto),
       // Mensalidade do iFood (cobrança de PERÍODO, não de pedido). Sempre
       // esteve no líquido; o que faltava era aparecer na quebra — o lojista
@@ -1600,6 +1633,7 @@ export async function getFinanceiroResumoForMonth(
       cancelamentoParcialQtd: 0,
       perdaCancelamento: 0,
       liquido: 0,
+      antecipacao: 0,
       recebidoDireto: 0,
       mensalidade: 0,
       hasData: false,
