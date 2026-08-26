@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Plug } from "lucide-react"
+import { Link2, Plug } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { gerarConviteAction, type ConviteState } from "../_actions"
 
 export type UnidadeOpcao = { id: string; code: string; name: string }
 
@@ -41,6 +42,20 @@ export function ConectarLoja({
   )
   const [unitId, setUnitId] = React.useState<string>("")
   const [indo, setIndo] = React.useState(false)
+  const [gerando, setGerando] = React.useState(false)
+  const [copiado, setCopiado] = React.useState(false)
+  const [convite, setConvite] = React.useState<ConviteState | null>(null)
+
+  async function gerarConvite() {
+    if (!unitId) return
+    setGerando(true)
+    setConvite(null)
+    try {
+      setConvite(await gerarConviteAction(unitId, ambiente))
+    } finally {
+      setGerando(false)
+    }
+  }
 
   /**
    * Manda pro DOMÍNIO CANÔNICO, sempre.
@@ -129,7 +144,65 @@ export function ConectarLoja({
           <Plug className="size-4" />
           {indo ? "Redirecionando..." : "Conectar no Cardápio Web"}
         </Button>
+
+        {/* O botão do convite fica LADO A LADO com o de conectar, e não escondido
+            atrás de um "avançado": na maioria dos nossos clientes quem opera o
+            painel é a assessoria e quem autoriza é o dono da loja — duas pessoas.
+            O caminho de duas pessoas é o normal, não a exceção. */}
+        <Button
+          variant="outline"
+          onClick={gerarConvite}
+          disabled={gerando || !unitId}
+          className="h-9"
+          title={
+            unitId
+              ? "Gera um link pro dono da loja autorizar sem ter conta aqui"
+              : "Escolha a unidade primeiro"
+          }
+        >
+          <Link2 className="size-4" />
+          {gerando ? "Gerando..." : "Gerar link pro dono da loja"}
+        </Button>
       </div>
+
+      {convite?.url && (
+        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
+          <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300">
+            Link pronto — mande pro dono da loja
+          </p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-800/80 dark:text-emerald-400/80">
+            Ele abre, entra com o login <b>do Cardápio Web</b> dele e autoriza.
+            Não precisa de conta no Delivery OS. Vale até{" "}
+            {convite.expiraEm
+              ? new Date(convite.expiraEm).toLocaleDateString("pt-BR")
+              : "7 dias"}
+            .
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              readOnly
+              value={convite.url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-8 flex-1 rounded border bg-background px-2 text-[11px]"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0"
+              onClick={() => {
+                void navigator.clipboard.writeText(convite.url ?? "")
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2000)
+              }}
+            >
+              {copiado ? "Copiado!" : "Copiar"}
+            </Button>
+          </div>
+        </div>
+      )}
+      {convite && !convite.ok && (
+        <p className="mt-2 text-[11px] text-destructive">{convite.message}</p>
+      )}
 
       {/* A URL de retorno precisa bater LETRA POR LETRA com a cadastrada no
           app. Mostrar aqui evita depender do DevTools pra saber o que estamos

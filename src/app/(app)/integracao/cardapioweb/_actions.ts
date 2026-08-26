@@ -1,5 +1,7 @@
 "use server"
 
+import { randomBytes } from "node:crypto"
+
 import { revalidatePath } from "next/cache"
 
 import { requireAdmin } from "@/lib/auth/guards"
@@ -261,4 +263,77 @@ export async function vincularUnidadeAction(
   revalidatePath("/integracao/cardapioweb")
   revalidatePath("/unidades")
   return { ok: true, reassociados }
+}
+
+export type ConviteState = {
+  ok: boolean
+  url?: string
+  expiraEm?: string
+  message?: string
+}
+
+/**
+ * Gera o link que o DONO DA LOJA abre pra autorizar, sem ter conta aqui.
+ *
+ * ── POR QUE (Marcus, 27/08/26) ───────────────────────────────────────────
+ * "ele não tem acesso ao deliveryOS. quem tem é o usuário adenilton e o dono da
+ * loja é outra pessoa que não usa nosso sistema."
+ *
+ * O botão "Conectar no Cardápio Web" exige sessão de admin, então só serve
+ * quando quem opera o painel é também o proprietário da loja — o que quase
+ * nunca é o caso de quem tem assessoria.
+ *
+ * 7 DIAS de validade. O `state` do OAuth continua com 10 minutos (é o padrão do
+ * protocolo e ele nasce no clique do dono, não aqui); o que dura uma semana é o
+ * CONVITE. Sem isso, admin e dono precisariam estar combinados ao vivo.
+ */
+export async function gerarConviteAction(
+  unitId: string,
+  ambiente: CwAmbiente = "producao",
+): Promise<ConviteState> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, message: "Só administradores podem gerar o convite." }
+  }
+  if (!unitId) return { ok: false, message: "Escolha a loja." }
+
+  const admin = createAdminClient()
+
+  // A empresa vem da LOJA, não do usuário: assim o convite não tem como
+  // apontar pra uma empresa diferente da unidade escolhida.
+  const { data: unit } = await admin
+    .from("units")
+    .select("id, brand_id")
+    .eq("id", unitId)
+    .maybeSingle()
+  const brandId = (unit as { brand_id?: string } | null)?.brand_id
+  if (!brandId) return { ok: false, message: "Loja não encontrada." }
+  const { data: brand } = await admin
+    .from("brands")
+    .select("holding_id")
+    .eq("id", brandId)
+    .maybeSingle()
+  const holdingId = (brand as { holding_id?: string } | null)?.holding_id
+  if (!holdingId) return { ok: false, message: "Empresa da loja não encontrada." }
+
+  const token = randomBytes(24).toString("base64url")
+  const expira = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+  const { error } = await admin.from("cardapioweb_convites").insert({
+    token,
+    holding_id: holdingId,
+    unit_id: unitId,
+    ambiente,
+    expira_em: expira.toISOString(),
+  })
+  if (error) return { ok: false, message: error.message }
+
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
+  revalidatePath("/integracao/cardapioweb")
+  return {
+    ok: true,
+    url: `${site}/conectar/cardapioweb/${token}`,
+    expiraEm: expira.toISOString(),
+  }
 }
