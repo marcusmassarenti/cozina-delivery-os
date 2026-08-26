@@ -567,6 +567,8 @@ function montarContexto(
   },
   plataformasSemDadoMap: ReturnType<typeof plataformasSemDado>,
   coberturaLojas: Map<string, CoberturaLoja>,
+  /** Comparação mês-a-mês já pronta, na mesma janela dos dois lados. */
+  comparativo_mesmo_recorte: unknown,
 ): string {
   // Detalhe do MÊS CORRENTE por loja + histórico mensal do ano da mesma loja.
   const por_loja = units
@@ -577,8 +579,26 @@ function montarContexto(
       return {
         ...(atual ?? { loja: u.name }),
         // Tabela — colunas em `legenda_das_tabelas.historico_mensal`.
+        /**
+         * ⚠️ O MÊS CORRENTE VAI MARCADO COMO PARCIAL, DENTRO DO PRÓPRIO VALOR.
+         *
+         * Sem a marca, a série mostra "07/2026|1208031" e "08/2026|1006039"
+         * lado a lado e o modelo subtrai — foi assim que ele anunciou "a rede
+         * caiu 16,7%" num mês em que a rede CRESCEU 1% no mesmo recorte.
+         *
+         * A regra no prompt não venceu isso duas vezes seguidas, e o motivo
+         * está escrito em `semRepeticoesDaPergunta`: instrução compete com
+         * exemplo, e exemplo ganha. Então a marca vai no exemplo.
+         */
         historico_mensal: historico.map((h) =>
-          linha(h.mes, h.bruto, h.liquido, h.pedidos, h.cancelados, h.promocoes),
+          linha(
+            h.mes === periodo ? `${h.mes} (PARCIAL)` : h.mes,
+            h.bruto,
+            h.liquido,
+            h.pedidos,
+            h.cancelados,
+            h.promocoes,
+          ),
         ),
         // Até que dia ESTA loja tem dado, por plataforma. É o denominador de
         // qualquer projeção do mês corrente — ver a regra no prompt.
@@ -634,9 +654,13 @@ function montarContexto(
       redeMes.set(m.mes, cur)
     }
   }
+  // Mesma marca da série por loja: o mês corrente não é comparável com os
+  // fechados, e a marca tem que viajar junto do número.
   const historico_rede_mensal = [...redeMes.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([mes, v]) => linha(mes, round(v.bruto), v.pedidos))
+    .map(([mes, v]) =>
+      linha(mes === periodo ? `${mes} (PARCIAL)` : mes, round(v.bruto), v.pedidos),
+    )
 
   const payload = {
     mes_corrente: periodo,
@@ -645,10 +669,11 @@ function montarContexto(
     // nome do campo em toda linha. Esta é a legenda das colunas.
     legenda_das_tabelas: {
       historico_mensal:
-        "mes|bruto|liquido|pedidos|cancelados|promocoes_marketing_custeado_pela_loja",
+        "mes|bruto|liquido|pedidos|cancelados|promocoes_marketing_custeado_pela_loja — o mês marcado (PARCIAL) está INCOMPLETO: NUNCA subtraia ele de um mês fechado. Pra comparar, use comparativo_mesmo_recorte.",
       historico_rede_mensal: "mes|faturamento_bruto|pedidos",
       por_plataforma: "plataforma|bruto|liquido|taxa_da_plataforma",
       periodos_por_loja: "loja|bruto|pedidos|cancelados",
+      periodos_por_loja_plataforma: "loja|plataforma|bruto|liquido",
     },
     rede_mes_corrente: {
       lojas: units.length,
@@ -657,6 +682,10 @@ function montarContexto(
       pedidos: rede.pedidos,
       cancelados: rede.cancelados,
     },
+    // A comparação mês-a-mês PRONTA, com os dois lados na mesma janela de
+    // dias. Vem antes de `periodos` de propósito: é a primeira coisa que o
+    // modelo encontra quando a pergunta é "cresceu ou caiu".
+    comparativo_mesmo_recorte,
     // Recortes de quinzena (rede + por loja) do mês corrente e do mês passado.
     periodos: recortes,
     // Cancelamentos da rede por motivo (iFood), com perda em R$.
@@ -1199,6 +1228,21 @@ type ResumoPeriodo = {
   rede: { bruto: number; liquido: number; pedidos: number; cancelados: number }
   /** Tabela ORDENADA por bruto — colunas em `legenda_das_tabelas.periodos_por_loja`. */
   por_loja: string[]
+  /**
+   * Bruto por LOJA × PLATAFORMA no mesmo recorte.
+   *
+   * ── POR QUE (Marcus, 27/08/26) ──────────────────────────────────────────
+   * Perguntado sobre crescimento por plataforma, o Nino respondeu
+   * literalmente: "Os dados de produtos vendidos não dão a visão por
+   * plataforma que você precisa. Vou montar o comparativo com os números que
+   * já tenho do contexto" — e montou uma tabela com valores que NÃO EXISTEM na
+   * base (JK/Keeta/julho: disse R$ 164.092,92, o real é R$ 132.827,49).
+   *
+   * O `por_plataforma` do contexto é só do mês corrente, então comparar mês a
+   * mês por plataforma não tinha fonte. Agora tem, e no recorte certo — que é
+   * o que impede o segundo erro (ver a regra de mesmo recorte no prompt).
+   */
+  por_loja_plataforma: string[]
 }
 
 /** Soma da rede + por loja de UMA janela de dias (start..end) de um mês. */
@@ -1217,9 +1261,21 @@ async function resumoDePeriodo(
   ])
   const rede = { bruto: 0, liquido: 0, pedidos: 0, cancelados: 0 }
   const lojas: { nome: string; bruto: number; pedidos: number; cancelados: number }[] = []
+  const porPlat: { nome: string; plat: string; bruto: number; liquido: number }[] = []
   for (const u of units) {
     const m = map.get(u.id)
     if (!m) continue
+    for (const p of m.platforms ?? []) {
+      // Plataforma sem movimento no recorte não vira linha: enche o contexto e
+      // convida a IA a dizer "caiu 100%" onde a loja simplesmente não usa.
+      if ((p.bruto ?? 0) <= 0 && (p.liquido ?? 0) <= 0) continue
+      porPlat.push({
+        nome: u.name,
+        plat: p.id,
+        bruto: round(p.bruto ?? 0),
+        liquido: round(p.liquido ?? 0),
+      })
+    }
     const bruto = m.faturamentoBruto + (cestas.get(u.id)?.valor ?? 0)
     rede.bruto += bruto
     rede.liquido += m.totalLiquido
@@ -1243,6 +1299,76 @@ async function resumoDePeriodo(
     por_loja: lojas
       .sort((a, b) => b.bruto - a.bruto)
       .map((l) => linha(l.nome, l.bruto, l.pedidos, l.cancelados)),
+    por_loja_plataforma: porPlat
+      .sort((a, b) => b.bruto - a.bruto)
+      .map((l) => linha(l.nome, l.plat, l.bruto, l.liquido)),
+  }
+}
+
+/**
+ * A COMPARAÇÃO MÊS-A-MÊS, PRONTA E NO MESMO RECORTE.
+ *
+ * ── POR QUE ISTO NÃO É REGRA DE PROMPT (Marcus, 27/08/26) ─────────────────
+ * O Nino comparou julho INTEIRO com agosto até o dia 25 e anunciou queda em
+ * quase toda loja, com a rede CRESCENDO 4% no mesmo recorte. Escrevi a regra no
+ * prompt e ele errou de novo — na segunda vez pegou a QUINZENA de julho contra
+ * o mês de agosto e inverteu o sinal, anunciando +94%.
+ *
+ * Este arquivo já aprendeu essa lição em `semRepeticoesDaPergunta`: "instrução
+ * compete com exemplo, e exemplo ganha". O contexto entrega `historico_mensal`
+ * (meses inteiros) e `periodos` (quinzenas) — o modelo pega o que está na
+ * frente dele e monta a conta sozinho. Enquanto a comparação certa precisar ser
+ * CONSTRUÍDA, ela vai sair errada.
+ *
+ * Então ela vem pronta: dia 1 até o corte de AMBOS os meses, rede, loja e loja
+ * × plataforma. Não sobra conta pra fazer.
+ *
+ * ⚠️ O CORTE É O MENOR `completo_ate_dia`, NÃO O MAIOR. Escrevi com `Math.max`
+ * na primeira tentativa e o bloco passou a produzir a comparação errada que ele
+ * existe pra impedir: em 27/08 uma única loja tinha iFood até o dia 31, então a
+ * janela virou "01 a 31 de agosto contra 01 a 31 de julho" — julho inteiro
+ * contra agosto parcial, o erro original com carimbo de oficial. O Nino usou o
+ * bloco fielmente e errou junto.
+ *
+ * O menor é o último dia em que a REDE INTEIRA tem dado — o único denominador
+ * em que os dois lados são comparáveis. Uma loja atrasada encurta a janela, e
+ * isso é o certo: melhor comparar menos dias do que comparar dias que só um
+ * lado tem. O campo `janela` diz qual foi, pro dono julgar.
+ */
+async function comparativoMesmoRecorte(
+  units: { id: string; name: string }[],
+  year: number,
+  month: number,
+  coberturaLojas: Map<string, CoberturaLoja>,
+) {
+  const cortes = [...coberturaLojas.values()]
+    .map((c) => c.completo_ate_dia)
+    .filter((d): d is number => typeof d === "number" && d > 0)
+  const corteComparativo = cortes.length > 0 ? Math.min(...cortes) : null
+  if (!corteComparativo) return null
+  const ant = mesAnterior(year, month)
+  const corteAnt = Math.min(corteComparativo, diasNoMes(ant.year, ant.month))
+  const [agora, antes] = await Promise.all([
+    resumoDePeriodo(units, year, month, ymd(year, month, 1), ymd(year, month, corteComparativo)),
+    resumoDePeriodo(units, ant.year, ant.month, ymd(ant.year, ant.month, 1), ymd(ant.year, ant.month, corteAnt)),
+  ])
+  const varia = (a: number, b: number) => (b > 0 ? round(((a - b) / b) * 100) : null)
+  return {
+    leia_isto_antes_de_comparar_meses:
+      "Esta é a ÚNICA comparação válida entre o mês corrente e o passado. Os dois lados têm a MESMA janela de dias. Use estes números; não monte a conta com historico_mensal (meses inteiros) nem com periodos (quinzenas) — os dois lados ficariam de tamanhos diferentes.",
+    janela: `dia 01 a ${corteComparativo} de ${String(month).padStart(2, "0")}/${year} contra dia 01 a ${corteAnt} de ${String(ant.month).padStart(2, "0")}/${ant.year}`,
+    rede: {
+      bruto_agora: agora.rede.bruto,
+      bruto_antes: antes.rede.bruto,
+      variacao_pct: varia(agora.rede.bruto, antes.rede.bruto),
+      pedidos_agora: agora.rede.pedidos,
+      pedidos_antes: antes.rede.pedidos,
+    },
+    por_loja: { agora: agora.por_loja, antes: antes.por_loja },
+    por_loja_plataforma: {
+      agora: agora.por_loja_plataforma,
+      antes: antes.por_loja_plataforma,
+    },
   }
 }
 
@@ -1295,7 +1421,7 @@ function ferramentaPeriodo(
   return {
     name: FERRAMENTA_PERIODO,
     description:
-      "Soma o faturamento, os pedidos e os cancelamentos de um intervalo de datas QUALQUER (uma semana, um fim de semana, um dia só, ou um intervalo custom como 13 a 20 do mês). Devolve o total da rede e o de cada loja, já ordenado do maior pro menor. Use SEMPRE que a pergunta citar um recorte que não seja o mês inteiro nem a quinzena — nunca tente somar os dias de cabeça. O intervalo precisa ficar dentro de um mesmo mês.",
+      "Soma o faturamento, os pedidos e os cancelamentos de um intervalo de datas QUALQUER (uma semana, um fim de semana, um dia só, ou um intervalo custom como 13 a 20 do mês). Devolve o total da rede, o de cada loja E o de cada loja POR PLATAFORMA (por_loja_plataforma), tudo ordenado do maior pro menor. Use SEMPRE que a pergunta citar um recorte que não seja o mês inteiro nem a quinzena — nunca tente somar os dias de cabeça. USE TAMBÉM, obrigatoriamente e DUAS VEZES, pra qualquer comparação que envolva o mês corrente (ele está parcial): uma chamada dia 1 até completo_ate_dia deste mês, outra dia 1 até o MESMO dia do mês passado. E use pra plataforma em qualquer mês que não seja o corrente — é a única fonte disso. O intervalo precisa ficar dentro de um mesmo mês.",
     input_schema: {
       type: "object",
       properties: {
@@ -1339,6 +1465,11 @@ ORDEM DAS LISTAS: as listas de LOJA ("por_loja", tanto o do mês quanto o dentro
 O contexto tem:
 - "contexto_temporal": a data de hoje, o dia do mês, dias no mês e dias restantes.
 - "dado_vai_ate" (dentro de CADA loja, não no contexto_temporal): até que dia AQUELA loja tem número em cada plataforma, mais "completo_ate_dia" (o menor entre as que têm dado).
+- ⚠️ COMPARAR MESES: use o bloco "comparativo_mesmo_recorte". Ele já traz os dois lados na MESMA janela de dias (rede, por loja e por loja × plataforma) — é ler e responder, sem montar conta. Se ele existir, é a ÚNICA fonte válida pra "cresceu ou caiu" envolvendo o mês corrente; se vier null, o mês ainda não tem dado suficiente e você diz isso.
+  NUNCA compare o mês corrente com um mês fechado inteiro. O mês corrente está PARCIAL (o dado vai só até "completo_ate_dia"), e comparar 25 dias contra 31 inventa uma queda de ~20% que não existe. Isso já produziu uma resposta inteira errada em 27/08/26: com a rede CRESCENDO 4% no mesmo recorte, a tabela saiu com queda em quase toda loja, e seis delas viraram de "-12%" pra "+23%" quando o recorte foi igualado.
+  O certo é comparar JANELA IGUAL: use a ferramenta faturamento_por_periodo duas vezes — dia 1 até "completo_ate_dia" no mês corrente, e dia 1 até o MESMO dia no mês passado. Ela devolve rede, por loja e por loja × plataforma, então serve tanto pra "a rede cresceu?" quanto pra "qual plataforma caiu na loja X".
+  Se por algum motivo você comparar mês cheio contra mês cheio, diga que o corrente está incompleto e que o número vai mudar. E NUNCA anuncie crescimento ou queda sem dizer de que período pra que período.
+- ⚠️ PLATAFORMA MÊS A MÊS: o "por_plataforma" de cada loja é SÓ DO MÊS CORRENTE — não dá pra comparar plataforma entre meses com ele. Pra isso existe o "por_loja_plataforma" que a faturamento_por_periodo devolve. Se você precisa de plataforma em outro mês e não chamou a ferramenta, CHAME. Não monte a tabela "com os números que já tenho": em 27/08/26 isso produziu valores que não existem na base (JK/Keeta/julho saiu R$ 164.092,92 onde o real é R$ 132.827,49). Número que você não tem é ferramenta que você não chamou — nunca é número pra estimar.
 - PROJEÇÃO DO MÊS — a regra é: faturamento_do_mes ÷ **completo_ate_dia DA LOJA** × dias_no_mes. NUNCA divida por "dias_decorridos": dia do calendário não é dia com dado. Hoje pode ser 12 e a última planilha daquela loja ter parado no dia 10 — dividir por 12 espalha o faturamento de 10 dias por 12 e devolve uma queda que não existe. E NUNCA use a cobertura de uma loja pra projetar outra: no mesmo dia uma pode estar no dia 8 e outra no 12. Se "completo_ate_dia" for null, não projete: diga que ainda não há dado suficiente no mês.
 - Ao projetar, SEMPRE diga até que dia o dado vai ("com dado até 10/ago"). É isso que deixa a pessoa julgar a projeção em vez de engolir o número. E deixe claro que é projeção, não certeza.
 - Se uma plataforma estiver bem mais atrasada que as outras, diga qual e sugira sincronizar/subir o relatório antes de tirar conclusão — projeção com dado velho vira diagnóstico errado de queda.
@@ -1551,6 +1682,12 @@ export async function perguntarConsultor(
     // Cobertura é POR LOJA (vai em cada item de `por_loja`), não aqui: no mesmo
     // dia a Alphaville estava no dia 8 do iFood e metade da rede no 12.
     const coberturaLojas = await coberturaPorLoja(year, month, unitIds)
+    const comparativo_mesmo_recorte = await comparativoMesmoRecorte(
+      units,
+      year,
+      month,
+      coberturaLojas,
+    )
     const ant = mesAnterior(year, month)
     const cobertura = {
       // O que cobra ação HOJE: mês fechado, prazo vencido, ainda sem relatório.
@@ -1570,7 +1707,7 @@ export async function perguntarConsultor(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, paresViaApi(units, links99.data, ifoodComApi.data)), coberturaLojas)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, paresViaApi(units, links99.data, ifoodComApi.data)), coberturaLojas, comparativo_mesmo_recorte)
 
     const resposta = await askClaudeChat({
       system: systemDoNino(periodo, contexto),
@@ -1765,6 +1902,12 @@ export async function* perguntarConsultorStream(
     // Cobertura é POR LOJA (vai em cada item de `por_loja`), não aqui: no mesmo
     // dia a Alphaville estava no dia 8 do iFood e metade da rede no 12.
     const coberturaLojas = await coberturaPorLoja(year, month, unitIds)
+    const comparativo_mesmo_recorte = await comparativoMesmoRecorte(
+      units,
+      year,
+      month,
+      coberturaLojas,
+    )
     const ant = mesAnterior(year, month)
     const cobertura = {
       // O que cobra ação HOJE: mês fechado, prazo vencido, ainda sem relatório.
@@ -1784,7 +1927,7 @@ export async function* perguntarConsultorStream(
         ),
       },
     }
-    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, paresViaApi(units, links99.data, ifoodComApi.data)), coberturaLojas)
+    const contexto = montarContexto(units, numeros, histMap, periodo, temporal, recortes, cancelMap, reputacao, promoMap, cobertura, plataformasSemDado(units, monthlyMap, paresViaApi(units, links99.data, ifoodComApi.data)), coberturaLojas, comparativo_mesmo_recorte)
 
     const stream = streamClaudeChat({
       system: systemDoNino(periodo, contexto),
