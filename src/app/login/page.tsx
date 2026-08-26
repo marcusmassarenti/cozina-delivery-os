@@ -15,6 +15,26 @@ export default async function LoginPage({
   searchParams: Promise<{ recuperado?: string; next?: string }>
 }) {
   const sp = await searchParams
+
+  /**
+   * Nome da plataforma quando o login veio de um link de CONEXÃO.
+   *
+   * O `next` é o único sinal disponível: `/conectar/cardapioweb` chega aqui
+   * como `next=%2Fconectar%2Fcardapioweb`. Vale pras próximas também — se
+   * amanhã existir `/conectar/99food`, basta a linha no mapa.
+   */
+  const plataformaDoNext = (() => {
+    const alvo = decodeURIComponent(sp.next ?? "")
+    if (!alvo.startsWith("/conectar/")) return null
+    const mapa: Record<string, string> = {
+      cardapioweb: "Cardápio Web",
+      "99food": "99 Food",
+      ifood: "iFood",
+      keeta: "Keeta",
+    }
+    const slug = alvo.split("/")[2]?.split("?")[0] ?? ""
+    return mapa[slug] ?? null
+  })()
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
   if (data.user) {
@@ -106,6 +126,28 @@ export default async function LoginPage({
                   <b>Código de recuperação aceito.</b> A verificação em duas
                   etapas foi desativada. Entre com e-mail e senha e cadastre seu
                   novo aparelho em Minha conta → Segurança.
+                </span>
+              </div>
+            )}
+
+            {/* Veio de um link de CONEXÃO de plataforma.
+                ── POR QUE (Marcus, 27/08/26) ──────────────────────────────
+                Um cliente passou a manhã travado em
+                deliveryos.food/conectar/cardapioweb: sem sessão, a rota manda
+                pro /login, e ele digitava ali o e-mail e a senha DO CARDÁPIO
+                WEB. Nas palavras dele: "loguei normalmente no cardápio web,
+                mas no deliveryOS fala que o email e senha está incorreto".
+                As credenciais estavam certas — só eram de outro sistema.
+                A tela dizia "Acesso Administrativo" e mais nada, então tentar
+                a senha da plataforma que ele veio conectar é o comportamento
+                óbvio, não o descuido dele. */}
+            {plataformaDoNext && (
+              <div className="mb-6 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  Entre com a sua conta do <b>Delivery OS</b> — não com o login
+                  do <b>{plataformaDoNext}</b>. Assim que entrar, você volta
+                  direto para a autorização.
                 </span>
               </div>
             )}
