@@ -70,25 +70,43 @@ export function DashboardFilters({
     pushWith("plataformas", todas ? null : ids.join(","))
   }
 
+  /**
+   * ⚠️ SEM FILTRO = NENHUM BOX MARCADO, e clicar um seleciona SÓ ele.
+   *
+   * ── POR QUE MUDOU (Marcus, 26/08/26) ───────────────────────────────────
+   * "quando eu clicar todas as plataformas, elas precisam vir sem o box
+   * clicado. hoje, vem todas selecionadas e demora muito para processar."
+   *
+   * Antes, "todas" aparecia como os quatro boxes marcados. Duas consequências,
+   * e a segunda é a cara:
+   *
+   *  1. Visual: quatro boxes marcados parecem filtro ligado, quando o estado é
+   *     justamente "não estou filtrando".
+   *  2. Custo: clicar UMA plataforma partindo daí virava "todas menos essa" —
+   *     três plataformas, o recorte MAIS pesado que existe. Quem clica em
+   *     "Keeta" quer ver a Keeta, e recebia iFood + 99 + Cardápio Web.
+   *
+   * Agora, partindo do vazio, clicar uma plataforma seleciona só ela: o recorte
+   * mais leve, e o que a pessoa quis dizer.
+   */
   function togglePlataforma(id: PlatformId) {
-    const base =
-      plataformasSelected.length === 0
-        ? PLATFORMS.map((p) => p.id) // "todas" implícito vira explícito
-        : plataformasSelected
-    const proxima = base.includes(id)
-      ? base.filter((x) => x !== id)
-      : [...base, id]
-    // Desmarcar tudo não faz sentido (a tela ficaria vazia) — volta pra todas.
-    setPlataformas(proxima.length === 0 ? [] : proxima)
+    const semFiltro = plataformasSelected.length === 0
+    if (semFiltro) {
+      setPlataformas([id])
+      return
+    }
+    const proxima = plataformasSelected.includes(id)
+      ? plataformasSelected.filter((x) => x !== id)
+      : [...plataformasSelected, id]
+    // Desmarcar tudo volta pra "todas" — tela vazia não é um estado útil.
+    setPlataformas(proxima)
   }
 
-  // Vazio = todas. `platsAtivas` é a lista efetiva pra marcar os checkboxes.
   const platsFiltrando =
     plataformasSelected.length > 0 &&
     plataformasSelected.length < PLATFORMS.length
-  const platsAtivas = platsFiltrando
-    ? plataformasSelected
-    : PLATFORMS.map((p) => p.id)
+  /** O que está REALMENTE marcado. Vazio quando não há filtro. */
+  const platsAtivas = plataformasSelected
 
   const unitsCount = unidadesSelected.length
   const allSelected = unitsCount === 0 || unitsCount === unitOptions.length
