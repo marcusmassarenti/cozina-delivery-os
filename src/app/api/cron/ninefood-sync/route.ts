@@ -49,6 +49,27 @@ export async function GET(req: Request) {
     console.error("[99] varredura de lojas falhou:", e)
   }
 
+  /**
+   * O resultado da varredura PRECISA sair daqui.
+   *
+   * Até 25/08/26 ele só existia no JSON desta resposta: a varredura descobria
+   * a loja, vinculava, puxava o histórico — e não contava a ninguém. O Marcus
+   * perguntou "como vejo se uma loja conectou na 99 sem o usuário me avisar?"
+   * e a resposta era "abrindo a tela e reparando", que não é resposta.
+   *
+   * Não derruba o cron: aviso que falha é aviso perdido, não sync perdido.
+   */
+  if (lojas99) {
+    try {
+      const { avisarAutorizacao99 } = await import(
+        "@/lib/ninefood/avisar-autorizacao"
+      )
+      await avisarAutorizacao99(lojas99)
+    } catch (e) {
+      console.error("[99] aviso de autorização falhou:", e)
+    }
+  }
+
   // mês atual + anterior (app roda em TZ America/Sao_Paulo)
   const now = new Date()
   const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)

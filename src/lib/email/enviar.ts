@@ -32,6 +32,17 @@ export type TipoEmail =
   /** Relatório interno de saúde — sai todo dia, não é régua de cliente. */
   | "saude-diaria"
   /**
+   * Interno: "uma loja autorizou o app no 99". Disparado pela varredura diária
+   * quando aparece vínculo novo. O 99 não tem callback de autorização como o
+   * Cardápio Web — sem este aviso, o Marcus só descobria loja nova olhando à
+   * mão (foi o caso da Marmitex Faisão, 24/08/26).
+   *
+   * `holdingId` vai null de propósito: é e-mail da casa, não régua de cliente.
+   * A trava de duplicidade não se aplica, e não faz falta — o gatilho é o
+   * INSERT do vínculo, que acontece uma vez só por loja.
+   */
+  | "99-autorizada"
+  /**
    * "Este cliente concluiu a parte dele na esteira de conexão." Interno, com
    * `forcar: true`: uma loja gera vários avisos conforme o cliente vai
    * concluindo cada plataforma, e a trava de duplicidade engoliria do segundo
