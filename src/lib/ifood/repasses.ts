@@ -1,4 +1,4 @@
-import "server-only";
+import "server-only"
 
 /**
  * O repasse do iFood por CICLO, com a data em que o dinheiro caiu de verdade.
@@ -25,9 +25,9 @@ import "server-only";
  *
  * Espelha `keeta_repasses`, que já resolvia o mesmo problema do lado da Keeta.
  */
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getAnticipations } from "./anticipations";
-import { getSettlements } from "./settlements";
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getAnticipations } from "./anticipations"
+import { getSettlements } from "./settlements"
 
 /**
  * ⚠️ JANELA MÁXIMA DE ~31 DIAS, E ESTOURAR NÃO DÁ ERRO.
@@ -41,29 +41,29 @@ import { getSettlements } from "./settlements";
  * `ciclos: 0` sem reclamar. Por isso o intervalo é fatiado aqui, e não na
  * mão de quem chama: quem chama não tem como saber do limite.
  */
-const MAX_DIAS_JANELA = 31;
+const MAX_DIAS_JANELA = 31
 
 function fatiar(de: string, ate: string): [string, string][] {
-  const out: [string, string][] = [];
-  const fim = new Date(`${ate}T00:00:00`);
-  let ini = new Date(`${de}T00:00:00`);
+  const out: [string, string][] = []
+  const fim = new Date(`${ate}T00:00:00`)
+  let ini = new Date(`${de}T00:00:00`)
   while (ini <= fim) {
-    const p = new Date(ini);
-    p.setDate(p.getDate() + MAX_DIAS_JANELA - 1);
-    const pFim = p > fim ? fim : p;
-    out.push([ini.toISOString().slice(0, 10), pFim.toISOString().slice(0, 10)]);
-    ini = new Date(pFim);
-    ini.setDate(ini.getDate() + 1);
+    const p = new Date(ini)
+    p.setDate(p.getDate() + MAX_DIAS_JANELA - 1)
+    const pFim = p > fim ? fim : p
+    out.push([ini.toISOString().slice(0, 10), pFim.toISOString().slice(0, 10)])
+    ini = new Date(pFim)
+    ini.setDate(ini.getDate() + 1)
   }
-  return out;
+  return out
 }
 
 export type ResultadoRepasses = {
-  merchantId: string;
-  ciclos: number;
-  antecipados: number;
-  erro?: string;
-};
+  merchantId: string
+  ciclos: number
+  antecipados: number
+  erro?: string
+}
 
 /**
  * ⚠️ SÓ O SALDO FECHADO CONTA COMO DINHEIRO DO CICLO.
@@ -77,25 +77,25 @@ export type ResultadoRepasses = {
  */
 const SALDO_FECHADO = (tipo?: string, status?: string) =>
   (tipo === "SALDO POSITIVO" || tipo === "SALDO NEGATIVO") &&
-  status === "CLOSED";
+  status === "CLOSED"
 
 /** Sinal certo: SALDO NEGATIVO já vem negativo na API, mas não custa garantir. */
 const comSinal = (tipo: string | undefined, v: number) =>
-  tipo === "SALDO NEGATIVO" ? -Math.abs(v) : v;
+  tipo === "SALDO NEGATIVO" ? -Math.abs(v) : v
 
 type Linha = {
-  unit_id: string;
-  merchant_id: string;
-  ciclo_inicio: string;
-  ciclo_fim: string;
-  tipo: string | null;
-  status: string | null;
-  valor_bruto: number;
-  taxa_antecipacao: number;
-  valor_liquido: number;
-  data_prevista: string | null;
-  data_pagamento: string | null;
-};
+  unit_id: string
+  merchant_id: string
+  ciclo_inicio: string
+  ciclo_fim: string
+  tipo: string | null
+  status: string | null
+  valor_bruto: number
+  taxa_antecipacao: number
+  valor_liquido: number
+  data_prevista: string | null
+  data_pagamento: string | null
+}
 
 /**
  * Traz os repasses de uma loja num intervalo de APURAÇÃO (não de pagamento:
@@ -112,34 +112,34 @@ export async function sincronizarRepassesIfood(
   de: string,
   ate: string,
 ): Promise<ResultadoRepasses> {
-  const admin = createAdminClient();
-  const porCiclo = new Map<string, Linha>();
+  const admin = createAdminClient()
+  const porCiclo = new Map<string, Linha>()
 
-  const fatias = fatiar(de, ate);
-  let antecipados = 0;
+  const fatias = fatiar(de, ate)
+  let antecipados = 0
 
   // 1) ANTECIPAÇÕES primeiro: quem antecipa tem a data real só aqui.
   for (const [fDe, fAte] of fatias) {
-    const anti = await getAnticipations(merchantId, fDe, fAte);
+    const anti = await getAnticipations(merchantId, fDe, fAte)
     if (!anti.ok) {
       return {
         merchantId,
         ciclos: 0,
         antecipados: 0,
         erro: anti.error ?? `HTTP ${anti.status}`,
-      };
+      }
     }
     for (const p of anti.data?.settlements ?? []) {
-      const ini = p.startDateCalculation?.slice(0, 10);
-      const fim = p.endDateCalculation?.slice(0, 10);
-      if (!ini || !fim) continue;
+      const ini = p.startDateCalculation?.slice(0, 10)
+      const fim = p.endDateCalculation?.slice(0, 10)
+      if (!ini || !fim) continue
       for (const it of p.closingItems ?? []) {
-        const chave = `${ini}|${fim}`;
-        const atual = porCiclo.get(chave);
-        const bruto = Number(it.originalPaymentAmount ?? 0);
-        const taxa = Number(it.feeAmount ?? 0);
-        const liq = Number(it.anticipatedPaymentAmount ?? 0);
-        antecipados++;
+        const chave = `${ini}|${fim}`
+        const atual = porCiclo.get(chave)
+        const bruto = Number(it.originalPaymentAmount ?? 0)
+        const taxa = Number(it.feeAmount ?? 0)
+        const liq = Number(it.anticipatedPaymentAmount ?? 0)
+        antecipados++
         porCiclo.set(chave, {
           unit_id: unitId,
           merchant_id: merchantId,
@@ -158,7 +158,7 @@ export async function sincronizarRepassesIfood(
             it.anticipatedPaymentDate?.slice(0, 10) ??
             atual?.data_pagamento ??
             null,
-        });
+        })
       }
     }
   }
@@ -166,18 +166,18 @@ export async function sincronizarRepassesIfood(
   // 2) SETTLEMENTS pros ciclos que NÃO foram antecipados. Aqui a data prevista
   //    é a data real, porque não houve antecipação pra deslocar nada.
   for (const [fDe, fAte] of fatias) {
-    const set = await getSettlements(merchantId, fDe, fAte, "calculo");
+    const set = await getSettlements(merchantId, fDe, fAte, "calculo")
     if (set.ok) {
       for (const p of set.data?.settlements ?? []) {
-        const ini = p.startDateCalculation?.slice(0, 10);
-        const fim = p.endDateCalculation?.slice(0, 10);
-        if (!ini || !fim) continue;
-        const chave = `${ini}|${fim}`;
-        if (porCiclo.has(chave)) continue; // antecipado: a data boa é a de cima
+        const ini = p.startDateCalculation?.slice(0, 10)
+        const fim = p.endDateCalculation?.slice(0, 10)
+        if (!ini || !fim) continue
+        const chave = `${ini}|${fim}`
+        if (porCiclo.has(chave)) continue // antecipado: a data boa é a de cima
         for (const it of p.closingItems ?? []) {
-          if (!SALDO_FECHADO(it.type, it.status)) continue;
-          const v = comSinal(it.type, Number(it.amount ?? 0));
-          const atual = porCiclo.get(chave);
+          if (!SALDO_FECHADO(it.type, it.status)) continue
+          const v = comSinal(it.type, Number(it.amount ?? 0))
+          const atual = porCiclo.get(chave)
           porCiclo.set(chave, {
             unit_id: unitId,
             merchant_id: merchantId,
@@ -192,24 +192,24 @@ export async function sincronizarRepassesIfood(
               it.paymentDate?.slice(0, 10) ?? atual?.data_prevista ?? null,
             data_pagamento:
               it.paymentDate?.slice(0, 10) ?? atual?.data_pagamento ?? null,
-          });
+          })
         }
       }
     }
   }
 
-  const linhas = [...porCiclo.values()];
-  if (linhas.length === 0) return { merchantId, ciclos: 0, antecipados: 0 };
+  const linhas = [...porCiclo.values()]
+  if (linhas.length === 0) return { merchantId, ciclos: 0, antecipados: 0 }
 
   await admin
     .from("ifood_repasses")
     .delete()
     .eq("merchant_id", merchantId)
     .gte("ciclo_inicio", de)
-    .lte("ciclo_inicio", ate);
-  const { error } = await admin.from("ifood_repasses").insert(linhas);
+    .lte("ciclo_inicio", ate)
+  const { error } = await admin.from("ifood_repasses").insert(linhas)
   if (error)
-    return { merchantId, ciclos: 0, antecipados: 0, erro: error.message };
+    return { merchantId, ciclos: 0, antecipados: 0, erro: error.message }
 
-  return { merchantId, ciclos: linhas.length, antecipados };
+  return { merchantId, ciclos: linhas.length, antecipados }
 }

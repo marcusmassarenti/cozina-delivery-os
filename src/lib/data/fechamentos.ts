@@ -1,30 +1,30 @@
-import "server-only";
+import "server-only"
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllRows } from "@/lib/data/paginate";
+import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
 
 export type ValorSemana = {
   /** O ciclo cujo PERÍODO é esta semana. null = a plataforma não fechou ainda. */
-  ciclo: number | null;
+  ciclo: number | null
   /** O repasse que CAIU na conta dentro desta semana (de um ciclo anterior). */
-  caiu: number | null;
+  caiu: number | null
   /**
    * true = veio da tabela de repasse da plataforma, é o número exato.
    * false = reconstruído de dado de pedido, é aproximação — a tela precisa
    * dizer isso em vez de mostrar centavos que não existem.
    */
-  exato: boolean;
-};
+  exato: boolean
+}
 
 export type RecebidoSemana = {
-  ifood: ValorSemana;
-  ninefood: ValorSemana;
-  keeta: ValorSemana;
+  ifood: ValorSemana
+  ninefood: ValorSemana
+  keeta: ValorSemana
   /** VR (vale-refeição) recebido via iFood na semana — relatório de Pedidos. */
-  vr: number;
-};
+  vr: number
+}
 
-const vazio = (): ValorSemana => ({ ciclo: null, caiu: null, exato: false });
+const vazio = (): ValorSemana => ({ ciclo: null, caiu: null, exato: false })
 
 /**
  * O que a semana rendeu e o que caiu na conta, por plataforma.
@@ -61,16 +61,16 @@ export async function getRecebidoSemana(
   inicio: string, // YYYY-MM-DD
   fim: string,
 ): Promise<RecebidoSemana> {
-  const admin = createAdminClient();
-  const fimTs = `${fim}T23:59:59`;
-  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const admin = createAdminClient()
+  const fimTs = `${fim}T23:59:59`
+  const round2 = (n: number) => Math.round(n * 100) / 100
   const soma = (rows: unknown[] | null, campo: string) =>
     round2(
       (rows ?? []).reduce<number>(
         (a, r) => a + (Number((r as Record<string, unknown>)[campo]) || 0),
         0,
       ),
-    );
+    )
 
   const [
     ifoodCiclo,
@@ -137,7 +137,7 @@ export async function getRecebidoSemana(
           .range(from, to),
       "recebido semana vr",
     ),
-  ]);
+  ])
 
   const ifood: ValorSemana = {
     ciclo: ifoodCiclo.data?.length
@@ -145,7 +145,7 @@ export async function getRecebidoSemana(
       : null,
     caiu: ifoodCaiu.data?.length ? soma(ifoodCaiu.data, "valor_liquido") : null,
     exato: Boolean(ifoodCiclo.data?.length || ifoodCaiu.data?.length),
-  };
+  }
 
   const keeta: ValorSemana = {
     ciclo: keetaCiclo.data?.length
@@ -153,7 +153,7 @@ export async function getRecebidoSemana(
       : null,
     caiu: keetaCaiu.data?.length ? soma(keetaCaiu.data, "valor_repasse") : null,
     exato: Boolean(keetaCiclo.data?.length || keetaCaiu.data?.length),
-  };
+  }
 
   /**
    * 99: a API traz o `settlementAmount` por pedido, com a data de liquidação
@@ -165,8 +165,8 @@ export async function getRecebidoSemana(
    * primeiro como era antes.
    */
   const appShopId = (nineLink.data as { app_shop_id?: string } | null)
-    ?.app_shop_id;
-  let ninefood: ValorSemana = vazio();
+    ?.app_shop_id
+  let ninefood: ValorSemana = vazio()
   if (appShopId) {
     /**
      * ⚠️ SEM O FILTRO `order_type = 1` AQUI, E DE PROPÓSITO.
@@ -193,7 +193,7 @@ export async function getRecebidoSemana(
         .eq("app_shop_id", appShopId)
         .gte("expect_settle_date", inicio)
         .lte("expect_settle_date", fim),
-    ]);
+    ])
     const settle = (rows: { raw: Record<string, unknown> }[] | null) =>
       rows?.length
         ? round2(
@@ -202,13 +202,13 @@ export async function getRecebidoSemana(
               0,
             ),
           )
-        : null;
-    const c = settle(porVenda.data as never);
-    const p = settle(porLiquidacao.data as never);
-    ninefood = { ciclo: c, caiu: p, exato: c != null || p != null };
+        : null
+    const c = settle(porVenda.data as never)
+    const p = settle(porLiquidacao.data as never)
+    ninefood = { ciclo: c, caiu: p, exato: c != null || p != null }
   }
   if (!ninefood.exato && nineDiario.length > 0) {
-    ninefood = { ciclo: soma(nineDiario, "liquido"), caiu: null, exato: false };
+    ninefood = { ciclo: soma(nineDiario, "liquido"), caiu: null, exato: false }
   }
 
   return {
@@ -216,27 +216,27 @@ export async function getRecebidoSemana(
     ninefood,
     keeta,
     vr: soma(vrRows, "total_pago_cliente"),
-  };
+  }
 }
 
 export type Fechamento = {
-  id: string;
-  unitId: string;
-  periodoInicio: string; // YYYY-MM-DD
-  periodoFim: string;
-  recebidoIfood: number;
-  recebidoKeeta: number;
-  recebido99: number;
+  id: string
+  unitId: string
+  periodoInicio: string // YYYY-MM-DD
+  periodoFim: string
+  recebidoIfood: number
+  recebidoKeeta: number
+  recebido99: number
   /** VR da semana (coluna `credito_debito` reaproveitada). Soma no recebido. */
-  vr: number;
-  custoProdutos: number;
-  custoVinagrete: number;
-  acerto: Record<string, unknown>;
-  observacoes: string | null;
-  createdAt: string;
-};
+  vr: number
+  custoProdutos: number
+  custoVinagrete: number
+  acerto: Record<string, unknown>
+  observacoes: string | null
+  createdAt: string
+}
 
-const num = (v: unknown) => (v == null ? 0 : Number(v));
+const num = (v: unknown) => (v == null ? 0 : Number(v))
 
 function mapRow(r: Record<string, unknown>): Fechamento {
   return {
@@ -253,38 +253,38 @@ function mapRow(r: Record<string, unknown>): Fechamento {
     acerto: (r.acerto as Record<string, unknown>) ?? {},
     observacoes: (r.observacoes as string | null) ?? null,
     createdAt: r.created_at as string,
-  };
+  }
 }
 
 /** Um fechamento pelo id (pra tela de impressão). */
 export async function getFechamentoById(
   id: string,
 ): Promise<Fechamento | null> {
-  const admin = createAdminClient();
+  const admin = createAdminClient()
   const { data, error } = await admin
     .from("unit_fechamentos")
     .select(
       "id, unit_id, periodo_inicio, periodo_fim, recebido_ifood, recebido_keeta, recebido_99, credito_debito, custo_produtos, custo_vinagrete, acerto, observacoes, created_at",
     )
     .eq("id", id)
-    .maybeSingle();
-  if (error || !data) return null;
-  return mapRow(data as Record<string, unknown>);
+    .maybeSingle()
+  if (error || !data) return null
+  return mapRow(data as Record<string, unknown>)
 }
 
 /** Todos os fechamentos da unidade, mais recentes primeiro. */
 export async function getFechamentos(unitId: string): Promise<Fechamento[]> {
-  const admin = createAdminClient();
+  const admin = createAdminClient()
   const { data, error } = await admin
     .from("unit_fechamentos")
     .select(
       "id, unit_id, periodo_inicio, periodo_fim, recebido_ifood, recebido_keeta, recebido_99, credito_debito, custo_produtos, custo_vinagrete, acerto, observacoes, created_at",
     )
     .eq("unit_id", unitId)
-    .order("periodo_inicio", { ascending: false });
+    .order("periodo_inicio", { ascending: false })
   if (error) {
-    console.error("getFechamentos:", error.message);
-    return [];
+    console.error("getFechamentos:", error.message)
+    return []
   }
-  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>))
 }
