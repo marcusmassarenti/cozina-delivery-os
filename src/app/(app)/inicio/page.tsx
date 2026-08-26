@@ -2089,6 +2089,11 @@ export default async function Home({
                     pedidoIdCurto: null,
                   })),
                 ]
+                  /* Respeita o filtro do topo. Sem isto, com "Keeta" marcado a
+                     lista trazia comentário de iFood no meio — e o rótulo do
+                     canto ainda anunciava "iFood + 99 Food + Keeta", que é a
+                     tela contando o que ela mesma não devia estar mostrando. */
+                  .filter((c) => mostraPlat(c.platform))
                   .sort((a, b) => (a.data > b.data ? -1 : 1))
                   .slice(0, 5)
                 if (merged.length === 0) return null
@@ -2101,10 +2106,12 @@ export default async function Home({
                       </h3>
                       <span className="ml-auto text-[10px] text-muted-foreground">
                         {[
-                          hasAvaliacoesData && "iFood",
-                          hasAvaliacoes99Data && "99 Food",
-                          hasAvaliacoesKeetaData && "Keeta",
-                          hasAvaliacoesCwData && "Cardápio Web",
+                          mostraPlat("ifood") && hasAvaliacoesData && "iFood",
+                          mostraPlat("99food") && hasAvaliacoes99Data && "99 Food",
+                          mostraPlat("keeta") && hasAvaliacoesKeetaData && "Keeta",
+                          mostraPlat("cardapioweb") &&
+                            hasAvaliacoesCwData &&
+                            "Cardápio Web",
                         ]
                           .filter(Boolean)
                           .join(" + ")}{" "}
