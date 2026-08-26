@@ -1,16 +1,20 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { CalendarRange, FileDown, Plus, Trash2 } from "lucide-react"
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { CalendarRange, FileDown, Plus, Trash2 } from "lucide-react";
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { fmtBRL } from "@/lib/format"
-import type { Fechamento, RecebidoSemana } from "@/lib/data/fechamentos"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { fmtBRL } from "@/lib/format";
+import type {
+  Fechamento,
+  RecebidoSemana,
+  ValorSemana,
+} from "@/lib/data/fechamentos";
 import {
   type Acerto,
   type AcertoMode,
@@ -20,28 +24,59 @@ import {
   lucroLiquido,
   computeSplit,
   acertoBreakdown,
-} from "@/lib/fechamento-calc"
-import type { VinagreteRef } from "@/lib/data/produtos-vendidos"
+} from "@/lib/fechamento-calc";
+import type { VinagreteRef } from "@/lib/data/produtos-vendidos";
 import {
   saveFechamento,
   deleteFechamento,
   prefillRecebido,
   getVinagreteReference,
-} from "../_actions"
-import { VinagretePanel } from "./vinagrete-panel"
+} from "../_actions";
+import { VinagretePanel } from "./vinagrete-panel";
+
+/**
+ * As duas referências clicáveis de uma plataforma.
+ *
+ * `exato: false` vira "≈" no rótulo: loja do 99 sem API só tem planilha, e
+ * planilha não sabe de liquidação. Mostrar o número sem o sinal seria vender
+ * como repasse o que é estimativa — o defeito que esta tela tinha.
+ */
+function refsDe(
+  v: ValorSemana | undefined,
+): { rotulo: string; valor: number; titulo?: string }[] {
+  if (!v) return [];
+  const out: { rotulo: string; valor: number; titulo?: string }[] = [];
+  if (v.ciclo != null && v.ciclo > 0) {
+    out.push({
+      rotulo: v.exato ? "ciclo da semana" : "≈ vendas da semana",
+      valor: v.ciclo,
+      titulo: v.exato
+        ? "O que as vendas desta semana renderam de repasse"
+        : "Estimativa pela planilha — esta loja não tem API nesta plataforma",
+    });
+  }
+  if (v.caiu != null && v.caiu > 0) {
+    out.push({
+      rotulo: "caiu na conta",
+      valor: v.caiu,
+      titulo: "Repasse que entrou na conta nestes dias (de um ciclo anterior)",
+    });
+  }
+  return out;
+}
 
 type Draft = {
-  periodoInicio: string
-  periodoFim: string
-  recebidoIfood: number
-  recebidoKeeta: number
-  recebido99: number
-  vr: number
-  custoProdutos: number
-  custoVinagrete: number
-  acerto: Acerto
-  observacoes: string
-}
+  periodoInicio: string;
+  periodoFim: string;
+  recebidoIfood: number;
+  recebidoKeeta: number;
+  recebido99: number;
+  vr: number;
+  custoProdutos: number;
+  custoVinagrete: number;
+  acerto: Acerto;
+  observacoes: string;
+};
 
 function emptyDraft(): Draft {
   return {
@@ -55,7 +90,7 @@ function emptyDraft(): Draft {
     custoVinagrete: 0,
     acerto: { ...EMPTY_ACERTO },
     observacoes: "",
-  }
+  };
 }
 
 function fromFechamento(f: Fechamento): Draft {
@@ -70,32 +105,32 @@ function fromFechamento(f: Fechamento): Draft {
     custoVinagrete: f.custoVinagrete,
     acerto: toAcerto(f.acerto),
     observacoes: f.observacoes ?? "",
-  }
+  };
 }
 
 function fmtPeriodo(ini: string, fim: string): string {
   const d = (s: string) => {
-    const [, m, day] = s.split("-")
-    return `${day}/${m}`
-  }
-  return `${d(ini)} – ${d(fim)}`
+    const [, m, day] = s.split("-");
+    return `${day}/${m}`;
+  };
+  return `${d(ini)} – ${d(fim)}`;
 }
 
 /** Segunda-feira da semana de `dateStr` (YYYY-MM-DD). */
 function mondayOf(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  const dow = dt.getUTCDay() // 0=dom .. 6=sáb
-  const diff = dow === 0 ? -6 : 1 - dow
-  dt.setUTCDate(dt.getUTCDate() + diff)
-  return dt.toISOString().slice(0, 10)
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=dom .. 6=sáb
+  const diff = dow === 0 ? -6 : 1 - dow;
+  dt.setUTCDate(dt.getUTCDate() + diff);
+  return dt.toISOString().slice(0, 10);
 }
 
 function addDays(dateStr: string, n: number): string {
-  const [y, m, d] = dateStr.split("-").map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  dt.setUTCDate(dt.getUTCDate() + n)
-  return dt.toISOString().slice(0, 10)
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
 }
 
 export function FechamentoTab({
@@ -104,73 +139,73 @@ export function FechamentoTab({
   fechamentos,
   canEdit,
 }: {
-  unitId: string
-  unitCode: string
-  fechamentos: Fechamento[]
-  canEdit: boolean
+  unitId: string;
+  unitCode: string;
+  fechamentos: Fechamento[];
+  canEdit: boolean;
 }) {
-  const router = useRouter()
-  const [draft, setDraft] = React.useState<Draft>(emptyDraft())
-  const [editing, setEditing] = React.useState(false)
-  const [saving, setSaving] = React.useState(false)
+  const router = useRouter();
+  const [draft, setDraft] = React.useState<Draft>(emptyDraft());
+  const [editing, setEditing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(
     null,
-  )
+  );
   // Referência cinza: soma do importado na semana (NÃO preenche os campos).
-  const [imported, setImported] = React.useState<RecebidoSemana | null>(null)
-  const [pulling, setPulling] = React.useState(false)
-  const lastPulled = React.useRef("")
+  const [imported, setImported] = React.useState<RecebidoSemana | null>(null);
+  const [pulling, setPulling] = React.useState(false);
+  const lastPulled = React.useRef("");
   // Vinagrete pela planilha do JK (referência cinza no campo + painel de preços).
-  const [vinRef, setVinRef] = React.useState<VinagreteRef | null>(null)
-  const lastVin = React.useRef("")
+  const [vinRef, setVinRef] = React.useState<VinagreteRef | null>(null);
+  const lastVin = React.useRef("");
 
   // Ao ter as duas datas, busca o importado da semana só pra conferência.
   React.useEffect(() => {
-    const { periodoInicio: ini, periodoFim: fim } = draft
+    const { periodoInicio: ini, periodoFim: fim } = draft;
     if (!editing || !ini || !fim || fim < ini) {
-      setImported(null)
-      return
+      setImported(null);
+      return;
     }
-    const key = `${ini}|${fim}`
-    if (key === lastPulled.current) return
-    lastPulled.current = key
-    setPulling(true)
+    const key = `${ini}|${fim}`;
+    if (key === lastPulled.current) return;
+    lastPulled.current = key;
+    setPulling(true);
     prefillRecebido(unitId, ini, fim).then((res) => {
-      setPulling(false)
-      setImported(res.ok && res.data ? res.data : null)
-    })
+      setPulling(false);
+      setImported(res.ok && res.data ? res.data : null);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.periodoInicio, draft.periodoFim, editing])
+  }, [draft.periodoInicio, draft.periodoFim, editing]);
 
   // Referência do vinagrete (planilha do JK) pra semana selecionada.
   React.useEffect(() => {
-    const { periodoInicio: ini, periodoFim: fim } = draft
+    const { periodoInicio: ini, periodoFim: fim } = draft;
     if (!editing || !ini || !fim || fim < ini) {
-      setVinRef(null)
-      return
+      setVinRef(null);
+      return;
     }
-    const key = `${ini}|${fim}`
-    if (key === lastVin.current) return
-    lastVin.current = key
+    const key = `${ini}|${fim}`;
+    if (key === lastVin.current) return;
+    lastVin.current = key;
     getVinagreteReference(unitId, ini, fim).then((res) => {
-      setVinRef(res.ok && res.ref ? res.ref : null)
-    })
+      setVinRef(res.ok && res.ref ? res.ref : null);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.periodoInicio, draft.periodoFim, editing])
+  }, [draft.periodoInicio, draft.periodoFim, editing]);
 
   // Recarrega a referência do vinagrete (após editar preço).
   async function refreshVin() {
-    const { periodoInicio: ini, periodoFim: fim } = draft
-    if (!ini || !fim) return
-    const res = await getVinagreteReference(unitId, ini, fim)
-    setVinRef(res.ok && res.ref ? res.ref : null)
+    const { periodoInicio: ini, periodoFim: fim } = draft;
+    if (!ini || !fim) return;
+    const res = await getVinagreteReference(unitId, ini, fim);
+    setVinRef(res.ok && res.ref ? res.ref : null);
   }
 
   // Importou a planilha: alinha a semana ao arquivo e mostra o detalhamento.
   function onVinImported(ref: VinagreteRef, ini: string, fim: string) {
-    setDraft((p) => ({ ...p, periodoInicio: ini, periodoFim: fim }))
-    lastVin.current = `${ini}|${fim}`
-    setVinRef(ref)
+    setDraft((p) => ({ ...p, periodoInicio: ini, periodoFim: fim }));
+    lastVin.current = `${ini}|${fim}`;
+    setVinRef(ref);
   }
 
   const rc = {
@@ -180,49 +215,53 @@ export function FechamentoTab({
     vr: draft.vr,
     custoProdutos: draft.custoProdutos,
     custoVinagrete: draft.custoVinagrete,
-  }
-  const recebido = recebidoTotal(rc)
-  const lucro = lucroLiquido(rc)
+  };
+  const recebido = recebidoTotal(rc);
+  const lucro = lucroLiquido(rc);
   const split = computeSplit(
     lucro,
     draft.custoProdutos,
     draft.custoVinagrete,
     draft.acerto,
-  )
-  const acertoLines = acertoBreakdown(draft.acerto)
+  );
+  const acertoLines = acertoBreakdown(draft.acerto);
 
   function startNew() {
-    setDraft(emptyDraft())
-    setEditing(true)
-    setImported(null)
-    lastPulled.current = ""
-    setMsg(null)
+    setDraft(emptyDraft());
+    setEditing(true);
+    setImported(null);
+    lastPulled.current = "";
+    setMsg(null);
   }
   function startEdit(f: Fechamento) {
-    setDraft(fromFechamento(f))
-    setEditing(true)
-    setImported(null)
-    lastPulled.current = ""
-    setMsg(null)
+    setDraft(fromFechamento(f));
+    setEditing(true);
+    setImported(null);
+    lastPulled.current = "";
+    setMsg(null);
   }
 
   // Escolher o início trava a semana em segunda → domingo.
   function setInicio(value: string) {
     if (!value) {
-      setDraft((p) => ({ ...p, periodoInicio: "", periodoFim: "" }))
-      return
+      setDraft((p) => ({ ...p, periodoInicio: "", periodoFim: "" }));
+      return;
     }
-    const seg = mondayOf(value)
-    setDraft((p) => ({ ...p, periodoInicio: seg, periodoFim: addDays(seg, 6) }))
+    const seg = mondayOf(value);
+    setDraft((p) => ({
+      ...p,
+      periodoInicio: seg,
+      periodoFim: addDays(seg, 6),
+    }));
   }
 
   async function onSave() {
     if (!draft.periodoInicio || !draft.periodoFim) {
-      setMsg({ ok: false, text: "Escolha a semana." })
-      return
+      setMsg({ ok: false, text: "Escolha a semana." });
+      return;
     }
-    setSaving(true)
-    setMsg(null)
+    setSaving(true);
+    setMsg(null);
     const res = await saveFechamento({
       unitId,
       unitCode,
@@ -236,26 +275,26 @@ export function FechamentoTab({
       custoVinagrete: draft.custoVinagrete,
       acerto: draft.acerto as unknown as Record<string, unknown>,
       observacoes: draft.observacoes,
-    })
-    setSaving(false)
+    });
+    setSaving(false);
     if (res.ok) {
-      setEditing(false)
-      router.refresh()
+      setEditing(false);
+      router.refresh();
     } else {
-      setMsg({ ok: false, text: res.message ?? "Erro ao salvar." })
+      setMsg({ ok: false, text: res.message ?? "Erro ao salvar." });
     }
   }
 
   async function onDelete(id: string) {
-    const res = await deleteFechamento(id, unitCode)
-    if (res.ok) router.refresh()
-    else setMsg({ ok: false, text: res.message ?? "Erro ao apagar." })
+    const res = await deleteFechamento(id, unitCode);
+    if (res.ok) router.refresh();
+    else setMsg({ ok: false, text: res.message ?? "Erro ao apagar." });
   }
 
   const setNum = (k: keyof Draft, v: number) =>
-    setDraft((p) => ({ ...p, [k]: v }))
+    setDraft((p) => ({ ...p, [k]: v }));
   const setAcerto = <K extends keyof Acerto>(k: K, v: Acerto[K]) =>
-    setDraft((p) => ({ ...p, acerto: { ...p.acerto, [k]: v } }))
+    setDraft((p) => ({ ...p, acerto: { ...p.acerto, [k]: v } }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -304,24 +343,39 @@ export function FechamentoTab({
                 {pulling
                   ? " Conferindo o importado…"
                   : imported
-                    ? " Em cinza = importado da semana (≈ vendas); clique pra usar — o que vale é o depósito que você digita."
+                    ? " Em cinza, clique pra usar: “ciclo da semana” = o que estas vendas renderam; “caiu na conta” = o repasse que entrou nestes dias (de uma semana anterior). São ciclos diferentes — escolha um critério e use o mesmo nas três."
                     : ""}
               </p>
               <Bloco titulo="1. Recebido das plataformas">
-                <Money label="iFood" value={draft.recebidoIfood} onChange={(n) => setNum("recebidoIfood", n)} reference={imported?.ifood ?? null} />
-                <Money label="Keeta" value={draft.recebidoKeeta} onChange={(n) => setNum("recebidoKeeta", n)} reference={imported?.keeta ?? null} />
-                <Money label="99 Food" value={draft.recebido99} onChange={(n) => setNum("recebido99", n)} reference={imported?.ninefood ?? null} />
+                <Money
+                  label="iFood"
+                  value={draft.recebidoIfood}
+                  onChange={(n) => setNum("recebidoIfood", n)}
+                  refs={refsDe(imported?.ifood)}
+                />
+                <Money
+                  label="Keeta"
+                  value={draft.recebidoKeeta}
+                  onChange={(n) => setNum("recebidoKeeta", n)}
+                  refs={refsDe(imported?.keeta)}
+                />
+                <Money
+                  label="99 Food"
+                  value={draft.recebido99}
+                  onChange={(n) => setNum("recebido99", n)}
+                  refs={refsDe(imported?.ninefood)}
+                />
                 {(() => {
                   // VR vem BRUTO do relatório; aplicamos a taxa de 8% do iFood
                   // (CLAUDE.md) e preenchemos o campo com o LÍQUIDO, mostrando o
                   // bruto e o desconto no hint pra conferência.
-                  const vrBruto = imported?.vr ?? 0
-                  const vrLiq = Math.round(vrBruto * 0.92 * 100) / 100
+                  const vrBruto = imported?.vr ?? 0;
+                  const vrLiq = Math.round(vrBruto * 0.92 * 100) / 100;
                   const fmt = (n: number) =>
                     n.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
-                    })
+                    });
                   return (
                     <Money
                       label="VR (desc. do iFood)"
@@ -339,7 +393,7 @@ export function FechamentoTab({
                         ) : null
                       }
                     />
-                  )
+                  );
                 })()}
               </Bloco>
               <p className="-mt-2 text-[10px] text-muted-foreground">
@@ -348,7 +402,11 @@ export function FechamentoTab({
               </p>
 
               <Bloco titulo="2. Custos da operação">
-                <Money label="Produtos (CMV)" value={draft.custoProdutos} onChange={(n) => setNum("custoProdutos", n)} />
+                <Money
+                  label="Produtos (CMV)"
+                  value={draft.custoProdutos}
+                  onChange={(n) => setNum("custoProdutos", n)}
+                />
                 <Money
                   label="Vinagrete / maionese / bebidas"
                   value={draft.custoVinagrete}
@@ -377,8 +435,16 @@ export function FechamentoTab({
 
                 {/* CNPão + B2B: somam Cozina, descontam JK */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Money label="Desc. Churrasco no Pão" value={draft.acerto.cnpao} onChange={(n) => setAcerto("cnpao", n)} />
-                  <Money label="Vendas B2B" value={draft.acerto.b2b} onChange={(n) => setAcerto("b2b", n)} />
+                  <Money
+                    label="Desc. Churrasco no Pão"
+                    value={draft.acerto.cnpao}
+                    onChange={(n) => setAcerto("cnpao", n)}
+                  />
+                  <Money
+                    label="Vendas B2B"
+                    value={draft.acerto.b2b}
+                    onChange={(n) => setAcerto("b2b", n)}
+                  />
                 </div>
                 <p className="-mt-1 text-[10px] text-muted-foreground">
                   CNPão e B2B somam pra parte da Cozina e descontam do JK.
@@ -416,8 +482,8 @@ export function FechamentoTab({
                   className="rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
                 />
                 <p className="-mt-1 text-[10px] text-muted-foreground">
-                  <b>Dividir</b> = cada um paga metade · <b>Reembolsar JK</b> = ele
-                  já pagou tudo, a Cozina devolve a parte dela.
+                  <b>Dividir</b> = cada um paga metade · <b>Reembolsar JK</b> =
+                  ele já pagou tudo, a Cozina devolve a parte dela.
                 </p>
               </div>
 
@@ -438,7 +504,11 @@ export function FechamentoTab({
             <div className="flex h-fit flex-col gap-2 rounded-lg border bg-muted/30 p-4">
               <Linha label="Recebido (com VR)" value={recebido} strong />
               <Linha label="(−) Produtos" value={-draft.custoProdutos} muted />
-              <Linha label="(−) Vinagrete/bebidas" value={-draft.custoVinagrete} muted />
+              <Linha
+                label="(−) Vinagrete/bebidas"
+                value={-draft.custoVinagrete}
+                muted
+              />
               <div className="my-1 border-t" />
               <Linha label="Lucro líquido" value={lucro} strong />
               <Linha label="Lucro ÷ 2" value={split.half} muted />
@@ -483,11 +553,17 @@ export function FechamentoTab({
                 <div className="mt-0.5 grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <div className="text-[10px] text-muted-foreground">JK</div>
-                    <div className="font-semibold tabular-nums">{fmtBRL(split.jk)}</div>
+                    <div className="font-semibold tabular-nums">
+                      {fmtBRL(split.jk)}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Cozina</div>
-                    <div className="font-semibold tabular-nums">{fmtBRL(split.cozina)}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Cozina
+                    </div>
+                    <div className="font-semibold tabular-nums">
+                      {fmtBRL(split.cozina)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -509,14 +585,19 @@ export function FechamentoTab({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setEditing(false)
-                    setMsg(null)
+                    setEditing(false);
+                    setMsg(null);
                   }}
                   className="flex-1"
                 >
                   Cancelar
                 </Button>
-                <Button onClick={onSave} disabled={saving} size="sm" className="flex-1">
+                <Button
+                  onClick={onSave}
+                  disabled={saving}
+                  size="sm"
+                  className="flex-1"
+                >
                   {saving ? "Salvando..." : "Salvar"}
                 </Button>
               </div>
@@ -542,9 +623,15 @@ export function FechamentoTab({
               <thead>
                 <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
                   <th className="px-3 py-2.5 text-left font-medium">Semana</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Recebido</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Lucro líq.</th>
-                  <th className="px-3 py-2.5 text-right font-medium">JK / Cozina</th>
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    Recebido
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    Lucro líq.
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    JK / Cozina
+                  </th>
                   <th className="w-28 px-3 py-2.5"></th>
                 </tr>
               </thead>
@@ -557,7 +644,7 @@ export function FechamentoTab({
                     vr: f.vr,
                     custoProdutos: f.custoProdutos,
                     custoVinagrete: f.custoVinagrete,
-                  })
+                  });
                   const luc = lucroLiquido({
                     recebidoIfood: f.recebidoIfood,
                     recebidoKeeta: f.recebidoKeeta,
@@ -565,13 +652,13 @@ export function FechamentoTab({
                     vr: f.vr,
                     custoProdutos: f.custoProdutos,
                     custoVinagrete: f.custoVinagrete,
-                  })
+                  });
                   const s = computeSplit(
                     luc,
                     f.custoProdutos,
                     f.custoVinagrete,
                     toAcerto(f.acerto),
-                  )
+                  );
                   return (
                     <tr key={f.id} className="border-b last:border-0">
                       <td className="px-3 py-2.5 font-medium">
@@ -621,7 +708,7 @@ export function FechamentoTab({
                         </div>
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -629,35 +716,35 @@ export function FechamentoTab({
         )
       )}
     </div>
-  )
+  );
 }
 
 function signed(n: number): string {
-  const s = fmtBRL(Math.abs(n))
-  return n < 0 ? `−${s}` : `+${s}`
+  const s = fmtBRL(Math.abs(n));
+  return n < 0 ? `−${s}` : `+${s}`;
 }
 
 function Field({
   label,
   children,
 }: {
-  label: string
-  children: React.ReactNode
+  label: string;
+  children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium">{label}</Label>
       {children}
     </div>
-  )
+  );
 }
 
 function Bloco({
   titulo,
   children,
 }: {
-  titulo: string
-  children: React.ReactNode
+  titulo: string;
+  children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
@@ -666,7 +753,7 @@ function Bloco({
       </div>
       <div className="grid grid-cols-2 gap-2">{children}</div>
     </div>
-  )
+  );
 }
 
 /** Custo compartilhado: valor + toggle dividir/reembolsar (compacto p/ 3 col). */
@@ -677,26 +764,26 @@ function SharedCost({
   onValue,
   onMode,
 }: {
-  label: string
-  value: number
-  mode: AcertoMode
-  onValue: (n: number) => void
-  onMode: (m: AcertoMode) => void
+  label: string;
+  value: number;
+  mode: AcertoMode;
+  onValue: (n: number) => void;
+  onMode: (m: AcertoMode) => void;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-md border border-input/60 bg-background/40 p-2">
       <Money label={label} value={value} onChange={onValue} />
       <ModeToggle value={mode} onChange={onMode} />
     </div>
-  )
+  );
 }
 
 function ModeToggle({
   value,
   onChange,
 }: {
-  value: AcertoMode
-  onChange: (m: AcertoMode) => void
+  value: AcertoMode;
+  onChange: (m: AcertoMode) => void;
 }) {
   const opt = (m: AcertoMode, txt: string) => (
     <button
@@ -711,7 +798,7 @@ function ModeToggle({
     >
       {txt}
     </button>
-  )
+  );
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] text-muted-foreground">Tratamento</span>
@@ -720,7 +807,7 @@ function ModeToggle({
         {opt("reembolsar", "Reemb. JK")}
       </div>
     </div>
-  )
+  );
 }
 
 /** Campo de dinheiro: digita números, formata como R$ automaticamente. */
@@ -732,16 +819,29 @@ function Money({
   reference = null,
   referenceLabel = "importado",
   referenceHint = null,
+  refs,
 }: {
-  label: string
-  value: number
-  onChange: (n: number) => void
-  allowNegative?: boolean
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  allowNegative?: boolean;
   /** Valor importado/calculado da semana — em cinza só pra conferência. */
-  reference?: number | null
-  referenceLabel?: string
+  reference?: number | null;
+  referenceLabel?: string;
   /** Texto custom do hint (substitui o "importado: X"); mantém o "· usar". */
-  referenceHint?: React.ReactNode
+  referenceHint?: React.ReactNode;
+  /**
+   * Duas referências clicáveis, quando as duas perguntas têm resposta.
+   *
+   * ── POR QUE DUAS (Marcus, 26/08/26) ────────────────────────────────────
+   * "o que a semana rendeu" e "o que caiu na conta na semana" são ciclos
+   * diferentes. Na JK, 17–23/08: o ciclo da semana deu R$ 21.002,81 (pago em
+   * 26/08) e o que caiu na semana foi R$ 17.570,65 (ciclo 10–16/08, pago em
+   * 19/08). Com UM número só, metade das plataformas ia estar no critério
+   * errado — foi o que aconteceu: o Marcus preencheu iFood e 99 por um
+   * critério e a Keeta pelo outro, sem perceber.
+   */
+  refs?: { rotulo: string; valor: number; titulo?: string }[];
 }) {
   const display =
     value === 0
@@ -749,7 +849,7 @@ function Money({
       : value.toLocaleString("pt-BR", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        })
+        });
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[10px] text-muted-foreground">{label}</span>
@@ -759,15 +859,34 @@ function Money({
         value={display}
         placeholder="0,00"
         onChange={(e) => {
-          const raw = e.target.value
-          const neg = allowNegative && raw.trim().startsWith("-")
-          const digits = raw.replace(/\D/g, "")
-          const cents = parseInt(digits || "0", 10)
-          onChange((neg ? -1 : 1) * (cents / 100))
+          const raw = e.target.value;
+          const neg = allowNegative && raw.trim().startsWith("-");
+          const digits = raw.replace(/\D/g, "");
+          const cents = parseInt(digits || "0", 10);
+          onChange((neg ? -1 : 1) * (cents / 100));
         }}
         className="rounded-md border border-input bg-background px-2 py-1.5 text-right text-sm tabular-nums outline-none focus:border-ring"
       />
-      {reference != null && reference > 0 && (
+      {refs && refs.length > 0 ? (
+        <span className="flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground/70">
+          {refs.map((r) => (
+            <button
+              key={r.rotulo}
+              type="button"
+              onClick={() => onChange(r.valor)}
+              title={r.titulo ?? "Usar este valor"}
+              className="tabular-nums transition-colors hover:text-primary"
+            >
+              {r.rotulo}:{" "}
+              {r.valor.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </button>
+          ))}
+        </span>
+      ) : null}
+      {!refs?.length && reference != null && reference > 0 && (
         <button
           type="button"
           onClick={() => onChange(reference)}
@@ -787,7 +906,7 @@ function Money({
         </button>
       )}
     </label>
-  )
+  );
 }
 
 function Linha({
@@ -796,10 +915,10 @@ function Linha({
   strong,
   muted,
 }: {
-  label: string
-  value: number
-  strong?: boolean
-  muted?: boolean
+  label: string;
+  value: number;
+  strong?: boolean;
+  muted?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between text-sm">
@@ -814,5 +933,5 @@ function Linha({
         {fmtBRL(value)}
       </span>
     </div>
-  )
+  );
 }

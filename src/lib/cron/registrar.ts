@@ -20,6 +20,7 @@ export type NomeCron =
   | "ifood-auto-vincular"
   | "ifood-backfill"
   | "ifood-coletor"
+  | "ifood-repasses"
   | "ninefood-sync"
   | "ninefood-comandas"
   | "cardapioweb-sync"
