@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { gerarConviteAction } from "@/app/(app)/integracao/cardapioweb/_actions"
 
 export type ConexaoRow = {
   unitId: string
@@ -368,7 +369,7 @@ export function ConexoesTable({ rows }: { rows: ConexaoRow[] }) {
                             <ApiCell on={r.ninefoodApi} />
                           </td>
                           <td className="px-3 py-2.5 text-center">
-                            <ApiCell on={r.cardapiowebApi} />
+                            <CelulaCw row={r} />
                           </td>
                         </tr>
                       ))}
@@ -399,5 +400,68 @@ function ApiCell({ on }: { on: boolean }) {
     >
       <Minus className="size-3.5" />
     </span>
+  )
+}
+
+/**
+ * Célula do Cardápio Web: status + o botão de convite quando falta conectar.
+ *
+ * ── POR QUE AQUI (Marcus, 27/08/26) ──────────────────────────────────────
+ * "eu como dono do sistema preciso na minha tela poder gerar para outros
+ * clientes". O botão existia só em /integracao/cardapioweb, que é a tela do
+ * TENANT — serve pro cliente se conectar sozinho, não pro Marcus resolver pelo
+ * cliente. Esta tela já lista toda loja de todo cliente com o status por
+ * plataforma, então é onde a pergunta "quem falta conectar?" já é respondida.
+ *
+ * O botão só aparece quando a loja DECLAROU usar Cardápio Web e ainda NÃO está
+ * conectada — que é exatamente a lista de quem cutucar. Em loja conectada ou
+ * que não usa o canal, ele seria ruído.
+ */
+function CelulaCw({ row }: { row: ConexaoRow }) {
+  const [gerando, setGerando] = React.useState(false)
+  const [url, setUrl] = React.useState<string | null>(null)
+  const [erro, setErro] = React.useState<string | null>(null)
+  const [copiado, setCopiado] = React.useState(false)
+
+  const declarou = row.platforms.includes("cardapioweb")
+  if (row.cardapiowebApi || !declarou) return <ApiCell on={row.cardapiowebApi} />
+
+  if (url) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(url)
+          setCopiado(true)
+          setTimeout(() => setCopiado(false), 2000)
+        }}
+        title={url}
+        className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400"
+      >
+        {copiado ? "copiado!" : "copiar link"}
+      </button>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={gerando}
+      onClick={async () => {
+        setGerando(true)
+        setErro(null)
+        try {
+          const r = await gerarConviteAction(row.unitId, "producao")
+          if (r.ok && r.url) setUrl(r.url)
+          else setErro(r.message ?? "não deu")
+        } finally {
+          setGerando(false)
+        }
+      }}
+      title="Gera o link pro dono da loja autorizar — ele não precisa de conta aqui"
+      className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+    >
+      {gerando ? "..." : (erro ?? "gerar link")}
+    </button>
   )
 }

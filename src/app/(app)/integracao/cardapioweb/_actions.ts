@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
 import { requireAdmin } from "@/lib/auth/guards"
+import { getAccessibleUnitIds, isSuperadmin } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   sincronizarCatalogo,
@@ -297,6 +298,27 @@ export async function gerarConviteAction(
     return { ok: false, message: "Só administradores podem gerar o convite." }
   }
   if (!unitId) return { ok: false, message: "Escolha a loja." }
+
+  /**
+   * ⚠️ QUEM PEDE PRECISA TER ACESSO À LOJA — menos o dono da plataforma.
+   *
+   * A primeira versão derivava a empresa da LOJA (certo, evita apontar pra
+   * empresa errada) mas NÃO conferia se quem pediu enxerga aquela loja. Com o
+   * uuid de uma unidade de outro cliente, um admin qualquer geraria convite pra
+   * loja alheia. O estrago seria pequeno — o token só amarra instalação, e a
+   * autorização ainda exige o Proprietário do lado do Cardápio Web — mas é
+   * furo de isolamento entre clientes, que neste projeto já voltou duas vezes.
+   *
+   * O superadmin passa de propósito: é a tela dele em /clientes que precisa
+   * gerar convite pra qualquer cliente (Marcus, 27/08/26: "eu como dono do
+   * sistema preciso na minha tela poder gerar para outros clientes").
+   */
+  if (!(await isSuperadmin())) {
+    const visiveis = await getAccessibleUnitIds()
+    if (visiveis !== null && !visiveis.includes(unitId)) {
+      return { ok: false, message: "Essa loja não é da sua empresa." }
+    }
+  }
 
   const admin = createAdminClient()
 
