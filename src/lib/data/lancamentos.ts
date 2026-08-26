@@ -296,6 +296,21 @@ export async function getRealMonthlyForUnits(
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
+  /**
+   * Plataformas a buscar. Vazio/ausente = todas (comportamento antigo).
+   *
+   * ── POR QUE (Marcus, 27/08/26): "faz a performance do dashboard agora" ──
+   * Esta função roda 3× por carregamento e busca as 4 plataformas em cada uma
+   * — 12 consultas. Com o dashboard filtrado numa plataforma, 9 delas eram
+   * trabalho jogado fora: nada na tela mostrava as outras (a cobertura, os
+   * selos, os comentários, o detalhamento e o gráfico passaram a filtrar em
+   * 26/08). O iFood é justamente o mais caro do grupo.
+   *
+   * O parâmetro é opcional de propósito: `getRealMonthlyForUnits` é lida por
+   * DRE, relatórios e scripts, e nenhum deles filtra por plataforma. Quem não
+   * passa nada continua recebendo tudo.
+   */
+  plataformas?: PlatformId[],
 ): Promise<Map<string, UnitMonthly>> {
   const result = new Map<string, UnitMonthly>()
   if (unitIds.length === 0) return result
@@ -317,11 +332,24 @@ export async function getRealMonthlyForUnits(
     }
   }
 
+  /** Sem filtro, tudo entra — é o caminho de todo mundo que não é o dashboard. */
+  const quer = (p: PlatformId) =>
+    !plataformas || plataformas.length === 0 || plataformas.includes(p)
+  const vazio = <T,>() => Promise.resolve(new Map<string, T>())
+
   const [finMap, nineMap, keetaMap, cwMap, monthlyRes] = await Promise.all([
-    medir("ifood", getFinanceiroResumoByUnits(unitIds, year, month, dateRange)),
-    medir("99", getNinefoodResumoByUnits(unitIds, year, month, dateRange)),
-    medir("keeta", getKeetaResumoByUnits(unitIds, year, month, dateRange)),
-    medir("cardapioweb", getCardapioWebResumoByUnits(unitIds, year, month, dateRange)),
+    quer("ifood")
+      ? medir("ifood", getFinanceiroResumoByUnits(unitIds, year, month, dateRange))
+      : vazio<Awaited<ReturnType<typeof getFinanceiroResumoByUnits>> extends Map<string, infer T> ? T : never>(),
+    quer("99food")
+      ? medir("99", getNinefoodResumoByUnits(unitIds, year, month, dateRange))
+      : vazio<Awaited<ReturnType<typeof getNinefoodResumoByUnits>> extends Map<string, infer T> ? T : never>(),
+    quer("keeta")
+      ? medir("keeta", getKeetaResumoByUnits(unitIds, year, month, dateRange))
+      : vazio<Awaited<ReturnType<typeof getKeetaResumoByUnits>> extends Map<string, infer T> ? T : never>(),
+    quer("cardapioweb")
+      ? medir("cardapioweb", getCardapioWebResumoByUnits(unitIds, year, month, dateRange))
+      : vazio<Awaited<ReturnType<typeof getCardapioWebResumoByUnits>> extends Map<string, infer T> ? T : never>(),
     medir("mensal", supabase
       .from("monthly_entries")
       .select(
@@ -349,7 +377,9 @@ export async function getRealMonthlyForUnits(
   )
 
   // Keeta cai no preço de tabela do Pedidos recentes quando não há Loja diária.
-  const keetaFbIds = unitIds.filter((id) => !(keetaMap.get(id)?.hasData ?? false))
+  const keetaFbIds = quer("keeta")
+    ? unitIds.filter((id) => !(keetaMap.get(id)?.hasData ?? false))
+    : []
 
   const tOnda2 = Date.now()
   const [vrRows, keetaPorLoja] = await Promise.all([
@@ -363,7 +393,10 @@ export async function getRealMonthlyForUnits(
     //   • número: loja sem Conciliação na janela recebia 30 dias de VR como
     //     fallback de 3 dias, inflando o lado "mês passado" das setas do herói;
     //   • tempo: 27.764 linhas (28 idas ao banco) onde 2.936 (3 idas) bastavam.
-    unitIds.length > 0
+    // Só com o iFood no recorte: o VR é dinheiro que o IFOOD paga à parte, e
+    // esta consulta chegou a 27.764 linhas / 28 idas ao banco numa janela de 3
+    // dias. Num dashboard filtrado na Keeta ela não alimenta nada na tela.
+    unitIds.length > 0 && quer("ifood")
       ? getIfoodPedidosResumoByUnits(year, month, unitIds, dateRange)
       : Promise.resolve([]),
     // MESMO problema latente aqui: esta busca o mês inteiro e não aceita

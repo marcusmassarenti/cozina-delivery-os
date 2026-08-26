@@ -274,14 +274,29 @@ export default async function Home({
   const heroDeltasP =
     isFullMonth && activeUnitIds.length > 0
       ? Promise.all([
-          getRealMonthlyForUnits(activeUnitIds, year, month, {
-            start: `${year}-${p2(month)}-01`,
-            end: `${year}-${p2(month)}-${p2(corte)}`,
-          }),
-          getRealMonthlyForUnits(activeUnitIds, prevY, prevM, {
-            start: `${prevY}-${p2(prevM)}-01`,
-            end: `${prevY}-${p2(prevM)}-${p2(cortePrev)}`,
-          }),
+          // As setas comparam o MESMO recorte de plataforma dos KPIs. Sem o
+          // filtro aqui, a variação do mês passado somaria as quatro contra um
+          // número de uma só — a seta apontaria pro lado errado.
+          getRealMonthlyForUnits(
+            activeUnitIds,
+            year,
+            month,
+            {
+              start: `${year}-${p2(month)}-01`,
+              end: `${year}-${p2(month)}-${p2(corte)}`,
+            },
+            plataformasFilter,
+          ),
+          getRealMonthlyForUnits(
+            activeUnitIds,
+            prevY,
+            prevM,
+            {
+              start: `${prevY}-${p2(prevM)}-01`,
+              end: `${prevY}-${p2(prevM)}-${p2(cortePrev)}`,
+            },
+            plataformasFilter,
+          ),
         ])
       : null
   // Disparada antes de ser aguardada: se algo estourar no meio da página, a
@@ -446,14 +461,37 @@ export default async function Home({
     plataformasFilter.length ? plataformasFilter : null,
   )
 
+  /**
+   * Plataforma fora do filtro não é buscada.
+   *
+   * ── POR QUE (Marcus, 27/08/26) ──────────────────────────────────────────
+   * A fase `resumos` era o gargalo do dashboard (5–16 s de 14–16 s) e buscava
+   * as QUATRO plataformas sempre. Com o filtro ligado, três eram trabalho
+   * jogado fora — e o iFood, o mais caro, vinha ainda por cima duas vezes
+   * (aqui e dentro do `getRealMonthlyForUnits`).
+   *
+   * Só ficou seguro cortar depois de 26/08, quando cobertura, selos,
+   * comentários, detalhamento e gráfico passaram a respeitar o filtro. Antes
+   * disso alguém na tela ainda lia esses mapas.
+   */
+  const querPlat = (p: PlatformId) =>
+    plataformasFilter.length === 0 || plataformasFilter.includes(p)
+  const mapaVazio = <T,>() => Promise.resolve(new Map<string, T>())
+
   const fase2aP = Promise.all([
-    isFullMonth
+    !querPlat("ifood")
+      ? mapaVazio<Awaited<ReturnType<typeof getFinanceiroResumoByUnits>> extends Map<string, infer T> ? T : never>()
+      : isFullMonth
       ? getFinanceiroResumoByUnits(activeUnitIds, year, month)
       : getFinanceiroResumoByUnitsForRange(activeUnitIds, periodRange),
-    isFullMonth
+    !querPlat("99food")
+      ? mapaVazio<Awaited<ReturnType<typeof getNinefoodResumoByUnits>> extends Map<string, infer T> ? T : never>()
+      : isFullMonth
       ? getNinefoodResumoByUnits(activeUnitIds, year, month)
       : getNinefoodResumoByUnitsForRange(activeUnitIds, periodRange),
-    isFullMonth
+    !querPlat("keeta")
+      ? mapaVazio<Awaited<ReturnType<typeof getKeetaResumoByUnits>> extends Map<string, infer T> ? T : never>()
+      : isFullMonth
       ? getKeetaResumoByUnits(activeUnitIds, year, month)
       : getKeetaResumoByUnitsForRange(activeUnitIds, periodRange),
     getImportCoverageForMonth(year, month, filterUnitIds),
@@ -463,22 +501,27 @@ export default async function Home({
     // Cardápio Web precisa vir do PERÍODO escolhido. `unit.monthly` é sempre
     // do mês corrente (getUnits usa currentYearMonth), então usá-lo aqui
     // mostrava julho num dashboard filtrado em junho.
-    getCardapioWebResumoByUnits(
-      activeUnitIds,
-      year,
-      month,
-      isFullMonth ? undefined : periodRange,
-    ),
+    !querPlat("cardapioweb")
+      ? mapaVazio<Awaited<ReturnType<typeof getCardapioWebResumoByUnits>> extends Map<string, infer T> ? T : never>()
+      : getCardapioWebResumoByUnits(
+          activeUnitIds,
+          year,
+          month,
+          isFullMonth ? undefined : periodRange,
+        ),
     // VR do PERÍODO. Ele também mora em `unit.monthly`, que é sempre do mês
     // corrente — então, olhando julho no dia 1º de agosto, o VR vinha ~zero.
     // É dinheiro que o iFood paga à parte, fora do repasse: sem ele o "% que
     // fica na loja" mente pra baixo.
-    getVrValorByUnits(
-      year,
-      month,
-      activeUnitIds,
-      isFullMonth ? undefined : periodRange,
-    ),
+    // VR é do iFood: sem ele no recorte, não alimenta nada na tela.
+    !querPlat("ifood")
+      ? mapaVazio<number>()
+      : getVrValorByUnits(
+          year,
+          month,
+          activeUnitIds,
+          isFullMonth ? undefined : periodRange,
+        ),
     // Mensal DO PERÍODO. `unit.monthly` (de getVisibleUnits) é sempre do mês
     // corrente: olhando julho no dia 1º de agosto ele zerava promoções e
     // Cardápio Web, e no dia 20 INFLARIA julho com o movimento de agosto.
@@ -488,6 +531,7 @@ export default async function Home({
       year,
       month,
       isFullMonth ? undefined : periodRange,
+      plataformasFilter,
     ),
   ])
 
