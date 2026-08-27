@@ -3,6 +3,7 @@ import { ArrowLeft, Shield, Store } from "lucide-react"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
+import { HOLDING_DEMO_ID } from "@/lib/data/holding-demo"
 import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhadas"
 
 import { RefreshButton, RunSyncButton } from "@/app/(app)/integracao/ifood-merchants/_components/link-row"
@@ -184,6 +185,45 @@ async function getData() {
 }
 
 /**
+ * As lojas que o seletor do app distribuído oferece.
+ *
+ * Consulta PRÓPRIA, e não a de `getData()`, por causa de um detalhe que
+ * importa: aquela filtra `active = true`, o que é certo pra tabela de
+ * merchants — não se vincula loja nova a uma unidade morta — e errado aqui.
+ * Loja suspensa é justamente o caso em que se quer testar uma autorização sem
+ * risco: a Niterói, primeira loja escolhida pro teste, sumiu do seletor por
+ * causa desse filtro.
+ *
+ * A rede de DEMONSTRAÇÃO continua fora: as lojas dela são fictícias e não
+ * existe lojista pra autorizar — gerar código pra uma delas cria uma conexão
+ * que nunca fecha.
+ */
+async function getUnidadesParaDistribuido(): Promise<
+  { id: string; code: string; name: string; holdingName: string; inativa: boolean }[]
+> {
+  const { data } = await createAdminClient()
+    .from("units")
+    .select("id, code, name, active, brands!inner(holding_id, holdings!inner(name))")
+    .order("code")
+
+  return ((data ?? []) as unknown as {
+    id: string
+    code: string
+    name: string
+    active: boolean
+    brands: { holding_id: string; holdings: { name: string } }
+  }[])
+    .filter((u) => u.brands?.holding_id !== HOLDING_DEMO_ID)
+    .map((u) => ({
+      id: u.id,
+      code: u.code,
+      name: u.name,
+      holdingName: u.brands?.holdings?.name ?? "—",
+      inativa: u.active === false,
+    }))
+}
+
+/**
  * Conexões do app DISTRIBUÍDO — o caminho novo, em teste.
  *
  * Vem separado do resto porque não substitui nada: as lojas do centralizado
@@ -290,6 +330,7 @@ export async function AbaIfood() {
     sumidos,
     avisosFechados,
     conexoesDist,
+    unidadesDist,
   ] = await Promise.all([
     getData(),
     getSolicitacoes(),
@@ -297,6 +338,7 @@ export async function AbaIfood() {
     merchantsSumidos(),
     getAvisosFechados(),
     getConexoesDistribuidas(),
+    getUnidadesParaDistribuido(),
   ])
   /**
    * A contagem tem que bater com o que a lista MOSTRA.
@@ -402,16 +444,13 @@ export async function AbaIfood() {
           pode competir com as três abas, que são o trabalho de todo dia. */}
       <ConexaoDistribuida
         unidades={(() => {
-          // Quem já tem merchant vinculado no centralizado — o seletor separa
-          // as duas listas com isso.
+          // Quem já tem merchant vinculado no centralizado — vira a marca
+          // "já conectada" na linha do seletor.
           const comMerchant = new Set(
             Object.values(byMerchant).map((v) => v.unitId),
           )
-          return units.map((u) => ({
-            id: u.id,
-            code: u.code,
-            name: u.name,
-            holdingName: u.holdingName,
+          return unidadesDist.map((u) => ({
+            ...u,
             noCentralizado: comMerchant.has(u.id),
           }))
         })()}

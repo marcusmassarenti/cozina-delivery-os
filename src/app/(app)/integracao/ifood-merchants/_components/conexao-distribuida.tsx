@@ -21,6 +21,9 @@ export type UnidadeOpcao = {
   holdingName: string
   /** Já conectada pelo app centralizado — ver o aviso no seletor. */
   noCentralizado: boolean
+  /** Desativada no cadastro. Aparece de propósito: loja parada é o lugar
+   *  mais seguro pra testar uma autorização nova. */
+  inativa: boolean
 }
 
 export type ConexaoDist = {
@@ -123,6 +126,23 @@ export function ConexaoDistribuida({
   )
   const [unidade, setUnidade] = React.useState("")
 
+  /* Cliente → lojas dele, com as ainda não conectadas na frente. */
+  const porCliente = React.useMemo(() => {
+    const mapa = new Map<string, UnidadeOpcao[]>()
+    for (const u of unidades) {
+      const atual = mapa.get(u.holdingName)
+      if (atual) atual.push(u)
+      else mapa.set(u.holdingName, [u])
+    }
+    for (const lojas of mapa.values()) {
+      lojas.sort((a, b) => {
+        if (a.noCentralizado !== b.noCentralizado) return a.noCentralizado ? 1 : -1
+        return a.code.localeCompare(b.code, "pt-BR", { numeric: true })
+      })
+    }
+    return [...mapa.entries()].sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
+  }, [unidades])
+
   const abertas = conexoes.filter((c) => c.status === "aguardando")
   const resto = conexoes.filter((c) => c.status !== "aguardando")
 
@@ -155,33 +175,33 @@ export function ConexaoDistribuida({
         ) : (
           <form action={acaoGerar} className="flex flex-wrap items-center gap-2">
             <input type="hidden" name="unitId" value={unidade} />
-            {/* Loja SEM conexão primeiro. Este caminho existe pra loja nova,
-                e com 130 opções em ordem alfabética a que interessa fica
-                perdida no meio das que já estão conectadas. */}
+            {/* UM GRUPO POR CLIENTE. (Marcus, 27/08/26: "tá tudo bagunçado".)
+                A lista vinha ordenada pelo CÓDIGO da unidade, que é numeração
+                interna de cada cliente — então "04 Sushi Bar · DG FOODS" caía
+                ao lado de "04 Coringa SLZ · Prime Gestão", e o nome do cliente
+                repetia em toda linha sem nunca agrupar nada. Quem procura uma
+                loja sabe de qual cliente ela é; o código, quase nunca.
+
+                A conexão vira uma MARCA na linha, não um grupo: dentro do
+                cliente o que importa é achar a loja, e as não conectadas —
+                que é o alvo deste caminho — sobem pro topo do grupo dele. */}
             <select
               value={unidade}
               onChange={(e) => setUnidade(e.target.value)}
-              className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring sm:max-w-[320px]"
+              className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring sm:max-w-[340px]"
             >
               <option value="">Escolher a loja…</option>
-              <optgroup label="Ainda sem iFood conectado">
-                {unidades
-                  .filter((u) => !u.noCentralizado)
-                  .map((u) => (
+              {porCliente.map(([cliente, lojas]) => (
+                <optgroup key={cliente} label={cliente}>
+                  {lojas.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.code} — {u.name} · {u.holdingName}
+                      {u.code} — {u.name}
+                      {u.inativa ? "  · inativa" : ""}
+                      {u.noCentralizado ? "  · já conectada" : ""}
                     </option>
                   ))}
-              </optgroup>
-              <optgroup label="Já conectadas pelo app centralizado">
-                {unidades
-                  .filter((u) => u.noCentralizado)
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.code} — {u.name} · {u.holdingName}
-                    </option>
-                  ))}
-              </optgroup>
+                </optgroup>
+              ))}
             </select>
             <Enviar>Gerar código</Enviar>
           </form>
