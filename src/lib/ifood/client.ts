@@ -42,6 +42,23 @@ export type IfoodFetchOptions = {
   merchantId?: string
   /** Etiqueta semântica do endpoint pro log (ex.: "GET /order/v1.0/orders/{id}") */
   endpointLabel?: string
+  /**
+   * Token DA LOJA, do app distribuído — substitui o token global do app.
+   *
+   * No centralizado uma credencial serve todas as lojas, e é isso que
+   * `getIfoodToken(app)` devolve. No distribuído cada loja tem o token dela,
+   * autorizado pelo próprio lojista, e não existe cache global que sirva: o
+   * token certo depende de QUAL unidade está sendo sincronizada.
+   *
+   * É função, não string, porque o 401 aqui embaixo precisa poder pedir um
+   * token NOVO — e renovar no distribuído é bater no iFood com o
+   * `refresh_token` daquela loja, não limpar um cache em memória. O parâmetro
+   * `renovar` é o que distingue as duas chamadas.
+   *
+   * Ausente = comportamento de sempre. As 108 lojas centralizadas não mudam
+   * de caminho por causa disto.
+   */
+  obterToken?: (renovar: boolean) => Promise<string>
 }
 
 export type IfoodFetchResult<T = unknown> = {
@@ -99,11 +116,17 @@ export async function fetchIfood<T = unknown>(
 
   const start = Date.now()
 
+  // Ligado pelo 401: a próxima volta do laço pede token novo em vez de
+  // reaproveitar o que acabou de ser recusado.
+  let renovarToken = false
+
   while (retries <= MAX_RETRIES) {
     // (Re)obtém token a cada tentativa (cache cuida disso)
     let token: string
     try {
-      token = await getIfoodToken(app)
+      token = opts.obterToken
+        ? await opts.obterToken(renovarToken)
+        : await getIfoodToken(app)
     } catch (e) {
       lastError = e instanceof Error ? e.message : "Falha ao obter token"
       lastStatus = 0
@@ -147,7 +170,10 @@ export async function fetchIfood<T = unknown>(
     lastStatus = res.status
     // 401: força re-auth e tenta 1×
     if (res.status === 401 && retries === 0) {
-      clearIfoodTokenCache(app)
+      // No distribuído não há cache global pra limpar: quem renova é o dono
+      // do token, e ele só sabe disso pelo parâmetro.
+      if (opts.obterToken) renovarToken = true
+      else clearIfoodTokenCache(app)
       retries++
       continue
     }
