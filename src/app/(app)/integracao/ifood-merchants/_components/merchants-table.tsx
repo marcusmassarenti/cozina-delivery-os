@@ -74,7 +74,7 @@ const PISTA: Record<DonoSugerido["via"], { txt: string; ajuda: string }> = {
     ajuda: "O CNPJ do merchant bate com o cadastro da loja ou com a solicitação de conexão.",
   },
   raiz: {
-    txt: "mesma empresa",
+    txt: "pela raiz do CNPJ",
     ajuda:
       "Os 8 primeiros dígitos do CNPJ batem — mesma empresa, filial diferente. Confira antes de vincular.",
   },
@@ -275,12 +275,35 @@ export function MerchantsTable({
       if (!map.has(chave)) map.set(chave, [])
       map.get(chave)!.push(m)
     }
+    /* Dentro de "Sem unidade vinculada", as lojas do MESMO cliente ficam
+       juntas. (Marcus, 27/08/26: "a ordem tá pulando Le Brunch primeiro e
+       depois DG FOODS e volta pra Le Brunch".)
+       A lista vinha na ordem do banco, e como cada linha carrega o nome do
+       cliente, o olho ia e voltava entre dois clientes o tempo todo. Quem
+       resolve pendência resolve por cliente — abre o portal daquele cliente
+       uma vez e despacha as lojas dele.
+       Sem dono deduzido vai pro fim: é a fila que precisa de decisão humana. */
+    const pend = map.get(SEM_VINCULO)
+    if (pend) {
+      const dono = (m: MerchantRow) => donoPorMerchant?.[m.id]?.name ?? null
+      pend.sort((a, b) => {
+        const da = dono(a)
+        const db = dono(b)
+        if (da !== db) {
+          if (!da) return 1
+          if (!db) return -1
+          return da.localeCompare(db, "pt-BR")
+        }
+        return (a.name ?? "").localeCompare(b.name ?? "", "pt-BR")
+      })
+    }
+
     // Pendência primeiro, arquivadas por último, clientes em ordem no meio.
     const peso = (k: string) => (k === SEM_VINCULO ? 0 : k === IGNORADAS ? 2 : 1)
     return [...map.entries()].sort(([a], [b]) =>
       peso(a) !== peso(b) ? peso(a) - peso(b) : a.localeCompare(b, "pt-BR"),
     )
-  }, [merchants, byMerchant, aba, busca, suspensos])
+  }, [merchants, byMerchant, aba, busca, suspensos, donoPorMerchant])
 
   if (merchants.length === 0) {
     return (
@@ -386,13 +409,55 @@ export function MerchantsTable({
             </summary>
 
             <ul className="divide-y">
-              {(expandidos[nome] ? lista : lista.slice(0, LIMITE)).map((m) => {
+              {(expandidos[nome] ? lista : lista.slice(0, LIMITE)).map((m, i, visiveis) => {
                 const linked = byMerchant[m.id]
                 const st = rotuloStatus(m.merchant_state)
                 const local = [m.city, m.state].filter(Boolean).join("/")
+
+                /* Subcabeçalho quando o cliente muda. A lista já vem ordenada
+                   por cliente, então comparar com o anterior basta — e ele
+                   acompanha o recorte visível, senão o primeiro bloco depois
+                   de "mostrar as outras" apareceria sem título. */
+                const donoAtual = semVinculo
+                  ? (donoPorMerchant?.[m.id]?.name ?? null)
+                  : null
+                const donoAnterior =
+                  semVinculo && i > 0
+                    ? (donoPorMerchant?.[visiveis[i - 1].id]?.name ?? null)
+                    : undefined
+                const abreCliente =
+                  semVinculo && (i === 0 || donoAtual !== donoAnterior)
+                const quantas = semVinculo
+                  ? lista.filter(
+                      (x) => (donoPorMerchant?.[x.id]?.name ?? null) === donoAtual,
+                    ).length
+                  : 0
+
                 return (
+                  <React.Fragment key={m.id}>
+                  {abreCliente && (
+                    <li className="flex items-center gap-2 bg-amber-100/60 px-3 py-1.5 sm:px-4 dark:bg-amber-950/40">
+                      {donoAtual ? (
+                        <>
+                          <Building2 className="size-3.5 text-amber-800 dark:text-amber-400" />
+                          <span className="text-xs font-semibold text-amber-900 dark:text-amber-300">
+                            {donoAtual}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="size-3.5 text-amber-700 dark:text-amber-400" />
+                          <span className="text-xs font-semibold text-amber-900 dark:text-amber-300">
+                            Cliente não identificado
+                          </span>
+                        </>
+                      )}
+                      <span className="text-[10px] text-amber-800/80 dark:text-amber-400/80">
+                        {quantas} loja{quantas > 1 ? "s" : ""}
+                      </span>
+                    </li>
+                  )}
                   <li
-                    key={m.id}
                     className="flex flex-wrap items-start gap-x-4 gap-y-2 px-3 py-3 sm:px-4"
                   >
                     {/* No celular a coluna ocupa a linha inteira. Com
@@ -440,26 +505,18 @@ export function MerchantsTable({
                           "1 de Grupo Le Brunch · ver todas", do lado direito,
                           em 10px. Quem varre a coluna da esquerda pra decidir
                           o que fazer não via cliente nenhum. */}
-                      {!linked && (
-                        <div className="mt-1.5">
-                          {donoPorMerchant?.[m.id] ? (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium">
-                              <Building2 className="size-3 text-muted-foreground" />
-                              {donoPorMerchant[m.id].name}
-                              <span
-                                className="text-[10px] font-normal text-muted-foreground"
-                                title={PISTA[donoPorMerchant[m.id].via].ajuda}
-                              >
-                                · {PISTA[donoPorMerchant[m.id].via].txt}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-                              <AlertTriangle className="size-3" />
-                              cliente não identificado
-                            </span>
-                          )}
-                        </div>
+                      {/* Só a PISTA — o nome do cliente já está no
+                          subcabeçalho logo acima. Ela fica na linha, e não no
+                          cabeçalho, porque varia dentro do mesmo cliente: as
+                          duas do Grupo Le Brunch chegaram por caminhos
+                          diferentes, uma por CNPJ e outra por razão social. */}
+                      {!linked && donoPorMerchant?.[m.id] && (
+                        <p
+                          className="mt-1 text-[10px] text-muted-foreground"
+                          title={PISTA[donoPorMerchant[m.id].via].ajuda}
+                        >
+                          identificado {PISTA[donoPorMerchant[m.id].via].txt}
+                        </p>
                       )}
                     </div>
 
@@ -518,6 +575,7 @@ export function MerchantsTable({
                       )}
                     </div>
                   </li>
+                  </React.Fragment>
                 )
               })}
             </ul>
