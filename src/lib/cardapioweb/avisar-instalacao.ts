@@ -13,9 +13,9 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { enviarEmail } from "@/lib/email/enviar"
+import { cardapiowebInstalacao } from "@/lib/email/templates"
 
 const DESTINO = process.env.SAUDE_EMAIL ?? "marcus@massarenti.me"
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 
 export async function avisarInstalacaoNova(d: {
   merchantName: string
@@ -43,26 +43,12 @@ export async function avisarInstalacaoNova(d: {
     holdingId: null,
     tipo: "cardapioweb-instalacao",
     para: DESTINO,
-    assunto: `${sandbox ? "[sandbox] " : ""}Cardápio Web: ${cliente} conectou ${d.merchantName}`,
-    html: `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:24px;color:#18181b;">
-  <p style="margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:1.4px;color:#71717a;text-transform:uppercase;">Delivery OS · Cardápio Web</p>
-  <h1 style="margin:0 0 16px;font-size:20px;">Loja nova conectada</h1>
-  <table cellpadding="0" cellspacing="0" border="0" style="font-size:14px;line-height:1.7;">
-    <tr><td style="padding-right:16px;color:#71717a;">Cliente</td><td><strong>${cliente}</strong></td></tr>
-    <tr><td style="padding-right:16px;color:#71717a;">Loja</td><td><strong>${d.merchantName}</strong></td></tr>
-    <tr><td style="padding-right:16px;color:#71717a;">Unidade</td><td>${unidade}</td></tr>
-    <tr><td style="padding-right:16px;color:#71717a;">Ambiente</td><td>${d.ambiente}</td></tr>
-  </table>
-  ${
-    sandbox
-      ? `<p style="margin:16px 0 0;font-size:13px;color:#92400e;background:#fffbeb;border-left:3px solid #d97706;padding:10px 12px;">Foi em <strong>sandbox</strong> — o faturamento desta loja não entra em conta nenhuma. Se era pra valer, a conexão precisa ser refeita em produção.</p>`
-      : ""
-  }
-  <p style="margin:20px 0 0;"><a href="${SITE}/integracao/cardapioweb" style="color:#ff4d1c;font-weight:600;">Ver as conexões do Cardápio Web</a></p>
-</div>`.trim(),
-    // Uma loja nova é sempre notícia nova, mesmo que já tenha vindo outra
-    // deste cliente antes. A trava padrão engoliria da segunda em diante.
+    ...cardapiowebInstalacao({
+      cliente,
+      loja: d.merchantName,
+      unidade,
+      sandbox,
+    }),
     forcar: true,
   })
 }

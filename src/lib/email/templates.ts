@@ -1059,6 +1059,55 @@ export function autorizacao99(d: {
   }
 }
 
+/**
+ * Interno: "uma loja conectou o Cardápio Web".
+ *
+ * Mora aqui pelo motivo do cabeçalho deste arquivo — e-mail da mesma marca com
+ * cara diferente parece golpe, e o Marcus lê o da casa no mesmo celular que o do
+ * cliente. Estava com HTML solto no módulo que dispara (Marcus, 27/08/26:
+ * "precisa ajustar o layout para nosso modelo").
+ */
+export function cardapiowebInstalacao(d: {
+  cliente: string
+  loja: string
+  unidade: string
+  sandbox: boolean
+}) {
+  const esc = (t: string) =>
+    t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+  const linha = (rotulo: string, valor: string) => `
+    <tr>
+      <td style="padding:8px 16px 8px 0;font-size:13px;color:${SUAVE};white-space:nowrap;border-bottom:1px solid ${LINHA};">${rotulo}</td>
+      <td style="padding:8px 0;font-size:15px;font-weight:600;color:${TINTA};border-bottom:1px solid ${LINHA};">${valor}</td>
+    </tr>`
+
+  return {
+    assunto: `${d.sandbox ? "[sandbox] " : ""}Cardápio Web: ${d.cliente} conectou ${d.loja}`,
+    html: layout({
+      titulo: "Loja nova conectada",
+      corpo: `
+        <p style="margin:0 0 16px;">O lojista autorizou sozinho, do lado dele — não passou por ninguém aqui.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${linha("Cliente", esc(d.cliente))}
+          ${linha("Loja", esc(d.loja))}
+          ${linha("Unidade", esc(d.unidade))}
+        </table>
+        ${
+          d.sandbox
+            ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0 0;">
+                 <tr><td style="background:#fffbeb;border-left:4px solid #d97706;border-radius:0 10px 10px 0;padding:16px 18px;">
+                   <p style="margin:0;font-size:14px;line-height:1.55;color:#92400e;">Foi em <strong>sandbox</strong> — o faturamento desta loja não entra em conta nenhuma. Se era pra valer, a conexão precisa ser refeita em produção.</p>
+                 </td></tr>
+               </table>`
+            : ""
+        }`,
+      cta: { texto: "Ver as conexões", url: `${SITE}/integracao/cardapioweb` },
+      ps: "O histórico já está sendo puxado. Os números aparecem sozinhos em alguns minutos.",
+    }),
+  }
+}
+
 /** Lista de lojas para os e-mails em lote: "02 · Gravataí — 63.415.846/0001-02". */
 function listaDeLojas(lojas: { nome: string; cnpj: string }[]): string {
   return lojas

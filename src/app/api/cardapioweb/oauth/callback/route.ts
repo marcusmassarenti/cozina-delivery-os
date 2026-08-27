@@ -308,12 +308,42 @@ export async function GET(req: Request) {
   // lojista não fica preso esperando o sync terminar.
   const idParaSync = installId
   after(async () => {
+    /**
+     * ⚠️ VÁRIAS FATIAS, NÃO UMA.
+     *
+     * ── POR QUE (Marcus, 27/08/26) ──────────────────────────────────────
+     * Era uma chamada só, e cada fatia detalha no máximo 80 pedidos. Isso
+     * bastava pra loja pequena (Goiânia conectou com 22 e nasceu completa) e
+     * falhava justamente nas que importam: Dourados nasceu com 145 pedidos
+     * SEM VALOR e Varginha com 95. As duas ficaram zeradas na tela até alguém
+     * rodar o sync à mão — e loja zerada some do ranking, que filtra
+     * `bruto > 0`. O lojista que abre o painel logo depois de autorizar vê
+     * zero e conclui que não funcionou.
+     *
+     * O laço para no primeiro dos três: nada mais a detalhar, orçamento de
+     * tempo estourado, ou teto de fatias. O `maxDuration` desta rota é 120 s,
+     * então o orçamento fica em 90 — o que sobra é do cron, que continua
+     * existindo pra fechar o resto do histórico.
+     */
+    const COMECOU = Date.now()
+    const ORCAMENTO_MS = 90_000
+    const TETO_FATIAS = 8
     try {
-      const r = await sincronizarInstall(idParaSync)
-      console.log(
-        `[cw-primeiro-sync] ${r.loja}: ${r.incremental?.pedidos ?? 0} recentes, ` +
-          `${r.backfill?.pedidos ?? 0} do histórico, ${r.detalhe?.processados ?? 0} detalhados`,
-      )
+      for (let n = 1; n <= TETO_FATIAS; n++) {
+        const r = await sincronizarInstall(idParaSync)
+        console.log(
+          `[cw-primeiro-sync] ${r.loja} fatia ${n}: ${r.incremental?.pedidos ?? 0} recentes, ` +
+            `${r.backfill?.pedidos ?? 0} do histórico, ${r.detalhe?.processados ?? 0} detalhados, ` +
+            `${r.detalhe?.restantes ?? 0} restantes`,
+        )
+        if (r.erro) break
+        // Nada detalhado E nada restando = não há mais o que fazer agora.
+        if ((r.detalhe?.restantes ?? 0) === 0 && (r.detalhe?.processados ?? 0) === 0) break
+        if (Date.now() - COMECOU > ORCAMENTO_MS) {
+          console.log(`[cw-primeiro-sync] ${r.loja}: orçamento de tempo esgotado, o cron continua`)
+          break
+        }
+      }
     } catch (e) {
       // Falhar aqui não quebra a conexão — o cron tenta de novo amanhã.
       console.error("[cw-primeiro-sync]", e)
