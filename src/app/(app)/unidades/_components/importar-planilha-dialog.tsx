@@ -54,6 +54,36 @@ export function ImportarPlanilhaDialog() {
   const [logos, setLogos] = React.useState<ResultadoLogos | null>(null)
   const [subindoLogos, setSubindoLogos] = React.useState(false)
 
+  /** Escreveu algo nesta sessão do diálogo? Decide o refresh ao fechar. */
+  const [gravou, setGravou] = React.useState(false)
+
+  /**
+   * FECHAR O DIÁLOGO ATUALIZA A LISTA. (Marcus, 27/08/26: "parece que nada
+   * aconteceu e preciso atualizar a página".)
+   *
+   * O `router.refresh()` logo depois de gravar não bastava, e o motivo é de
+   * ordem, não de cache: quando ele roda, o diálogo ainda está aberto por
+   * cima da lista, mostrando o resultado. A tela por baixo até atualiza — só
+   * que ninguém está vendo. Quando a pessoa fecha, ela olha uma lista que
+   * pode ter sido renderizada antes da gravação, dependendo de onde o React
+   * estava no meio do caminho.
+   *
+   * Atualizar TAMBÉM no fechamento resolve pelo lado certo: o dado é buscado
+   * de novo no instante em que a lista volta a ser olhada. E limpar o estado
+   * junto evita que a próxima abertura mostre o resultado da importação
+   * passada como se fosse desta.
+   */
+  const aoTrocarAberto = (aberto: boolean) => {
+    setOpen(aberto)
+    if (aberto || !gravou) return
+    router.refresh()
+    setGravou(false)
+    setArquivo(null)
+    setPrevia(null)
+    setResultado(null)
+    setLogos(null)
+  }
+
   /**
    * Quantas linhas de fato ESCREVEM algo.
    *
@@ -88,7 +118,10 @@ export function ImportarPlanilhaDialog() {
     const r = await importarPlanilha(fd)
     setResultado(r)
     setGravando(false)
-    if (r.ok) router.refresh()
+    if (r.ok) {
+      setGravou(true)
+      router.refresh()
+    }
   }
 
   const enviarLogos = async (files: FileList | null) => {
@@ -100,11 +133,14 @@ export function ImportarPlanilhaDialog() {
     const r = await subirLogosEmMassa(fd)
     setLogos(r)
     setSubindoLogos(false)
-    if (r.ok) router.refresh()
+    if (r.ok) {
+      setGravou(true)
+      router.refresh()
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={aoTrocarAberto}>
       <DialogTrigger
         render={
           <button
