@@ -16,6 +16,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { lojasIfoodParaSync } from "@/lib/ifood/lojas-sync"
 import { fetchIfood } from "./client"
 
 /** MONDAY → 1, igual ao extract(dow) do Postgres (0=domingo). */
@@ -51,27 +52,15 @@ export async function syncIfoodHorarios(
   const admin = createAdminClient()
   const out: ResultadoHorarios = { lojas: 0, turnos: 0, puladas: [] }
 
-  let q = admin
-    .from("unit_platforms")
-    .select("unit_id, api_store_id, units!inner(code, name)")
-    .eq("platform", "ifood")
-    .not("api_store_id", "is", null)
-  if (unitIds) q = q.in("unit_id", unitIds)
-
-  const { data } = await q
-  const vinculos = (data ?? []) as unknown as {
-    unit_id: string
-    api_store_id: string
-    units: { code: string; name: string }
-  }[]
+  const vinculos = await lojasIfoodParaSync(unitIds)
 
   for (const v of vinculos) {
-    const nome = `#${v.units.code} ${v.units.name}`
+    const nome = `#${v.code} ${v.name}`
     const r = await fetchIfood<OpeningHours>({
-      path: `/merchant/v1.0/merchants/${encodeURIComponent(v.api_store_id)}/opening-hours`,
+      path: `/merchant/v1.0/merchants/${encodeURIComponent(v.merchantId)}/opening-hours`,
       method: "GET",
       responseType: "json",
-      merchantId: v.api_store_id,
+      merchantId: v.merchantId,
       endpointLabel: "GET /merchant/v1.0/merchants/{id}/opening-hours",
     })
 
@@ -85,7 +74,7 @@ export async function syncIfoodHorarios(
         const dow = DOW[String(s.dayOfWeek ?? "").toUpperCase()]
         if (dow == null || !s.start || !s.duration) return null
         return {
-          unit_id: v.unit_id,
+          unit_id: v.unitId,
           dow,
           hora_inicio: s.start,
           duracao_min: Math.round(s.duration),
@@ -99,7 +88,7 @@ export async function syncIfoodHorarios(
     // loja REMOVEU no portal continuaria aqui pra sempre, e "abre segunda"
     // errado é pior que não saber — a tela usaria isso pra dizer que a loja
     // não abriu num dia em que ela nem opera mais.
-    await admin.from("ifood_horarios").delete().eq("unit_id", v.unit_id)
+    await admin.from("ifood_horarios").delete().eq("unit_id", v.unitId)
     if (linhas.length > 0) {
       const { error } = await admin.from("ifood_horarios").insert(linhas)
       if (error) {

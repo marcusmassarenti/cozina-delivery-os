@@ -14,7 +14,7 @@
  * então reprocessar mais que isso é gastar chamada à toa.
  * `?desde=YYYY-MM-DD` amplia pra backfill; `?units=uuid,uuid` restringe.
  */
-import { createAdminClient } from "@/lib/supabase/admin"
+import { lojasIfoodParaSync } from "@/lib/ifood/lojas-sync"
 import { registrarCron } from "@/lib/cron/registrar"
 import { sincronizarRepassesIfood } from "@/lib/ifood/repasses"
 
@@ -47,16 +47,7 @@ export async function GET(req: Request) {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u),
       )
 
-    const admin = createAdminClient()
-    let q = admin
-      .from("unit_platforms")
-      .select("unit_id, api_store_id")
-      .eq("platform", "ifood")
-      .not("api_store_id", "is", null)
-    if (units.length > 0) q = q.in("unit_id", units)
-    const { data } = await q
-
-    const lojas = ((data ?? []) as { unit_id: string; api_store_id: string }[])
+    const lojas = await lojasIfoodParaSync(units)
     const resultados: unknown[] = []
     let ciclos = 0
     let comErro = 0
@@ -65,14 +56,14 @@ export async function GET(req: Request) {
     // pressa — ninguém está esperando na tela.
     for (const l of lojas) {
       try {
-        const r = await sincronizarRepassesIfood(l.unit_id, l.api_store_id, de, ate)
+        const r = await sincronizarRepassesIfood(l.unitId, l.merchantId, de, ate)
         ciclos += r.ciclos
         if (r.erro) comErro++
-        resultados.push({ unit: l.unit_id, ...r })
+        resultados.push({ unit: l.unitId, ...r })
       } catch (e) {
         comErro++
         resultados.push({
-          unit: l.unit_id,
+          unit: l.unitId,
           erro: e instanceof Error ? e.message : String(e),
         })
       }
