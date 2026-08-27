@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 
 export type LojaIfoodSync = {
   unitId: string
@@ -11,20 +11,27 @@ export type LojaIfoodSync = {
 }
 
 /**
- * As lojas que um cron do iFood pode BATER NA API — já sem a demo.
+ * As lojas que um cron do iFood pode BATER NA API.
  *
- * Existe porque o mesmo `select` estava copiado em dois crons e os dois
- * esqueceram o mesmo filtro. O aviso já estava escrito em `holding-demo.ts`
- * ("é justamente por estar conectada que ela precisa ficar fora do sync") e
- * ainda assim escapou duas vezes, porque quem escreve o cron seguinte copia o
- * anterior, não o comentário. Filtro que depende de lembrar vira filtro que
- * um dia não acontece; então a escolha da loja passa a ter um lugar só.
+ * Aplica `idsDeUnidadesForaDoSync()` — o ponto único que já reunia os quatro
+ * motivos de pular uma loja (fechada no cadastro, assinatura suspensa, rede de
+ * demonstração, cliente encerrado). Sete módulos de sync já o usavam; os
+ * únicos dois que não usavam eram `horarios.ts` e o cron de repasses, e foram
+ * exatamente os dois que vazaram chamada.
  *
- * Custo real do escape: 130 chamadas 403 ao iFood em 10 dias (120 de
- * `opening-hours` + 10 de `anticipations`), todas com merchant fictício.
+ * Não vazaram por falta de aviso: `unidades-inativas.ts` diz que o ponto único
+ * existe "porque se cada sync fizesse a própria união, o terceiro motivo
+ * entraria em três dos quatro e ninguém perceberia no quarto". O que faltava
+ * era o passo anterior — ESCOLHER a loja também estava copiado, e quem copia o
+ * select copia junto o que ele esqueceu. Por isso a seleção vem para cá
+ * inteira, em vez de só o filtro.
+ *
+ * Custo medido do escape, em 10 dias: 130 chamadas 403 ao iFood — 120 de
+ * `opening-hours` com merchant da demo e 10 de `anticipations`, mais a
+ * Pizzaria Quero Mais, de cliente com sync pausado desde 22/08.
  *
  * Só para sync/cron. Tela e relatório continuam lendo `unit_platforms`
- * direto — lá a demo PRECISA aparecer conectada.
+ * direto — lá a loja suspensa e a demo PRECISAM aparecer conectadas.
  */
 export async function lojasIfoodParaSync(
   unitIds?: string[] | null,
@@ -37,14 +44,14 @@ export async function lojasIfoodParaSync(
     .not("api_store_id", "is", null)
   if (unitIds && unitIds.length > 0) q = q.in("unit_id", unitIds)
 
-  const [{ data }, demo] = await Promise.all([q, idsDeUnidadesDemo()])
+  const [{ data }, fora] = await Promise.all([q, idsDeUnidadesForaDoSync()])
 
   return ((data ?? []) as unknown as {
     unit_id: string
     api_store_id: string
     units: { code: string; name: string }
   }[])
-    .filter((v) => !demo.has(v.unit_id))
+    .filter((v) => !fora.has(v.unit_id))
     .map((v) => ({
       unitId: v.unit_id,
       merchantId: v.api_store_id,
