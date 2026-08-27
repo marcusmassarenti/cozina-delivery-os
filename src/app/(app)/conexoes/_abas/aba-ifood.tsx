@@ -8,6 +8,10 @@ import { getLojasCompartilhadasPorHolding } from "@/lib/data/lojas-compartilhada
 import { RefreshButton, RunSyncButton } from "@/app/(app)/integracao/ifood-merchants/_components/link-row"
 import { PainelMerchants } from "@/app/(app)/integracao/ifood-merchants/_components/painel"
 import type { SolicitacaoAdmin } from "@/app/(app)/integracao/ifood-merchants/_components/solicitacoes-panel"
+import {
+  ConexaoDistribuida,
+  type ConexaoDist,
+} from "@/app/(app)/integracao/ifood-merchants/_components/conexao-distribuida"
 
 type MerchantRow = {
   id: string
@@ -179,6 +183,51 @@ async function getData() {
   return { merchants, units, holdings, byMerchant }
 }
 
+/**
+ * Conexões do app DISTRIBUÍDO — o caminho novo, em teste.
+ *
+ * Vem separado do resto porque não substitui nada: as lojas do centralizado
+ * seguem em `unit_platforms.api_store_id` e não sabem que esta tabela existe.
+ */
+async function getConexoesDistribuidas(): Promise<ConexaoDist[]> {
+  const { data } = await createAdminClient()
+    .from("ifood_conexoes_distribuidas")
+    .select(
+      "id, user_code, verification_url, user_code_expira_em, status, merchant_id, erro, units(code, name), holdings(name)",
+    )
+    .order("criada_em", { ascending: false })
+    .limit(50)
+
+  return ((data ?? []) as unknown as {
+    id: string
+    user_code: string | null
+    verification_url: string | null
+    user_code_expira_em: string | null
+    status: ConexaoDist["status"]
+    merchant_id: string | null
+    erro: string | null
+    units: { code: string; name: string } | null
+    holdings: { name: string } | null
+  }[]).map((c) => ({
+    id: c.id,
+    unitLabel: c.units ? `#${c.units.code} ${c.units.name}` : "(sem loja)",
+    holdingName: c.holdings?.name ?? "—",
+    userCode: c.user_code,
+    verificationUrl: c.verification_url,
+    expiraEm: c.user_code_expira_em
+      ? new Date(c.user_code_expira_em).toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null,
+    status: c.status,
+    merchantId: c.merchant_id,
+    erro: c.erro,
+  }))
+}
+
 /** Fila de solicitações de conexão feitas pelos clientes (todas as holdings). */
 async function getSolicitacoes(): Promise<SolicitacaoAdmin[]> {
   const admin = createAdminClient()
@@ -231,18 +280,23 @@ export async function AbaIfood() {
   const { getAvisosFechados } = await import("@/lib/data/avisos-fechados")
   const { merchantsSumidos } = await import("@/lib/ifood/merchants-sumidos")
   const { donosDosMerchants } = await import("@/lib/ifood/dono-do-merchant")
+  const { distribuidoConfigurado } = await import(
+    "@/lib/ifood/auth-distribuido"
+  )
   const [
     { merchants, units, holdings, byMerchant },
     solicitacoes,
     donoPorMerchant,
     sumidos,
     avisosFechados,
+    conexoesDist,
   ] = await Promise.all([
     getData(),
     getSolicitacoes(),
     donosDosMerchants(),
     merchantsSumidos(),
     getAvisosFechados(),
+    getConexoesDistribuidas(),
   ])
   /**
    * A contagem tem que bater com o que a lista MOSTRA.
@@ -342,6 +396,27 @@ export async function AbaIfood() {
         byMerchant={byMerchant}
         donoPorMerchant={donoPorMerchant}
         compartilhadas={compartilhadas}
+      />
+
+      {/* Caminho NOVO, fechado por padrão. Ver a nota no componente: ele não
+          pode competir com as três abas, que são o trabalho de todo dia. */}
+      <ConexaoDistribuida
+        unidades={(() => {
+          // Quem já tem merchant vinculado no centralizado — o seletor separa
+          // as duas listas com isso.
+          const comMerchant = new Set(
+            Object.values(byMerchant).map((v) => v.unitId),
+          )
+          return units.map((u) => ({
+            id: u.id,
+            code: u.code,
+            name: u.name,
+            holdingName: u.holdingName,
+            noCentralizado: comMerchant.has(u.id),
+          }))
+        })()}
+        conexoes={conexoesDist}
+        configurado={distribuidoConfigurado()}
       />
 
       <div className="rounded-lg border bg-card p-4 text-xs text-muted-foreground">
