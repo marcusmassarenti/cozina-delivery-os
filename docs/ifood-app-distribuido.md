@@ -48,6 +48,55 @@ Obrigado!
 
 ---
 
+## A RESPOSTA (28/08/26) — e a decisão
+
+**1. Como o lojista autoriza.** Geramos um código e um link, mandamos pro
+lojista; ele abre, cai na área de integrações do Portal do Parceiro e autoriza.
+**Aí o portal gera um NOVO código, que ele precisa mandar de volta pra gente** —
+e só então fechamos o vínculo.
+
+Ou seja: não é self-service. Tem uma volta manual no meio, com um código
+passando pela mão do lojista. Nosso `/conectar/<plataforma>/<token>` não resolve
+isso, porque lá o retorno vem por redirect do OAuth, sozinho.
+
+**2. Módulo extra: NÃO.** *"Os aplicativos centralizado e distribuído possuem os
+mesmos módulos e funcionalidades. O que muda é apenas o modelo de autenticação."*
+Centralizado = um token pra todas as lojas; distribuído = um token por loja.
+
+⚠️ Isso derruba a justificativa da Analytics — mas mostra onde ela estava
+errada. O impedimento de 03/ago nunca foi "precisa ser distribuído", foi
+"**o app que você já tem** não migra, precisa de um app NOVO". Um app novo pode
+ser CENTRALIZADO. Se um dia a Analytics valer a pena, o caminho é criar outro
+app centralizado — e não revincular 108 lojas.
+
+**3. Prazo de descontinuação do centralizado: NÃO RESPONDIDO.** A pergunta saiu
+solta no fim da mensagem e voltou sem resposta. É a única que mudaria a decisão.
+
+### Decisão: não migrar as 108 agora
+
+Aplicando a régua que este documento escreveu ANTES de saber a resposta: sem
+ganho de módulo e sem prazo, migrar é pedir 108 autorizações ao lojista sem
+nada visível em troca — e o desgaste é com o cliente, não com o iFood.
+
+### O que ainda pode valer: usar o distribuído em loja NOVA
+
+`src/lib/ifood/auth-distribuido.ts` já está construído (migration 0194,
+credenciais no ambiente) e nunca foi ligado a tela nenhuma — zero linha em
+`ifood_conexoes_distribuidas`. A resposta do iFood confirma que o fluxo que
+implementamos é exatamente o deles.
+
+O que o distribuído resolve, e não é pouco: hoje cada loja nova exige alguém
+entrar no Portal do DESENVOLVEDOR e pedir autorização por CNPJ, e o resultado
+não é determinístico — em 13/ago o lojista aprovou e a API seguiu com 403 por
+40 minutos; a Tech Assessoria ficou 10 lojas travadas por dias e voltou sem
+o iFood explicar o quê. No distribuído o passo que falta é uma ação do lojista,
+que a gente vê acontecer.
+
+A troca é: perde-se a autorização automática, ganha-se previsibilidade. Vale
+testar em UMA loja nova antes de decidir.
+
+---
+
 ## Para quem ler a resposta deles
 
 - **Se a autorização for por link self-service:** já temos o caminho pronto. O
