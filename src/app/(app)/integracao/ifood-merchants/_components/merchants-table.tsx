@@ -17,7 +17,7 @@ import {
 import { ignorarMerchant, type IgnorarMerchantState } from "../_actions"
 import { combina, type Aba } from "./abas"
 import { AppToggles } from "./app-toggles"
-import { LinkRow } from "./link-row"
+import { LinkRow, type DonoSugerido } from "./link-row"
 
 type MerchantRow = {
   id: string
@@ -59,6 +59,30 @@ function fmtCnpj(d: string | null): string | null {
   const s = (d ?? "").replace(/\D/g, "")
   if (s.length !== 14) return d
   return `${s.slice(0, 2)}.${s.slice(2, 5)}.${s.slice(5, 8)}/${s.slice(8, 12)}-${s.slice(12)}`
+}
+
+/**
+ * Como o dono foi deduzido, em português — e o quanto vale confiar.
+ *
+ * Aparece junto do nome do cliente porque as três pistas NÃO têm o mesmo
+ * peso: CNPJ completo é identidade, razão social é indício. Quem vai clicar
+ * em "Vincular" merece saber em qual das duas está se apoiando.
+ */
+const PISTA: Record<DonoSugerido["via"], { txt: string; ajuda: string }> = {
+  cnpj: {
+    txt: "por CNPJ",
+    ajuda: "O CNPJ do merchant bate com o cadastro da loja ou com a solicitação de conexão.",
+  },
+  raiz: {
+    txt: "mesma empresa",
+    ajuda:
+      "Os 8 primeiros dígitos do CNPJ batem — mesma empresa, filial diferente. Confira antes de vincular.",
+  },
+  razao: {
+    txt: "pela razão social",
+    ajuda:
+      "Este merchant não tem CNPJ, mas a razão social é idêntica à de outro merchant deste cliente. É indício, não prova — confira antes de vincular.",
+  },
 }
 
 /** Status da loja no iFood, em português. */
@@ -160,7 +184,7 @@ export function MerchantsTable({
   merchants,
   units,
   holdings,
-  donoPorCnpj,
+  donoPorMerchant,
   byMerchant,
   compartilhadas = {},
   aba,
@@ -169,8 +193,8 @@ export function MerchantsTable({
   merchants: MerchantRow[]
   units: UnitOption[]
   holdings: { id: string; name: string }[]
-  /** CNPJ → cliente que pediu a conexão. Sugere o dono do merchant. */
-  donoPorCnpj?: Record<string, { id: string; name: string }>
+  /** merchant id → cliente deduzido (CNPJ, raiz do CNPJ ou razão social). */
+  donoPorMerchant?: Record<string, DonoSugerido>
   byMerchant: Record<string, Linked>
   /**
    * Lojas que o cliente ACOMPANHA (de outra empresa), por nome do cliente.
@@ -189,8 +213,6 @@ export function MerchantsTable({
   /** Busca já normalizada (minúscula, sem acento nem pontuação). */
   busca: string
 }) {
-  const [cliente, setCliente] = React.useState<string>("todos")
-
   /**
    * Quantas linhas cada grupo mostra antes do "mostrar todas".
    *
@@ -201,14 +223,6 @@ export function MerchantsTable({
    */
   const LIMITE = 25
   const [expandidos, setExpandidos] = React.useState<Record<string, boolean>>({})
-
-  const unitsFiltradas = React.useMemo(
-    () =>
-      cliente === "todos"
-        ? units
-        : units.filter((u) => u.holdingId === cliente),
-    [units, cliente],
-  )
 
   // Agrupa por cliente; sem vínculo vai pra um balde próprio que renderiza
   // primeiro. Ordena os clientes por nome, mas o balde fura a fila.
@@ -268,11 +282,6 @@ export function MerchantsTable({
     )
   }, [merchants, byMerchant, aba, busca, suspensos])
 
-  const nomeCliente =
-    cliente === "todos"
-      ? null
-      : (holdings.find((h) => h.id === cliente)?.name ?? null)
-
   if (merchants.length === 0) {
     return (
       <div className="rounded-xl border bg-card px-3 py-12 text-center text-xs text-muted-foreground">
@@ -284,32 +293,6 @@ export function MerchantsTable({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* O filtro NÃO esconde linhas: ele restringe as unidades oferecidas nos
-          seletores. É o que evita vincular um merchant na loja de outro
-          cliente — o erro mais caro desta tela. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Ao vincular, oferecer lojas de:
-        </span>
-        <select
-          value={cliente}
-          onChange={(e) => setCliente(e.target.value)}
-          className="h-8 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
-        >
-          <option value="todos">Todos os clientes</option>
-          {holdings.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.name}
-            </option>
-          ))}
-        </select>
-        <span className="text-[11px] text-muted-foreground">
-          {nomeCliente
-            ? `só as ${unitsFiltradas.length} lojas de ${nomeCliente}`
-            : "todas as lojas da base — cuidado pra não vincular no cliente errado"}
-        </span>
-      </div>
-
       {/* Clientes que só ACOMPANHAM loja de terceiro não têm merchant e por
           isso não apareciam em lugar nenhum desta tela — o cliente existia,
           pagava e era invisível aqui. */}
@@ -443,8 +426,41 @@ export function MerchantsTable({
                             label={fmtCnpj(m.cnpj) ?? "CNPJ"}
                           />
                         )}
-                        <Copiavel valor={m.id} label="ID" />
+                        {/* O id do merchant é dado técnico: fica atrás do
+                            "..." em vez de ocupar a linha ao lado do nome do
+                            cliente. Continua a um clique pra conferir no
+                            Portal do Desenvolvedor. */}
+                        <Copiavel valor={m.id} label="ID iFood" />
                       </div>
+
+                      {/* DE QUEM É ESTA LOJA — a pergunta que a tela não
+                          respondia. (Marcus, 27/08/26: "quem é o cliente que
+                          tem essa unidade?")
+                          O dono ficava escondido dentro do texto do botão
+                          "1 de Grupo Le Brunch · ver todas", do lado direito,
+                          em 10px. Quem varre a coluna da esquerda pra decidir
+                          o que fazer não via cliente nenhum. */}
+                      {!linked && (
+                        <div className="mt-1.5">
+                          {donoPorMerchant?.[m.id] ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium">
+                              <Building2 className="size-3 text-muted-foreground" />
+                              {donoPorMerchant[m.id].name}
+                              <span
+                                className="text-[10px] font-normal text-muted-foreground"
+                                title={PISTA[donoPorMerchant[m.id].via].ajuda}
+                              >
+                                · {PISTA[donoPorMerchant[m.id].via].txt}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                              <AlertTriangle className="size-3" />
+                              cliente não identificado
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="w-full min-w-0 sm:w-auto sm:min-w-[260px]">
@@ -468,14 +484,11 @@ export function MerchantsTable({
                             <LinkRow
                               merchantId={m.id}
                               currentUnitId={linked.unitId}
-                              units={unitsFiltradas}
-                              /* Dono deduzido pelo CNPJ do merchant: o
-                                 seletor abre só nas lojas dele. */
-                              holdingSugerido={
-                                donoPorCnpj?.[
-                                  String(m.cnpj ?? "").replace(/\D/g, "")
-                                ] ?? null
-                              }
+                              units={units}
+                              /* Dono deduzido do merchant: o seletor abre
+                                 só nas lojas dele. */
+                              holdingSugerido={donoPorMerchant?.[m.id] ?? null}
+                              holdings={holdings}
                             />
                           </div>
                           <AppToggles
@@ -489,16 +502,13 @@ export function MerchantsTable({
                           <LinkRow
                             merchantId={m.id}
                             currentUnitId={null}
-                            units={unitsFiltradas}
+                            units={units}
                             /* ⚠️ Este é o LinkRow das NÃO VINCULADAS — o que o
                                admin de fato usa. Passei o cliente só no outro
                                (das já vinculadas) e o filtro não pegou. Se
                                mexer num, mexa nos dois. */
-                            holdingSugerido={
-                              donoPorCnpj?.[
-                                String(m.cnpj ?? "").replace(/\D/g, "")
-                              ] ?? null
-                            }
+                            holdingSugerido={donoPorMerchant?.[m.id] ?? null}
+                            holdings={holdings}
                           />
                           <BotaoIgnorar
                             merchantId={m.id}

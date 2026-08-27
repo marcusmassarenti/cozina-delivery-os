@@ -31,17 +31,27 @@ type UnitOption = {
   holdingName?: string
 }
 
+export type DonoSugerido = {
+  id: string
+  name: string
+  /** Força da pista: CNPJ completo, raiz do CNPJ, ou razão social. */
+  via: "cnpj" | "raiz" | "razao"
+}
+
 export function LinkRow({
   merchantId,
   currentUnitId,
   units,
   holdingSugerido,
+  holdings = [],
 }: {
   merchantId: string
   currentUnitId: string | null
   units: UnitOption[]
-  /** Cliente deduzido pelo CNPJ do merchant (solicitação de conexão). */
-  holdingSugerido?: { id: string; name: string } | null
+  /** Cliente deduzido do merchant (CNPJ, raiz do CNPJ ou razão social). */
+  holdingSugerido?: DonoSugerido | null
+  /** Todos os clientes — para quando a dedução falha ou está errada. */
+  holdings?: { id: string; name: string }[]
 }) {
   const [linkState, linkAction] = useActionState<LinkMerchantState, FormData>(
     linkMerchantToUnit,
@@ -54,21 +64,45 @@ export function LinkRow({
   const [selectedUnit, setSelectedUnit] = React.useState<string>(
     currentUnitId ?? "",
   )
-  /* Só as lojas DO CLIENTE do merchant.
+  /* O seletor NUNCA mistura clientes. (Marcus, 27/08/26)
    *
-   * A lista trazia todas as unidades da base misturadas — o admin não sabia
-   * qual loja era de qual dono e vinculava no escuro. E vincular errado aqui
-   * mistura o faturamento de dois clientes, o pior erro possível nesta tela.
+   * Antes: sem dono deduzido, `opcoes` caía em `units` — a base inteira —
+   * "porque lista longa é melhor que seletor vazio". Não é. Foi assim que a
+   * linha de um merchant da DG FOODS ficou com a unidade CR Poços, do
+   * Churrasco Royal, escolhida e a um clique de vincular. Misturar o
+   * faturamento de dois clientes é o pior erro possível nesta tela, e um
+   * seletor vazio é constrangimento; o outro é dano.
    *
-   * O cliente sai do CNPJ do merchant casado com a solicitação de conexão.
-   * Sem dedução possível (merchant sem pedido), mostra todas — lista longa é
-   * melhor que seletor vazio. */
-  const [verTodas, setVerTodas] = React.useState(false)
-  const doCliente = holdingSugerido
-    ? units.filter((u) => u.holdingId === holdingSugerido.id)
-    : []
-  const filtrando = !!holdingSugerido && !verTodas && doCliente.length > 0
-  const opcoes = filtrando ? doCliente : units
+   * Agora a pergunta vem antes: primeiro DE QUEM é o merchant, depois qual
+   * loja. Com dono deduzido a primeira já vem respondida. */
+  const [clienteEscolhido, setClienteEscolhido] = React.useState<string>(
+    holdingSugerido?.id ?? "",
+  )
+  const opcoes = React.useMemo(
+    () =>
+      clienteEscolhido
+        ? units.filter((u) => u.holdingId === clienteEscolhido)
+        : [],
+    [units, clienteEscolhido],
+  )
+
+  /* Trocar de cliente LIMPA a unidade escolhida.
+   *
+   * Sem isto o `value` do Select sobrevive à troca e some da lista de opções
+   * — e o Select, sem item correspondente, desenha o UUID cru no lugar do
+   * nome. Era o "5402b5cd-6517-4457-9d16" que aparecia na tela. Feio, mas o
+   * problema real é outro: o campo escondido continuava mandando aquele id no
+   * submit, então o vínculo errado ia junto sem ninguém ver o nome dele. */
+  const trocarCliente = (id: string) => {
+    setClienteEscolhido(id)
+    setSelectedUnit("")
+  }
+
+  /* Cinto de segurança do que efetivamente vai no submit: só passa id que
+   * está na lista visível. Se por qualquer caminho o estado divergir, o botão
+   * desabilita em vez de vincular no escuro. */
+  const unitValida = opcoes.some((u) => u.id === selectedUnit)
+  const valorSubmit = unitValida ? selectedUnit : ""
 
   if (currentUnitId) {
     return (
@@ -96,40 +130,64 @@ export function LinkRow({
       className="flex w-full min-w-0 flex-wrap items-center gap-2"
     >
       <input type="hidden" name="merchantId" value={merchantId} />
-      <input type="hidden" name="unitId" value={selectedUnit} />
-      <Select
-        value={selectedUnit}
-        onValueChange={(v) => setSelectedUnit(v ?? "")}
-      >
-        <SelectTrigger className="h-7 w-full text-xs sm:w-[200px]">
-          <SelectValue placeholder="Escolher unidade…" />
-        </SelectTrigger>
-        <SelectContent>
-          {opcoes.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              {u.code} — {u.name}
-              {/* Com a lista aberta pra todos, "01 — JK" não diz de quem é. */}
-              {!filtrando && u.holdingName ? (
-                <span className="ml-1 text-muted-foreground">
-                  · {u.holdingName}
-                </span>
-              ) : null}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <LinkBtn />
-      {holdingSugerido && doCliente.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setVerTodas((v) => !v)}
-          className="whitespace-nowrap text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+      <input type="hidden" name="unitId" value={valorSubmit} />
+
+      {/* Passo 1 — de quem é. Só aparece quando não deduzimos, ou quando a
+          pessoa clica em "trocar": com o dono conhecido, obrigar a confirmar
+          o óbvio em 60 linhas é ruído. */}
+      {!clienteEscolhido && (
+        <select
+          value=""
+          onChange={(e) => trocarCliente(e.target.value)}
+          className="h-7 w-full rounded-md border border-amber-300 bg-background px-2 text-xs outline-none focus:border-ring sm:w-[200px] dark:border-amber-800"
         >
-          {filtrando
-            ? `${doCliente.length} de ${holdingSugerido.name} · ver todas`
-            : `só ${holdingSugerido.name}`}
-        </button>
+          <option value="">De qual cliente é?</option>
+          {holdings.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.name}
+            </option>
+          ))}
+        </select>
       )}
+
+      {/* Passo 2 — qual loja dele. */}
+      {clienteEscolhido && (
+        <>
+          <Select
+            value={valorSubmit}
+            onValueChange={(v) => setSelectedUnit(v ?? "")}
+          >
+            <SelectTrigger className="h-7 w-full text-xs sm:w-[200px]">
+              <SelectValue placeholder="Escolher unidade…" />
+            </SelectTrigger>
+            <SelectContent>
+              {opcoes.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.code} — {u.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <LinkBtn desabilitado={!valorSubmit} />
+        </>
+      )}
+
+      {clienteEscolhido && opcoes.length === 0 && (
+        <span className="text-[10px] text-amber-700 dark:text-amber-400">
+          esse cliente não tem loja livre — cadastre a unidade primeiro
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={() => trocarCliente("")}
+        className={`whitespace-nowrap text-[10px] text-muted-foreground underline-offset-2 hover:underline ${
+          clienteEscolhido ? "" : "hidden"
+        }`}
+      >
+        trocar cliente
+      </button>
+
       {linkState.error && (
         <span className="text-[10px] text-rose-600">{linkState.error}</span>
       )}
@@ -137,10 +195,15 @@ export function LinkRow({
   )
 }
 
-function LinkBtn() {
+function LinkBtn({ desabilitado = false }: { desabilitado?: boolean }) {
   const { pending } = useFormStatus()
   return (
-    <Button type="submit" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={pending}>
+    <Button
+      type="submit"
+      size="sm"
+      className="h-7 gap-1 px-2 text-xs"
+      disabled={pending || desabilitado}
+    >
       <Link2 className="size-3" />
       {pending ? "..." : "Vincular"}
     </Button>
