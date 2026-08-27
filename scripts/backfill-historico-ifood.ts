@@ -10,7 +10,10 @@
  */
 import { createAdminClient } from "../src/lib/supabase/admin"
 import { syncIfoodAll } from "../src/lib/ifood/sync"
-import { competenciasDesdeInicio } from "../src/lib/ifood/auto-link"
+import {
+  competenciasDesdeInicio,
+  competenciasQueJaTenho,
+} from "../src/lib/ifood/auto-link"
 import { enviarPush } from "../src/lib/push/enviar"
 
 const cliente = process.argv[2]
@@ -71,10 +74,26 @@ async function main() {
       const u = res.results[0]
       const linhas = (u?.reconciliation ?? []).reduce((s, x) => s + (x.persisted ?? 0), 0)
       const meses = (u?.reconciliation ?? []).filter((x) => (x.persisted ?? 0) > 0).length
-      // Sinal = "a API respondeu", não "achou dado" — ver a nota em
-      // auto-link.ts. Loja que abriu depois de janeiro volta vazia e mesmo
-      // assim sai da fila: a pergunta foi feita e respondida.
-      const respondeu = (u?.reconciliation ?? []).some((x) => x.ok === true)
+      /* MESMA REGRA DO CRON — `every`, não `some`. Ver a nota longa em
+       * auto-link.ts, que registra as três vezes que essa decisão errou.
+       *
+       * Este script tinha ficado com o `some`: bastava UM mês responder pra
+       * loja sair da fila. E o carimbo É a fila — mês que ficou pra trás não
+       * seria tentado nunca mais, e o buraco é invisível, porque o painel
+       * mostra o que entrou, não o que faltou. Foi assim que o Baião de Dois
+       * perdeu maio e julho em 14/08.
+       *
+       * `jaTenho` olha o BANCO, não a resposta desta rodada: o extrato do
+       * iFood é assíncrono, então um mês já coletado ontem pode voltar
+       * "ainda gerando" hoje — e sem essa consulta ele contaria como não
+       * respondido, segurando na fila uma loja que já está completa. */
+      const porCompetencia = u?.reconciliation ?? []
+      const jaTenho = await competenciasQueJaTenho(r.unit_id, comps)
+      const respondeu =
+        porCompetencia.length > 0 &&
+        porCompetencia.every(
+          (x) => x.ok === true || jaTenho.has(x.competencia),
+        )
       if (respondeu) {
         await admin.from("unit_platforms")
           .update({ historico_backfill_at: new Date().toISOString() })

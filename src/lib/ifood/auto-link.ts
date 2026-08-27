@@ -886,7 +886,7 @@ export async function backfillPendentes(
  * cuida de "a API está mesmo funcionando" é o `platform_imports.source`, que é
  * o que libera o e-mail pro cliente.
  */
-async function competenciasQueJaTenho(
+export async function competenciasQueJaTenho(
   unitId: string,
   competencias: string[],
 ): Promise<Set<string>> {
