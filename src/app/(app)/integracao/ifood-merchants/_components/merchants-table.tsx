@@ -251,9 +251,21 @@ export function MerchantsTable({
   const grupos = React.useMemo(() => {
     const map = new Map<string, MerchantRow[]>()
     for (const m of merchants) {
-      const chave = m.ignorado_em
-        ? IGNORADAS
-        : (byMerchant[m.id]?.holdingName ?? SEM_VINCULO)
+      /* O VÍNCULO manda mais que o arquivamento.
+       *
+       * Era `ignorado_em ? IGNORADAS : ...` — o carimbo vencia sempre, então
+       * um merchant arquivado e depois vinculado ficava preso em "Ignoradas"
+       * exibindo "Vinculado" e "Restaurar" lado a lado. A ação de vincular
+       * agora limpa o carimbo, mas a precedência aqui vale como segunda
+       * trava: se o carimbo sobreviver por qualquer caminho (importação,
+       * script, ajuste no banco), a tela ainda mostra a loja onde ela está
+       * de fato — no cliente dela. */
+      const vinculo = byMerchant[m.id]
+      const chave = vinculo
+        ? vinculo.holdingName
+        : m.ignorado_em
+          ? IGNORADAS
+          : SEM_VINCULO
 
       // Cada aba responde UMA pergunta. Sem este corte, "Conectadas" mostrava
       // as pendências junto e a separação não servia pra nada.

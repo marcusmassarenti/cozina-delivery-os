@@ -255,7 +255,13 @@ export async function AbaIfood() {
   const linkedCount = Object.values(byMerchant).filter(
     (v) => !v.holdingFora,
   ).length
-  const ignorados = merchants.filter((m) => m.ignorado_em).length
+  /* Arquivado E vinculado conta como CONECTADO, não como ignorado — a mesma
+   * precedência que a tabela aplica. Contar aqui pelo carimbo e listar lá
+   * pelo vínculo faria o badge dizer 3 com duas linhas na tela, que é o
+   * defeito que esta contagem já teve uma vez ("dizia 88 e desenhava 61"). */
+  const ignorados = merchants.filter(
+    (m) => m.ignorado_em && !byMerchant[m.id],
+  ).length
   const semVinculo = merchants.filter(
     (m) => !m.ignorado_em && !byMerchant[m.id],
   ).length

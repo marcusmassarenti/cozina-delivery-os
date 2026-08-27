@@ -273,6 +273,27 @@ export async function linkMerchantToUnit(
       console.error("[link-merchant] falhou ao ligar api_sync_enabled:", e)
     }
 
+    /* Vincular É desarquivar. Um merchant vinculado não é "ignorado".
+     *
+     * "Ignoradas" quer dizer "não virou unidade da rede" — e virar unidade é
+     * exatamente o que acabou de acontecer. Sem limpar o carimbo, o merchant
+     * segue no balde de arquivadas mostrando o selo "Vinculado" ao lado do
+     * botão "Restaurar": dois estados que se contradizem na mesma linha.
+     *
+     * Não é hipótese. A Churrasco no Pão foi arquivada em 27/07 como loja
+     * inativa, VOLTOU a operar, foi vinculada em 26/08 e ficou um mês em
+     * "Ignoradas" — puxando extrato normalmente enquanto a tela dizia que ela
+     * tinha sido descartada. Quem conta loja conectada pela tela contava uma a
+     * menos.
+     *
+     * O motivo escrito na época some junto, e é certo que suma: ele
+     * justificava o arquivamento, e o arquivamento acabou. */
+    await admin
+      .from("ifood_merchants")
+      .update({ ignorado_em: null, ignorado_motivo: null })
+      .eq("id", merchantId)
+      .not("ignorado_em", "is", null)
+
     // Vincular É conectar: a solicitação daquela loja fecha junto.
     //
     // Sem isto, a loja passava a puxar dado normalmente e mesmo assim seguia na
