@@ -21,7 +21,10 @@ import "server-only"
 import * as XLSX from "xlsx"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getAccessibleUnitIds } from "@/lib/auth/permissions"
+import {
+  getAccessibleUnitIds,
+  getCurrentHoldingId,
+} from "@/lib/auth/permissions"
 import { normalizarCnpj } from "@/lib/cnpj"
 import { COLUNAS, acharColuna, idDaOpcao, normalizar } from "./planilha-colunas"
 import type { CanalId } from "@/components/platform-logo"
@@ -66,6 +69,7 @@ export type PreviaImportacao = {
 
 export async function lerPlanilhaUnidades(
   arquivo: File,
+  opts?: { unidadesVisiveis?: string[] | null; holdingId?: string | null },
 ): Promise<PreviaImportacao> {
   const vazio: PreviaImportacao = {
     linhas: [],
@@ -158,12 +162,49 @@ export async function lerPlanilhaUnidades(
 
   // ── Lojas que já existem, pra saber o que é criação e o que é atualização ─
   const admin = createAdminClient()
-  const allowed = await getAccessibleUnitIds()
+  /* `unidadesVisiveis` existe pra PODER TESTAR isto fora de um request.
+   *
+   * `getAccessibleUnitIds()` lê cookie, então qualquer script que tente rodar
+   * a leitura de planilha morre em "cookies was called outside a request
+   * scope" — e o efeito prático era que a única forma de conferir uma
+   * mudança aqui era subir e pedir pra alguém reimportar. Passando o escopo
+   * de fora, um script roda o arquivo de verdade e compara o resultado.
+   *
+   * Em produção ninguém passa: o `undefined` cai no caminho de sempre. */
+  const [allowed, holdingId] = await Promise.all([
+    opts?.unidadesVisiveis !== undefined
+      ? Promise.resolve(opts.unidadesVisiveis)
+      : getAccessibleUnitIds(),
+    opts?.holdingId !== undefined
+      ? Promise.resolve(opts.holdingId)
+      : getCurrentHoldingId(),
+  ])
+
   let qExistentes = admin
     .from("units")
     .select(
-      "id, code, name, cnpj, active, razao_social, tipo_cozinha, logradouro, numero, complemento, bairro, city, state, cep, telefone, responsavel_nome, responsavel_email, tipo_operacao, regime_fiscal, tipo_entrega, data_inauguracao",
+      "id, code, name, cnpj, active, razao_social, tipo_cozinha, logradouro, numero, complemento, bairro, city, state, cep, telefone, responsavel_nome, responsavel_email, tipo_operacao, regime_fiscal, tipo_entrega, data_inauguracao, brands!inner(holding_id)",
     )
+
+  /* ⚠️ O CÓDIGO DA LOJA NÃO É ÚNICO NA BASE — é único DENTRO DO CLIENTE.
+   *
+   * Oito lojas usam "01": a JK do Churrasco no Pote, a CR Poços do Churrasco
+   * Royal, a THE SALAD do Le Brunch, e assim por diante. Sem esta trava, o
+   * mapa de existentes ficava chaveado só pelo código e guardava a ÚLTIMA
+   * loja que a consulta devolvesse — então quem enxerga mais de um cliente
+   * (superadmin) via a prévia comparar a linha "01" da planilha com a loja
+   * "01" de outra empresa, e a gravação usaria o `id` dela.
+   *
+   * Ficou escondido enquanto os campos obrigatórios barravam essas linhas
+   * antes da comparação: o erro tapava a colisão. Ao aceitar vazio em loja
+   * existente, a colisão apareceu — e a prévia passou a oferecer 16
+   * atualizações trocando nome e CNPJ de loja de outro cliente.
+   *
+   * A âncora é a MESMA da criação (`getDefaultBrand` usa `getCurrentHoldingId`),
+   * e ela respeita o "ver como cliente" — que é como um superadmin importa
+   * planilha de outra empresa de propósito, em vez de por acidente. */
+  if (holdingId) qExistentes = qExistentes.eq("brands.holding_id", holdingId)
+
   if (allowed !== null) {
     if (allowed.length === 0) qExistentes = qExistentes.in("id", ["-"])
     else qExistentes = qExistentes.in("id", allowed)
@@ -235,6 +276,27 @@ export async function lerPlanilhaUnidades(
     if (!code) erros.push("Código vazio")
     if (!name) erros.push("Nome vazio")
 
+    /* ── VAZIO NUMA LOJA QUE JÁ EXISTE = "NÃO MEXI NISSO" ──────────────────
+     *
+     * A busca do cadastro atual vinha DEPOIS das validações, então elas
+     * cobravam de uma loja já cadastrada os mesmos campos que cobrariam de
+     * uma loja nova. Isso quebra o fluxo inteiro do "traga a planilha de
+     * volta": quem exporta 16 lojas e reimporta sem editar nada leva 13
+     * erros, porque o export escreveu vazio nos campos que o cadastro nunca
+     * teve. Foi o que aconteceu com o Churrasco no Pote em 27/08/26.
+     *
+     * A regra nova em uma frase: célula vazia numa loja EXISTENTE preserva o
+     * que está no banco; célula com valor ERRADO continua sendo erro, nova ou
+     * não. Obrigatório segue valendo inteiro para loja nova — lá o vazio é
+     * cadastro incompleto de verdade.
+     *
+     * Preservar (e não gravar null) é o que torna a ida e volta sem perda:
+     * apagar campo por omissão faria uma reimportação distraída limpar dado
+     * que ninguém pediu pra limpar. */
+    const existente = code ? existentes.get(normalizar(code)) : undefined
+    const manter = <T,>(atual: T, campo: string): T | null =>
+      existente ? ((existente[campo] as T) ?? null) : atual
+
     // Código repetido DENTRO do arquivo: sem isso, duas linhas com o mesmo
     // código gravariam uma por cima da outra e a segunda venceria em silêncio.
     if (code) {
@@ -249,20 +311,34 @@ export async function lerPlanilhaUnidades(
     // "11.111.111/1111-11", e o erro só apareceria dias depois, quando o
     // vínculo com o iFood não casasse.
     const cnpjRaw = pega("cnpj")
-    const cnpj = normalizarCnpj(cnpjRaw)
-    if (!cnpjRaw) erros.push("CNPJ vazio")
-    else if (!cnpj) erros.push(`CNPJ inválido (${cnpjRaw})`)
+    const cnpjLido = normalizarCnpj(cnpjRaw)
+    let cnpj = cnpjLido
+    if (!cnpjRaw) {
+      if (existente) cnpj = (existente.cnpj as string | null) ?? null
+      else erros.push("CNPJ vazio")
+    } else if (!cnpjLido) {
+      // Digitado e errado: erro sempre. Só o VAZIO é "não mexi".
+      erros.push(`CNPJ inválido (${cnpjRaw})`)
+    }
 
-    const uf = pega("state").toUpperCase()
-    if (!/^[A-Z]{2}$/.test(uf)) erros.push(`UF inválida (${pega("state") || "vazia"})`)
+    const ufLida = pega("state").toUpperCase()
+    let uf = ufLida
+    if (!/^[A-Z]{2}$/.test(ufLida)) {
+      if (!ufLida && existente) uf = String(existente.state ?? "")
+      else erros.push(`UF inválida (${pega("state") || "vazia"})`)
+    }
 
-    const dataInaug = paraISO(pega("data_inauguracao"))
+    let dataInaug = paraISO(pega("data_inauguracao"))
     if (!dataInaug) {
-      erros.push(
-        pega("data_inauguracao")
-          ? `Inauguração em formato não reconhecido (${pega("data_inauguracao")}) — use DD/MM/AAAA`
-          : "Inauguração vazia",
-      )
+      if (pega("data_inauguracao")) {
+        erros.push(
+          `Inauguração em formato não reconhecido (${pega("data_inauguracao")}) — use DD/MM/AAAA`,
+        )
+      } else if (existente) {
+        dataInaug = (existente.data_inauguracao as string | null) ?? null
+      } else {
+        erros.push("Inauguração vazia")
+      }
     }
 
     const plataformas = pega("platforms")
@@ -272,7 +348,9 @@ export async function lerPlanilhaUnidades(
     const invalidas = plataformas.filter(
       (p) => !(PLATAFORMAS_VALIDAS as readonly string[]).includes(p),
     )
-    if (plataformas.length === 0) erros.push("Nenhuma plataforma informada")
+    if (plataformas.length === 0 && !existente) {
+      erros.push("Nenhuma plataforma informada")
+    }
     else if (invalidas.length > 0) {
       erros.push(
         `Plataforma desconhecida: ${invalidas.join(", ")} — use ifood, 99food, keeta ou cardapioweb`,
@@ -295,12 +373,13 @@ export async function lerPlanilhaUnidades(
         continue
       }
       const valor = pega(c.campo)
-      if (c.obrigatorio && !valor) {
-        erros.push(`${c.titulo} vazio`)
-        continue
-      }
       if (!valor) {
-        dados[c.campo] = null
+        // Loja nova: obrigatório é obrigatório. Loja que já existe: preserva.
+        if (c.obrigatorio && !existente) {
+          erros.push(`${c.titulo} vazio`)
+          continue
+        }
+        dados[c.campo] = manter(null, c.campo)
         continue
       }
       if (c.campo === "city") {
@@ -322,8 +401,6 @@ export async function lerPlanilhaUnidades(
         dados[c.campo] = valor
       }
     }
-
-    const existente = code ? existentes.get(normalizar(code)) : undefined
 
     if (erros.length > 0) {
       linhas.push({ linha: numeroLinha, code, name, acao: "erro", erros, mudancas: [] })
