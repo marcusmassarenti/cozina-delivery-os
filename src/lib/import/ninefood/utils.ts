@@ -105,7 +105,9 @@ export function parseSimNao(v: unknown): boolean | null {
  *      "1.234,56" → "1234.56"   |   "1,234.56" → "1234.56"
  *  - Só vírgula → decimal quando vem 1-2 dígitos depois ("113,69" → "113.69");
  *      3 dígitos ou várias vírgulas = milhar ("1,234" → "1234").
- *  - Só ponto (ou nenhum separador) → mantém (ponto = decimal, formato US).
+ *  - Só ponto → decimal quando vem 1-2 dígitos depois ("113.69" → "113.69");
+ *      3 dígitos ou vários pontos = milhar ("2.097" → "2097"). Mesma régua da
+ *      vírgula: dinheiro não tem 3 casas decimais.
  *
  * Compartilhado com o parser do Keeta. Antes o 99 Food assumia SEMPRE ponto =
  * milhar (`.replace(/\./g,"")`), o que inflava 100× quando o decimal vinha com
@@ -128,6 +130,29 @@ export function normalizeNumeric(raw: string): string {
       s = s.replace(",", ".")
     } else {
       s = s.replace(/,/g, "")
+    }
+  } else if (hasDot) {
+    /* ⚠️ PONTO SOZINHO COM 3 DÍGITOS DEPOIS É MILHAR, NÃO DECIMAL.
+     *
+     * O ramo da vírgula acima já aplicava essa régua ("1,234" = mil duzentos
+     * e trinta e quatro); o do ponto não, e a assimetria custou dinheiro de
+     * verdade. O relatório "Dados da loja" da 99 é pt-BR puro: vírgula
+     * decimal, ponto milhar. Um dia cujo faturamento é redondo sai sem
+     * decimais — "2.097" — e era lido como R$ 2,10.
+     *
+     * Medido em 28/08/26 na Pizzaria Forno a Lenha 4 (DG FOODS), agosto: o
+     * bruto do mês saía R$ 46.892,50 quando o relatório diz R$ 51.886,50.
+     * Cinco mil reais somem, e somem PARA BAIXO — o lojista vê o canal pior
+     * do que é e ninguém confere um número ruim.
+     *
+     * A regra separa os dois formatos sem ambiguidade prática: dinheiro tem
+     * 1 ou 2 casas decimais, nunca 3. Então "113.69" e "300.00" seguem
+     * decimais (formato US do relatório de itens), e "2.097" e "1.234.567"
+     * viram milhar. */
+    const parts = s.split(".")
+    const last = parts[parts.length - 1]
+    if (parts.length > 2 || last.length === 3) {
+      s = s.replace(/\./g, "")
     }
   }
   return s
