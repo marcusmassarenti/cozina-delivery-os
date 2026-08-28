@@ -180,8 +180,8 @@ export default async function VisaoPage({
                   href={`/unidades/${encodeURIComponent(a.code)}`}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition hover:bg-muted/50"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   {a.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={a.logoUrl}
                       alt=""
