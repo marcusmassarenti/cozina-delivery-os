@@ -19,6 +19,7 @@ import {
   Sparkles,
   Star,
   Scale,
+  ListChecks,
   Store,
   Tag,
   TrendingUp,
@@ -120,6 +121,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Carteira",
     defaultOpen: true,
     items: [
+      {
+        label: "Lojas",
+        href: "/carteira/lojas",
+        icon: ListChecks,
+        module: "unidades",
+      },
       {
         label: "Gestores",
         href: "/carteira/gestores",
