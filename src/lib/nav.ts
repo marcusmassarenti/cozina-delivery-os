@@ -25,6 +25,7 @@ import {
   UserCog,
   Users,
   UtensilsCrossed,
+  UsersRound,
   Wallet,
 } from "lucide-react"
 
@@ -104,6 +105,27 @@ export const NAV_GROUPS: NavGroup[] = [
         module: "relatorios",
       },
       { label: "DRE Grupo", href: "/dre", icon: Wallet, module: "financeiro" },
+    ],
+  },
+  {
+    /* CARTEIRA — as telas de quem administra uma agência de delivery.
+     *
+     * Seção própria, e o nome NÃO é "Gestor": gestor é uma das entidades de
+     * dentro, e batizar a seção com o nome de uma tela dela confunde (seria
+     * como chamar o Financeiro de "Lançamentos"). Quem usa isto é o DONO da
+     * agência; o gestor é quem é medido.
+     *
+     * Fica no módulo `unidades` porque é sobre a carteira de lojas — e some
+     * pra cliente de loja única, que não tem carteira pra administrar. */
+    label: "Carteira",
+    defaultOpen: true,
+    items: [
+      {
+        label: "Gestores",
+        href: "/carteira/gestores",
+        icon: UsersRound,
+        module: "unidades",
+      },
     ],
   },
   {
