@@ -368,19 +368,23 @@ export async function getNetworkNinefoodPedidoResumo(
   unitIds: string[],
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a tela somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<NinefoodPedidoResumo> {
   if (unitIds.length === 0) return emptyResumo()
   const admin = createAdminClient()
-  const rows = await pageAll((from, to) =>
-    admin
+  const rows = await pageAll((from, to) => {
+    let q = admin
       .from("ninefood_pedidos")
       .select(SELECT)
       .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(from, to),
-  )
+    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
+    // sempre o mês inteiro, e uma semana traria os números dos 30 dias.
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    return q.order("id").range(from, to)
+  })
   return aggregate(preferirPlanilha(rows))
 }
 
@@ -402,6 +406,8 @@ export async function getNinefoodPedidoPorLoja(
   unitIds: string[],
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a tela somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<NinefoodPedidoUnitRow[]> {
   if (unitIds.length === 0) return []
   const admin = createAdminClient()
@@ -416,16 +422,18 @@ export async function getNinefoodPedidoPorLoja(
   let from = 0
   const pageSize = 1000
   for (let i = 0; i < 300; i++) {
-    const { data, error } = await admin
+    let sel = admin
       .from("ninefood_pedidos")
       .select(
         "unit_id, receita_vendas, receita_real_loja, despesas_ofertas, horario_cancelamento",
       )
       .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(from, from + pageSize - 1)
+    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
+    // sempre o mês inteiro, e uma semana traria os números dos 30 dias.
+    sel = dateRange
+      ? sel.gte("data", dateRange.start).lte("data", dateRange.end)
+      : sel.eq("ref_year", year).eq("ref_month", month)
+    const { data, error } = await sel.order("id").range(from, from + pageSize - 1)
     if (error) {
       console.error("getNinefoodPedidoPorLoja:", error.message)
       break
