@@ -59,26 +59,53 @@ const somaDias = (d: Date, n: number) => {
 }
 
 /**
- * As últimas `quantas` semanas de uma loja, da mais recente pra trás.
+ * As semanas de uma loja dentro do período selecionado na tela.
  *
- * ⚠️ PEDE UMA SEMANA A MAIS do que devolve, de propósito: a variação da
- * semana mais antiga precisa da anterior a ela pra existir. Sem isso a
- * primeira linha da lista sempre apareceria sem comparação, e a pessoa
- * concluiria que faltou dado.
+ * ── SEGUE O FILTRO, E ISSO É UMA CORREÇÃO ────────────────────────────────
+ * A primeira versão ignorava o seletor de período de propósito: a aba
+ * pergunta "o que está pendente", e um recorte de dias esconderia semana que
+ * a agência ainda deve. O Marcus corrigiu em 28/08/26 — e com razão. Filtro
+ * que umas abas obedecem e outras não é pior que qualquer uma das duas
+ * regras: quem seleciona agosto e vê julho lê aquilo como defeito, não como
+ * intenção, e passa a desconfiar do filtro na tela inteira.
+ *
+ * A semana entra se ENCOSTA no período. A de 27/07 a 02/08 aparece tanto em
+ * julho quanto em agosto, porque ela é das duas — cortá-la ao meio seria
+ * inventar uma semana de quatro dias que não existe no ciclo da agência.
+ *
+ * ⚠️ BUSCA UMA SEMANA A MAIS do que devolve: a variação da mais antiga
+ * precisa da anterior a ela. Sem isso a primeira linha sempre apareceria sem
+ * comparação, e a pessoa concluiria que faltou dado.
  */
 export async function getSemanasDaLoja(
   unitId: string,
-  quantas = 8,
+  periodo: { start: string; end: string },
   hoje = new Date(),
 ): Promise<SemanaDaLoja[]> {
+  const dentroDoPeriodo = (ini: Date) =>
+    iso(ini) <= periodo.end && iso(somaDias(ini, 6)) >= periodo.start
+
   const segundaAtual = segundaDaSemana(hoje)
+  // A semana corrente ainda está aberta — o ciclo só conta a que fechou.
+  const ultimaFechada = somaDias(segundaAtual, -7)
 
-  // A semana corrente ainda está aberta — o ciclo começa na que fechou.
-  const maisRecente = somaDias(segundaAtual, -7)
-  const maisAntigaComExtra = somaDias(maisRecente, -7 * quantas)
-
+  // Começa na segunda do primeiro dia do período e caminha até o fim dele,
+  // sem passar da última semana fechada.
+  const primeira = segundaDaSemana(new Date(`${periodo.start}T12:00:00Z`))
   const inicios: Date[] = []
-  for (let i = 0; i <= quantas; i++) inicios.push(somaDias(maisRecente, -7 * i))
+  for (let d = new Date(primeira); iso(d) <= periodo.end; d = somaDias(d, 7)) {
+    if (iso(d) > iso(ultimaFechada)) break
+    if (dentroDoPeriodo(d)) inicios.push(new Date(d))
+  }
+  // Da mais recente pra trás, que é como se lê uma lista de pendência.
+  inicios.reverse()
+  // A extra, só pra calcular a variação da última linha — não é devolvida.
+  if (inicios.length > 0) {
+    inicios.push(somaDias(inicios[inicios.length - 1], -7))
+  }
+  const quantas = Math.max(0, inicios.length - 1)
+  const maisAntigaComExtra = inicios[inicios.length - 1] ?? primeira
+  const maisRecente = inicios[0] ?? primeira
 
   const admin = createAdminClient()
   const [{ data: registros }, agregado] = await Promise.all([

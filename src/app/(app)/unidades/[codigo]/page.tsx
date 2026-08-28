@@ -668,13 +668,13 @@ async function DetailTabs({
   const m = monthlyMerged
   const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
 
-  /* O ciclo semanal NÃO segue o filtro de período da tela.
+  /* O ciclo semanal segue o período da tela, como as outras abas.
    *
-   * Ele é um calendário próprio: segunda a domingo, entrega na quarta. Se
-   * respeitasse o seletor de mês, olhar "20 a 27 de agosto" esconderia as
-   * semanas que a agência ainda deve — e a pergunta da aba é justamente
-   * "o que está pendente", não "o que aconteceu no recorte". */
-  const semanas = await getSemanasDaLoja(unit.id, 8)
+   * A primeira versão ignorava o seletor — a aba pergunta "o que está
+   * pendente", e o recorte esconderia semana devida. O Marcus corrigiu, e o
+   * argumento dele é mais forte: filtro que umas abas obedecem e outras não
+   * faz a pessoa desconfiar do filtro na tela inteira. */
+  const semanas = await getSemanasDaLoja(unit.id, periodRange)
 
   // Fechamentos só do mês selecionado (a semana aparece no mês que ela cobre).
   const mm = String(month).padStart(2, "0")
