@@ -70,6 +70,8 @@ import { CardapioKeetaTab } from "./_components/cardapio-keeta-tab"
 import { CardapioCwTab } from "./_components/cardapio-cw-tab"
 import { AvaliacoesCwTab } from "./_components/avaliacoes-cw-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
+import { SemanaTab } from "./_components/semana-tab"
+import { getSemanasDaLoja } from "@/lib/data/relatorio-semanal"
 import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
@@ -634,7 +636,7 @@ function HeroKpis({
 // Tabs
 //----------------------------------------------------------------
 
-function DetailTabs({
+async function DetailTabs({
   unit,
   monthlyMerged,
   platforms,
@@ -665,6 +667,14 @@ function DetailTabs({
 }) {
   const m = monthlyMerged
   const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
+
+  /* O ciclo semanal NÃO segue o filtro de período da tela.
+   *
+   * Ele é um calendário próprio: segunda a domingo, entrega na quarta. Se
+   * respeitasse o seletor de mês, olhar "20 a 27 de agosto" esconderia as
+   * semanas que a agência ainda deve — e a pergunta da aba é justamente
+   * "o que está pendente", não "o que aconteceu no recorte". */
+  const semanas = await getSemanasDaLoja(unit.id, 8)
 
   // Fechamentos só do mês selecionado (a semana aparece no mês que ela cobre).
   const mm = String(month).padStart(2, "0")
@@ -769,6 +779,7 @@ function DetailTabs({
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
           <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
+          <TabsTrigger value="semana">Semana</TabsTrigger>
           <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
           {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
         </TabsList>
@@ -796,6 +807,14 @@ function DetailTabs({
       {/* Avaliações */}
       <TabsContent value="avaliacoes" className="mt-4">
         <PlatformSwitcher slots={avaliacoesSlots} />
+      </TabsContent>
+
+      {/* Semana — ciclo da agência. Fica ANTES do Diagnóstico porque é
+          trabalho de toda quarta; diagnóstico é consulta eventual. */}
+      <TabsContent value="semana" className="mt-4">
+        <Suspense fallback={<TabSkeleton />}>
+          <SemanaTab unitId={unit.id} codigo={unit.code} semanas={semanas} />
+        </Suspense>
       </TabsContent>
 
       {/* Diagnóstico da loja (estilo plano de ação) */}
