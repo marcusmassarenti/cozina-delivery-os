@@ -13,11 +13,11 @@ export type SalvarSemanaState = {
 }
 
 /**
- * Grava o texto do relatório da semana.
+ * Grava o comentário da semana.
  *
- * `requireUnitWrite` porque escrever aqui é escrever NA LOJA: o relatório vai
- * pro cliente da agência com o nome dela. Quem não pode editar a unidade não
- * pode falar por ela.
+ * `requireUnitWrite` porque escrever aqui é escrever NA LOJA: o comentário
+ * vai junto do relatório que a agência entrega ao cliente dela. Quem não pode
+ * editar a unidade não pode falar por ela.
  */
 export async function salvarSemana(
   _prev: SalvarSemanaState,
@@ -42,6 +42,8 @@ export async function salvarSemana(
   if (codigo) revalidatePath(`/unidades/${codigo}`)
   return {
     ok: true,
-    message: texto.trim() ? "Relatório entregue." : "Texto limpo — semana volta a pendente.",
+    message: texto.trim()
+      ? "Comentário salvo — semana marcada como entregue."
+      : "Comentário limpo — semana volta a pendente.",
   }
 }

@@ -146,15 +146,21 @@ function Semana({
         <input type="hidden" name="unitId" value={unitId} />
         <input type="hidden" name="codigo" value={codigo} />
         <input type="hidden" name="semana" value={s.inicio} />
+        {/* "Comentários", não "Relatório da semana". (Marcus, 28/08/26)
+            O RELATÓRIO É TUDO QUE ESTÁ ACIMA — os números, as plataformas, o
+            gráfico, os produtos. Esta caixa é o que o gestor escreve EM CIMA
+            disso. Chamá-la de relatório prometia que ela é o relatório, e era
+            por isso que "Salvar relatório" parecia que deveria fazer algo
+            além de salvar. O nome errado criava a expectativa errada. */}
         <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Relatório da semana
+          Comentários da semana
         </label>
         <textarea
           name="texto"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           rows={3}
-          placeholder="O que aconteceu na semana, o que explica o número, o que vai ser feito."
+          placeholder="O que explica o número, o que foi feito, o que vem pela frente."
           className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
         />
         <div className="flex flex-wrap items-center gap-2">
@@ -168,8 +174,13 @@ function Semana({
             </span>
           )}
           {s.entregueEm && !estado.ok && (
+            /* "comentado em", não "entregue em": o sistema não envia nada
+               ainda, e dizer que foi entregue afirma o que não aconteceu. O
+               selo da semana continua "Entregue" porque ele mede o CICLO da
+               agência — o gestor fez a parte dele. Quando existir envio, as
+               duas palavras voltam a significar a mesma coisa. */
             <span className="text-[11px] text-muted-foreground">
-              entregue em{" "}
+              comentado em{" "}
               {new Date(s.entregueEm).toLocaleDateString("pt-BR", {
                 day: "2-digit",
                 month: "2-digit",
@@ -222,7 +233,7 @@ function Salvar() {
   const { pending } = useFormStatus()
   return (
     <Button type="submit" size="sm" className="h-8 text-xs" disabled={pending}>
-      {pending ? "Salvando…" : "Salvar relatório"}
+      {pending ? "Salvando…" : "Salvar comentário"}
     </Button>
   )
 }
