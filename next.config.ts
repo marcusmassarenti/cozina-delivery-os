@@ -57,7 +57,17 @@ const nextConfig: NextConfig = {
    * `NEXT_DIST_DIR=.next-verify npx next build` dá pra provar que o código
    * compila do zero enquanto o servidor de desenvolvimento continua servindo
    * — que é a diferença entre "o typecheck passou" e "compila de verdade".
-   * Default idêntico ao de antes. */
+   * Default idêntico ao de antes.
+   *
+   * ⚠️ O `next build` REESCREVE o tsconfig.json: ele acrescenta o
+   * `<distDir>/types` ao `include` e ainda reformata o arquivo inteiro.
+   * Depois de um build de verificação, confira o `git diff` do tsconfig e
+   * descarte — senão o caminho temporário entra no repositório.
+   *
+   * ⚠️ Um `.next/types` de build antigo convive mal com o `.next/dev/types`
+   * do servidor em execução: o `tsc` acusa rota nova como inexistente porque
+   * lê os dois. É ruído de cache, não erro de código — o build limpo é quem
+   * responde. */
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
 
   /**
