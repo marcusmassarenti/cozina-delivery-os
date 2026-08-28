@@ -33,7 +33,7 @@ import {
   parseRangeFromSp,
   rangeIsFullMonth,
 } from "@/lib/period"
-import { AlertTriangle } from "lucide-react"
+import { CalendarRange } from "lucide-react"
 
 import { PedidosIfoodView } from "./_components/pedidos-ifood-view"
 import { getHorariosDaRede } from "@/lib/data/ifood-horarios"
@@ -112,8 +112,8 @@ export default async function PedidosPage({
     plataforma === "ifood"
       ? await (async () => {
           const [vrByUnit, resumo, fatMap] = await Promise.all([
-            getVrByUnits(year, month, ids),
-            getNetworkPagamentoResumo(year, month, ids),
+            getVrByUnits(year, month, ids, queryRange),
+            getNetworkPagamentoResumo(year, month, ids, queryRange),
             getFinanceiroResumoByUnits(ids, year, month, queryRange),
           ])
           const enriched = vrByUnit
@@ -150,11 +150,11 @@ export default async function PedidosPage({
       ? await (async () => {
           const [resumo, unitsWithData, porLoja, fatMap, promocoes] =
             await Promise.all([
-              getNetworkKeetaPedidoResumo(ids, year, month),
+              getNetworkKeetaPedidoResumo(ids, year, month, queryRange),
               getKeetaPedidoUnitsWithData(year, month),
-              getKeetaPedidoPorLoja(ids, year, month),
+              getKeetaPedidoPorLoja(ids, year, month, queryRange),
               getKeetaResumoByUnits(ids, year, month, queryRange),
-              getKeetaPromocaoResumo(ids, year, month),
+              getKeetaPromocaoResumo(ids, year, month, queryRange),
             ])
           const enriched = porLoja
             .map((u) => ({
@@ -190,9 +190,9 @@ export default async function PedidosPage({
     plataforma === "99food"
       ? await (async () => {
           const [resumo, unitsWithData, porLoja, fatMap] = await Promise.all([
-            getNetworkNinefoodPedidoResumo(ids, year, month),
+            getNetworkNinefoodPedidoResumo(ids, year, month, queryRange),
             getNinefoodPedidoUnitsWithData(year, month),
-            getNinefoodPedidoPorLoja(ids, year, month),
+            getNinefoodPedidoPorLoja(ids, year, month, queryRange),
             getNinefoodResumoByUnits(ids, year, month, queryRange),
           ])
           const enriched = porLoja
@@ -266,11 +266,23 @@ export default async function PedidosPage({
         </div>
       </div>
 
+      {/* O aviso antigo dizia que pagamento, VR por bandeira e cardápio podiam
+          mostrar o mês inteiro — e dizia a verdade: aquelas consultas filtravam
+          por ref_year/ref_month e ignoravam o recorte de dias. Agora todas
+          filtram por data, então o alerta saiu em vez de virar letra morta.
+
+          O que continua sendo do MÊS é a linha de cobertura ("consolidado de X
+          de Y lojas"), e isso está certo: ela fala de planilha importada, e a
+          importação é mensal. Uma loja não passa a ter meio mês importado
+          porque o filtro mostra uma semana. */}
       {!isFullMonth && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
-          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-400">
+          <CalendarRange className="size-3.5 shrink-0 mt-0.5" />
           <span>
-            Período personalizado <strong>{formatRangeLabel(periodRange)}</strong> — resumos das plataformas filtram por dia; algumas seções específicas (pagamento, VR por bandeira, cardápio) podem mostrar o mês inteiro de {formatPeriodLabel({ year, month })}.
+            Mostrando <strong>{formatRangeLabel(periodRange)}</strong> — todos os
+            números desta tela são só desse período. A cobertura de lojas abaixo
+            é do mês de {formatPeriodLabel({ year, month })}, porque a
+            importação da planilha é mensal.
           </span>
         </div>
       )}

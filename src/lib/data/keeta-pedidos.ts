@@ -268,19 +268,23 @@ export async function getNetworkKeetaPedidoResumo(
   unitIds: string[],
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a tela somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<KeetaPedidoResumo> {
   if (unitIds.length === 0) return emptyResumo()
   const admin = createAdminClient()
-  const rows = await pageAll((from, to) =>
-    admin
+  const rows = await pageAll((from, to) => {
+    let q = admin
       .from("keeta_pedidos_recentes")
       .select(SELECT)
       .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(from, to),
-  )
+    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
+    // sempre o mês inteiro, e uma semana traria os números dos 30 dias.
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    return q.order("id").range(from, to)
+  })
   return aggregate(rows)
 }
 
@@ -304,6 +308,8 @@ export async function getKeetaPedidoPorLoja(
   unitIds: string[],
   year: number,
   month: number,
+  /** Recorte de dias do filtro. Sem ele a tela somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<KeetaPedidoUnitRow[]> {
   if (unitIds.length === 0) return []
   const admin = createAdminClient()
@@ -320,16 +326,18 @@ export async function getKeetaPedidoPorLoja(
   let from = 0
   const pageSize = 1000
   for (let i = 0; i < 300; i++) {
-    const { data, error } = await admin
+    let sel = admin
       .from("keeta_pedidos_recentes")
       .select(
         "unit_id, status_pedido, motivo_cancelamento, valor_pago_cliente, preco_original, promo_keeta, promo_loja",
       )
       .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(from, from + pageSize - 1)
+    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
+    // sempre o mês inteiro, e uma semana traria os números dos 30 dias.
+    sel = dateRange
+      ? sel.gte("data", dateRange.start).lte("data", dateRange.end)
+      : sel.eq("ref_year", year).eq("ref_month", month)
+    const { data, error } = await sel.order("id").range(from, from + pageSize - 1)
     if (error) {
       console.error("getKeetaPedidoPorLoja:", error.message)
       break

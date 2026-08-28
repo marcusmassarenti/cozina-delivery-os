@@ -272,18 +272,19 @@ export async function getNetworkPagamentoResumo(
   year: number,
   month: number,
   filterUnitIds?: string[],
+  /** Recorte de dias do filtro. Sem ele a tela somava o mês inteiro. */
+  dateRange?: { start: string; end: string },
 ): Promise<PagamentoResumo> {
   const admin = createAdminClient()
   const rows = await pageAll<Row>((a, b) => {
-    let q = admin
-      .from("ifood_pedidos")
-      .select(SELECT_COLS)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(a, b)
-    if (filterUnitIds)
-      q = q.in("unit_id", filterUnitIds)
+    let q = admin.from("ifood_pedidos").select(SELECT_COLS)
+    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
+    // sempre o mês inteiro, e uma semana traria os números dos 30 dias.
+    q = dateRange
+      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
+      : q.eq("ref_year", year).eq("ref_month", month)
+    q = q.order("id").range(a, b)
+    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
     return q
   })
   return aggregate(rows)
