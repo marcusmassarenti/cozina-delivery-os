@@ -139,6 +139,7 @@ export function AppSidebar({
   logoUrl = null,
   companyName = "",
   podeVerSuporte = false,
+  podeVerCarteira = false,
 }: {
   allowedModules: string[]
   isSuperadmin?: boolean
@@ -147,6 +148,9 @@ export function AppSidebar({
   companyName?: string
   /** Mesmo portão do painel de suporte — botão sem painel não abre nada. */
   podeVerSuporte?: boolean
+  /* Mesmo portão da rota /carteira. Item de menu que leva a 404 é pior que
+     item ausente: o cliente vê que existe e conclui que está quebrado. */
+  podeVerCarteira?: boolean
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
@@ -161,9 +165,11 @@ export function AppSidebar({
     module?: string
     comingSoon?: boolean
     superadminOnly?: boolean
+    carteiraOnly?: boolean
     proOnly?: boolean
   }) =>
     (!item.superadminOnly || isSuperadmin) &&
+    (!item.carteiraOnly || podeVerCarteira) &&
     (!item.proOnly || isPro) &&
     (!!item.comingSoon || !item.module || allowed.has(item.module))
 

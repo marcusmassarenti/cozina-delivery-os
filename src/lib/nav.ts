@@ -46,6 +46,8 @@ export type NavItem = {
   module?: string
   /** Só aparece pro super-admin da plataforma (dono do SaaS). */
   superadminOnly?: boolean
+  /** Só pra cliente com o painel da Carteira liberado (agência). */
+  carteiraOnly?: boolean
   /** Módulo do plano Pro — só aparece pra quem tem o plano Pro (ou super-admin). */
   proOnly?: boolean
   /** Ativo só no path exato (ex.: /caixa não fica ativo em /caixa/lancamentos). */
@@ -122,16 +124,15 @@ export const NAV_GROUPS: NavGroup[] = [
      * Fica no módulo `unidades` porque é sobre a carteira de lojas — e some
      * pra cliente de loja única, que não tem carteira pra administrar.
      *
-     * ⚠️ TRAVADO EM `superadminOnly` ATÉ O MARCUS LIBERAR (28/08/26).
+     * ⚠️ LIBERADO CLIENTE A CLIENTE (`carteiraOnly`), não pra base toda.
      *
-     * As telas estão de pé mas o conteúdo delas ainda é rascunho pro cliente:
-     * não existe gestor cadastrado em agência nenhuma, nem atendimento, nem
-     * mensalidade. Cliente que abrisse hoje veria quatro telas vazias e
-     * concluiria que o módulo não funciona — e primeira impressão de tela
-     * vazia não se desfaz com um deploy depois.
+     * Só parte dos clientes é agência. Uma pizzaria com duas lojas não tem
+     * gestor, nem carteira, nem mensalidade a receber de ninguém — sete
+     * telas vazias pra ela é pior que tela nenhuma. Quem libera é o
+     * super-admin, na ficha do cliente, e só pra quem é do tipo Consultoria.
      *
-     * Pra liberar: tirar `superadminOnly` dos itens. O `module: "unidades"`
-     * embaixo continua valendo e é ele que decide QUEM vê depois. */
+     * O `module: "unidades"` embaixo continua valendo: decide quem, DENTRO
+     * do cliente liberado, tem permissão pra ver. */
     label: "Carteira",
     defaultOpen: true,
     items: [
@@ -140,42 +141,42 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/carteira/visao",
         icon: LayoutDashboard,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
       {
         label: "Lojas",
         href: "/carteira/lojas",
         icon: ListChecks,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
       {
         label: "Gestores",
         href: "/carteira/gestores",
         icon: UsersRound,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
       {
         label: "Atendimentos",
         href: "/carteira/atendimentos",
         icon: ClipboardList,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
       {
         label: "Onboarding",
         href: "/carteira/onboarding",
         icon: Handshake,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
       {
         label: "Comercial",
         href: "/carteira/comercial",
         icon: Trophy,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
       {
         /* "Financeiro da agência" por extenso: existe um "Financeiro" no menu
@@ -184,7 +185,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/carteira/financeiro",
         icon: PiggyBank,
         module: "unidades",
-        superadminOnly: true,
+        carteiraOnly: true,
       },
     ],
   },

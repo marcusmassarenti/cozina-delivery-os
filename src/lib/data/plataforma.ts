@@ -94,6 +94,8 @@ export type ClientOverview = {
    */
   emailNaoConfirmado: boolean
   establishmentType: string | null
+  /** Painel da Carteira liberado pra este cliente (agência). */
+  carteiraHabilitada: boolean
   // Cobrança
   paymentMethod: string | null
   monthlyFee: number | null
@@ -255,7 +257,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle",
+      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -269,6 +271,7 @@ export async function getClientsOverview(): Promise<{
       ).map((h) => ({
         ...h,
         establishment_type: null,
+        carteira_habilitada: false,
         conta_interna: false,
         conta_interna_nota: null,
         convite_asaas_em: null,
@@ -406,6 +409,7 @@ export async function getClientsOverview(): Promise<{
   const clients: ClientOverview[] = holdings.map((h) => {
     const hh = h as typeof h & {
       establishment_type: string | null
+      carteira_habilitada: boolean | null
       payment_method: string | null
       monthly_fee: number | string | null
       price_per_unit: number | string | null
@@ -518,6 +522,7 @@ export async function getClientsOverview(): Promise<{
       createdAt: h.created_at,
       emailNaoConfirmado: temUsuarioConhecido && !algumConfirmou,
       establishmentType: hh.establishment_type ?? null,
+      carteiraHabilitada: hh.carteira_habilitada === true,
       brands: brandsByHolding.get(h.id)?.size ?? 0,
       units: unitCount.get(h.id) ?? 0,
       activeUnits,

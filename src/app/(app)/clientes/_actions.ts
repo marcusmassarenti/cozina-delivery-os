@@ -8,6 +8,7 @@ import { guard, requireSuperadmin } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { COOKIE_VER_COMO, VER_COMO_DURACAO_S } from "@/lib/auth/ver-como"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { normalizaTipoCliente } from "@/lib/tipos-cliente"
 import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
 import { auditar } from "@/lib/data/auditoria"
 import { quitarFaturaComPagamento } from "@/lib/data/faturas"
@@ -975,4 +976,50 @@ export async function entrarVerComoAction(formData: FormData) {
   })
 
   redirect("/inicio")
+}
+
+/**
+ * Liga/desliga o painel da Carteira pra um cliente (super-admin).
+ *
+ * ⚠️ A TRAVA DO TIPO É CHECADA AQUI, não só escondendo o botão. Esconder
+ * controla o que se vê; a action controla o que ACONTECE, e é ela que
+ * responde a um POST montado à mão. Só cliente do tipo Consultoria pode ser
+ * ligado — desligar é sempre permitido, porque tirar acesso nunca pode
+ * depender de o cadastro estar certo.
+ */
+export async function toggleCarteira(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    const holdingId = String(formData.get("holdingId") ?? "").trim()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+    const ligar = String(formData.get("acao") ?? "") === "liberar"
+
+    if (ligar) {
+      const { data } = await admin
+        .from("holdings")
+        .select("establishment_type")
+        .eq("id", holdingId)
+        .maybeSingle()
+      if (normalizaTipoCliente(data?.establishment_type ?? null) !== "Consultoria") {
+        return {
+          ok: false,
+          message:
+            "Só cliente do tipo Consultoria pode usar o painel da Carteira. Ajuste o tipo de estabelecimento primeiro.",
+        }
+      }
+    }
+
+    const { error } = await admin
+      .from("holdings")
+      .update({ carteira_habilitada: ligar })
+      .eq("id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    revalidatePath("/clientes")
+    // O menu é montado no layout — sem isto o item só aparece no F5.
+    revalidatePath("/", "layout")
+    return { ok: true }
+  })
 }

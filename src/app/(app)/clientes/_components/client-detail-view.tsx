@@ -25,6 +25,7 @@ import { AvisoPushDialog } from "./aviso-push-dialog"
 import { VerComoBotao } from "./ver-como-botao"
 import { EditBillingDialog } from "./edit-billing-dialog"
 import { PlanControls } from "./plan-controls"
+import { CarteiraToggle } from "./carteira-toggle"
 import { DescontoNegociado } from "./desconto-negociado"
 import { IndicadoPor } from "./indicado-por"
 
@@ -500,6 +501,17 @@ export function ClientDetailView({
           </ul>
         </Card>
       )}
+
+      {/* Fica ANTES do plano de propósito: não é upgrade de plano, é um
+          módulo que só serve pra parte da base. Misturar com os tiers faria
+          parecer que se compra. */}
+      <CarteiraToggle
+        holdingId={c.id}
+        habilitada={c.carteiraHabilitada}
+        ehConsultoria={
+          (c.establishmentType ?? "").trim().toLowerCase() === "consultoria"
+        }
+      />
 
       <Card title="Plano & Nino AI" icon={Sparkles}>
         <PlanControls

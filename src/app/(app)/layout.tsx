@@ -11,6 +11,7 @@ import { WelcomeSubscribedModal } from "@/components/welcome-subscribed-modal"
 import { WhatsNewModal } from "@/components/whats-new-modal"
 import { SuporteBolha } from "@/components/suporte/suporte-bolha"
 import { podeVerSuporte } from "@/lib/data/holding-demo"
+import { podeVerCarteira } from "@/lib/data/carteira-acesso"
 import { SaudeSemanalModal } from "@/components/saude-semanal-modal"
 import { NinoCortesiaModal } from "@/components/nino-cortesia-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -162,6 +163,7 @@ export default async function AppLayout({
              menu tivesse portão próprio, um dia os dois divergiriam e o botão
              abriria um painel que não está montado. */
           podeVerSuporte={!superadmin && podeVerSuporte(holdingAtual)}
+          podeVerCarteira={await podeVerCarteira()}
         />
         <SidebarInset>
           <TopBar
