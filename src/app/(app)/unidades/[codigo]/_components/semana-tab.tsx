@@ -277,11 +277,24 @@ function Serie({ semanas }: { semanas: SemanaDaLoja[] }) {
             <div
               key={s.inicio}
               className="group flex h-full flex-1 flex-col items-center gap-1"
-              title={`${dia(s.inicio)} a ${dia(s.fim)} · ${fmtBRL(s.bruto ?? 0)}`}
+              title={`${dia(s.inicio)} a ${dia(s.fim)} · ${fmtBRL(s.bruto ?? 0)}${
+                s.variacaoPct === null
+                  ? ""
+                  : ` · ${s.variacaoPct >= 0 ? "+" : ""}${s.variacaoPct.toFixed(1)}% vs. semana anterior`
+              }`}
             >
               {/* A variação fica SEMPRE visível, não só no hover: a pergunta
                   do gráfico é "subiu ou caiu", e resposta que exige passar o
-                  mouse não é resposta pra quem está lendo de relance. */}
+                  mouse não é resposta pra quem está lendo de relance.
+     
+                  ⚠️ COM UMA CASA DECIMAL, igual ao cartão. Arredondado pra
+                  inteiro, o gráfico dizia "8%" onde o cartão dizia "7,8%" —
+                  os dois certos, e mesmo assim o leitor para pra conferir se
+                  bateu. E parar pra conferir é caro aqui, porque o gráfico
+                  corre da esquerda pra direita e a lista embaixo corre do
+                  mais recente pro mais antigo: quem cruza os dois erra de
+                  semana com facilidade. O número idêntico nos dois lugares
+                  resolve sem precisar inverter nenhuma das ordens. */}
               <span className="h-3 text-[9px] font-semibold tabular-nums">
                 {s.variacaoPct === null ? (
                   <span className="text-muted-foreground">—</span>
@@ -294,7 +307,7 @@ function Serie({ semanas }: { semanas: SemanaDaLoja[] }) {
                     }
                   >
                     {s.variacaoPct >= 0 ? "▲" : "▼"}
-                    {Math.abs(s.variacaoPct).toFixed(0)}%
+                    {Math.abs(s.variacaoPct).toFixed(1)}%
                   </span>
                 )}
               </span>
