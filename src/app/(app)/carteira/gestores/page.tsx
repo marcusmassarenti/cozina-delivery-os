@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_GESTORES } from "../_tours"
 
 import {
   GestoresView,
@@ -52,6 +54,9 @@ export default async function GestoresPage({
           <p className="mt-0.5 text-sm text-muted-foreground">
             Quem cuida de cada loja, e quanto cada carteira traz no período.
           </p>
+          <div className="mt-2">
+            <TourButton steps={TOUR_GESTORES} />
+          </div>
         </div>
         <PeriodSelector current={periodRange} />
       </div>

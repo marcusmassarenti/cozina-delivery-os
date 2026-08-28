@@ -263,6 +263,11 @@ export function AppSidebar({
           return (
             <Collapsible
               key={group.label}
+              /* Âncora pros tours: o "Como funciona" da Carteira destaca o
+                 grupo do menu enquanto explica a ordem das telas. Genérico de
+                 propósito — qualquer grupo vira alvo sem precisar de código
+                 novo. */
+              data-tour={`menu-${(group.label ?? "").toLowerCase()}`}
               // Controlado, não `defaultOpen`: é isso que faz a categoria
               // continuar fechada na próxima visita. Ver `useGruposMenu`.
               open={estaAberto(group.label ?? "", group.defaultOpen ?? true)}

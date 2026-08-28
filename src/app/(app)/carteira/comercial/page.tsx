@@ -6,6 +6,8 @@ import { fmtBRL, fmtNum } from "@/lib/format"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_COMERCIAL } from "../_tours"
 
 export const metadata = { title: "Comercial · Delivery OS" }
 
@@ -43,11 +45,14 @@ export default async function ComercialPage({
           <p className="mt-0.5 text-sm text-muted-foreground">
             Quem vendeu quanto de mensalidade no período.
           </p>
+          <div className="mt-2">
+            <TourButton steps={TOUR_COMERCIAL} />
+          </div>
         </div>
         <PeriodSelector current={range} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div data-tour="com-kpis" className="grid gap-3 sm:grid-cols-3">
         <Kpi rotulo={`Lojas vendidas · ${periodo}`} valor={fmtNum(p.totalVendas)} />
         <Kpi
           rotulo="Mensalidade vendida"
@@ -90,7 +95,7 @@ export default async function ComercialPage({
         </div>
       )}
 
-      <div className="rounded-xl border bg-card">
+      <div data-tour="com-ranking" className="rounded-xl border bg-card">
         <div className="border-b px-4 py-2.5">
           <h2 className="text-sm font-semibold">Ranking do período</h2>
         </div>
@@ -135,7 +140,7 @@ export default async function ComercialPage({
         )}
       </div>
 
-      <div className="rounded-xl border bg-card p-4">
+      <div data-tour="com-evolucao" className="rounded-xl border bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold">
           Mensalidade vendida · 12 meses
         </h2>

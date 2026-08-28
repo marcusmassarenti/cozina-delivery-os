@@ -93,7 +93,7 @@ export function OnboardingView({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div data-tour="onb-acoes" className="flex flex-wrap items-center gap-2">
         <AdicionarLoja livres={livres} />
         <NovaColuna />
         <Button size="sm" variant="ghost" onClick={() => setGerindo((g) => !g)}>
@@ -114,7 +114,7 @@ export function OnboardingView({
           caber o conteúdo em vez de deixar o `overflow-x-auto` agir — e a
           rolagem vaza pro <main>, levando junto o cabeçalho e o menu. Medido:
           main com 1402px numa janela de 1181px. */}
-      <div className="-mx-1 min-w-0 overflow-x-auto px-1 pb-2">
+      <div data-tour="onb-quadro" className="-mx-1 min-w-0 overflow-x-auto px-1 pb-2">
         {/* `w-max` e NÃO `minWidth` em pixels.
             Largura mínima em px sobe a árvore: o <main> tem `min-width: auto`
             e cresce pra caber o filho, então a rolagem que era pra ficar no

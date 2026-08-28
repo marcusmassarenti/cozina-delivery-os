@@ -76,7 +76,7 @@ export function LojasView({ lojas }: { lojas: LojaDaLista[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div data-tour="lojas-filtros" className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
         <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -134,7 +134,7 @@ export function LojasView({ lojas }: { lojas: LojaDaLista[] }) {
         </div>
       ) : (
         porCategoria.map((c) => (
-          <section key={c.id} className="flex flex-col gap-3">
+          <section key={c.id} data-tour="lojas-categorias" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2 border-b pb-2">
               <h2 className="text-sm font-semibold">Categoria: {c.titulo}</h2>
               {c.etapas && (
@@ -160,6 +160,7 @@ function Cartao({ loja: l }: { loja: LojaDaLista }) {
   return (
     <Link
       href={`/unidades/${encodeURIComponent(l.code)}`}
+      data-tour="lojas-cartao"
       className="flex flex-col gap-2 rounded-xl border bg-card p-3 transition hover:border-ring hover:shadow-sm"
     >
       <div className="flex items-start justify-between gap-2">

@@ -4,6 +4,8 @@ import { assertCanView } from "@/lib/auth/permissions"
 import { listarCarteira } from "@/lib/data/carteira-lojas"
 
 import { LojasView } from "./_components/lojas-view"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_LOJAS } from "../_tours"
 
 export const metadata = { title: "Lista de Lojas · Delivery OS" }
 
@@ -28,6 +30,9 @@ export default async function CarteiraLojasPage() {
         <p className="mt-0.5 text-sm text-muted-foreground">
           Clique na loja para abrir a tela completa e registrar a semana.
         </p>
+        <div className="mt-2">
+          <TourButton steps={TOUR_LOJAS} />
+        </div>
       </div>
 
       <LojasView lojas={lojas} />

@@ -106,6 +106,7 @@ export function GestoresView({
               />
             </div>
             <label
+              data-tour="gestores-canceladas"
               className="flex cursor-pointer items-center gap-1.5 rounded-md border bg-card px-2.5 py-2 text-xs"
               title={
                 canceladas > 0
@@ -186,6 +187,7 @@ function CardGestor({
 
   return (
     <div
+      data-tour="gestores-lista"
       className={`rounded-xl border bg-card ${
         posicao === 1 ? "border-amber-300 dark:border-amber-700" : ""
       }`}
@@ -454,7 +456,7 @@ function Resumo({
   const pendentes = gestores.reduce((s, g) => s + g.semanasPendentes, 0)
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div data-tour="gestores-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Kpi
         rotulo={`Faturamento · ${periodo}`}
         valor={fmtBRL(total)}
@@ -543,7 +545,7 @@ function Comparativo({
   if (maior <= 0) return null
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+    <div data-tour="gestores-comparativo" className="flex flex-col gap-2 rounded-xl border bg-card p-4">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Comparativo
       </p>

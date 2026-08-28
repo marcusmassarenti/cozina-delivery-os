@@ -7,6 +7,8 @@ import { fmtBRL } from "@/lib/format"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_FINANCEIRO } from "../_tours"
 
 import { FinanceiroView, type LojaSimples } from "./_components/financeiro-view"
 
@@ -44,11 +46,14 @@ export default async function FinanceiroAgenciaPage({
             O que a agência recebe e o que ela gasta — não é o financeiro das
             lojas.
           </p>
+          <div className="mt-2">
+            <TourButton steps={TOUR_FINANCEIRO} />
+          </div>
         </div>
         <PeriodSelector current={range} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="fin-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           rotulo="Projetado mensal"
           valor={fmtBRL(f.projetadoMensal)}
@@ -84,6 +89,7 @@ export default async function FinanceiroAgenciaPage({
         {/* Sobra usa só dinheiro que se MOVEU — recebido menos pago. Usar o
             previsto daria uma sobra que existe na planilha e não na conta. */}
         <div
+          data-tour="fin-sobra"
           className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${
             f.sobra >= 0
               ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20"
@@ -128,11 +134,13 @@ export default async function FinanceiroAgenciaPage({
         </div>
       )}
 
+      <div data-tour="fin-listas">
       <FinanceiroView
         cobrancas={f.cobrancas}
         despesas={f.despesas}
         lojas={lojas}
       />
+      </div>
     </div>
   )
 }

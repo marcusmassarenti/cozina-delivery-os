@@ -74,6 +74,8 @@ import { SemanaTab } from "./_components/semana-tab"
 import { FluxoLoja } from "./_components/fluxo-loja"
 import { getSemanasDaLoja } from "@/lib/data/relatorio-semanal"
 import { getLojaNaCarteira, type LojaNaCarteira } from "@/lib/data/fluxo-loja"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_SEMANA } from "../../carteira/_tours"
 import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
@@ -803,7 +805,11 @@ async function DetailTabs({
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
           <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
-          <TabsTrigger value="semana">Carteira</TabsTrigger>
+          {/* "Semana", não "Carteira": Carteira é a SEÇÃO do menu, e o mesmo
+              rótulo em dois lugares faz a pessoa clicar no errado — aconteceu
+              comigo verificando esta tela. E o conteúdo é a semana: gráfico
+              semanal, comparativo e comentários. (Marcus, 28/08/26) */}
+          <TabsTrigger value="semana">Semana</TabsTrigger>
           <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
           {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
         </TabsList>
@@ -838,8 +844,15 @@ async function DetailTabs({
       <TabsContent value="semana" className="mt-4">
         <Suspense fallback={<TabSkeleton />}>
           <div className="flex flex-col gap-4">
-            {naCarteira && <FluxoLoja loja={naCarteira} codigo={unit.code} />}
-            <SemanaTab unitId={unit.id} codigo={unit.code} semanas={semanas} />
+            <div>
+              <TourButton steps={TOUR_SEMANA} />
+            </div>
+            <div data-tour="semana-fluxo">
+              {naCarteira && <FluxoLoja loja={naCarteira} codigo={unit.code} />}
+            </div>
+            <div data-tour="semana-grafico">
+              <SemanaTab unitId={unit.id} codigo={unit.code} semanas={semanas} />
+            </div>
           </div>
         </Suspense>
       </TabsContent>

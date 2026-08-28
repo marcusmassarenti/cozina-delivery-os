@@ -54,7 +54,9 @@ export function AtendimentosView({
 
   return (
     <div className="flex flex-col gap-4">
-      <Abrir lojas={lojas} />
+      <span data-tour="at-abrir">
+        <Abrir lojas={lojas} />
+      </span>
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -101,7 +103,11 @@ export function AtendimentosView({
             : "Nenhum atendimento com esses filtros."}
         </div>
       ) : (
-        filtrados.map((a) => <Cartao key={a.id} a={a} />)
+        <div data-tour="at-lista" className="flex flex-col gap-4">
+          {filtrados.map((a) => (
+            <Cartao key={a.id} a={a} />
+          ))}
+        </div>
       )}
     </div>
   )

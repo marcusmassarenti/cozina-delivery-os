@@ -8,6 +8,8 @@ import {
   AtendimentosView,
   type LojaSimples,
 } from "./_components/atendimentos-view"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_ATENDIMENTOS } from "../_tours"
 
 export const metadata = { title: "Atendimentos · Delivery OS" }
 
@@ -42,6 +44,9 @@ export default async function AtendimentosPage({
         <p className="mt-0.5 text-sm text-muted-foreground">
           Cada passo feito na loja, registrado e sem apagar.
         </p>
+        <div className="mt-2">
+          <TourButton steps={TOUR_ATENDIMENTOS} />
+        </div>
       </div>
 
       <AtendimentosView

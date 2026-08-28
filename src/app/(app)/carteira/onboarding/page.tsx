@@ -9,6 +9,8 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin"
 
 import { OnboardingView, type Vendedor } from "./_components/onboarding-view"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_ONBOARDING } from "../_tours"
 
 export const metadata = { title: "Onboarding · Delivery OS" }
 
@@ -39,6 +41,9 @@ export default async function OnboardingPage() {
           Quem vendeu, quem alinha e quem vai cuidar — a loja entre a venda e a
           carteira.
         </p>
+        <div className="mt-2">
+          <TourButton steps={TOUR_ONBOARDING} />
+        </div>
       </div>
 
       <OnboardingView

@@ -50,6 +50,16 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  /* Pasta de saída configurável por env.
+   *
+   * Existe pra poder RODAR UM BUILD SEM DERRUBAR O `next dev` que está no ar:
+   * os dois escrevem em `.next` e um atropela o outro. Com
+   * `NEXT_DIST_DIR=.next-verify npx next build` dá pra provar que o código
+   * compila do zero enquanto o servidor de desenvolvimento continua servindo
+   * — que é a diferença entre "o typecheck passou" e "compila de verdade".
+   * Default idêntico ao de antes. */
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
+
   /**
    * Trava a raiz do projeto.
    *

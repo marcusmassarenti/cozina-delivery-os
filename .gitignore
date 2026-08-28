@@ -53,3 +53,4 @@ backups/
 # Sobras de teste manual — o .tmp chegou a versionar um code_verifier do iFood.
 .ifood-dist-verifier.tmp
 t-tmp.mjs
+.next-verify/

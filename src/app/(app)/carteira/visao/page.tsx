@@ -14,6 +14,8 @@ import type { GestorOpcao, LojaNoTopo, PontoMes } from "@/lib/data/carteira-visa
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
 import { PeriodSelector } from "@/components/shared/period-selector"
+import { TourButton } from "@/components/onboarding/tour-button"
+import { TOUR_CARTEIRA } from "../_tours"
 
 export const metadata = { title: "Visão da carteira · Delivery OS" }
 
@@ -55,6 +57,13 @@ export default async function VisaoPage({
           <p className="mt-0.5 text-sm text-muted-foreground">
             Como a carteira está hoje, antes de olhar loja por loja.
           </p>
+          {/* O tour daqui explica o PAINEL INTEIRO, não só esta tela: é a
+              porta de entrada da seção, e quem chega precisa entender a
+              ordem (vende → alinha → entrega ao gestor → trabalha → cobra)
+              antes de entender qualquer tela isolada. */}
+          <div className="mt-2">
+            <TourButton steps={TOUR_CARTEIRA} label="Como funciona o painel" />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FiltroGestor
@@ -81,7 +90,7 @@ export default async function VisaoPage({
           operação do cliente; quem abre esta é o dono da agência, e a
           primeira pergunta dele é sobre o dinheiro dele. */}
       <Secao titulo="A agência" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="visao-agencia" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           rotulo="Receita recorrente (MRR)"
           valor={fmtBRL(v.mrr)}
@@ -129,7 +138,7 @@ export default async function VisaoPage({
           Número sem comparação não é informação: R$ 1,1 milhão é bom ou
           ruim? Só o mês anterior responde. */}
       <Secao titulo="A carteira que ela administra" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="visao-carteira" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           rotulo={`Faturamento · ${periodo}`}
           valor={fmtBRL(v.faturamento)}
@@ -254,12 +263,12 @@ export default async function VisaoPage({
         </Bloco>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div data-tour="visao-concentracao" className="grid gap-4 lg:grid-cols-2">
         <Evolucao serie={v.serie} />
         <Concentracao top={v.topLojas} pct={v.concentracaoTop5} />
       </div>
 
-      <div className="rounded-xl border bg-card">
+      <div data-tour="visao-atencao" className="rounded-xl border bg-card">
         <div className="flex items-center gap-2 border-b px-4 py-2.5">
           <TrendingDown className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">Precisa de atenção</h2>
