@@ -2,8 +2,6 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { PLATAFORMAS } from "@/components/platform-logo"
-import { getEvolucaoSeries } from "./comparativo"
 import { getRealMonthlyForUnitsForRange } from "./range-aggregation"
 import { segundaDaSemana } from "./relatorio-semanal"
 
@@ -45,6 +43,16 @@ export type PontoMes = {
    * nota de rodapé.
    */
   parcial: boolean
+  /**
+   * Crescimento contra o mês anterior. `null` no primeiro ponto da série,
+   * que não tem base — e 0 → algo não é "+∞%".
+   *
+   * ⚠️ NO MÊS EM CURSO A BASE É RECORTADA. Comparar 28 dias com um mês cheio
+   * de 31 acusa queda que não existe: foi assim que o Nino anunciou −16,7%
+   * numa rede que cresceu 1%. Aqui o mês corrente é medido contra o MESMO
+   * intervalo de dias do mês anterior.
+   */
+  variacao: number | null
 }
 
 export type LojaNoTopo = {
@@ -86,6 +94,8 @@ export type VisaoDaCarteira = {
 
   /* ── A carteira, comparada com o período anterior ───────────────────── */
   pedidos: number
+  /** Rótulo da base ("01/07 a 28/07") — sem ele "antes: R$ X" é adivinhação. */
+  periodoAnteriorLabel: string
   ticket: number
   faturamentoAnterior: number
   pedidosAnterior: number
@@ -176,6 +186,7 @@ export async function visaoDaCarteira(
     ticket: 0,
     faturamentoAnterior: 0,
     pedidosAnterior: 0,
+    periodoAnteriorLabel: "",
     emOnboarding: 0,
     lojasNovas30: 0,
     lojasParadas: 0,
@@ -202,29 +213,70 @@ export async function visaoDaCarteira(
    * faturamento de verdade vem das importações e da API. Duas perguntas
    * parecidas respondidas por tabelas diferentes é como se produz um painel
    * que ninguém acredita. */
-  /* Período anterior do MESMO tamanho, colado no início do atual.
-     Comparar com "o mês passado do calendário" faria toda loja parecer em
-     queda no dia 3 do mês. */
-  const dias =
-    Math.round(
-      (new Date(periodo.end).getTime() - new Date(periodo.start).getTime()) /
-        86400000,
-    ) + 1
-  const antesFim = new Date(`${periodo.start}T12:00:00Z`)
-  antesFim.setUTCDate(antesFim.getUTCDate() - 1)
-  const antesIni = new Date(antesFim)
-  antesIni.setUTCDate(antesIni.getUTCDate() - (dias - 1))
+  /* ── O PERÍODO ANTERIOR É O MESMO RECORTE DO MÊS ANTERIOR ─────────────
+   *
+   * 01–28/ago compara com 01–28/JUL, não com os 28 dias imediatamente
+   * anteriores (04–31/jul). A janela deslizante é justa em TAMANHO e mente
+   * na LEITURA: o cartão diz "agosto" e o número embaixo é de um pedaço de
+   * julho que ninguém escolheu, então uma queda de 8% parece distância da
+   * meta quando é só o recorte errado (Marcus, 28/08/26).
+   *
+   * É também a régua que o resto do sistema já usa — as setas do dashboard
+   * pedem o mês passado recortado do dia 1 até o mesmo dia. Duas réguas de
+   * comparação no mesmo produto é como se produz número que não bate entre
+   * telas.
+   *
+   * O dia é preso ao último do mês anterior: 31/mar tem que virar 28/fev, e
+   * não 03/mar. */
+  const hojeD = new Date()
+  const recuarUmMes = (ymd: string): string => {
+    const [y, m, d] = ymd.split("-").map(Number)
+    const alvoMes = m === 1 ? 12 : m - 1
+    const alvoAno = m === 1 ? y - 1 : y
+    const ultimoDia = new Date(Date.UTC(alvoAno, alvoMes, 0)).getUTCDate()
+    return iso(new Date(Date.UTC(alvoAno, alvoMes - 1, Math.min(d, ultimoDia))))
+  }
+  /* ⚠️ E O FIM É O DIA DE HOJE, NÃO O FIM NOMINAL DO PERÍODO.
+   *
+   * O seletor devolve o mês INTEIRO (01–31/ago) mesmo faltando três dias
+   * pra acabar. Recuar isso um mês dá julho inteiro — e aí 28 dias de agosto
+   * disputam com 31 de julho. Foi assim que o cartão anunciou −8,3% num mês
+   * que está +1,6%: a série ao lado, que já recorta, mostrava o número
+   * certo, e as duas leituras conviviam na MESMA tela.
+   *
+   * Recorta os dois lados no mesmo dia. */
+  const hojeStr = hojeD.toISOString().slice(0, 10)
+  const fimEfetivo = periodo.end > hojeStr ? hojeStr : periodo.end
+  const antesIni = recuarUmMes(periodo.start)
+  const antesFim = recuarUmMes(fimEfetivo)
 
   /* Seis meses de série, não doze: cada mês é uma agregação completa, e a
      tela já é a mais cara da seção. Seis mostram a tendência e cabem numa
      olhada; doze dobrariam o custo pra responder a mesma pergunta. */
-  const hojeD = new Date()
   const mesesSerie = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(
+    const ini = new Date(
       Date.UTC(hojeD.getUTCFullYear(), hojeD.getUTCMonth() - (5 - i), 1),
     )
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, d }
+    const fim = new Date(
+      Date.UTC(ini.getUTCFullYear(), ini.getUTCMonth() + 1, 0),
+    )
+    return {
+      year: ini.getUTCFullYear(),
+      month: ini.getUTCMonth() + 1,
+      start: iso(ini),
+      end: iso(fim),
+    }
   })
+
+  /* O mesmo recorte de dias do mês anterior — a base justa pro mês em curso.
+     Ex.: em 28/ago, compara 01–28/ago com 01–28/jul. */
+  const diaDeHoje = hojeD.getUTCDate()
+  const iniMesAnterior = new Date(
+    Date.UTC(hojeD.getUTCFullYear(), hojeD.getUTCMonth() - 1, 1),
+  )
+  const fimRecorteAnterior = new Date(
+    Date.UTC(hojeD.getUTCFullYear(), hojeD.getUTCMonth() - 1, diaDeHoje),
+  )
 
   const [
     periodoMap,
@@ -235,6 +287,7 @@ export async function visaoDaCarteira(
     serieRaw,
     { data: cobRaw },
     { data: despRaw },
+    anteriorRecortado,
   ] = await Promise.all([
       getRealMonthlyForUnitsForRange(ids, periodo),
       getRealMonthlyForUnitsForRange(ids, {
@@ -254,11 +307,21 @@ export async function visaoDaCarteira(
         .in("unit_id", ids)
         .eq("semana_inicio", iso(semana))
         .not("entregue_em", "is", null),
-      getRealMonthlyForUnitsForRange(ids, {
-        start: iso(antesIni),
-        end: iso(antesFim),
-      }),
-      getEvolucaoSeries(ids, PLATAFORMAS, mesesSerie),
+      getRealMonthlyForUnitsForRange(ids, { start: antesIni, end: antesFim }),
+      /* ⚠️ O MESMO AGREGADOR DOS KPIs, não o do relatório de Evolução.
+       *
+       * A série usava `getEvolucaoSeries` e o cartão usava
+       * `getRealMonthlyForUnitsForRange`. Os dois estavam certos e davam
+       * números diferentes pro MESMO agosto — R$ 1.101.886,92 no cartão,
+       * R$ 1.101.946,82 na barra logo abaixo. São R$ 60 em um milhão, e o
+       * tamanho não importa: duas réguas na mesma tela é como se produz
+       * painel em que ninguém confia, e foi o defeito que esta tela já teve
+       * hoje de manhã com "sem dado". Uma fonte só. */
+      Promise.all(
+        mesesSerie.map((m) =>
+          getRealMonthlyForUnitsForRange(ids, { start: m.start, end: m.end }),
+        ),
+      ),
       /* O dinheiro da agência vem das cobranças LANÇADAS, não da mensalidade
          do cadastro — a mensalidade projeta, a cobrança registra. Mesma
          lição do repasse do iFood: número reconstruído bate quase sempre e
@@ -275,6 +338,10 @@ export async function visaoDaCarteira(
         .eq("holding_id", holdingId)
         .gte("vencimento", periodo.start)
         .lte("vencimento", periodo.end),
+      getRealMonthlyForUnitsForRange(ids, {
+        start: iso(iniMesAnterior),
+        end: iso(fimRecorteAnterior),
+      }),
     ])
 
   const vendeu = (m: { faturamentoBruto: number; pedidos: number } | undefined) =>
@@ -437,6 +504,7 @@ export async function visaoDaCarteira(
     ticket: pedidos > 0 ? faturamento / pedidos : 0,
     faturamentoAnterior: somaMapa(periodoAnterior, "faturamentoBruto"),
     pedidosAnterior: somaMapa(periodoAnterior, "pedidos"),
+    periodoAnteriorLabel: `${antesIni.slice(8, 10)}/${antesIni.slice(5, 7)} a ${antesFim.slice(8, 10)}/${antesFim.slice(5, 7)}`,
 
     /* ── MOVIMENTO ───────────────────────────────────────────────────── */
     emOnboarding: lojas.filter(
@@ -448,16 +516,27 @@ export async function visaoDaCarteira(
     lojasParadas: alertas.filter((a) => a.para === 0).length,
 
     /* ── RISCO E EVOLUÇÃO ────────────────────────────────────────────── */
-    serie: serieRaw.map((p) => ({
-      rotulo: new Date(Date.UTC(p.year, p.month - 1, 1)).toLocaleDateString(
-        "pt-BR",
-        { month: "short", timeZone: "UTC" },
-      ),
-      faturamento: p.metrics.bruto,
-      pedidos: p.metrics.pedidos,
-      parcial:
-        p.year === hojeD.getUTCFullYear() && p.month === hojeD.getUTCMonth() + 1,
-    })),
+    serie: serieRaw.map((mapa, i) => {
+      const m = mesesSerie[i]
+      const parcial =
+        m.year === hojeD.getUTCFullYear() && m.month === hojeD.getUTCMonth() + 1
+      const bruto = somaMapa(mapa, "faturamentoBruto")
+      /* A base do mês em curso é o mesmo recorte de dias do mês anterior;
+         a dos meses fechados é o mês fechado anterior. */
+      const base = parcial
+        ? somaMapa(anteriorRecortado, "faturamentoBruto")
+        : somaMapa(serieRaw[i - 1] ?? new Map(), "faturamentoBruto")
+      return {
+        rotulo: new Date(Date.UTC(m.year, m.month - 1, 1)).toLocaleDateString(
+          "pt-BR",
+          { month: "short", timeZone: "UTC" },
+        ),
+        faturamento: bruto,
+        pedidos: somaMapa(mapa, "pedidos"),
+        parcial,
+        variacao: i === 0 || base <= 0 ? null : ((bruto - base) / base) * 100,
+      }
+    }),
     topLojas: top,
     /* CONCENTRAÇÃO: quanto do faturamento depende das 5 maiores. É a
        pergunta de risco que ninguém faz até a maior sair da carteira. */

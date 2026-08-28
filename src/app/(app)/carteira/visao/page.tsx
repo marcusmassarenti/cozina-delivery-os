@@ -9,7 +9,7 @@ import {
 
 import { assertCanView } from "@/lib/auth/permissions"
 import { visaoDaCarteira } from "@/lib/data/carteira-visao"
-import { fmtBRL, fmtNum } from "@/lib/format"
+import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
 import type { GestorOpcao, LojaNoTopo, PontoMes } from "@/lib/data/carteira-visao"
 import { formatRangeLabel } from "@/lib/period"
 import { readPeriod } from "@/lib/period-helpers"
@@ -143,14 +143,16 @@ export default async function VisaoPage({
           rotulo={`Faturamento · ${periodo}`}
           valor={fmtBRL(v.faturamento)}
           variacao={variacao(v.faturamento, v.faturamentoAnterior)}
-          nota={`antes: ${fmtBRL(v.faturamentoAnterior)}`}
+          /* O rótulo diz QUAL período é a base. "antes: R$ X" sozinho fazia
+             quem lê supor "julho inteiro" e estranhar a queda. */
+          nota={`${v.periodoAnteriorLabel}: ${fmtBRL(v.faturamentoAnterior)}`}
           destaque
         />
         <Kpi
           rotulo="Pedidos"
           valor={fmtNum(v.pedidos)}
           variacao={variacao(v.pedidos, v.pedidosAnterior)}
-          nota={`antes: ${fmtNum(v.pedidosAnterior)}`}
+          nota={`${v.periodoAnteriorLabel}: ${fmtNum(v.pedidosAnterior)}`}
         />
         <Kpi
           rotulo="Ticket médio"
@@ -414,7 +416,7 @@ function Evolucao({ serie }: { serie: PontoMes[] }) {
         </h2>
         {serie.some((p) => p.parcial) && (
           <span className="text-[11px] text-muted-foreground">
-            * mês em curso, ainda incompleto
+            * mês em curso — a % dele compara com o mesmo dia do mês passado
           </span>
         )}
       </div>
@@ -425,8 +427,27 @@ function Evolucao({ serie }: { serie: PontoMes[] }) {
             className="group flex h-full flex-1 flex-col items-center gap-1"
             title={`${p.rotulo}${p.parcial ? " (mês em curso)" : ""}: ${fmtBRL(p.faturamento)} · ${fmtNum(p.pedidos)} pedidos`}
           >
-            <span className="h-3 text-[9px] font-medium tabular-nums text-muted-foreground">
-              {p.faturamento === maior ? fmtBRL(p.faturamento) : ""}
+            {/* Valor em TODOS os meses, em formato curto (Marcus).
+                A versão anterior mostrava só o maior pra não virar parede de
+                números — mas aí o gráfico só dizia a FORMA, e comparar duas
+                barras parecidas exigia passar o mouse. `fmtBRLShort` resolve
+                os dois: "R$ 1,2 mi" cabe embaixo de uma barra estreita e o
+                valor cheio continua no hover. */}
+            <span className="h-3 whitespace-nowrap text-[9px] font-medium tabular-nums text-muted-foreground">
+              {fmtBRLShort(p.faturamento)}
+            </span>
+            <span
+              className={`h-3 whitespace-nowrap text-[9px] font-semibold tabular-nums ${
+                p.variacao === null
+                  ? "text-transparent"
+                  : p.variacao >= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
+              }`}
+            >
+              {p.variacao === null
+                ? "—"
+                : `${p.variacao >= 0 ? "▲" : "▼"}${Math.abs(p.variacao).toFixed(1)}%`}
             </span>
             {/* Altura em % precisa de pai com altura resolvida — este flex-1
                 dentro do h-36 dá isso. */}
