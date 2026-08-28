@@ -345,9 +345,26 @@ export async function getNinefoodResumoByUnits(
      */
     const pedidosDaLoja = pedidosPorDia.get(unitId)
     const diasDaApi = diasViaApi.get(unitId)
+    /* ⚠️ COBERTURA É TER VALOR, NÃO TER LINHA.
+     *
+     * Era `pedidosDaLoja?.has(d)` — o dia existir no relatório de pedido. Só
+     * que `receita_real_loja` é coluna de PLANILHA: o pedido que entrou pela
+     * API/webhook está na tabela com o campo NULL, e `Number(null) || 0` faz
+     * a soma do dia valer zero. A trava então aprovava o mês (todos os dias
+     * "existem") e devolvia um líquido montado com zeros.
+     *
+     * A Jardins em ago/26 é o caso: 892 pedidos, 866 sem o campo (97%), e o
+     * líquido do mês saía R$ 1.021,48 sobre R$ 53.445,18 de venda — a soma de
+     * 26 pedidos apresentada como o mês inteiro.
+     *
+     * É a mesma doença de sempre, na terceira variação: ler "não tenho esse
+     * campo" como "esse valor é zero". A pergunta certa não é "o dia está na
+     * tabela?", é "eu tenho o número desse dia?" — e dia sem venda nem chega
+     * aqui, então exigir > 0 não descarta dia legítimo. */
+    const temValorNoDia = (d: string) =>
+      diasDaApi?.has(d) || (pedidosDaLoja?.get(d)?.liquido ?? 0) > 0
     const cobreOsDias =
-      acc.diasComVenda.size > 0 &&
-      [...acc.diasComVenda].every((d) => pedidosDaLoja?.has(d))
+      acc.diasComVenda.size > 0 && [...acc.diasComVenda].every(temValorNoDia)
     const liquidoDoRelatorio = cobreOsDias
       ? [...acc.dias].reduce(
           (soma, dia) =>
