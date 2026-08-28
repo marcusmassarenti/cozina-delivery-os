@@ -3,7 +3,6 @@
 import * as React from "react"
 import { usePathname } from "next/navigation"
 import { useNavigate } from "@/components/shared/navigation-progress"
-import { Check, ChevronDown, Store } from "lucide-react"
 
 import { PlatformLogo, type PlatformId,
   PLATAFORMAS as TODAS_PLATAFORMAS,
@@ -14,6 +13,7 @@ import {
   type ComparativoMetric,
 } from "@/lib/data/comparativo-metrics"
 import type { PeriodOption, UnitOption } from "./comparativo-filters"
+import { SeletorLojas } from "./seletor-lojas"
 
 const PLATAFORMAS: { id: PlatformId; label: string }[] = TODAS_PLATAFORMAS.map((id) => ({
   id,
@@ -51,7 +51,6 @@ export function EvolucaoFilters({
   const [metrica, setMetrica] = React.useState<ComparativoMetric>(
     initial.metrica,
   )
-  const [lojasOpen, setLojasOpen] = React.useState(false)
 
   function togglePlat(id: PlatformId) {
     setPlataformas((prev) => {
@@ -59,14 +58,6 @@ export function EvolucaoFilters({
       if (next.has(id)) {
         if (next.size > 1) next.delete(id)
       } else next.add(id)
-      return next
-    })
-  }
-  function toggleLoja(code: string) {
-    setLojas((prev) => {
-      const next = new Set(prev)
-      if (next.has(code)) next.delete(code)
-      else next.add(code)
       return next
     })
   }
@@ -128,68 +119,12 @@ export function EvolucaoFilters({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Lojas
           </span>
-          <button
-            type="button"
-            onClick={() => setLojasOpen((o) => !o)}
-            className="inline-flex h-9 min-w-[150px] items-center justify-between gap-2 rounded-md border bg-card px-2.5 text-xs font-medium"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Store className="size-3.5 text-muted-foreground" />
-              {lojasLabel}
-            </span>
-            <ChevronDown className="size-3.5 text-muted-foreground" />
-          </button>
-          {lojasOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setLojasOpen(false)}
-              />
-              <div className="absolute top-full z-20 mt-1 max-h-72 w-60 overflow-auto rounded-md border bg-popover p-1 shadow-lg">
-                <div className="flex items-center justify-between px-2 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setLojas(new Set())}
-                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    Rede toda
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLojas(new Set(units.map((u) => u.code)))}
-                    className="text-[11px] font-medium text-primary hover:underline"
-                  >
-                    Selecionar todas
-                  </button>
-                </div>
-                {units.map((u) => {
-                  const on = lojas.has(u.code)
-                  return (
-                    <button
-                      key={u.code}
-                      type="button"
-                      onClick={() => toggleLoja(u.code)}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                    >
-                      <span
-                        className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                          on
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-input"
-                        }`}
-                      >
-                        {on && <Check className="size-3" />}
-                      </span>
-                      <span className="truncate">
-                        {u.name}{" "}
-                        <span className="text-muted-foreground">#{u.code}</span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+          <SeletorLojas
+            units={units}
+            selecionadas={lojas}
+            onChange={setLojas}
+            rotulo={lojasLabel}
+          />
         </div>
 
         {/* Indicador */}
