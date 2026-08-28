@@ -11,10 +11,13 @@ export const maxDuration = 120
 /**
  * Segunda de manhã: push com o resumo da semana + aviso de loja sem dado.
  *
- * As duas coisas moram no MESMO cron de propósito. A conta Vercel é Hobby, que
- * limita cron a 1x/dia e derruba o build se passar disso — cada rota nova de
- * cron é orçamento gasto. E as duas são a mesma cadência (semanal, segunda de
- * manhã) pro mesmo público.
+ * As duas coisas moram no MESMO cron de propósito: são a mesma cadência
+ * (semanal, segunda de manhã) pro mesmo público, e separá-las criaria duas
+ * rotas pra manter no lugar de uma.
+ *
+ * (O motivo original era outro — a conta Vercel era Hobby e limitava o número
+ * de crons. Hoje é Pro e esse teto não existe mais, mas juntar segue certo
+ * pelo motivo acima.)
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET

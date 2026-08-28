@@ -12,6 +12,7 @@
 import { syncNinefoodFinanceiro } from "@/lib/ninefood/sync-financeiro"
 import { syncNinefoodCardapio } from "@/lib/ninefood/sync-cardapio"
 import { registrarCron } from "@/lib/cron/registrar"
+import { tentarRelatorioSync } from "@/lib/push/relatorio-sync"
 import { sincronizarLojas99 } from "@/lib/ninefood/lojas"
 import { backfillHistorico99 } from "@/lib/ninefood/backfill"
 import { varrerConexoesNovas } from "@/lib/email/conexao-ativada"
@@ -152,8 +153,20 @@ export async function GET(req: Request) {
     console.error("[99] aviso de conexão:", e)
   }
 
+  // Lojas: o MAIOR entre as competências, não a soma — a mesma loja aparece
+  // no mês corrente e no anterior, e somar contaria cada uma duas vezes.
+  const push = await tentarRelatorioSync({
+    rotulo: "99 Food",
+    ok: true,
+    lojas: financeiro.reduce((m, f) => Math.max(m, f.lojas), 0),
+    erros: financeiro.reduce((s, f) => s + f.erros, 0),
+    destaque: `cardápio de ${card.results.length}`,
+    chave: "99food",
+  })
+
   return Response.json({
     lojas99,
+    push,
     ok: true,
     ranAt: new Date().toISOString(),
     financeiro,

@@ -3,11 +3,21 @@
  * vercel.json). Roda global (todas as lojas vinculadas), puxando as avaliações
  * novas via API e as tags do detalhe. Loja não autorizada é pulada.
  *
+ * ⏰ 08:00 UTC = 5h de Brasília, entre o financeiro (4h) e o 99 Food (6h). As
+ * três rotinas do iFood + 99 fecham antes das 6h30, que é quando o resumo da
+ * manhã confere tudo e avisa.
+ *
+ * Este cron DEIXOU DE SER o último da manhã, e duas tarefas que moravam aqui
+ * só por causa disso foram junto pro `resumo-importacao` (6h30): a varredura
+ * dos e-mails de "conexão ativada" e a faxina dos logs de API. As duas
+ * dependem de todo mundo já ter rodado — a regra não mudou, mudou o dono.
+ *
  * Segurança: a Vercel manda `Authorization: Bearer <CRON_SECRET>`. Sem a env
  * CRON_SECRET batendo → 401.
  */
 import { syncIfoodReviews } from "@/lib/ifood/review-sync"
 import { registrarCron } from "@/lib/cron/registrar"
+import { tentarRelatorioSync } from "@/lib/push/relatorio-sync"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -37,27 +47,9 @@ export async function GET(req: Request) {
   try {
     const r = await syncIfoodReviews(unitIds)
 
-    // Varredura dos e-mails de "conectado — olha o que já entrou", das TRÊS
-    // plataformas, pendurada aqui de propósito.
-    //
-    // Este é o último cron da manhã: 99 Food às 5h, iFood às 6h, Cardápio Web
-    // às 6h05, avaliações às 7h. Rodando junto do sync do financeiro (6h) o
-    // e-mail diria "as avaliações ainda não estão entrando -- falta autorizar
-    // o segundo app" pra quem autorizou os dois certinho, porque elas só
-    // chegam uma hora depois.
-    //
-    // Não derruba o cron: o sync de avaliações é o que não pode faltar.
-    let conexoes: { avaliadas: number; enviados: number } | null = null
-    try {
-      const { varrerConexoesNovas } = await import("@/lib/email/conexao-ativada")
-      conexoes = await varrerConexoesNovas()
-    } catch (e) {
-      console.error("varrerConexoesNovas:", e)
-    }
-
-    // Horário de funcionamento das lojas. Pendurado aqui pelo mesmo motivo da
-    // varredura de conexões: é o último cron da manhã e a Vercel Hobby não
-    // deixa criar mais um. Horário muda raramente — uma vez por dia sobra.
+    // Horário de funcionamento das lojas. Fica aqui porque é dado do iFood e
+    // muda raramente — uma vez por dia sobra, e não depende de ordem nenhuma.
+    // (O motivo antigo era o limite de crons do plano Hobby; a conta é Pro.)
     let horarios: { lojas: number; turnos: number } | null = null
     try {
       const { syncIfoodHorarios } = await import("@/lib/ifood/horarios")
@@ -85,24 +77,25 @@ export async function GET(req: Request) {
       console.error("avisarAvaliacoesNoPrazoFinal:", e)
     }
 
-    // Expurgo dos logs de API, pendurado aqui pelo mesmo motivo da varredura:
-    // é o último cron da manhã, então todo mundo já escreveu o log do dia.
-    // Também não derruba o cron — perder uma faxina é irrelevante perto de
-    // perder o sync das avaliações.
-    let expurgo: { apagados: number; corte: string } | null = null
-    try {
-      const { expurgarLogsApi } = await import("@/lib/manutencao/expurgo-logs")
-      expurgo = await expurgarLogsApi()
-    } catch (e) {
-      console.error("expurgarLogsApi:", e)
-    }
+    // Relatório da rodada. Só na varredura COMPLETA: com ?units isto é
+    // backfill de uma loja recém-vinculada, e quem disparou está olhando a
+    // resposta — push ali seria eco.
+    const push = unitIds
+      ? null
+      : await tentarRelatorioSync({
+          rotulo: "iFood avaliações",
+          ok: true,
+          lojas: r.lojasProcessadas,
+          erros: r.resultados.filter((u) => !u.ok).length,
+          destaque: `${r.totalGravadas.toLocaleString("pt-BR")} novas`,
+          chave: "ifood-avaliacoes",
+        })
 
     return Response.json({
       ok: true,
       ranAt: new Date().toISOString(),
       ...r,
-      conexoes,
-      expurgo,
+      push,
       prazoAvaliacoes,
       horarios,
     })

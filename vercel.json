@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/ninefood-sync",
-      "schedule": "0 8 * * *"
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/cron/ninefood-comandas",
@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/ifood-sync",
-      "schedule": "0 9 * * *"
+      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/cardapioweb-sync",
@@ -34,7 +34,7 @@
     },
     {
       "path": "/api/cron/ifood-review-sync",
-      "schedule": "0 10 * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/billing-vencimentos",
@@ -59,6 +59,10 @@
     {
       "path": "/api/cron/ifood-repasses",
       "schedule": "20 9 * * *"
+    },
+    {
+      "path": "/api/cron/resumo-importacao",
+      "schedule": "30 9 * * *"
     }
   ]
 }

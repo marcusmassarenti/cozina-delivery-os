@@ -477,6 +477,9 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
     "billing-vencimentos",
     "emitir-faturas",
     "regua-email",
+    // Diário, e o silêncio dele é o que mais engana: se o resumo da manhã
+    // parar de sair, a falta do aviso se parece com "deu tudo certo".
+    "resumo-importacao",
   ]
   /**
    * ⚠️ UMA CONSULTA POR CRON, e não "as N linhas mais recentes".

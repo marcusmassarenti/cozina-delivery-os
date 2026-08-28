@@ -30,6 +30,7 @@ export type NomeCron =
   | "regua-email"
   | "saude-diaria"
   | "resumo-semanal"
+  | "resumo-importacao"
 
 /**
  * Roda o cron registrando início e fim. O sucesso é lido do STATUS da

@@ -14,6 +14,7 @@
 import { autoLinkAndBackfill } from "@/lib/ifood/auto-link"
 import { syncIfoodAll } from "@/lib/ifood/sync"
 import { registrarCron } from "@/lib/cron/registrar"
+import { tentarRelatorioSync } from "@/lib/push/relatorio-sync"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -83,7 +84,31 @@ export async function GET(req: Request) {
       competences: competences.length > 0 ? competences : undefined,
       unitIds: units.length > 0 ? units : undefined,
     })
-    return Response.json({ ok: true, autoLink, ...out })
+    // Relatório da rodada. Só na chamada AUTOMÁTICA: com ?units ou
+    // ?competences isto é backfill na mão, e quem disparou está olhando a
+    // resposta — push ali seria eco.
+    const novas = out.results.reduce(
+      (s, u) => s + u.reconciliation.reduce((t, c) => t + (c.novas ?? 0), 0),
+      0,
+    )
+    const push =
+      units.length === 0 && competences.length === 0
+        ? await tentarRelatorioSync({
+            rotulo: "iFood financeiro",
+            ok: true,
+            lojas: out.unitsProcessed,
+            // `pendente` não é erro: é extrato que o iFood ainda está gerando
+            // e que a próxima rodada pega. Contar como falha faria o aviso
+            // gritar praticamente todo dia.
+            erros: out.results.filter((u) =>
+              u.reconciliation.some((c) => c.error && !c.pendente),
+            ).length,
+            destaque: `${novas.toLocaleString("pt-BR")} lançamentos novos`,
+            chave: "ifood-financeiro",
+          })
+        : null
+
+    return Response.json({ ok: true, autoLink, push, ...out })
   } catch (e) {
     return Response.json(
       {

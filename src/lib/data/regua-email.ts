@@ -3,8 +3,9 @@
  *
  * Toda a proteção contra e-mail repetido está no índice único de
  * `email_enviados` (holding_id, tipo) — não em cálculo de data. Assim, se o
- * cron rodar duas vezes ou o horário escorregar (no plano Hobby a Vercel tem
- * tolerância de 59 min), ninguém recebe nada duas vezes.
+ * cron rodar duas vezes ou o horário escorregar, ninguém recebe nada duas
+ * vezes. Cron na Vercel é melhor esforço, não relógio — mesmo no Pro, onde a
+ * tolerância é bem menor que os 59 min do Hobby de antes.
  *
  * Conta interna nunca entra: mandar cobrança pra si mesmo é ruído.
  */
@@ -296,8 +297,10 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
     if (trialFim && !pago) {
       const faltam = diasEntre(hoje, trialFim)
 
-      // 2) Reta final do teste. Janela de 1 a 3 dias (e não "== 3") porque no
-      //    Hobby o cron pode escorregar quase uma hora e pular o dia exato.
+      // 2) Reta final do teste. Janela de 1 a 3 dias (e não "== 3") porque um
+      //    dia exato só acerta se o cron nunca falhar nem atrasar. Uma execução
+      //    perdida com "== 3" pularia o e-mail pra sempre; com a janela, o dia
+      //    seguinte pega.
       if (faltam >= 1 && faltam <= 3) {
         await disparar("trial-3-dias", trial3Dias({ ...dados, diasRestantes: faltam }))
       }
