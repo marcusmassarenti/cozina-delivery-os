@@ -122,6 +122,12 @@ export const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       {
+        label: "Visão",
+        href: "/carteira/visao",
+        icon: LayoutDashboard,
+        module: "unidades",
+      },
+      {
         label: "Lojas",
         href: "/carteira/lojas",
         icon: ListChecks,
@@ -131,6 +137,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Gestores",
         href: "/carteira/gestores",
         icon: UsersRound,
+        module: "unidades",
+      },
+      {
+        label: "Atendimentos",
+        href: "/carteira/atendimentos",
+        icon: ClipboardList,
         module: "unidades",
       },
     ],

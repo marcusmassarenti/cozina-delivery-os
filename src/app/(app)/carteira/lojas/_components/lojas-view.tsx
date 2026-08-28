@@ -198,6 +198,15 @@ function Cartao({ loja: l }: { loja: LojaDaLista }) {
             </span>
           )}
         </div>
+        {/* Só aparece quando há algo aberto. Um "0 atendimento(s)" fixo diria
+            que a loja está em dia quando talvez ninguém tenha registrado nada
+            — ausência de registro não é ausência de trabalho. */}
+        {l.atendimentosAbertos > 0 && (
+          <div className="font-medium text-amber-700 dark:text-amber-400">
+            {l.atendimentosAbertos} atendimento
+            {l.atendimentosAbertos === 1 ? "" : "s"} em aberto
+          </div>
+        )}
         {l.categoria === "nova" && (
           <div className="flex gap-2">
             <Etapa ok={l.checklistOk} label="Checklist" />

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import type { PlatformId } from "@/components/platform-logo"
 import { getRealMonthlyForUnitsForRange } from "./range-aggregation"
+import { abertosPorLoja } from "./atendimentos"
 
 /**
  * A carteira em forma de lista — a tela onde a agência varre as lojas.
@@ -29,6 +30,7 @@ export type LojaDaLista = {
   cardapioOk: boolean
   /** Média mensal dos últimos 90 dias. `null` = sem dado importado. */
   media3Meses: number | null
+  atendimentosAbertos: number
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
@@ -68,10 +70,13 @@ export async function listarCarteira(): Promise<LojaDaLista[]> {
   const ate = new Date()
   const de = new Date()
   de.setUTCDate(de.getUTCDate() - 90)
-  const noventa = await getRealMonthlyForUnitsForRange(
-    linhas.map((l) => l.id),
-    { start: iso(de), end: iso(ate) },
-  )
+  const [noventa, atendimentos] = await Promise.all([
+    getRealMonthlyForUnitsForRange(linhas.map((l) => l.id), {
+      start: iso(de),
+      end: iso(ate),
+    }),
+    abertosPorLoja(),
+  ])
 
   const hoje = Date.now()
   return linhas.map((l) => {
@@ -100,6 +105,7 @@ export async function listarCarteira(): Promise<LojaDaLista[]> {
       checklistOk: l.checklist_ok_em !== null,
       cardapioOk: l.cardapio_ok_em !== null,
       media3Meses: temDado ? m!.faturamentoBruto / 3 : null,
+      atendimentosAbertos: atendimentos.get(l.id) ?? 0,
     }
   })
 }
