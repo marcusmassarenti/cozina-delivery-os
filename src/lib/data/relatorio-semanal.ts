@@ -24,6 +24,16 @@ const DIAS_ATE_VENCER = 9
 
 export type SituacaoSemana = "entregue" | "pendente" | "vencida"
 
+export type PlataformaNaSemana = {
+  id: "ifood" | "99food" | "keeta" | "cardapioweb"
+  pedidos: number
+  bruto: number
+  ticketMedio: number
+  /** `null` = ninguém avaliou nessa semana, ou a plataforma não devolve nota. */
+  nota: number | null
+  notasQtd: number
+}
+
 export type SemanaDaLoja = {
   /** Segunda-feira, ISO. Chave da semana. */
   inicio: string
@@ -39,6 +49,8 @@ export type SemanaDaLoja = {
   variacaoPct: number | null
   texto: string | null
   entregueEm: string | null
+  /** Só as plataformas com movimento na semana, da maior pra menor. */
+  plataformas: PlataformaNaSemana[]
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
@@ -108,7 +120,7 @@ export async function getSemanasDaLoja(
   const maisRecente = inicios[0] ?? primeira
 
   const admin = createAdminClient()
-  const [{ data: registros }, agregado] = await Promise.all([
+  const [{ data: registros }, agregado, porPlataforma] = await Promise.all([
     admin
       .from("relatorio_semanal")
       .select("semana_inicio, texto, entregue_em")
@@ -119,6 +131,10 @@ export async function getSemanasDaLoja(
     // 9 idas ao banco pra montar uma tela — e a nota de performance do
     // projeto existe justamente por causa desse padrão.
     porSemana(unitId, inicios),
+    /* UMA chamada cobre todas as semanas E todas as plataformas. Montado em
+       TS seriam 8 semanas × 4 plataformas = 32 idas ao banco pra desenhar
+       uma aba — o padrão que a nota de performance do projeto proíbe. */
+    plataformasPorSemana(unitId, iso(maisAntigaComExtra), iso(somaDias(maisRecente, 6))),
   ])
 
   const porInicio = new Map(
@@ -160,6 +176,7 @@ export async function getSemanasDaLoja(
           : null,
       texto: reg?.texto ?? null,
       entregueEm: reg?.entregue_em ?? null,
+      plataformas: porPlataforma.get(chave) ?? [],
     })
   }
   return out
@@ -206,6 +223,61 @@ async function porSemana(
     if (m.faturamentoBruto <= 0 && m.pedidos <= 0) return
     out.set(iso(ini), { bruto: m.faturamentoBruto, pedidos: m.pedidos })
   })
+  return out
+}
+
+/**
+ * Faturamento, pedidos e nota por plataforma, de todas as semanas do recorte.
+ *
+ * ⚠️ A NOTA VEM DE QUATRO LUGARES DIFERENTES — iFood tem tabela própria; 99 e
+ * Keeta guardam no pedido; Cardápio Web tem tabela sem data de pedido. A
+ * função no banco uniformiza isso pra a tela não precisar saber.
+ *
+ * ⚠️ Plataforma sem nota devolve `null`, não zero. Nota 0,0 diria que os
+ * clientes odiaram; a verdade costuma ser que ninguém avaliou ainda — ou que
+ * a plataforma não nos entrega esse dado.
+ */
+async function plataformasPorSemana(
+  unitId: string,
+  de: string,
+  ate: string,
+): Promise<Map<string, PlataformaNaSemana[]>> {
+  const out = new Map<string, PlataformaNaSemana[]>()
+  const { data, error } = await createAdminClient().rpc("semana_por_plataforma", {
+    p_unit_id: unitId,
+    p_de: de,
+    p_ate: ate,
+  })
+  if (error) {
+    console.error("plataformasPorSemana:", error.message)
+    return out
+  }
+  for (const r of (data ?? []) as {
+    semana: string
+    plataforma: PlataformaNaSemana["id"]
+    pedidos: number | string
+    bruto: number | string
+    nota_media: number | string | null
+    notas_qtd: number | string
+  }[]) {
+    const pedidos = Number(r.pedidos) || 0
+    const bruto = Number(r.bruto) || 0
+    // Semana sem venda E sem nota não vira linha: a plataforma simplesmente
+    // não operou, e mostrar "R$ 0,00" sugeriria que operou e vendeu nada.
+    const notasQtd = Number(r.notas_qtd) || 0
+    if (pedidos === 0 && bruto === 0 && notasQtd === 0) continue
+    const lista = out.get(r.semana) ?? []
+    lista.push({
+      id: r.plataforma,
+      pedidos,
+      bruto,
+      ticketMedio: pedidos > 0 ? bruto / pedidos : 0,
+      nota: r.nota_media == null ? null : Number(r.nota_media),
+      notasQtd,
+    })
+    out.set(r.semana, lista)
+  }
+  for (const lista of out.values()) lista.sort((a, b) => b.bruto - a.bruto)
   return out
 }
 

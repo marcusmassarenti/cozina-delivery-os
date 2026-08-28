@@ -6,8 +6,9 @@ import { useFormStatus } from "react-dom"
 import { CalendarCheck, CircleAlert, Clock, TrendingDown, TrendingUp } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { fmtBRL, fmtNum } from "@/lib/format"
-import type { SemanaDaLoja } from "@/lib/data/relatorio-semanal"
+import { PlatformLogo } from "@/components/platform-logo"
+import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
+import type { PlataformaNaSemana, SemanaDaLoja } from "@/lib/data/relatorio-semanal"
 
 import { salvarSemana, type SalvarSemanaState } from "../_actions-semanal"
 
@@ -61,6 +62,7 @@ export function SemanaTab({
         Semana de segunda a domingo, entrega na quarta seguinte. O faturamento é
         calculado do que já entrou — não precisa digitar.
       </p>
+      <Serie semanas={semanas} />
       {semanas.map((s) => (
         <Semana key={s.inicio} unitId={unitId} codigo={codigo} s={s} />
       ))}
@@ -133,7 +135,9 @@ function Semana({
         </div>
       </div>
 
-      <form action={acao} className="flex flex-col gap-2 px-4 py-3">
+      <PorPlataforma lista={s.plataformas} />
+
+      <form action={acao} className="flex flex-col gap-2 border-t px-4 py-3">
         <input type="hidden" name="unitId" value={unitId} />
         <input type="hidden" name="codigo" value={codigo} />
         <input type="hidden" name="semana" value={s.inicio} />
@@ -216,4 +220,155 @@ function Salvar() {
       {pending ? "Salvando…" : "Salvar relatório"}
     </Button>
   )
+}
+
+/**
+ * A série das semanas em barras.
+ *
+ * Existe porque a lista responde "quanto foi cada semana" e não responde
+ * "para onde isso está indo" — que é a primeira coisa que o gestor precisa
+ * dizer no relatório. Sete números empilhados não viram tendência na cabeça
+ * de ninguém; sete barras viram na hora.
+ *
+ * Ordem cronológica aqui, ao contrário da lista abaixo: gráfico que cresce
+ * pra esquerda se lê errado, mesmo com o eixo escrito.
+ */
+function Serie({ semanas }: { semanas: SemanaDaLoja[] }) {
+  const dados = [...semanas].reverse().filter((s) => s.bruto !== null)
+  if (dados.length < 2) return null
+  const max = Math.max(...dados.map((s) => s.bruto ?? 0))
+  const ultima = dados[dados.length - 1]
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Faturamento por semana
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          {dados.length} semanas · maior {fmtBRLShort(max)}
+        </p>
+      </div>
+      <div className="mt-3 flex h-24 items-end gap-1.5">
+        {dados.map((s) => {
+          const alt = max > 0 ? Math.max(4, ((s.bruto ?? 0) / max) * 100) : 4
+          const eh = s === ultima
+          return (
+            /* ⚠️ A COLUNA PRECISA DE `h-full`, e a barra de um pai com altura
+               resolvida. Sem isso a altura em % da barra é calculada contra um
+               pai `auto` e vira ZERO — o gráfico renderiza os rótulos e nenhuma
+               barra, que foi exatamente o que apareceu no primeiro teste. */
+            <div
+              key={s.inicio}
+              className="group flex h-full flex-1 flex-col items-center gap-1"
+              title={`${dia(s.inicio)} a ${dia(s.fim)} · ${fmtBRL(s.bruto ?? 0)}`}
+            >
+              <span className="text-[9px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                {fmtBRLShort(s.bruto ?? 0)}
+              </span>
+              <div className="flex w-full flex-1 items-end">
+                <div
+                  className={`w-full rounded-t transition-colors ${
+                    eh ? "bg-primary" : "bg-primary/30 group-hover:bg-primary/50"
+                  }`}
+                  style={{ height: `${alt}%` }}
+                />
+              </div>
+              <span className="text-[9px] tabular-nums text-muted-foreground">
+                {dia(s.inicio).slice(0, 5)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A semana aberta por plataforma.
+ *
+ * A barra de proporção mostra o PESO de cada canal — dizer "iFood R$ 26 mil"
+ * não responde "quanto do meu faturamento depende do iFood", que é a pergunta
+ * que muda decisão.
+ */
+function PorPlataforma({ lista }: { lista: PlataformaNaSemana[] }) {
+  if (lista.length === 0) return null
+  const total = lista.reduce((s, p) => s + p.bruto, 0)
+
+  return (
+    <div className="border-t">
+      {total > 0 && (
+        <div className="flex h-1.5 w-full overflow-hidden">
+          {lista.map((p) => (
+            <div
+              key={p.id}
+              className="h-full"
+              style={{
+                width: `${(p.bruto / total) * 100}%`,
+                background: COR[p.id],
+              }}
+            />
+          ))}
+        </div>
+      )}
+      <div className="divide-y">
+        {lista.map((p) => (
+          <div
+            key={p.id}
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-xs"
+          >
+            <span className="flex min-w-[104px] items-center gap-1.5">
+              <PlatformLogo platform={p.id} size="sm" />
+              <span className="font-medium">{ROTULO[p.id]}</span>
+            </span>
+            <span className="tabular-nums font-semibold">{fmtBRL(p.bruto)}</span>
+            <span className="tabular-nums text-muted-foreground">
+              {fmtNum(p.pedidos)} ped
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              {fmtBRL(p.ticketMedio)} ticket
+            </span>
+            {p.nota === null ? (
+              <span
+                className="text-muted-foreground"
+                title="Ninguém avaliou nesta semana, ou a plataforma não nos entrega a nota"
+              >
+                — sem nota
+              </span>
+            ) : (
+              <span className="tabular-nums font-medium">
+                ★ {p.nota.toFixed(2)}
+                <span className="ml-1 font-normal text-muted-foreground">
+                  ({p.notasQtd})
+                </span>
+              </span>
+            )}
+            {total > 0 && (
+              <span className="ml-auto tabular-nums text-[11px] text-muted-foreground">
+                {((p.bruto / total) * 100).toFixed(0)}%
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* Cor de marca de cada plataforma — as mesmas do PlatformLogo, pra a barra
+ * de proporção e o logo ao lado falarem a mesma língua. A 99 e a Keeta são
+ * amarelos parecidos de propósito: é a marca delas, não escolha nossa. */
+const COR: Record<PlataformaNaSemana["id"], string> = {
+  ifood: "#EA1D2C",
+  "99food": "#FFD300",
+  keeta: "#FFCD00",
+  cardapioweb: "#5B2A86",
+}
+
+const ROTULO: Record<PlataformaNaSemana["id"], string> = {
+  ifood: "iFood",
+  "99food": "99 Food",
+  keeta: "Keeta",
+  cardapioweb: "Cardápio Web",
 }
