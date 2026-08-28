@@ -8,7 +8,11 @@ import { CalendarCheck, CircleAlert, Clock, TrendingDown, TrendingUp } from "luc
 import { Button } from "@/components/ui/button"
 import { PlatformLogo } from "@/components/platform-logo"
 import { fmtBRL, fmtBRLShort, fmtNum } from "@/lib/format"
-import type { PlataformaNaSemana, SemanaDaLoja } from "@/lib/data/relatorio-semanal"
+import type {
+  ItemDaSemana,
+  PlataformaNaSemana,
+  SemanaDaLoja,
+} from "@/lib/data/relatorio-semanal"
 
 import { salvarSemana, type SalvarSemanaState } from "../_actions-semanal"
 
@@ -136,6 +140,7 @@ function Semana({
       </div>
 
       <PorPlataforma lista={s.plataformas} />
+      <Itens semana={s} />
 
       <form action={acao} className="flex flex-col gap-2 border-t px-4 py-3">
         <input type="hidden" name="unitId" value={unitId} />
@@ -263,13 +268,37 @@ function Serie({ semanas }: { semanas: SemanaDaLoja[] }) {
               className="group flex h-full flex-1 flex-col items-center gap-1"
               title={`${dia(s.inicio)} a ${dia(s.fim)} · ${fmtBRL(s.bruto ?? 0)}`}
             >
-              <span className="text-[9px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                {fmtBRLShort(s.bruto ?? 0)}
+              {/* A variação fica SEMPRE visível, não só no hover: a pergunta
+                  do gráfico é "subiu ou caiu", e resposta que exige passar o
+                  mouse não é resposta pra quem está lendo de relance. */}
+              <span className="h-3 text-[9px] font-semibold tabular-nums">
+                {s.variacaoPct === null ? (
+                  <span className="text-muted-foreground">—</span>
+                ) : (
+                  <span
+                    className={
+                      s.variacaoPct >= 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
+                    }
+                  >
+                    {s.variacaoPct >= 0 ? "▲" : "▼"}
+                    {Math.abs(s.variacaoPct).toFixed(0)}%
+                  </span>
+                )}
               </span>
               <div className="flex w-full flex-1 items-end">
+                {/* Cor pela DIREÇÃO, não pela posição: barra que caiu fica
+                    vermelha mesmo sendo a última. O que interessa é o sinal. */}
                 <div
                   className={`w-full rounded-t transition-colors ${
-                    eh ? "bg-primary" : "bg-primary/30 group-hover:bg-primary/50"
+                    s.variacaoPct !== null && s.variacaoPct < 0
+                      ? eh
+                        ? "bg-rose-500"
+                        : "bg-rose-400/45 group-hover:bg-rose-400/65"
+                      : eh
+                        ? "bg-primary"
+                        : "bg-primary/30 group-hover:bg-primary/50"
                   }`}
                   style={{ height: `${alt}%` }}
                 />
@@ -371,4 +400,146 @@ const ROTULO: Record<PlataformaNaSemana["id"], string> = {
   "99food": "99 Food",
   keeta: "Keeta",
   cardapioweb: "Cardápio Web",
+}
+
+/* Fatias da rosca. Cinco tons do laranja da marca, do mais forte ao mais
+   fraco, e o cinza pro "outros" — que não é um produto e não deve competir
+   por atenção com quem é. */
+const FATIAS = ["#EA5B0C", "#F07B36", "#F59B63", "#F9B98F", "#FCD6BC"]
+const OUTROS = "#D4D4D8"
+
+/**
+ * Mais e menos vendidos da semana.
+ *
+ * ── POR QUE OS MAIS VENDIDOS SÃO PIZZA E OS MENOS SÃO LISTA ──────────────
+ * A rosca responde "de onde vem o meu volume" — cinco fatias grandes e o
+ * resto. Já os menos vendidos ocupam 0,3% cada: em pizza virariam riscos
+ * invisíveis, e o gráfico diria "não há nada aqui" quando a informação é
+ * justamente quais itens não giram. Lista com o número resolve.
+ *
+ * ⚠️ RANQUEADO POR UNIDADE, não por receita: a Keeta manda item sem valor, e
+ * ordenar por dinheiro a zeraria.
+ */
+function Itens({ semana }: { semana: SemanaDaLoja }) {
+  if (semana.topItens.length === 0) return null
+
+  const top = semana.topItens
+  const somaTop = top.reduce((a, i) => a + i.qtd, 0)
+  const restoQtd = Math.max(0, semana.totalUnidades - somaTop)
+  const restoPct =
+    semana.totalUnidades > 0 ? (restoQtd / semana.totalUnidades) * 100 : 0
+
+  // Fatias em graus, na ordem: top 5 e depois "outros".
+  const fatias = [
+    ...top.map((i, n) => ({ pct: i.pct, cor: FATIAS[n] })),
+    ...(restoQtd > 0 ? [{ pct: restoPct, cor: OUTROS }] : []),
+  ]
+  let acc = 0
+  const stops = fatias
+    .map((f) => {
+      const ini = acc
+      acc += f.pct
+      return `${f.cor} ${ini.toFixed(2)}% ${acc.toFixed(2)}%`
+    })
+    .join(", ")
+
+  const plats = [...new Set(top.flatMap((i) => i.plataformas))].sort()
+
+  return (
+    <div className="flex flex-col gap-4 border-t px-4 py-4 lg:flex-row">
+      <div className="flex items-center gap-4">
+        <div
+          className="size-28 shrink-0 rounded-full"
+          style={{
+            background: `conic-gradient(${stops})`,
+            // O furo transforma a pizza em rosca: o miolo carrega o total, e
+            // um número no centro é mais legível que uma legenda ao lado.
+            mask: "radial-gradient(circle, transparent 52%, black 53%)",
+            WebkitMask: "radial-gradient(circle, transparent 52%, black 53%)",
+          }}
+          role="img"
+          aria-label={`Cinco itens mais vendidos representam ${somaTop} de ${semana.totalUnidades} unidades`}
+        />
+        <div className="lg:hidden">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Mais vendidos
+          </p>
+          <p className="text-sm font-semibold tabular-nums">
+            {fmtNum(semana.totalUnidades)} un.
+          </p>
+        </div>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          5 mais vendidos · {fmtNum(semana.totalUnidades)} unidades na semana
+        </p>
+        <ul className="flex flex-col gap-1">
+          {top.map((i, n) => (
+            <LinhaItem key={i.nome} item={i} cor={FATIAS[n]} />
+          ))}
+          {restoQtd > 0 && (
+            <li className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span
+                className="size-2.5 shrink-0 rounded-sm"
+                style={{ background: OUTROS }}
+              />
+              <span className="min-w-0 flex-1 truncate">
+                outros {semana.itensDistintos - top.length} itens
+              </span>
+              <span className="tabular-nums">{fmtNum(restoQtd)}</span>
+              <span className="w-10 text-right tabular-nums">
+                {restoPct.toFixed(0)}%
+              </span>
+            </li>
+          )}
+        </ul>
+
+        {semana.piorItens.length > 0 && (
+          <>
+            <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              5 que menos giraram
+            </p>
+            <ul className="flex flex-col gap-1">
+              {semana.piorItens.map((i) => (
+                <LinhaItem key={i.nome} item={i} />
+              ))}
+            </ul>
+          </>
+        )}
+
+        {/* Quais plataformas entraram na conta. Sem isso o ranking parece
+            cobrir a loja inteira — e o iFood só tem item diário até 11/08. */}
+        <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
+          Contando {plats.map((p) => ROTULO[p]).join(", ")}. O mesmo prato pode
+          aparecer duas vezes: cada plataforma tem o próprio nome pra ele.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function LinhaItem({ item, cor }: { item: ItemDaSemana; cor?: string }) {
+  return (
+    <li className="flex items-center gap-2 text-xs">
+      <span
+        className="size-2.5 shrink-0 rounded-sm"
+        style={{ background: cor ?? "transparent", border: cor ? undefined : "1px solid var(--border)" }}
+      />
+      <span className="min-w-0 flex-1 truncate" title={item.nome}>
+        {item.nome}
+      </span>
+      <span className="flex shrink-0 gap-0.5">
+        {item.plataformas.map((p) => (
+          <PlatformLogo key={p} platform={p} size="sm" />
+        ))}
+      </span>
+      <span className="w-10 text-right tabular-nums text-muted-foreground">
+        {fmtNum(item.qtd)}
+      </span>
+      <span className="w-10 text-right font-medium tabular-nums">
+        {item.pct.toFixed(1)}%
+      </span>
+    </li>
+  )
 }

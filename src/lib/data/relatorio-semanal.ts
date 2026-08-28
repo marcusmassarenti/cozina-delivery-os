@@ -34,6 +34,16 @@ export type PlataformaNaSemana = {
   notasQtd: number
 }
 
+export type ItemDaSemana = {
+  nome: string
+  qtd: number
+  /** Só o 99 e o iFood têm valor por item; a Keeta manda quantidade. */
+  valor: number
+  plataformas: PlataformaNaSemana["id"][]
+  /** Fatia do total de unidades vendidas na semana. */
+  pct: number
+}
+
 export type SemanaDaLoja = {
   /** Segunda-feira, ISO. Chave da semana. */
   inicio: string
@@ -51,6 +61,14 @@ export type SemanaDaLoja = {
   entregueEm: string | null
   /** Só as plataformas com movimento na semana, da maior pra menor. */
   plataformas: PlataformaNaSemana[]
+  /** Os 5 mais vendidos em unidades, com a fatia de cada um. */
+  topItens: ItemDaSemana[]
+  /** Os 5 menos vendidos — lista, não pizza: fatia de 0,4% é invisível. */
+  piorItens: ItemDaSemana[]
+  /** Unidades vendidas na semana, base do percentual. */
+  totalUnidades: number
+  /** Quantos itens distintos a semana teve — contexto pros "menos vendidos". */
+  itensDistintos: number
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
@@ -120,7 +138,7 @@ export async function getSemanasDaLoja(
   const maisRecente = inicios[0] ?? primeira
 
   const admin = createAdminClient()
-  const [{ data: registros }, agregado, porPlataforma] = await Promise.all([
+  const [{ data: registros }, agregado, porPlataforma, itens] = await Promise.all([
     admin
       .from("relatorio_semanal")
       .select("semana_inicio, texto, entregue_em")
@@ -135,6 +153,7 @@ export async function getSemanasDaLoja(
        TS seriam 8 semanas × 4 plataformas = 32 idas ao banco pra desenhar
        uma aba — o padrão que a nota de performance do projeto proíbe. */
     plataformasPorSemana(unitId, iso(maisAntigaComExtra), iso(somaDias(maisRecente, 6))),
+    itensPorSemana(unitId, iso(maisAntigaComExtra), iso(somaDias(maisRecente, 6))),
   ])
 
   const porInicio = new Map(
@@ -177,6 +196,12 @@ export async function getSemanasDaLoja(
       texto: reg?.texto ?? null,
       entregueEm: reg?.entregue_em ?? null,
       plataformas: porPlataforma.get(chave) ?? [],
+      ...(itens.get(chave) ?? {
+        topItens: [],
+        piorItens: [],
+        totalUnidades: 0,
+        itensDistintos: 0,
+      }),
     })
   }
   return out
@@ -278,6 +303,95 @@ async function plataformasPorSemana(
     out.set(r.semana, lista)
   }
   for (const lista of out.values()) lista.sort((a, b) => b.bruto - a.bruto)
+  return out
+}
+
+/**
+ * Os itens de cada semana, já divididos em mais e menos vendidos.
+ *
+ * ── RANQUEIA POR QUANTIDADE, NÃO POR RECEITA ──────────────────────────────
+ * A Keeta manda item sem valor (`keeta_daily_item` não tem coluna de
+ * receita), então ordenar por dinheiro zeraria ela e o ranking mentiria por
+ * omissão. Unidade vendida as três plataformas têm.
+ *
+ * ⚠️ O MESMO PRATO PODE APARECER DUAS VEZES. Cada plataforma tem o próprio
+ * nome — "Churrasco de Sobrecoxa Defumado (Top Pote)" no 99 é "Sobrecoxa
+ * Desossada Defumada (Mais Pedido!)" na Keeta. Fundir exigiria um de-para
+ * item a item, que este projeto MEDIU e descartou em 16/08/26 na ficha
+ * técnica. Por isso a tela mostra o selo da plataforma em cada linha: o
+ * leitor precisa saber que "duas linhas" pode ser "um prato".
+ *
+ * ⚠️ O iFood só tem item diário até 11/08/26. Depois disso o relatório de
+ * cardápio dele vem agregado por período e não é fatiável por semana — as
+ * semanas recentes saem sem ele, e a tela diz quais plataformas entraram.
+ */
+async function itensPorSemana(
+  unitId: string,
+  de: string,
+  ate: string,
+): Promise<
+  Map<
+    string,
+    {
+      topItens: ItemDaSemana[]
+      piorItens: ItemDaSemana[]
+      totalUnidades: number
+      itensDistintos: number
+    }
+  >
+> {
+  const out = new Map<
+    string,
+    {
+      topItens: ItemDaSemana[]
+      piorItens: ItemDaSemana[]
+      totalUnidades: number
+      itensDistintos: number
+    }
+  >()
+  const { data, error } = await createAdminClient().rpc("semana_itens", {
+    p_unit_id: unitId,
+    p_de: de,
+    p_ate: ate,
+  })
+  if (error) {
+    console.error("itensPorSemana:", error.message)
+    return out
+  }
+
+  const porSemanaMap = new Map<string, ItemDaSemana[]>()
+  for (const r of (data ?? []) as {
+    semana: string
+    nome_item: string
+    qtd: number | string
+    valor: number | string
+    plataformas: PlataformaNaSemana["id"][]
+  }[]) {
+    const lista = porSemanaMap.get(r.semana) ?? []
+    lista.push({
+      nome: r.nome_item,
+      qtd: Number(r.qtd) || 0,
+      valor: Number(r.valor) || 0,
+      plataformas: r.plataformas ?? [],
+      pct: 0,
+    })
+    porSemanaMap.set(r.semana, lista)
+  }
+
+  for (const [semana, lista] of porSemanaMap) {
+    const total = lista.reduce((s, i) => s + i.qtd, 0)
+    for (const i of lista) i.pct = total > 0 ? (i.qtd / total) * 100 : 0
+    const ordenada = [...lista].sort((a, b) => b.qtd - a.qtd)
+    out.set(semana, {
+      topItens: ordenada.slice(0, 5),
+      /* Os menos vendidos só fazem sentido quando há cardápio pra comparar.
+         Com 6 itens no total, "os 5 piores" seriam quase o cardápio inteiro
+         e a lista viraria ruído. */
+      piorItens: ordenada.length >= 10 ? ordenada.slice(-5).reverse() : [],
+      totalUnidades: total,
+      itensDistintos: ordenada.length,
+    })
+  }
   return out
 }
 
