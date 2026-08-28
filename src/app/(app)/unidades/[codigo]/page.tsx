@@ -71,7 +71,9 @@ import { CardapioCwTab } from "./_components/cardapio-cw-tab"
 import { AvaliacoesCwTab } from "./_components/avaliacoes-cw-tab"
 import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
 import { SemanaTab } from "./_components/semana-tab"
+import { FluxoLoja } from "./_components/fluxo-loja"
 import { getSemanasDaLoja } from "@/lib/data/relatorio-semanal"
+import { getLojaNaCarteira } from "@/lib/data/fluxo-loja"
 import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
@@ -674,7 +676,10 @@ async function DetailTabs({
    * pendente", e o recorte esconderia semana devida. O Marcus corrigiu, e o
    * argumento dele é mais forte: filtro que umas abas obedecem e outras não
    * faz a pessoa desconfiar do filtro na tela inteira. */
-  const semanas = await getSemanasDaLoja(unit.id, periodRange)
+  const [semanas, naCarteira] = await Promise.all([
+    getSemanasDaLoja(unit.id, periodRange),
+    getLojaNaCarteira(unit.id),
+  ])
 
   // Fechamentos só do mês selecionado (a semana aparece no mês que ela cobre).
   const mm = String(month).padStart(2, "0")
@@ -779,7 +784,7 @@ async function DetailTabs({
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="cardapio">Cardápio</TabsTrigger>
           <TabsTrigger value="avaliacoes">Avaliações</TabsTrigger>
-          <TabsTrigger value="semana">Semana</TabsTrigger>
+          <TabsTrigger value="semana">Carteira</TabsTrigger>
           <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
           {isJK && <TabsTrigger value="fechamento">Fechamento</TabsTrigger>}
         </TabsList>
@@ -813,7 +818,10 @@ async function DetailTabs({
           trabalho de toda quarta; diagnóstico é consulta eventual. */}
       <TabsContent value="semana" className="mt-4">
         <Suspense fallback={<TabSkeleton />}>
-          <SemanaTab unitId={unit.id} codigo={unit.code} semanas={semanas} />
+          <div className="flex flex-col gap-4">
+            {naCarteira && <FluxoLoja loja={naCarteira} codigo={unit.code} />}
+            <SemanaTab unitId={unit.id} codigo={unit.code} semanas={semanas} />
+          </div>
         </Suspense>
       </TabsContent>
 
