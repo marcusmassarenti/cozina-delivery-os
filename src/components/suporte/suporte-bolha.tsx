@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, MessageSquare, Send, X } from "lucide-react"
+import { Loader2, Send, X } from "lucide-react"
 
 import { DeliveryOsMark } from "@/components/delivery-os-logo"
+import { anunciarNova, ouvirAbrir } from "@/components/suporte/suporte-canal"
 import { CATEGORIAS, type Categoria } from "@/lib/suporte/ajuda"
 import {
   abrirConversa,
@@ -65,11 +66,10 @@ export function SuporteBolha() {
   const [enviando, setEnviando] = React.useState(false)
   const [erro, setErro] = React.useState<string | null>(null)
   const [temNova, setTemNova] = React.useState(false)
-  const [convite, setConvite] = React.useState(true)
   const fim = React.useRef<HTMLDivElement>(null)
 
   /**
-   * Selo de resposta nova no balão fechado.
+   * Selo de resposta nova — hoje mostrado no item do menu.
    *
    * Confere ao montar e ao voltar pra aba — não em intervalo. Aba aberta e
    * esquecida a tarde inteira custaria CPU na Vercel pra perguntar a mesma
@@ -170,60 +170,22 @@ export function SuporteBolha() {
     if (r.conversa) setConversa(r.conversa)
   }
 
+  /* A entrada agora é o item do menu; aqui só se escuta o pedido de abrir. */
+  React.useEffect(() => ouvirAbrir(() => setAberto(true)), [])
+  React.useEffect(() => anunciarNova(temNova), [temNova])
+
   const naFila = conversa?.status === "aguardando_humano"
   const comHumano = naFila || conversa?.status === "com_humano"
   const msgs = conversa?.mensagens ?? []
 
-  // ---------------------------------------------------------------- fechado
-  if (!aberto) {
-    return (
-      // data-print="hide": a bolha e fixed, entao ela nao "rola pra fora" da
-    // folha — aparecia carimbada por cima do conteudo no PDF exportado
-    // (Marcus, 17/08/26). A regra global de print ja esconde quem tem o
-    // atributo; faltava marcar aqui.
-    <div
-      data-print="hide"
-      className="fixed bottom-5 right-5 z-50 flex items-center gap-2"
-    >
-        {/* Convite. Dispensável de propósito: um chamariz que não se cala vira
-            estorvo em toda tela do sistema. */}
-        {convite && !temNova && (
-          <>
-            <button
-              type="button"
-              onClick={() => setConvite(false)}
-              aria-label="Dispensar"
-              className="flex size-9 items-center justify-center rounded-full bg-card text-muted-foreground shadow-lg transition-colors hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setAberto(true)}
-              className="rounded-full bg-card px-4 py-2.5 text-sm font-medium shadow-lg transition-colors hover:bg-muted"
-            >
-              Posso ajudar?
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          aria-label={temNova ? "Abrir suporte (resposta nova)" : "Abrir suporte"}
-          className="relative flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105"
-        >
-          <MessageSquare className="size-6" />
-          {temNova && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-rose-500 ring-2 ring-background">
-              <span className="size-1.5 rounded-full bg-white" />
-            </span>
-          )}
-        </button>
-      </div>
-    )
-  }
+  /* FECHADO NÃO DESENHA NADA.
+   *
+   * O botão flutuante virou item do menu lateral — ver `suporte-canal`. Um
+   * chamariz que fica por cima do conteúdo em toda tela cobra o preço o tempo
+   * todo pra entregar um atalho que se usa uma vez por semana. */
+  if (!aberto) return null
 
-  // ----------------------------------------------------------------- aberto
+  // --------------------------------------------------------------- aberto
   return (
     <div
       data-print="hide"

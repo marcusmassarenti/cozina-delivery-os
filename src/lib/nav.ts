@@ -117,7 +117,18 @@ export const NAV_GROUPS: NavGroup[] = [
      * agência; o gestor é quem é medido.
      *
      * Fica no módulo `unidades` porque é sobre a carteira de lojas — e some
-     * pra cliente de loja única, que não tem carteira pra administrar. */
+     * pra cliente de loja única, que não tem carteira pra administrar.
+     *
+     * ⚠️ TRAVADO EM `superadminOnly` ATÉ O MARCUS LIBERAR (28/08/26).
+     *
+     * As telas estão de pé mas o conteúdo delas ainda é rascunho pro cliente:
+     * não existe gestor cadastrado em agência nenhuma, nem atendimento, nem
+     * mensalidade. Cliente que abrisse hoje veria quatro telas vazias e
+     * concluiria que o módulo não funciona — e primeira impressão de tela
+     * vazia não se desfaz com um deploy depois.
+     *
+     * Pra liberar: tirar `superadminOnly` dos itens. O `module: "unidades"`
+     * embaixo continua valendo e é ele que decide QUEM vê depois. */
     label: "Carteira",
     defaultOpen: true,
     items: [
@@ -126,24 +137,28 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/carteira/visao",
         icon: LayoutDashboard,
         module: "unidades",
+        superadminOnly: true,
       },
       {
         label: "Lojas",
         href: "/carteira/lojas",
         icon: ListChecks,
         module: "unidades",
+        superadminOnly: true,
       },
       {
         label: "Gestores",
         href: "/carteira/gestores",
         icon: UsersRound,
         module: "unidades",
+        superadminOnly: true,
       },
       {
         label: "Atendimentos",
         href: "/carteira/atendimentos",
         icon: ClipboardList,
         module: "unidades",
+        superadminOnly: true,
       },
     ],
   },

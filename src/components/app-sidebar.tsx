@@ -23,6 +23,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { SuporteItemMenu } from "@/components/suporte/suporte-item-menu"
 import { useFavorites } from "@/hooks/use-favorites"
 import { useGruposMenu } from "@/hooks/use-grupos-menu"
 import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "@/lib/nav"
@@ -137,12 +138,15 @@ export function AppSidebar({
   isPro = false,
   logoUrl = null,
   companyName = "",
+  podeVerSuporte = false,
 }: {
   allowedModules: string[]
   isSuperadmin?: boolean
   isPro?: boolean
   logoUrl?: string | null
   companyName?: string
+  /** Mesmo portão do painel de suporte — botão sem painel não abre nada. */
+  podeVerSuporte?: boolean
 }) {
   const pathname = usePathname()
   const { isFav, toggle, ready } = useFavorites()
@@ -288,6 +292,9 @@ export function AppSidebar({
       <SidebarFooter>
         <SidebarSeparator />
         <SidebarMenu>
+          {/* Ajuda antes de "Recolher menu": é a saída que alguém procura
+              quando emperrou, e recolher o menu é ajuste de layout. */}
+          {podeVerSuporte && <SuporteItemMenu />}
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={toggleSidebar}

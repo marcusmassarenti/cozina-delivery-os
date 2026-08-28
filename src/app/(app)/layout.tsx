@@ -158,6 +158,10 @@ export default async function AppLayout({
           }
           logoUrl={userContext.logoUrl}
           companyName={userContext.companyName}
+          /* MESMA condição do painel, escrita uma vez só aqui. Se o item do
+             menu tivesse portão próprio, um dia os dois divergiriam e o botão
+             abriria um painel que não está montado. */
+          podeVerSuporte={!superadmin && podeVerSuporte(holdingAtual)}
         />
         <SidebarInset>
           <TopBar
