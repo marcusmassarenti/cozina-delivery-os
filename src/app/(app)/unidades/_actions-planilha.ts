@@ -82,7 +82,7 @@ export async function importarPlanilha(
     for (const l of previa.linhas) {
       if (l.acao === "erro" || !l.dados) continue
 
-      const { platforms, ...campos } = l.dados
+      const { platforms, idsPlataforma, ...campos } = l.dados
       // Cidade pela lista do IBGE, igual ao formulário — senão a planilha
       // viraria a porta dos fundos por onde "SAO PAULO" volta pra base.
       const { data: cidadeOk } = await supabase.rpc("normalizar_cidade", {
@@ -105,7 +105,12 @@ export async function importarPlanilha(
             .update(registro)
             .eq("id", l.unitId)
           if (error) throw new Error(error.message)
-          await sincronizarPlataformas(supabase, l.unitId, platforms)
+          await sincronizarPlataformas(
+            supabase,
+            l.unitId,
+            platforms,
+            idsPlataforma,
+          )
           atualizadas++
         } else {
           const { data: nova, error } = await supabase
@@ -114,7 +119,12 @@ export async function importarPlanilha(
             .select("id")
             .single()
           if (error) throw new Error(error.message)
-          await sincronizarPlataformas(supabase, String(nova.id), platforms)
+          await sincronizarPlataformas(
+            supabase,
+            String(nova.id),
+            platforms,
+            idsPlataforma,
+          )
           criadas++
         }
       } catch (e) {
@@ -146,15 +156,22 @@ export async function importarPlanilha(
  * a plataforma foi habilitada. Apagar e recriar perderia o vínculo com o iFood
  * e a loja voltaria pra fila de vínculo manual — um efeito colateral e tanto
  * pra quem só queria corrigir um telefone na planilha.
+ *
+ * O `external_store_id` entra aqui desde 28/08/26. Antes esta função escrevia
+ * só `{unit_id, platform, active}`, e o resultado é que a criação em lote
+ * produzia cadastro completo e loja irreconhecível: as 16 da Churrasco Royal
+ * entraram em 19/08 e o 99 não tinha como casar nenhuma delas. A regra existia
+ * no formulário de edição; a cópia do lado — o importador — nunca recebeu.
  */
 async function sincronizarPlataformas(
   supabase: ReturnType<typeof createAdminClient>,
   unitId: string,
   desejadas: string[],
+  ids: Partial<Record<string, string>> = {},
 ): Promise<void> {
   const { data: atuais } = await supabase
     .from("unit_platforms")
-    .select("platform, active")
+    .select("platform, active, external_store_id")
     .eq("unit_id", unitId)
   const existentes = new Map(
     ((atuais ?? []) as { platform: string; active: boolean }[]).map((p) => [
@@ -162,20 +179,35 @@ async function sincronizarPlataformas(
       p.active,
     ]),
   )
+  const idAtual = new Map(
+    ((atuais ?? []) as { platform: string; external_store_id: string | null }[]).map(
+      (p) => [p.platform, p.external_store_id],
+    ),
+  )
 
   for (const p of desejadas) {
+    const idNovo = ids[p]
     if (existentes.has(p)) {
-      if (!existentes.get(p)) {
+      // Célula vazia PRESERVA o que já existe — a planilha não é a única
+      // porta pra esse campo, e quem corrige um telefone não deveria apagar
+      // um vínculo sem querer. Só grava quando veio valor E ele mudou.
+      const patch: Record<string, unknown> = {}
+      if (!existentes.get(p)) patch.active = true
+      if (idNovo && idNovo !== idAtual.get(p)) patch.external_store_id = idNovo
+      if (Object.keys(patch).length > 0) {
         await supabase
           .from("unit_platforms")
-          .update({ active: true })
+          .update(patch)
           .eq("unit_id", unitId)
           .eq("platform", p)
       }
     } else {
-      await supabase
-        .from("unit_platforms")
-        .insert({ unit_id: unitId, platform: p, active: true })
+      await supabase.from("unit_platforms").insert({
+        unit_id: unitId,
+        platform: p,
+        active: true,
+        external_store_id: idNovo ?? null,
+      })
     }
   }
 

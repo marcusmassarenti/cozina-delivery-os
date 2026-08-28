@@ -26,7 +26,14 @@ import {
   getCurrentHoldingId,
 } from "@/lib/auth/permissions"
 import { normalizarCnpj } from "@/lib/cnpj"
-import { COLUNAS, acharColuna, idDaOpcao, normalizar } from "./planilha-colunas"
+import {
+  COLUNAS,
+  CAMPO_ID_POR_PLATAFORMA,
+  PSEUDO_CAMPOS,
+  acharColuna,
+  idDaOpcao,
+  normalizar,
+} from "./planilha-colunas"
 import type { CanalId } from "@/components/platform-logo"
 
 const PLATAFORMAS_VALIDAS = ["ifood", "99food", "keeta", "cardapioweb"] as const
@@ -54,6 +61,12 @@ export type DadosUnidade = {
   cnpj: string
   active: boolean
   platforms: CanalId[]
+  /**
+   * ID da loja em cada plataforma. Fica FORA do resto porque não é coluna de
+   * `units` — quem grava é `sincronizarPlataformas`. Ausente = a planilha não
+   * disse nada, e o que já existe fica de pé.
+   */
+  idsPlataforma: Partial<Record<CanalId, string>>
   data_inauguracao: string | null
   [campo: string]: unknown
 }
@@ -215,6 +228,35 @@ export async function lerPlanilhaUnidades(
     existentes.set(normalizar(String(u.code ?? "")), u)
   }
 
+  /* IDs por plataforma que a base já tem — só pra a prévia saber o que MUDA.
+   * Numa consulta só: uma por loja seriam 300 idas ao banco pra montar uma
+   * lista de diferenças. */
+  const idsAtuais = new Map<string, string>()
+  const plataformasAtuais = new Map<string, string[]>()
+  const idsExistentes = [...existentes.values()].map((u) => String(u.id))
+  if (idsExistentes.length > 0) {
+    const { data: platsRaw } = await admin
+      .from("unit_platforms")
+      .select("unit_id, platform, external_store_id, active")
+      .in("unit_id", idsExistentes)
+    for (const r of (platsRaw ?? []) as {
+      unit_id: string
+      platform: string
+      external_store_id: string | null
+      active: boolean
+    }[]) {
+      if (r.external_store_id) {
+        idsAtuais.set(`${r.unit_id}|${r.platform}`, r.external_store_id)
+      }
+      if (r.active) {
+        plataformasAtuais.set(r.unit_id, [
+          ...(plataformasAtuais.get(r.unit_id) ?? []),
+          r.platform,
+        ])
+      }
+    }
+  }
+
   /**
    * Cidades já na grafia do IBGE, ANTES de comparar.
    *
@@ -341,10 +383,25 @@ export async function lerPlanilhaUnidades(
       }
     }
 
-    const plataformas = pega("platforms")
+    const plataformasDaPlanilha = pega("platforms")
       .split(/[;,/]/)
       .map((p) => normalizar(p))
       .filter(Boolean)
+
+    /* CÉLULA VAZIA PRESERVA — inclusive esta.
+     *
+     * Todo campo da planilha segue essa regra em loja que já existe, menos
+     * esta coluna, que mandava uma lista vazia adiante. E lista vazia não é
+     * "não mexe": `sincronizarPlataformas` desativa tudo que não está nela,
+     * então uma planilha feita à mão só com Código e Telefone desligava o
+     * iFood, o 99 e a Keeta da loja de uma vez — em silêncio, porque a prévia
+     * pulava a coluna Plataformas na hora de listar as mudanças.
+     *
+     * Só não apareceu ainda porque a exportação sempre preenche a coluna. */
+    const plataformas =
+      plataformasDaPlanilha.length === 0 && existente
+        ? (plataformasAtuais.get(String(existente.id)) ?? [])
+        : plataformasDaPlanilha
     const invalidas = plataformas.filter(
       (p) => !(PLATAFORMAS_VALIDAS as readonly string[]).includes(p),
     )
@@ -357,6 +414,43 @@ export async function lerPlanilhaUnidades(
       )
     }
 
+    /* IDs por plataforma.
+     *
+     * ⚠️ O ID DO 99 TEM 19 DÍGITOS E O EXCEL O DESTRÓI. Digitado numa célula
+     * comum ele vira número, perde precisão a partir do 16º dígito e volta
+     * como "5,76461E+18". Salvar isso seria pior do que não salvar: a loja
+     * ficaria vinculada a um ID que não existe, e o dado do 99 continuaria
+     * sem casa — só que agora com a tela dizendo que está tudo certo.
+     *
+     * Por isso o campo só aceita dígitos, e a exportação escreve a célula
+     * como texto pra que o vai-e-volta não estrague o que já estava certo. */
+    const idsPlataforma: Partial<Record<CanalId, string>> = {}
+    for (const [plataforma, campo] of Object.entries(
+      CAMPO_ID_POR_PLATAFORMA,
+    ) as [CanalId, string][]) {
+      const bruto = pega(campo)
+      if (!bruto) continue
+      const limpo = bruto.replace(/[\s.\-]/g, "")
+      const titulo = COLUNAS.find((c) => c.campo === campo)?.titulo ?? campo
+      if (/e\+?\d/i.test(bruto)) {
+        erros.push(
+          `${titulo}: "${bruto}" veio em notação científica — o Excel encurtou o número. Formate a coluna como Texto e cole o ID de novo.`,
+        )
+        continue
+      }
+      if (!/^\d+$/.test(limpo)) {
+        erros.push(`${titulo}: "${bruto}" não é um ID (só números).`)
+        continue
+      }
+      if (!plataformas.includes(plataforma)) {
+        erros.push(
+          `${titulo} preenchido, mas ${plataforma} não está na coluna Plataformas — o ID seria descartado.`,
+        )
+        continue
+      }
+      idsPlataforma[plataforma] = limpo
+    }
+
     // Campos de texto obrigatórios + listas fechadas.
     const dados: DadosUnidade = {
       code,
@@ -364,12 +458,16 @@ export async function lerPlanilhaUnidades(
       cnpj: cnpj ?? "",
       active: normalizar(pega("active")) !== "nao",
       platforms: plataformas as CanalId[],
+      idsPlataforma,
       data_inauguracao: dataInaug,
       state: uf,
     }
 
     for (const c of COLUNAS) {
-      if (["code", "name", "cnpj", "state", "platforms", "active", "data_inauguracao"].includes(c.campo)) {
+      // Pseudo-campo não é coluna de `units`: deixar passar aqui mandaria
+      // `id_ifood` no update e o Postgres derrubaria a linha inteira.
+      if (PSEUDO_CAMPOS.has(c.campo)) continue
+      if (["code", "name", "cnpj", "state", "data_inauguracao"].includes(c.campo)) {
         continue
       }
       const valor = pega(c.campo)
@@ -419,6 +517,18 @@ export async function lerPlanilhaUnidades(
     const mudancas: string[] = []
     for (const c of COLUNAS) {
       if (c.campo === "platforms") continue // comparado na hora de gravar
+      const plataformaDoId = (
+        Object.entries(CAMPO_ID_POR_PLATAFORMA) as [CanalId, string][]
+      ).find(([, campo]) => campo === c.campo)?.[0]
+      if (plataformaDoId) {
+        // Célula vazia PRESERVA o que existe — então não é mudança. Mesma
+        // régua do resto da planilha.
+        const informado = dados.idsPlataforma[plataformaDoId]
+        if (!informado) continue
+        const atual = idsAtuais.get(`${String(existente.id)}|${plataformaDoId}`)
+        if (informado !== atual) mudancas.push(c.titulo)
+        continue
+      }
       const novo = c.campo === "active" ? dados.active : dados[c.campo]
       const velho =
         c.campo === "active" ? existente.active !== false : existente[c.campo]

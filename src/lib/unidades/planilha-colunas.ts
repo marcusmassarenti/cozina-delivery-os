@@ -169,6 +169,42 @@ export const COLUNAS: ColunaPlanilha[] = [
       "Onde a loja vende, separado por ponto e vírgula. Aceita: ifood; 99food; keeta; cardapioweb. Ex.: ifood;99food",
     largura: 26,
   },
+  /* IDs da loja em cada plataforma.
+   *
+   * Pseudo-campos: não moram em `units` e sim em `unit_platforms`, como
+   * `platforms` e `active`. Quem escreve é `sincronizarPlataformas`.
+   *
+   * Existem porque a criação em lote não tinha como gravá-los: a planilha
+   * dizia QUAIS plataformas a loja usa e nunca QUAL loja ela é em cada uma.
+   * As 16 lojas da Churrasco Royal entraram assim em 19/08/26 — o cadastro
+   * completo, e o 99 sem ter como reconhecer nenhuma delas.
+   *
+   * Cardápio Web fica de fora de propósito: o vínculo dele é OAuth por loja e
+   * mora em `cardapioweb_installs`, não aqui. Uma coluna seria preenchida à
+   * toa. */
+  {
+    titulo: "ID iFood",
+    campo: "id_ifood",
+    obrigatorio: false,
+    ajuda:
+      "Número da loja no iFood (ex.: 260777) — o mesmo que aparece como ID DA LOJA nos relatórios. É por ele que a importação de planilha do iFood acha a loja. Quem conectou por API não precisa preencher.",
+    largura: 14,
+  },
+  {
+    titulo: "ID 99 Food",
+    campo: "id_99food",
+    obrigatorio: false,
+    ajuda:
+      "ID da loja no 99 Food — 19 dígitos, copie do relatório sem reformatar. Sem ele o dado do 99 chega e não acha a loja.",
+    largura: 22,
+  },
+  {
+    titulo: "ID Keeta",
+    campo: "id_keeta",
+    obrigatorio: false,
+    ajuda: "ID da loja na Keeta (ex.: 159476634).",
+    largura: 14,
+  },
   {
     titulo: "Ativa",
     campo: "active",
@@ -178,6 +214,22 @@ export const COLUNAS: ColunaPlanilha[] = [
     largura: 8,
   },
 ]
+
+/** Campos que NÃO são colunas de `units` — vivem em `unit_platforms`. */
+export const PSEUDO_CAMPOS = new Set([
+  "platforms",
+  "active",
+  "id_ifood",
+  "id_99food",
+  "id_keeta",
+])
+
+/** Coluna de ID → plataforma correspondente. */
+export const CAMPO_ID_POR_PLATAFORMA = {
+  ifood: "id_ifood",
+  "99food": "id_99food",
+  keeta: "id_keeta",
+} as const
 
 /** Cabeçalho do arquivo, na ordem. */
 export const CABECALHO = COLUNAS.map((c) => c.titulo)

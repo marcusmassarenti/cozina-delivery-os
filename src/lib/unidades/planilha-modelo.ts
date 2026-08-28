@@ -27,7 +27,12 @@ import * as XLSX from "xlsx"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
-import { COLUNAS, CABECALHO } from "./planilha-colunas"
+import {
+  COLUNAS,
+  CABECALHO,
+  PSEUDO_CAMPOS,
+  CAMPO_ID_POR_PLATAFORMA,
+} from "./planilha-colunas"
 
 /** Linhas em branco. No modelo são muitas; no export, um punhado. */
 const LINHAS_MODELO = 200
@@ -44,9 +49,11 @@ export async function gerarPlanilhaUnidades(
   const admin = createAdminClient()
   const allowed = await getAccessibleUnitIds()
 
-  const campos = COLUNAS.map((c) => c.campo).filter(
-    (c) => c !== "platforms" && c !== "active",
-  )
+  // Pseudo-campos ficam de fora: não são colunas de `units`. A lista mora em
+  // planilha-colunas pra que acrescentar um pseudo-campo novo não exija
+  // lembrar deste filtro aqui — foi assim que os IDs por plataforma passaram
+  // anos sem existir na planilha.
+  const campos = COLUNAS.map((c) => c.campo).filter((c) => !PSEUDO_CAMPOS.has(c))
   let q = admin
     .from("units")
     .select(`id, active, ${campos.join(", ")}`)
@@ -66,19 +73,39 @@ export async function gerarPlanilhaUnidades(
   const { data: plats } = ids.length
     ? await admin
         .from("unit_platforms")
-        .select("unit_id, platform")
+        .select("unit_id, platform, external_store_id")
         .eq("active", true)
         .in("unit_id", ids)
-    : { data: [] as { unit_id: string; platform: string }[] }
+    : {
+        data: [] as {
+          unit_id: string
+          platform: string
+          external_store_id: string | null
+        }[],
+      }
   const porUnidade = new Map<string, string[]>()
-  for (const p of (plats ?? []) as { unit_id: string; platform: string }[]) {
+  const idPorLojaEPlataforma = new Map<string, string>()
+  for (const p of (plats ?? []) as {
+    unit_id: string
+    platform: string
+    external_store_id: string | null
+  }[]) {
     porUnidade.set(p.unit_id, [...(porUnidade.get(p.unit_id) ?? []), p.platform])
+    if (p.external_store_id) {
+      idPorLojaEPlataforma.set(`${p.unit_id}|${p.platform}`, p.external_store_id)
+    }
   }
 
   const linhas = unidades.map((u) =>
     COLUNAS.map((c) => {
       if (c.campo === "platforms") return (porUnidade.get(u.id) ?? []).join(";")
       if (c.campo === "active") return u.active === false ? "não" : "sim"
+      const plataformaDoId = (
+        Object.entries(CAMPO_ID_POR_PLATAFORMA) as [string, string][]
+      ).find(([, campo]) => campo === c.campo)?.[0]
+      if (plataformaDoId) {
+        return idPorLojaEPlataforma.get(`${u.id}|${plataformaDoId}`) ?? ""
+      }
       const bruto = u[c.campo]
       if (bruto === null || bruto === undefined) return ""
       if (c.campo === "data_inauguracao") return paraDataBR(String(bruto))
@@ -136,6 +163,11 @@ function abaInstrucoes(comDados: boolean): XLSX.WorkSheet {
         ["Para cadastrar lojas novas em massa, prefira a PLANILHA MODELO"],
         ["(botão 'Importar em massa' na tela de Unidades) — ela vem vazia."],
         [],
+        [
+          "⚠️ IDs DAS PLATAFORMAS: formate as colunas ID iFood / ID 99 Food / ID Keeta como TEXTO antes de colar. O ID do 99 tem 19 dígitos e o Excel o transforma em número, perdendo os últimos dígitos — a importação recusa a linha em vez de gravar um ID errado.",
+        ],
+        [],
+
         ["Salve sempre como .xlsx. CSV NÃO é aceito:"],
         [
           "o Excel em português separa CSV por ponto e vírgula, e a coluna Plataformas usa ponto e vírgula por dentro (ifood;99food) — o arquivo desalinha e grava dado trocado.",
@@ -165,6 +197,10 @@ function abaInstrucoes(comDados: boolean): XLSX.WorkSheet {
         ["Salve como .xlsx. CSV NÃO é aceito:"],
         [
           "o Excel em português separa CSV por ponto e vírgula, e a coluna Plataformas usa ponto e vírgula por dentro (ifood;99food) — o arquivo desalinha e grava dado trocado.",
+        ],
+        [],
+        [
+          "⚠️ IDs DAS PLATAFORMAS: formate as colunas ID iFood / ID 99 Food / ID Keeta como TEXTO antes de colar. O ID do 99 tem 19 dígitos e o Excel o transforma em número, perdendo os últimos dígitos — a importação recusa a linha em vez de gravar um ID errado.",
         ],
         [],
         [
