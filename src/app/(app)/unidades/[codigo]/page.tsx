@@ -73,7 +73,7 @@ import { FinanceiroLojaTab } from "./_components/financeiro-loja-tab"
 import { SemanaTab } from "./_components/semana-tab"
 import { FluxoLoja } from "./_components/fluxo-loja"
 import { getSemanasDaLoja } from "@/lib/data/relatorio-semanal"
-import { getLojaNaCarteira } from "@/lib/data/fluxo-loja"
+import { getLojaNaCarteira, type LojaNaCarteira } from "@/lib/data/fluxo-loja"
 import { UnitCoverageStrip } from "./_components/unit-coverage-strip"
 import { mergeMonthly } from "./_components/merge-monthly"
 import { FechamentoTab } from "./_components/fechamento-tab"
@@ -181,6 +181,11 @@ export default async function UnidadeDetalhePage({
   const [fechamentos, canEditFechamento] = isJK
     ? await Promise.all([getFechamentos(unit.id), userCan("financeiro", "edit")])
     : [[], false]
+
+  /* A carteira é buscada AQUI, e não dentro do DetailTabs, porque os dois
+     ramos da tela precisam dela: a loja com faturamento (nas abas) e a sem
+     (onde o fluxo é a única coisa que existe pra mostrar). */
+  const naCarteira = await getLojaNaCarteira(unit.id)
 
   const periodRange = parseRangeFromSp(sp)
   const isFullMonth = rangeIsFullMonth(periodRange)
@@ -408,15 +413,30 @@ export default async function UnidadeDetalhePage({
             periodRange={periodRange}
             fechamentos={fechamentos}
             canEditFechamento={canEditFechamento}
+            naCarteira={naCarteira}
           />
         </>
       ) : (
-        <div className="rounded-xl border border-dashed bg-card p-10 text-center">
-          <p className="text-sm font-medium">Unidade sem dados no mês</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Conecte as plataformas ou adicione lançamentos manuais para começar
-            a ver o resultado dessa loja.
-          </p>
+        /* ⚠️ SEM FATURAMENTO, A CARTEIRA CONTINUA APARECENDO.
+         *
+         * O bloco de carteira — gestor, entrada, fluxo de checklist e
+         * cardápio — é sobre a ENTRADA da loja na agência, e isso acontece
+         * ANTES de existir faturamento. Deixá-lo atrás do `hasData` escondia
+         * o fluxo justamente nas 19 lojas novas, que são as únicas onde ele
+         * serve pra alguma coisa. Descoberto abrindo a #18 em 28/08/26: a
+         * tela não mostrava aba nenhuma.
+         *
+         * O aviso de "sem dados" continua, mas embaixo e falando só do que
+         * ele é: a parte financeira. */
+        <div className="flex flex-col gap-4">
+          {naCarteira && <FluxoLoja loja={naCarteira} codigo={unit.code} />}
+          <div className="rounded-xl border border-dashed bg-card p-10 text-center">
+            <p className="text-sm font-medium">Sem faturamento no período</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Conecte as plataformas ou adicione lançamentos manuais para
+              começar a ver o resultado dessa loja.
+            </p>
+          </div>
         </div>
       )}
     </div>
@@ -651,6 +671,7 @@ async function DetailTabs({
   periodRange,
   fechamentos,
   canEditFechamento,
+  naCarteira,
 }: {
   unit: Unit
   monthlyMerged: UnitMonthly
@@ -666,6 +687,7 @@ async function DetailTabs({
   periodRange: { start: string; end: string }
   fechamentos: Fechamento[]
   canEditFechamento: boolean
+  naCarteira: LojaNaCarteira | null
 }) {
   const m = monthlyMerged
   const isJK = (unit.name ?? "").trim().toUpperCase() === "JK"
@@ -676,10 +698,7 @@ async function DetailTabs({
    * pendente", e o recorte esconderia semana devida. O Marcus corrigiu, e o
    * argumento dele é mais forte: filtro que umas abas obedecem e outras não
    * faz a pessoa desconfiar do filtro na tela inteira. */
-  const [semanas, naCarteira] = await Promise.all([
-    getSemanasDaLoja(unit.id, periodRange),
-    getLojaNaCarteira(unit.id),
-  ])
+  const semanas = await getSemanasDaLoja(unit.id, periodRange)
 
   // Fechamentos só do mês selecionado (a semana aparece no mês que ela cobre).
   const mm = String(month).padStart(2, "0")

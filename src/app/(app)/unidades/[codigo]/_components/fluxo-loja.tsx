@@ -112,11 +112,22 @@ export function FluxoLoja({
       {loja.categoria === "nova" ? (
         <Fluxo loja={loja} codigo={codigo} />
       ) : (
-        <p className="rounded-xl border bg-card px-4 py-3 text-xs text-muted-foreground">
-          Loja já ativa na carteira
-          {loja.encaminhada.em ? ` desde ${dataCurta(loja.encaminhada.em)}` : ""}.
-          O fluxo de entrada não se aplica mais.
-        </p>
+        /* ⚠️ LOJA ATIVA PRECISA DE VOLTA. O bloco do fluxo só aparece em loja
+           "nova", e sem esta saída quem encaminhasse por engano ficaria sem
+           caminho na tela — ação irreversível pela interface é dívida que
+           cobra juros no dia em que alguém erra.
+           Só aparece quando houve encaminhamento: loja que sempre foi ativa
+           (as 110 do backfill) não tem o que desfazer. */
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+            Loja já ativa na carteira
+            {loja.encaminhada.em ? ` desde ${dataCurta(loja.encaminhada.em)}` : ""}.
+            O fluxo de entrada não se aplica mais.
+          </p>
+          {loja.encaminhada.concluida && (
+            <VoltarParaNovas unitId={loja.unitId} codigo={codigo} />
+          )}
+        </div>
       )}
 
       <DadosComerciais loja={loja} codigo={codigo} />
@@ -319,6 +330,45 @@ function SalvarDados() {
   return (
     <Button type="submit" size="sm" className="h-9 text-xs" disabled={pending}>
       {pending ? "…" : "Salvar"}
+    </Button>
+  )
+}
+
+function VoltarParaNovas({
+  unitId,
+  codigo,
+}: {
+  unitId: string
+  codigo: string
+}) {
+  const [estado, acao] = useActionState<FluxoState, FormData>(moverEtapa, {
+    ok: false,
+  })
+  return (
+    <form action={acao} className="flex items-center gap-2">
+      <input type="hidden" name="unitId" value={unitId} />
+      <input type="hidden" name="codigo" value={codigo} />
+      <input type="hidden" name="etapa" value="encaminhar" />
+      <input type="hidden" name="desfazer" value="1" />
+      <VoltarBtn />
+      {estado.error && (
+        <span className="text-[10px] text-rose-600">{estado.error}</span>
+      )}
+    </form>
+  )
+}
+
+function VoltarBtn() {
+  const { pending } = useFormStatus()
+  return (
+    <Button
+      type="submit"
+      size="sm"
+      variant="outline"
+      className="h-8 text-xs"
+      disabled={pending}
+    >
+      {pending ? "…" : "Voltar para Novas"}
     </Button>
   )
 }
