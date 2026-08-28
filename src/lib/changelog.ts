@@ -42,6 +42,86 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.23.0",
+    date: "2026-08-28",
+    tag: "Grande novidade",
+    title: "Painel da Carteira: oito telas pra quem administra lojas de terceiros",
+    summary:
+      "Da venda até a mensalidade na conta — gestores, onboarding, atendimentos, comercial e o financeiro da própria agência. Disponível pra quem administra carteira de lojas; fale com a gente pra liberar.",
+    destaque: true,
+    areas: [
+      {
+        area: "Carteira",
+        items: [
+          {
+            kind: "novo",
+            title: "Visão da carteira — a tela do dono",
+            desc:
+              "O SEU dinheiro primeiro: mensalidade recorrente, o que entrou, o que atrasou e o que sobrou depois das despesas. Depois a carteira que você administra, sempre comparada com o mesmo período do mês passado, evolução de 6 meses e a concentração — quanto do faturamento depende das 5 maiores lojas.",
+          },
+          {
+            kind: "novo",
+            title: "Onboarding em quadro, com as colunas que você criar",
+            desc:
+              "A loja entra vendida e caminha até a coluna que você marcar como final. Arraste o cartão entre as colunas; a ficha guarda quem vendeu, por quanto, quem alinha, a reunião e o link. O encaminhamento pro gestor só libera quando o checklist e o cardápio estão prontos.",
+          },
+          {
+            kind: "novo",
+            title: "Atendimentos que não se apagam",
+            desc:
+              "Cada passo feito na loja fica gravado com autor e data, e não pode ser editado — errou, escreve um passo novo corrigindo. É o que faz o registro valer quando o lojista pergunta o que foi feito três meses atrás.",
+          },
+          {
+            kind: "novo",
+            title: "Gestores, Comercial e o financeiro da agência",
+            desc:
+              "Ranking de gestores por faturamento e por semanas sem comentário; pódio de quem vendeu mais mensalidade; e o P&L da agência — recebido, atrasado, despesas e a sobra. Esse financeiro é o SEU, não o das lojas.",
+          },
+          {
+            kind: "melhoria",
+            title: "Cada tela tem “Como funciona”",
+            desc:
+              "O da Visão explica o painel inteiro em nove passos, na ordem em que a loja anda: vende, alinha, entrega ao gestor, trabalha, cobra.",
+          },
+        ],
+      },
+      {
+        area: "Unidades",
+        items: [
+          {
+            kind: "melhoria",
+            title: "A aba “Carteira” da loja virou “Semana”",
+            antes:
+              "O mesmo nome aparecia na aba da loja e na seção do menu, e era fácil clicar no lugar errado.",
+            depois:
+              "A aba se chama Semana, que é o que ela mostra: faturamento semanal, comparativo com a semana anterior e os comentários da semana.",
+          },
+          {
+            kind: "melhoria",
+            title: "A planilha de unidades aceita o ID da loja em cada plataforma",
+            antes:
+              "A planilha dizia QUAIS plataformas a loja usa e nunca QUAL loja ela é em cada uma — então o cadastro em lote criava loja completa que a importação não reconhecia.",
+            depois:
+              "Três colunas novas (ID iFood, ID 99 Food e ID Keeta) na exportação e na importação. Atenção ao ID do 99: são 19 dígitos, formate a coluna como Texto antes de colar — o Excel encurta o número e a planilha recusa a linha em vez de gravar um ID errado.",
+          },
+        ],
+      },
+      {
+        area: "Ajuda",
+        items: [
+          {
+            kind: "melhoria",
+            title: "O botão de suporte saiu de cima do conteúdo",
+            antes:
+              "O balão flutuava no canto e tapava o rodapé de alguns cards — na DRE da loja, em cima dos números.",
+            depois:
+              "Virou o item “Ajuda”, fixo no rodapé do menu. O aviso de resposta nova continua, só mudou de lugar.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.22.0",
     date: "2026-08-24",
     tag: "Correções",
