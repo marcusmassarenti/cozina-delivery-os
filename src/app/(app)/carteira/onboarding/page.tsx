@@ -1,7 +1,11 @@
 import { Handshake } from "lucide-react"
 
 import { assertCanView, getCurrentHoldingId } from "@/lib/auth/permissions"
-import { filaDeOnboarding } from "@/lib/data/carteira-onboarding"
+import {
+  etapasDaAgencia,
+  filaDeOnboarding,
+  lojasForaDaFila,
+} from "@/lib/data/carteira-onboarding"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 import { OnboardingView, type Vendedor } from "./_components/onboarding-view"
@@ -17,13 +21,15 @@ export const metadata = { title: "Onboarding · Delivery OS" }
  */
 export default async function OnboardingPage() {
   await assertCanView("unidades")
-  const [lojas, vendedores] = await Promise.all([
+  const [lojas, etapas, vendedores, livres] = await Promise.all([
     filaDeOnboarding(),
+    etapasDaAgencia(),
     listarVendedores(),
+    lojasForaDaFila(),
   ])
 
   return (
-    <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-4 sm:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 bg-muted/30 p-4 sm:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <Handshake className="size-6 text-muted-foreground" />
@@ -35,7 +41,12 @@ export default async function OnboardingPage() {
         </p>
       </div>
 
-      <OnboardingView lojas={lojas} vendedores={vendedores} />
+      <OnboardingView
+        lojas={lojas}
+        etapas={etapas}
+        vendedores={vendedores}
+        livres={livres}
+      />
     </div>
   )
 }

@@ -11,6 +11,8 @@ import type { GestorNoRanking } from "@/lib/data/carteira"
 
 import { atribuirLoja, criarGestor, type GestorState } from "../_actions"
 
+const MEDALHA = ["🥇", "🥈", "🥉"]
+
 export type LojaDaCarteira = {
   id: string
   code: string
@@ -89,6 +91,8 @@ export function GestoresView({
         </p>
       ) : (
         <>
+          <Podio gestores={ordenados} valor={valor} />
+
           <Comparativo gestores={ordenados} valor={valor} />
 
           <div className="flex flex-wrap items-center gap-2">
@@ -181,10 +185,23 @@ function CardGestor({
   const minhas = lojas.filter((l) => l.gestorId === g.id)
 
   return (
-    <div className="rounded-xl border bg-card">
+    <div
+      className={`rounded-xl border bg-card ${
+        posicao === 1 ? "border-amber-300 dark:border-amber-700" : ""
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold tabular-nums text-muted-foreground">
-          {posicao}
+        {/* Medalha nos três primeiros, número nos outros — a mesma régua da
+            tela do Comercial, pra as duas competições da agência se lerem
+            igual. */}
+        <span
+          className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums ${
+            posicao <= 3
+              ? "bg-transparent text-base"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {posicao <= 3 ? MEDALHA[posicao - 1] : posicao}
         </span>
         <span className="flex min-w-[150px] flex-1 items-center gap-2">
           <UserRound className="size-4 text-muted-foreground" />
@@ -222,7 +239,10 @@ function CardGestor({
 
       {fatia > 0 && (
         <div className="mx-4 h-1 overflow-hidden rounded-full bg-muted">
-          <div className="h-full bg-primary" style={{ width: `${fatia}%` }} />
+          <div
+            className={`h-full ${posicao === 1 ? "bg-amber-500" : "bg-primary"}`}
+            style={{ width: `${fatia}%` }}
+          />
         </div>
       )}
 
@@ -546,6 +566,52 @@ function Comparativo({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * Pódio dos três primeiros.
+ *
+ * Repete números que já estão no ranking logo abaixo, e é de propósito: o
+ * ranking responde "onde eu estou", o pódio responde "quem ganhou" — e a
+ * segunda é a pergunta que faz a tela ser aberta na segunda-feira. Mesmo
+ * desenho da tela do Comercial, porque é a mesma competição em outra moeda.
+ */
+function Podio({
+  gestores,
+  valor,
+}: {
+  gestores: GestorNoRanking[]
+  valor: (g: GestorNoRanking) => number
+}) {
+  const tres = gestores.filter((g) => valor(g) > 0).slice(0, 3)
+  if (tres.length === 0) return null
+
+  const cores = [
+    "border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/20",
+    "border-slate-300 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/30",
+    "border-orange-300 bg-orange-50/40 dark:border-orange-800 dark:bg-orange-950/20",
+  ]
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {tres.map((g, i) => (
+        <div
+          key={g.id}
+          className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${cores[i]}`}
+        >
+          <span className="text-lg leading-none">{MEDALHA[i]}</span>
+          <span className="mt-1 truncate text-sm font-semibold">{g.nome}</span>
+          <span className="text-xl font-semibold tabular-nums">
+            {fmtBRL(valor(g))}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {g.lojasAtivas}/{g.lojas} loja{g.lojas === 1 ? "" : "s"} ·{" "}
+            {fmtNum(g.pedidos)} pedidos
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

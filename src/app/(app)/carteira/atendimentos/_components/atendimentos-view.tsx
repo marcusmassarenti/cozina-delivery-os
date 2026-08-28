@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { CheckCircle2, Plus, RotateCcw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { SeletorBusca } from "@/components/shared/seletor-busca"
 import { TIPOS, type Atendimento } from "@/lib/data/atendimentos-tipos"
 
 import {
@@ -217,21 +218,13 @@ function Abrir({ lojas }: { lojas: LojaSimples[] }) {
       className="flex flex-col gap-2 rounded-xl border bg-card p-3"
     >
       <div className="grid gap-2 sm:grid-cols-2">
-        <select
+        <SeletorBusca
           name="unitId"
-          required
-          defaultValue=""
-          className="h-9 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
-        >
-          <option value="" disabled>
-            Escolha a loja…
-          </option>
-          {lojas.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.code} — {l.name}
-            </option>
-          ))}
-        </select>
+          opcoes={lojas.map((l) => ({ id: l.id, rotulo: l.name, detalhe: l.code }))}
+          placeholder="Escolha a loja…"
+          vazio={null}
+          obrigatorio
+        />
         <select
           name="tipo"
           defaultValue="cardapio"

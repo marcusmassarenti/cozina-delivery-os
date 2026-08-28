@@ -307,7 +307,14 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        /* `min-w-0`: item de flex tem `min-width: auto` e cresce até caber o
+           conteúdo. Sem isso, qualquer tela com bloco largo (quadro de
+           colunas, tabela comprida) empurra o <main> além da janela e a
+           rolagem horizontal vaza pra PÁGINA — levando o cabeçalho e o menu
+           junto, em vez de ficar dentro do bloco que rola.
+           Medido em 28/08/26 no quadro de Onboarding: main com 1146px numa
+           área de 925px; com min-w-0, 940px e a rolagem no lugar certo. */
+        "relative flex w-full min-w-0 flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className
       )}
       {...props}

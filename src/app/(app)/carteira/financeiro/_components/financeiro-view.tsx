@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { SeletorBusca } from "@/components/shared/seletor-busca"
 import { fmtBRL } from "@/lib/format"
 import type { Cobranca, Despesa } from "@/lib/data/carteira-financeiro"
 
@@ -181,18 +182,12 @@ function BotaoBaixa({ pago }: { pago: boolean }) {
 function NovaCobranca({ lojas }: { lojas: LojaSimples[] }) {
   return (
     <Formulario acao={lancarCobranca} rotulo="Cobrança">
-      <select
+      <SeletorBusca
         name="unitId"
-        defaultValue=""
-        className="h-8 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
-      >
-        <option value="">Sem loja específica</option>
-        {lojas.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.code} — {l.name}
-          </option>
-        ))}
-      </select>
+        opcoes={lojas.map((l) => ({ id: l.id, rotulo: l.name, detalhe: l.code }))}
+        placeholder="Sem loja específica"
+        vazio="Sem loja específica"
+      />
       <Campo nome="valor" rotulo="Valor (R$)" placeholder="990,00" />
       <Campo nome="vencimento" rotulo="Vencimento" tipo="date" />
       <Campo nome="pagoEm" rotulo="Pago em (se já pagou)" tipo="date" />

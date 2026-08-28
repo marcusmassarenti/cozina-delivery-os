@@ -17,10 +17,17 @@ export type Alerta = {
   unitId: string
   code: string
   nome: string
+  logoUrl: string | null
   motivo: string
+  /* O quanto, em reais — "caiu 26%" sozinho não diz se são R$ 300 ou
+     R$ 80 mil, e é o valor que decide qual loja se atende primeiro. */
+  de: number | null
+  para: number | null
   /** Quanto pior, mais alto. Ordena a lista. */
   peso: number
 }
+
+export type GestorOpcao = { id: string; nome: string }
 
 export type VisaoDaCarteira = {
   lojasAtivas: number
@@ -38,34 +45,57 @@ export type VisaoDaCarteira = {
   semanasPendentes: number
   semanasVencendoHoje: number
   alertas: Alerta[]
+  gestores: GestorOpcao[]
+  /** Quantas lojas ativas ficaram de fora por causa do filtro. */
+  foraDoFiltro: number
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 
-export async function visaoDaCarteira(periodo: {
-  start: string
-  end: string
-}): Promise<VisaoDaCarteira | null> {
+export async function visaoDaCarteira(
+  periodo: { start: string; end: string },
+  gestorId?: string | null,
+): Promise<VisaoDaCarteira | null> {
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return null
   const admin = createAdminClient()
 
-  const { data: unitsRaw } = await admin
-    .from("units")
-    .select(
-      "id, code, name, active, entrada_carteira, meta_30_dias, categoria_carteira, brands!inner(holding_id)",
-    )
-    .eq("brands.holding_id", holdingId)
+  const [{ data: unitsRaw }, { data: gestoresRaw }] = await Promise.all([
+    admin
+      .from("units")
+      .select(
+        "id, code, name, active, logo_url, gestor_id, entrada_carteira, meta_30_dias, categoria_carteira, brands!inner(holding_id)",
+      )
+      .eq("brands.holding_id", holdingId),
+    admin
+      .from("gestores")
+      .select("id, nome")
+      .eq("holding_id", holdingId)
+      .order("nome"),
+  ])
 
-  const lojas = (unitsRaw ?? []) as unknown as {
+  const gestores = (gestoresRaw ?? []) as GestorOpcao[]
+  const todas = (unitsRaw ?? []) as unknown as {
     id: string
     code: string
     name: string
     active: boolean
+    logo_url: string | null
+    gestor_id: string | null
     entrada_carteira: string | null
     meta_30_dias: number | null
     categoria_carteira: string | null
   }[]
+  /* O filtro corta ANTES de qualquer conta. Filtrar depois daria KPIs da
+     rede inteira ao lado de uma lista de alertas de um gestor só — duas
+     leituras na mesma tela, que é como se produz um painel em que ninguém
+     confia. */
+  const lojas =
+    gestorId === "sem"
+      ? todas.filter((l) => !l.gestor_id)
+      : gestorId
+        ? todas.filter((l) => l.gestor_id === gestorId)
+        : todas
   const vazio: VisaoDaCarteira = {
     lojasAtivas: 0,
     lojasTotal: 0,
@@ -79,6 +109,8 @@ export async function visaoDaCarteira(periodo: {
     semanasPendentes: 0,
     semanasVencendoHoje: 0,
     alertas: [],
+    gestores,
+    foraDoFiltro: todas.filter((l) => l.active).length - 0,
   }
   if (lojas.length === 0) return vazio
 
@@ -147,8 +179,15 @@ export async function visaoDaCarteira(periodo: {
           unitId: l.id,
           code: l.code,
           nome: l.name,
-          motivo: `caiu ${queda.toFixed(0)}% nos últimos 30 dias`,
-          peso: 100 + queda,
+          logoUrl: l.logo_url,
+          motivo: `caiu ${queda.toFixed(0)}%`,
+          de: b,
+          para: a,
+          /* Peso pela QUEDA EM REAIS, não pelo percentual. Uma loja de
+             R$ 3 mil que caiu 40% perde R$ 1,2 mil; uma de R$ 300 mil que
+             caiu 16% perde R$ 48 mil. Ordenar por percentual põe a primeira
+             no topo e a agência atende a errada. */
+          peso: 1000 + (b - a),
         })
       }
     }
@@ -162,14 +201,19 @@ export async function visaoDaCarteira(periodo: {
      * Loja "nova" fica de fora: ela ainda não vendeu porque não abriu, e
      * cobrar dela é cobrar o calendário do cliente. */
     if (l.categoria_carteira !== "nova" && !vendeu(ultimos30.get(l.id))) {
+      const antes = anteriores30.get(l.id)
       alertas.push({
         unitId: l.id,
         code: l.code,
         nome: l.name,
-        motivo: vendeu(anteriores30.get(l.id))
-          ? "parou de vender nos últimos 30 dias"
+        logoUrl: l.logo_url,
+        motivo: antes && vendeu(antes)
+          ? "parou de vender"
           : "sem venda há mais de 60 dias",
-        peso: vendeu(anteriores30.get(l.id)) ? 300 : 250,
+        de: antes?.faturamentoBruto ?? null,
+        para: 0,
+        // Parada vale mais que qualquer queda: perdeu 100%.
+        peso: 1_000_000 + (antes?.faturamentoBruto ?? 0),
       })
     }
   }
@@ -214,5 +258,7 @@ export async function visaoDaCarteira(periodo: {
     semanasPendentes: pendentes,
     semanasVencendoHoje: vencendoHoje,
     alertas: alertas.sort((x, y) => y.peso - x.peso).slice(0, 12),
+    gestores,
+    foraDoFiltro: todas.filter((l) => l.active).length - ativas.length,
   }
 }
