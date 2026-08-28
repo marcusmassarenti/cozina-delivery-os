@@ -503,20 +503,53 @@ export async function getNetworkDrePlatforms(
     // taxa (é dinheiro que a loja pegou na entrega); sem descontá-lo aqui, a
     // linha por plataforma inflaria e não somaria o header. Mesma conta do DRE
     // por unidade (financeiro-loja-tab).
-    const taxaTotal = Math.max(0, bruto - liq - recebidoDireto)
     const lista: { label: string; value: number; credit?: boolean }[] =
       itens.filter((i) => i.value > 0)
-    const resto = taxaTotal - lista.reduce((s, i) => s + i.value, 0)
-    if (resto > 0.5) {
-      lista.push({ label: "Cancelamentos / outros", value: resto })
-    } else if (resto < -0.5) {
-      // Os descontos itemizados somam mais que a taxa líquida real — a
-      // diferença é o que a plataforma devolveu (promoções financiadas por
-      // ela, estornos/ressarcimentos). Entra como crédito pra fechar a conta.
+    const somaItens = lista.reduce((s, i) => s + i.value, 0)
+    const derivada = bruto - liq - recebidoDireto
+
+    /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS, NÃO `bruto − líquido`.
+     *
+     * A derivação parece mais segura e não é: ela depende do líquido, e o
+     * líquido do 99 é a peça frágil da conta — a "Receita total" do relatório
+     * não é receita menos taxa, e a `receita_real_loja` do relatório de
+     * pedidos vem corrompida em parte das lojas (a Jardins marcou R$ 1.021,48
+     * sobre R$ 53.445,18 de venda em ago/26). Já a comissão, a taxa de
+     * pagamento e as promoções vêm itemizadas do relatório oficial e foram
+     * conferidas ao centavo.
+     *
+     * ⚠️ O QUE ISSO CONSERTA, e por que o cliente reclamou: era
+     * `Math.max(0, bruto − líquido − recebido)`. Na Pizzaria Forno a Lenha 4
+     * (DG FOODS) essa conta dava −R$ 2.688,14, o `max` devolvia ZERO, e a
+     * tela dizia "Taxas das plataformas R$ 0,00" com R$ 11.601,89 de taxa
+     * itemizada logo abaixo. O lojista viu e perguntou se tinha ficado sem
+     * taxa nenhuma. O zero não era arredondamento: era um negativo escondido.
+     *
+     * A diferença entre as duas contas continua aparecendo, mas com o nome
+     * certo — ver abaixo. */
+    const taxaTotal = somaItens > 0 ? somaItens : Math.max(0, derivada)
+
+    /* A diferença vira LINHA VISÍVEL, e só é chamada de crédito quando dá
+     * pra afirmar isso.
+     *
+     * Antes, qualquer sobra negativa virava "Créditos / estornos da
+     * plataforma" — um rótulo que afirma que a plataforma devolveu dinheiro.
+     * Na Forno a Lenha esse "crédito" era de R$ 11.601,89, exatamente o valor
+     * das taxas, porque era só o resto da conta. Chamar entulho de
+     * conciliação de crédito faz o lojista somar no caixa dinheiro que não
+     * existe.
+     *
+     * Agora o rótulo diz o que a linha é: uma diferença entre o que a
+     * plataforma repassou e o que as taxas explicam. */
+    const naoExplicado = liq > 0 ? bruto - recebidoDireto - taxaTotal - liq : 0
+    if (Math.abs(naoExplicado) > 0.5) {
       lista.push({
-        label: "Créditos / estornos da plataforma",
-        value: -resto,
-        credit: true,
+        label:
+          naoExplicado > 0
+            ? "Diferença não explicada pelas taxas"
+            : "Recebido a mais que as taxas explicam",
+        value: Math.abs(naoExplicado),
+        credit: naoExplicado < 0,
       })
     }
     return {

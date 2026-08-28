@@ -232,24 +232,42 @@ export async function FinanceiroLojaTab({
   ): DrePlat | null => {
     const p = m.platforms.find((x) => x.id === id)
     if (!p || p.bruto <= 0) return null
-    // Taxas reais: sem o recebido-direto (que tem linha própria no DRE).
-    const taxaTotal = Math.max(
-      0,
-      p.bruto - p.liquido - (p.recebidoDireto ?? 0),
-    )
     const lista: { label: string; value: number; credit?: boolean }[] =
       itens.filter((i) => i.value > 0)
-    const resto = taxaTotal - lista.reduce((a, i) => a + i.value, 0)
-    if (resto > 0.5) {
-      lista.push({ label: "Cancelamentos / outros", value: resto })
-    } else if (resto < -0.5) {
-      // Descontos itemizados > taxa líquida real → a diferença é o que a
-      // plataforma devolveu (promoção financiada por ela, estorno). Entra
-      // como crédito pra abertura fechar com a linha de taxas.
+    const somaItens = lista.reduce((a, i) => a + i.value, 0)
+    const recebidoDireto = p.recebidoDireto ?? 0
+    const derivada = p.bruto - p.liquido - recebidoDireto
+
+    /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS. Mesma mudança de resultado.ts,
+     * e o motivo nasceu nesta tela: a DRE da Pizzaria Forno a Lenha 4
+     * (DG FOODS) mostrava "Taxas das plataformas R$ 0,00" com R$ 11.601,89
+     * de taxa itemizada logo abaixo, e o lojista perguntou se tinha ficado
+     * sem taxa nenhuma.
+     *
+     * O zero vinha de `Math.max(0, bruto − líquido − recebido)`: a conta dava
+     * −R$ 2.688,14 e o `max` devolvia zero. Um negativo escondido, não um
+     * arredondamento.
+     *
+     * A itemização é a fonte confiável — comissão, taxa de pagamento e
+     * promoções vêm do relatório oficial e batem ao centavo. Já o líquido do
+     * 99 não: a "Receita total" do relatório não é receita menos taxa, e a
+     * `receita_real_loja` vem corrompida em parte das lojas. */
+    const taxaTotal = somaItens > 0 ? somaItens : Math.max(0, derivada)
+
+    /* A diferença que sobra ganha o nome do que ela é. "Créditos / estornos
+     * da plataforma" afirma que a plataforma devolveu dinheiro — e ali era só
+     * o resto da conta, do tamanho exato das taxas. Chamar entulho de
+     * conciliação de crédito faz o lojista somar no caixa o que não existe. */
+    const naoExplicado =
+      p.liquido > 0 ? p.bruto - recebidoDireto - taxaTotal - p.liquido : 0
+    if (Math.abs(naoExplicado) > 0.5) {
       lista.push({
-        label: "Créditos / estornos da plataforma",
-        value: -resto,
-        credit: true,
+        label:
+          naoExplicado > 0
+            ? "Diferença não explicada pelas taxas"
+            : "Recebido a mais que as taxas explicam",
+        value: Math.abs(naoExplicado),
+        credit: naoExplicado < 0,
       })
     }
     return {
