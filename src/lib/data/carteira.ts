@@ -2,7 +2,10 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { getRealMonthlyForUnitsForRange } from "./range-aggregation"
+import {
+  getFinanceiroResumoByUnitsForRange,
+  getRealMonthlyForUnitsForRange,
+} from "./range-aggregation"
 import { segundaDaSemana } from "./relatorio-semanal"
 
 /**
@@ -24,9 +27,19 @@ export type Gestor = {
 export type GestorNoRanking = Gestor & {
   lojas: number
   lojasAtivas: number
-  /** Faturamento da carteira dele no período. */
+  /** Faturamento da carteira dele no período — COM canceladas, régua do portal. */
   bruto: number
+  /**
+   * Cesta dos pedidos cancelados no período.
+   *
+   * ⚠️ SÓ iFOOD. É a única plataforma que informa a perda por cancelamento;
+   * 99, Keeta e Cardápio Web não mandam esse número. Por isso a tela chama o
+   * que sobra de "sem canceladas do iFood" e não de "venda válida" — dizer a
+   * segunda coisa seria prometer uma precisão que não existe.
+   */
+  canceladas: number
   pedidos: number
+  pedidosCancelados: number
   /** Média de dias que as lojas dele estão na carteira. `null` sem data. */
   diasMedios: number | null
   /** Semanas fechadas sem comentário — mede o TRABALHO, não só o resultado. */
@@ -89,9 +102,20 @@ export async function rankingDeGestores(
   }[]
 
   const idsDeTodas = lojas.map((l) => l.id)
-  const [faturamento, pendentes] = await Promise.all([
+  /* A perda por cancelamento vem do EXTRATO do iFood, não do agregador.
+   *
+   * `UnitMonthly.cancelamentosReembolsos` existe, mas é alimentado só pelo
+   * lançamento MANUAL — e esse campo está zerado nas 239 linhas da base
+   * inteira. Ler dali daria um botão que acende e não move número nenhum, o
+   * pior tipo de controle num painel: parece que respondeu. O valor de
+   * verdade mora no resumo financeiro (a JK perdeu R$ 845,96 em ago/26), que
+   * é a mesma fonte que o DRE usa pra abrir "Vendas totais − cancelados". */
+  const [faturamento, financeiro, pendentes] = await Promise.all([
     idsDeTodas.length > 0
       ? getRealMonthlyForUnitsForRange(idsDeTodas, periodo)
+      : Promise.resolve(new Map()),
+    idsDeTodas.length > 0
+      ? getFinanceiroResumoByUnitsForRange(idsDeTodas, periodo)
       : Promise.resolve(new Map()),
     semanasPendentesPorLoja(idsDeTodas),
   ])
@@ -107,18 +131,25 @@ export async function rankingDeGestores(
           if (m) {
             acc.bruto += m.faturamentoBruto
             acc.pedidos += m.pedidos
+            acc.pedidosCancelados += m.pedidosCancelados
           }
+          const f = financeiro.get(l.id)
+          // Vem NEGATIVA no extrato; aqui é grandeza, igual ao merge da tela
+          // da loja.
+          if (f) acc.canceladas += Math.abs(f.perdaCancelamento)
           acc.pendentes += pendentes.get(l.id) ?? 0
           return acc
         },
-        { bruto: 0, pedidos: 0, pendentes: 0 },
+        { bruto: 0, canceladas: 0, pedidos: 0, pedidosCancelados: 0, pendentes: 0 },
       )
       return {
         ...g,
         lojas: minhas.length,
         lojasAtivas: minhas.filter((l) => l.active).length,
         bruto: soma.bruto,
+        canceladas: soma.canceladas,
         pedidos: soma.pedidos,
+        pedidosCancelados: soma.pedidosCancelados,
         diasMedios:
           comData.length === 0
             ? null

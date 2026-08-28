@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
-import { AlertTriangle, Plus, UserRound } from "lucide-react"
+import { AlertTriangle, Plus, Search, UserRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { fmtBRL, fmtNum } from "@/lib/format"
@@ -35,11 +35,40 @@ export function GestoresView({
   lojas: LojaDaCarteira[]
   periodo: string
 }) {
-  const total = gestores.reduce((s, g) => s + g.bruto, 0)
+  const [busca, setBusca] = React.useState("")
+  /* Canceladas ENTRAM por padrão: é a régua do portal, a mesma do resto do
+     sistema (bruto = a cesta que passou pelo balcão). O botão existe pra
+     responder "e quanto virou venda de verdade?", não pra escolher número. */
+  const [comCanceladas, setComCanceladas] = React.useState(true)
+
+  const valor = React.useCallback(
+    (g: GestorNoRanking) => (comCanceladas ? g.bruto : g.bruto - g.canceladas),
+    [comCanceladas],
+  )
+
+  const ordenados = React.useMemo(
+    () => [...gestores].sort((a, b) => valor(b) - valor(a)),
+    [gestores, valor],
+  )
+  const filtrados = React.useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    return q ? ordenados.filter((g) => g.nome.toLowerCase().includes(q)) : ordenados
+  }, [ordenados, busca])
+
+  const total = ordenados.reduce((s, g) => s + valor(g), 0)
   const semGestor = lojas.filter((l) => !l.gestorId)
+  const canceladas = gestores.reduce((s, g) => s + g.canceladas, 0)
 
   return (
     <div className="flex flex-col gap-4">
+      <Resumo
+        gestores={gestores}
+        lojas={lojas}
+        total={total}
+        periodo={periodo}
+        comCanceladas={comCanceladas}
+      />
+
       <NovoGestor />
 
       {semGestor.length > 0 && (
@@ -59,16 +88,75 @@ export function GestoresView({
           Nenhum gestor cadastrado. Comece criando um acima.
         </p>
       ) : (
-        gestores.map((g, i) => (
-          <CardGestor
-            key={g.id}
-            gestor={g}
-            posicao={i + 1}
-            fatia={total > 0 ? (g.bruto / total) * 100 : 0}
-            lojas={lojas}
-            periodo={periodo}
-          />
-        ))
+        <>
+          <Comparativo gestores={ordenados} valor={valor} />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar gestor"
+                className="h-9 w-full rounded-md border bg-background pl-8 pr-2 text-xs outline-none focus:border-ring"
+              />
+            </div>
+            <label
+              className="flex cursor-pointer items-center gap-1.5 rounded-md border bg-card px-2.5 py-2 text-xs"
+              title={
+                canceladas > 0
+                  ? "Cancelado só é informado pelo iFood — 99, Keeta e Cardápio Web não mandam esse número."
+                  : "Nenhum cancelamento informado no período."
+              }
+            >
+              <input
+                type="checkbox"
+                checked={comCanceladas}
+                onChange={(e) => setComCanceladas(e.target.checked)}
+                className="size-3.5"
+              />
+              Incluir canceladas
+              {canceladas > 0 && (
+                <span className="text-muted-foreground tabular-nums">
+                  ({fmtBRL(canceladas)})
+                </span>
+              )}
+            </label>
+            {busca && (
+              <span className="text-xs text-muted-foreground">
+                {filtrados.length} de {gestores.length}
+              </span>
+            )}
+          </div>
+
+          {!comCanceladas && (
+            /* Dito na tela, não só no código: só o iFood informa cancelamento,
+               então este número NÃO é "venda válida da rede". Rotular assim
+               seria inventar precisão que os outros canais não deram. */
+            <p className="-mt-1 text-[11px] text-muted-foreground">
+              Sem as canceladas do iFood. As outras plataformas não informam
+              cancelamento, então o número delas continua inteiro.
+            </p>
+          )}
+
+          {filtrados.length === 0 ? (
+            <p className="rounded-xl border border-dashed bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+              Nenhum gestor com esse nome.
+            </p>
+          ) : (
+            filtrados.map((g) => (
+              <CardGestor
+                key={g.id}
+                gestor={g}
+                posicao={ordenados.indexOf(g) + 1}
+                valor={valor(g)}
+                fatia={total > 0 ? (valor(g) / total) * 100 : 0}
+                lojas={lojas}
+                periodo={periodo}
+              />
+            ))
+          )}
+        </>
       )}
     </div>
   )
@@ -77,12 +165,14 @@ export function GestoresView({
 function CardGestor({
   gestor: g,
   posicao,
+  valor,
   fatia,
   lojas,
   periodo,
 }: {
   gestor: GestorNoRanking
   posicao: number
+  valor: number
   fatia: number
   lojas: LojaDaCarteira[]
   periodo: string
@@ -106,7 +196,7 @@ function CardGestor({
           )}
         </span>
 
-        <Metrica rotulo={periodo} valor={fmtBRL(g.bruto)} destaque />
+        <Metrica rotulo={periodo} valor={fmtBRL(valor)} destaque />
         <Metrica rotulo="lojas" valor={`${g.lojasAtivas}/${g.lojas}`} />
         <Metrica rotulo="pedidos" valor={fmtNum(g.pedidos)} />
         <Metrica
@@ -315,5 +405,147 @@ function NovoBtn() {
       <Plus className="size-3" />
       {pending ? "…" : "Criar gestor"}
     </Button>
+  )
+}
+
+/**
+ * Os números do topo — o que a agência olha antes de olhar gestor nenhum.
+ *
+ * Vem ANTES do ranking de propósito: "quanto a carteira toda fez" é a
+ * pergunta que enquadra "quem fez quanto". Sem isso, o primeiro colocado
+ * parece grande ou pequeno sem régua nenhuma.
+ */
+function Resumo({
+  gestores,
+  lojas,
+  total,
+  periodo,
+  comCanceladas,
+}: {
+  gestores: GestorNoRanking[]
+  lojas: LojaDaCarteira[]
+  total: number
+  periodo: string
+  comCanceladas: boolean
+}) {
+  const ativos = gestores.filter((g) => g.ativo).length
+  const comCarteira = gestores.filter((g) => g.lojas > 0).length
+  const emCarteira = lojas.filter((l) => l.gestorId).length
+  const pendentes = gestores.reduce((s, g) => s + g.semanasPendentes, 0)
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi
+        rotulo={`Faturamento · ${periodo}`}
+        valor={fmtBRL(total)}
+        nota={comCanceladas ? "com canceladas" : "sem as canceladas do iFood"}
+        destaque
+      />
+      <Kpi
+        rotulo="Gestores"
+        valor={fmtNum(ativos)}
+        /* Gestor ativo SEM carteira é o alarme silencioso desta tela: ele
+           existe na folha e não aparece em ranking nenhum. */
+        nota={
+          ativos - comCarteira > 0
+            ? `${ativos - comCarteira} sem nenhuma loja`
+            : "todos com carteira"
+        }
+        alerta={ativos - comCarteira > 0}
+      />
+      <Kpi
+        rotulo="Lojas em carteira"
+        valor={`${emCarteira}/${lojas.length}`}
+        nota={
+          lojas.length - emCarteira > 0
+            ? `${lojas.length - emCarteira} sem gestor`
+            : "todas atribuídas"
+        }
+        alerta={lojas.length - emCarteira > 0}
+      />
+      <Kpi
+        rotulo="Semanas em aberto"
+        valor={fmtNum(pendentes)}
+        nota={pendentes > 0 ? "comentário não escrito" : "tudo em dia"}
+        alerta={pendentes > 0}
+      />
+    </div>
+  )
+}
+
+function Kpi({
+  rotulo,
+  valor,
+  nota,
+  destaque,
+  alerta,
+}: {
+  rotulo: string
+  valor: string
+  nota: string
+  destaque?: boolean
+  alerta?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-xl border bg-card px-4 py-3">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {rotulo}
+      </span>
+      <span
+        className={`tabular-nums ${destaque ? "text-xl font-semibold" : "text-lg font-semibold"}`}
+      >
+        {valor}
+      </span>
+      <span
+        className={`text-[11px] ${alerta ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
+      >
+        {nota}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Comparativo entre gestores.
+ *
+ * Barra proporcional ao MAIOR, não ao total: com seis gestores a fatia de
+ * cada um vira um toco de 16% e o gráfico deixa de comparar qualquer coisa.
+ * Contra o líder, a diferença entre o segundo e o terceiro se enxerga.
+ */
+function Comparativo({
+  gestores,
+  valor,
+}: {
+  gestores: GestorNoRanking[]
+  valor: (g: GestorNoRanking) => number
+}) {
+  const maior = Math.max(...gestores.map(valor), 0)
+  if (maior <= 0) return null
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Comparativo
+      </p>
+      {gestores.map((g) => {
+        const v = valor(g)
+        return (
+          <div key={g.id} className="flex items-center gap-3">
+            <span className="w-28 shrink-0 truncate text-xs" title={g.nome}>
+              {g.nome}
+            </span>
+            <div className="h-4 flex-1 overflow-hidden rounded bg-muted">
+              <div
+                className="h-full rounded bg-primary transition-[width]"
+                style={{ width: `${(v / maior) * 100}%` }}
+              />
+            </div>
+            <span className="w-28 shrink-0 text-right text-xs font-medium tabular-nums">
+              {fmtBRL(v)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
