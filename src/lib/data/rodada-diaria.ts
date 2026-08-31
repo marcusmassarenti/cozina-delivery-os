@@ -17,6 +17,7 @@ import "server-only"
  * Por isso a régua aqui é OUTRA: não é "a rotina executou", é "o dado chegou".
  */
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 
 import type { Gravidade } from "./saude-integracoes"
@@ -286,6 +287,19 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
       new Date(iso),
     )
 
+  /* ⚠️ FORA DO SYNC NÃO ENTRA NO RELATÓRIO DE SAÚDE.
+   *
+   * O e-mail cobrava extrato de loja que o próprio sistema decidiu não
+   * sincronizar: as duas do Vbfood, suspenso desde 22/08, apareceram em
+   * 31/08 como "nunca fechou o extrato deste mês". Claro que não fecharam —
+   * ninguém foi buscar. Cobrar trabalho de quem foi mandado parar é o tipo
+   * de alarme que treina a pessoa a ignorar o e-mail inteiro.
+   *
+   * A regra existia num módulo só (`unidades-inativas`) justamente pra não
+   * divergir, e os quatro coletores do relatório eram as cópias que nunca a
+   * receberam. */
+  const fora = await idsDeUnidadesForaDoSync()
+
   let fecharamHoje = 0
   const atrasadas: ExtratoAtrasado[] = []
   for (const u of ((nomes ?? []) as {
@@ -293,7 +307,7 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
     name: string
     brand_id: string
     active: boolean
-  }[]).filter((u) => u.active)) {
+  }[]).filter((u) => u.active && !fora.has(u.id))) {
     const ultimo = ultimoExtrato.get(u.id) ?? null
     if (ultimo && diaDe(ultimo) === hoje) {
       fecharamHoje += 1

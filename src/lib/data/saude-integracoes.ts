@@ -19,6 +19,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 import { merchantsSumidos } from "@/lib/ifood/merchants-sumidos"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
@@ -343,10 +344,19 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
       ]),
   )
 
+  /* ⚠️ FORA DO SYNC NÃO ENTRA NO RELATÓRIO DE SAÚDE.
+   *
+   * Cliente suspenso e conta demo saem de todos os syncs, e mesmo assim
+   * entravam nos contadores daqui — inflando o denominador do "88/91" e
+   * cobrando extrato de loja que ninguém foi buscar. A regra vivia num
+   * módulo só (`unidades-inativas`) pra não divergir; este coletor era a
+   * cópia que nunca a recebeu. */
+  const fora = await idsDeUnidadesForaDoSync()
+
   const porCliente = new Map<string, OportunidadeConexao>()
   for (const s of semApi) {
     const info = unitInfo.get(s.unit_id)
-    if (!info || !info.ativa) continue
+    if (!info || !info.ativa || fora.has(s.unit_id)) continue
     const atual =
       porCliente.get(info.cliente) ??
       { cliente: info.cliente, ifood: 0, noveNove: 0, cardapioWeb: 0, total: 0 }
@@ -364,7 +374,7 @@ export async function diagnosticarIntegracoes(): Promise<SaudeIntegracoes> {
   const lojas: LojaSaude[] = []
   for (const s of linhas) {
     const info = unitInfo.get(s.unit_id)
-    if (!info || !info.ativa) continue
+    if (!info || !info.ativa || fora.has(s.unit_id)) continue
 
     const pedido = s.ultimo_pedido
     const fin = s.ultimo_financeiro

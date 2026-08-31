@@ -21,6 +21,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
 import { idsDeUnidadesDemo } from "@/lib/data/holding-demo"
 import { idsDeUnidadesEncerradas } from "@/lib/data/unidades-encerradas"
 
@@ -134,6 +135,19 @@ export async function alertasDeVenda(
     .in("id", linhas.map((l) => l.unit_id))
 
   const info = new Map<string, { code: string; loja: string; cliente: string }>()
+  /* ⚠️ FORA DO SYNC NÃO ENTRA NO RELATÓRIO DE SAÚDE.
+   *
+   * O e-mail cobrava extrato de loja que o próprio sistema decidiu não
+   * sincronizar: as duas do Vbfood, suspenso desde 22/08, apareceram em
+   * 31/08 como "nunca fechou o extrato deste mês". Claro que não fecharam —
+   * ninguém foi buscar. Cobrar trabalho de quem foi mandado parar é o tipo
+   * de alarme que treina a pessoa a ignorar o e-mail inteiro.
+   *
+   * A regra existia num módulo só (`unidades-inativas`) justamente pra não
+   * divergir, e os quatro coletores do relatório eram as cópias que nunca a
+   * receberam. */
+  const fora = await idsDeUnidadesForaDoSync()
+
   for (const u of (uns ?? []) as unknown as {
     id: string
     code: string
@@ -141,7 +155,7 @@ export async function alertasDeVenda(
     active: boolean
     brands: { holdings: { name: string } }
   }[]) {
-    if (!u.active) continue
+    if (!u.active || fora.has(u.id)) continue
     info.set(u.id, {
       code: u.code,
       loja: u.name,
