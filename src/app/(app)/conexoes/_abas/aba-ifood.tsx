@@ -26,6 +26,8 @@ type MerchantRow = {
   ignorado_em: string | null
   ignorado_motivo: string | null
   last_seen_at: string
+  /** Quando o merchant apareceu pela primeira vez na lista do iFood. */
+  first_seen_at: string | null
 }
 
 type LinkedRow = {
@@ -57,7 +59,10 @@ async function getData() {
     admin
       .from("ifood_merchants")
       .select(
-        "id, name, corporate_name, cnpj, city, state, merchant_state, ignorado_em, ignorado_motivo, last_seen_at",
+        /* `first_seen_at` alimenta o "aguardando cadastro há N dias": loja
+           parada nesta fila há 35 dias é outra coisa de uma que chegou
+           ontem, e a tela não distinguia as duas. */
+        "id, name, corporate_name, cnpj, city, state, merchant_state, ignorado_em, ignorado_motivo, last_seen_at, first_seen_at",
       )
       .order("name"),
     admin
@@ -80,7 +85,18 @@ async function getData() {
       .from("holdings")
       .select("id, name, trial_ends_at, suspend_on, paid, due_date, encerrado_em"),
   ])
-  const merchants = (merchantsRes.data ?? []) as MerchantRow[]
+  /* Os dias de espera são contados NO SERVIDOR.
+   *
+   * `Date.now()` dentro do componente é função impura no render (o lint
+   * barra) e, pior, faz o HTML do servidor divergir do primeiro render do
+   * cliente quando a virada do dia cai no meio — a contagem aqui é uma só. */
+  const agora = Date.now()
+  const merchants = ((merchantsRes.data ?? []) as MerchantRow[]).map((m) => ({
+    ...m,
+    diasEsperando: m.first_seen_at
+      ? Math.floor((agora - new Date(m.first_seen_at).getTime()) / 86_400_000)
+      : null,
+  }))
   const linkedRaw = (linkedRes.data ?? []) as unknown as LinkedRow[]
 
   // unit → holding (via brand) + nome da holding, pro filtro por cliente.

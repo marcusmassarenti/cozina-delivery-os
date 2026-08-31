@@ -29,6 +29,10 @@ type MerchantRow = {
   merchant_state: string | null
   ignorado_em: string | null
   ignorado_motivo: string | null
+  /** Quando o merchant apareceu pela primeira vez na lista do iFood. */
+  first_seen_at?: string | null
+  /** Dias de espera, contados no SERVIDOR — ver a nota em aba-ifood. */
+  diasEsperando?: number | null
 }
 type UnitOption = {
   id: string
@@ -306,6 +310,12 @@ export function MerchantsTable({
           if (!db) return -1
           return da.localeCompare(db, "pt-BR")
         }
+        /* DENTRO DO CLIENTE, QUEM ESPERA HÁ MAIS TEMPO VEM PRIMEIRO.
+           Era ordem alfabética, que trata igual uma loja parada há 35 dias e
+           uma que chegou hoje. O nome só desempata quando a data falta. */
+        const desde = (m: MerchantRow) =>
+          m.first_seen_at ? new Date(m.first_seen_at).getTime() : Infinity
+        if (desde(a) !== desde(b)) return desde(a) - desde(b)
         return (a.name ?? "").localeCompare(b.name ?? "", "pt-BR")
       })
     }
@@ -530,6 +540,15 @@ export function MerchantsTable({
                           identificado {PISTA[donoPorMerchant[m.id].via].txt}
                         </p>
                       )}
+                      {/* HÁ QUANTO TEMPO ESTÁ ESPERANDO.
+                          A loja autorizou o acesso e o dado dela não entra
+                          até alguém cadastrar a unidade. Sem este número as
+                          linhas pareciam todas iguais — a Hulk Burguer está
+                          parada desde 27/07 e ninguém tinha como saber olhando
+                          a tela. */}
+                      {!linked && !m.ignorado_em && (
+                        <Espera dias={m.diasEsperando ?? null} />
+                      )}
                     </div>
 
                     <div className="w-full min-w-0 sm:w-auto sm:min-w-[260px]">
@@ -605,5 +624,31 @@ export function MerchantsTable({
         )
       })}
     </div>
+  )
+}
+
+/**
+ * "Aguardando cadastro há N dias".
+ *
+ * Fica na linha do merchant sem unidade porque é o único lugar onde a espera
+ * é visível: a loja autorizou o acesso no iFood, o merchant aparece aqui, e
+ * o dado dela não entra até alguém cadastrar a unidade — o que é decisão do
+ * CLIENTE, não desta tela.
+ *
+ * A cor escala com o tempo: até uma semana é fila normal, acima de duas é
+ * alguém esperando há tempo demais.
+ */
+function Espera({ dias }: { dias: number | null }) {
+  if (dias === null || dias < 1) return null
+  const cor =
+    dias >= 14
+      ? "text-rose-600 dark:text-rose-400"
+      : dias >= 7
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-muted-foreground"
+  return (
+    <p className={`mt-0.5 text-[10px] font-medium ${cor}`}>
+      aguardando cadastro há {dias} dia{dias === 1 ? "" : "s"}
+    </p>
   )
 }
