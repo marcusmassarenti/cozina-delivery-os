@@ -13,11 +13,13 @@ import "server-only"
  * de deploy, e é reversível na mesma velocidade.
  */
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
-import { agruparSaude, type GrupoCliente } from "@/lib/data/saude-agrupada"
 import { contatosPorHolding } from "@/lib/data/contato-cliente"
 import { lojasEsperandoCadastro } from "@/lib/data/merchants-esperando"
 
-import { emailClienteIntegracao } from "./cliente-integracao"
+import {
+  emailClienteIntegracao,
+  type LojaSumidaAviso,
+} from "./cliente-integracao"
 import { enviarEmail } from "./enviar"
 
 const INTERNO = process.env.SAUDE_EMAIL ?? "marcus@massarenti.me"
@@ -32,77 +34,58 @@ export type ResultadoAviso = {
 
 export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
   const s = await diagnosticarIntegracoes()
-  const g = agruparSaude(s.lojas)
 
-  /* "Nunca trouxe dado" entra como CONTEXTO, não como gatilho.
+  /* ── SÓ CONEXÃO ────────────────────────────────────────────────────────
    *
-   * Ele conta no e-mail (o Marcus pediu, e é acionável: ou falta puxar a
-   * primeira vez, ou o cadastro tem uma plataforma a mais), mas não faz um
-   * e-mail existir sozinho. É estado permanente, e a régua da casa é que
-   * e-mail é pra coisa que MUDOU — senão o cliente de conta em teste, com uma
-   * marcação solta, receberia a mesma cobrança toda segunda pra sempre.
-   * Medido em 08/ago: seriam 3 clientes nessa situação, todos com 1 marcação.
-   * No painel ele aparece do mesmo jeito, no aviso semanal. */
-  const nuncaPorCliente = new Map<string, { semConexao: number; lojas: Set<string>; aguardando: number }>()
-  for (const l of s.lojas) {
-    if (l.gravidade === "ok" || l.ultimoPedido || l.ultimoFinanceiro) continue
-    const cur = nuncaPorCliente.get(l.cliente) ?? {
-      semConexao: 0,
-      lojas: new Set<string>(),
-      aguardando: 0,
-    }
-    if (l.conectada) cur.aguardando += 1
-    else {
-      cur.semConexao += 1
-      cur.lojas.add(l.unitId)
-    }
-    nuncaPorCliente.set(l.cliente, cur)
-  }
-
-  // O gatilho continua sendo o que a operação dele pode resolver hoje: loja
-  // que mandava dado e parou.
-  const porCliente = new Map<string, GrupoCliente>()
-  for (const grupo of [...g.pararamHoje, ...g.seguemParadas]) {
-    const cur = porCliente.get(grupo.cliente)
-    if (!cur) {
-      porCliente.set(grupo.cliente, { ...grupo, lojas: [...grupo.lojas] })
-      continue
-    }
-    cur.lojas.push(...grupo.lojas)
-    cur.piorDias = Math.max(cur.piorDias ?? 0, grupo.piorDias ?? 0)
-  }
-
-  /* LOJA ESPERANDO CADASTRO É GATILHO, diferente do "nunca trouxe dado".
+   * Este e-mail já foi "suas lojas pararam de mandar dados", e a prévia de
+   * 31/08 mostrou por que isso não podia sair: "os pedidos estão chegando
+   * normalmente, mas o faturamento parou em 27/08" é sintoma sem causa, e
+   * quem lê conclui — com razão — que o defeito é de quem escreveu. Cobrar o
+   * cliente por uma falha que pode ser nossa gasta a confiança que o canal
+   * existe pra construir.
    *
-   * A distinção é o que o cliente pode FAZER. "Plataforma marcada que nunca
-   * trouxe" é estado permanente e ambíguo — pode ser cadastro a mais — então
-   * entra como contexto e não faz e-mail existir sozinho. Aqui o lojista já
-   * aprovou a conexão no iFood, o dado está liberado do lado de lá, e falta
-   * um ato único e claro: cadastrar a unidade. Quatro lojas da DG FOODS
-   * estavam assim havia 34, 32, 31 e 27 dias, e o cliente não tinha como
-   * saber — a única tela que mostra isso é interna. */
+   * Ficam aqui as três pendências cuja causa é comprovadamente do lado dele
+   * e cuja ação também é dele. "Vendia e parou" e "o financeiro parou antes
+   * dos pedidos" seguem no relatório INTERNO, que é onde a gente investiga
+   * antes de acusar. */
   const esperandoPorCliente = await lojasEsperandoCadastro()
-  for (const [cliente, lista] of esperandoPorCliente) {
-    if (lista.length === 0 || porCliente.has(cliente)) continue
-    // Cliente que só tem esse problema também recebe: grupo sem lojas
-    // paradas, para o e-mail sair com o bloco de espera e mais nada.
-    porCliente.set(cliente, {
-      cliente,
-      lojas: [],
-      piorDias: null,
-    } as unknown as GrupoCliente)
+
+  const sumidasPorCliente = new Map<string, LojaSumidaAviso[]>()
+  for (const l of s.lojasSumidas) {
+    const lista = sumidasPorCliente.get(l.empresa) ?? []
+    lista.push({ nome: l.unitName, cnpj: l.cnpj, dias: l.dias })
+    sumidasPorCliente.set(l.empresa, lista)
   }
+
+  /* Plataforma marcada no cadastro sem integração ligada.
+   * Continua sendo CONTEXTO e não gatilho: é estado permanente e ambíguo
+   * (pode ser cadastro a mais), e cliente com uma marcação solta receberia a
+   * mesma cobrança toda segunda pra sempre. */
+  const semConexaoPorCliente = new Map<string, { plataformas: number; lojas: Set<string> }>()
+  for (const l of s.lojas) {
+    if (l.conectada) continue
+    const cur = semConexaoPorCliente.get(l.cliente) ?? {
+      plataformas: 0,
+      lojas: new Set<string>(),
+    }
+    cur.plataformas += 1
+    cur.lojas.add(l.unitId)
+    semConexaoPorCliente.set(l.cliente, cur)
+  }
+
+  // Gatilho: só quem tem loja esperando cadastro ou conexão caída.
+  const clientes = new Set<string>([
+    ...[...esperandoPorCliente].filter(([, l]) => l.length > 0).map(([c]) => c),
+    ...[...sumidasPorCliente].filter(([, l]) => l.length > 0).map(([c]) => c),
+  ])
 
   const falhas: string[] = []
   let enviados = 0
 
-  // O diagnóstico traz o cliente pelo NOME (é o que aparece na tela); o
-  // contato é indexado por id. Um mapa nome → contato resolve, e como nome de
-  // holding é único no cadastro, não há ambiguidade.
   const contatos = await contatosPorHolding()
   const porNome = new Map([...contatos.values()].map((c) => [c.nomeCliente, c]))
 
-  for (const [cliente, grupo] of porCliente) {
+  for (const cliente of clientes) {
     const contato = porNome.get(cliente)
     const holdingId = contato?.holdingId ?? null
     const destinoReal = contato?.email ?? null
@@ -112,19 +95,13 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
     const para = LIBERADO ? (destinoReal ?? INTERNO) : INTERNO
     const previaPara = LIBERADO ? undefined : (destinoReal ?? `${cliente} (sem admin cadastrado)`)
 
-    // A ordenação e o corte de volume moram no template — aqui só o conteúdo.
-    const nunca = nuncaPorCliente.get(cliente)
+    const sc = semConexaoPorCliente.get(cliente)
     const msg = emailClienteIntegracao(
-      grupo,
+      cliente,
       previaPara,
-      nunca
-        ? {
-            semConexao: nunca.semConexao,
-            lojas: nunca.lojas.size,
-            aguardando: nunca.aguardando,
-          }
-        : undefined,
       esperandoPorCliente.get(cliente) ?? [],
+      sumidasPorCliente.get(cliente) ?? [],
+      sc ? { plataformas: sc.plataformas, lojas: sc.lojas.size } : null,
     )
 
     const r = await enviarEmail({
@@ -133,8 +110,8 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
       para,
       assunto: previaPara ? `[prévia · ${cliente}] ${msg.assunto}` : msg.assunto,
       html: msg.html,
-      // `forcar` porque isto NÃO é régua de uma vez só: a mesma loja pode
-      // parar em semanas diferentes, e a trava de duplicidade engoliria da
+      // `forcar` porque isto NÃO é régua de uma vez só: a mesma conexão pode
+      // cair em semanas diferentes, e a trava de duplicidade engoliria da
       // segunda em diante — exatamente quando o problema virou recorrente.
       forcar: true,
     })
@@ -144,7 +121,7 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
 
   return {
     liberado: LIBERADO,
-    clientesComProblema: porCliente.size,
+    clientesComProblema: clientes.size,
     enviados,
     falhas,
   }

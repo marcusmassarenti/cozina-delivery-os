@@ -1,41 +1,43 @@
 import "server-only"
 
 /**
- * Aviso SEMANAL para o cliente: "sua loja parou de mandar dados".
+ * Aviso SEMANAL para o cliente: "sua CONEXÃO precisa de você".
  *
- * É o mesmo diagnóstico do relatório interno, escrito para quem não conhece a
- * máquina por dentro. As diferenças que importam:
+ * ── SÓ CONEXÃO, E ISSO MUDOU EM 31/08/26 ────────────────────────────────
+ * Este e-mail já foi "suas lojas pararam de mandar dados" e essa versão saiu
+ * do ar antes de chegar a cliente nenhum. A prévia mostrou o problema: a
+ * linha "os pedidos estão chegando normalmente, mas o faturamento parou em
+ * 27/08" descreve um SINTOMA sem causa — e quem lê conclui, com razão, que o
+ * defeito é do sistema que está escrevendo. Cobrar o cliente por uma falha
+ * que pode ser nossa gasta a confiança que o canal existe pra construir
+ * (Marcus).
  *
- *  • O interno é um painel de controle — placar, volume, rotinas. Este aqui
- *    responde três perguntas e só: qual loja, desde quando, o que eu faço.
- *  • O interno sai TODO dia, inclusive verde, porque silêncio ambíguo é o modo
- *    de falha dele. Este só sai quando há problema: e-mail semanal dizendo
- *    "está tudo bem" treina o cliente a arquivar sem ler, e aí o dia em que
- *    algo quebra ele arquiva também.
- *  • Nada de jargão nosso: "extrato", "cron", "sync" e "conciliação" não
- *    aparecem. O cliente entende "faturamento" e "relatório".
+ * Então entra AQUI só o que a causa é comprovadamente do lado dele e a ação
+ * é dele:
  *
- * ⚠️ Por decisão do Marcus (08/ago/26), nas duas primeiras semanas este e-mail
- * vai SÓ pra ele, com uma tarja dizendo pra quem iria. Estrear um e-mail
- * automático direto na caixa do cliente é o tipo de coisa que só dá pra
- * corrigir depois que já saiu.
+ *   1. loja que autorizou o acesso e não foi cadastrada;
+ *   2. loja que sumiu da lista do iFood — a autorização caiu e precisa ser
+ *      refeita no Portal do Parceiro;
+ *   3. plataforma marcada no cadastro sem integração ligada.
+ *
+ * "Vendia e parou" e "o financeiro parou antes dos pedidos" FICAM NO
+ * RELATÓRIO INTERNO. A causa pode ser nossa, e enquanto não soubermos qual é
+ * não é assunto pra caixa de entrada do cliente.
+ *
+ * As outras regras seguem valendo:
+ *  • Só sai quando há problema. E-mail semanal dizendo "está tudo bem" treina
+ *    o cliente a arquivar sem ler, e aí o dia em que algo quebra ele arquiva
+ *    junto.
+ *  • Nada de jargão: "extrato", "cron", "sync" e "conciliação" não aparecem.
+ *
+ * ⚠️ Por decisão do Marcus (08/ago/26), o disparo passa por `AVISO_CLIENTE_
+ * LIBERADO`: enquanto ela não for "1", tudo vai pro endereço interno com uma
+ * tarja dizendo pra quem iria.
  */
-import type { PlatformId } from "@/components/platform-logo"
-
-import type { GrupoCliente } from "@/lib/data/saude-agrupada"
 import type { LojaEsperando } from "@/lib/data/merchants-esperando"
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 const LARANJA = "#ff4d1c"
-
-const NOMES: Record<string, string> = {
-  ifood: "iFood",
-  "99food": "99 Food",
-  keeta: "Keeta",
-  cardapioweb: "Cardápio Web",
-}
-
-const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
 /**
  * Quantas lojas aparecem com nome antes de virar contagem.
@@ -48,235 +50,172 @@ const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
  */
 const TETO = 5
 
-function logos(plats: PlatformId[]): string {
-  return plats
-    .map(
-      (p) =>
-        `<img src="${SITE}/platforms/${p}.png" width="18" height="18" alt="${NOMES[p] ?? p}" style="display:inline-block;width:18px;height:18px;border-radius:4px;vertical-align:-4px;margin-right:4px;" />`,
-    )
-    .join("")
-}
 
-/**
- * Marcações de plataforma que NUNCA trouxeram dado.
- *
- * Não é a mesma coisa que "parou": aqui nunca começou. E a causa o sistema não
- * consegue deduzir — pode ser relatório que falta subir na primeira vez, ou
- * plataforma marcada no cadastro em que a loja nunca vendeu. Só o dono sabe,
- * então o texto pergunta em vez de acusar.
- */
-export type NuncaTrouxe = {
-  /** Marcações sem conexão nenhuma — dependem de uma ação do cliente. */
-  semConexao: number
-  /** Em quantas lojas distintas elas estão. */
-  lojas: number
-  /** Conectadas por API, primeira carga ainda vindo — não pedem nada. */
-  aguardando: number
+export type LojaSumidaAviso = {
+  nome: string
+  cnpj: string | null
+  dias: number
 }
 
 export function emailClienteIntegracao(
-  grupo: GrupoCliente,
+  cliente: string,
   /** Quando presente, o e-mail sai com a tarja de prévia interna. */
-  previaPara?: string,
-  nunca?: NuncaTrouxe,
-  /**
-   * Lojas que autorizaram o acesso no iFood e não têm unidade cadastrada.
-   *
-   * Bloco DESTE e-mail, e não um e-mail próprio: a pergunta é a mesma que o
-   * resto responde — "por que o dado da minha loja não está aparecendo?" — e
-   * um segundo e-mail semanal competiria com este pela mesma atenção. A
-   * diferença é que aqui a ação é do cliente e é uma só: cadastrar.
-   */
-  esperando: LojaEsperando[] = [],
+  previaPara: string | undefined,
+  /** Lojas que autorizaram o acesso e não foram cadastradas. */
+  esperando: LojaEsperando[],
+  /** Lojas cuja autorização caiu — sumiram da lista do iFood. */
+  sumidas: LojaSumidaAviso[],
+  /** Plataformas marcadas no cadastro sem integração ligada. */
+  semConexao: { plataformas: number; lojas: number } | null,
 ): { assunto: string; html: string } {
-  const n = grupo.lojas.length
-  /* O assunto tem que falar do que o e-mail é.
+  const totalAcoes =
+    esperando.length + sumidas.length + (semConexao?.plataformas ?? 0)
+
+  /* O assunto nomeia a AÇÃO, não o sintoma.
    *
-   * Quando o cliente NÃO tem loja parada e só tem loja esperando cadastro, o
-   * grupo chega vazio — e o assunto antigo produziria "0 das suas lojas estão
-   * sem dados", que é a frase que faz alguém marcar como spam. */
+   * "2 das suas lojas estão sem dados" descrevia o que aconteceu e deixava a
+   * causa em aberto — e causa em aberto num e-mail nosso é lida como culpa
+   * nossa. "Falta cadastrar" e "precisa reconectar" dizem o que fazer. */
   const assunto =
-    n === 0
+    esperando.length > 0 && sumidas.length === 0
       ? esperando.length === 1
-        ? `${esperando[0].nome} autorizou o acesso e falta cadastrar`
+        ? `${esperando[0].nome}: falta cadastrar a loja no Delivery OS`
         : `${esperando.length} lojas autorizaram o acesso e faltam cadastrar`
-      : n === 1
-        ? `Sua loja ${grupo.lojas[0].loja} está sem dados no Delivery OS`
-        : `${n} das suas lojas estão sem dados no Delivery OS`
+      : sumidas.length > 0 && esperando.length === 0
+        ? sumidas.length === 1
+          ? `${sumidas[0].nome}: a conexão com o iFood precisa ser refeita`
+          : `${sumidas.length} lojas precisam reconectar com o iFood`
+        : `${totalAcoes} conexões das suas lojas precisam de você`
 
-  // As mais antigas primeiro: parada há 12 dias é pior que parada há 2.
-  const ordenadas = [...grupo.lojas].sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0))
-  const mostra = ordenadas.slice(0, TETO)
-  const resto = ordenadas.length - mostra.length
-
-  const linhas = mostra
-    .map(
-      (l) => `
+  const cartao = (
+    titulo: string,
+    detalhe: string,
+    rodape: string,
+  ) => `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 10px;background:#fafafa;border-radius:10px;">
       <tr><td style="padding:14px 16px;">
-        <p style="margin:0 0 3px;font-size:15px;font-weight:700;color:#18181b;">
-          ${logos(l.plataformas)}${l.loja}
-        </p>
-        <p style="margin:0;font-size:13px;color:#71717a;">
-          ${
-            l.tipo === "nunca" || l.dias === null
-              ? "Ainda não recebemos nenhum dado desta loja."
-              : l.tipo === "financeiro"
-                ? // A loja está vendendo — o que não chegou foi o dinheiro
-                  // daquelas vendas. Dizer "parou" aqui assustaria à toa.
-                  `Os pedidos estão chegando normalmente, mas o faturamento parou em ${
-                    l.ultimoFinanceiro ? dm(l.ultimoFinanceiro) : "—"
-                  }${l.ultimoPedido ? `, e a loja vendeu até ${dm(l.ultimoPedido)}` : ""}. Os relatórios desses dias estão sem valor.`
-                : `Sem dados novos ${l.desde ? `desde ${dm(l.desde)}` : ""}${
-                    l.dias > 0 ? ` — ${l.dias} dia${l.dias === 1 ? "" : "s"}` : ""
-                  }${l.ultimoPedido ? `. O último pedido que chegou foi em ${dm(l.ultimoPedido)}.` : "."}`
-          }
-        </p>
+        <p style="margin:0 0 3px;font-size:15px;font-weight:700;color:#18181b;">${titulo}</p>
+        <p style="margin:0;font-size:13px;color:#71717a;">${detalhe}</p>
+        ${rodape ? `<p style="margin:6px 0 0;font-size:13px;color:#3f3f46;">${rodape}</p>` : ""}
       </td></tr>
-    </table>`,
-    )
-    .join("")
+    </table>`
+
+  const bloco = (
+    cor: { fundo: string; borda: string; titulo: string; texto: string },
+    titulo: string,
+    intro: string,
+    itens: string[],
+    resto: number,
+    acao: string,
+  ) => `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+      <tr><td style="background:${cor.fundo};border:1px solid ${cor.borda};border-radius:12px;padding:16px 18px;">
+        <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:${cor.titulo};">${titulo}</p>
+        <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:${cor.texto};">${intro}</p>
+        ${itens.join("")}
+        ${resto > 0 ? `<p style="margin:2px 0 10px;font-size:13px;color:${cor.texto};">E mais ${resto} — a lista completa está no painel.</p>` : ""}
+        <p style="margin:8px 0 0;padding-top:10px;border-top:1px solid ${cor.borda};font-size:14px;line-height:1.6;color:${cor.texto};">${acao}</p>
+      </td></tr>
+    </table>`
+
+  const blocoEsperando =
+    esperando.length === 0
+      ? ""
+      : bloco(
+          { fundo: "#fffbeb", borda: "#fcd34d", titulo: "#92400e", texto: "#78350f" },
+          esperando.length === 1
+            ? "1 loja autorizou o acesso e falta cadastrar"
+            : `${esperando.length} lojas autorizaram o acesso e faltam cadastrar`,
+          `${esperando.length === 1 ? "O lojista já aprovou" : "Os lojistas já aprovaram"} a conexão no iFood e o faturamento está liberado do lado deles. Só falta ${esperando.length === 1 ? "essa loja existir" : "essas lojas existirem"} no seu cadastro.`,
+          esperando
+            .slice(0, TETO)
+            .map((l) =>
+              cartao(
+                l.nome,
+                `${l.cnpj ? `${l.cnpj} · ` : ""}esperando há ${l.dias} dia${l.dias === 1 ? "" : "s"}`,
+                "",
+              ),
+            ),
+          Math.max(0, esperando.length - TETO),
+          `Cadastre ${esperando.length === 1 ? "a loja" : "as lojas"} em <strong>Unidades</strong>, com o mesmo CNPJ acima. A conexão já existe: assim que a unidade estiver lá, o histórico entra sozinho.`,
+        )
+
+  const blocoSumidas =
+    sumidas.length === 0
+      ? ""
+      : bloco(
+          { fundo: "#fef2f2", borda: "#fecaca", titulo: "#991b1b", texto: "#7f1d1d" },
+          sumidas.length === 1
+            ? "1 loja saiu da lista do iFood"
+            : `${sumidas.length} lojas saíram da lista do iFood`,
+          `A autorização que ${sumidas.length === 1 ? "essa loja deu" : "essas lojas deram"} não aparece mais para nós. Costuma ser o app removido nas permissões do Portal do Parceiro.`,
+          sumidas
+            .slice(0, TETO)
+            .map((l) =>
+              cartao(
+                l.nome,
+                `${l.cnpj ? `${l.cnpj} · ` : ""}sem aparecer há ${l.dias} dia${l.dias === 1 ? "" : "s"}`,
+                "",
+              ),
+            ),
+          Math.max(0, sumidas.length - TETO),
+          `No <strong>Portal do Parceiro do iFood</strong>, aba <strong>Permissões</strong>, confira se o Delivery OS ainda está autorizado. Se não estiver, autorizar de novo religa a entrada de dados sozinho.`,
+        )
+
+  const blocoSemConexao =
+    !semConexao || semConexao.plataformas === 0
+      ? ""
+      : bloco(
+          { fundo: "#f0f9ff", borda: "#bae6fd", titulo: "#075985", texto: "#0c4a6e" },
+          `${semConexao.plataformas} ${semConexao.plataformas === 1 ? "plataforma marcada" : "plataformas marcadas"} sem conexão ligada`,
+          `Em ${semConexao.lojas} ${semConexao.lojas === 1 ? "loja" : "lojas"} do seu cadastro. Isso costuma ser uma de duas coisas, e só você sabe qual:`,
+          [
+            `<p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:#0c4a6e;"><strong>1. A conexão nunca foi ligada.</strong> Dá pra fazer em <strong>Conexões</strong>, e leva menos de um minuto.</p>`,
+            `<p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:#0c4a6e;"><strong>2. A loja não vende nessa plataforma.</strong> Aí é o cadastro que está a mais — no painel, cada uma tem o botão <em>“não vendo nessa plataforma”</em>. Um clique tira a marcação e o aviso para de aparecer.</p>`,
+          ],
+          0,
+          `Enquanto a marcação existir sem conexão, essa plataforma aparece vazia nos seus relatórios.`,
+        )
 
   const html = `
-<div style="margin:0;padding:32px 12px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;margin:0 auto;">
-    ${
-      previaPara
-        ? `<tr><td style="background:#18181b;color:#fafafa;border-radius:12px;padding:12px 16px;font-size:12px;line-height:1.5;">
-             <strong>PRÉVIA INTERNA</strong> — este e-mail iria para <strong>${previaPara}</strong>.
-             Ninguém de fora recebeu. Ajuste o texto antes de liberar.
-           </td></tr><tr><td style="height:12px;"></td></tr>`
-        : ""
-    }
-    <tr><td style="background:#ffffff;border-radius:16px;padding:36px 32px;">
-
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;">
-        <tr>
-          <td style="padding-right:12px;">
-            <img src="${SITE}/deliveryos-icon.png" width="36" height="36" alt="Delivery OS"
-                 style="display:block;width:36px;height:36px;border-radius:9px;background:${LARANJA};" />
-          </td>
-          <td style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#71717a;text-transform:uppercase;">Delivery OS</td>
-        </tr>
-      </table>
-
-      <h1 style="margin:0 0 12px;font-size:23px;line-height:1.3;color:#18181b;font-weight:700;">
-        ${n === 1 ? "Uma loja sua parou de mandar dados" : `${n} lojas suas pararam de mandar dados`}
-      </h1>
-
-      <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#3f3f46;">
-        Enquanto isso, o faturamento, as taxas e as avaliações ${n === 1 ? "dessa loja" : "dessas lojas"}
-        não entram nos seus relatórios — e o mês aparece menor do que foi de verdade no seu painel.
-      </p>
-
-      ${linhas}
+  <div style="background:#f4f4f5;padding:28px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;">
       ${
-        resto > 0
-          ? `<p style="margin:2px 0 0;font-size:13px;color:#71717a;">
-               E mais <strong>${resto}</strong> ${resto === 1 ? "loja" : "lojas"} na mesma situação —
-               a lista completa está no painel.
-             </p>`
+        previaPara
+          ? `<tr><td style="background:#18181b;padding:10px 16px;font-size:12px;color:#fafafa;">
+               PRÉVIA INTERNA — este e-mail iria para <strong>${previaPara}</strong>
+             </td></tr>`
           : ""
       }
+      <tr><td style="padding:28px 26px 8px;">
+        <p style="margin:0 0 2px;font-size:12px;font-weight:700;letter-spacing:1.6px;color:#71717a;text-transform:uppercase;">Delivery OS</p>
+        <h1 style="margin:0 0 6px;font-size:22px;line-height:1.3;color:#18181b;">
+          ${totalAcoes === 1 ? "Uma conexão sua precisa de você" : "Suas conexões precisam de você"}
+        </h1>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3f3f46;">
+          ${cliente}, ${totalAcoes === 1 ? "há uma pendência" : `há ${totalAcoes} pendências`} que só você consegue resolver — ${totalAcoes === 1 ? "ela depende" : "elas dependem"} de um acesso ou de um cadastro do seu lado. Enquanto ${totalAcoes === 1 ? "isso não for feito" : "isso não for feito"}, ${totalAcoes === 1 ? "essa loja não aparece" : "essas lojas não aparecem"} nos seus relatórios.
+        </p>
 
-      ${
-        nunca && nunca.semConexao > 0
-          ? `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0 0;">
-        <tr><td style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:16px 18px;">
-          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#075985;">
-            E ${nunca.semConexao} ${nunca.semConexao === 1 ? "plataforma marcada" : "plataformas marcadas"} que nunca trouxe${nunca.semConexao === 1 ? "" : "ram"} dado
-          </p>
-          <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#0c4a6e;">
-            Em ${nunca.lojas} ${nunca.lojas === 1 ? "loja" : "lojas"} do seu cadastro. Isso costuma ser
-            uma de duas coisas, e só você sabe qual:
-          </p>
-          <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:#0c4a6e;">
-            <strong>1. Falta puxar pela primeira vez.</strong> Suba o relatório dessa plataforma em
-            <strong>Importação</strong> e o histórico entra de uma vez.
-          </p>
-          <p style="margin:0;font-size:14px;line-height:1.6;color:#0c4a6e;">
-            <strong>2. A loja nunca vendeu por ali.</strong> Aí é o cadastro que está a mais — no
-            painel, cada uma tem o botão <em>“não vendo nessa plataforma”</em>. Um clique tira a
-            marcação e o aviso para de aparecer.
-          </p>
-          ${
-            nunca.aguardando > 0
-              ? `<p style="margin:10px 0 0;padding-top:8px;border-top:1px solid #bae6fd;font-size:13px;color:#0369a1;">
-                   Outras ${nunca.aguardando} já estão conectadas e a primeira carga ainda está vindo —
-                   essas não precisam de nada da sua parte.
-                 </p>`
-              : ""
-          }
-        </td></tr>
-      </table>`
-          : ""
-      }
+        ${blocoEsperando}
+        ${blocoSumidas}
+        ${blocoSemConexao}
 
-      ${
-        esperando.length > 0
-          ? `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0 0;">
-        <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 18px;">
-          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#92400e;">
-            ${esperando.length === 1 ? "1 loja autorizou o acesso e falta cadastrar" : `${esperando.length} lojas autorizaram o acesso e faltam cadastrar`}
-          </p>
-          <p style="margin:0 0 10px;font-size:14px;line-height:1.6;color:#78350f;">
-            ${esperando.length === 1 ? "O lojista já aprovou" : "Os lojistas já aprovaram"} a conexão no iFood e o
-            faturamento está liberado do lado deles. Só falta ${esperando.length === 1 ? "essa loja existir" : "essas lojas existirem"}
-            no seu cadastro — enquanto isso, o dado ${esperando.length === 1 ? "dela" : "delas"} não entra.
-          </p>
-          ${esperando
-            .slice(0, TETO)
-            .map(
-              (l) => `
-          <p style="margin:0 0 6px;font-size:14px;color:#78350f;">
-            <strong>${l.nome}</strong>${l.cnpj ? ` <span style="color:#a16207;font-size:13px;">${l.cnpj}</span>` : ""}
-            <br/><span style="font-size:13px;color:#a16207;">esperando há ${l.dias} dia${l.dias === 1 ? "" : "s"}</span>
-          </p>`,
-            )
-            .join("")}
-          ${
-            esperando.length > TETO
-              ? `<p style="margin:6px 0 0;font-size:13px;color:#a16207;">E mais ${esperando.length - TETO} — a lista completa está no painel.</p>`
-              : ""
-          }
-          <p style="margin:10px 0 0;padding-top:8px;border-top:1px solid #fcd34d;font-size:14px;line-height:1.6;color:#78350f;">
-            Cadastre ${esperando.length === 1 ? "a loja" : "as lojas"} em <strong>Unidades</strong>, com o mesmo CNPJ acima.
-            A conexão já existe: assim que a unidade estiver lá, o histórico entra sozinho.
-          </p>
-        </td></tr>
-      </table>`
-          : ""
-      }
-
-      <p style="margin:22px 0 8px;font-size:15px;font-weight:700;color:#18181b;">Como resolver</p>
-      <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#3f3f46;">
-        <strong>Se a loja é conectada direto na plataforma:</strong> a autorização pode ter expirado.
-        Refaça a conexão na tela <strong>Conexões</strong> — leva menos de um minuto e o histórico
-        entra sozinho depois.
-      </p>
-      <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#3f3f46;">
-        <strong>Se você envia os relatórios manualmente:</strong> baixe o relatório no portal da
-        plataforma e suba em <strong>Importação</strong>. Os dias que faltam entram de uma vez.
-      </p>
-
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:26px 0 4px;">
-        <tr><td align="center">
-          <a href="${SITE}/conexoes" style="display:inline-block;background:${LARANJA};color:#ffffff;text-decoration:none;padding:14px 34px;border-radius:999px;font-size:15px;font-weight:700;">Resolver agora</a>
-        </td></tr>
-      </table>
-
-      <hr style="border:none;border-top:1px solid #e4e4e7;margin:26px 0 14px;" />
-      <p style="margin:0;font-size:12px;line-height:1.6;color:#a1a1aa;">
-        Uma vez por semana a gente confere se todas as suas lojas estão mandando dados.
-        Quando está tudo certo, este e-mail não sai — se ele chegou, é porque tem algo pra olhar.
-      </p>
-
-    </td></tr>
-    <tr><td align="center" style="padding:16px 0 0;font-size:12px;color:#a1a1aa;">Delivery OS</td></tr>
-  </table>
-</div>`.trim()
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0 4px;">
+          <tr><td align="center">
+            <a href="${SITE}/conexoes" style="display:inline-block;background:${LARANJA};color:#ffffff;text-decoration:none;padding:14px 34px;border-radius:999px;font-size:15px;font-weight:700;">Abrir Conexões</a>
+          </td></tr>
+        </table>
+        <p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#71717a;">
+          Ficou com dúvida em alguma? Responda este e-mail que a gente resolve junto.
+        </p>
+      </td></tr>
+      <tr><td style="padding:18px 26px 26px;border-top:1px solid #e4e4e7;">
+        <p style="margin:0;font-size:12px;color:#a1a1aa;">
+          Delivery OS · você recebe este aviso quando alguma conexão sua precisa de ação.
+        </p>
+      </td></tr>
+    </table>
+  </div>`
 
   return { assunto, html }
 }
