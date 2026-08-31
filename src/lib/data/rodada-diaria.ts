@@ -343,14 +343,44 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
    * A regra existia num módulo só (`unidades-inativas`) justamente pra não
    * divergir, e os quatro coletores do relatório eram as cópias que nunca a
    * receberam. */
+  /* ── LOJA QUE NUNCA TROUXE NADA NÃO ESTÁ ATRASADA ─────────────────────
+   *
+   * Ela ainda não começou. A Araraquara (Churrasco Royal) aparecia todo dia
+   * como "nunca fechou o extrato deste mês" e simplesmente não inaugurou; a
+   * data de inauguração dela diz 01/06/26 porque as 15 lojas entraram num
+   * cadastro em lote com a mesma data, então esse campo não serve de régua
+   * aqui (Marcus, 31/08/26).
+   *
+   * A régua que serve é a mesma que `lojas-sem-dado` já usa: só cobra quem
+   * JÁ TROUXE dado alguma vez. Medido hoje, ela separa exatamente o ruído do
+   * sinal — a Araraquara e a SUPER DOG (zero importações) saem, e a Varginha
+   * (25 importações e o extrato de agosto vazio) fica, que é o caso real.
+   *
+   * O dia em que a loja abrir e trouxer a primeira linha, ela passa a ser
+   * cobrada sozinha. */
   let fecharamHoje = 0
   const atrasadas: ExtratoAtrasado[] = []
-  for (const u of ((nomes ?? []) as {
+  /* Candidatas primeiro, pergunta depois.
+   *
+   * A primeira versão puxava `platform_imports` de TODAS as lojas conectadas
+   * pra montar o conjunto "já trouxe dado" — e o PostgREST corta em 1.000
+   * linhas sem avisar. Com 91 lojas e milhares de importações, o conjunto
+   * vinha pela metade, a Varginha caía fora dele e o alerta REAL dela sumia
+   * junto com o ruído. É o mesmo modo de falha do `fetchAllRows`: consulta
+   * parcial que se passa por resposta completa.
+   *
+   * As candidatas a atrasada são poucas (três hoje), então a pergunta é feita
+   * uma vez por candidata — barato e certo. */
+  type LojaDoExtrato = {
     id: string
     name: string
     brand_id: string
     active: boolean
-  }[]).filter((u) => u.active && !fora.has(u.id))) {
+  }
+  const candidatas: { u: LojaDoExtrato; ultimo: string | null }[] = []
+  for (const u of ((nomes ?? []) as LojaDoExtrato[]).filter(
+    (u) => u.active && !fora.has(u.id),
+  )) {
     const ultimo = ultimoExtrato.get(u.id) ?? null
     if (ultimo && diaDe(ultimo) === hoje) {
       fecharamHoje += 1
@@ -367,11 +397,44 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
           ? "atencao"
           : "ok"
     if (grav === "ok") continue
+    candidatas.push({ u, ultimo })
+  }
+
+  /* ── LOJA QUE NUNCA TROUXE NADA NÃO ESTÁ ATRASADA ─────────────────────
+   *
+   * Ela ainda não começou. A Araraquara (Churrasco Royal) aparecia todo dia
+   * como "nunca fechou o extrato deste mês" e simplesmente não inaugurou; a
+   * data de inauguração dela diz 01/06/26 porque as 15 lojas entraram num
+   * cadastro em lote com a mesma data, então esse campo não serve de régua
+   * (Marcus, 31/08/26).
+   *
+   * A régua que serve é a de `lojas-sem-dado`: só cobra quem JÁ TROUXE dado
+   * alguma vez. Medida hoje, separa o ruído do sinal — Araraquara e SUPER
+   * DOG (zero importações) saem, e a Varginha (25 importações, extrato de
+   * agosto vazio porque estava no merchant errado) fica.
+   *
+   * Quando a loja abrir e trouxer a primeira linha, passa a ser cobrada
+   * sozinha. */
+  for (const { u, ultimo } of candidatas) {
+    if (!ultimo) {
+      const { count } = await admin
+        .from("platform_imports")
+        .select("id", { count: "exact", head: true })
+        .eq("unit_id", u.id)
+        .gt("rows_imported", 0)
+      if ((count ?? 0) === 0) continue
+    }
+    const dias = ultimo ? diasEntre(ultimo, agora) : null
     atrasadas.push({
       cliente: nomeHolding.get(holdingDaBrand.get(u.brand_id) ?? "") ?? "—",
       loja: u.name,
       dias,
-      gravidade: grav,
+      gravidade:
+        dias === null || dias >= EXTRATO_ALERTA_D
+          ? "alerta"
+          : dias >= EXTRATO_ATENCAO_D
+            ? "atencao"
+            : "ok",
       desdeQuando: ultimo ? diaDe(ultimo) : null,
     })
   }
