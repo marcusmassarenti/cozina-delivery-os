@@ -794,6 +794,16 @@ function ResultSummary({ summary }: { summary: ImportSummary }) {
           <Stat label="Linhas (item·dia)" value={summary.itensCount} />
           <Stat label="Receita total" value={fmtBRL(summary.receitaTotal)} />
         </div>
+        {summary.duplicadas > 0 && (
+          // Silêncio aqui seria pior que o aviso: quem confere o relatório do
+          // 99 contra a tela precisa saber por que a contagem de linhas não
+          // bate com a do arquivo.
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {summary.duplicadas} linha{summary.duplicadas > 1 ? "s" : ""} com
+            item repetido no mesmo dia — receita e quantidade somadas, preço
+            médio recalculado.
+          </p>
+        )}
       </div>
     )
   }

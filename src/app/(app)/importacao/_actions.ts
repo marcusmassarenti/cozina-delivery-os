@@ -138,6 +138,8 @@ export type ImportSummary =
       storeId: string
       diasImportados: number
       itensCount: number
+      /** Linhas do arquivo com (dia, item) repetido, consolidadas na gravação. */
+      duplicadas: number
       periodoInicio: string // YYYY-MM-DD
       periodoFim: string // YYYY-MM-DD
       receitaTotal: number
@@ -2102,36 +2104,113 @@ async function saveNinefoodDadosItem(
     .single()
   if (ilErr) throw new Error(`Falha ao criar log: ${ilErr.message}`)
 
+  /**
+   * O MESMO NOME PODE VIR DUAS VEZES NO MESMO DIA.
+   *
+   * A tabela tem `unique (unit_id, data, nome_item)` e o parser assumia "1
+   * linha = 1 loja × 1 dia × 1 item". O export do 99 não traz ID de item, só
+   * o nome — e o cardápio permite o mesmo nome em categorias diferentes
+   * ("Coca-Cola 350ml" em Bebidas e em Combos). Aí a gravação estourava a
+   * constraint no meio (DG FOODS, Kawaii Poke, 30/08/26: morreu no chunk 2).
+   *
+   * Regra da consolidação, e os dois casos são diferentes de propósito:
+   *  - linhas IDÊNTICAS  → é repetição do relatório; fica uma só.
+   *  - linhas DIFERENTES → são duas entradas do cardápio com o mesmo nome;
+   *    soma o que é volume (receita, quantidade, alcance, carrinho) e
+   *    RECALCULA o que é média (preço, conversão). Somar médias inventaria
+   *    número; jogar uma fora perderia venda.
+   */
+  type Linha = {
+    unit_id: string
+    data: string
+    nome_item: string
+    receita: number
+    qtd_vendida: number
+    preco_medio: number
+    alcance: number
+    add_carrinho: number
+    conversao_pct: number | null
+    import_id: string
+  }
+  const rows: Linha[] = []
+  const porChave = new Map<string, Linha>()
+  let duplicadas = 0
+  for (const it of grupo.itens) {
+    const linha: Linha = {
+      unit_id: unit.unitId,
+      data: formatDateOnly(it.data),
+      nome_item: it.nomeItem,
+      receita: it.receita,
+      qtd_vendida: it.qtdVendida,
+      preco_medio: it.precoMedio,
+      alcance: it.alcance,
+      add_carrinho: it.addCarrinho,
+      conversao_pct: it.conversaoPct,
+      import_id: importLog.id,
+    }
+    const chave = `${linha.data}|${linha.nome_item}`
+    const antes = porChave.get(chave)
+    if (!antes) {
+      porChave.set(chave, linha)
+      rows.push(linha)
+      continue
+    }
+    duplicadas++
+    const identica =
+      antes.receita === linha.receita &&
+      antes.qtd_vendida === linha.qtd_vendida &&
+      antes.alcance === linha.alcance &&
+      antes.add_carrinho === linha.add_carrinho
+    if (identica) continue
+    antes.receita += linha.receita
+    antes.qtd_vendida += linha.qtd_vendida
+    antes.alcance += linha.alcance
+    antes.add_carrinho += linha.add_carrinho
+    antes.preco_medio =
+      antes.qtd_vendida > 0
+        ? Math.round((antes.receita / antes.qtd_vendida) * 100) / 100
+        : 0
+    antes.conversao_pct =
+      antes.alcance > 0
+        ? Math.round((antes.add_carrinho / antes.alcance) * 1000000) / 10000
+        : null
+  }
+
+  /**
+   * GRAVA ANTES DE APAGAR — a ordem inversa da anterior, e é o ponto todo.
+   *
+   * Antes: apagava as datas do arquivo e depois inseria em blocos de 500. Não
+   * há transação aqui, então o erro no chunk 2 deixou a Kawaii Poke com 500
+   * linhas e 16 dos 29 dias: o dado velho já tinha ido embora e o novo não
+   * entrou. Falha de importação não pode ser pior que não ter importado.
+   *
+   * Agora: upsert por (unit, data, nome), e só depois some o que sobrou de
+   * importações anteriores nessas mesmas datas — reconhecido pelo import_id,
+   * já que todas as linhas novas carregam o desta rodada. Se o upsert morrer
+   * no meio, nada foi apagado.
+   */
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK)
+    const { error } = await admin
+      .from("ninefood_daily_item")
+      .upsert(slice, { onConflict: "unit_id,data,nome_item" })
+    if (error) {
+      throw new Error(
+        `Falha ao gravar Dados do item (bloco ${i / CHUNK + 1} de ${Math.ceil(rows.length / CHUNK)}): ${error.message}`,
+      )
+    }
+  }
+
   if (substituido) {
+    // `import_id is null` entra na limpeza: linha de importação antiga, de
+    // antes de existir o log, também é resto.
     await admin
       .from("ninefood_daily_item")
       .delete()
       .eq("unit_id", unit.unitId)
       .in("data", isoDatas)
-  }
-
-  const rows = grupo.itens.map((it) => ({
-    unit_id: unit.unitId,
-    data: formatDateOnly(it.data),
-    nome_item: it.nomeItem,
-    receita: it.receita,
-    qtd_vendida: it.qtdVendida,
-    preco_medio: it.precoMedio,
-    alcance: it.alcance,
-    add_carrinho: it.addCarrinho,
-    conversao_pct: it.conversaoPct,
-    import_id: importLog.id,
-  }))
-
-  const CHUNK = 500
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const slice = rows.slice(i, i + CHUNK)
-    const { error } = await admin.from("ninefood_daily_item").insert(slice)
-    if (error) {
-      throw new Error(
-        `Falha ao gravar Dados do item (chunk ${i / CHUNK + 1}): ${error.message}`,
-      )
-    }
+      .or(`import_id.is.null,import_id.neq.${importLog.id}`)
   }
 
   const receitaTotal = grupo.itens.reduce((s, it) => s + it.receita, 0)
@@ -2142,7 +2221,8 @@ async function saveNinefoodDadosItem(
     unitName: unit.name,
     storeId: grupo.storeId,
     diasImportados: isoDatas.length,
-    itensCount: grupo.itens.length,
+    itensCount: rows.length,
+    duplicadas,
     periodoInicio: formatDateOnly(periodoInicio),
     periodoFim: formatDateOnly(periodoFim),
     receitaTotal,
