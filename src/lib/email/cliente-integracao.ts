@@ -23,6 +23,7 @@ import "server-only"
 import type { PlatformId } from "@/components/platform-logo"
 
 import type { GrupoCliente } from "@/lib/data/saude-agrupada"
+import type { LojaEsperando } from "@/lib/data/merchants-esperando"
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 const LARANJA = "#ff4d1c"
@@ -78,12 +79,30 @@ export function emailClienteIntegracao(
   /** Quando presente, o e-mail sai com a tarja de prévia interna. */
   previaPara?: string,
   nunca?: NuncaTrouxe,
+  /**
+   * Lojas que autorizaram o acesso no iFood e não têm unidade cadastrada.
+   *
+   * Bloco DESTE e-mail, e não um e-mail próprio: a pergunta é a mesma que o
+   * resto responde — "por que o dado da minha loja não está aparecendo?" — e
+   * um segundo e-mail semanal competiria com este pela mesma atenção. A
+   * diferença é que aqui a ação é do cliente e é uma só: cadastrar.
+   */
+  esperando: LojaEsperando[] = [],
 ): { assunto: string; html: string } {
   const n = grupo.lojas.length
+  /* O assunto tem que falar do que o e-mail é.
+   *
+   * Quando o cliente NÃO tem loja parada e só tem loja esperando cadastro, o
+   * grupo chega vazio — e o assunto antigo produziria "0 das suas lojas estão
+   * sem dados", que é a frase que faz alguém marcar como spam. */
   const assunto =
-    n === 1
-      ? `Sua loja ${grupo.lojas[0].loja} está sem dados no Delivery OS`
-      : `${n} das suas lojas estão sem dados no Delivery OS`
+    n === 0
+      ? esperando.length === 1
+        ? `${esperando[0].nome} autorizou o acesso e falta cadastrar`
+        : `${esperando.length} lojas autorizaram o acesso e faltam cadastrar`
+      : n === 1
+        ? `Sua loja ${grupo.lojas[0].loja} está sem dados no Delivery OS`
+        : `${n} das suas lojas estão sem dados no Delivery OS`
 
   // As mais antigas primeiro: parada há 12 dias é pior que parada há 2.
   const ordenadas = [...grupo.lojas].sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0))
@@ -189,6 +208,43 @@ export function emailClienteIntegracao(
                  </p>`
               : ""
           }
+        </td></tr>
+      </table>`
+          : ""
+      }
+
+      ${
+        esperando.length > 0
+          ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0 0;">
+        <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 18px;">
+          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#92400e;">
+            ${esperando.length === 1 ? "1 loja autorizou o acesso e falta cadastrar" : `${esperando.length} lojas autorizaram o acesso e faltam cadastrar`}
+          </p>
+          <p style="margin:0 0 10px;font-size:14px;line-height:1.6;color:#78350f;">
+            ${esperando.length === 1 ? "O lojista já aprovou" : "Os lojistas já aprovaram"} a conexão no iFood e o
+            faturamento está liberado do lado deles. Só falta ${esperando.length === 1 ? "essa loja existir" : "essas lojas existirem"}
+            no seu cadastro — enquanto isso, o dado ${esperando.length === 1 ? "dela" : "delas"} não entra.
+          </p>
+          ${esperando
+            .slice(0, TETO)
+            .map(
+              (l) => `
+          <p style="margin:0 0 6px;font-size:14px;color:#78350f;">
+            <strong>${l.nome}</strong>${l.cnpj ? ` <span style="color:#a16207;font-size:13px;">${l.cnpj}</span>` : ""}
+            <br/><span style="font-size:13px;color:#a16207;">esperando há ${l.dias} dia${l.dias === 1 ? "" : "s"}</span>
+          </p>`,
+            )
+            .join("")}
+          ${
+            esperando.length > TETO
+              ? `<p style="margin:6px 0 0;font-size:13px;color:#a16207;">E mais ${esperando.length - TETO} — a lista completa está no painel.</p>`
+              : ""
+          }
+          <p style="margin:10px 0 0;padding-top:8px;border-top:1px solid #fcd34d;font-size:14px;line-height:1.6;color:#78350f;">
+            Cadastre ${esperando.length === 1 ? "a loja" : "as lojas"} em <strong>Unidades</strong>, com o mesmo CNPJ acima.
+            A conexão já existe: assim que a unidade estiver lá, o histórico entra sozinho.
+          </p>
         </td></tr>
       </table>`
           : ""

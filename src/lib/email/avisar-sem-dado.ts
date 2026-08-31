@@ -15,6 +15,7 @@ import "server-only"
 import { diagnosticarIntegracoes } from "@/lib/data/saude-integracoes"
 import { agruparSaude, type GrupoCliente } from "@/lib/data/saude-agrupada"
 import { contatosPorHolding } from "@/lib/data/contato-cliente"
+import { lojasEsperandoCadastro } from "@/lib/data/merchants-esperando"
 
 import { emailClienteIntegracao } from "./cliente-integracao"
 import { enviarEmail } from "./enviar"
@@ -71,6 +72,27 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
     cur.piorDias = Math.max(cur.piorDias ?? 0, grupo.piorDias ?? 0)
   }
 
+  /* LOJA ESPERANDO CADASTRO É GATILHO, diferente do "nunca trouxe dado".
+   *
+   * A distinção é o que o cliente pode FAZER. "Plataforma marcada que nunca
+   * trouxe" é estado permanente e ambíguo — pode ser cadastro a mais — então
+   * entra como contexto e não faz e-mail existir sozinho. Aqui o lojista já
+   * aprovou a conexão no iFood, o dado está liberado do lado de lá, e falta
+   * um ato único e claro: cadastrar a unidade. Quatro lojas da DG FOODS
+   * estavam assim havia 34, 32, 31 e 27 dias, e o cliente não tinha como
+   * saber — a única tela que mostra isso é interna. */
+  const esperandoPorCliente = await lojasEsperandoCadastro()
+  for (const [cliente, lista] of esperandoPorCliente) {
+    if (lista.length === 0 || porCliente.has(cliente)) continue
+    // Cliente que só tem esse problema também recebe: grupo sem lojas
+    // paradas, para o e-mail sair com o bloco de espera e mais nada.
+    porCliente.set(cliente, {
+      cliente,
+      lojas: [],
+      piorDias: null,
+    } as unknown as GrupoCliente)
+  }
+
   const falhas: string[] = []
   let enviados = 0
 
@@ -102,6 +124,7 @@ export async function avisarClientesSemDado(): Promise<ResultadoAviso> {
             aguardando: nunca.aguardando,
           }
         : undefined,
+      esperandoPorCliente.get(cliente) ?? [],
     )
 
     const r = await enviarEmail({
