@@ -44,6 +44,47 @@ export type ExtratoAtrasado = {
   /** Dias desde a última vez que o extrato do mês corrente foi baixado. */
   dias: number | null
   gravidade: Gravidade
+  /**
+   * O que o CLIENTE perde: última data com dado financeiro.
+   *
+   * Sem isto as linhas pareciam todas iguais ("nunca fechou o extrato deste
+   * mês") e não dava pra separar quem conectou ontem de quem está cego há
+   * três semanas — que é a diferença entre "espera" e "liga agora".
+   */
+  desdeQuando: string | null
+}
+
+/**
+ * O dinheiro que o iFood repassa.
+ *
+ * Ganhou linha própria porque é a rotina cujo silêncio custa mais caro e a
+ * que menos aparece: o extrato pode entrar em dia e o repasse ficar parado,
+ * e aí o cliente vê venda que bate e conciliação que não fecha. Antes disso
+ * o relatório inteiro não tinha uma linha sobre repasse.
+ */
+export type RepasseDoDia = {
+  lojas: number
+  linhas: number
+  /** Dias desde o último sync bem-sucedido. `null` se nunca sincronizou. */
+  diasSemSync: number | null
+  gravidade: Gravidade
+}
+
+/**
+ * Loja que o sistema decidiu não sincronizar, e por quê.
+ *
+ * Some do relatório sem deixar rastro — e se um cliente for suspenso por
+ * engano, ninguém percebe pelo e-mail. Aqui ela reaparece como INFORMAÇÃO,
+ * não como alarme.
+ *
+ * ⚠️ A DEMO NÃO ENTRA. Ela não é cliente e não sincroniza de propósito;
+ * listá-la seria transformar dez linhas de configuração normal em ruído
+ * permanente (Marcus, 31/08/26).
+ */
+export type ForaDoSync = {
+  cliente: string
+  lojas: number
+  motivo: string
 }
 
 export type RodadaDiaria = {
@@ -60,6 +101,8 @@ export type RodadaDiaria = {
     /** Lojas atrasadas, da pior pra menos pior. */
     atrasadas: ExtratoAtrasado[]
   }
+  repasse: RepasseDoDia
+  foraDoSync: ForaDoSync[]
   gravidade: Gravidade
   motivo: string
 }
@@ -122,12 +165,6 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
     source_filename: string | null
   }
 
-  // A DEMO NÃO É CLIENTE — fora de qualquer relatório interno. As lojas dela
-  // são marcadas como conectadas por API de propósito (é o que se mostra na
-  // apresentação), então entravam no "86/86 iFood" e na lista de lojas que
-  // "nunca fecharam o extrato" — sendo que elas nem sincronizam.
-  const demo = await idsDeUnidadesDemo()
-
   const [{ data: recentesRaw }, { data: extratosRaw }, { data: conectadasRaw }] =
     await Promise.all([
       // Tudo que entrou nas últimas 24h — de qualquer plataforma, só via API.
@@ -159,11 +196,19 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
         .not("api_store_id", "is", null),
     ])
 
-  const foraDaDemo = <T extends { unit_id: string }>(xs: T[] | null) =>
-    (xs ?? []).filter((x) => !demo.has(x.unit_id))
-  const recentes = foraDaDemo(recentesRaw as { unit_id: string }[] | null)
-  const extratos = foraDaDemo(extratosRaw as { unit_id: string }[] | null)
-  const conectadas = foraDaDemo(conectadasRaw as { unit_id: string }[] | null)
+  /* ⚠️ A MESMA EXCLUSÃO DO RESTO DO RELATÓRIO, NÃO SÓ A DEMO.
+   *
+   * Este contador filtrava só a conta demo e o painel de integrações filtrava
+   * tudo que sai do sync — então o mesmo e-mail mostrava "88/91 iFood" no
+   * topo e "fechou em 88/96 lojas" no rodapé. Duas frações parecidas com
+   * denominadores diferentes, sem dizer que são bases diferentes, é como se
+   * produz desconfiança no relatório inteiro (Marcus, 31/08/26). */
+  const fora = await idsDeUnidadesForaDoSync()
+  const noSync = <T extends { unit_id: string }>(xs: T[] | null) =>
+    (xs ?? []).filter((x) => !fora.has(x.unit_id))
+  const recentes = noSync(recentesRaw as { unit_id: string }[] | null)
+  const extratos = noSync(extratosRaw as { unit_id: string }[] | null)
+  const conectadas = noSync(conectadasRaw as { unit_id: string }[] | null)
 
   // ── Volume por fonte ────────────────────────────────────────────────────
   // O extrato vem com report_type 'financeiro' e source 'report' (é um arquivo
@@ -213,7 +258,7 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
   for (const r of (recentes ?? []) as Imp[]) registrar(r)
   // O extrato vem com source='report' (é arquivo, não endpoint), então não
   // entrou no recorte acima — mas é a linha que mais importa aqui.
-  for (const r of foraDaDemo(recentesExtrato as { unit_id: string }[] | null) as unknown as {
+  for (const r of noSync(recentesExtrato as { unit_id: string }[] | null) as unknown as {
     unit_id: string
     ref_year: number | null
     ref_month: number | null
@@ -298,8 +343,6 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
    * A regra existia num módulo só (`unidades-inativas`) justamente pra não
    * divergir, e os quatro coletores do relatório eram as cópias que nunca a
    * receberam. */
-  const fora = await idsDeUnidadesForaDoSync()
-
   let fecharamHoje = 0
   const atrasadas: ExtratoAtrasado[] = []
   for (const u of ((nomes ?? []) as {
@@ -329,6 +372,7 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
       loja: u.name,
       dias,
       gravidade: grav,
+      desdeQuando: ultimo ? diaDe(ultimo) : null,
     })
   }
   atrasadas.sort((a, b) => (b.dias ?? 999) - (a.dias ?? 999))
@@ -370,9 +414,101 @@ export async function resumoDaRodada(): Promise<RodadaDiaria> {
       conectadas: idsConectadas.length,
       atrasadas,
     },
+    repasse: await repasseDoDia(agora, fora),
+    foraDoSync: await quemEstaForaDoSync(),
     gravidade,
     motivo,
   }
+}
+
+/** Dias sem sincronizar repasse antes de virar aviso e antes de virar alerta. */
+const REPASSE_ATENCAO_D = 2
+const REPASSE_ALERTA_D = 4
+
+/**
+ * O repasse do iFood — a rotina que o relatório não olhava.
+ *
+ * Extrato em dia e repasse parado é um estado possível e caro: o cliente vê
+ * a venda bater e a conciliação não fechar, e a resposta "seu dado está
+ * atualizado" fica tecnicamente certa e inútil.
+ */
+async function repasseDoDia(
+  agora: Date,
+  fora: Set<string>,
+): Promise<RepasseDoDia> {
+  const { data } = await createAdminClient()
+    .from("ifood_repasses")
+    .select("unit_id, synced_at")
+    .order("synced_at", { ascending: false })
+    .limit(5000)
+
+  const linhas = ((data ?? []) as { unit_id: string; synced_at: string }[])
+    .filter((r) => !fora.has(r.unit_id))
+  const ultimo = linhas[0]?.synced_at ?? null
+  const dias = ultimo ? diasEntre(ultimo, agora) : null
+
+  return {
+    lojas: new Set(linhas.map((r) => r.unit_id)).size,
+    linhas: linhas.length,
+    diasSemSync: dias,
+    gravidade:
+      dias === null || dias >= REPASSE_ALERTA_D
+        ? "alerta"
+        : dias >= REPASSE_ATENCAO_D
+          ? "atencao"
+          : "ok",
+  }
+}
+
+/**
+ * Quem está fora do sync, agrupado por cliente e com o motivo.
+ *
+ * ⚠️ SEM A DEMO. Ela não é cliente e não sincroniza de propósito — listá-la
+ * seria transformar dez linhas de configuração normal em ruído permanente, e
+ * ruído permanente é o que faz a pessoa parar de ler a seção.
+ *
+ * O resto entra porque some do relatório sem deixar rastro: se um cliente
+ * for suspenso por engano, hoje ninguém percebe pelo e-mail.
+ */
+async function quemEstaForaDoSync(): Promise<ForaDoSync[]> {
+  const admin = createAdminClient()
+  const [fora, demo] = await Promise.all([
+    idsDeUnidadesForaDoSync(),
+    idsDeUnidadesDemo(),
+  ])
+  const alvo = [...fora].filter((id) => !demo.has(id))
+  if (alvo.length === 0) return []
+
+  const { data } = await admin
+    .from("units")
+    .select("id, active, brands!inner(holdings!inner(id, name, suspend_on, paid))")
+    .in("id", alvo)
+
+  const porCliente = new Map<string, { lojas: number; motivo: string }>()
+  for (const u of (data ?? []) as unknown as {
+    id: string
+    active: boolean
+    brands: { holdings: { name: string; suspend_on: string | null; paid: boolean } }
+  }[]) {
+    const h = u.brands.holdings
+    /* A loja desativada no cadastro tem motivo PRÓPRIO, mesmo num cliente
+       suspenso: são decisões diferentes e quem lê precisa saber qual desfazer. */
+    const motivo = !u.active
+      ? "desativada no cadastro"
+      : h.suspend_on && !h.paid
+        ? `assinatura suspensa desde ${h.suspend_on.slice(8, 10)}/${h.suspend_on.slice(5, 7)}`
+        : "fora do sync"
+    const chave = `${h.name}||${motivo}`
+    const atual = porCliente.get(chave) ?? { lojas: 0, motivo }
+    atual.lojas += 1
+    porCliente.set(chave, atual)
+  }
+
+  return [...porCliente].map(([chave, v]) => ({
+    cliente: chave.split("||")[0],
+    lojas: v.lojas,
+    motivo: v.motivo,
+  }))
 }
 
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000"

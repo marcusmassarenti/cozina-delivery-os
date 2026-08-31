@@ -316,7 +316,7 @@ function blocoRodada(rd: RodadaDiaria): string {
       <p style="margin:12px 0 0;padding-top:10px;border-top:1px solid rgba(0,0,0,.07);font-size:13px;color:#3f3f46;">
         <strong>Extrato de ${mesLabel}:</strong> fechou em
         <strong style="color:${extratoOk ? COR.ok.texto : COR.atencao.texto};">${rd.extrato.fecharamHoje}/${rd.extrato.conectadas}</strong>
-        lojas hoje.
+        das lojas com iFood conectado hoje.
         ${
           extratoOk
             ? "Todas as conectadas em dia."
@@ -329,6 +329,70 @@ function blocoRodada(rd: RodadaDiaria): string {
               : `<strong style="color:${COR.atencao.texto};">${rd.extrato.atrasadas.length}</strong> com atraso de 2+ dias (listadas acima).`
         }
       </p>
+      ${linhaRepasse(rd.repasse)}
+    </td></tr>
+  </table>`
+}
+
+/**
+ * O repasse do iFood.
+ *
+ * Colado no veredito do extrato de propósito: são as duas rotinas de
+ * DINHEIRO, e é possível uma estar em dia e a outra parada — caso em que o
+ * cliente vê a venda bater e a conciliação não fechar, e "seu dado está
+ * atualizado" fica tecnicamente certo e inútil.
+ */
+function linhaRepasse(r: RodadaDiaria["repasse"]): string {
+  const cor =
+    r.gravidade === "ok"
+      ? COR.ok.texto
+      : r.gravidade === "atencao"
+        ? COR.atencao.texto
+        : COR.alerta.texto
+  const quando =
+    r.diasSemSync === null
+      ? "nunca sincronizou"
+      : r.diasSemSync === 0
+        ? "sincronizou hoje"
+        : `último sync há ${r.diasSemSync} dia${r.diasSemSync === 1 ? "" : "s"}`
+  return `<p style="margin:8px 0 0;font-size:13px;color:#3f3f46;">
+    <strong>Repasse do iFood:</strong>
+    <strong style="color:${cor};">${quando}</strong>${
+      r.lojas > 0
+        ? ` — ${r.linhas.toLocaleString("pt-BR")} linhas em ${r.lojas} lojas.`
+        : "."
+    }
+  </p>`
+}
+
+/**
+ * Quem está fora do sync — INFORMAÇÃO, não alarme.
+ *
+ * Cinza e no fim do e-mail de propósito: não é problema a resolver, é estado
+ * a conferir. Loja fora do sync some do relatório sem deixar rastro, e
+ * cliente suspenso por engano hoje não aparece em lugar nenhum.
+ *
+ * ⚠️ A DEMO NÃO ENTRA — ver a nota em rodada-diaria. Dez linhas de
+ * configuração normal todo dia é ruído permanente, e ruído permanente é o
+ * que faz a pessoa parar de ler a seção.
+ */
+function blocoForaDoSync(lista: RodadaDiaria["foraDoSync"]): string {
+  if (lista.length === 0) return ""
+  const linhas = lista
+    .map(
+      (f) =>
+        `<tr><td style="padding:5px 0;font-size:13px;color:#3f3f46;">${f.cliente}` +
+        `<span style="color:#71717a;"> — ${f.motivo}</span></td>` +
+        `<td align="right" style="padding:5px 0;font-size:13px;color:#3f3f46;white-space:nowrap;">${f.lojas} loja${f.lojas === 1 ? "" : "s"}</td></tr>`,
+    )
+    .join("")
+  const total = lista.reduce((s2, f) => s2 + f.lojas, 0)
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:#fafafa;border-left:4px solid #d4d4d8;border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#52525b;">Fora do sync</p>
+      <p style="margin:0 0 10px;font-size:13px;color:#71717a;">${total} loja${total === 1 ? "" : "s"} que o sistema não sincroniza — de propósito. Não entram em nenhum número acima.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid rgba(0,0,0,.07);">${linhas}</table>
     </td></tr>
   </table>`
 }
@@ -491,9 +555,18 @@ export function emailSaude(
     rodada?.extrato.atrasadas.filter((a) => a.gravidade === "atencao") ?? []
   const linhaExtrato = (a: NonNullable<typeof rodada>["extrato"]["atrasadas"][number]) =>
     `<strong>${a.cliente} · ${a.loja}</strong> <span style="font-size:12px;color:#71717a;">(extrato do mês)</span><br/>${
+      /* O que o CLIENTE perde, e sem repetir a informação.
+         Sem a data as linhas pareciam todas iguais e não dava pra separar
+         quem conectou ontem de quem está cego há três semanas — a diferença
+         entre esperar e ligar agora. Mas quando a loja NUNCA fechou, dizer
+         "nenhum dado entrou ainda" logo depois é a mesma frase duas vezes. */
       a.dias === null
-        ? "nunca fechou o extrato deste mês"
-        : `sem fechar há ${a.dias} dia${a.dias === 1 ? "" : "s"}`
+        ? "nenhum dado financeiro deste mês entrou ainda"
+        : `sem fechar há ${a.dias} dia${a.dias === 1 ? "" : "s"}${
+            a.desdeQuando
+              ? ` — o financeiro dela está parado em ${a.desdeQuando.slice(8, 10)}/${a.desdeQuando.slice(5, 7)}`
+              : ""
+          }`
     }`
 
   /* O assunto carrega o veredito inteiro. É a única linha que você é obrigado
@@ -603,6 +676,8 @@ export function emailSaude(
             ])
           : ""
       }
+
+      ${rodada ? blocoForaDoSync(rodada.foraDoSync) : ""}
 
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:26px 0 4px;">
         <tr><td align="center">
