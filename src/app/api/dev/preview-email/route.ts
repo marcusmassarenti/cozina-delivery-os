@@ -75,7 +75,11 @@ export async function GET(req: Request) {
       medirInfra().catch(() => null),
       estadoDoPipeline(),
     ])
-    const m = emailSaude(s2, conferencia, rodada, g, infra)
+    // A prévia mostra o e-mail INTEIRO — inclusive os blocos novos, senão ela
+    // deixa de servir pra revisar o que sai.
+    const { merchantsIrmaos } = await import("@/lib/data/merchants-irmaos")
+    const irmaos = await merchantsIrmaos().catch(() => [])
+    const m = emailSaude(s2, conferencia, rodada, g, infra, [], irmaos)
     const aviso = estado.concluido
       ? ""
       : `<div style="padding:10px 14px;background:#fff7ed;border-left:3px solid #ff4d1c;font:600 13px system-ui;color:#7c2d12;">

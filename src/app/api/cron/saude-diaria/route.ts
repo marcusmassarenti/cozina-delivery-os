@@ -27,6 +27,7 @@ import { enviarEmail } from "@/lib/email/enviar"
 import { registrarCron } from "@/lib/cron/registrar"
 import { medirInfra, type InfraMetricas } from "@/lib/data/infra-metricas"
 import { estadoDoPipeline, saudeJaSaiuHoje } from "@/lib/data/pipeline-do-dia"
+import { merchantsIrmaos } from "@/lib/data/merchants-irmaos"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -145,7 +146,14 @@ export async function GET(req: Request) {
      * acionável, depois decide se ela vai pra fora. Foi assim com a régua de
      * "loja sem dado", e foi por isso que ela nasceu confiável. */
     const quedas = await alertasDeVenda()
-    const msg = emailSaude(s, conferencia, rodada, g, infra, quedas)
+    /* Cadastro irmão no iFood — a checagem que teria poupado nove dias na
+       Varginha. Falha aqui não pode derrubar o relatório: é conferência, não
+       diagnóstico. */
+    const irmaos = await merchantsIrmaos().catch((e) => {
+      console.error("merchantsIrmaos:", e)
+      return []
+    })
+    const msg = emailSaude(s, conferencia, rodada, g, infra, quedas, irmaos)
 
     // Quem lê precisa saber que está vendo um retrato parcial — senão vai
     // tratar "faltam 12 lojas" como problema, quando é só a fila do iFood

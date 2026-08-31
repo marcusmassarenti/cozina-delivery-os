@@ -17,10 +17,15 @@ import type {
   SaudeIntegracoes,
 } from "@/lib/data/saude-integracoes"
 import type { RodadaDiaria } from "@/lib/data/rodada-diaria"
+import type { GrupoIrmaos } from "@/lib/data/merchants-irmaos"
 import type { LojaAgrupada, SaudeAgrupada } from "@/lib/data/saude-agrupada"
 import type { PlatformId } from "@/components/platform-logo"
 import { fmtBytes, type InfraMetricas } from "@/lib/data/infra-metricas"
 import { rotulo } from "@/lib/cron-labels"
+
+/** R$ curto pro corpo do e-mail — Intl direto, sem depender do lib de tela. */
+const brl = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.deliveryos.food"
 const LARANJA = "#ff4d1c"
@@ -397,6 +402,45 @@ function blocoForaDoSync(lista: RodadaDiaria["foraDoSync"]): string {
   </table>`
 }
 
+/**
+ * Cadastro irmão no iFood — alerta de CONFERÊNCIA, não de erro.
+ *
+ * A Varginha passou nove dias vinculada ao cadastro errado da mesma empresa:
+ * "Churrasco Royal - Carnes Bbq e Comida" em vez de "...Comida Brasileira",
+ * ambos CLUBE DA GASTRONOMIA LTDA em VARGINHA/MG. O sistema mostrava R$ 93,98
+ * numa loja que fez R$ 16.911,60, e o único alerta que existia dizia "nunca
+ * fechou o extrato" — que se lê como falha de sincronização, não como vínculo
+ * trocado.
+ *
+ * O faturamento do vinculado vai junto porque é ELE que decide: com R$ 16 mil
+ * e 267 pedidos está claramente certo; com R$ 94 e 1 pedido, claramente não.
+ * Duas lojas da mesma empresa na mesma cidade existem de verdade — por isso o
+ * texto pede pra conferir em vez de acusar.
+ */
+function blocoIrmaos(lista: GrupoIrmaos[]): string {
+  if (lista.length === 0) return ""
+  const linhas = lista
+    .map((g) => {
+      const v = g.vinculado!
+      const magro = v.pedidosDoMes < 10
+      return `<tr><td style="padding:8px 0;border-top:1px solid rgba(0,0,0,.07);font-size:13px;color:#3f3f46;">
+        <strong>${v.cliente} · ${v.loja}</strong>
+        <span style="font-size:12px;color:#71717a;">(${g.cidade})</span><br/>
+        Vinculada a “${v.merchantNome}” — <strong style="color:${magro ? COR.alerta.texto : COR.ok.texto};">${brl(v.brutoDoMes)} e ${v.pedidosDoMes} pedidos</strong> neste mês.<br/>
+        <span style="color:#71717a;">Mesma razão social e cidade de ${g.soltos.length === 1 ? "outro cadastro" : `outros ${g.soltos.length} cadastros`} sem vínculo: ${g.soltos.map((s) => `“${s.nome}”`).join(", ")}.</span>
+      </td></tr>`
+    })
+    .join("")
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;">
+    <tr><td style="background:${COR.atencao.fundo};border-left:4px solid ${COR.atencao.borda};border-radius:0 8px 8px 0;padding:16px 18px;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:${COR.atencao.texto};">Cadastro irmão no iFood — vale conferir</p>
+      <p style="margin:0 0 6px;font-size:13px;color:#3f3f46;">A mesma empresa tem mais de um cadastro na mesma cidade e nem todos estão vinculados. Se o faturamento abaixo parecer baixo demais pra loja, o vínculo pode estar no cadastro errado.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${linhas}</table>
+    </td></tr>
+  </table>`
+}
+
 /** Uma linha da conferência API × planilha (só as que divergem em dia). */
 export type ConferenciaResumo = {
   clienteNome: string
@@ -515,6 +559,14 @@ export function emailSaude(
    * cima são problema NOSSO e esta é problema do CLIENTE.
    */
   quedas: AlertaVenda[] = [],
+  /**
+   * Lojas vinculadas a um merchant que tem IRMÃO solto no iFood.
+   *
+   * Vai neste e-mail e não no do cliente porque é conferência nossa: a
+   * pergunta é "o vínculo está no cadastro certo?", e quem responde tem que
+   * olhar o Portal do Parceiro.
+   */
+  irmaos: GrupoIrmaos[] = [],
 ): { assunto: string; html: string } {
   const r = s.resumo
   const cronsRuins = s.crons.filter((c) => c.gravidade === "alerta")
@@ -676,6 +728,8 @@ export function emailSaude(
             ])
           : ""
       }
+
+      ${blocoIrmaos(irmaos)}
 
       ${rodada ? blocoForaDoSync(rodada.foraDoSync) : ""}
 
