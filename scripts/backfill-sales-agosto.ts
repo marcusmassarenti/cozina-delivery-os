@@ -21,9 +21,15 @@ async function main() {
     .eq("platform", "ifood")
     .eq("active", true)
     .not("api_store_id", "is", null)
-  const lojas = (links ?? [])
-    .filter((l: any) => l.units?.active)
-    .map((l: any) => ({ unitId: l.unit_id, mid: l.api_store_id, nome: l.units.name }))
+  type Link = {
+    unit_id: string
+    api_store_id: string
+    units: { name: string; active: boolean } | null
+  }
+  type LinkAtivo = Link & { units: { name: string; active: boolean } }
+  const lojas = ((links ?? []) as unknown as Link[])
+    .filter((l): l is LinkAtivo => l.units?.active === true)
+    .map((l) => ({ unitId: l.unit_id, mid: l.api_store_id, nome: l.units.name }))
   console.log(`lojas: ${lojas.length} — competência ${COMPETENCIA}`)
 
   let okCount = 0, errCount = 0, totalGravados = 0

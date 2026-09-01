@@ -19,7 +19,8 @@ async function main() {
   const fin = await getFinanceiroResumoByUnits(ids, YEAR, MONTH)
   const monthly = await getRealMonthlyForUnits(ids, YEAR, MONTH)
 
-  let iguais = 0, difs: string[] = [], comEntrega = 0, semEntrega = 0
+  let iguais = 0, comEntrega = 0, semEntrega = 0
+  const difs: string[] = []
   let somaAgg = 0, somaRegua = 0
   for (const u of all) {
     const f = fin.get(u.id)
