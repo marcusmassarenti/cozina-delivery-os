@@ -18,14 +18,22 @@ const brl = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDi
 
 async function main() {
   const sb = createAdminClient()
-  const { data: hs } = await sb.from("holdings").select("id, nome")
+  const { data: hs, error: erroHoldings } = await sb
+    .from("holdings")
+    .select("id, name")
+  // A consulta pedia "nome" e a coluna é `name`. O PostgREST devolvia erro, o
+  // código lia só `data` (null) e seguia: o mapa nascia vazio e TODA loja caía
+  // em "(sem holding)" — o relatório inteiro virava uma linha só, sem nada
+  // indicando que a causa era a consulta. Erro calado num diagnóstico é pior
+  // que num recurso: aqui o número errado é o produto.
+  if (erroHoldings) throw new Error(`holdings: ${erroHoldings.message}`)
   const { data: us } = await sb.from("units").select("id, code, name, brand_id, active")
   const { data: bs } = await sb.from("brands").select("id, holding_id")
   type Brand = { id: string; holding_id: string }
-  type Holding = { id: string; nome: string | null }
+  type Holding = { id: string; name: string | null }
   type Unit = { id: string; code: string; name: string; brand_id: string; active: boolean }
   const holdingDaBrand = new Map(((bs ?? []) as Brand[]).map((b) => [b.id, b.holding_id]))
-  const nomeHolding = new Map(((hs ?? []) as Holding[]).map((h) => [h.id, h.nome]))
+  const nomeHolding = new Map(((hs ?? []) as Holding[]).map((h) => [h.id, h.name]))
   const units = ((us ?? []) as Unit[]).filter((u) => u.active)
   const ids = units.map((u) => u.id)
 
