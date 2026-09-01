@@ -166,8 +166,20 @@ async function getDeliveryFeeByUnitsPaginated(
       return q.order("id").range(a, b)
     },
   )
+  // Soma COM SINAL (e nega no fim), n\u00E3o `Math.abs` linha a linha.
+  //
+  // O cancelamento estorna a taxa numa linha POSITIVA de mesmo valor. Com
+  // `abs()` em cada linha, o -8,99 da venda e o +8,99 do estorno viravam
+  // 17,98 em vez de zero: o pedido cancelado entrava no custo EM DOBRO.
+  // Medido em ago/26 \u2014 R$ 4.761,73 de custo de entrega inventado na rede,
+  // R$ 1.921,93 s\u00F3 no Churrasco no Pote (R$ 79.326,88 exibidos contra
+  // R$ 77.394,96 reais).
+  //
+  // Somar com sinal resolve os dois casos de uma vez e sem join: cancelamento
+  // total se anula, e cancelamento PARCIAL abate a parte devolvida \u2014 que
+  // um filtro por `fato_gerador = 'Venda'` deixaria passar.
   for (const r of ifood) {
-    ensure(r.unit_id).ifood += Math.abs(Number(r.valor) || 0)
+    ensure(r.unit_id).ifood -= Number(r.valor) || 0
   }
 
   // 99 Food: custo logístico + frete grátis bancado pela loja.
