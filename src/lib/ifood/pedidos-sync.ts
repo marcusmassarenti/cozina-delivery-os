@@ -21,6 +21,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { syncSalesDaLoja } from "./sales-sync"
 
 import {
   fetchAllFinancialEvents,
@@ -175,7 +176,7 @@ function paraLinha(unitId: string, p: PedidoAgregado) {
  * sync precisa ser corrigida logo depois. E a linha que TEM import_id veio de
  * planilha — essa fica como está, senão a origem do dado vira ficção.
  */
-async function marcarOrigemApi(unitId: string, pedidoIds: string[]) {
+export async function marcarOrigemApi(unitId: string, pedidoIds: string[]) {
   if (pedidoIds.length === 0) return
   await createAdminClient()
     .from("ifood_pedidos")
@@ -226,6 +227,10 @@ export type PedidosSyncCompetencia = {
   pedidos: number
   gravados: number
   erro?: string
+  /** Pedidos gravados pelo endpoint de VENDAS (sales) — frete, itens, status. */
+  vendasSales?: number
+  /** Erro do sales (não-fatal: os events desta competência já valeram). */
+  salesErro?: string
 }
 
 /**
@@ -288,12 +293,30 @@ export async function syncPedidosDaLoja(
     gravados += lote.length
   }
 
+  // Vendas (endpoint sales): traz o que os events não têm — valor dos itens,
+  // FRETE do cliente, taxa de serviço, quem entrega, status. É o que fecha o
+  // "Valor das vendas" do portal nas lojas de entrega própria sem depender
+  // da planilha (ver src/lib/ifood/sales-sync.ts). Falha aqui NÃO derruba o
+  // sync de pagamentos — o dado dos events já está gravado e vale sozinho —
+  // mas viaja no resultado pra aparecer no log do cron, não pra sumir.
+  let vendasSales = 0
+  let salesErro: string | undefined
+  try {
+    const sv = await syncSalesDaLoja(unitId, merchantId, competencia)
+    vendasSales = sv.gravados
+    if (!sv.ok) salesErro = sv.erro
+  } catch (e) {
+    salesErro = e instanceof Error ? e.message : String(e)
+  }
+
   return {
     competencia,
     ok: true,
     eventos: eventos.length,
     pedidos: pedidos.length,
     gravados,
+    vendasSales,
+    salesErro,
   }
 }
 
