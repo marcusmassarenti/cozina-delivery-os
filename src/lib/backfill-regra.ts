@@ -59,8 +59,14 @@ export function mesesDoBackfill(
   let inicio = new Date(BACKFILL_DESDE.year, BACKFILL_DESDE.month - 1, 1)
 
   if (plataforma === "99food") {
-    // Teto medido, não suposto: antes de junho/26 a API devolve erro.
-    const limite99 = new Date(2026, 5, 1)
+    // Teto MÓVEL, não fixo. A Bill API aceita ~3 meses corridos pra trás
+    // ("errno 110004: Query period exceeds limit. You can query up to 3
+    // months of data"). A versão anterior fixava junho/26 — medição de
+    // agosto, correta EM agosto — e apodreceu em 01/09/26: junho saiu da
+    // janela, o backfill das lojas novas do Le Brunch bateu 110004 pra
+    // sempre e a fila travou nas mesmas 2 lojas (head-of-line de novo).
+    // Janela = mês corrente + 2 anteriores, que é o que a API entrega hoje.
+    const limite99 = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
     if (limite99 > inicio) inicio = limite99
   }
   if (plataforma === "cardapioweb" && conectadaEm) {
