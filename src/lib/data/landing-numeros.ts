@@ -174,17 +174,49 @@ export async function recalcularLandingNumeros(): Promise<LandingNumeros> {
   /** Bruto e deduções POR LOJA — a mediana e o p90 saem daqui. */
   const porLoja = new Map<string, { bruto: number; tira: number }>()
   let brutoIfood = 0
+  // Lojas em LOTES de 40 por chamada. A rede inteira numa RPC só encostou no
+  // statement_timeout de 8s do Supabase (que o service_role não sobrescreve):
+  // em 01/09/26 o recálculo falhou em 2026-8 e a landing congelou no snapshot
+  // da véspera — exatamente o "número velho vendendo menos em silêncio" que
+  // este arquivo existe pra evitar. Lote de 40 fica em ~1-2s por chamada,
+  // longe do penhasco, e o total de chamadas continua pequeno (3-4 por mês).
+  const LOTE = 40
+  const lotes: string[][] = []
+  for (let i = 0; i < ids.length; i += LOTE) lotes.push(ids.slice(i, i + LOTE))
   for (const c of competencias) {
-    const { data, error } = await admin.rpc(
-      "ifood_financeiro_resumo_by_units",
-      {
-        p_unit_ids: ids,
+    const data: Record<string, unknown>[] = []
+    // Frete da ENTREGA PRÓPRIA por loja — a régua do portal (bruto = cesta +
+    // frete próprio, ver src/lib/ifood-bruto.ts). A landing somava o `bruto`
+    // cru da RPC e ficava ~R$ 685 mil abaixo do que as telas do produto
+    // mostram — era a ÚLTIMA cópia sem a régua (01/09/26).
+    const freteByUnit = new Map<string, number>()
+    let error: { message: string } | null = null
+    for (const lote of lotes) {
+      const r = await admin.rpc("ifood_financeiro_resumo_by_units", {
+        p_unit_ids: lote,
         p_year: c.ano,
         p_month: c.mes,
         p_start_date: null,
         p_end_date: null,
-      },
-    )
+      })
+      if (r.error) {
+        error = r.error
+        break
+      }
+      data.push(...((r.data ?? []) as Record<string, unknown>[]))
+      const f = await admin.rpc("ifood_frete_proprio_by_units", {
+        p_unit_ids: lote,
+        p_year: c.ano,
+        p_month: c.mes,
+      })
+      if (f.error) {
+        error = f.error
+        break
+      }
+      for (const row of (f.data ?? []) as { unit_id: string; frete: number | string }[]) {
+        freteByUnit.set(row.unit_id, Number(row.frete))
+      }
+    }
     /**
      * ⚠️ COMPETÊNCIA QUE FALHA ABORTA O CÁLCULO INTEIRO.
      *
@@ -195,7 +227,8 @@ export async function recalcularLandingNumeros(): Promise<LandingNumeros> {
      */
     if (error) throw new Error(`landing: ${c.ano}-${c.mes}: ${error.message}`)
     for (const r of (data ?? []) as Record<string, unknown>[]) {
-      const bruto = numero(r.bruto)
+      const bruto =
+        numero(r.bruto) + (freteByUnit.get(r.unit_id as string) ?? 0)
       vendas += bruto
       brutoIfood += bruto
       pedidos += numero(r.pedidos_unicos)
