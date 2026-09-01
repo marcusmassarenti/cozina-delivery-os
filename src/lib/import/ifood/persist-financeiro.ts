@@ -29,6 +29,24 @@ export type PersistFinanceiroSource = {
   importedBy: string | null
   /** Cadência do log — manual é "mensal", o sync também trata competência mensal. */
   cadencia?: string
+  /**
+   * Merchant (api_store_id) dono do extrato — só o sync via API tem.
+   *
+   * Com ele, o apaga-e-regrava fica cirúrgico: apaga apenas linhas do MESMO
+   * merchant (ou legado NULL). Linhas de OUTRO merchant são a história da
+   * transição de vínculo e FICAM — era a vulnerabilidade nº 1 da auditoria de
+   * 31/08/26: trocar o merchant fazia o extrato do novo engolir o mês inteiro
+   * e deletar os pedidos que só existiam no antigo, com log `success`.
+   *
+   * Planilha manual NÃO passa merchant de propósito: o export do portal cobre
+   * a loja inteira (todos os merchants), então substituir tudo é o correto lá.
+   *
+   * ⚠️ Efeito colateral aceito: se alguém vincular o merchant ERRADO, importar
+   * dado dele e depois corrigir o vínculo, as linhas do errado não são mais
+   * limpas automaticamente (antes eram, por acidente). A varredura de
+   * integridade encontra: linhas cujo merchant_id não é o vinculado atual.
+   */
+  merchantId?: string | null
 }
 
 export type PersistFinanceiroResult = {
@@ -72,6 +90,77 @@ export async function persistFinanceiro(
   source: PersistFinanceiroSource,
   admin: Admin,
 ): Promise<PersistFinanceiroResult> {
+  // ── MUTEX POR LOJA ──────────────────────────────────────────────────
+  //
+  // Cron das 06h, coletor de ~4 min e botão manual podem chegar aqui pra
+  // MESMA loja ao mesmo tempo (o comentário do limpa-partials abaixo admite).
+  // O laço grava→confere→apaga não é transacional: no interleaving em que os
+  // dois passam na conferência e depois cada um apaga o import_id do outro, a
+  // competência fica VAZIA com dois logs `success` — vulnerabilidade nº 3 da
+  // auditoria de 31/08/26.
+  //
+  // Advisory lock do Postgres não serve com PostgREST (pooling: o unlock
+  // cairia noutra conexão). O lock é uma linha em `import_locks`: insert
+  // adquire, delete solta, e lock com mais de 15 min é dono morto — pode ser
+  // tomado (o persist inteiro das lojas grandes leva ~1–2 min).
+  const lockKey = `ifood:financeiro:${unit.unitId}`
+  const lockedBy = source.filename
+  const STALE_MS = 15 * 60 * 1000
+
+  const tentarAdquirir = async (): Promise<boolean> => {
+    const { error } = await admin
+      .from("import_locks")
+      .insert({ lock_key: lockKey, locked_by: lockedBy })
+    if (!error) return true
+    // Já existe. Dono morto (lock velho)? Toma — o update condicionado ao
+    // locked_at antigo é atômico, então só UM candidato leva.
+    const { data: tomado } = await admin
+      .from("import_locks")
+      .update({ locked_at: new Date().toISOString(), locked_by: lockedBy })
+      .eq("lock_key", lockKey)
+      .lt("locked_at", new Date(Date.now() - STALE_MS).toISOString())
+      .select("lock_key")
+    return (tomado?.length ?? 0) > 0
+  }
+
+  // ESPERA em vez de falhar: o sync roda as competências da MESMA loja em
+  // paralelo (sync.ts:443 — o lado lento é o iFood gerando o arquivo, e isso
+  // continua paralelo). Se o lock falhasse na hora, a segunda competência de
+  // toda loja erraria TODO DIA. Esperando, ela só serializa o persist — o
+  // arquivo dela já está baixado e parseado quando chega aqui.
+  let adquirido = await tentarAdquirir()
+  for (let espera = 0; !adquirido && espera < 24; espera++) {
+    await new Promise((r) => setTimeout(r, 10_000))
+    adquirido = await tentarAdquirir()
+  }
+  if (!adquirido) {
+    // 4 minutos de espera + dono ainda vivo = algo realmente travado.
+    throw new Error(
+      `Outra importação do financeiro desta loja está rodando há mais de 4 ` +
+        `minutos (lock ${lockKey}). O mês atual foi preservado — tente de novo.`,
+    )
+  }
+  try {
+    return await persistFinanceiroDestravado(parsed, unit, source, admin)
+  } finally {
+    // Solta SEMPRE — inclusive quando o persist lança erro. Se o processo
+    // morrer antes daqui, o lock expira sozinho em 15 min (takeover acima).
+    await admin.from("import_locks").delete().eq("lock_key", lockKey)
+  }
+}
+
+async function persistFinanceiroDestravado(
+  parsed: ParsedFinanceiro,
+  unit: { unitId: string; code?: string; name?: string },
+  source: PersistFinanceiroSource,
+  admin: Admin,
+): Promise<PersistFinanceiroResult> {
+  // Escopo de merchant: com merchantId, toda contagem e todo delete deste
+  // persist enxergam APENAS linhas do mesmo merchant ou legado NULL. Ver o
+  // comentário em `PersistFinanceiroSource.merchantId`.
+  const filtroMerchant = source.merchantId
+    ? `merchant_id.is.null,merchant_id.eq.${source.merchantId}`
+    : null
   // Dedupe POR COMPETÊNCIA: um arquivo/competência-mensal pode trazer
   // lançamentos de meses vizinhos (o iFood mistura repasses). A coluna
   // 'competencia' é a chave de período confiável do schema.
@@ -79,11 +168,15 @@ export async function persistFinanceiro(
     ...new Set(parsed.lancamentos.map((l) => l.competencia)),
   ].filter(Boolean)
 
-  const { count: existingCount, error: countErr } = await admin
+  let countQ = admin
     .from("ifood_financeiro_lancamentos")
     .select("id", { count: "exact", head: true })
     .eq("unit_id", unit.unitId)
     .in("competencia", competencias.length > 0 ? competencias : ["__none__"])
+  // Sem o escopo, a 1ª carga após uma troca de merchant compara o arquivo do
+  // novo contra o total do antigo e a trava de regressão dispara à toa.
+  if (filtroMerchant) countQ = countQ.or(filtroMerchant)
+  const { count: existingCount, error: countErr } = await countQ
 
   // ⚠️ Erro nesta contagem NÃO pode virar zero.
   //
@@ -122,6 +215,18 @@ export async function persistFinanceiro(
   const anterior = existingCount ?? 0
   const novas = parsed.lancamentos.length
   const encolheuDemais = anterior > 0 && novas < anterior * 0.7
+  // Encolhimento DENTRO da folga (até 30%): substitui, mas deixa rastro.
+  //
+  // Vulnerabilidade nº 2 da auditoria de 31/08/26: qualquer versão do extrato
+  // até 30% menor entrava com `success` seco — e a última carga antes de a
+  // competência sair da janela do sync congela como estado final. A folga
+  // continua existindo (cancelamento e estorno encolhem o arquivo
+  // legitimamente), mas agora ela é auditável: o aviso vai pra coluna
+  // `aviso` do platform_imports, onde a rotina de saúde lê.
+  const avisoEncolheu =
+    anterior > 0 && novas < anterior
+      ? `extrato encolheu ${Math.round((1 - novas / anterior) * 100)}% vs a carga anterior (${anterior} → ${novas} linhas)`
+      : null
   if (encolheuDemais) {
     return {
       substituido: false,
@@ -191,12 +296,14 @@ export async function persistFinanceiro(
     .lt("imported_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
   const idsIncompletos = (incompletos ?? []).map((r) => r.id as string)
   if (idsIncompletos.length > 0) {
-    await admin
+    let limpaQ = admin
       .from("ifood_financeiro_lancamentos")
       .delete()
       .eq("unit_id", unit.unitId)
       .in("competencia", competencias)
       .in("import_id", idsIncompletos)
+    if (filtroMerchant) limpaQ = limpaQ.or(filtroMerchant)
+    await limpaQ
   }
 
   // Conciliação do iFood tem MUITOS lançamentos (7k+ por loja/mês, 21k nas
@@ -240,6 +347,7 @@ export async function persistFinanceiro(
     impacto_no_repasse: l.impactoNoRepasse,
     parcela_pagamento: l.parcelaPagamento,
     id_saldo: l.idSaldo,
+    merchant_id: source.merchantId ?? null,
     import_id: importLog.id,
   }))
 
@@ -329,7 +437,7 @@ export async function persistFinanceiro(
   {
     const DELETE_CHUNK = 200
     for (;;) {
-      const { data: velhas, error: selErr } = await admin
+      let velhasQ = admin
         .from("ifood_financeiro_lancamentos")
         .select("id")
         .eq("unit_id", unit.unitId)
@@ -338,6 +446,10 @@ export async function persistFinanceiro(
         // é NULL, não "diferente") — e linha antiga sem import_id existe.
         .or(`import_id.is.null,import_id.neq.${importLog.id}`)
         .limit(DELETE_CHUNK)
+      // Linhas de OUTRO merchant não são "carga antiga" — são a história da
+      // transição de vínculo, e apagá-las era a vulnerabilidade nº 1.
+      if (filtroMerchant) velhasQ = velhasQ.or(filtroMerchant)
+      const { data: velhas, error: selErr } = await velhasQ
       if (selErr) {
         await abortar(`Falha ao localizar a carga antiga: ${selErr.message}`)
       }
@@ -358,7 +470,11 @@ export async function persistFinanceiro(
 
   await admin
     .from("platform_imports")
-    .update({ status: "success", rows_imported: rows.length })
+    .update({
+      status: "success",
+      rows_imported: rows.length,
+      aviso: avisoEncolheu,
+    })
     .eq("id", importLog.id)
 
   // Derruba o cache dos meses fechados. O dashboard guarda o agregado de mês

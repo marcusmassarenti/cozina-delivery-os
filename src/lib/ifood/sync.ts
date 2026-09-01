@@ -313,7 +313,15 @@ export async function syncReconciliationCompetencia(
     const saved = await persistFinanceiro(
       parsed,
       { unitId: u.unitId, code: u.unitCode },
-      { filename: `API Reconciliation ${competencia}`, importedBy: null, cadencia: "mensal" },
+      {
+        filename: `API Reconciliation ${competencia}`,
+        importedBy: null,
+        cadencia: "mensal",
+        // Escopo do apaga-e-regrava: sem isto, trocar o vínculo de merchant
+        // fazia o extrato do novo deletar os lançamentos do antigo (auditoria
+        // 31/08/26, vulnerabilidade nº 1).
+        merchantId: u.merchantId,
+      },
       admin,
     )
     // Carga recusada por encolher demais: o mês antigo continua de pé. Vai
