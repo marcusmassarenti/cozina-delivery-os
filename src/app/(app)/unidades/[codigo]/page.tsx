@@ -394,6 +394,11 @@ export default async function UnidadeDetalhePage({
               year === new Date().getFullYear() &&
               month === new Date().getMonth() + 1
             }
+            freteProprioFaltando={
+              fin.hasData &&
+              Math.abs(fin.taxaEntrega) === 0 &&
+              fin.fretePropriaCliente === 0
+            }
           />
           <HeroKpis
             monthly={m}
@@ -401,6 +406,20 @@ export default async function UnidadeDetalhePage({
             notasCount={notasTotal}
             notaFonte={notaFonte}
             cancelCesta={cancelCesta}
+            // ENTREGA PRÓPRIA sem o frete fluindo: o portal soma o frete da
+            // loja no "Valor das vendas" (a linha lá se chama "Valor dos
+            // itens e entrega própria da loja" — print da Varginha,
+            // 31/08/26), mas o frete não vem no extrato nem nos Financial
+            // Events — só no Relatório de Pedidos (planilha) ou na futura
+            // API de Pedidos. 39 lojas estavam nessa em ago/26. Sem o aviso,
+            // o dono compara com o portal, vê menos, e desconfia do sistema
+            // inteiro — a divergência EXPLICADA é o que protege a
+            // credibilidade até o dado chegar.
+            freteProprioFaltando={
+              fin.hasData &&
+              Math.abs(fin.taxaEntrega) === 0 &&
+              fin.fretePropriaCliente === 0
+            }
           />
           <DetailTabs
             unit={unit}
@@ -461,6 +480,7 @@ function HeroKpis({
   notasCount,
   notaFonte,
   cancelCesta,
+  freteProprioFaltando,
 }: {
   monthly: UnitMonthly
   notaMedia: number
@@ -469,6 +489,9 @@ function HeroKpis({
   /** Cesta dos pedidos cancelados no iFood (pro Bruto "total" bater com o
    *  "Valor das vendas" do portal). */
   cancelCesta?: { qtd: number; valor: number }
+  /** Loja de ENTREGA PRÓPRIA cujo frete ainda não chega por nenhuma fonte —
+   *  o Bruto fica abaixo do "Valor das vendas" do portal e a tela AVISA. */
+  freteProprioFaltando?: boolean
 }) {
   const cancelPct =
     m.pedidos > 0 ? (m.pedidosCancelados / m.pedidos) * 100 : 0
@@ -479,6 +502,12 @@ function HeroKpis({
    * promoções, a cesta do extrato é antes — e porque taxa e repasse, que só o
    * extrato traz, continuam sem existir. */
   const dePedidos = m.ifoodBrutoDePedidos === true
+  /* O bruto inclui a taxa de entrega e a de serviço pagas pelo cliente — a
+     régua do "Valor das vendas" do portal. Só acontece em loja de ENTREGA DO
+     iFOOD; em entrega própria o frete não passa pela plataforma e não está no
+     extrato. Dizer na tela porque duas lojas do mesmo cliente podem estar em
+     réguas diferentes, e comparar as duas sem saber é comparar coisas
+     diferentes. */
   const repasseDesconhecido = dePedidos && m.totalLiquido <= 0
 
   // Régua única (src/lib/financeiro/regua.ts). Este cabeçalho tinha conta
@@ -513,16 +542,18 @@ function HeroKpis({
       value: fmtBRL(fin.brutoTotal),
       title: dePedidos
         ? "Soma do que os clientes pagaram nos pedidos que a API do iFood j\u00E1 entregou. O extrato do m\u00EAs ainda n\u00E3o chegou \u2014 quando chegar este valor sobe, porque a cesta do extrato \u00E9 contada ANTES das promo\u00E7\u00F5es."
-        : cancelCesta && cancelCesta.valor > 0
-          ? "Vendas totais, igual ao \u201CValor das vendas\u201D do portal iFood (inclui os pedidos cancelados). O DRE desconta os cancelados antes de calcular taxas e margem."
-          : "Vendas menos cancelamentos.",
+        : freteProprioFaltando
+          ? "Igual ao \u201CValor dos itens\u201D do portal do iFood. Como a entrega \u00E9 da pr\u00F3pria loja, o portal soma tamb\u00E9m o frete dela no \u201CValor das vendas\u201D \u2014 esse frete ainda n\u00E3o chega pela conex\u00E3o atual e entra automaticamente com a nova conex\u00E3o do iFood (ou importando o Relat\u00F3rio de Pedidos)."
+          : cancelCesta && cancelCesta.valor > 0
+            ? "Vendas totais, igual ao \u201CValor das vendas\u201D do portal iFood (inclui os pedidos cancelados). O DRE desconta os cancelados antes de calcular taxas e margem."
+            : "Vendas menos cancelamentos.",
       sub: dePedidos
         ? `${fmtNum(m.pedidos)} pedidos \u00B7 pago pelo cliente`
         : `${fmtNum(m.pedidos)} pedidos${
             cancelCesta && cancelCesta.qtd > 0
               ? ` \u00B7 ${fmtNum(cancelCesta.qtd)} cancelados`
               : ""
-          }`,
+          }${freteProprioFaltando ? " \u00B7 sem o frete da entrega pr\u00F3pria" : ""}`,
     },
     {
       label: ROTULOS.ficaNaLoja,

@@ -29,6 +29,7 @@ export function UnitCoverageStrip({
   periodLabel,
   platforms,
   mesEmAberto = false,
+  freteProprioFaltando = false,
 }: {
   coverage: ImportCoverage
   month: number
@@ -38,6 +39,11 @@ export function UnitCoverageStrip({
   /** Período exibido = mês corrente → chip "mês em aberto" explicando por
    *  que o portal (ao vivo) pode mostrar um pouco mais que o sistema. */
   mesEmAberto?: boolean
+  /** ENTREGA PRÓPRIA sem o frete fluindo por nenhuma fonte: o portal soma o
+   *  frete da loja no "Valor das vendas" e o nosso Bruto fica abaixo. O chip
+   *  fica AQUI (e não só no card do KPI) porque o sub do card trunca em
+   *  ~125px e o aviso sumia — medido na Varginha em 31/08/26. */
+  freteProprioFaltando?: boolean
 }) {
   const covOf: Record<MarketplaceId, PlatformCoverage> = {
     ifood: coverage.ifood,
@@ -103,6 +109,18 @@ export function UnitCoverageStrip({
         >
           <Info className="size-3" />
           mês em aberto
+        </span>
+      )}
+
+      {freteProprioFaltando && (
+        <span
+          title={
+            "Esta loja faz a própria entrega, e o portal do iFood soma o frete dela no \u201CValor das vendas\u201D. Esse frete não vem na conexão atual do iFood — entra automaticamente com a nova conexão (em homologação) ou importando o Relatório de Pedidos do portal. Até lá, o Bruto daqui equivale ao \u201CValor dos itens\u201D do portal, sem o frete."
+          }
+          className="inline-flex cursor-help items-center gap-1 rounded-full border border-amber-300/60 bg-amber-50/60 px-2 py-0.5 font-medium text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400"
+        >
+          <Info className="size-3" />
+          sem o frete da entrega própria
         </span>
       )}
 

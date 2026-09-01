@@ -42,6 +42,68 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.24.0",
+    date: "2026-08-31",
+    tag: "Números iguais aos do portal",
+    title: "Faturamento do iFood agora bate com a tela do portal — incluindo o frete da entrega própria",
+    summary:
+      "Auditamos cada número contra o portal do iFood, pedido por pedido. Loja que faz a própria entrega passou a ter o frete somado no faturamento (igual ao portal), o custo de entrega parou de contar pedido cancelado em dobro, e o gráfico de evolução fala o mesmo número do topo da tela.",
+    destaque: true,
+    areas: [
+      {
+        area: "Faturamento",
+        items: [
+          {
+            kind: "novo",
+            title: "Frete da entrega própria entra no faturamento — direto da API",
+            desc:
+              "O portal do iFood soma o frete da SUA entrega no \u201CValor das vendas\u201D. Agora nós também: o valor vem automaticamente da API, pedido a pedido, sem depender de relatório. Loja de entrega própria pode ver o faturamento de agosto (e do ano) subir — é o frete que sempre foi seu e não aparecia.",
+          },
+          {
+            kind: "correcao",
+            title: "Gráfico de evolução agora bate com o card de faturamento",
+            antes: "O gráfico mostrava o faturamento sem os pedidos cancelados; o card do topo mostrava com. Dois números diferentes pra mesma pergunta.",
+            depois: "Um número só, o mesmo do portal do iFood: vendas totais, incluindo os pedidos cancelados (que o DRE segue descontando antes das taxas).",
+          },
+        ],
+      },
+      {
+        area: "Custos",
+        items: [
+          {
+            kind: "correcao",
+            title: "Custo de entrega não conta mais pedido cancelado em dobro",
+            antes: "Pedido cancelado tem o frete devolvido pelo iFood — mas a cobrança E a devolução entravam como custo, dobrando o valor.",
+            depois: "O custo de entrega é só o frete que a loja pagou de verdade. O número de agosto (e dos meses anteriores) fica um pouco menor — e certo.",
+          },
+          {
+            kind: "correcao",
+            title: "Taxa de entrega e de serviço sem os pedidos cancelados",
+            desc:
+              "As taxas de pedido totalmente cancelado (que o iFood estorna ao centavo) saíram da quebra de taxas — a loja não paga nada num pedido que caiu.",
+          },
+        ],
+      },
+      {
+        area: "Confiabilidade",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Aviso quando o frete da entrega própria ainda não chegou",
+            desc:
+              "Se a conexão da loja ainda não trouxe o frete, a tela avisa em vez de mostrar um número menor sem explicação — e o aviso some sozinho quando o dado entra.",
+          },
+          {
+            kind: "melhoria",
+            title: "Importação do extrato mais blindada",
+            desc:
+              "Trocar o vínculo do iFood não apaga mais o histórico do vínculo antigo, duas sincronizações ao mesmo tempo não conflitam, e extrato que encolher deixa rastro auditável.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.23.0",
     date: "2026-08-28",
     tag: "Grande novidade",
