@@ -42,6 +42,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.24.1",
+    date: "2026-09-01",
+    tag: "Correções",
+    title: "Nino AI: comentários de clientes num canal separado dos números",
+    // Só correção, sem destaque: entra em Novidades, não abre pop-up.
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "correcao",
+            title: "Comentários de avaliação separados dos números do contexto",
+            desc:
+              "Os textos escritos por clientes nas avaliações agora chegam ao Nino num bloco próprio, marcado como conteúdo de terceiros pra análise — separado dos números da operação. Isso garante que qualquer coisa escrita num comentário seja sempre tratada como dado, nunca como comando, e de quebra os comentários do canal próprio (Cardápio Web) passaram a chegar ao Nino também.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.24.0",
     date: "2026-08-31",
     tag: "Números iguais aos do portal",
