@@ -843,18 +843,39 @@ export function conexaoSolicitada(d: {
   nome: string | null
   loja: string | null
   cnpj: string
+  /**
+   * TODAS as lojas do cliente nesse CNPJ (dark kitchen: várias marcas na
+   * mesma cozinha). Uma aprovação no Portal do Parceiro conecta todas — e o
+   * dono precisa LER isso, senão aprova uma e fica esperando N pedidos que
+   * nunca chegam (caso Le Brunch, 01/09/26).
+   */
+  lojas?: string[]
 }) {
   const cnpjFmt =
     d.cnpj.length === 14
       ? `${d.cnpj.slice(0, 2)}.${d.cnpj.slice(2, 5)}.${d.cnpj.slice(5, 8)}/${d.cnpj.slice(8, 12)}-${d.cnpj.slice(12)}`
       : d.cnpj
-  const daLoja = d.loja ? ` da <strong>${d.loja}</strong>` : ""
+  const varias = (d.lojas?.length ?? 0) > 1
+  const daLoja = varias
+    ? ` de <strong>${d.lojas!.length} lojas</strong>`
+    : d.loja
+      ? ` da <strong>${d.loja}</strong>`
+      : ""
+  // Uma aprovação por CNPJ conecta TODAS as marcas dele — o dono de dark
+  // kitchen precisa ler isso, senão aprova uma e espera N pedidos que nunca
+  // vêm (caso Le Brunch, 01/09/26).
+  const blocoLojas = varias
+    ? `<p style="margin:0 0 14px;">Esse CNPJ tem <strong>${d.lojas!.length} lojas</strong> no iFood — <strong>${d.lojas!.join(", ")}</strong>. Uma única aprovação conecta todas de uma vez.</p>`
+    : ""
   return {
-    assunto: `Falta você aprovar no iFood${d.loja ? ` — ${d.loja}` : ""}`,
+    assunto: varias
+      ? `Falta você aprovar no iFood — ${d.lojas!.length} lojas num clique`
+      : `Falta você aprovar no iFood${d.loja ? ` — ${d.loja}` : ""}`,
     html: layout({
       titulo: "Pedi a conexão no iFood. Agora falta você aprovar.",
       corpo: `
         <p style="margin:0 0 14px;">${oi(d.nome)} Solicitei ao iFood a conexão${daLoja} com o CNPJ <strong style="white-space:nowrap;">${cnpjFmt}</strong>. O último passo é seu — e leva menos de um minuto.</p>
+        ${blocoLojas}
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
           <tr><td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 18px;font-size:15px;line-height:1.6;color:#3f3f46;">
             No <strong>Portal do Parceiro do iFood</strong>, vá em <strong>Aplicativos</strong> e autorize <strong>os dois</strong>:

@@ -48,7 +48,13 @@ async function main() {
   }
   for (const r of reqs) {
     const loja = (r.units as { name?: string } | null)?.name ?? null
-    const { assunto, html } = conexaoSolicitada({ nome: contato.nome, loja, cnpj: r.cnpj as string })
+    const { data: irmas } = await admin
+      .from("units").select("name, cnpj, brands!inner(holding_id)")
+      .eq("brands.holding_id", h.id)
+    const lojasCnpj = ((irmas ?? []) as { name: string; cnpj: string | null }[])
+      .filter((x) => (x.cnpj ?? "").replace(/\D/g, "") === String(r.cnpj).replace(/\D/g, ""))
+      .map((x) => x.name)
+    const { assunto, html } = conexaoSolicitada({ nome: contato.nome, loja, cnpj: r.cnpj as string, lojas: lojasCnpj })
     const res = await enviarEmail({
       holdingId: h.id as string, tipo: "conexao-solicitada",
       para: contato.email, assunto, html, forcar: true,

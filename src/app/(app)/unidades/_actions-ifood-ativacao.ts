@@ -24,6 +24,27 @@ export type SolicitacaoIfoodState = {
   message?: string
 }
 
+/**
+ * Lojas da holding que compartilham o CNPJ (dark kitchens: várias marcas na
+ * mesma cozinha). A aprovação do iFood é POR CNPJ — quem aprova uma, conecta
+ * todas — mas o cliente pensa por loja e clicava loja a loja, levando "já
+ * existe solicitação" como se fosse erro (Marcus, 01/09/26, caso Le Brunch:
+ * 3 marcas no CNPJ da Lorena). Quem traduz a característica é o sistema.
+ */
+async function lojasDoMesmoCnpj(
+  admin: Awaited<ReturnType<typeof requireAdmin>>["admin"],
+  holdingId: string,
+  cnpj: string,
+): Promise<{ id: string; name: string }[]> {
+  const { data } = await admin
+    .from("units")
+    .select("id, name, cnpj, brands!inner(holding_id)")
+    .eq("brands.holding_id", holdingId)
+  return ((data ?? []) as { id: string; name: string; cnpj: string | null }[])
+    .filter((u) => (u.cnpj ?? "").replace(/\D/g, "") === cnpj)
+    .map((u) => ({ id: u.id, name: u.name }))
+}
+
 export async function solicitarAtivacaoIfood(
   _prev: SolicitacaoIfoodState,
   formData: FormData,
@@ -77,12 +98,21 @@ export async function solicitarAtivacaoIfood(
     .in("status", ["pendente", "solicitada"])
     .maybeSingle()
   if (aberta) {
+    // NÃO é erro: a aprovação do iFood é por CNPJ, então a loja clicada entra
+    // na MESMA aprovação que já está andando. Recusar aqui fazia o cliente de
+    // dark kitchen achar que as outras marcas ficaram de fora.
+    const irmas = await lojasDoMesmoCnpj(admin, holdingId, cnpj)
+    const outras = irmas.filter((u) => u.id !== unitId).map((u) => u.name)
+    const cobre =
+      outras.length > 0
+        ? ` A aprovação é por CNPJ e cobre também: ${outras.join(", ")}.`
+        : ""
     return {
-      ok: false,
+      ok: true,
       message:
         aberta.status === "pendente"
-          ? "Já existe uma solicitação em análise para esse CNPJ."
-          : "Esse CNPJ já foi solicitado — falta aprovar no seu Portal do Parceiro.",
+          ? `Esta loja já está na solicitação em análise deste CNPJ.${cobre}`
+          : `Esta loja entra na aprovação que já está com o proprietário — uma única aprovação no Portal do Parceiro conecta todas as lojas do CNPJ.${cobre}`,
     }
   }
 
@@ -100,10 +130,14 @@ export async function solicitarAtivacaoIfood(
   void avisarSolicitacaoIfood(holdingId, { tipo: "pedido", cnpj, unitId })
 
   revalidatePath("/unidades")
+  const irmas = await lojasDoMesmoCnpj(admin, holdingId, cnpj)
+  const outras = irmas.filter((u) => u.id !== unitId).map((u) => u.name)
   return {
     ok: true,
     message:
-      "Solicitação registrada! Vamos conectar sua loja e você acompanha o status aqui.",
+      outras.length > 0
+        ? `Solicitação registrada! Este CNPJ cobre também ${outras.join(", ")} — uma única aprovação do proprietário conecta ${irmas.length} lojas de uma vez.`
+        : "Solicitação registrada! Vamos conectar sua loja e você acompanha o status aqui.",
   }
 }
 
@@ -267,25 +301,75 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
 
   const { createAdminClient } = await import("@/lib/supabase/admin")
   const db = createAdminClient()
-  let q = db
+  const q = db
     .from("ifood_activation_requests")
     .select(
-      "id, unit_id, status, nota, cliente_confirmou_at, updated_at, units(code, name)",
+      "id, unit_id, cnpj, status, nota, cliente_confirmou_at, updated_at, units(code, name)",
     )
     .eq("holding_id", holdingId)
     .in("status", ["solicitada", "ativa", "recusada"])
     .order("updated_at", { ascending: false })
-  if (acessiveis !== null) q = q.in("unit_id", acessiveis)
   const { data } = await q
-  const linhas = ((data ?? []) as unknown as {
+  const cruas = ((data ?? []) as unknown as {
     id: string
     unit_id: string
+    cnpj: string
     status: MinhaSolicitacao["status"]
     nota: string | null
     cliente_confirmou_at: string | null
     updated_at: string
     units: { code: string; name: string } | null
   }[])
+
+  /* ── ESPELHO POR CNPJ ─────────────────────────────────────────────────
+   *
+   * A aprovação do iFood é por CNPJ, mas o pedido carrega UMA unidade — e as
+   * irmãs de dark kitchen (várias marcas na mesma cozinha, caso Le Brunch)
+   * ficavam SEM status nenhum na faixa, como se ninguém tivesse pedido nada
+   * por elas. Aqui cada pedido vira uma linha POR LOJA do mesmo CNPJ: o
+   * cliente vê o estado onde ele procura, na loja dele.
+   *
+   * O filtro de acesso muda de lugar junto: antes cortava pelo unit_id do
+   * PEDIDO, agora corta pelas lojas espelhadas — um franqueado com acesso só
+   * à irmã continua vendo o status dela. */
+  const { data: unitsHolding } = await db
+    .from("units")
+    .select("id, code, name, cnpj, brands!inner(holding_id)")
+    .eq("brands.holding_id", holdingId)
+  const porCnpj = new Map<string, { id: string; code: string; name: string }[]>()
+  for (const u of (unitsHolding ?? []) as {
+    id: string
+    code: string
+    name: string
+    cnpj: string | null
+  }[]) {
+    const dig = (u.cnpj ?? "").replace(/\D/g, "")
+    if (!dig) continue
+    const arr = porCnpj.get(dig) ?? []
+    arr.push({ id: u.id, code: u.code, name: u.name })
+    porCnpj.set(dig, arr)
+  }
+
+  const linhas: (typeof cruas[number] & { espelhoDe?: string })[] = []
+  const vistos = new Set<string>()
+  for (const s0 of cruas) {
+    const lojas = porCnpj.get((s0.cnpj ?? "").replace(/\D/g, "")) ?? []
+    const alvos = lojas.length > 0
+      ? lojas
+      : [{ id: s0.unit_id, code: s0.units?.code ?? "", name: s0.units?.name ?? "sua loja" }]
+    for (const l of alvos) {
+      if (acessiveis !== null && !acessiveis.includes(l.id)) continue
+      // Uma loja aparece UMA vez (o pedido mais recente do CNPJ dela ganha).
+      if (vistos.has(l.id)) continue
+      vistos.add(l.id)
+      linhas.push({
+        ...s0,
+        unit_id: l.id,
+        units: { code: l.code, name: l.name },
+        espelhoDe: l.id === s0.unit_id ? undefined : s0.unit_id,
+      })
+    }
+  }
 
   // Quais dessas lojas JÁ têm lançamento do iFood.
   //
@@ -329,7 +413,9 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
   }
 
   return linhas.map((s) => ({
-    id: s.id,
+    // O espelho gera N linhas do mesmo pedido — o id composto mantém a chave
+    // única sem inventar pedido novo.
+    id: s.espelhoDe ? `${s.id}:${s.unit_id}` : s.id,
     unitId: s.unit_id,
     unitCode: s.units?.code ?? null,
     unitName: s.units?.name ?? "sua loja",
@@ -368,7 +454,9 @@ export async function reportarLojaNaoApareceu(
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return { ok: false, message: "Empresa não identificada." }
 
-  const id = String(formData.get("id") ?? "").trim()
+  // A faixa espelha o pedido nas lojas irmãs do CNPJ com id composto
+  // "pedido:unidade" — aqui interessa só o pedido.
+  const id = String(formData.get("id") ?? "").trim().split(":")[0]
   if (!id) return { ok: false, message: "Solicitação não informada." }
 
   // Escopo duplo: a solicitação é da holding dela E de uma unidade que ela

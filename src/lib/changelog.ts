@@ -42,6 +42,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.24.2",
+    date: "2026-09-01",
+    tag: "Correções",
+    title: "Conexão iFood: lojas do mesmo CNPJ andam juntas",
+    // Correção de fluxo, sem destaque — não abre pop-up.
+    areas: [
+      {
+        area: "Conexões",
+        items: [
+          {
+            kind: "correcao",
+            title: "Pedir conexão numa loja irmã não é mais recusado",
+            antes: "Quem tem várias marcas no mesmo CNPJ (dark kitchen) clicava na segunda loja e levava \u201Cjá existe uma solicitação\u201D — parecia erro, e as outras lojas ficavam sem status nenhum.",
+            depois: "A aprovação do iFood é por CNPJ, e agora o sistema traduz isso: qualquer loja do CNPJ mostra o mesmo andamento, o clique explica que uma única aprovação conecta todas, e o e-mail pro proprietário lista as lojas cobertas.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.24.1",
     date: "2026-09-01",
     tag: "Correções",

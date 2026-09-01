@@ -576,16 +576,28 @@ async function avisarSolicitacaoPorEmail(d: {
     const { contatoDaHolding } = await import("@/lib/email/contato-holding")
     const { enviarEmail } = await import("@/lib/email/enviar")
     const { conexaoSolicitada } = await import("@/lib/email/templates")
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const admin = createAdminClient()
 
     const contato = await contatoDaHolding(d.holdingId)
     if (!contato) {
       return "Não avisei por e-mail: a empresa não tem administrador com e-mail confirmado."
     }
 
+    // Todas as lojas do cliente nesse CNPJ — a aprovação cobre todas, e o
+    // e-mail tem que dizer isso (dark kitchen aprova 1× e conecta N marcas).
+    const { data: irmas } = await admin
+      .from("units")
+      .select("name, cnpj, brands!inner(holding_id)")
+      .eq("brands.holding_id", d.holdingId)
+    const lojas = ((irmas ?? []) as { name: string; cnpj: string | null }[])
+      .filter((u) => (u.cnpj ?? "").replace(/\D/g, "") === d.cnpj.replace(/\D/g, ""))
+      .map((u) => u.name)
     const { assunto, html } = conexaoSolicitada({
       nome: contato.nome,
       loja: d.loja,
       cnpj: d.cnpj,
+      lojas,
     })
     const r = await enviarEmail({
       holdingId: d.holdingId,
