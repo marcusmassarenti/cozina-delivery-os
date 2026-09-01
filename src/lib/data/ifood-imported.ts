@@ -92,6 +92,18 @@ export type FinanceiroResumo = {
   bruto: number
   comissaoIfood: number
   taxaEntrega: number
+  /**
+   * Frete da ENTREGA PRÓPRIA cobrado do cliente — vem da API de pedidos
+   * (`ifood_pedidos.taxa_entrega_cliente`, produto logístico de entrega
+   * própria), NÃO do extrato, que não tem essa linha.
+   *
+   * É o pedaço que faltava pro "Valor das vendas" do portal numa loja de
+   * entrega própria: a tela chama a linha de "Valor dos itens E ENTREGA
+   * PRÓPRIA DA LOJA" (Varginha, 31/08/26 — R$ 19.266,98 vs R$ 17.021,57 da
+   * cesta). Na entrega parceira o frete é do iFood e este campo vale 0.
+   * Quem soma é `brutoIfoodComoNoPortal` — nunca somar na mão.
+   */
+  fretePropriaCliente: number
   taxaTransacao: number
   taxaServicoCliente: number
   promocaoLoja: number
@@ -1425,18 +1437,46 @@ async function chamarResumo(
   month: number,
   dateRange?: { start: string; end: string },
 ): Promise<{ data: ResumoRpcRow[] | null; error: string | null }> {
-  const { data, error } = await createAdminClient().rpc(
-    "ifood_financeiro_resumo_by_units",
-    {
-      p_unit_ids: unitIds,
-      p_year: year,
-      p_month: month,
-      ...(dateRange
-        ? { p_start_date: dateRange.start, p_end_date: dateRange.end }
-        : {}),
-    },
+  const admin = createAdminClient()
+  const params = {
+    p_unit_ids: unitIds,
+    p_year: year,
+    p_month: month,
+    ...(dateRange
+      ? { p_start_date: dateRange.start, p_end_date: dateRange.end }
+      : {}),
+  }
+  // As duas RPCs viajam juntas de propósito: o frete próprio faz parte do
+  // resumo (é o pedaço do "Valor das vendas" que o extrato não tem — ver
+  // migration 0251) e precisa entrar no MESMO unstable_cache. Buscá-lo fora
+  // do cache custaria uma ida ao banco por render; buscá-lo noutro momento
+  // deixaria bruto e frete de idades diferentes.
+  const [resumo, fretes] = await Promise.all([
+    admin.rpc("ifood_financeiro_resumo_by_units", params),
+    admin.rpc("ifood_frete_proprio_by_units", params),
+  ])
+  if (resumo.error) {
+    return { data: null, error: resumo.error.message }
+  }
+  // Frete falhou? O resumo NÃO pode cair junto — mas também não pode fingir
+  // frete zero em silêncio (loja de entrega própria voltaria a divergir do
+  // portal sem aviso). Erro é erro: não entra no cache e a próxima tenta.
+  if (fretes.error) {
+    return {
+      data: null,
+      error: `ifood_frete_proprio_by_units falhou: ${fretes.error.message}`,
+    }
+  }
+  const freteByUnit = new Map(
+    ((fretes.data ?? []) as { unit_id: string; frete: number | string }[]).map(
+      (f) => [f.unit_id, Number(f.frete)],
+    ),
   )
-  return { data: (data ?? null) as ResumoRpcRow[] | null, error: error?.message ?? null }
+  const rows = ((resumo.data ?? []) as ResumoRpcRow[]).map((r) => ({
+    ...r,
+    frete_proprio: freteByUnit.get(r.unit_id as string) ?? 0,
+  }))
+  return { data: rows, error: null }
 }
 
 /**
@@ -1577,12 +1617,14 @@ function mapearResumo(data: any): Map<string, FinanceiroResumo> {
     recebido_direto: number | string
     mensalidade: number | string
     antecipacao?: number | string | null
+    frete_proprio?: number | string | null
   }>) {
     out.set(row.unit_id, {
       pedidosUnicos: row.pedidos_unicos,
       bruto: Number(row.bruto),
       comissaoIfood: Number(row.comissao_ifood),
       taxaEntrega: Number(row.taxa_entrega),
+      fretePropriaCliente: Number(row.frete_proprio ?? 0),
       taxaTransacao: Number(row.taxa_transacao),
       taxaServicoCliente: Number(row.taxa_servico_cliente),
       promocaoLoja: Number(row.promocao_loja),
@@ -1622,6 +1664,7 @@ export async function getFinanceiroResumoForMonth(
       bruto: 0,
       comissaoIfood: 0,
       taxaEntrega: 0,
+      fretePropriaCliente: 0,
       taxaTransacao: 0,
       taxaServicoCliente: 0,
       promocaoLoja: 0,

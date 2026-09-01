@@ -1,5 +1,7 @@
 import "server-only"
 
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   MarketplaceId,
@@ -464,8 +466,15 @@ export async function getRealMonthlyForUnits(
      * exatamente o valor da API. Por isso o flag viaja junto até a tela. */
     const ifoodBrutoDePedidos =
       !ifoodHas && (ifFb?.valorItens ?? 0) <= 0 && (ifFb?.totalPago ?? 0) > 0
+    /* ── O bruto do iFood é a CESTA. Entrega e serviço NÃO entram. ───────
+     *
+     * A régua e o histórico do erro estão em src/lib/ifood-bruto.ts. Resumo:
+     * o portal marca "Valores complementares" (entrega, serviço, conveniência)
+     * como "apenas informativos e não considerados no cálculo". Somei os dois
+     * em 31/08/26 e tive que desfazer no mesmo dia, quando o Marcus mandou o
+     * print da tela com a frase. */
     const ifoodBruto = ifoodHas
-      ? fin!.bruto
+      ? brutoIfoodComoNoPortal(fin!)
       : ifoodBrutoDePedidos
         ? ifFb!.totalPago
         : ifFb?.valorItens ?? 0

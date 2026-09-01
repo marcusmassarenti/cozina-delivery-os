@@ -14,6 +14,8 @@
 
 import "server-only"
 
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
+
 import { lerFinanceiro } from "@/lib/financeiro/regua"
 
 import { getUnits } from "@/lib/data/units"
@@ -156,7 +158,11 @@ export async function getNetworkResultadoForMonth(
     const temImport = hasIfood || has99 || hasKeeta || hasCw
 
     // Bruto / líquido por plataforma (importado preferido, fallback manual)
-    const ifoodBruto = hasIfood ? fin!.bruto : platBruto(monthlyM, "ifood")
+    // `brutoIfoodComoNoPortal` e não `fin!.bruto`: o portal soma entrega e
+    // taxa de serviço no "Valor das vendas". Ver src/lib/ifood-bruto.ts.
+    const ifoodBruto = hasIfood
+      ? brutoIfoodComoNoPortal(fin!)
+      : platBruto(monthlyM, "ifood")
     const ifoodLiq = hasIfood ? fin!.liquido : platLiquido(monthlyM, "ifood")
     const nineBruto = has99 ? nine!.bruto : platBruto(monthlyM, "99food")
     const nineLiq = has99 ? nine!.liquido : platLiquido(monthlyM, "99food")
@@ -429,7 +435,7 @@ export async function getNetworkDrePlatforms(
 
     // Bruto/líquido por plataforma (importado preferido, fallback manual) —
     // MESMA lógica do getNetworkResultadoForMonth, pra somar idêntico.
-    const ifBruto = hasIfood ? fin!.bruto : pBruto(mm, "ifood")
+    const ifBruto = hasIfood ? brutoIfoodComoNoPortal(fin!) : pBruto(mm, "ifood")
     const ifLiq = hasIfood ? fin!.liquido : pLiq(mm, "ifood")
     const niBruto = has99 ? nine!.bruto : pBruto(mm, "99food")
     const niLiq = has99 ? nine!.liquido : pLiq(mm, "99food")

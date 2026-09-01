@@ -1,5 +1,7 @@
 import "server-only"
 
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
+
 /**
  * Ficha Técnica: o custo por item vendido e a margem que sai dele.
  *
@@ -657,8 +659,9 @@ export async function getLojasCusto(
   for (const u of units) {
     const cur = acc.get(u.id)
     if (!cur) continue
+    const fu = fin.get(u.id)
     cur.receitaMes =
-      (fin.get(u.id)?.bruto ?? 0) +
+      (fu ? brutoIfoodComoNoPortal(fu) : 0) +
       (nine.get(u.id)?.bruto ?? 0) +
       (keeta.get(u.id)?.bruto ?? 0) +
       (cw.get(u.id)?.bruto ?? 0)

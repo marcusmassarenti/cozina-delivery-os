@@ -11,6 +11,7 @@ import {
   getNetworkPagamentoResumo,
   getVrByUnits,
 } from "@/lib/data/ifood-pedidos"
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import {
   getKeetaPedidoPorLoja,
@@ -119,7 +120,12 @@ export default async function PedidosPage({
           const enriched = vrByUnit
             .map((u) => ({
               ...u,
-              faturamento: fatMap?.get(u.unitId)?.bruto || u.valorItens,
+              // Régua do portal — ver src/lib/ifood-bruto.ts. Só no ramo do
+              // iFood: os outros dois `fatMap` desta tela são 99 e Keeta.
+              faturamento: (() => {
+                const f = fatMap?.get(u.unitId)
+                return f ? brutoIfoodComoNoPortal(f) : u.valorItens
+              })(),
             }))
             .sort((a, b) => b.faturamento - a.faturamento)
 

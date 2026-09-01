@@ -8,6 +8,9 @@
  */
 import "server-only"
 
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
+import { getCancelamentoCestaByUnits } from "./ifood-imported"
+
 import type { PlatformId } from "@/components/platform-logo"
 import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
 import { getReceitaPropriaByUnits } from "@/lib/data/lancamentos"
@@ -41,7 +44,7 @@ export async function getUnitMetricsForMonth(
   const querTodas = (["ifood", "99food", "keeta", "cardapioweb"] as const).every(
     (p) => want.has(p),
   )
-  const [ifood, nine, keeta, cw, propria] = await Promise.all([
+  const [ifood, nine, keeta, cw, propria, cestaCancelada] = await Promise.all([
     want.has("ifood")
       ? getFinanceiroResumoByUnits(unitIds, year, month)
       : null,
@@ -53,6 +56,12 @@ export async function getUnitMetricsForMonth(
       ? getCardapioWebResumoByUnits(unitIds, year, month)
       : null,
     querTodas ? getReceitaPropriaByUnits(unitIds, year, month) : null,
+    // Cesta dos pedidos cancelados: a RÉGUA DO PORTAL manda mostrar o bruto
+    // COM eles (ver project-bruto-portal). Ela entra AQUI dentro, e não em
+    // cada tela, porque quem somava por fora era só metade do sistema — o
+    // gráfico de Evolução mostrava R$ 1.249.939 embaixo de um KPI de R$ 1,3
+    // mi e o Marcus leu a diferença no tooltip (31/08/26).
+    want.has("ifood") ? getCancelamentoCestaByUnits(unitIds, year, month) : null,
   ])
 
   const out = new Map<string, UnitMetrics>()
@@ -65,7 +74,9 @@ export async function getUnitMetricsForMonth(
 
     const fi = ifood?.get(id)
     if (fi) {
-      bruto += fi.bruto
+      // Régua do portal — ver src/lib/ifood-bruto.ts (taxas do cliente) e o
+      // comentário do `cestaCancelada` acima (pedidos que não viraram venda).
+      bruto += brutoIfoodComoNoPortal(fi) + (cestaCancelada?.get(id)?.valor ?? 0)
       liquido += fi.liquido
       pedidos += fi.pedidosUnicos
       cancelados += fi.cancelamentoTotalQtd + fi.cancelamentoParcialQtd

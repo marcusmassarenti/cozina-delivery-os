@@ -1175,25 +1175,28 @@ async function historicoMensalDoAno(
   // O resumo do iFood já é buscado dentro de getUnitMetricsForMonth com os
   // mesmos argumentos e é memoizado por mês fechado — pedir de novo aqui é
   // acerto de cache, não consulta nova.
-  const [mapsPorMes, cestasPorMes, finPorMes] = await Promise.all([
+  // `getCancelamentoCestaByUnits` saiu daqui: a cesta dos cancelados agora
+  // vive dentro do `getUnitMetricsForMonth`, uma vez só.
+  const [mapsPorMes, finPorMes] = await Promise.all([
     Promise.all(
       meses.map((m) => getUnitMetricsForMonth(unitIds, TODAS_PLATAFORMAS, year, m)),
     ),
-    Promise.all(meses.map((m) => getCancelamentoCestaByUnits(unitIds, year, m))),
     Promise.all(meses.map((m) => getFinanceiroResumoByUnits(unitIds, year, m))),
   ])
   const hist = new Map<string, MesLoja[]>()
   for (const id of unitIds) hist.set(id, [])
   meses.forEach((m, i) => {
     const map = mapsPorMes[i]
-    const cestas = cestasPorMes[i]
     const fin = finPorMes[i]
     for (const id of unitIds) {
       const mt = map.get(id)
       if (!mt || !mt.hasData) continue
       hist.get(id)!.push({
         mes: `${String(m).padStart(2, "0")}/${year}`,
-        bruto: round(mt.bruto + (cestas.get(id)?.valor ?? 0)),
+        // A cesta dos cancelados JÁ vem dentro do `getUnitMetricsForMonth`
+        // desde 31/08/26 (a régua do portal foi pra dentro da função pra
+        // parar de existir em dois lugares). Somar aqui de novo dobrava.
+        bruto: round(mt.bruto),
         liquido: round(mt.liquido),
         pedidos: mt.pedidos,
         cancelados: mt.cancelados,

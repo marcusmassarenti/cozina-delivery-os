@@ -74,7 +74,7 @@ export type UnitMonthly = {
    * dia em que o extrato chega, e quem olha lê como venda que apareceu do nada.
    */
   ifoodBrutoDePedidos?: boolean
-}
+  }
 
 export const emptyMonthly: UnitMonthly = {
   pedidos: 0,

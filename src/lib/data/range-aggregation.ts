@@ -34,6 +34,7 @@ function mergeFinResumo(acc: FinanceiroResumo, v: FinanceiroResumo) {
   acc.bruto += v.bruto
   acc.comissaoIfood += v.comissaoIfood
   acc.taxaEntrega += v.taxaEntrega
+  acc.fretePropriaCliente += v.fretePropriaCliente
   acc.taxaTransacao += v.taxaTransacao
   acc.taxaServicoCliente += v.taxaServicoCliente
   acc.promocaoLoja += v.promocaoLoja

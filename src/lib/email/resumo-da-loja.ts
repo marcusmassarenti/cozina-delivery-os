@@ -1,5 +1,6 @@
 import "server-only"
 
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { getCancelamentoCestaForMonth } from "@/lib/data/ifood-imported"
 import { fmtBRL, fmtNum } from "@/lib/format"
@@ -155,7 +156,9 @@ export async function resumoDoAnoIfood(
     if (erro) return { linhas: [], temDado: false }
     const r = resumo.get(unitId)
     if (!r) continue
-    const brutoMes = (r.bruto ?? 0) + (cesta?.valor ?? 0)
+    // Régua do portal — ver src/lib/ifood-bruto.ts. O e-mail vai pro dono da
+    // loja, que confere contra o portal: divergir aqui é o pior lugar.
+    const brutoMes = brutoIfoodComoNoPortal(r) + (cesta?.valor ?? 0)
     if (brutoMes <= 0 && (r.pedidosUnicos ?? 0) === 0) continue
     if (primeiroMes == null) primeiroMes = m
     bruto += brutoMes

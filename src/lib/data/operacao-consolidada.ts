@@ -1,5 +1,7 @@
 import "server-only"
 
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
+
 import { getFinanceiroResumoForMonth } from "@/lib/data/ifood-imported"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoForMonth } from "@/lib/data/keeta-imported"
@@ -60,11 +62,14 @@ export async function getOperacaoConsolidada(
     {
       id: "ifood",
       label: LABEL.ifood,
-      bruto: ifood.hasData ? ifood.bruto : 0,
+      // Régua do portal — ver src/lib/ifood-bruto.ts. O ticket sai do MESMO
+      // bruto, senão a quebra por plataforma some com o frete e o ticket não
+      // bate com o da tela da unidade.
+      bruto: ifood.hasData ? brutoIfoodComoNoPortal(ifood) : 0,
       pedidos: ifood.hasData ? ifood.pedidosUnicos : 0,
       ticket:
         ifood.hasData && ifood.pedidosUnicos > 0
-          ? ifood.bruto / ifood.pedidosUnicos
+          ? brutoIfoodComoNoPortal(ifood) / ifood.pedidosUnicos
           : 0,
       temDados: ifood.hasData,
     },

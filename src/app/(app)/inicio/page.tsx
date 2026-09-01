@@ -35,6 +35,7 @@ import {
   getPrimeirasAvaliacoes,
 } from "@/lib/data/conexoes-novas"
 import { AvisosConvite } from "@/components/dashboard/avisos-convite"
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 import { getCadastroIncompleto } from "@/lib/data/cadastro-incompleto"
 import { CadastroIncompletoAviso } from "@/app/(app)/unidades/_components/cadastro-incompleto-aviso"
 import { NovidadesConexoes } from "@/components/dashboard/novidades-conexoes"
@@ -606,6 +607,7 @@ export default async function Home({
     janelaRankingIfood,
   ] = await (earlyNetworkP ?? runNetwork(networkScopeIds))
   cron.marca("rede")
+
 
 
   // Cesta dos pedidos cancelados no iFood (escopo visível) — o card
@@ -2363,7 +2365,10 @@ function networkTotalsMerged(
     if (inc("ifood")) {
       if (ifoodImp?.hasData) {
         pedidos += ifoodImp.pedidosUnicos
-        bruto += ifoodImp.bruto
+        // Régua do portal (entrega + serviço). Este total da REDE é uma quinta
+        // cópia da mesma conta — foi ela que deixou o dashboard em R$ 1,2 mi
+        // enquanto o DRE já mostrava R$ 1,3 mi. Ver src/lib/ifood-bruto.ts.
+        bruto += brutoIfoodComoNoPortal(ifoodImp)
         liquido += ifoodImp.liquido
         cancelados +=
           ifoodImp.cancelamentoTotalQtd + ifoodImp.cancelamentoParcialQtd
@@ -2562,11 +2567,15 @@ function mergeUnitMonthlyForDashboard(
       // de 75,4% pra 66,9% — dando a impressão de que o iFood ficava com mais
       // do que fica de verdade.
       const recDir = fin!.recebidoDireto
+      // Ver src/lib/ifood-bruto.ts — o dashboard NÃO usa o `monthly` que o
+      // agregador devolve, reconstrói o bruto do resumo cru. Foi por isso que
+      // a unidade mudou e o dashboard não (Marcus, 31/08/26).
+      const ifoodBruto = brutoIfoodComoNoPortal(fin!)
       const ifoodPctLoja =
-        fin!.bruto > 0 ? ((fin!.liquido + recDir) / fin!.bruto) * 100 : 0
+        ifoodBruto > 0 ? ((fin!.liquido + recDir) / ifoodBruto) * 100 : 0
       return {
         ...p,
-        bruto: fin!.bruto,
+        bruto: ifoodBruto,
         liquido: fin!.liquido,
         recebidoDireto: recDir,
         pctLoja: ifoodPctLoja,
@@ -2604,7 +2613,7 @@ function mergeUnitMonthlyForDashboard(
   if (want("ifood")) {
     if (hasIfood) {
       totalPedidos += fin!.pedidosUnicos
-      totalBruto += fin!.bruto
+      totalBruto += brutoIfoodComoNoPortal(fin!)
       totalLiquido += fin!.liquido
       totalCancelados += fin!.cancelamentoTotalQtd + fin!.cancelamentoParcialQtd
     } else {

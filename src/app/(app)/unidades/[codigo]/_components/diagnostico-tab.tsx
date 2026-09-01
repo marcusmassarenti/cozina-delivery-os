@@ -33,6 +33,7 @@ import {
   rotuloPlataforma,
   type PlatformId,
 } from "@/components/platform-logo"
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 import { getEnabledReports } from "@/lib/data/report-prefs"
 import { getVerComoHoldingId } from "@/lib/auth/permissions"
 import { getOperacaoConsolidada } from "@/lib/data/operacao-consolidada"
@@ -209,7 +210,11 @@ export async function DiagnosticoTab({
   // O painel é do iFood: usa faturamento/pedidos da Conciliação do iFood, não
   // o consolidado (iFood + 99 + Keeta), pra tudo falar a mesma língua do funil.
   const temIfood = ifood.hasData
-  const faturamento = temIfood ? ifood.bruto : monthly.faturamentoBruto
+  // Régua do portal (entrega + serviço) — ver src/lib/ifood-bruto.ts. Sem
+  // isto o Diagnóstico acusava faturamento menor que a própria aba ao lado.
+  const faturamento = temIfood
+    ? brutoIfoodComoNoPortal(ifood)
+    : monthly.faturamentoBruto
   const cancelQtdIfood = ifood.cancelamentoTotalQtd + ifood.cancelamentoParcialQtd
   const pedidos = temIfood ? ifood.pedidosUnicos : monthly.pedidos
   const conversao = funil?.conversaoPct ?? null

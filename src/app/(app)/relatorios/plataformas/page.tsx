@@ -4,6 +4,7 @@ import { ArrowLeft, AlertTriangle, Layers } from "lucide-react"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import { ExportPdfButton } from "@/components/shared/export-pdf-button"
 import { ProcedenciaDados } from "@/components/shared/procedencia-dados"
+import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 import { procedenciaDoRange } from "@/lib/data/procedencia"
 import { ReportBrandLogo } from "@/components/report-brand-logo"
 import { LojaFilter } from "@/components/shared/loja-filter"
@@ -74,7 +75,8 @@ export default async function PlataformasPage({
     {
       id: "ifood",
       label: "iFood",
-      bruto: sumBy(ifoodMap, (v) => v.bruto),
+      // Régua do portal (entrega + serviço) — ver src/lib/ifood-bruto.ts.
+      bruto: sumBy(ifoodMap, (v) => brutoIfoodComoNoPortal(v)),
       pedidos: sumBy(ifoodMap, (v) => v.pedidosUnicos),
       liquido: sumBy(ifoodMap, (v) => v.liquido),
       // Venda direta (dinheiro/PIX/maquininha na porta) é dinheiro da loja e
