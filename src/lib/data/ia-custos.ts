@@ -133,8 +133,13 @@ export type ConsumoIaCliente = {
 export async function getConsumoIaPorCliente(
   mes: string = mesCorrente(),
 ): Promise<{ clientes: ConsumoIaCliente[]; totalUsd: number; totalMensagens: number }> {
-  // Consumo/custo de TODOS os clientes é visão de dono.
+  // Consumo/custo de TODOS os clientes é visão de dono — e dono FORA do
+  // "ver como": dentro da visão de um cliente este painel vazaria dados dos
+  // outros (mesma classe do vazamento de 01/09/26 no aviso de solicitações).
   if (!(await isSuperadmin()))
+    return { clientes: [], totalUsd: 0, totalMensagens: 0 }
+  const { getVerComoHoldingId } = await import("@/lib/auth/permissions")
+  if (await getVerComoHoldingId())
     return { clientes: [], totalUsd: 0, totalMensagens: 0 }
   const admin = createAdminClient()
   const [holdingsRes, usoRes, custosRes] = await Promise.all([

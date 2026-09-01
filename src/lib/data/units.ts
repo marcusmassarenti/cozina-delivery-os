@@ -437,6 +437,13 @@ export async function getSolicitacoesIfoodPendentes(): Promise<{
   primeira: { holding: string; loja: string | null } | null
 }> {
   if (!(await isSuperadmin())) return { total: 0, primeira: null }
+  // ⚠️ "Ver como o cliente" NÃO desliga o isSuperadmin — e este aviso é da
+  // PLATAFORMA (pendências de todos os clientes). Sem este guard, o Marcus
+  // viu "Grupo Le Brunch" estampado dentro da visão do Churrasco Royal
+  // (01/09/26). A pergunta certa não é "sou superadmin?", é "estou agindo
+  // como a plataforma AGORA?" — mesma lição do aviso do cliente, invertida.
+  const { getVerComoHoldingId } = await import("@/lib/auth/permissions")
+  if (await getVerComoHoldingId()) return { total: 0, primeira: null }
   const admin = createAdminClient()
   const { data, count } = await admin
     .from("ifood_activation_requests")
