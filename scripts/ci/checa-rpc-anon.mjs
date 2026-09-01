@@ -9,10 +9,21 @@
  * nascerem abertas -- Postgres concede EXECUTE a PUBLIC por padrão, e no
  * Supabase o `anon` herda. Tratamos o sintoma duas vezes; isto trata a causa.
  *
- * Por que a regra é "não executável pelo ANON" e não "revogado de todo mundo":
- * funções como `has_unit_access` são `security definer` de propósito e PRECISAM
- * ser executáveis pelo logado -- é assim que a RLS avalia as políticas. Proibir
- * `authenticated` quebraria a RLS inteira.
+ * O gate cobre ANON e AUTHENTICATED (lints 0028 e 0029 do advisor).
+ *
+ * ⚠️ HISTÓRIA DA PREMISSA, pra ninguém reverter isto daqui a 3 meses: até
+ * 01/set/2026 este arquivo só olhava o anon, com a justificativa de que
+ * cobrar `authenticated` "quebraria a RLS inteira" (has_unit_access etc.
+ * precisariam de EXECUTE pro logado). A premissa foi MEDIDA e caiu:
+ * has_unit_access, has_holding_access e has_brand_access têm ACL só
+ * postgres + service_role em produção — as policies as executam como dono
+ * da tabela, não como o usuário. Enquanto o gate não cobria o 0029,
+ * 7 RPCs de faturamento nasceram com EXECUTE pro authenticated e viraram
+ * caminho de leitura entre clientes (fechadas na migration 0253).
+ *
+ * Função que PRECISA legitimamente do authenticated (checa auth.uid() por
+ * dentro e é chamada pelo client logado) entra na ALLOWLIST_AUTHENTICATED
+ * abaixo, com o motivo escrito do lado.
  *
  * Lê o Security Advisor do Supabase (mesma regra que o painel usa:
  * 0028_anon_security_definer_function_executable). Sem token, AVISA e passa --
@@ -44,6 +55,7 @@ if (!TOKEN || !REF) {
 // Nenhuma destas deveria aparecer NUNCA, em nível nenhum.
 const SEMPRE_BLOQUEIA = new Set([
   "anon_security_definer_function_executable", // o P0 de jul e ago
+  "authenticated_security_definer_function_executable", // o P1 de set (0253)
   "rls_disabled_in_public",
   "security_definer_view", // view ignorando RLS: a irmã gêmea do P0
   "policy_exists_rls_disabled",
@@ -55,6 +67,22 @@ const SEMPRE_BLOQUEIA = new Set([
 // como ERROR. `rls_enabled_no_policy` (INFO, 37 tabelas) mora aqui: tabela
 // exclusiva do servidor sem policy é o estado esperado.
 const BLOQUEIA_SE_ERROR = true
+
+// Exceções LEGÍTIMAS do lint de authenticated — cada linha diz por quê.
+// Função nova só entra aqui se checar auth.uid() por dentro E for chamada
+// pelo client logado. "É mais fácil dar grant" não é motivo.
+const ALLOWLIST_AUTHENTICATED = new Set([
+  // Carimba last_seen_at do PRÓPRIO usuário (auth.uid() por dentro); é o
+  // client logado que chama. Revogar mata o "último acesso" (já mordeu 2x).
+  "touch_last_seen",
+])
+
+/** Nome da função citada no achado (metadata quando tem; senão, do texto). */
+function nomeDaFuncao(l) {
+  if (l.metadata?.name) return l.metadata.name
+  const m = /function\s+(?:public\.)?([a-zA-Z0-9_]+)/.exec(l.detail ?? "")
+  return m?.[1] ?? null
+}
 
 const resp = await fetch(
   `https://api.supabase.com/v1/projects/${REF}/advisors/security`,
@@ -70,10 +98,15 @@ if (!resp.ok) {
 }
 
 const { lints = [] } = await resp.json()
-const bloqueiam = lints.filter(
-  (l) =>
-    SEMPRE_BLOQUEIA.has(l.name) || (BLOQUEIA_SE_ERROR && l.level === "ERROR"),
-)
+const bloqueiam = lints.filter((l) => {
+  if (
+    l.name === "authenticated_security_definer_function_executable" &&
+    ALLOWLIST_AUTHENTICATED.has(nomeDaFuncao(l))
+  ) {
+    return false
+  }
+  return SEMPRE_BLOQUEIA.has(l.name) || (BLOQUEIA_SE_ERROR && l.level === "ERROR")
+})
 
 if (bloqueiam.length === 0) {
   const porNivel = lints.reduce((a, l) => {
@@ -85,8 +118,8 @@ if (bloqueiam.length === 0) {
       .map(([n, q]) => `${q} ${n}`)
       .join(", ") || "nada"
   console.log(
-    `✓ Nenhuma função security definer alcançável pelo anônimo, ` +
-      `nenhuma view ignorando RLS, RLS ligada em tudo.\n` +
+    `✓ Nenhuma função security definer alcançável por anônimo OU logado ` +
+      `(fora a allowlist), nenhuma view ignorando RLS, RLS ligada em tudo.\n` +
       `  (advisor: ${resumo} — não-bloqueantes)`,
   )
   process.exit(0)
