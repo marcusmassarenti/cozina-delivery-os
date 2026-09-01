@@ -588,8 +588,10 @@ async function avisarSolicitacaoPorEmail(d: {
     // e-mail tem que dizer isso (dark kitchen aprova 1× e conecta N marcas).
     const { data: irmas } = await admin
       .from("units")
-      .select("name, cnpj, brands!inner(holding_id)")
+      .select("name, cnpj, brands!inner(holding_id), unit_platforms!inner(platform, active)")
       .eq("brands.holding_id", d.holdingId)
+      .eq("unit_platforms.platform", "ifood")
+      .eq("unit_platforms.active", true)
     const lojas = ((irmas ?? []) as { name: string; cnpj: string | null }[])
       .filter((u) => (u.cnpj ?? "").replace(/\D/g, "") === d.cnpj.replace(/\D/g, ""))
       .map((u) => u.name)

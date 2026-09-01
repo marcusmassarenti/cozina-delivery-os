@@ -36,10 +36,20 @@ async function main() {
 
   console.log(`empresa   ${h.name}`)
   console.log(`vai para  ${contato.nome ?? "(sem nome)"} <${contato.email}>`)
+  const { data: todasUnits } = await admin
+    .from("units")
+    .select("name, cnpj, brands!inner(holding_id), unit_platforms!inner(platform, active)")
+    .eq("brands.holding_id", h.id)
+    .eq("unit_platforms.platform", "ifood")
+    .eq("unit_platforms.active", true)
+  const lojasDoCnpj = (cnpj: string) =>
+    ((todasUnits ?? []) as { name: string; cnpj: string | null }[])
+      .filter((x) => (x.cnpj ?? "").replace(/\D/g, "") === cnpj.replace(/\D/g, ""))
+      .map((x) => x.name)
   for (const r of reqs) {
     const loja = (r.units as { name?: string } | null)?.name ?? null
-    const { assunto } = conexaoSolicitada({ nome: contato.nome, loja, cnpj: r.cnpj as string })
-    console.log(`  · ${loja} — ${r.cnpj}\n    assunto: ${assunto}`)
+    const { assunto } = conexaoSolicitada({ nome: contato.nome, loja, cnpj: r.cnpj as string, lojas: lojasDoCnpj(r.cnpj as string) })
+    console.log(`  · ${loja} — ${r.cnpj} · cobre: ${lojasDoCnpj(r.cnpj as string).join(", ")}\n    assunto: ${assunto}`)
   }
 
   if (!enviar) {
@@ -48,13 +58,7 @@ async function main() {
   }
   for (const r of reqs) {
     const loja = (r.units as { name?: string } | null)?.name ?? null
-    const { data: irmas } = await admin
-      .from("units").select("name, cnpj, brands!inner(holding_id)")
-      .eq("brands.holding_id", h.id)
-    const lojasCnpj = ((irmas ?? []) as { name: string; cnpj: string | null }[])
-      .filter((x) => (x.cnpj ?? "").replace(/\D/g, "") === String(r.cnpj).replace(/\D/g, ""))
-      .map((x) => x.name)
-    const { assunto, html } = conexaoSolicitada({ nome: contato.nome, loja, cnpj: r.cnpj as string, lojas: lojasCnpj })
+    const { assunto, html } = conexaoSolicitada({ nome: contato.nome, loja, cnpj: r.cnpj as string, lojas: lojasDoCnpj(r.cnpj as string) })
     const res = await enviarEmail({
       holdingId: h.id as string, tipo: "conexao-solicitada",
       para: contato.email, assunto, html, forcar: true,

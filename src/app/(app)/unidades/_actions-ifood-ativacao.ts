@@ -36,10 +36,15 @@ async function lojasDoMesmoCnpj(
   holdingId: string,
   cnpj: string,
 ): Promise<{ id: string; name: string }[]> {
+  // SÓ unidades com iFood habilitado: o mesmo CNPJ pode ter marca que vive
+  // noutra plataforma (Salada Lovers é Keeta no CNPJ da Lorena) — prometer
+  // que a aprovação do iFood conecta essa criaria expectativa falsa.
   const { data } = await admin
     .from("units")
-    .select("id, name, cnpj, brands!inner(holding_id)")
+    .select("id, name, cnpj, brands!inner(holding_id), unit_platforms!inner(platform, active)")
     .eq("brands.holding_id", holdingId)
+    .eq("unit_platforms.platform", "ifood")
+    .eq("unit_platforms.active", true)
   return ((data ?? []) as { id: string; name: string; cnpj: string | null }[])
     .filter((u) => (u.cnpj ?? "").replace(/\D/g, "") === cnpj)
     .map((u) => ({ id: u.id, name: u.name }))
@@ -334,8 +339,10 @@ export async function getMinhasSolicitacoesIfood(): Promise<MinhaSolicitacao[]> 
    * à irmã continua vendo o status dela. */
   const { data: unitsHolding } = await db
     .from("units")
-    .select("id, code, name, cnpj, brands!inner(holding_id)")
+    .select("id, code, name, cnpj, brands!inner(holding_id), unit_platforms!inner(platform, active)")
     .eq("brands.holding_id", holdingId)
+    .eq("unit_platforms.platform", "ifood")
+    .eq("unit_platforms.active", true)
   const porCnpj = new Map<string, { id: string; code: string; name: string }[]>()
   for (const u of (unitsHolding ?? []) as {
     id: string
