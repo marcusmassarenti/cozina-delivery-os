@@ -42,6 +42,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.24.3",
+    date: "2026-09-01",
+    tag: "Correções",
+    title: "99 Food: dinheiro na entrega não é mais contado duas vezes",
+    // Muda número que o cliente já viu — destaque pra ele não descobrir sozinho.
+    destaque: true,
+    areas: [
+      {
+        area: "99 Food",
+        items: [
+          {
+            kind: "correcao",
+            title: "\u201CFica na loja\u201D do 99 estava inflado nas lojas com pedido em dinheiro",
+            antes:
+              "Quando o valor l\u00EDquido vinha do relat\u00F3rio de pedidos, os pedidos pagos em dinheiro na entrega j\u00E1 estavam inclu\u00EDdos ali \u2014 e o sistema somava esse mesmo dinheiro outra vez como \u201Crecebido direto\u201D.",
+            depois:
+              "O dinheiro entra uma vez s\u00F3. O percentual que fica na loja fica alguns pontos menor e passa a bater com o extrato do 99 \u2014 numa loja de exemplo, caiu de 78,4% para 75,4%.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.24.2",
     date: "2026-09-01",
     tag: "Correções",

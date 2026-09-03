@@ -427,6 +427,31 @@ export async function getNinefoodResumoByUnits(
             liquidoDoRelatorio <= acc.bruto
           ? liquidoDoRelatorio
           : derivado
+    /* ⚠️ DINHEIRO NA PORTA NÃO PODE ENTRAR DUAS VEZES.
+     *
+     * `ficaNaLoja` da tela = liquido + recebidoDireto. Isso está certo quando
+     * o líquido é o REPASSE (fontes 1 e 3), que por definição não inclui o
+     * que o cliente pagou na mão.
+     *
+     * Mas a fonte 2 é `receita_real_loja` do relatório de PEDIDO — e ali
+     * cada pedido tem a sua linha, inclusive os pagos em dinheiro. Somar o
+     * recebido direto por cima conta o mesmo dinheiro de novo.
+     *
+     * Medido em 01/09/26 (Kawaii Poke, reclamação da DG via Diego): a tela
+     * mostrava 78,4% de "fica na loja" onde o real é 75,2% — e o lojista, que
+     * recebeu 63% no banco, leu a diferença inteira como erro nosso. Parte
+     * era: R$ 991,19 de dinheiro contados 2× só em agosto. Na rede, 38 lojas
+     * caem na fonte 2 e a inflação passava de R$ 27 mil/mês (DG FOODS, 30 de
+     * 34 lojas, R$ 23,9 mil).
+     *
+     * É a mesma doença do VR no iFood (ver `project-vr-ja-no-repasse`): valor
+     * que JÁ ESTÁ dentro do líquido, somado à parte. Terceira vez que aparece
+     * neste projeto — por isso o flag viaja junto do número, e não numa
+     * regra que quem lê precisa lembrar. */
+    const liquidoIncluiDinheiro = liquidoUsar === liquidoDoRelatorio
+    const recebidoDireto = liquidoIncluiDinheiro
+      ? 0
+      : vendaDiretaDoMes(unitId, acc.dias, diasDaApi, pedidosPorDia, apiPorDia)
     const ticketMedio = acc.pedidos > 0 ? acc.bruto / acc.pedidos : 0
     const pctLoja = acc.bruto > 0 ? (liquidoUsar / acc.bruto) * 100 : 0
     out.set(unitId, {
@@ -443,13 +468,7 @@ export async function getNinefoodResumoByUnits(
       diasComDados: acc.dias.size,
       ticketMedio,
       pctLoja,
-      recebidoDireto: vendaDiretaDoMes(
-        unitId,
-        acc.dias,
-        diasDaApi,
-        pedidosPorDia,
-        apiPorDia,
-      ),
+      recebidoDireto,
       hasData: acc.bruto > 0 || acc.pedidos > 0,
     })
   }
