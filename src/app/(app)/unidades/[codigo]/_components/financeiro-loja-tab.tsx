@@ -32,6 +32,7 @@ import { getPagamentoResumoForMonth } from "@/lib/data/ifood-pedidos"
 import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
+import { getAReceber99ForUnit } from "@/lib/data/ninefood-a-receber"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth, getEntregaPropria } from "@/lib/data/taxa-entrega"
 import { getUnitCostBreakdown } from "@/lib/data/unit-costs"
@@ -133,6 +134,7 @@ export async function FinanceiroLojaTab({
     quemPaga,
     entregaPropria,
     cwOp,
+    aReceber99,
   ] = await Promise.all([
     // Estas SEGUEM o período escolhido — as tabelas têm data por pedido.
     getPagamentoResumoForMonth(unitId, year, month, dateRange),
@@ -160,6 +162,10 @@ export async function FinanceiroLojaTab({
     // taxas e motivo de cancelamento — coisas que o hub da própria loja sabe
     // e marketplace nenhum entrega.
     getOperacaoCardapioWeb([unitId], year, month, dateRange),
+    // A RECEBER DO 99 — não segue o período escolhido DE PROPÓSITO: a
+    // pergunta é "quanto ainda vai cair na minha conta", que é sobre o
+    // futuro, não sobre o mês que a pessoa está olhando.
+    getAReceber99ForUnit(unitId),
   ])
   // Fora do Promise.all de propósito: é leitura pequena e opcional — loja sem
   // relatório Super importado devolve vazio e o card some.
@@ -391,6 +397,42 @@ export async function FinanceiroLojaTab({
             antecipacaoIfood={antecipFee}
             showPdf={false}
           />
+          {/* A RECEBER DO 99 — rodapé do DRE, não card.
+              É informação de APOIO: serve pra pessoa fechar a conta contra o
+              extrato do banco (a tela conta por data da VENDA, o banco por
+              data do REPASSE), mas não é um indicador que ela acompanha. Como
+              card virava o segundo maior número da tela — peso de KPI numa
+              nota de rodapé (Marcus, 01/09/26).
+
+              Só pra loja conectada por API: quem sobe planilha não tem
+              `expect_settle_date`, e R$ 0,00 ali afirmaria "não há nada a
+              receber" numa loja que vende. Ver ninefood-a-receber.ts. */}
+          {aReceber99 && aReceber99.valor > 0 && (
+            <p
+              className="mt-2 px-1 text-xs text-muted-foreground"
+              title={
+                "O 99 deposita de 4 a 9 dias depois da venda. Por isso o extrato do banco mostra menos que esta tela: aqui está o que a loja ganhou, lá o que já foi pago. Somando este valor, as duas contas fecham."
+              }
+            >
+              <PlatformLogo platform="99food" size="sm" />{" "}
+              <b className="tabular-nums font-semibold">
+                {fmtBRL(aReceber99.valor)}
+              </b>{" "}
+              do 99 ainda não caíram na conta —{" "}
+              {fmtNum(aReceber99.pedidos)} pedido
+              {aReceber99.pedidos === 1 ? "" : "s"} entregue
+              {aReceber99.pedidos === 1 ? "" : "s"}
+              {aReceber99.proximaData
+                ? `, próximo depósito em ${new Date(
+                    `${aReceber99.proximaData}T12:00:00`,
+                  ).toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })}`
+                : ""}
+              .
+            </p>
+          )}
         </div>
 
         {/* Coluna da direita: o que a loja LANÇA à mão — a receita que nenhum

@@ -42,6 +42,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.25.0",
+    date: "2026-09-02",
+    tag: "Novidade",
+    title: "Agora dá pra ver quanto o 99 ainda tem pra te pagar",
+    summary:
+      "O 99 deposita de 4 a 9 dias depois da venda. Aí o extrato do banco mostra menos que o painel, e parece que faltou dinheiro. Agora a tela mostra o que ainda está na fila — e as duas contas fecham.",
+    areas: [
+      {
+        area: "99 Food",
+        items: [
+          {
+            kind: "novo",
+            title: "\u201CA receber do 99\u201D na aba Financeiro da loja",
+            desc:
+              "No rodapé do DRE da loja aparece quanto o 99 ainda vai depositar, quantos pedidos já entregues compõem esse valor e a data do próximo depósito. O valor e a data vêm do próprio 99, pedido a pedido — não é estimativa nossa. Aparece nas lojas conectadas por API; quem só sobe planilha não recebe essa informação do 99, e por isso a linha não aparece (em vez de mostrar zero, que diria algo falso).",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.24.2",
     date: "2026-09-01",
     tag: "Correções",
