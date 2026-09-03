@@ -359,8 +359,10 @@ export async function autoLinkIfoodMerchants(
     }
   }
 
-  const abertas = ((reqs ?? []) as unknown as {
-    id: string
+  type Aberta = {
+    /** null = IRMÃ sintética: unidade do mesmo CNPJ de um pedido já aprovado,
+     *  que nunca teve pedido próprio (dark kitchen — 1 aprovação, N marcas). */
+    id: string | null
     unit_id: string
     cnpj: string | null
     units: {
@@ -370,14 +372,74 @@ export async function autoLinkIfoodMerchants(
       /** Da Receita (import por CNPJ). Casa com o `corporateName` do merchant. */
       razao_social: string | null
     }
-  }[]).filter((row) => !unidadesJaVinculadas.has(row.unit_id))
+  }
+  const abertas: Aberta[] = ((reqs ?? []) as unknown as Aberta[]).filter(
+    (row) => !unidadesJaVinculadas.has(row.unit_id),
+  )
+
+  /* ── IRMÃS DE MESMO CNPJ ───────────────────────────────────────────────
+   *
+   * A aprovação do iFood é por CNPJ, mas cada `activation_request` é por
+   * unidade. Uma dark kitchen com 3 marcas no mesmo CNPJ abre UM pedido só —
+   * quando a primeira loja vincula, o pedido vira 'ativa' e as irmãs, que
+   * nunca tiveram pedido próprio, deixam de ser procuradas. Resultado: o
+   * e-mail "cliente aprovou" chega, mas 2 de 3 lojas ficam sem vínculo até
+   * alguém casar merchant×loja na mão (Le Brunch, 03/09/26 — aconteceu 3×).
+   *
+   * Aqui, pra cada pedido que o cliente JÁ aprovou (solicitada ou ativa),
+   * puxo as unidades do MESMO CNPJ e da MESMA holding que têm iFood ativo e
+   * seguem sem `api_store_id`. Elas entram no casamento como irmãs (id null):
+   * o `fechar` já lida com isso — o update de status é escopado por
+   * pendente/solicitada, então numa irmã sem pedido ele casa zero linhas, sem
+   * efeito. Escopo por holding, nunca entre clientes. */
+  {
+    const { data: aprovados } = await admin
+      .from("ifood_activation_requests")
+      .select("holding_id, cnpj")
+      .in("status", ["solicitada", "ativa"])
+    const paresAprovados = new Map<string, Set<string>>() // holding -> cnpjs
+    for (const a of (aprovados ?? []) as { holding_id: string; cnpj: string | null }[]) {
+      const c = soDigitos(a.cnpj)
+      if (!a.holding_id || c.length !== 14) continue
+      const set = paresAprovados.get(a.holding_id) ?? new Set<string>()
+      set.add(c)
+      paresAprovados.set(a.holding_id, set)
+    }
+    if (paresAprovados.size > 0) {
+      const { data: irmasCand } = await admin
+        .from("units")
+        .select("id, code, name, cnpj, razao_social, brands!inner(holding_id), unit_platforms!inner(platform, active, api_store_id)")
+        .eq("unit_platforms.platform", "ifood")
+        .eq("unit_platforms.active", true)
+        .is("unit_platforms.api_store_id", null)
+      for (const u of (irmasCand ?? []) as unknown as {
+        id: string; code: string; name: string; cnpj: string | null; razao_social: string | null
+        brands: { holding_id: string }
+      }[]) {
+        const c = soDigitos(u.cnpj)
+        const holding = u.brands?.holding_id
+        if (c.length !== 14 || !holding) continue
+        if (!paresAprovados.get(holding)?.has(c)) continue
+        if (unidadesJaVinculadas.has(u.id)) continue
+        if (abertas.some((a) => a.unit_id === u.id)) continue
+        if (restrictUnitIds && !restrictUnitIds.includes(u.id)) continue
+        abertas.push({
+          id: null,
+          unit_id: u.id,
+          cnpj: u.cnpj,
+          units: { id: u.id, code: u.code, name: u.name, razao_social: u.razao_social },
+        })
+      }
+    }
+  }
 
   const vinculadas: AutoLinkResult["vinculadas"] = []
   const ambiguas: AutoLinkResult["ambiguas"] = []
   const usados = new Set<string>()
 
   /** Registra a rodada mesmo quando não foi possível identificar a loja. */
-  async function marcarTentativa(requestId: string): Promise<void> {
+  async function marcarTentativa(requestId: string | null): Promise<void> {
+    if (requestId === null) return
     const { error } = await admin
       .from("ifood_activation_requests")
       .update({ last_auto_link_checked_at: new Date().toISOString() })
@@ -390,7 +452,7 @@ export async function autoLinkIfoodMerchants(
 
   /** Vincula e marca a solicitação como ativa. Devolve false se o banco negou. */
   async function fechar(
-    row: { unit_id: string; units: { code: string; name: string } },
+    row: Aberta,
     merchantId: string,
     score: number,
     cnpj: string,
