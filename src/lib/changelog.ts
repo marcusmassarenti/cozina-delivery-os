@@ -46,8 +46,10 @@ export const CHANGELOG: Release[] = [
     date: "2026-09-01",
     tag: "Correções",
     title: "99 Food: dinheiro na entrega não é mais contado duas vezes",
-    // Muda número que o cliente já viu — destaque pra ele não descobrir sozinho.
-    destaque: true,
+    // SEM destaque: correção não abre pop-up (regra do ehEstrutural). Marcus
+    // tirou em 01/09/26 — anunciar em pop-up que o número estava errado
+    // levanta a dúvida em quem nem tinha reparado. Fica no /novidades pra
+    // quem procurar, e a explicação vai por WhatsApp a quem perguntar.
     areas: [
       {
         area: "99 Food",
