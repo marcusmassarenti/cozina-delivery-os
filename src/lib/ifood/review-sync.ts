@@ -221,6 +221,20 @@ export async function syncIfoodReviews(
       else if (!r.firstStatus)
         motivo = r.error ?? "Falha ao autenticar (faltam credenciais na Vercel?)."
       else motivo = r.error ?? `HTTP ${r.firstStatus}`
+      // 403 = o app de AVALIAÇÕES não foi autorizado pra esta loja (é por
+      // loja, não por CNPJ — provado na Parmegiana Crocante, 03/09/26, cujas
+      // irmãs de mesmo CNPJ já estavam ok). O vínculo carimbou
+      // `review_enabled_at` otimista na hora de conectar; a API diz que
+      // MENTE. Limpa o carimbo pra a tela mostrar "falta avaliações" em vez
+      // de "conectado". Só no 403 — 401/0 são credencial/rede, problema
+      // nosso, não do lojista, e apagar o carimbo ali daria alarme falso.
+      if (r.firstStatus === 403) {
+        await admin
+          .from("unit_platforms")
+          .update({ review_enabled_at: null })
+          .eq("unit_id", v.unit_id)
+          .eq("platform", "ifood")
+      }
       resultados.push({
         unitId: v.unit_id,
         unitCode,
@@ -336,6 +350,15 @@ export async function syncIfoodReviews(
       })
       if (logErr) console.error("review-sync log:", logErr.message)
     }
+
+    // Avaliações responderam: garante o carimbo (reacende quem autorizou
+    // depois do vínculo, cujo `review_enabled_at` o 403 tinha limpado).
+    await admin
+      .from("unit_platforms")
+      .update({ review_enabled_at: new Date().toISOString() })
+      .eq("unit_id", v.unit_id)
+      .eq("platform", "ifood")
+      .is("review_enabled_at", null)
 
     resultados.push({
       unitId: v.unit_id,

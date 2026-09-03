@@ -361,6 +361,37 @@ export async function getUnitPlatforms(
   return (data ?? []).map((r) => r.platform as PlatformId)
 }
 
+/**
+ * Estado dos DOIS apps do iFood de uma loja — Financeiro e Avaliações.
+ *
+ * O iFood autoriza cada app SEPARADAMENTE, e Avaliações é POR LOJA, não por
+ * CNPJ (provado na Parmegiana Crocante, 03/09/26: mesmo CNPJ das irmãs já
+ * ativas, mas a API de avaliações dela dava 403). A tela dizia "conectado"
+ * olhando só o vínculo — Marcus pegou: "por que você disse que todas estavam
+ * conectadas e essa faltava?".
+ *
+ * A verdade mora nos carimbos que os crons mantêm contra a API: o financeiro
+ * confirma quando o extrato desce, o review-sync limpa `review_enabled_at`
+ * no 403 e reacende no 200. Vínculo só (api_store_id) NÃO é conexão completa.
+ */
+export async function getIfoodAppsStatus(
+  unitId: string,
+): Promise<{ vinculado: boolean; financeiro: boolean; avaliacoes: boolean } | null> {
+  const { data } = await createAdminClient()
+    .from("unit_platforms")
+    .select("api_store_id, fin_enabled_at, review_enabled_at")
+    .eq("unit_id", unitId)
+    .eq("platform", "ifood")
+    .eq("active", true)
+    .maybeSingle()
+  if (!data) return null
+  return {
+    vinculado: data.api_store_id != null,
+    financeiro: data.fin_enabled_at != null,
+    avaliacoes: data.review_enabled_at != null,
+  }
+}
+
 export async function getDefaultBrand(): Promise<{ id: string; name: string }> {
   const supabase = createAdminClient()
 

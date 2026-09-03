@@ -16,6 +16,7 @@ import {
 import {
   getUnitByCode,
   getUnitPlatforms,
+  getIfoodAppsStatus,
   type Unit,
 } from "@/lib/data/units"
 import {
@@ -198,6 +199,7 @@ export default async function UnidadeDetalhePage({
   const queryRange = isFullMonth ? undefined : periodRange
   const [
     platforms,
+    ifoodApps,
     fin,
     nine,
     keeta,
@@ -211,6 +213,7 @@ export default async function UnidadeDetalhePage({
     cancelCesta,
   ] = await Promise.all([
     getUnitPlatforms(unit.id),
+    getIfoodAppsStatus(unit.id),
     getFinanceiroResumoForMonth(unit.id, year, month, queryRange),
     getNinefoodResumoForMonth(unit.id, year, month, queryRange),
     getKeetaResumoForMonth(unit.id, year, month, queryRange),
@@ -390,6 +393,12 @@ export default async function UnidadeDetalhePage({
             month={month}
             periodLabel={formatPeriodLabel({ year, month })}
             platforms={platforms.filter(ehMarketplace)}
+            // Avaliações do iFood não autorizadas (o app é por LOJA): o
+            // financeiro conecta, mas a nota/comentário não vem até o lojista
+            // autorizar o 2º app no Portal do Parceiro. Ver getIfoodAppsStatus.
+            avaliacoesIfoodFaltando={
+              ifoodApps?.vinculado === true && ifoodApps.avaliacoes === false
+            }
             mesEmAberto={
               year === new Date().getFullYear() &&
               month === new Date().getMonth() + 1
