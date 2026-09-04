@@ -219,6 +219,24 @@ export async function getNinefoodResumoByUnits(
   }
   const accs = new Map<string, Acc>()
 
+  // API PRIMEIRO — régua do 99 vira a MESMA do iFood (extrato > planilha).
+  //
+  // Até 03/09/26 a planilha diária ganhava o dia e a API só tapava buraco. O
+  // problema: a `ninefood_daily_loja` fica INCOMPLETA (a Pinheiros tinha só
+  // 17 dos 31 dias de agosto) e o `bruto` dela é base diferente da API. O
+  // resumo montava um Frankenstein — dias 1-17 da planilha, 18-31 da API —
+  // que não batia com fonte nenhuma: R$ 9.024 de bruto onde o portal do 99
+  // mostra R$ 5.972 de "ganhos esperados" (== nosso orderAmount da API, ao
+  // centavo). Diego pegou na Pinheiros/Churrasco no Pote.
+  //
+  // Agora, no dia que a API tem, o FINANCEIRO vem dela. A planilha ainda
+  // entra pelas MÉTRICAS OPERACIONAIS (avaliação, aceitação, tempo — que a
+  // API não expõe) e segue sendo a fonte do financeiro nos dias/lojas SEM
+  // API. Loja só-planilha não muda em nada.
+  const apiPorDia = await ninefoodApiPorDia(unitIds, year, month, dateRange)
+  const diasApiPorUnit = new Map<string, Set<string>>()
+  for (const [u, dias] of apiPorDia) diasApiPorUnit.set(u, new Set(dias.keys()))
+
   for (const row of data ?? []) {
     let acc = accs.get(row.unit_id)
     if (!acc) {
@@ -238,24 +256,31 @@ export async function getNinefoodResumoByUnits(
       }
       accs.set(row.unit_id, acc)
     }
-    acc.pedidos += row.pedidos ?? 0
-    acc.bruto += Number(row.bruto ?? 0)
-    acc.liquido += Number(row.liquido ?? 0)
-    acc.comissao += Number(row.comissao_rs ?? 0)
-    acc.taxaPgto += Number(row.taxa_canal_pagamento_rs ?? 0)
-    acc.promo += Number(row.promocoes_rs ?? 0)
-    acc.cancel += row.cancelamentos_qtd ?? 0
+    // Métricas operacionais: SEMPRE da planilha (a API não tem nota, aceitação
+    // nem tempo de preparo).
     if (row.avaliacao_loja != null) acc.avaliacoes.push(Number(row.avaliacao_loja))
     if (row.taxa_aceitacao_pct != null)
       acc.aceitacoes.push(Number(row.taxa_aceitacao_pct))
     if (row.tempo_medio_preparo_min != null)
       acc.tempos.push(row.tempo_medio_preparo_min)
-    if (row.data) {
-      acc.dias.add(row.data)
-      if (Number(row.bruto ?? 0) > 0 || (row.pedidos ?? 0) > 0) {
+    // Financeiro: só quando a API NÃO cobre esse dia (senão a API abaixo soma
+    // de novo, e com base mais completa). É a inversão da régua.
+    const apiCobreEsteDia =
+      row.data != null && (diasApiPorUnit.get(row.unit_id)?.has(row.data) ?? false)
+    if (!apiCobreEsteDia) {
+      acc.pedidos += row.pedidos ?? 0
+      acc.bruto += Number(row.bruto ?? 0)
+      acc.liquido += Number(row.liquido ?? 0)
+      acc.comissao += Number(row.comissao_rs ?? 0)
+      acc.taxaPgto += Number(row.taxa_canal_pagamento_rs ?? 0)
+      acc.promo += Number(row.promocoes_rs ?? 0)
+      acc.cancel += row.cancelamentos_qtd ?? 0
+      if (row.data && (Number(row.bruto ?? 0) > 0 || (row.pedidos ?? 0) > 0)) {
         acc.diasComVenda.add(row.data)
       }
     }
+    // O dia entra em `dias` de qualquer forma (a operacional dele existe).
+    if (row.data) acc.dias.add(row.data)
   }
 
   /**
@@ -275,7 +300,6 @@ export async function getNinefoodResumoByUnits(
    * A planilha ganha o dia quando existe nos dois lados: ela é mais rica
    * (avaliação, aceitação, tempo de preparo — que a API não tem).
    */
-  const apiPorDia = await ninefoodApiPorDia(unitIds, year, month, dateRange)
   /** unit → dias cujo número veio da API (e não da planilha). */
   const diasViaApi = new Map<string, Set<string>>()
   for (const [unitId, dias] of apiPorDia) {
@@ -300,7 +324,9 @@ export async function getNinefoodResumoByUnits(
       accs.set(unitId, acc)
     }
     for (const [dia, v] of dias) {
-      if (acc.dias.has(dia)) continue
+      // A planilha já NÃO somou financeiro pros dias da API (gate acima), então
+      // aqui a API entra pra TODO dia dela — sem `continue`, senão o dia que a
+      // planilha também tinha ficaria sem financeiro nenhum.
       acc.pedidos += v.pedidos
       acc.bruto += v.bruto
       acc.liquido += v.liquido
@@ -309,6 +335,7 @@ export async function getNinefoodResumoByUnits(
       acc.promo += v.promo
       acc.cancel += v.cancelados
       acc.dias.add(dia)
+      if (v.bruto > 0 || v.pedidos > 0) acc.diasComVenda.add(dia)
       viaApi.add(dia)
     }
   }
