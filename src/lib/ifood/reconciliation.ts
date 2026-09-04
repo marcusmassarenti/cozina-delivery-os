@@ -24,6 +24,11 @@ import { gunzipSync } from "node:zlib"
 import { fetchIfood, type IfoodFetchResult } from "./client"
 import { createAdminClient } from "@/lib/supabase/admin"
 
+/** Competência (YYYY-MM) de uma data, no calendário local. */
+function ym(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
 /**
  * Janela em que o iFood reaproveita o pedido de extrato em vez de criar um
  * novo. É REGRA DELES (6h), não nossa — por isso o número mora aqui perto do
@@ -105,6 +110,29 @@ export async function marcarCompetenciaVazia(
   merchantId: string,
   competencia: string,
 ): Promise<void> {
+  /* ⚠️ O MÊS CORRENTE NUNCA É "VAZIO PARA SEMPRE".
+   *
+   * "Não existem lançamentos no período" é resposta DEFINITIVA quando o mês
+   * já acabou — não vai nascer venda em maio de novo. No mês CORRENTE é
+   * apenas o estado daquele instante: o mês ainda está acontecendo.
+   *
+   * ── O QUE ISSO CAUSOU (04/09/26) ──────────────────────────────────────
+   * Na madrugada de 1º/09 o coletor perguntou pelo extrato de setembro. O
+   * iFood respondeu "vazio", porque setembro tinha 40 minutos de vida. A
+   * marca virou permanente e o coletor passou a PULAR setembro em 93 lojas —
+   * a rede quase inteira — de 4 em 4 minutos, o mês todo. Os crons diários
+   * ainda pegavam alguma coisa (eles forçam o mês corrente), mas o coletor,
+   * que é quem recolhe o extrato que ficou pronto depois, ficou cego.
+   *
+   * O sintoma que chegou ao Marcus: a JK aparecia com 16 pedidos em três
+   * dias, fazendo 88 por dia; a Jardins com 20. As duas maiores lojas da
+   * rede paradas em 01/09, e o número não batendo com o portal do iFood.
+   *
+   * Marcar mês passado continua valendo — é o que impede o coletor de bater
+   * pra sempre em janeiro de uma loja que abriu em junho, e a cota do iFood
+   * é por APLICATIVO (chamada gasta numa loja é tirada de todas). */
+  if (competencia === ym(new Date())) return
+
   const admin = createAdminClient()
   const { error } = await admin
     .from("ifood_competencia_vazia")
