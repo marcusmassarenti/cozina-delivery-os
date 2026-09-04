@@ -49,6 +49,20 @@ export type PlataformaBackfill = "ifood" | "99food" | "cardapioweb" | "keeta"
  * quando a fonte não alcança janeiro — não faz sentido pedir mês em que a
  * loja ainda não era nossa.
  */
+/**
+ * O dia mais antigo que a Bill API do 99 aceita hoje: 90 dias corridos, menos
+ * 3 de margem pra janela não escorregar durante uma execução longa.
+ *
+ * Exportado porque quem monta o intervalo precisa clampar o mês mais antigo
+ * por ele — pedir 01/06 quando a janela abre em 06/06 derruba o mês inteiro.
+ */
+export function primeiroDia99(hoje = new Date()): Date {
+  const d = new Date(hoje)
+  d.setDate(d.getDate() - (90 - 3))
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 export function mesesDoBackfill(
   plataforma: PlataformaBackfill,
   conectadaEm?: Date,
@@ -59,14 +73,26 @@ export function mesesDoBackfill(
   let inicio = new Date(BACKFILL_DESDE.year, BACKFILL_DESDE.month - 1, 1)
 
   if (plataforma === "99food") {
-    // Teto MÓVEL, não fixo. A Bill API aceita ~3 meses corridos pra trás
-    // ("errno 110004: Query period exceeds limit. You can query up to 3
-    // months of data"). A versão anterior fixava junho/26 — medição de
-    // agosto, correta EM agosto — e apodreceu em 01/09/26: junho saiu da
-    // janela, o backfill das lojas novas do Le Brunch bateu 110004 pra
-    // sempre e a fila travou nas mesmas 2 lojas (head-of-line de novo).
-    // Janela = mês corrente + 2 anteriores, que é o que a API entrega hoje.
-    const limite99 = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
+    /* Teto MÓVEL, medido dia a dia — e a medição corrigiu a versão anterior.
+     *
+     * A Bill API recusa com "errno 110004: You can query up to 3 months of
+     * data", e "3 meses" ali são 90 DIAS CORRIDOS, não três meses de
+     * calendário. Provado em 04/09/26 pedindo um dia por vez: 05/06 recusa,
+     * 06/06 responde — exatamente 90 dias antes.
+     *
+     * A regra anterior usava "mês corrente + 2 anteriores" (1º de julho, em
+     * setembro) por segurança. Só que isso jogava fora 25 dias de junho que a
+     * API entregava — e foi o Marcus que pegou: "se libera 3 e estamos em
+     * setembro, não deveria ser jun jul e ago?". Devia mesmo.
+     *
+     * A margem de 3 dias existe porque a janela ANDA: um backfill longo que
+     * começasse colado no limite veria o dia mais antigo cair fora no meio da
+     * execução, e o 110004 volta a travar a fila (head-of-line, 01/09/26).
+     *
+     * ⚠️ O mês mais antigo NÃO começa no dia 1 — quem monta o intervalo tem
+     * de clampar pelo `primeiroDia99` abaixo, senão a chamada de junho vai
+     * de 01/06 e é recusada inteira, levando junho junto. */
+    const limite99 = primeiroDia99(hoje)
     if (limite99 > inicio) inicio = limite99
   }
   if (plataforma === "cardapioweb" && conectadaEm) {
@@ -74,9 +100,18 @@ export function mesesDoBackfill(
     if (inst > inicio) inicio = inst
   }
 
+  /* O laço anda de MÊS em mês, sempre a partir do dia 1.
+   *
+   * ⚠️ Não usar `inicio` cru aqui. Desde que a janela do 99 virou "90 dias
+   * corridos", `inicio` carrega um dia qualquer (09/06, por exemplo) — e um
+   * laço que soma mês mantendo o dia 9 pularia o mês corrente sempre que
+   * hoje fosse antes do dia 9. Setembro sumiu assim no primeiro teste.
+   *
+   * O dia só importa pra clampar a PRIMEIRA chamada; quem monta o intervalo
+   * usa `primeiroDia99` pra isso. */
   const out: { year: number; month: number }[] = []
   for (
-    const d = new Date(inicio);
+    const d = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
     d <= hoje;
     d.setMonth(d.getMonth() + 1)
   ) {

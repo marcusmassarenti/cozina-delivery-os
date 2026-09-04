@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { mesesDoBackfill } from "@/lib/backfill-regra"
+import { mesesDoBackfill, primeiroDia99 } from "@/lib/backfill-regra"
 import { syncNinefoodFinanceiro } from "./sync-financeiro"
 
 /**
@@ -107,9 +107,18 @@ async function rodar(
     for (const { year, month } of meses) {
       const mm = String(month).padStart(2, "0")
       const ultimoDia = new Date(year, month, 0).getDate()
+      /* O MÊS MAIS ANTIGO NÃO COMEÇA NO DIA 1.
+       * A janela do 99 abre num dia qualquer do mês (90 dias corridos atrás).
+       * Pedir 01/06 quando ela abre em 06/06 faz a API recusar a chamada
+       * INTEIRA com 110004 — e junho se perde por causa de 5 dias. */
+      const abre = primeiroDia99()
+      const diaInicial =
+        abre.getFullYear() === year && abre.getMonth() + 1 === month
+          ? String(abre.getDate()).padStart(2, "0")
+          : "01"
       try {
         const res = await syncNinefoodFinanceiro({
-          startDate: `${year}${mm}01`,
+          startDate: `${year}${mm}${diaInicial}`,
           endDate: `${year}${mm}${String(ultimoDia).padStart(2, "0")}`,
           appShopIds: [l.app_shop_id],
         })
