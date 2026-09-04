@@ -31,7 +31,20 @@ export type DrePlat = {
   /** Abertura das taxas (pode ser parcial; Keeta vem vazio). `credit` = linha
    * positiva (estorno/promoção que a plataforma devolveu), pra fechar com a
    * taxa líquida real. */
-  itens: { label: string; value: number; credit?: boolean }[]
+  itens: {
+    label: string
+    value: number
+    credit?: boolean
+    /**
+     * INFORMATIVO: mostra o valor mas NÃO entra na soma das taxas. Serve
+     * pra "promoção que a loja deu" e "frete grátis que a loja bancou" no
+     * 99, que JÁ estão abatidos do bruto (a "Renda total das vendas" do
+     * portal). Somar de novo duplicava e o DRE inventava um crédito de
+     * "recebido a mais que as taxas explicam" do tamanho exato da promoção.
+     * Ver a migration 0256.
+     */
+    info?: boolean
+  }[]
 }
 
 export type VrInfo = {
@@ -714,7 +727,20 @@ function ItemList({
   total,
   base,
 }: {
-  itens: { label: string; value: number; credit?: boolean }[]
+  itens: {
+    label: string
+    value: number
+    credit?: boolean
+    /**
+     * INFORMATIVO: mostra o valor mas NÃO entra na soma das taxas. Serve
+     * pra "promoção que a loja deu" e "frete grátis que a loja bancou" no
+     * 99, que JÁ estão abatidos do bruto (a "Renda total das vendas" do
+     * portal). Somar de novo duplicava e o DRE inventava um crédito de
+     * "recebido a mais que as taxas explicam" do tamanho exato da promoção.
+     * Ver a migration 0256.
+     */
+    info?: boolean
+  }[]
   total: number
   base: number
 }) {
@@ -730,6 +756,32 @@ function ItemList({
     <>
       {itens.map((it) => {
         const pct = base > 0 ? (it.value / base) * 100 : 0
+        // Informativo: sem sinal e em cinza, com o aviso de que já está no
+        // bruto — pra ninguém somar de cabeça e achar que falta taxa.
+        if (it.info) {
+          return (
+            <div
+              key={it.label}
+              className="flex items-baseline justify-between gap-2 py-0.5"
+              title="Já abatido do faturamento bruto (é assim que o portal do 99 mostra a renda). Não entra na soma das taxas."
+            >
+              <span className="truncate text-[11px] italic text-muted-foreground/80">
+                {it.label}{" "}
+                <span className="not-italic text-[9px] uppercase tracking-wide">
+                  · já no bruto
+                </span>
+              </span>
+              <span className="flex shrink-0 items-baseline gap-1.5">
+                <span className="text-[11px] tabular-nums text-muted-foreground/80">
+                  {fmtBRL(it.value)}
+                </span>
+                <span className="w-10 text-right text-[9px] font-normal tabular-nums text-muted-foreground/60">
+                  {fmtPct(pct)}
+                </span>
+              </span>
+            </div>
+          )
+        }
         return (
           <div
             key={it.label}

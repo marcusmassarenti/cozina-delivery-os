@@ -64,6 +64,18 @@ export type NinefoodResumo = {
   taxaCanalPagamentoRs: number
   /** Soma "Despesas de ofertas da loja" */
   promocoesRs: number
+  /**
+   * Entrega feita pelo 99 e cobrada da loja (`b2pDeliveryAmount`). Só a API
+   * traz; a planilha diária não tem a coluna (fica 0). Sem esta linha o DRE
+   * da Pinheiros mostrava "Diferença não explicada −R$ 1.675,92 (18,6%)".
+   */
+  entregaRs: number
+  /**
+   * Frete grátis líquido que a loja bancou (`freeDeliveryOutcome +
+   * freeDeliverySubsidy`). INFORMATIVO: já está abatido do `bruto`, que é a
+   * "Renda total das vendas" do portal — NÃO subtrair de novo. Ver 0256.
+   */
+  freteGratisLojaRs: number
   /** Soma de cancelamentos comerciantes */
   cancelamentosQtd: number
   /** Média da Avaliação da loja nos dias com dado */
@@ -209,6 +221,8 @@ export async function getNinefoodResumoByUnits(
     comissao: number
     taxaPgto: number
     promo: number
+    entrega: number
+    freteGratisLoja: number
     cancel: number
     avaliacoes: number[]
     aceitacoes: number[]
@@ -247,6 +261,8 @@ export async function getNinefoodResumoByUnits(
         comissao: 0,
         taxaPgto: 0,
         promo: 0,
+        entrega: 0,
+        freteGratisLoja: 0,
         cancel: 0,
         avaliacoes: [],
         aceitacoes: [],
@@ -314,6 +330,8 @@ export async function getNinefoodResumoByUnits(
         comissao: 0,
         taxaPgto: 0,
         promo: 0,
+        entrega: 0,
+        freteGratisLoja: 0,
         cancel: 0,
         avaliacoes: [],
         aceitacoes: [],
@@ -333,6 +351,8 @@ export async function getNinefoodResumoByUnits(
       acc.comissao += v.comissao
       acc.taxaPgto += v.taxaCanal
       acc.promo += v.promo
+      acc.entrega += v.entrega
+      acc.freteGratisLoja += v.freteGratisLoja
       acc.cancel += v.cancelados
       acc.dias.add(dia)
       if (v.bruto > 0 || v.pedidos > 0) acc.diasComVenda.add(dia)
@@ -439,7 +459,25 @@ export async function getNinefoodResumoByUnits(
      * e faz o lojista achar o canal ruim, este erra PARA CIMA — e ninguém
      * reclama de um número bom. Por isso passou despercebido.
      */
-    const derivado = Math.max(0, acc.bruto - acc.comissao - acc.taxaPgto - acc.promo)
+    /* Todos os dias com venda vieram da API? Aí a régua é a do PORTAL (0256):
+     * o bruto é a "Renda total das vendas", que JÁ abate a promoção da loja,
+     * e a taxa que falta itemizar é a ENTREGA feita pelo 99. Na Pinheiros
+     * (ago/26) `bruto − comissão − taxa − entrega` = 5.972,61 = orderAmount,
+     * ao centavo. Subtrair a promoção de novo dava 5.777,61 — 195,00 a menos,
+     * o tamanho exato da promoção — e o DRE inventava um crédito. Em dia de
+     * PLANILHA a entrega não existe (0) e a promoção segue na conta, então a
+     * loja só-planilha é byte-idêntica. */
+    const todosDiasViaApi =
+      acc.diasComVenda.size > 0 &&
+      [...acc.diasComVenda].every((d) => diasDaApi?.has(d) ?? false)
+    const derivado = Math.max(
+      0,
+      acc.bruto -
+        acc.comissao -
+        acc.taxaPgto -
+        acc.entrega -
+        (todosDiasViaApi ? 0 : acc.promo),
+    )
     const gravadoPlausivel =
       liquidoGravado > 0 &&
       liquidoGravado <= acc.bruto &&
@@ -488,6 +526,8 @@ export async function getNinefoodResumoByUnits(
       comissaoRs: acc.comissao,
       taxaCanalPagamentoRs: acc.taxaPgto,
       promocoesRs: acc.promo,
+      entregaRs: acc.entrega,
+      freteGratisLojaRs: acc.freteGratisLoja,
       cancelamentosQtd: acc.cancel,
       avaliacaoMedia: mean(acc.avaliacoes),
       taxaAceitacaoMedia: mean(acc.aceitacoes),
@@ -520,15 +560,23 @@ function vendaDiretaDoMes(
   dias: Set<string>,
   diasDaApi: Set<string> | undefined,
   pedidosPorDia: Map<string, Map<string, DiaPedidos>>,
-  apiPorDia: Map<string, Map<string, DiaApi>>,
+  _apiPorDia: Map<string, Map<string, DiaApi>>,
 ): number {
   const planilha = pedidosPorDia.get(unitId)
-  const api = apiPorDia.get(unitId)
   let total = 0
   for (const dia of dias) {
-    total += diasDaApi?.has(dia)
-      ? api?.get(dia)?.recebidoDireto ?? 0
-      : planilha?.get(dia)?.direto ?? 0
+    /* Dia da API NUNCA soma aqui. O `orderAmount` (o "Ganhos esperados" do
+     * portal) é a soma de TODOS os pedidos, os pagos em dinheiro inclusive —
+     * e ele está dentro de qualquer líquido que a gente use pra esse dia:
+     * gravado (é o próprio orderAmount), relatório (usa o orderAmount da API
+     * nesse dia) ou derivado (parte do bruto, que também conta o pedido em
+     * dinheiro). Somar o recebido direto por cima contava o mesmo dinheiro
+     * duas vezes: a Pinheiros fechava com −59,43 de "recebido a mais que as
+     * taxas explicam" — exatamente os R$ 59,43 pagos na porta. É a doença da
+     * Kawaii (01/09/26), na variante da API. O valor continua na RPC
+     * (`recebido_direto`) pra tela poder informar "R$ X veio em dinheiro". */
+    if (diasDaApi?.has(dia)) continue
+    total += planilha?.get(dia)?.direto ?? 0
   }
   return total
 }
@@ -545,6 +593,8 @@ type DiaApi = {
   promo: number
   cancelados: number
   recebidoDireto: number
+  entrega: number
+  freteGratisLoja: number
 }
 
 /**
@@ -601,6 +651,8 @@ async function ninefoodApiPorDia(
     promo: number | string
     cancelados: number
     recebido_direto: number | string
+    entrega: number | string
+    frete_gratis_loja: number | string
   }[]) {
     let porDia = out.get(r.unit_id)
     if (!porDia) {
@@ -616,6 +668,8 @@ async function ninefoodApiPorDia(
       promo: Number(r.promo) || 0,
       cancelados: Number(r.cancelados) || 0,
       recebidoDireto: Number(r.recebido_direto) || 0,
+      entrega: Number(r.entrega) || 0,
+      freteGratisLoja: Number(r.frete_gratis_loja) || 0,
     })
   }
   return out
@@ -645,6 +699,8 @@ export async function getNinefoodResumoForMonth(
       comissaoRs: 0,
       taxaCanalPagamentoRs: 0,
       promocoesRs: 0,
+      entregaRs: 0,
+      freteGratisLojaRs: 0,
       cancelamentosQtd: 0,
       avaliacaoMedia: null,
       taxaAceitacaoMedia: null,

@@ -356,7 +356,8 @@ export type NetworkDrePlat = {
   /** Promoção/cupom que a LOJA bancou — separa "taxa real da plataforma" das
    * decisões de campanha da loja no card "Para onde vai o bruto". */
   promocoesLoja: number
-  itens: { label: string; value: number; credit?: boolean }[]
+  /** `info` = mostra mas não soma (já dentro do bruto). Ver DrePlat. */
+  itens: { label: string; value: number; credit?: boolean; info?: boolean }[]
 }
 
 /**
@@ -417,7 +418,7 @@ export async function getNetworkDrePlatforms(
       // consolidado. Só iFood tem.
       recDireto: 0, mensalidade: 0,
     },
-    ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0 },
+    ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0, entrega: 0, freteGratis: 0 },
     ke: { bruto: 0, liq: 0, promo: 0 },
     // Canal próprio: sem comissão, sem promoção de plataforma. O que separa
     // bruto de líquido aqui é só cancelamento.
@@ -483,6 +484,8 @@ export async function getNetworkDrePlatforms(
       a.ni.comissao += nine!.comissaoRs
       a.ni.taxaPgto += nine!.taxaCanalPagamentoRs
       a.ni.promo += nine!.promocoesRs
+      a.ni.entrega += nine!.entregaRs
+      a.ni.freteGratis += nine!.freteGratisLojaRs
     }
     a.ke.bruto += keBruto
     a.ke.liq += keLiq
@@ -498,7 +501,7 @@ export async function getNetworkDrePlatforms(
     name: string,
     bruto: number,
     liq: number,
-    itens: { label: string; value: number }[],
+    itens: { label: string; value: number; info?: boolean }[],
     vr: number,
     promoLoja: number,
     cancel?: { valor: number; qtd: number },
@@ -509,9 +512,9 @@ export async function getNetworkDrePlatforms(
     // taxa (é dinheiro que a loja pegou na entrega); sem descontá-lo aqui, a
     // linha por plataforma inflaria e não somaria o header. Mesma conta do DRE
     // por unidade (financeiro-loja-tab).
-    const lista: { label: string; value: number; credit?: boolean }[] =
-      itens.filter((i) => i.value > 0)
-    const somaItens = lista.reduce((s, i) => s + i.value, 0)
+    const lista: NetworkDrePlat["itens"] = itens.filter((i) => i.value > 0)
+    // Item `info` aparece mas não soma: já está dentro do bruto (99).
+    const somaItens = lista.reduce((s, i) => s + (i.info ? 0 : i.value), 0)
     const derivada = bruto - liq - recebidoDireto
 
     /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS, NÃO `bruto − líquido`.
@@ -597,7 +600,10 @@ export async function getNetworkDrePlatforms(
       [
         { label: "Comissão", value: a.ni.comissao },
         { label: "Taxa de pagamento", value: a.ni.taxaPgto },
-        { label: "Promoções", value: a.ni.promo },
+        { label: "Entrega pelo 99", value: a.ni.entrega },
+        // Já abatidas do bruto (portal): mostram, não somam. Ver 0256.
+        { label: "Promoções da loja", value: a.ni.promo, info: true },
+        { label: "Frete grátis bancado pela loja", value: a.ni.freteGratis, info: true },
       ],
       0,
       a.ni.promo,

@@ -230,7 +230,7 @@ export async function FinanceiroLojaTab({
   const buildPlat = (
     id: PlatformId,
     name: string,
-    itens: { label: string; value: number }[],
+    itens: { label: string; value: number; info?: boolean }[],
     vr: number,
     // Só o iFood traz (da Conciliação): R$ e qtd de pedidos cancelados, pro
     // DRE abrir em "Vendas totais − cancelados" igual ao portal.
@@ -238,9 +238,9 @@ export async function FinanceiroLojaTab({
   ): DrePlat | null => {
     const p = m.platforms.find((x) => x.id === id)
     if (!p || p.bruto <= 0) return null
-    const lista: { label: string; value: number; credit?: boolean }[] =
-      itens.filter((i) => i.value > 0)
-    const somaItens = lista.reduce((a, i) => a + i.value, 0)
+    const lista: DrePlat["itens"] = itens.filter((i) => i.value > 0)
+    // Item `info` aparece mas não soma: já está dentro do bruto (ver o tipo).
+    const somaItens = lista.reduce((a, i) => a + (i.info ? 0 : i.value), 0)
     const recebidoDireto = p.recebidoDireto ?? 0
     const derivada = p.bruto - p.liquido - recebidoDireto
 
@@ -341,7 +341,17 @@ export async function FinanceiroLojaTab({
       [
         { label: "Comissão", value: nineResumo.comissaoRs },
         { label: "Taxa de pagamento", value: nineResumo.taxaCanalPagamentoRs },
-        { label: "Promoções", value: nineResumo.promocoesRs },
+        // Entrega feita pelo 99 e cobrada da loja. Só a API traz; sem esta
+        // linha a Pinheiros mostrava "não explicada −R$ 1.675,92 (18,6%)".
+        { label: "Entrega pelo 99", value: nineResumo.entregaRs },
+        // As duas abaixo JÁ estão abatidas do bruto (= "Renda total das
+        // vendas" do portal): mostram o que a loja deu, mas não somam.
+        { label: "Promoções da loja", value: nineResumo.promocoesRs, info: true },
+        {
+          label: "Frete grátis bancado pela loja",
+          value: nineResumo.freteGratisLojaRs,
+          info: true,
+        },
       ],
       0,
     ),

@@ -42,6 +42,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.25.1",
+    date: "2026-09-03",
+    tag: "Correção",
+    title: "Números do 99 Food agora batem com a tela do portal",
+    summary:
+      "O faturamento bruto do 99 passa a ser a \u201CRenda total das vendas\u201D que o portal mostra, e a taxa de ganhos fica igual à do 99 \u2014 ao centavo.",
+    areas: [
+      {
+        area: "99 Food",
+        items: [
+          {
+            kind: "correcao",
+            title: "Bruto e % da loja iguais aos do portal do 99",
+            desc:
+              "O bruto usava a base de comissão do 99, que é maior que a venda real (não abate o frete grátis que a loja banca). A loja parecia ficar com menos do que fica: 66,8% onde o portal mostra 75,78%. Agora bruto, líquido, % e quantidade de pedidos são os mesmos da tela do 99. Pedido cancelado deixa de entrar pela metade, e a entrega feita pelo 99 aparece como linha própria \u2014 a \u201Cdiferença não explicada\u201D some. Promoção e frete grátis da loja continuam visíveis, marcados como \u201Cjá no bruto\u201D (não somam de novo). Vale para lojas conectadas por API; quem só sobe planilha não muda.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.25.0",
     date: "2026-09-02",
     tag: "Novidade",

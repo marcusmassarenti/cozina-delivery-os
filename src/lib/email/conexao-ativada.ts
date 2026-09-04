@@ -208,8 +208,10 @@ export async function resumoDaLoja(
        * é pior que em qualquer tela: ele compara com o portal do 99 e a
        * diferença vira desconfiança na integração inteira.
        *
-       * A RPC devolve a régua certa (`commissionBaseAmount`) e já filtra
-       * `order_type = 1` — ajuste e taxa mensal não são pedido.
+       * A RPC devolve a régua do PORTAL — bruto = "Renda total das vendas"
+       * (commissionBaseAmount menos o frete grátis que a loja bancou), sem
+       * cancelados — e já filtra `order_type = 1`. Ver a migration 0256: é
+       * o número que o cliente vê na tela do 99, ao centavo.
        */
       const { data: dias } = await admin.rpc("ninefood_api_diario", {
         p_unit_ids: [unitId],
