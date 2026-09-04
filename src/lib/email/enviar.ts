@@ -251,53 +251,42 @@ async function registrar(
  * cron roda todo dia.
  */
 /**
- * O que AINDA sai pra cliente que não é mais operação viva.
+ * Cliente fora da operação NÃO RECEBE E-MAIL NENHUM.
  *
- * ── POR QUE ESTA LISTA EXISTE (Marcus, 04/09/26) ─────────────────────────
+ * ── A DECISÃO (Marcus, 04/09/26) ─────────────────────────────────────────
  * "vbfood e clientes nesse estado não tem mais nenhum tipo de vínculo
- * conosco". Ele disse isso vendo a Vbfood — trial vencido em 14/08, suspensa
- * em 22/08 — receber "sua loja conectou". Medido no mesmo minuto: 14 e-mails
- * em 30 dias pra ela e 8 pra Empreender com Delivery, também suspensa.
+ * conosco" — e, quando perguntei se cobrança e acesso deviam escapar,
+ * "corta tudo, suspenso não recebe nada".
  *
- * A causa não foi um aviso mal feito: era que NENHUM caminho de e-mail
- * perguntava se o cliente ainda existe. O helper `clientesForaDaOperacao`
- * estava pronto desde 20/08 e era usado só em três TELAS.
+ * Eu tinha proposto deixar passar fatura, login e suporte, com o argumento de
+ * que é por aí que o cliente volta. O Marcus decidiu o contrário: sem vínculo,
+ * sem e-mail. A lista de exceção fica aqui VAZIA de propósito, e não apagada:
+ * se um dia a cobrança precisar furar a trava, é só nomear o tipo aqui.
+ *
+ * ── O QUE MOTIVOU (medido no dia) ────────────────────────────────────────
+ * A Vbfood (trial vencido em 14/08, suspensa em 22/08) recebeu 14 e-mails em
+ * 30 dias, e a Empreender com Delivery, 8. A causa não era um aviso mal
+ * feito: NENHUM dos 15 caminhos de e-mail perguntava se o cliente ainda
+ * existe. O helper `clientesForaDaOperacao` estava pronto desde 20/08 e era
+ * usado só em três TELAS.
  *
  * Por isso a trava mora aqui, na porta única de saída, e não em cada
  * remetente: régua espalhada por 15 arquivos volta a falhar na primeira cópia
- * nova — que é o modo de falha mais comum deste repositório.
+ * nova — o modo de falha mais comum deste repositório.
  *
- * ── O QUE CONTINUA SAINDO, E POR QUÊ ─────────────────────────────────────
- * Cobrança e retomada de relação. Um cliente suspenso PRECISA receber
- * "sua fatura venceu" e "bem-vindo de volta" — é assim que ele volta. Cortar
- * isso transformaria uma suspensão temporária em perda definitiva.
+ * ── QUEM É "FORA DA OPERAÇÃO" ────────────────────────────────────────────
+ * Suspenso (trial vencido ou cobrança parada), encerrado e conta interna.
+ * Cliente NOVO em trial válido NÃO entra — confirmação de cadastro e
+ * boas-vindas continuam saindo normalmente pra quem está entrando.
  *
- * O que NÃO sai é o operacional: conexão de loja, resumo, novidades, aviso de
- * dado faltando. Isso é serviço, e serviço ele não tem mais.
+ * ⚠️ CONSEQUÊNCIA ACEITA: quem está suspenso não recebe nem "recuperar
+ * senha". Se alguém de um cliente suspenso disser que não recebe e-mail, a
+ * resposta está em `email_enviados` — o retido é registrado com o motivo, não
+ * engolido.
  *
- * Interno (holdingId null) nunca passa por aqui — não tem cliente pra checar.
+ * Interno (holdingId null) nunca passa por aqui: não tem cliente pra checar.
  */
-const SAI_MESMO_FORA_DA_OPERACAO = new Set<TipoEmail>([
-  // Cobrança e ciclo de vida da assinatura
-  "fatura-vencendo",
-  "fatura-vencida",
-  "trial-3-dias",
-  "trial-terminou",
-  "recuperacao-1",
-  "recuperacao-2",
-  "recuperacao-3",
-  "recuperacao-4",
-  "proposta-aceita",
-  // Volta / acesso: sem isso ele não consegue nem entrar pra retomar
-  "boas-vindas",
-  "confirme-1",
-  "confirme-2",
-  "confirme-3",
-  "recuperar-senha",
-  // Suporte: se ele escreveu, merece resposta mesmo suspenso
-  "suporte-chamado",
-  "suporte-resposta",
-])
+const SAI_MESMO_FORA_DA_OPERACAO = new Set<TipoEmail>([])
 
 export async function enviarEmail(input: {
   holdingId: string | null
