@@ -57,7 +57,33 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const t0 = Date.now()
 
-  // 1) Mapa app_shop_id → unit_id (lojas vinculadas e ativas)
+  /* 1) VÍNCULO DE LOJA PRIMEIRO — chega por `shopBindStatus` e até 04/09/26
+   *    era ignorado (25 eventos parados desde junho; o Le Brunch em 01/09 e a
+   *    DG em 04/09 vincularam e ninguém agiu).
+   *
+   *    Roda ANTES do mapa `app_shop_id → unit_id` de propósito: a loja que
+   *    acabou de vincular já entra nele, e os pedidos dela que vierem na
+   *    MESMA rodada caem com dono em vez de "loja não vinculada" — que era o
+   *    que acontecia quando o 1º pedido chegava junto com o bind. */
+  const { data: pendentesBind } = await admin
+    .from("ninefood_webhook_events")
+    .select("id, event_type, payload")
+    .eq("event_type", "shopBindStatus")
+    .eq("processed", false)
+    .order("received_at")
+    .limit(200)
+  const { processarShopBindStatus } = await import(
+    "@/lib/ninefood/bind-webhook"
+  )
+  const binds = await processarShopBindStatus(
+    (pendentesBind ?? []) as unknown as {
+      id: string
+      event_type: string | null
+      payload: Record<string, unknown> | null
+    }[],
+  )
+
+  // 2) Mapa app_shop_id → unit_id (lojas vinculadas e ativas)
   const { data: links } = await admin
     .from("ninefood_store_links")
     .select("app_shop_id, unit_id")
@@ -412,6 +438,12 @@ export async function GET(req: Request) {
       itens_gravados: itensGravados,
       orderFinish: finished,
       orderCancel: canceled,
+      shopBind: {
+        vinculadas: binds.vinculadas,
+        desvinculadas: binds.desvinculadas,
+        orfas: binds.orfas,
+        erros: binds.erros,
+      },
       outros: events.length - news.length - finishes.length - cancels.length,
     },
     skipped_sample: skippedNew.slice(0, 5),

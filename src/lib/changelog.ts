@@ -42,6 +42,33 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.26.0",
+    date: "2026-09-04",
+    tag: "Novidade",
+    title: "Conectar o 99 virou coisa de um clique",
+    summary:
+      "A loja que autoriza no 99 agora aparece aqui em segundos, com o histórico junto \u2014 sem ninguém digitar nada. E dá pra mandar um link pro dono autorizar sozinho.",
+    areas: [
+      {
+        area: "99 Food",
+        items: [
+          {
+            kind: "novo",
+            title: "Loja conecta sozinha, na hora",
+            desc:
+              "O 99 avisa no instante em que uma loja é autorizada. Antes esse aviso era ignorado e a loja só aparecia na varredura do dia seguinte \u2014 quando alguém não vinculava na mão antes. Agora o vínculo e o histórico entram em segundos, e a loja é reconhecida pelo identificador do 99, não pelo nome. Quando uma loja é desconectada, o sistema também percebe e para de cobrar dado dela.",
+          },
+          {
+            kind: "novo",
+            title: "Link para o cliente autorizar sozinho",
+            desc:
+              "Em Conexões, na aba do 99, o botão \u201CGerar link\u201D cria uma página do próprio 99 onde o dono da loja vê os estabelecimentos dele e autoriza. Evita entrar no Portal do Parceiro e vincular loja por loja. O link vale 7 dias e é gerado na hora, então nunca chega vencido.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.25.1",
     date: "2026-09-03",
     tag: "Correção",

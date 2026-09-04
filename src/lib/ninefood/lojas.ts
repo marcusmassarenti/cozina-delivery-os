@@ -110,6 +110,30 @@ export type Sincronizacao99 = {
  * Também não desativa quem sumiu da lista: no iFood a gente aprendeu que sumir
  * não prova revogação.
  */
+/**
+ * Grava o `shop_id` do 99 no cadastro da unidade quando ele ainda não está lá.
+ *
+ * É o elo que faz o webhook `shopBindStatus` reconhecer a loja sozinho: ele
+ * traz só o `app_shop_id`, e no fluxo self-service esse identificador é um
+ * UUID gerado pelo 99, que não diz nada. A corrente
+ * `app_shop_id → shop_id → external_store_id` é a única que funciona nos dois
+ * formatos. Sem este carimbo, a próxima loja a vincular nasceria órfã.
+ *
+ * Só preenche o que está vazio — nunca sobrescreve cadastro feito à mão.
+ */
+async function carimbarShopId(
+  admin: ReturnType<typeof createAdminClient>,
+  unitId: string,
+  shopId: string,
+): Promise<void> {
+  await admin
+    .from("unit_platforms")
+    .update({ external_store_id: shopId })
+    .eq("unit_id", unitId)
+    .eq("platform", "99food")
+    .is("external_store_id", null)
+}
+
 export async function sincronizarLojas99(): Promise<Sincronizacao99> {
   const admin = createAdminClient()
   const lojas = await listarLojas99()
@@ -167,7 +191,10 @@ export async function sincronizarLojas99(): Promise<Sincronizacao99> {
       })
       if (error) continue
       novas.push(l.appShopId)
-      if (unitId) casadas.push(l.appShopId)
+      if (unitId) {
+        casadas.push(l.appShopId)
+        await carimbarShopId(admin, unitId, l.shopId)
+      }
       continue
     }
 
@@ -179,7 +206,10 @@ export async function sincronizarLojas99(): Promise<Sincronizacao99> {
         .update({ unit_id: unitId, id_loja: l.shopId })
         .eq("app_shop_id", l.appShopId)
         .is("unit_id", null)
-      if (!error) casadas.push(l.appShopId)
+      if (!error) {
+        casadas.push(l.appShopId)
+        await carimbarShopId(admin, unitId, l.shopId)
+      }
     }
   }
 

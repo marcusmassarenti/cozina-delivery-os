@@ -1,4 +1,5 @@
 import { PlatformLogo } from "@/components/platform-logo"
+import { Link99Botao } from "./link-99-botao"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 
@@ -132,17 +133,19 @@ export async function Aba99() {
         {emAberto > 0
           ? `${emAberto} loja${emAberto > 1 ? "s" : ""} esperando conexão. `
           : ""}
-        A conexão do 99 não é automática: cada loja precisa ser autorizada ao
-        nosso app do lado deles, e é isso que gera o{" "}
-        <code className="rounded bg-muted px-1 text-xs">app_shop_id</code>. Com
-        ele em mãos, vincule aqui — o cron diário passa a trazer o financeiro
-        sozinho.
+        Cada loja precisa ser autorizada ao nosso app do lado do 99 — pelo
+        Portal do Parceiro ou pelo link abaixo, que o próprio dono usa. Feito
+        isso, o vínculo e o histórico entram <strong>sozinhos, em segundos</strong>:
+        o 99 nos avisa por webhook e a loja é reconhecida pelo{" "}
+        <code className="rounded bg-muted px-1 text-xs">shop_id</code>, sem
+        ninguém digitar nada.
       </p>
       <p className="max-w-3xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
         Uma loja só pode estar ligada a <strong>um</strong> aplicativo no 99. Se
         ela já usa outro integrador, confirme com o cliente antes de pedir a
         troca — a conexão atual dele pode parar.
       </p>
+      <Link99Botao />
       <Fila99Panel itens={itens} conectadas={await lojasConectadas99()} />
     </div>
   )
