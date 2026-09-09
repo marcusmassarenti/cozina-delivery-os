@@ -1,5 +1,6 @@
 "use client"
 
+import { focarAbaDoCampoInvalido } from "@/components/unidades/aba-com-erro"
 import { DadosDaUnidade, OperacaoDaUnidade } from "@/components/unidades/dados-da-unidade"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import * as React from "react"
@@ -162,6 +163,8 @@ export function EditUnitDialog({
   cadastroExigente?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
+  /** Aba visível. Controlada pra poder pular pro campo reprovado. */
+  const [aba, setAba] = React.useState("dados")
   const [tourOpen, setTourOpen] = React.useState(false)
   const [state, formAction] = useActionState(updateUnit, initial)
   const [solicitacaoState, solicitarAction] = useActionState(
@@ -243,19 +246,23 @@ const [solicitacao99State, solicitar99Action] = useActionState(
         <form
           action={formAction}
           {...validacaoPtBr}
+          /* Campo obrigatório vazio na aba escondida bloqueia o envio e não
+             recebe foco — o navegador acusa um vizinho qualquer. Ver
+             `focarAbaDoCampoInvalido`. */
+          onInvalidCapture={(e) => focarAbaDoCampoInvalido(e, setAba)}
           className="flex flex-col gap-3"
         >
           <input type="hidden" name="unitId" value={unit.unitId} />
 
           {/* Mesmas duas abas do "Nova unidade": o cadastro que quase não
               muda de um lado, o que muda toda semana do outro. */}
-          <Tabs defaultValue="dados">
+          <Tabs value={aba} onValueChange={(v) => setAba(String(v ?? "dados"))}>
             <TabsList>
               <TabsTrigger value="dados">Dados da unidade</TabsTrigger>
               <TabsTrigger value="operacao">Operação</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="dados" className="pt-3">
+            <TabsContent value="dados" data-aba="dados" className="pt-3">
               <DadosDaUnidade
                 nome={unit.name}
                 erroCnpj={state.fieldErrors?.cnpj}

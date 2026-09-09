@@ -1,5 +1,6 @@
 "use client"
 
+import { focarAbaDoCampoInvalido } from "@/components/unidades/aba-com-erro"
 import { DadosDaUnidade, OperacaoDaUnidade } from "@/components/unidades/dados-da-unidade"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CampoCnpj } from "@/components/unidades/campo-cnpj"
@@ -69,6 +70,8 @@ export function NewUnitDialog({
   cadastroExigente?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
+  /** Aba visível. Controlada pra poder pular pro campo reprovado. */
+  const [aba, setAba] = React.useState("dados")
   /** "cadastro" = formulário; "conectar" = o que fazer com o que foi salvo. */
   const [etapa, setEtapa] = React.useState<"cadastro" | "conectar">("cadastro")
   const [state, formAction] = useActionState(createUnit, initial)
@@ -134,19 +137,23 @@ export function NewUnitDialog({
         <form
           action={formAction}
           {...validacaoPtBr}
+          /* Campo obrigatório vazio na aba escondida bloqueia o envio e não
+             recebe foco — o navegador acusa um vizinho qualquer. Ver
+             `focarAbaDoCampoInvalido`. */
+          onInvalidCapture={(e) => focarAbaDoCampoInvalido(e, setAba)}
           className="flex flex-col gap-3"
         >
           {/* Duas abas: o cadastro que quase não muda de um lado, o que muda
               toda semana do outro. Juntos, o CNPJ ficava soterrado embaixo de
               campo técnico de plataforma — e foi assim que 18 unidades
               chegaram sem CNPJ nenhum. */}
-          <Tabs defaultValue="dados">
+          <Tabs value={aba} onValueChange={(v) => setAba(String(v ?? "dados"))}>
             <TabsList>
               <TabsTrigger value="dados">Dados da unidade</TabsTrigger>
               <TabsTrigger value="operacao">Operação</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="dados" className="pt-3">
+            <TabsContent value="dados" data-aba="dados" className="pt-3">
               <DadosDaUnidade
                 erroCnpj={state.fieldErrors?.cnpj}
                 cidade={cidade}
@@ -173,7 +180,7 @@ export function NewUnitDialog({
               </div>
             </TabsContent>
 
-            <TabsContent value="operacao" className="pt-3">
+            <TabsContent value="operacao" data-aba="operacao" className="pt-3">
               <OperacaoDaUnidade>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
