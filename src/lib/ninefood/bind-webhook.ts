@@ -14,6 +14,13 @@ import "server-only"
  * "verifique se vincularam" e o vínculo foi feito à mão. Em 04/09 aconteceu
  * de novo com 8 lojas da DG FOODS. A informação estava no banco nas duas.
  *
+ * ⚠️ E EM 09/09 ACONTECEU UMA TERCEIRA VEZ, POR CULPA MINHA. Eu prometi
+ * "vínculo em segundos" e pendurei este processamento no cron
+ * `process-99-webhooks`, que rodava UMA VEZ POR DIA (10h UTC). A Piracicaba
+ * vinculou às 16:24 e continuou invisível — a detecção seguia levando até 24
+ * horas, exatamente o que este arquivo existe pra evitar. O cron passou a
+ * rodar a cada 10 minutos. Quem mover a agenda de volta reabre o buraco.
+ *
  * ── COMO A LOJA É IDENTIFICADA ───────────────────────────────────────────
  * O evento traz só o `app_shop_id`. Ele é o identificador DA NOSSA ponta e
  * hoje é digitado à mão no portal (`dg-kawaii-01`), mas no fluxo
