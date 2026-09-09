@@ -405,10 +405,16 @@ async function loadStoreMap(
   platform: "ifood" | "99food" | "keeta" = "ifood",
 ): Promise<StoreMap> {
   const map: StoreMap = new Map()
+  /* SÓ PLATAFORMA MARCADA NO CADASTRO ENTRA NO MAPA.
+   *
+   * Sem o `active`, uma loja que teve a plataforma desmarcada continuava
+   * casando pelo ID antigo e o arquivo entrava de novo — desfazer no cadastro
+   * não desfazia no import. */
   const { data, error } = await admin
     .from("unit_platforms")
     .select("unit_id, external_store_id, units:units!inner(id, code, name)")
     .eq("platform", platform)
+    .eq("active", true)
     .not("external_store_id", "is", null)
   if (error) return map
   for (const row of data ?? []) {
@@ -4053,6 +4059,40 @@ export async function linkUnitAndImport(
     .eq("unit_id", unitId)
     .eq("platform", platform)
     .maybeSingle()
+
+  /* ⚠️ NÃO CRIAR A PLATAFORMA A PARTIR DO UPLOAD.
+   *
+   * Até 09/09/26 este ramo INSERIA `unit_platforms` com `active: true` quando
+   * a unidade não tinha a plataforma. Ou seja: quem escolhesse a loja errada
+   * na tela de "não reconheci essa loja" não só importava no lugar errado —
+   * ligava a plataforma naquela loja, e ela passava a constar como se
+   * vendesse ali.
+   *
+   * Foi o que aconteceu com a The Salad (Le Brunch): a planilha do 99 do
+   * JARDINIER de 01→17/ago subiu no nome dela, o sistema criou o 99 no
+   * cadastro e passou a somar R$ 6.753,79 duas vezes no consolidado —
+   * o mesmo valor, ao centavo, que a API já trazia pelo Jardinier. Só foi
+   * descoberto porque o Marcus sabia que a The Salad não tem 99.
+   *
+   * O cadastro é a declaração de onde a loja vende. O upload não pode
+   * mudá-la — ele só pode obedecê-la. Loja nova continua entrando pelo
+   * "criar unidade e importar", que é onde a decisão é explícita. */
+  if (!existingRow || existingRow.active === false) {
+    const { data: un } = await admin
+      .from("units")
+      .select("code, name")
+      .eq("id", unitId)
+      .maybeSingle()
+    const loja = un ? `${un.code} · ${un.name}` : "Essa unidade"
+    return {
+      ok: false,
+      message:
+        `${loja} não tem ${platformLabel} marcado no cadastro, então este ` +
+        `arquivo não pode entrar nela. Se a loja vende mesmo no ` +
+        `${platformLabel}, marque a plataforma em /unidades e importe de novo. ` +
+        `Se não vende, o arquivo é de outra loja.`,
+    }
+  }
 
   if (existingRow) {
     // Tem a plataforma mas talvez sem ID — atualiza
