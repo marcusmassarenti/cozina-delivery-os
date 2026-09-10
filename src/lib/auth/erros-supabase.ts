@@ -17,6 +17,32 @@
  * voltando a vazar inglês sem ninguém perceber.
  */
 
+/**
+ * Falha de INFRAESTRUTURA, não de credencial.
+ *
+ * Em 09/09/26 o Marcus não conseguiu entrar e a tela dizia só "fetch failed".
+ * A Supabase estava em "Partially Degraded Service" e o endpoint de login
+ * respondia em 3,4 a 7 segundos (o normal são ~300 ms) — a conexão caía antes
+ * da resposta chegar. A senha estava certa, o sistema estava certo, e a tela
+ * acusava uma coisa que ninguém sabe o que significa.
+ *
+ * Erro de rede tem duas diferenças que importam pra quem lê: não adianta
+ * conferir a senha, e TENTAR DE NOVO costuma resolver. É isso que a mensagem
+ * precisa dizer — a regra deste arquivo é explicar o que fazer.
+ */
+const FALHAS_DE_REDE = [
+  "fetch failed",
+  "econnreset",
+  "econnrefused",
+  "enotfound",
+  "etimedout",
+  "socket hang up",
+  "network error",
+  "terminated",
+  "timeout",
+  "aborted",
+]
+
 const TRADUCOES: { contem: string; texto: string }[] = [
   {
     contem: "known to be weak and easy to guess",
@@ -68,6 +94,16 @@ export function mensagemDeErroAuth(original: string | null | undefined): string 
   const msg = (original ?? "").trim()
   if (!msg) return "Não foi possível concluir. Tente de novo."
   const baixo = msg.toLowerCase()
+
+  /* Rede vem ANTES das traduções de credencial: "timeout" cairia numa delas e
+   * mandaria a pessoa conferir uma senha que está certa. */
+  if (FALHAS_DE_REDE.some((f) => baixo.includes(f))) {
+    return (
+      "Não consegui falar com o servidor agora — isso não é problema da sua " +
+      "senha. Tente de novo em alguns segundos."
+    )
+  }
+
   for (const t of TRADUCOES) {
     if (baixo.includes(t.contem.toLowerCase())) return t.texto
   }
