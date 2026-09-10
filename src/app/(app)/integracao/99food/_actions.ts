@@ -167,8 +167,18 @@ export async function avisarClienteAutorizar99(
 
 export type Verificacao99 = {
   ok: boolean
-  /** Lojas que o 99 já autorizou e que ainda não estão apontadas pra ninguém. */
-  livres?: { appShopId: string; shopId: string }[]
+  /**
+   * Lojas que o 99 já autorizou e que ainda não estão apontadas pra ninguém.
+   *
+   * `unidade` vem preenchida quando o `shop_id` do 99 está no cadastro de UMA
+   * unidade — aí a tela oferece o vínculo num clique, sem ninguém digitar
+   * slug. Sem ela, a tela pede pra escolher.
+   */
+  livres?: {
+    appShopId: string
+    shopId: string
+    unidade?: { id: string; rotulo: string } | null
+  }[]
   /** Quantas o portal devolveu no total (autorizadas, vinculadas ou não). */
   total?: number
   message?: string
@@ -221,7 +231,37 @@ export async function verificarLojas99(): Promise<Verificacao99> {
       .map((l) => l.app_shop_id),
   )
 
-  const livres = lojas.filter((l) => !comDono.has(l.appShopId))
+  /* Resolve a unidade pelo `shop_id` do 99, que é o elo estável — o slug
+   * (`app_shop_id`) é nosso e no fluxo self-service vem como UUID, sem nada
+   * que identifique a loja. Só vale quando aponta pra UMA: duas unidades com
+   * o mesmo id é erro de cadastro, e escolher misturaria dois faturamentos.
+   * Ver `lib/ninefood/bind-webhook.ts`, que usa a mesma corrente. */
+  const semDono = lojas.filter((l) => !comDono.has(l.appShopId))
+  const { data: plats } = await admin
+    .from("unit_platforms")
+    .select("unit_id, external_store_id, units!inner(code, name, active)")
+    .eq("platform", "99food")
+    .eq("active", true)
+    .in(
+      "external_store_id",
+      semDono.map((l) => l.shopId),
+    )
+  const porShop = new Map<string, { id: string; rotulo: string }[]>()
+  for (const p of (plats ?? []) as unknown as {
+    unit_id: string
+    external_store_id: string
+    units: { code: string; name: string; active: boolean } | null
+  }[]) {
+    if (!p.units?.active) continue
+    const lista = porShop.get(p.external_store_id) ?? []
+    lista.push({ id: p.unit_id, rotulo: `${p.units.code} · ${p.units.name}` })
+    porShop.set(p.external_store_id, lista)
+  }
+  const livres = semDono.map((l) => {
+    const c = porShop.get(l.shopId) ?? []
+    return { ...l, unidade: c.length === 1 ? c[0]! : null }
+  })
+
   return {
     ok: true,
     livres,
@@ -230,6 +270,111 @@ export async function verificarLojas99(): Promise<Verificacao99> {
       livres.length > 0
         ? `O 99 devolveu ${lojas.length} loja(s) autorizada(s); ${livres.length} ainda sem unidade.`
         : `O 99 devolveu ${lojas.length} loja(s), todas já vinculadas. A loja nova ainda não foi autorizada — peça ao cliente pra autorizar o Delivery OS no portal do 99.`,
+  }
+}
+
+/**
+ * Liga uma loja autorizada no 99 a uma unidade, SEM exigir solicitação.
+ *
+ * ── POR QUE PRECISOU EXISTIR (Marcus, 09/09/26) ──────────────────────────
+ * "Apareceu aqui, mas não tem sequência depois disso." Ele tinha autorizado a
+ * Piracicaba no 99, o painel mostrava o chip `cozina-piracicaba-01` — e o
+ * chip só preenchia os campos dos cards de PENDÊNCIA abaixo. A Piracicaba não
+ * tinha card nenhum, então clicar não fazia nada.
+ *
+ * A causa: `vincularLoja99` exige o id de uma `ninefood_activation_request`.
+ * Isso cobre a loja que passou pela régua de solicitação — e deixa de fora
+ * justamente o caminho novo, o link self-service, em que o dono autoriza
+ * direto e nunca existiu pedido nenhum do nosso lado. Quanto mais o
+ * self-service for usado, mais lojas caem nesse vazio.
+ *
+ * Aqui o vínculo é feito pelo par (app_shop_id, unidade), que é o que de fato
+ * define a ligação. As travas continuam: não repontar loja que já tem dono
+ * (o financeiro de uma apareceria na outra) e backfill na hora.
+ */
+export async function vincularLojaLivre99(
+  _prev: Solicitacao99State,
+  formData: FormData,
+): Promise<Solicitacao99State> {
+  try {
+    await requireSuperadmin()
+  } catch {
+    return { ok: false, error: "Só o dono da plataforma pode fazer isso." }
+  }
+
+  const appShopId = String(formData.get("app_shop_id") ?? "").trim()
+  const unitId = String(formData.get("unit_id") ?? "").trim()
+  if (!appShopId) return { ok: false, error: "Loja do 99 não informada." }
+  if (!unitId) return { ok: false, error: "Escolha a unidade." }
+
+  const admin = createAdminClient()
+
+  const { data: unidade } = await admin
+    .from("units")
+    .select("id, code, name, active")
+    .eq("id", unitId)
+    .maybeSingle()
+  if (!unidade?.active) {
+    return { ok: false, error: "Unidade não encontrada ou inativa." }
+  }
+
+  /* A unidade precisa ter o 99 marcado no cadastro. É a mesma régua que passou
+   * a valer na importação em 09/09/26: o cadastro declara onde a loja vende, e
+   * a conexão obedece — não o contrário. Foi assim que a The Salad ganhou um
+   * 99 que ela não tem, e R$ 6.753,79 do Jardinier foram contados duas vezes. */
+  const { data: plat } = await admin
+    .from("unit_platforms")
+    .select("active")
+    .eq("unit_id", unitId)
+    .eq("platform", "99food")
+    .maybeSingle()
+  if (!plat?.active) {
+    return {
+      ok: false,
+      error: `${unidade.code} · ${unidade.name} não tem 99 Food marcado no cadastro. Marque a plataforma em /unidades antes de vincular.`,
+    }
+  }
+
+  const { data: existente } = await admin
+    .from("ninefood_store_links")
+    .select("unit_id")
+    .eq("app_shop_id", appShopId)
+    .maybeSingle()
+  if (existente?.unit_id && existente.unit_id !== unitId) {
+    return {
+      ok: false,
+      error:
+        "Essa loja do 99 já está vinculada a outra unidade. Confira antes — repontar faria o financeiro de uma aparecer na outra.",
+    }
+  }
+
+  const { error: errLink } = await admin.from("ninefood_store_links").upsert(
+    { app_shop_id: appShopId, unit_id: unitId, active: true },
+    { onConflict: "app_shop_id" },
+  )
+  if (errLink) return { ok: false, error: errLink.message }
+
+  // Backfill na hora — a regra do Marcus (18/08/26). Não derruba o vínculo se
+  // falhar: o que ficar sem carimbo o cron das 5h recolhe.
+  let historico = ""
+  try {
+    const { backfillDeUmaLoja99 } = await import("@/lib/ninefood/backfill")
+    const r = await backfillDeUmaLoja99(appShopId)
+    if (r) {
+      historico = r.concluido
+        ? ` Histórico: ${r.meses} meses, ${r.linhas} linhas.`
+        : " Histórico ficou pendente — o cron termina."
+    }
+  } catch {
+    historico = " Histórico ficou pendente — o cron termina."
+  }
+
+  revalidatePath("/integracao/99food")
+  revalidatePath("/conexoes")
+  revalidatePath("/inicio")
+  return {
+    ok: true,
+    message: `Vinculada a ${unidade.code} · ${unidade.name}.${historico}`,
   }
 }
 

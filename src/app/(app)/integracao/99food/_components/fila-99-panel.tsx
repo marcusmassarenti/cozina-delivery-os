@@ -16,6 +16,7 @@ import {
   avisarClienteAutorizar99,
   verificarLojas99,
   vincularLoja99,
+  vincularLojaLivre99,
   type Solicitacao99State,
   type Verificacao99,
 } from "../_actions"
@@ -501,26 +502,9 @@ function VerificarNo99() {
         <div className="mt-2">
           <p className="text-xs text-muted-foreground">{r.message}</p>
           {(r.livres ?? []).length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-2 flex flex-col gap-1.5">
               {(r.livres ?? []).map((l) => (
-                <button
-                  key={l.appShopId}
-                  type="button"
-                  onClick={() => {
-                    // Preenche TODOS os campos de vínculo da fila: quem clica
-                    // já sabe de qual card é, e digitar de novo é onde o erro
-                    // acontecia.
-                    document
-                      .querySelectorAll<HTMLInputElement>('input[name="app_shop_id"]')
-                      .forEach((i) => {
-                        i.value = l.appShopId
-                      })
-                  }}
-                  title="Usar este id nos campos de vínculo"
-                  className="rounded-md border bg-background px-2 py-1 font-mono text-[11px] transition-colors hover:bg-muted"
-                >
-                  {l.appShopId}
-                </button>
+                <LojaLivre99 key={l.appShopId} loja={l} />
               ))}
             </div>
           )}
@@ -533,5 +517,83 @@ function VerificarNo99() {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Uma loja que o 99 já autorizou e que ainda não aponta pra ninguém.
+ *
+ * ── POR QUE ISSO DEIXOU DE SER UM CHIP (Marcus, 09/09/26) ────────────────
+ * "Apareceu aqui, mas não tem sequência depois disso." Antes o slug era um
+ * botão que só copiava o id pros campos dos cards de PENDÊNCIA abaixo — e a
+ * loja que autorizou sem passar por solicitação (o caminho do link
+ * self-service) não tem card nenhum. Clicar não fazia nada, e a tela virava
+ * um beco: mostrava o problema e não oferecia a saída.
+ *
+ * Agora a unidade vem resolvida pelo `shop_id` e o vínculo é um clique. Sem
+ * unidade deduzida, a tela diz POR QUE não deu — quase sempre é o `shop_id`
+ * que falta no cadastro, e é lá que se resolve.
+ */
+function LojaLivre99({
+  loja,
+}: {
+  loja: {
+    appShopId: string
+    shopId: string
+    unidade?: { id: string; rotulo: string } | null
+  }
+}) {
+  const [estado, acao] = useActionState(vincularLojaLivre99, {
+    ok: false,
+  } as Solicitacao99State)
+
+  if (estado.ok) {
+    return (
+      <p className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+        <span className="font-mono">{loja.appShopId}</span> — {estado.message}
+      </p>
+    )
+  }
+
+  return (
+    <form
+      action={acao}
+      className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-2 py-1.5"
+    >
+      <input type="hidden" name="app_shop_id" value={loja.appShopId} />
+      <span className="font-mono text-[11px]">{loja.appShopId}</span>
+
+      {loja.unidade ? (
+        <>
+          <input type="hidden" name="unit_id" value={loja.unidade.id} />
+          <span className="text-[11px] text-muted-foreground">
+            → {loja.unidade.rotulo}
+          </span>
+          <BotaoVincular rotulo="Vincular" />
+        </>
+      ) : (
+        <span className="text-[11px] text-muted-foreground">
+          sem unidade com esse ID do 99 (
+          <span className="font-mono">{loja.shopId}</span>) no cadastro — preencha
+          o ID em /unidades e verifique de novo
+        </span>
+      )}
+
+      {estado.error && (
+        <span className="w-full text-[11px] text-destructive">
+          {estado.error}
+        </span>
+      )}
+    </form>
+  )
+}
+
+/** Botão que mostra que está trabalhando — o vínculo roda backfill junto. */
+function BotaoVincular({ rotulo }: { rotulo: string }) {
+  const { pending } = useFormStatus()
+  return (
+    <Button size="sm" type="submit" disabled={pending}>
+      {pending ? "Vinculando…" : rotulo}
+    </Button>
   )
 }
