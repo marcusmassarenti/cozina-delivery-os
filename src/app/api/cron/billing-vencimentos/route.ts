@@ -19,7 +19,7 @@
  */
 import { createAdminClient } from "@/lib/supabase/admin"
 import { registrarCron } from "@/lib/cron/registrar"
-import { getDefaultPlan } from "@/lib/data/assinatura"
+import { getDefaultPlan, getRegraCiclos } from "@/lib/data/assinatura"
 import { mensalidadeDoCliente } from "@/lib/data/mensalidade"
 import { contatoDaHolding } from "@/lib/email/contato-holding"
 import { enviarEmail } from "@/lib/email/enviar"
@@ -121,7 +121,7 @@ export async function GET(req: Request) {
   )
 
   if (aSuspender.length > 0) {
-    const precos = await getDefaultPlan()
+    const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
     for (const h of aSuspender) {
       const holdingId = String(h.id)
       const nome = String(h.name)
@@ -147,6 +147,7 @@ export async function GET(req: Request) {
           ativas,
           precos,
           hoje,
+          regra,
         )
         const venc = h.due_date ? fmtBR(String(h.due_date)) : null
         const dia = String(h.suspend_on)
@@ -191,6 +192,21 @@ export async function GET(req: Request) {
     }
   }
 
+  /* ── RENOVAÇÃO DO ANUAL EM 12x ───────────────────────────────────────────
+   * Parcelamento não renova sozinho como a assinatura. 15 dias antes do fim,
+   * a cobrança do ano seguinte é emitida e o link vai por e-mail — ver
+   * `lib/data/anual-12x.ts`. Falha aqui não derruba o resto do cron. */
+  let renovacoes12x: { emitidas: unknown[]; erros: string[] } = {
+    emitidas: [],
+    erros: [],
+  }
+  try {
+    const { emitirRenovacoes12x } = await import("@/lib/data/anual-12x")
+    renovacoes12x = await emitirRenovacoes12x(hoje)
+  } catch (e) {
+    renovacoes12x.erros.push(e instanceof Error ? e.message : String(e))
+  }
+
   // Diagnóstico: pagante SEM vencimento nunca entra na régua acima — o sistema
   // jamais vai cobrar. Não dá pra corrigir sozinho (qual data seria?), mas
   // aparecer no retorno do cron é melhor do que descobrir no fim do ano.
@@ -201,6 +217,7 @@ export async function GET(req: Request) {
     .is("due_date", null)
 
   return Response.json({
+    renovacoes12x,
     ok: true,
     ranAt: new Date().toISOString(),
     rebaixados,

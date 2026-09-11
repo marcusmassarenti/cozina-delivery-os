@@ -234,6 +234,82 @@ export async function asaasCreatePayment(input: {
 }
 
 /**
+ * Parcelamento no cartão — o ANUAL EM 12x.
+ *
+ * NÃO é assinatura: a assinatura do Asaas só repete uma cobrança por ciclo e
+ * não aceita parcelas. É uma cobrança parcelada (POST /payments com
+ * `installmentCount`): o cliente paga a 1ª fatura na página do Asaas, o cartão
+ * é cobrado pelo total em 12x e o valor inteiro sai do limite dele na hora. O
+ * Asaas repassa uma parcela a cada ~32 dias. O cartão continua sem passar pelo
+ * nosso servidor.
+ *
+ * Vai `installmentValue`, não `totalValue`: com o total, o Asaas divide e joga a
+ * sobra de centavos numa parcela só — e a tela que diz "12x de R$ X" passaria a
+ * mentir em uma delas.
+ *
+ * Sempre CREDIT_CARD. Boleto parcelado é carnê, e aí o cliente pode parar de
+ * pagar no meio — exatamente o que a opção escolhida (Marcus, 11/09/26) evita.
+ */
+export async function asaasCreateInstallment(input: {
+  customer: string
+  installmentValue: number
+  installmentCount: number
+  dueDate: string // YYYY-MM-DD — vencimento da 1ª parcela
+  description: string
+  externalReference: string
+  /** Depois de pagar, o Asaas leva o cliente de volta pra cá. */
+  callback?: { successUrl: string; autoRedirect?: boolean }
+}): Promise<{ installmentId: string; paymentId: string; invoiceUrl: string | null }> {
+  if (asaasIsMock()) {
+    const id = mockId("inst")
+    return {
+      installmentId: id,
+      paymentId: mockId("pay"),
+      invoiceUrl: `/assinatura/simulado?inst=${id}`,
+    }
+  }
+  const p = await call<{ id: string; installment?: string; invoiceUrl?: string }>(
+    "/payments",
+    {
+      method: "POST",
+      body: JSON.stringify({ billingType: "CREDIT_CARD", ...input }),
+    },
+  )
+  if (!p.installment)
+    throw new Error("O Asaas criou a cobrança, mas não devolveu o parcelamento.")
+  return {
+    installmentId: p.installment,
+    paymentId: p.id,
+    invoiceUrl: p.invoiceUrl ?? null,
+  }
+}
+
+/** Link da fatura que falta pagar num parcelamento (a 1ª parcela em aberto). */
+export async function asaasInstallmentInvoiceUrl(
+  installmentId: string,
+): Promise<string | null> {
+  if (asaasIsMock()) return `/assinatura/simulado?inst=${installmentId}`
+  const list = await call<{
+    data?: Array<{ invoiceUrl?: string; status?: string; installmentNumber?: number }>
+  }>(`/installments/${installmentId}/payments?limit=24`)
+  const itens = (list.data ?? [])
+    .slice()
+    .sort((a, b) => (a.installmentNumber ?? 0) - (b.installmentNumber ?? 0))
+  const aberta = itens.find((p) => p.status === "PENDING" || p.status === "OVERDUE")
+  return (aberta ?? itens[0])?.invoiceUrl ?? null
+}
+
+/**
+ * Remove um parcelamento que ainda NÃO foi pago — checkout abandonado ou
+ * renovação que o cliente cancelou. Parcelamento já pago não se remove: aí o
+ * caminho é estorno, e estorno é decisão da operação, não de um botão.
+ */
+export async function asaasDeleteInstallment(installmentId: string): Promise<void> {
+  if (asaasIsMock()) return
+  await call(`/installments/${installmentId}`, { method: "DELETE" })
+}
+
+/**
  * Atualiza o VALOR de uma assinatura recorrente (ex.: upgrade de plano). No
  * Asaas isso é um POST em /subscriptions/{id}. `updatePendingPayments` reflete
  * o novo valor nas cobranças futuras já geradas. Só muda as PRÓXIMAS cobranças

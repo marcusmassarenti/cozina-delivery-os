@@ -36,10 +36,13 @@ function SubmitBtn() {
 export function PlanSettingsDialog({
   precos,
   pacotePreco,
+  acrescimo12xPct,
 }: {
   precos: PrecosPlano
   /** Preço do pacote de perguntas extras do Consultor IA (Fase 2). */
   pacotePreco: number
+  /** Acréscimo do anual em 12x sobre a base, em %. */
+  acrescimo12xPct: number
 }) {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
@@ -127,6 +130,25 @@ export function PlanSettingsDialog({
               />
             </div>
           ))}
+
+          <div className="border-t pt-3">
+            <label htmlFor="acrescimo12x" className="text-xs font-medium">
+              Acréscimo do anual em 12x (%)
+            </label>
+            <input
+              id="acrescimo12x"
+              name="acrescimo12x"
+              inputMode="decimal"
+              defaultValue={String(acrescimo12xPct).replace(".", ",")}
+              className={inputCls}
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Os valores acima são o anual à vista, por mês. O anual em 12x no
+              cartão cobra esse valor mais este acréscimo; o mensal, mais 30%.
+              Muda na hora na landing e no checkout — quem já assinou segue com
+              o valor que aceitou até renovar.
+            </p>
+          </div>
 
           <div className="border-t pt-3">
             <label htmlFor="pacotePreco" className="text-xs font-medium">

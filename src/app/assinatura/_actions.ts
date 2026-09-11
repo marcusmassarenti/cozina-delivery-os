@@ -8,30 +8,50 @@ import { aplicarDescontos } from "@/lib/data/descontos"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import {
+  fimDoPeriodo,
   getDefaultPlan,
   getPlanoAtual,
+  getRegraCiclos,
   getUpgradeAiInfo,
+  PLANOS_META,
   precoDoPlano,
   valorAssinaturaDoPlano,
   type PlanId,
+  type PrecosPlano,
 } from "@/lib/data/assinatura"
 import { todayISO } from "@/lib/data/billing"
 import {
   asaasCycle,
+  cicloDoBanco,
+  mesesDoCiclo,
+  PARCELAS_12X,
   valorCobranca,
   type BillingCycle,
 } from "@/lib/pricing"
 import {
   asaasCancelSubscription,
   asaasCreateCustomer,
+  asaasCreateInstallment,
   asaasCreatePayment,
   asaasCreateSubscription,
+  asaasDeleteInstallment,
   type AsaasBillingType,
   asaasFirstInvoiceUrl,
+  asaasGetCustomer,
+  asaasInstallmentInvoiceUrl,
   asaasIsMock,
   asaasUpdateSubscription,
 } from "@/lib/asaas/client"
 import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
+import {
+  ativarAdesaoEEnviar,
+  cancelarAdesao,
+  cancelarAdesoesPendentes,
+  registrarAdesao,
+  vincularAdesaoAoAsaas,
+} from "@/lib/data/contrato-adesao"
+import { fmtDoc } from "@/lib/data/proposta-aceite"
+import { TERMO_VERSAO, type DadosAdesao } from "@/lib/contrato-adesao-texto"
 
 export type AssinarState = {
   ok: boolean
@@ -40,6 +60,27 @@ export type AssinarState = {
 }
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "")
+
+/** 2026-09-11 → 11/09/2026. */
+const fmtBR = (iso: string) => iso.split("-").reverse().join("/")
+
+/**
+ * IP e navegador de quem aceitou o termo. Mesma regra do aceite da proposta:
+ * o primeiro endereço do `x-forwarded-for` (borda da Vercel) é o cliente. Sem
+ * ele, fica vazio — comprovante sem IP ainda vale; com IP errado, vale menos.
+ */
+async function origemDaRequisicao(): Promise<{ ip: string; ua: string }> {
+  try {
+    const h = await headers()
+    const ff = h.get("x-forwarded-for") ?? ""
+    return {
+      ip: (ff.split(",")[0] ?? "").trim() || (h.get("x-real-ip") ?? ""),
+      ua: h.get("user-agent") ?? "",
+    }
+  } catch {
+    return { ip: "", ua: "" }
+  }
+}
 
 /** URL base do app (montada dos headers) — pro Asaas redirecionar de volta. */
 async function appBaseUrl(): Promise<string | null> {
@@ -56,9 +97,9 @@ async function appBaseUrl(): Promise<string | null> {
 }
 
 /**
- * Link de pagamento da assinatura JÁ CRIADA (pendente). Não recria nada —
- * só busca a fatura da 1ª cobrança pra o cliente pagar. Evita refazer o
- * cadastro/assinatura quando falta só pagar.
+ * Link de pagamento do que JÁ FOI CRIADO e falta pagar — a 1ª cobrança da
+ * assinatura, ou o parcelamento do 12x (o do 1º ano ou a renovação). Não
+ * recria nada: evita refazer cadastro, cobrança e termo quando falta só pagar.
  */
 export async function linkPagamentoPendente(): Promise<{
   ok: boolean
@@ -68,21 +109,15 @@ export async function linkPagamentoPendente(): Promise<{
   const supabase = await createClient()
   const { data: auth } = await supabase.auth.getUser()
   if (!auth.user) return { ok: false, message: "Sessão expirada." }
-  const holdingId = await getCurrentHoldingId()
-  if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
-
-  const admin = createAdminClient()
-  const { data: h } = await admin
-    .from("holdings")
-    .select("asaas_subscription_id")
-    .eq("id", holdingId)
-    .maybeSingle()
-  const subscriptionId = h?.asaas_subscription_id as string | null
-  if (!subscriptionId)
+  const plano = await getPlanoAtual()
+  if (!plano) return { ok: false, message: "Empresa não encontrada." }
+  if (!plano.subscriptionId && !plano.parceladoPendenteId)
     return { ok: false, message: "Nenhuma assinatura pra pagar." }
 
   try {
-    const checkoutUrl = await asaasFirstInvoiceUrl(subscriptionId)
+    const checkoutUrl = plano.subscriptionId
+      ? await asaasFirstInvoiceUrl(plano.subscriptionId)
+      : await asaasInstallmentInvoiceUrl(plano.parceladoPendenteId!)
     if (!checkoutUrl)
       return {
         ok: false,
@@ -116,6 +151,7 @@ export async function assinar(
   const supabase = await createClient()
   const { data: auth } = await supabase.auth.getUser()
   if (!auth.user) return { ok: false, message: "Sessão expirada. Entre de novo." }
+  const usuario = auth.user
 
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
@@ -132,23 +168,31 @@ export async function assinar(
         ? "ai"
         : "essencial"
   // Ciclo escolhido (self-service). Clientes com preço custom seguem mensal.
-  const ciclo: BillingCycle =
-    !plano.precoCustom && String(formData.get("ciclo") ?? "") === "anual"
-      ? "anual"
-      : String(formData.get("ciclo") ?? "") === "mensal"
-        ? "mensal"
-        : plano.precoCustom
-          ? "mensal"
-          : "anual"
+  const cicloPedido = String(formData.get("ciclo") ?? "")
+  const ciclo: BillingCycle = plano.precoCustom
+    ? "mensal"
+    : cicloPedido === "mensal" || cicloPedido === "anual_12x"
+      ? cicloPedido
+      : "anual"
 
-  // Valor cobrado: anual = 12× à vista (1 cobrança); mensal = base +30%.
+  /* O ACEITE DO TERMO. A caixinha do formulário é `required`, mas o que vale é
+   * o que chega aqui: sem aceite, nenhuma cobrança é criada. */
+  if (formData.get("aceite") !== "on")
+    return {
+      ok: false,
+      message: "Para assinar, marque que leu e aceita o Termo de Adesão e o Contrato.",
+    }
+
+  // Valor por ciclo: anual = 12× à vista; 12x = total do ano; mensal = base +30%.
+  const regra = await getRegraCiclos()
   let valor: number
+  let precos: PrecosPlano | null = null
   if (plano.precoCustom) {
     valor = plano.mensalidade // negociado, cobrado mensal
   } else {
-    const precos = await getDefaultPlan()
+    precos = await getDefaultPlan()
     const base = precoDoPlano(precos, planId, plano.activeUnits)
-    valor = valorCobranca(base, ciclo)
+    valor = valorCobranca(base, ciclo, regra)
   }
   if (valor <= 0)
     return {
@@ -177,15 +221,21 @@ export async function assinar(
   const { data: hRow } = await admin
     .from("holdings")
     .select(
-      "desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id, asaas_billing_type, desconto_tipo, desconto_valor, desconto_ate",
+      "desconto_primeira_fatura_pct, indicado_por, asaas_subscription_id, asaas_installment_id, asaas_billing_type, desconto_tipo, desconto_valor, desconto_ate, razao_social, doc_cpf_cnpj, nf_cep, nf_logradouro, nf_numero, nf_complemento, nf_bairro, nf_cidade, nf_uf",
     )
     .eq("id", holdingId)
     .maybeSingle()
-  const jaAssinou = !!(hRow as { asaas_subscription_id?: string } | null)
-    ?.asaas_subscription_id
-  const billingType =
-    ((hRow as { asaas_billing_type?: string } | null)?.asaas_billing_type ??
-      null) as AsaasBillingType | null
+  const hr = (hRow ?? {}) as Record<string, string | null | undefined>
+  // Já assinou alguma vez (assinatura ou 12x)? Então cupom de 1ª fatura não vale.
+  const jaAssinou = !!(hr.asaas_subscription_id || hr.asaas_installment_id)
+  const billingType = (hr.asaas_billing_type ?? null) as AsaasBillingType | null
+  // O 12x é parcelamento no CARTÃO. Boleto parcelado vira carnê, e aí o cliente
+  // pode parar no meio — justamente o que esta opção existe pra evitar.
+  if (ciclo === "anual_12x" && (billingType === "PIX" || billingType === "BOLETO"))
+    return {
+      ok: false,
+      message: "O anual em 12x é só no cartão de crédito. Escolha o anual à vista ou o mensal.",
+    }
 
   let descontoPct = Number(
     (hRow as { desconto_primeira_fatura_pct?: number } | null)
@@ -283,13 +333,207 @@ export async function assinar(
         .eq("id", holdingId)
     }
 
+    /* ── TERMO DE ADESÃO: quem está contratando e o quê ─────────────────
+     * Identidade do formulário (1ª assinatura) ou do cadastro — quem já é
+     * cliente no Asaas não vê esses campos de novo. O quadro-resumo é
+     * congelado aqui e o hash cobre ele e o texto das condições. */
+    const f = (k: string) => String(formData.get(k) ?? "").trim()
+    let contratanteNome = f("nome") || hr.razao_social || ""
+    let contratanteDoc = onlyDigits(f("cpfCnpj")) || onlyDigits(hr.doc_cpf_cnpj ?? "")
+    const cepContrato = onlyDigits(f("cep")) || onlyDigits(hr.nf_cep ?? "")
+    let endereco = [
+      [f("logradouro") || hr.nf_logradouro, f("numero") || hr.nf_numero]
+        .filter(Boolean)
+        .join(", "),
+      f("complemento") || hr.nf_complemento,
+      f("bairro") || hr.nf_bairro,
+      [hr.nf_cidade, hr.nf_uf].filter(Boolean).join("/"),
+      cepContrato ? `CEP ${cepContrato}` : "",
+    ]
+      .filter(Boolean)
+      .join(" — ")
+    if (!contratanteNome || !contratanteDoc || !endereco) {
+      try {
+        const c = (await asaasGetCustomer(customerId)) as unknown as Record<
+          string,
+          string | null | undefined
+        > | null
+        if (c) {
+          contratanteNome ||= c.name ?? ""
+          contratanteDoc ||= onlyDigits(c.cpfCnpj ?? "")
+          if (!endereco)
+            endereco = [
+              [c.address, c.addressNumber].filter(Boolean).join(", "),
+              c.province,
+              c.postalCode ? `CEP ${onlyDigits(c.postalCode)}` : "",
+            ]
+              .filter(Boolean)
+              .join(" — ")
+        }
+      } catch {
+        // Sem o cadastro do Asaas, o termo sai com o que houver.
+      }
+    }
+    const { data: perfil } = await admin
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", usuario.id)
+      .maybeSingle()
+    const signatario =
+      (perfil?.full_name as string | null) ||
+      (usuario.user_metadata?.full_name as string | undefined) ||
+      contratanteNome ||
+      usuario.email ||
+      ""
+    const hojeAceite = todayISO()
+    // 1ª cobrança respeita os dias de teste que ainda restam.
+    const primeiroVenc =
+      plano.trialEndsAt && plano.trialEndsAt > hojeAceite ? plano.trialEndsAt : hojeAceite
+    const dadosTermo: DadosAdesao = {
+      versaoTermo: TERMO_VERSAO,
+      contratante: {
+        nome: contratanteNome || plano.name,
+        documento: contratanteDoc ? fmtDoc(contratanteDoc) : "",
+        endereco,
+        email: usuario.email ?? "",
+      },
+      plano:
+        plano.precoCustom || !precos
+          ? {
+              id: "personalizado",
+              nome: plano.planLabel ?? "Personalizado",
+              precoPrimeiraLoja: null,
+              precoAdicional: null,
+              personalizado: true,
+            }
+          : {
+              id: planId,
+              nome: PLANOS_META[planId].label,
+              precoPrimeiraLoja: precos[planId].first,
+              precoAdicional: precos[planId].add,
+              personalizado: false,
+            },
+      lojas: plano.activeUnits,
+      ciclo,
+      valorMensal:
+        ciclo === "mensal"
+          ? valorRecorrente
+          : Math.round((valorRecorrente / 12) * 100) / 100,
+      valorCiclo: valorRecorrente,
+      parcelas: ciclo === "anual_12x" ? PARCELAS_12X : null,
+      acrescimo12xPct: ciclo === "anual_12x" ? regra.acrescimo12xPct : null,
+      primeiraCobranca: temDesconto
+        ? { valor: valorComDesconto, motivo: rotuloDesconto.replace(/^com /, "") }
+        : null,
+      formaPagamento:
+        ciclo === "anual_12x"
+          ? "Cartão de crédito em 12x"
+          : billingType === "PIX"
+            ? "Pix"
+            : billingType === "BOLETO"
+              ? "Boleto"
+              : billingType === "UNDEFINED"
+                ? "Cartão, Pix ou boleto"
+                : "Cartão de crédito",
+      inicio: hojeAceite,
+      fimPrimeiroPeriodo: ciclo === "mensal" ? null : addMonths(primeiroVenc, 12),
+    }
+    const { ip, ua } = await origemDaRequisicao()
+    const registrarTermo = () =>
+      registrarAdesao({
+        holdingId,
+        dados: dadosTermo,
+        userId: usuario.id,
+        nome: signatario,
+        email: usuario.email ?? "",
+        ip,
+        userAgent: ua,
+      })
+
+    /* ── ANUAL EM 12x: parcelamento, não assinatura ──────────────────────
+     * O termo é gravado ANTES da cobrança: se o registro do aceite falhar,
+     * nada é cobrado. Se a cobrança falhar depois, o termo vira "cancelado". */
+    if (ciclo === "anual_12x") {
+      // Já existe parcelamento esperando pagamento: devolve o link dele, sem
+      // criar outro (nem outro termo).
+      if (plano.parceladoPendenteId) {
+        const url = await asaasInstallmentInvoiceUrl(plano.parceladoPendenteId)
+        return url
+          ? { ok: true, checkoutUrl: url }
+          : {
+              ok: false,
+              message: "O link de pagamento ainda está sendo gerado. Tente de novo em instantes.",
+            }
+      }
+      const termo = await registrarTermo()
+      if (!termo.ok)
+        return { ok: false, message: `Não foi possível registrar o aceite: ${termo.erro}` }
+      try {
+        const base = await appBaseUrl()
+        const fim = addMonths(primeiroVenc, 12)
+        // Com cupom, o 1º ano sai com desconto nas 12 parcelas; a renovação
+        // volta ao valor cheio (o que o termo diz).
+        const parcelaAno1 = Math.round((valorComDesconto / PARCELAS_12X) * 100) / 100
+        const inst = await asaasCreateInstallment({
+          customer: customerId,
+          installmentValue: parcelaAno1,
+          installmentCount: PARCELAS_12X,
+          dueDate: primeiroVenc,
+          description: `Delivery OS — plano ${PLANOS_META[planId].label} · anual em 12x (${fmtBR(primeiroVenc)} a ${fmtBR(fim)})`,
+          externalReference: holdingId,
+          ...(base
+            ? { callback: { successUrl: `${base}/?assinou=1`, autoRedirect: true } }
+            : {}),
+        })
+        await vincularAdesaoAoAsaas(termo.id, inst.installmentId)
+        await admin
+          .from("holdings")
+          .update({
+            asaas_installment_id: inst.installmentId,
+            asaas_installment_renovacao_id: null,
+            parcelado_ate: fim,
+            parcelado_nao_renovar: false,
+            payment_method: "Asaas",
+            billing_cycle: ciclo,
+            // Só PENDENTE: o plano (que libera as features) vem do webhook.
+            pending_plan_tier: planId,
+            ...(indicadorId
+              ? { indicado_por: indicadorId, indicado_em: new Date().toISOString() }
+              : {}),
+            ...(temDesconto ? { desconto_primeira_fatura_pct: null } : {}),
+          })
+          .eq("id", holdingId)
+        const url =
+          inst.invoiceUrl ?? (await asaasInstallmentInvoiceUrl(inst.installmentId))
+        if (!url)
+          return {
+            ok: false,
+            message:
+              "Parcelamento criado, mas o link de pagamento ainda está sendo gerado. Tente de novo em alguns segundos.",
+          }
+        return {
+          ok: true,
+          checkoutUrl: url,
+          ...(temDesconto
+            ? {
+                message: `1º ano ${rotuloDesconto}: 12x de R$ ${parcelaAno1.toFixed(2)}. Na renovação, o valor cheio.`,
+              }
+            : {}),
+        }
+      } catch (e) {
+        await cancelarAdesao(termo.id)
+        throw e
+      }
+    }
+
     // 2) Assinatura (reaproveita se já existe → só busca o link).
     let subscriptionId = plano.subscriptionId
     if (!subscriptionId) {
-      // 1ª cobrança respeita os dias de teste que ainda restam.
-      const hoje = todayISO()
-      const nextDueDate =
-        plano.trialEndsAt && plano.trialEndsAt > hoje ? plano.trialEndsAt : hoje
+      const termo = await registrarTermo()
+      if (!termo.ok)
+        return { ok: false, message: `Não foi possível registrar o aceite: ${termo.erro}` }
+      try {
+      const nextDueDate = primeiroVenc
       const base = await appBaseUrl()
 
       /* Com desconto, o 1º mês vira cobrança AVULSA e a assinatura só começa
@@ -326,7 +570,7 @@ export async function assinar(
         // cliente paga cada uma. Combinado assim com a DG FOODS.
         ...(billingType ? { billingType } : {}),
         nextDueDate: primeiroVencimento,
-        cycle: asaasCycle(ciclo),
+        cycle: asaasCycle(ciclo === "mensal" ? "mensal" : "anual"),
         description: `Delivery OS — plano ${planId} (${plano.name}) · ${ciclo}`,
         externalReference: holdingId,
         // Depois de pagar, volta pro app com a tela de boas-vindas.
@@ -335,6 +579,7 @@ export async function assinar(
           : {}),
       })
       subscriptionId = sub.id
+      await vincularAdesaoAoAsaas(termo.id, sub.id)
 
       /* EMISSÃO AUTOMÁTICA DE NF: REMOVIDA (Marcus, 24/08/26).
        *
@@ -358,6 +603,11 @@ export async function assinar(
           asaas_subscription_id: subscriptionId,
           payment_method: "Asaas",
           billing_cycle: ciclo,
+          // Um 12x que terminou não pode ficar pendurado ao lado da assinatura nova.
+          asaas_installment_id: null,
+          asaas_installment_renovacao_id: null,
+          parcelado_ate: null,
+          parcelado_nao_renovar: false,
           // Grava só como PENDENTE. O plan_tier (que libera as features) só é
           // concedido pelo webhook quando o pagamento confirmar de verdade.
           ...(plano.precoCustom ? {} : { pending_plan_tier: planId }),
@@ -377,6 +627,10 @@ export async function assinar(
           checkoutUrl: linkPrimeiraCobranca,
           message: `1ª mensalidade ${rotuloDesconto}: R$ ${valorComDesconto.toFixed(2)} em vez de R$ ${valorCheio.toFixed(2)}. A partir do próximo ciclo, R$ ${valorRecorrente.toFixed(2)}.`,
         }
+      }
+      } catch (e) {
+        await cancelarAdesao(termo.id)
+        throw e
       }
     }
 
@@ -438,7 +692,9 @@ export async function iniciarUpgradeAi(): Promise<UpgradeState> {
     .maybeSingle()
   const customerId = (h?.asaas_customer_id as string | null) ?? null
   const subscriptionId = (h?.asaas_subscription_id as string | null) ?? null
-  if (!customerId || !subscriptionId)
+  // No anual em 12x não há assinatura: a proração é cobrada à parte e o plano
+  // novo entra no valor da renovação.
+  if (!customerId)
     return { ok: false, message: "Assinatura não encontrada. Fale com o suporte." }
 
   // Asaas não cobra abaixo de ~R$5. Se a proração for ínfima, sobe o valor da
@@ -447,10 +703,11 @@ export async function iniciarUpgradeAi(): Promise<UpgradeState> {
 
   try {
     if (info.proracaoAgora < MIN_ASAAS) {
-      await asaasUpdateSubscription(subscriptionId, {
-        value: info.aiValorCiclo,
-        description: "Delivery OS — plano ai",
-      })
+      if (subscriptionId)
+        await asaasUpdateSubscription(subscriptionId, {
+          value: info.aiValorCiclo,
+          description: "Delivery OS — plano ai",
+        })
       await admin
         .from("holdings")
         .update({ plan_tier: "ai", pending_plan_tier: null })
@@ -572,7 +829,7 @@ export async function simularPagamento(
   const plano = await getPlanoAtual()
   const pendingTier = (h.pending_plan_tier as string | null) ?? null
   // Anual paga o ano; o próximo vencimento é daqui a 12 meses (mensal = 1).
-  const mesesAteRenovar = h.billing_cycle === "anual" ? 12 : 1
+  const mesesAteRenovar = mesesDoCiclo(cicloDoBanco(h.billing_cycle))
   await admin
     .from("holdings")
     .update({
@@ -598,14 +855,92 @@ export async function simularPagamento(
     note: `Simulado ${subscriptionId}`,
   })
 
+  // Espelha o webhook: o 1º pagamento põe o Termo de Adesão em vigor.
+  await ativarAdesaoEEnviar(holdingId)
+
   revalidatePath("/assinatura")
   revalidatePath("/", "layout")
   return { ok: true }
 }
 
 /**
- * Cancela a assinatura recorrente. Para de cobrar no Asaas e libera o acesso
- * até o fim do período já pago (due_date); depois disso, suspende.
+ * MODO SIMULADO do 12x: faz o que o webhook faria quando o parcelamento é
+ * pago — libera o acesso até o fim do período e põe o termo em vigor. Só age
+ * num parcelamento "mock_..." da própria empresa.
+ */
+export async function simularPagamentoParcelado(
+  installmentId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const supabase = await createClient()
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user) return { ok: false, message: "Sessão expirada." }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, message: "Empresa não encontrada." }
+  if (!installmentId.startsWith("mock_"))
+    return { ok: false, message: "Só vale no modo de teste." }
+
+  const admin = createAdminClient()
+  const { data: h } = await admin
+    .from("holdings")
+    .select(
+      "id, asaas_installment_id, asaas_installment_renovacao_id, parcelado_ate, pending_plan_tier",
+    )
+    .eq("id", holdingId)
+    .maybeSingle()
+  const renovacao = h?.asaas_installment_renovacao_id === installmentId
+  if (!h || (h.asaas_installment_id !== installmentId && !renovacao))
+    return { ok: false, message: "Parcelamento não confere com a empresa." }
+
+  const hoje = todayISO()
+  const fim = renovacao
+    ? addMonths((h.parcelado_ate as string | null) ?? hoje, 12)
+    : ((h.parcelado_ate as string | null) ?? addMonths(hoje, 12))
+  const pendingTier = (h.pending_plan_tier as string | null) ?? null
+  const plano = await getPlanoAtual()
+  await admin
+    .from("holdings")
+    .update({
+      paid: true,
+      trial_ends_at: null,
+      suspend_on: null,
+      due_date: fim,
+      parcelado_ate: fim,
+      asaas_installment_id: installmentId,
+      asaas_installment_renovacao_id: null,
+      payment_method: "Asaas (Simulado)",
+      ...(pendingTier ? { plan_tier: pendingTier, pending_plan_tier: null } : {}),
+      asaas_last_event: {
+        event: "SIMULATED_INSTALLMENT_CONFIRMED",
+        at: new Date().toISOString(),
+      },
+    })
+    .eq("id", holdingId)
+
+  await admin.from("holding_payments").insert({
+    holding_id: holdingId,
+    paid_on: hoje,
+    amount: plano?.valorMensalCiclo ?? 0,
+    method: "Asaas (Simulado) · 1ª parcela do 12x",
+    note: `Simulado ${installmentId}`,
+  })
+
+  await ativarAdesaoEEnviar(holdingId)
+
+  revalidatePath("/assinatura")
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/**
+ * Cancela a assinatura. Três casos, porque "cancelar" muda de sentido:
+ *
+ *  - Assinatura (mensal / anual à vista): para de cobrar no Asaas; o acesso
+ *    segue até o FIM do período pago e depois suspende.
+ *  - 12x ainda NÃO pago: o parcelamento é removido — o cliente desistiu antes
+ *    de pagar, e não há período a respeitar.
+ *  - 12x já pago: cancela só a RENOVAÇÃO. As parcelas seguem no cartão (o
+ *    banco aprovou a compra inteira) e o acesso vai até `parcelado_ate`. É o
+ *    que o Termo de Adesão diz, com essas palavras.
  */
 export async function cancelarAssinatura(): Promise<{
   ok: boolean
@@ -620,35 +955,107 @@ export async function cancelarAssinatura(): Promise<{
   const admin = createAdminClient()
   const { data: h } = await admin
     .from("holdings")
-    .select("id, asaas_subscription_id, due_date")
+    .select(
+      "id, asaas_subscription_id, due_date, billing_cycle, asaas_installment_id, asaas_installment_renovacao_id, parcelado_ate",
+    )
     .eq("id", holdingId)
     .maybeSingle()
-  if (!h?.asaas_subscription_id)
+  if (!h) return { ok: false, message: "Empresa não encontrada." }
+
+  const agora = new Date().toISOString()
+
+  if (h.asaas_subscription_id) {
+    try {
+      await asaasCancelSubscription(h.asaas_subscription_id)
+    } catch (e) {
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : "Erro ao cancelar no Asaas.",
+      }
+    }
+
+    /* Acesso segue até o FIM do período pago. Antes isto usava o `due_date`
+     * cru — que, vindo do webhook, é o INÍCIO do período — e quem cancelava
+     * era suspenso na hora, apesar da tela prometer "até o fim do período". */
+    const fimPeriodo =
+      fimDoPeriodo(
+        (h.due_date as string | null) ?? null,
+        cicloDoBanco(h.billing_cycle),
+        null,
+      ) ?? todayISO()
+    await admin
+      .from("holdings")
+      .update({
+        asaas_subscription_id: null,
+        paid: false,
+        suspend_on: fimPeriodo,
+        asaas_last_event: { event: "SUBSCRIPTION_CANCELED", at: agora },
+      })
+      .eq("id", holdingId)
+    // Termo aceito que nunca vigorou (não pagou) perde o efeito.
+    await cancelarAdesoesPendentes(holdingId)
+
+    revalidatePath("/assinatura")
+    revalidatePath("/", "layout")
+    return { ok: true }
+  }
+
+  const inst = (h.asaas_installment_id as string | null) ?? null
+  const renov = (h.asaas_installment_renovacao_id as string | null) ?? null
+  if (!inst && !renov)
     return { ok: false, message: "Nenhuma assinatura ativa pra cancelar." }
 
   try {
-    await asaasCancelSubscription(h.asaas_subscription_id)
+    // Renovação já emitida e não paga: sai. (Paga, ela já teria virado a vigente.)
+    if (renov) await asaasDeleteInstallment(renov)
+
+    /* O parcelamento vigente foi pago? O termo dele entra em vigor na 1ª
+     * confirmação do Asaas — é o sinal mais firme que temos sem consultar a
+     * API, e é exatamente o fato que importa: houve pagamento. */
+    let pago = false
+    if (inst) {
+      const { data: vig } = await admin
+        .from("contratos_assinatura")
+        .select("id")
+        .eq("holding_id", holdingId)
+        .eq("asaas_ref", inst)
+        .eq("status", "vigente")
+        .limit(1)
+      pago = (vig ?? []).length > 0
+    }
+
+    if (inst && !pago) {
+      await asaasDeleteInstallment(inst)
+      await admin
+        .from("holdings")
+        .update({
+          asaas_installment_id: null,
+          asaas_installment_renovacao_id: null,
+          parcelado_ate: null,
+          parcelado_nao_renovar: false,
+          asaas_last_event: { event: "INSTALLMENT_REMOVED", at: agora },
+        })
+        .eq("id", holdingId)
+      await cancelarAdesoesPendentes(holdingId)
+    } else {
+      // Pago: acaba em `parcelado_ate`, sem renovar. O cron de vencimentos
+      // rebaixa o `paid` nessa data e a suspensão já está marcada.
+      await admin
+        .from("holdings")
+        .update({
+          asaas_installment_renovacao_id: null,
+          parcelado_nao_renovar: true,
+          suspend_on: (h.parcelado_ate as string | null) ?? todayISO(),
+          asaas_last_event: { event: "RENOVACAO_12X_CANCELADA", at: agora },
+        })
+        .eq("id", holdingId)
+    }
   } catch (e) {
     return {
       ok: false,
       message: e instanceof Error ? e.message : "Erro ao cancelar no Asaas.",
     }
   }
-
-  // Acesso segue até o fim do período pago; depois suspende.
-  const fimPeriodo = (h.due_date as string | null) ?? todayISO()
-  await admin
-    .from("holdings")
-    .update({
-      asaas_subscription_id: null,
-      paid: false,
-      suspend_on: fimPeriodo,
-      asaas_last_event: {
-        event: "SUBSCRIPTION_CANCELED",
-        at: new Date().toISOString(),
-      },
-    })
-    .eq("id", holdingId)
 
   revalidatePath("/assinatura")
   revalidatePath("/", "layout")

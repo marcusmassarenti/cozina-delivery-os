@@ -4,13 +4,20 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { simularPagamento, simularUpgrade } from "../../_actions"
+import {
+  simularPagamento,
+  simularPagamentoParcelado,
+  simularUpgrade,
+} from "../../_actions"
 
 export function SimuladoActions({
   sub,
+  inst = null,
   upgrade = false,
 }: {
   sub: string | null
+  /** Parcelamento do anual em 12x (modo simulado). */
+  inst?: string | null
   upgrade?: boolean
 }) {
   const [pending, setPending] = React.useState(false)
@@ -22,7 +29,9 @@ export function SimuladoActions({
     setError(null)
     const res = upgrade
       ? await simularUpgrade()
-      : await simularPagamento(sub ?? "")
+      : inst
+        ? await simularPagamentoParcelado(inst)
+        : await simularPagamento(sub ?? "")
     if (res.ok) {
       router.push(upgrade ? "/nino" : "/?assinou=1")
       router.refresh()

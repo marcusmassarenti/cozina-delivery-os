@@ -196,6 +196,18 @@ export type TipoEmail =
    * engoliria o comprovante da segunda.
    */
   | "proposta-aceita"
+  /**
+   * O Termo de Adesão, na confirmação do 1º pagamento. Vai com `forcar: true`:
+   * quem cancela e volta adere de novo, e a trava por (cliente, tipo) engoliria
+   * o segundo termo.
+   */
+  | "termo-adesao"
+  /**
+   * Renovação do anual em 12x, 15 dias antes do fim. A data do fim entra no
+   * tipo pelo mesmo motivo do `conta-suspensa-*`: com tipo fixo, o cliente
+   * receberia o aviso da primeira renovação e nunca mais.
+   */
+  | `renovacao-12x-${string}`
 
 export type ResultadoEnvio = {
   ok: boolean

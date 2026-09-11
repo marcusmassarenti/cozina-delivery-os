@@ -20,6 +20,7 @@ import "server-only"
 import { createHash, randomBytes } from "node:crypto"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { canonico } from "@/lib/data/hash-canonico"
 import { getModeloProposta, type ModeloProposta } from "@/lib/data/proposta-modelo"
 import {
   completarDadosPublico,
@@ -38,21 +39,6 @@ export type PropostaPublica = {
   modelo: ModeloProposta
   aceite: AceiteProposta | null
   recusadaEm: string | null
-}
-
-/**
- * JSON canônico: mesma entrada, mesma string, sempre.
- *
- * Sem ordenar as chaves o hash mudaria conforme a ordem em que o Postgres
- * devolvesse o JSONB — e um hash que muda sozinho não prova integridade
- * nenhuma, só gera a suspeita de adulteração que ele deveria afastar.
- */
-function canonico(v: unknown): string {
-  if (v === null || typeof v !== "object") return JSON.stringify(v ?? null)
-  if (Array.isArray(v)) return `[${v.map(canonico).join(",")}]`
-  const o = v as Record<string, unknown>
-  const chaves = Object.keys(o).sort()
-  return `{${chaves.map((k) => `${JSON.stringify(k)}:${canonico(o[k])}`).join(",")}}`
 }
 
 /** SHA-256 do conteúdo do documento: o que a pessoa leu e aceitou. */

@@ -20,6 +20,7 @@ import { retomarSyncDoCliente } from "@/lib/data/unidades-inativas"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { valorAssinaturaDoPlano } from "@/lib/data/assinatura"
 import { asaasUpdateSubscription } from "@/lib/asaas/client"
+import { ativarAdesaoEEnviar } from "@/lib/data/contrato-adesao"
 
 /** Comparação de segredo em tempo constante (evita timing attack). */
 function tokenOk(expected: string, got: string | null): boolean {
@@ -53,10 +54,19 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Soma meses a uma data YYYY-MM-DD e devolve YYYY-MM-DD. */
+function addMonths(iso: string, months: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCMonth(d.getUTCMonth() + months)
+  return d.toISOString().slice(0, 10)
+}
+
 type AsaasPayment = {
   id?: string
   customer?: string
   subscription?: string
+  /** Id do parcelamento — só vem nas parcelas do anual em 12x. */
+  installment?: string
   value?: number
   dueDate?: string
   paymentDate?: string
@@ -101,32 +111,56 @@ export async function POST(req: Request) {
       ? `${event}:${payment.id}`
       : ""
   const subscriptionId = payment.subscription ? String(payment.subscription) : null
+  const installmentId = payment.installment ? String(payment.installment) : null
   const customerId = payment.customer ? String(payment.customer) : null
 
   try {
     const admin = createAdminClient()
 
-    // Acha a holding pela assinatura (ou, no pior caso, pelo cliente).
-    let holdingId: string | null = null
-    let pendingPlanTier: string | null = null
+    // Acha a holding pela assinatura, pelo parcelamento do 12x (vigente ou
+    // renovação) ou, no pior caso, pelo cliente.
+    const COLS =
+      "id, pending_plan_tier, asaas_installment_id, asaas_installment_renovacao_id, parcelado_ate"
+    type Linha = {
+      id: string
+      pending_plan_tier: string | null
+      asaas_installment_id: string | null
+      asaas_installment_renovacao_id: string | null
+      parcelado_ate: string | null
+    }
+    let linha: Linha | null = null
     if (subscriptionId) {
       const { data } = await admin
         .from("holdings")
-        .select("id, pending_plan_tier")
+        .select(COLS)
         .eq("asaas_subscription_id", subscriptionId)
         .maybeSingle()
-      holdingId = data?.id ?? null
-      pendingPlanTier = (data?.pending_plan_tier as string | null) ?? null
+      linha = (data as Linha | null) ?? null
     }
-    if (!holdingId && customerId) {
+    if (!linha && installmentId) {
+      for (const col of [
+        "asaas_installment_id",
+        "asaas_installment_renovacao_id",
+      ] as const) {
+        if (linha) break
+        const { data } = await admin
+          .from("holdings")
+          .select(COLS)
+          .eq(col, installmentId)
+          .maybeSingle()
+        linha = (data as Linha | null) ?? null
+      }
+    }
+    if (!linha && customerId) {
       const { data } = await admin
         .from("holdings")
-        .select("id, pending_plan_tier")
+        .select(COLS)
         .eq("asaas_customer_id", customerId)
         .maybeSingle()
-      holdingId = data?.id ?? null
-      pendingPlanTier = (data?.pending_plan_tier as string | null) ?? null
+      linha = (data as Linha | null) ?? null
     }
+    const holdingId: string | null = linha?.id ?? null
+    const pendingPlanTier = linha?.pending_plan_tier ?? null
     if (!holdingId) {
       console.warn("asaas webhook: holding não encontrada", {
         event,
@@ -251,6 +285,58 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, upgrade: true })
     }
 
+    /* ── ANUAL EM 12x ────────────────────────────────────────────────────
+     * Cada parcela é uma cobrança com o id do parcelamento em `installment`.
+     * Três regras que o caminho da assinatura não precisava:
+     *
+     *  1. Só a CONFIRMAÇÃO mexe no acesso. No cartão, o Asaas confirma as 12
+     *     parcelas de uma vez (o banco aprovou a compra toda) e depois manda um
+     *     RECEBIDO por parcela, a cada ~32 dias. 12 × 32 = 384 dias: o último
+     *     RECEBIDO chega DEPOIS do fim do período. Se ele religasse o acesso,
+     *     quem não renovou voltaria de graça por semanas.
+     *  2. Parcela de um parcelamento que não é o vigente nem a renovação não
+     *     mexe em nada — é de um ano que já passou. E parcela REMOVIDA
+     *     (PAYMENT_DELETED) nunca corta acesso: o Asaas só remove o que não foi
+     *     pago, e isso acontece quando o próprio cliente cancela a renovação.
+     *  3. O vencimento gravado é o FIM do período (`parcelado_ate`), não o da
+     *     parcela: é a data em que o acesso precisa de renovação.
+     *
+     * A renovação paga vira o parcelamento vigente com a condição no próprio
+     * UPDATE. As 12 confirmações chegam juntas e só a primeira pode empurrar o
+     * período — sem a condição, ele andaria 12 meses por parcela. */
+    const ehParcela = installmentId !== null
+    const instAtual = linha?.asaas_installment_id ?? null
+    const instRenov = linha?.asaas_installment_renovacao_id ?? null
+    const doPeriodo =
+      ehParcela && (installmentId === instAtual || installmentId === instRenov)
+    let fimParcelado = linha?.parcelado_ate ?? null
+    if (ehParcela && event === "PAYMENT_CONFIRMED" && installmentId === instRenov) {
+      await admin
+        .from("holdings")
+        .update({
+          asaas_installment_id: installmentId,
+          asaas_installment_renovacao_id: null,
+          parcelado_ate: addMonths(
+            fimParcelado ?? new Date().toISOString().slice(0, 10),
+            12,
+          ),
+        })
+        .eq("id", holdingId)
+        .eq("asaas_installment_renovacao_id", installmentId)
+      // Relê: se outra parcela chegou antes e já empurrou, vale o dela.
+      const { data: fresco } = await admin
+        .from("holdings")
+        .select("parcelado_ate")
+        .eq("id", holdingId)
+        .maybeSingle()
+      fimParcelado = (fresco?.parcelado_ate as string | null) ?? fimParcelado
+    }
+    const recebimento =
+      event === "PAYMENT_RECEIVED" || event === "PAYMENT_RECEIVED_IN_CASH"
+    const mexeNoAcesso = !ehParcela || (doPeriodo && !recebimento)
+    const estorno =
+      ESTORNADO.has(event) && !(ehParcela && event === "PAYMENT_DELETED")
+
     const patch: Record<string, unknown> = {
       asaas_last_event: {
         event,
@@ -260,7 +346,7 @@ export async function POST(req: Request) {
     }
 
     let retomouPagamento = false
-    if (CONFIRMADO.has(event)) {
+    if (mexeNoAcesso && CONFIRMADO.has(event)) {
       patch.paid = true
       patch.trial_ends_at = null // deixou de ser trial, virou pagante
       patch.suspend_on = null
@@ -268,20 +354,21 @@ export async function POST(req: Request) {
       // Fora do patch de propósito: mexe em unit_platforms, não em holdings.
       retomouPagamento = true
       patch.payment_method = "Asaas"
-      if (payment.dueDate) patch.due_date = String(payment.dueDate)
+      if (ehParcela && fimParcelado) patch.due_date = fimParcelado
+      else if (payment.dueDate) patch.due_date = String(payment.dueDate)
       // Pagamento confirmado → CONCEDE o plano escolhido (pending → plan_tier).
       // É aqui, e só aqui, que a feature é liberada. Limpa o pendente.
       if (pendingPlanTier) {
         patch.plan_tier = pendingPlanTier
         patch.pending_plan_tier = null
       }
-    } else if (VENCIDO.has(event)) {
+    } else if (mexeNoAcesso && VENCIDO.has(event)) {
       patch.paid = false
       if (payment.dueDate) {
         patch.due_date = String(payment.dueDate)
         patch.suspend_on = addDays(String(payment.dueDate), 7) // 7 dias de tolerância
       }
-    } else if (ESTORNADO.has(event)) {
+    } else if (mexeNoAcesso && estorno) {
       patch.paid = false
     }
 
@@ -313,8 +400,17 @@ export async function POST(req: Request) {
       }
     }
 
+    // O 1º pagamento confirmado põe o Termo de Adesão em vigor e o manda por
+    // e-mail. Nas confirmações seguintes não há termo "aceito" e a função sai
+    // sem fazer nada — e ela nunca lança.
+    if (retomouPagamento) await ativarAdesaoEEnviar(holdingId)
+
     // Histórico de pagamento (dedupe pelo id da cobrança do Asaas).
-    if (CONFIRMADO.has(event) && payment.id) {
+    //
+    // Parcela do 12x entra quando o dinheiro CHEGA (RECEBIDO), uma por mês —
+    // é o que casa com a fatura mensal da parcela. Na confirmação seriam doze
+    // linhas no mesmo dia, como se o cliente tivesse pago o ano de uma vez.
+    if (CONFIRMADO.has(event) && payment.id && (!ehParcela || recebimento)) {
       const note = `Asaas ${payment.id}`
       const { data: exists } = await admin
         .from("holding_payments")

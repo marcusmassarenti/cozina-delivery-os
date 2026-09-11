@@ -16,11 +16,53 @@ import {
 } from "@/components/ui/dialog"
 import { cancelarAssinatura } from "../_actions"
 
-export function CancelButton({ fimPeriodo }: { fimPeriodo: string | null }) {
+/**
+ * O que o cancelamento significa muda com o que o cliente tem — e a caixa de
+ * confirmação precisa dizer isso ANTES do clique:
+ *
+ *  - assinatura: para a cobrança recorrente; acesso até o fim do período pago
+ *  - renovacao12x: o 12x já foi pago; cancela só a renovação, e as parcelas
+ *    seguem no cartão (é o que o Termo de Adesão diz)
+ *  - pendente: nada foi pago; a cobrança em aberto é removida
+ */
+type Modo = "assinatura" | "renovacao12x" | "pendente"
+
+const TEXTO: Record<
+  Modo,
+  { gatilho: string; titulo: string; botao: string }
+> = {
+  assinatura: {
+    gatilho: "Cancelar assinatura",
+    titulo: "Cancelar assinatura?",
+    botao: "Cancelar assinatura",
+  },
+  renovacao12x: {
+    gatilho: "Cancelar renovação",
+    titulo: "Cancelar a renovação?",
+    botao: "Cancelar renovação",
+  },
+  pendente: {
+    gatilho: "Desistir desta assinatura",
+    titulo: "Desistir do pagamento?",
+    botao: "Desistir",
+  },
+}
+
+export function CancelButton({
+  fimPeriodo,
+  modo = "assinatura",
+}: {
+  fimPeriodo: string | null
+  modo?: Modo
+}) {
   const [open, setOpen] = React.useState(false)
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const router = useRouter()
+  const t = TEXTO[modo]
+  const fim = fimPeriodo
+    ? fimPeriodo.split("-").reverse().join("/")
+    : "o fim do período pago"
 
   async function onConfirm() {
     setPending(true)
@@ -44,21 +86,33 @@ export function CancelButton({ fimPeriodo }: { fimPeriodo: string | null }) {
             className="mt-3 inline-flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <XCircle className="size-3.5" />
-            Cancelar assinatura
+            {t.gatilho}
           </button>
         }
       />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Cancelar assinatura?</DialogTitle>
+          <DialogTitle>{t.titulo}</DialogTitle>
           <DialogDescription>
-            A cobrança recorrente para de rodar. Seu acesso continua até{" "}
-            <strong>
-              {fimPeriodo
-                ? fimPeriodo.split("-").reverse().join("/")
-                : "o fim do período pago"}
-            </strong>
-            . Depois disso, o acesso é suspenso até você assinar de novo.
+            {modo === "renovacao12x" ? (
+              <>
+                Seu plano anual segue ativo até <strong>{fim}</strong>. As
+                parcelas já contratadas continuam no cartão até a última — o
+                banco aprovou a compra inteira. Depois dessa data, o plano não
+                renova.
+              </>
+            ) : modo === "pendente" ? (
+              <>
+                A cobrança que ainda não foi paga é removida. Você pode assinar
+                de novo quando quiser, em qualquer ciclo.
+              </>
+            ) : (
+              <>
+                A cobrança recorrente para de rodar. Seu acesso continua até{" "}
+                <strong>{fim}</strong>. Depois disso, o acesso é suspenso até
+                você assinar de novo.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -73,7 +127,7 @@ export function CancelButton({ fimPeriodo }: { fimPeriodo: string | null }) {
             Voltar
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={pending}>
-            {pending ? "Cancelando..." : "Cancelar assinatura"}
+            {pending ? "Cancelando..." : t.botao}
           </Button>
         </DialogFooter>
       </DialogContent>

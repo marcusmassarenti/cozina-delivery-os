@@ -37,10 +37,46 @@ export type Release = {
    * mudou um número que a pessoa já tinha visto e ela PRECISA saber.
    */
   destaque?: boolean
+  /**
+   * O contrário de `destaque`: novidade que entra na tela de Novidades mas NÃO
+   * abre o pop-up. Pra quando a novidade só interessa a uma parte da base —
+   * ex.: o anual em 12x (11/09/26), que só vale pra quem assina sozinho; DG e
+   * Le Brunch têm preço combinado e seriam interrompidos por algo que não usam.
+   */
+  semPopup?: boolean
   areas: ChangeArea[]
 }
 
 export const CHANGELOG: Release[] = [
+  {
+    version: "1.27.0",
+    date: "2026-09-11",
+    tag: "Novidade",
+    // Só interessa a quem assina pelo checkout — não interrompe a base toda.
+    semPopup: true,
+    title: "Anual em 12x no cartão, e o contrato sai sozinho ao assinar",
+    summary:
+      "A assinatura ganhou um terceiro jeito de pagar \u2014 o anual parcelado no cartão \u2014 e cada adesão passa a gerar um Termo de Adesão com os seus dados, que chega por e-mail e fica em Minha conta.",
+    areas: [
+      {
+        area: "Assinatura",
+        items: [
+          {
+            kind: "novo",
+            title: "Três jeitos de pagar: anual à vista, anual em 12x e mensal",
+            desc:
+              "O anual à vista continua sendo o melhor preço (23% abaixo do mensal). O anual em 12x divide o ano em 12 parcelas iguais no cartão, por um pouco mais que o à vista e ainda abaixo do mensal. O mensal segue sem fidelidade.",
+          },
+          {
+            kind: "novo",
+            title: "Contrato gerado na hora de assinar",
+            desc:
+              "Ao assinar, você aceita o contrato ali mesmo e o sistema monta o seu Termo de Adesão \u2014 plano, lojas, ciclo, valor e as regras de cancelamento do seu ciclo. Ele chega por e-mail quando o pagamento confirma e fica em Minha conta \u2192 Assinatura, pronto pra salvar em PDF.",
+          },
+        ],
+      },
+    ],
+  },
   {
     version: "1.26.0",
     date: "2026-09-04",
@@ -2398,6 +2434,7 @@ export const CHANGELOG: Release[] = [
  * `destaque: true` força o pop-up mesmo assim.
  */
 function ehEstrutural(r: Release): boolean {
+  if (r.semPopup) return false
   if (r.destaque) return true
   return r.areas.some((a) => a.items.some((i) => i.kind !== "correcao"))
 }

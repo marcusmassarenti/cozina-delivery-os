@@ -382,6 +382,10 @@ export async function setPlatformPlan(
     const aF = money("ai_first")
     const aA = money("ai_add")
     const pacotePreco = money("pacotePreco") // pacote de perguntas do Consultor IA
+    // Acréscimo do anual em 12x sobre a base (%). A base é o anual à vista.
+    const acrescimo12x = money("acrescimo12x")
+    if (acrescimo12x != null && acrescimo12x > 100)
+      return { ok: false, message: "O acréscimo do anual em 12x vai de 0 a 100%." }
     if (eF == null || eA == null)
       return { ok: false, message: "Informe os valores do Essencial (1ª loja e adicional)." }
     if (pF == null || pA == null)
@@ -401,6 +405,7 @@ export async function setPlatformPlan(
         ai_add: aA,
         // Só sobrescreve o preço do pacote se veio no form.
         ...(pacotePreco != null ? { ia_pack_price: pacotePreco } : {}),
+        ...(acrescimo12x != null ? { acrescimo_12x_pct: acrescimo12x } : {}),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },

@@ -9,11 +9,12 @@
 import "server-only"
 
 import { aplicarDescontos } from "@/lib/data/descontos"
-import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
+import { cicloDoBanco, valorMensalExibido } from "@/lib/pricing"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   getDefaultPlan,
+  getRegraCiclos,
   precoDoPlano,
   type PlanId,
 } from "@/lib/data/assinatura"
@@ -150,7 +151,7 @@ export async function emitirFaturasDoMes(
   competencia = hojeISO().slice(0, 7),
 ): Promise<EmissaoResultado> {
   const admin = createAdminClient()
-  const precos = await getDefaultPlan()
+  const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
   const hoje = hojeISO()
 
   const { data: holdings } = await admin
@@ -205,8 +206,32 @@ export async function emitirFaturasDoMes(
       // self-service; nulo = cobrança manual, que sempre usou a base.
       valor = valorMensalExibido(
         precoDoPlano(precos, plano, ativas),
-        (h.billing_cycle as BillingCycle | null) ?? "anual",
+        cicloDoBanco(h.billing_cycle),
+        regra,
       )
+
+      /* ANUAL À VISTA: UMA fatura por ano, no mês da renovação, com os 12
+       * meses. Emitir todo mês o valor mensal fazia o cliente que pagou o ano
+       * adiantado aparecer com 11 faturas "abertas" por ano — inadimplência
+       * fantasma — e o pagamento anual quitava só a mais antiga delas.
+       *
+       * O mês da renovação é o do `due_date`: é o vencimento da cobrança anual
+       * que o webhook grava. O 12x NÃO entra aqui: lá cada parcela cai num mês
+       * e a fatura mensal com o valor da parcela é exatamente o que acontece.
+       *
+       * Só com `anual` escrito no banco — nulo é cobrança manual mensal. */
+      if (h.billing_cycle === "anual") {
+        const venc = h.due_date ? String(h.due_date) : null
+        if (!venc) {
+          out.puladas.push({ cliente: nome, motivo: "anual sem data de renovação" })
+          continue
+        }
+        if (venc.slice(5, 7) !== competencia.slice(5, 7)) {
+          out.puladas.push({ cliente: nome, motivo: "anual: fatura só no mês da renovação" })
+          continue
+        }
+        valor = Math.round(valor * 12 * 100) / 100
+      }
     }
 
     let notaFatura: string | null = null

@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { contarLojasCompartilhadas } from "@/lib/data/lojas-compartilhadas"
 import {
   getDefaultPlan,
+  getRegraCiclos,
   PLANOS_META,
   type PlanId,
 } from "@/lib/data/assinatura"
@@ -94,13 +95,29 @@ export async function sincronizarValorAssinatura(
      * Asaas o preço de tabela puro. Ou seja: ela DESFAZIA o desconto e o ciclo
      * toda vez que rodasse — inclusive por cima de um valor corrigido à mão no
      * painel do Asaas, sem deixar rastro. */
-    const precos = await getDefaultPlan()
-    const valor = mensalidadeDoCliente(
+    const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
+    const mensal = mensalidadeDoCliente(
       h as Parameters<typeof mensalidadeDoCliente>[0],
       ativas,
       precos,
       new Date().toISOString().slice(0, 10),
+      regra,
     ).valor
+
+    /* ⚠️ O ANUAL À VISTA É COBRADO POR ANO — o valor da assinatura é 12×.
+     *
+     * `mensalidadeDoCliente` devolve o valor POR MÊS. Esta rotina mandava esse
+     * número direto pro Asaas, e na assinatura YEARLY isso trocaria R$ 1.188
+     * por R$ 99: a renovação sairia com 1/12 do preço. Não mordeu ainda porque
+     * até 11/09/26 nenhum cliente tinha assinado no anual — mas o anual passou
+     * a ser o destaque do checkout.
+     *
+     * Só multiplica com `billing_cycle = 'anual'` ESCRITO no banco. Nulo também
+     * é lido como anual em outras telas (é a base de preço da cobrança manual),
+     * e multiplicar por 12 a assinatura de alguém sem ciclo gravado seria o
+     * erro ao contrário, e bem pior. Preço combinado é sempre mensal. */
+    const anualAVista = h.billing_cycle === "anual" && h.monthly_fee == null
+    const valor = anualAVista ? Math.round(mensal * 12 * 100) / 100 : mensal
 
     if (valor <= 0) return { ok: false, motivo: "valor zerado" }
 

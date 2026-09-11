@@ -11,7 +11,7 @@ import "server-only"
 
 import { precoDoPlano, type PlanId, type PrecosPlano } from "@/lib/data/assinatura"
 import { aplicarDescontos, type DescontoNegociado } from "@/lib/data/descontos"
-import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
+import { cicloDoBanco, valorMensalExibido, type RegraCiclos } from "@/lib/pricing"
 
 export type DadosMensalidade = {
   plan_tier?: string | null
@@ -33,6 +33,8 @@ export function mensalidadeDoCliente(
   ativas: number,
   precos: PrecosPlano,
   hojeISO: string,
+  /** Acréscimo do 12x — vem do banco (`getRegraCiclos`), nunca de um padrão. */
+  regra: RegraCiclos,
 ): { cheio: number; valor: number } {
   let cheio: number
   if (h.monthly_fee != null) {
@@ -44,7 +46,8 @@ export function mensalidadeDoCliente(
   } else if (h.plan_tier) {
     cheio = valorMensalExibido(
       precoDoPlano(precos, h.plan_tier as PlanId, ativas),
-      (h.billing_cycle as BillingCycle | null) ?? "anual",
+      cicloDoBanco(h.billing_cycle),
+      regra,
     )
   } else {
     return { cheio: 0, valor: 0 }

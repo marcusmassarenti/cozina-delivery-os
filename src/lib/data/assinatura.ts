@@ -2,13 +2,23 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { aplicarDescontos, type DescontoNegociado } from "@/lib/data/descontos"
 import {
   computeBillingStatus,
   daysUntil,
   effectiveTrialEnd,
+  todayISO,
   type BillingStatus,
 } from "@/lib/data/billing"
-import { valorCobranca, type BillingCycle } from "@/lib/pricing"
+import {
+  ACRESCIMO_12X_PADRAO,
+  cicloDoBanco,
+  mesesDoCiclo,
+  valorCobranca,
+  valorMensalExibido,
+  type BillingCycle,
+  type RegraCiclos,
+} from "@/lib/pricing"
 
 /**
  * Preço da assinatura self-service — POR LOJA, em três planos (bate com a
@@ -70,6 +80,59 @@ export async function getDefaultPlan(): Promise<PrecosPlano> {
   }
 }
 
+/**
+ * Acréscimo do anual em 12x sobre a base (editável em Clientes → Preços dos
+ * planos). Toda conta que envolve ciclo passa por aqui — ver o aviso em
+ * `@/lib/pricing` sobre por que o parâmetro é obrigatório.
+ */
+export async function getRegraCiclos(): Promise<RegraCiclos> {
+  try {
+    const { data } = await createAdminClient()
+      .from("platform_settings")
+      .select("acrescimo_12x_pct")
+      .eq("id", 1)
+      .maybeSingle()
+    const v = data?.acrescimo_12x_pct
+    return {
+      acrescimo12xPct:
+        v != null && !Number.isNaN(Number(v)) ? Number(v) : ACRESCIMO_12X_PADRAO,
+    }
+  } catch {
+    return { acrescimo12xPct: ACRESCIMO_12X_PADRAO }
+  }
+}
+
+/** Soma meses a uma data YYYY-MM-DD. */
+function addMonths(iso: string, months: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCMonth(d.getUTCMonth() + months)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Fim do período pago — a data da PRÓXIMA cobrança.
+ *
+ * ⚠️ `due_date` NÃO significa a mesma coisa em todo lugar. O webhook do Asaas
+ * grava o vencimento da cobrança que ACABOU de ser paga (o INÍCIO do período),
+ * enquanto o checkout simulado e a cobrança manual gravam o próximo vencimento
+ * (o FIM). Ler o início como fim fazia duas coisas erradas: a tela dizia
+ * "próxima cobrança: hoje" pra quem acabou de pagar, e a proração do upgrade
+ * dava zero — no anual, um ano de plano AI de graça.
+ *
+ * Então: data no passado é início, e o fim é ela + o ciclo; data no futuro já
+ * é o fim. No 12x a resposta é direta: `parcelado_ate`.
+ */
+export function fimDoPeriodo(
+  dueDate: string | null,
+  cycle: BillingCycle,
+  parceladoAte: string | null,
+  hoje = todayISO(),
+): string | null {
+  if (cycle === "anual_12x") return parceladoAte
+  if (!dueDate) return null
+  return dueDate < hoje ? addMonths(dueDate, mesesDoCiclo(cycle)) : dueDate
+}
+
 /** Mensalidade (base) de um plano = primeira loja + adicional × (lojas − 1). */
 export function precoDoPlano(
   precos: PrecosPlano,
@@ -113,6 +176,25 @@ export type PlanoAtual = {
   paymentMethod: string | null
   customerId: string | null
   subscriptionId: string | null
+  /** Ciclo gravado. Nulo no banco = anual (a base). */
+  cycle: BillingCycle
+  regra: RegraCiclos
+  /**
+   * Valor por mês DO CICLO: mensal +30%, 12x = a parcela. `mensalidade` é a
+   * base e fica como está (o checkout aplica o ciclo que o cliente escolher).
+   */
+  valorMensalCiclo: number
+  /** Fim do período pago = data da próxima cobrança (ver `fimDoPeriodo`). */
+  proximaCobranca: string | null
+  /** Anual em 12x: parcelamento vigente, fim do período e se vai renovar. */
+  installmentId: string | null
+  parceladoAte: string | null
+  naoRenovar: boolean
+  /**
+   * Parcelamento esperando pagamento — o do 1º ano (checkout que não terminou)
+   * ou a renovação já emitida. Null = nada a pagar no 12x.
+   */
+  parceladoPendenteId: string | null
   /** Histórico de pagamentos da empresa (mais recentes primeiro). */
   payments: { paidOn: string; amount: number; method: string | null }[]
 }
@@ -125,7 +207,7 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
   const { data: h } = await admin
     .from("holdings")
     .select(
-      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, pending_plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id, asaas_billing_type",
+      "id, name, created_at, monthly_fee, price_per_unit, included_units, plan_tier, pending_plan_tier, due_date, paid, suspend_on, trial_ends_at, payment_method, asaas_customer_id, asaas_subscription_id, asaas_billing_type, billing_cycle, asaas_installment_id, parcelado_ate, asaas_installment_renovacao_id, parcelado_nao_renovar, desconto_tipo, desconto_valor, desconto_ate",
     )
     .eq("id", holdingId)
     .maybeSingle()
@@ -206,6 +288,37 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     method: (p.method as string | null) ?? null,
   }))
 
+  const regra = await getRegraCiclos()
+  const cycle = cicloDoBanco(h.billing_cycle)
+  const hoje = todayISO()
+  /* O que o cliente PAGA por mês: ciclo + desconto negociado. Preço combinado
+   * não leva multiplicador (já é o valor fechado), mas leva o desconto.
+   *
+   * Sem o desconto, a tela de Assinatura da Tech Assessoria (AI, 4 lojas,
+   * mensal, 20% acordado) mostraria R$ 579,80 enquanto a cobrança sai de
+   * R$ 463,84 — o mesmo número que a assinatura do Asaas tem. */
+  const negociado: DescontoNegociado = {
+    tipo: (h.desconto_tipo ?? null) as DescontoNegociado["tipo"],
+    valor: Number(h.desconto_valor ?? 0),
+    ate: (h.desconto_ate as string | null) ?? null,
+  }
+  const valorMensalCiclo = aplicarDescontos(
+    precoCustom ? mensalidade : valorMensalExibido(mensalidade, cycle, regra),
+    negociado,
+    0,
+    hoje,
+  ).valor
+  const parceladoAte = (h.parcelado_ate as string | null) ?? null
+  const installmentId = (h.asaas_installment_id as string | null) ?? null
+  const renovacaoId = (h.asaas_installment_renovacao_id as string | null) ?? null
+  const parceladoPendenteId =
+    renovacaoId ??
+    (installmentId &&
+    status !== "paid" &&
+    (!parceladoAte || parceladoAte > hoje)
+      ? installmentId
+      : null)
+
   const planLabel = selectedPlan
     ? PLANOS_META[selectedPlan].label
     : precoCustom
@@ -230,6 +343,19 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     paymentMethod: (h.payment_method as string | null) ?? null,
     customerId: (h.asaas_customer_id as string | null) ?? null,
     subscriptionId: (h.asaas_subscription_id as string | null) ?? null,
+    cycle,
+    regra,
+    valorMensalCiclo,
+    proximaCobranca: fimDoPeriodo(
+      (h.due_date as string | null) ?? null,
+      cycle,
+      parceladoAte,
+      hoje,
+    ),
+    installmentId,
+    parceladoAte,
+    naoRenovar: h.parcelado_nao_renovar === true,
+    parceladoPendenteId,
     payments,
   }
 }
@@ -254,7 +380,7 @@ async function contarLojasAtivas(holdingId: string): Promise<number> {
 }
 
 /** Valor recorrente (por ciclo) de um plano pra uma holding — respeita o
- *  ciclo (mensal +30% / anual ×12) e o nº de lojas. Usado pela ação de upgrade
+ *  ciclo (mensal +30% / anual ×12 / 12x = total do ano) e o nº de lojas. Usado pela ação de upgrade
  *  e pelo webhook (pra atualizar o valor da assinatura no Asaas). */
 export async function valorAssinaturaDoPlano(
   holdingId: string,
@@ -266,11 +392,10 @@ export async function valorAssinaturaDoPlano(
     .select("billing_cycle")
     .eq("id", holdingId)
     .maybeSingle()
-  const cycle: BillingCycle =
-    (h?.billing_cycle as BillingCycle | null) ?? "anual"
+  const cycle = cicloDoBanco(h?.billing_cycle)
   const units = await contarLojasAtivas(holdingId)
-  const precos = await getDefaultPlan()
-  return valorCobranca(precoDoPlano(precos, plan, units), cycle)
+  const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
+  return valorCobranca(precoDoPlano(precos, plan, units), cycle, regra)
 }
 
 export type UpgradeAiInfo = {
@@ -297,26 +422,34 @@ export async function getUpgradeAiInfo(): Promise<UpgradeAiInfo | null> {
   const admin = createAdminClient()
   const { data: h } = await admin
     .from("holdings")
-    .select("monthly_fee, plan_tier, billing_cycle, due_date, asaas_subscription_id")
+    .select(
+      "monthly_fee, plan_tier, billing_cycle, due_date, asaas_subscription_id, asaas_installment_id, parcelado_ate",
+    )
     .eq("id", holdingId)
     .maybeSingle()
   if (!h) return null
 
-  const cycle: BillingCycle =
-    (h.billing_cycle as BillingCycle | null) ?? "anual"
+  const cycle = cicloDoBanco(h.billing_cycle)
   const tierAtual = (h.plan_tier as PlanId | null) ?? "essencial"
-  const dueDate = (h.due_date as string | null) ?? null
+  const parceladoAte = (h.parcelado_ate as string | null) ?? null
+  // A proração corre até o FIM do período (ver `fimDoPeriodo`).
+  const dueDate = fimDoPeriodo(
+    (h.due_date as string | null) ?? null,
+    cycle,
+    parceladoAte,
+  )
   const units = await contarLojasAtivas(holdingId)
-  const precos = await getDefaultPlan()
+  const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
 
-  const aiValorCiclo = valorCobranca(precoDoPlano(precos, "ai", units), cycle)
+  const aiValorCiclo = valorCobranca(precoDoPlano(precos, "ai", units), cycle, regra)
   const atualValorCiclo = valorCobranca(
     precoDoPlano(precos, tierAtual, units),
     cycle,
+    regra,
   )
 
   // Proração: diferença por ciclo × (dias restantes / dias do ciclo).
-  const cycleDays = cycle === "anual" ? 365 : 30
+  const cycleDays = mesesDoCiclo(cycle) === 12 ? 365 : 30
   const restantes = dueDate
     ? Math.max(0, Math.min(cycleDays, daysUntil(dueDate)))
     : cycleDays
@@ -325,7 +458,11 @@ export async function getUpgradeAiInfo(): Promise<UpgradeAiInfo | null> {
 
   let motivo: UpgradeAiInfo["motivo"] = null
   if (h.monthly_fee != null) motivo = "custom"
-  else if (!h.asaas_subscription_id) motivo = "sem-assinatura"
+  else if (
+    !h.asaas_subscription_id &&
+    !(h.asaas_installment_id && parceladoAte && parceladoAte > todayISO())
+  )
+    motivo = "sem-assinatura"
   else if (tierAtual === "ai") motivo = "ja-ai"
 
   return {

@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button"
 import { fmtBRL } from "@/lib/format"
 import type { PlanId, PlanoOption } from "@/lib/data/assinatura"
 import {
+  CICLOS,
+  economiaAnualPct,
+  PARCELAS_12X,
+  ROTULO_CICLO,
   valorCobranca,
   valorMensalExibido,
   type BillingCycle,
@@ -33,6 +37,7 @@ export function SubscribeForm({
   defaultNome,
   defaultPlan,
   billingType,
+  acrescimo12xPct,
 }: {
   planos: PlanoOption[]
   precoCustom: boolean
@@ -43,13 +48,21 @@ export function SubscribeForm({
   defaultPlan: PlanId
   /** Forma de cobrança do cliente. "CREDIT_CARD" é o padrão. */
   billingType: string
+  /** Acréscimo do anual em 12x (vem do banco — ver @/lib/pricing). */
+  acrescimo12xPct: number
 }) {
   const [state, action] = useActionState<AssinarState, FormData>(assinar, {
     ok: false,
   })
   const [plan, setPlan] = React.useState<PlanId>(defaultPlan)
-  // Ciclo de cobrança (só self-service). Anual é a base; mensal custa +30%.
+  // Ciclo de cobrança (só self-service). Anual à vista é a base; 12x leva o
+  // acréscimo; mensal custa +30%.
   const [ciclo, setCiclo] = React.useState<BillingCycle>("anual")
+  const regra = { acrescimo12xPct }
+  // 12x é parcelamento no cartão: quem fechou em Pix/boleto não vê a opção.
+  const ciclosDisponiveis = CICLOS.filter(
+    (c) => c !== "anual_12x" || (billingType !== "PIX" && billingType !== "BOLETO"),
+  )
 
   // Endereço (pra Nota Fiscal) — CEP autopreenche o resto via ViaCEP.
   const [cep, setCep] = React.useState("")
@@ -91,15 +104,17 @@ export function SubscribeForm({
     "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 
   const selected = planos.find((p) => p.id === plan)
-  // baseTotal = preço-base (anual/mês) × lojas. mesExibido varia com o ciclo;
-  // cobrancaAgora é o que vai pro cartão (anual = 12× à vista; mensal = +30%).
+  // baseTotal = preço-base (anual à vista/mês) × lojas. mesExibido varia com
+  // o ciclo (no 12x é a parcela); cobrancaAgora é o total do ciclo (anual =
+  // 12× à vista; 12x = 12 parcelas; mensal = +30%).
   const baseTotal = precoCustom ? customMensalidade : (selected?.total ?? 0)
   const mesExibido = precoCustom
     ? baseTotal
-    : valorMensalExibido(baseTotal, ciclo)
+    : valorMensalExibido(baseTotal, ciclo, regra)
   const cobrancaAgora = precoCustom
     ? baseTotal
-    : valorCobranca(baseTotal, ciclo)
+    : valorCobranca(baseTotal, ciclo, regra)
+  const eco = economiaAnualPct()
 
   return (
     <form action={action} className="mt-6 space-y-4 text-left">
@@ -108,45 +123,54 @@ export function SubscribeForm({
           <input type="hidden" name="plano" value={plan} />
           <input type="hidden" name="ciclo" value={ciclo} />
 
-          {/* Toggle Mensal / Anual */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="inline-flex items-center gap-1 rounded-full border bg-background p-1">
-              <button
-                type="button"
-                onClick={() => setCiclo("anual")}
-                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-                  ciclo === "anual"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Anual
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-                    ciclo === "anual"
-                      ? "bg-primary-foreground/20"
-                      : "bg-emerald-500/15 text-emerald-600"
-                  }`}
-                >
-                  melhor preço
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCiclo("mensal")}
-                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-                  ciclo === "mensal"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Mensal
-              </button>
+          {/* Os três ciclos. Grade de 3 colunas, e não pílula corrida: no
+              cartão estreito do checkout, "Anual à vista" + selo + "Anual em
+              12x" + "Mensal" não cabem numa linha só. */}
+          <div className="space-y-1.5">
+            <div
+              role="radiogroup"
+              aria-label="Ciclo de cobrança"
+              className={`grid gap-1 rounded-xl border bg-background p-1 ${
+                ciclosDisponiveis.length === 3 ? "grid-cols-3" : "grid-cols-2"
+              }`}
+            >
+              {ciclosDisponiveis.map((c) => {
+                const ativo = ciclo === c
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={ativo}
+                    onClick={() => setCiclo(c)}
+                    className={`flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-xs font-medium leading-tight transition-colors ${
+                      ativo
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {ROTULO_CICLO[c]}
+                    {c === "anual" && (
+                      <span
+                        className={`rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide ${
+                          ativo
+                            ? "bg-primary-foreground/20"
+                            : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        economize {eco}%
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-center text-[11px] text-muted-foreground">
               {ciclo === "anual"
-                ? "1 cobrança à vista no cartão, sem os 30% a mais do mensal."
-                : "No anual você paga à vista e evita os 30% a mais."}
+                ? `1 cobrança à vista no cartão — ${eco}% a menos que o mensal.`
+                : ciclo === "anual_12x"
+                  ? `O ano em ${PARCELAS_12X} parcelas no cartão. O valor total usa o limite do cartão.`
+                  : "Cobrado todo mês. Cancele quando quiser."}
             </p>
           </div>
 
@@ -181,10 +205,15 @@ export function SubscribeForm({
                   <span className="flex items-center gap-2">
                     <span className="text-right">
                       <span className="block text-sm font-semibold tabular-nums">
-                        {fmtBRL(valorMensalExibido(p.total, ciclo))}
+                        {fmtBRL(valorMensalExibido(p.total, ciclo, regra))}
                       </span>
                       <span className="block text-[10px] text-muted-foreground">
-                        /mês{ciclo === "anual" ? " · anual" : ""}
+                        /mês
+                        {ciclo === "anual"
+                          ? " · à vista"
+                          : ciclo === "anual_12x"
+                            ? " · 12x"
+                            : ""}
                       </span>
                     </span>
                     <span
@@ -371,19 +400,40 @@ export function SubscribeForm({
         </div>
         <div className="mt-1.5 flex items-center justify-between border-t pt-1.5">
           <span className="text-xs text-muted-foreground">
-            {ciclo === "anual" && !precoCustom ? "Cobrança à vista (ano)" : "Total mensal"}
+            {precoCustom
+              ? "Total mensal"
+              : ciclo === "anual"
+                ? "Cobrança à vista (ano)"
+                : ciclo === "anual_12x"
+                  ? `${PARCELAS_12X} parcelas no cartão`
+                  : "Total mensal"}
           </span>
           <span className="text-base font-bold tabular-nums">
-            {fmtBRL(cobrancaAgora)}
-            <span className="text-xs font-normal text-muted-foreground">
-              {ciclo === "anual" && !precoCustom ? "/ano" : "/mês"}
-            </span>
+            {!precoCustom && ciclo === "anual_12x" ? (
+              <>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {PARCELAS_12X}x{" "}
+                </span>
+                {fmtBRL(mesExibido)}
+              </>
+            ) : (
+              <>
+                {fmtBRL(cobrancaAgora)}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {ciclo === "anual" && !precoCustom ? "/ano" : "/mês"}
+                </span>
+              </>
+            )}
           </span>
         </div>
-        {ciclo === "anual" && !precoCustom && (
+        {!precoCustom && ciclo !== "mensal" && (
           <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>Equivale a</span>
-            <span className="tabular-nums">{fmtBRL(mesExibido)}/mês</span>
+            <span>{ciclo === "anual" ? "Equivale a" : "Total no ano"}</span>
+            <span className="tabular-nums">
+              {ciclo === "anual"
+                ? `${fmtBRL(mesExibido)}/mês`
+                : fmtBRL(cobrancaAgora)}
+            </span>
           </div>
         )}
         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -396,9 +446,46 @@ export function SubscribeForm({
                 ? "Você escolhe como pagar · cancele quando quiser"
                 : ciclo === "anual" && !precoCustom
                   ? "Cartão de crédito · 1 cobrança à vista · renova a cada 12 meses"
-                  : "Cartão de crédito · renova automático · cancele quando quiser"}
+                  : ciclo === "anual_12x" && !precoCustom
+                    ? `Cartão de crédito · ${PARCELAS_12X} parcelas · renova a cada 12 meses`
+                    : "Cartão de crédito · renova automático · cancele quando quiser"}
         </p>
       </div>
+
+      {/* O ACEITE. É daqui que nasce o Termo de Adesão: o servidor recusa a
+          assinatura sem esta caixa, grava quem aceitou (conta, IP, data) e o
+          hash das condições do plano escolhido. O termo com os dados do
+          cliente chega por e-mail quando o pagamento confirma. */}
+      <label className="flex items-start gap-2.5 rounded-lg border bg-muted/20 px-3 py-2.5 text-[12px] leading-snug text-muted-foreground">
+        <input
+          type="checkbox"
+          name="aceite"
+          required
+          className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+        />
+        <span>
+          Li e aceito o{" "}
+          <a
+            href="/contrato"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            Contrato de Prestação de Serviços
+          </a>{" "}
+          e os{" "}
+          <a
+            href="/termos"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            Termos de Uso
+          </a>
+          . As condições do plano e do ciclo escolhidos formam o meu Termo de
+          Adesão, que chega por e-mail quando o pagamento for confirmado.
+        </span>
+      </label>
 
       {state.message && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
@@ -414,7 +501,9 @@ export function SubscribeForm({
               ? `Assinar por ${fmtBRL(cobrancaAgora)}/mês`
               : ciclo === "anual"
                 ? `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(cobrancaAgora)}/ano à vista`
-                : `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(cobrancaAgora)}/mês`
+                : ciclo === "anual_12x"
+                  ? `Assinar o ${selected?.label ?? "plano"} · ${PARCELAS_12X}x de ${fmtBRL(mesExibido)}`
+                  : `Assinar o ${selected?.label ?? "plano"} · ${fmtBRL(cobrancaAgora)}/mês`
         }
       />
 

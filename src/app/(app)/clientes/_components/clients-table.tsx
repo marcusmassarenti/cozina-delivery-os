@@ -495,12 +495,16 @@ export function ClientsTable({
                             {/* Mensal custa +30% sobre a base anual. Sem essa
                                 marca, o valor da linha não bate com o preço de
                                 tabela e parece erro de cálculo. */}
-                            {c.billingCycle === "mensal" && !c.precoNegociado ? (
+                            {c.billingCycle !== "anual" && !c.precoNegociado ? (
                               <span
                                 className="ml-1 opacity-70"
-                                title="Ciclo mensal: +30% sobre a base do plano anual."
+                                title={
+                                  c.billingCycle === "mensal"
+                                    ? "Ciclo mensal: +30% sobre a base do plano anual."
+                                    : `Anual em 12x no cartão: +${Math.round((c.cicloMult - 1) * 1000) / 10}% sobre a base do plano anual. O valor da linha é a parcela.`
+                                }
                               >
-                                · mensal
+                                · {c.billingCycle === "mensal" ? "mensal" : "12x"}
                               </span>
                             ) : null}
                           </>

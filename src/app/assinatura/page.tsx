@@ -20,6 +20,7 @@ import {
 } from "@/lib/data/assinatura"
 import { daysUntil, temConviteAsaas } from "@/lib/data/billing"
 import { fmtBRL } from "@/lib/format"
+import { PARCELAS_12X, ROTULO_CICLO } from "@/lib/pricing"
 
 import { SubscribeForm } from "./_components/subscribe-form"
 import { CancelButton } from "./_components/cancel-button"
@@ -133,12 +134,16 @@ function UpgradeScreen({ info }: { info: UpgradeAiInfo }) {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">
-              Mensalidade{info.cycle === "anual" ? " (no anual)" : ""}
+              {info.cycle === "anual"
+                ? "Mensalidade (no anual)"
+                : info.cycle === "anual_12x"
+                  ? "Valor do ano (em 12x)"
+                  : "Mensalidade"}
             </span>
             <span className="font-medium tabular-nums">
               {fmtBRL(info.aiValorCiclo)}
               <span className="text-xs font-normal text-muted-foreground">
-                {info.cycle === "anual" ? "/ano" : "/mês"}
+                {info.cycle === "mensal" ? "/mês" : "/ano"}
               </span>
             </span>
           </div>
@@ -152,7 +157,9 @@ function UpgradeScreen({ info }: { info: UpgradeAiInfo }) {
           </div>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             {temProracao
-              ? "Só a diferença proporcional até a sua renovação. A partir do próximo ciclo, a assinatura já sai no valor do AI."
+              ? info.cycle === "anual_12x"
+                ? "Só a diferença proporcional até o fim do seu período anual. As parcelas que você já tem seguem iguais; a renovação já sai no valor do AI."
+                : "Só a diferença proporcional até a sua renovação. A partir do próximo ciclo, a assinatura já sai no valor do AI."
               : "Sem cobrança agora — o AI é liberado na hora e o novo valor entra na próxima renovação."}
           </p>
         </div>
@@ -184,7 +191,9 @@ function Checkout({
   plano: PlanoAtual | null
   planoQuery?: string
 }) {
-  const pendentePagamento = !!plano?.subscriptionId
+  // Falta pagar: a 1ª cobrança da assinatura, ou um parcelamento do 12x (o
+  // do 1º ano ou a renovação já emitida).
+  const pendentePagamento = !!plano?.subscriptionId || !!plano?.parceladoPendenteId
   const diasTrial =
     plano?.status === "trial" && plano.trialEndsAt
       ? Math.max(0, daysUntil(plano.trialEndsAt))
@@ -376,17 +385,22 @@ function Checkout({
                 </p>
                 <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
                   ⏳ Cobrança gerada — falta só o pagamento
-                  {plano?.billingType === "PIX"
-                    ? " via Pix."
-                    : plano?.billingType === "BOLETO"
-                      ? " do boleto."
-                      : " no cartão."}
+                  {plano.parceladoPendenteId
+                    ? ` no cartão, em ${PARCELAS_12X}x.`
+                    : plano?.billingType === "PIX"
+                      ? " via Pix."
+                      : plano?.billingType === "BOLETO"
+                        ? " do boleto."
+                        : " no cartão."}
                 </div>
                 <PlanBox plano={plano} />
                 <div className="mt-6">
                   <PayPendingButton />
                 </div>
-                <CancelButton fimPeriodo={plano.dueDate} />
+                <CancelButton
+                  fimPeriodo={plano.proximaCobranca}
+                  modo={plano.parceladoPendenteId ? "pendente" : "assinatura"}
+                />
               </>
             ) : plano ? (
               <>
@@ -429,6 +443,7 @@ function Checkout({
                   defaultNome={plano.name}
                   defaultPlan={defaultPlan}
                   billingType={plano.billingType}
+                  acrescimo12xPct={plano.regra.acrescimo12xPct}
                 />
               </>
             ) : (
@@ -457,6 +472,8 @@ function Checkout({
 }
 
 function PlanBox({ plano }: { plano: PlanoAtual }) {
+  const doze = plano.cycle === "anual_12x" && !plano.precoCustom
+  const anual = plano.cycle === "anual" && !plano.precoCustom
   return (
     <div className="mt-6 space-y-2 rounded-xl border bg-muted/30 p-4 text-sm">
       <div className="flex items-center justify-between">
@@ -464,15 +481,27 @@ function PlanBox({ plano }: { plano: PlanoAtual }) {
         <span className="font-medium">{plano.planLabel ?? "—"}</span>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-muted-foreground">Valor</span>
-        <span className="font-medium tabular-nums">
-          {fmtBRL(plano.mensalidade)}/mês
+        <span className="text-muted-foreground">Ciclo</span>
+        <span className="font-medium">
+          {plano.precoCustom ? "Mensal" : ROTULO_CICLO[plano.cycle]}
         </span>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-muted-foreground">Próxima cobrança</span>
+        <span className="text-muted-foreground">Valor</span>
         <span className="font-medium tabular-nums">
-          {fmtDataBR(plano.dueDate)}
+          {doze
+            ? `${PARCELAS_12X}x de ${fmtBRL(plano.valorMensalCiclo)}`
+            : anual
+              ? `${fmtBRL(plano.valorMensalCiclo * 12)}/ano`
+              : `${fmtBRL(plano.valorMensalCiclo)}/mês`}
+        </span>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground">
+          {doze ? "Período até" : "Próxima cobrança"}
+        </span>
+        <span className="font-medium tabular-nums">
+          {fmtDataBR(doze ? plano.parceladoAte : plano.proximaCobranca)}
         </span>
       </div>
     </div>

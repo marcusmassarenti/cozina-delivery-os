@@ -48,7 +48,7 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, created_at, trial_ends_at, paid, due_date, suspend_on, plan_tier, monthly_fee, price_per_unit, included_units, conta_interna",
+      "id, name, created_at, trial_ends_at, paid, due_date, suspend_on, plan_tier, monthly_fee, price_per_unit, included_units, conta_interna, billing_cycle",
     )
     .eq("conta_interna", false)
 
@@ -319,8 +319,14 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
     }
 
     // 8) Cobrança de quem já é cliente pagante.
+    //
+    // O ANUAL EM 12x fica de fora. Lá o `due_date` é o FIM do período, e não
+    // existe fatura vencendo nele: a renovação tem e-mail próprio, com o link,
+    // 15 dias antes (`lib/data/anual-12x.ts`). Sem esta exceção, quem cancelou
+    // a renovação receberia "sua fatura vence em 5 dias" de uma cobrança que
+    // não existe.
     const venc = h.due_date ? String(h.due_date) : null
-    if (venc && plano) {
+    if (venc && plano && h.billing_cycle !== "anual_12x") {
       const faltamPraVencer = diasEntre(hoje, venc)
       // TRÊS toques por ciclo: 5 dias, 2 dias e no dia do vencimento.
       //

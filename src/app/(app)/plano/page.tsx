@@ -3,6 +3,7 @@ import {
   Clock,
   CreditCard,
   Download,
+  FileText,
   Mail,
   MessageCircle,
   Store,
@@ -11,6 +12,9 @@ import {
 
 import { createClient } from "@/lib/supabase/server"
 import { getPlanoAtual } from "@/lib/data/assinatura"
+import { getAdesaoAtual } from "@/lib/data/contrato-adesao"
+import { rotuloCicloAdesao } from "@/lib/contrato-adesao-texto"
+import { PARCELAS_12X } from "@/lib/pricing"
 import { asaasListInvoices } from "@/lib/asaas/client"
 import { fmtBRL } from "@/lib/format"
 import { CancelButton } from "@/app/assinatura/_components/cancel-button"
@@ -54,7 +58,13 @@ export default async function PlanoPage() {
     ? await asaasListInvoices(plano.customerId)
     : []
 
-  const valorBRL = fmtBRL(plano.mensalidade)
+  // O termo que está em vigor (ou recém-aceito). Cliente que assinou antes
+  // de 11/09/26 não tem — e aí o bloco simplesmente não aparece.
+  const termo = await getAdesaoAtual(plano.holdingId)
+
+  const doze = plano.cycle === "anual_12x" && !plano.precoCustom
+  const anual = plano.cycle === "anual" && !plano.precoCustom
+  const valorBRL = fmtBRL(plano.valorMensalCiclo)
 
   return (
     <div className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -78,21 +88,35 @@ export default async function PlanoPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <InfoCard
           icon={<Wallet className="size-4" />}
-          label="Valor mensal"
-          value={valorBRL}
-          sub="por mês"
+          label={doze ? "Parcela" : anual ? "Valor anual" : "Valor mensal"}
+          value={anual ? fmtBRL(plano.valorMensalCiclo * 12) : valorBRL}
+          sub={
+            doze
+              ? `${PARCELAS_12X}x no cartão`
+              : anual
+                ? `equivale a ${valorBRL}/mês`
+                : "por mês"
+          }
         />
         <InfoCard
           icon={<Clock className="size-4" />}
-          label="Próxima cobrança"
-          value={fmtDataBR(plano.dueDate)}
-          sub={valorBRL}
+          label={doze ? "Plano pago até" : "Próxima cobrança"}
+          value={fmtDataBR(doze ? plano.parceladoAte : plano.proximaCobranca)}
+          sub={
+            doze
+              ? plano.naoRenovar
+                ? "não renova"
+                : `renova em ${PARCELAS_12X}x`
+              : anual
+                ? fmtBRL(plano.valorMensalCiclo * 12)
+                : valorBRL
+          }
         />
         <InfoCard
           icon={<CreditCard className="size-4" />}
           label="Pagamento"
           value={plano.paymentMethod ?? "Asaas"}
-          sub="renova automático"
+          sub={doze ? `${PARCELAS_12X} parcelas no cartão` : "renova automático"}
         />
         <InfoCard
           icon={<Store className="size-4" />}
@@ -101,6 +125,33 @@ export default async function PlanoPage() {
           sub={plano.activeUnits === 1 ? "loja ativa" : "lojas ativas"}
         />
       </div>
+
+      {/* Contrato: o Termo de Adesão que nasceu no aceite do checkout. */}
+      {termo && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <FileText className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Seu contrato</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Termo de Adesão nº {termo.numero} · {rotuloCicloAdesao(termo.dados)}{" "}
+                · aceito em {fmtDataBR(termo.aceite.em.slice(0, 10))}
+                {termo.aceite.nome ? ` por ${termo.aceite.nome}` : ""}
+                {termo.status === "aceito" ? " · entra em vigor com o pagamento" : ""}
+              </p>
+            </div>
+          </div>
+          <a
+            href={`/contrato/adesao/${termo.token}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Download className="size-4" />
+            Ver e baixar
+          </a>
+        </div>
+      )}
 
       {/* Suporte */}
       <div className="rounded-xl border bg-card p-5">
@@ -254,12 +305,23 @@ export default async function PlanoPage() {
         </div>
       </div>
 
-      {/* Cancelar */}
-      {plano.subscriptionId && (
+      {/* Cancelar. No 12x pago, o que se cancela é a renovação; renovação já
+          cancelada vira aviso, não botão. */}
+      {plano.subscriptionId ? (
         <div className="flex justify-start">
-          <CancelButton fimPeriodo={plano.dueDate} />
+          <CancelButton fimPeriodo={plano.proximaCobranca} />
         </div>
-      )}
+      ) : doze && plano.installmentId && !plano.naoRenovar ? (
+        <div className="flex justify-start">
+          <CancelButton fimPeriodo={plano.parceladoAte} modo="renovacao12x" />
+        </div>
+      ) : doze && plano.naoRenovar ? (
+        <p className="text-xs text-muted-foreground">
+          Renovação cancelada — seu plano termina em{" "}
+          {fmtDataBR(plano.parceladoAte)}. Para continuar depois disso, é só
+          assinar de novo.
+        </p>
+      ) : null}
     </div>
   )
 }

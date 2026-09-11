@@ -48,7 +48,14 @@ import { Reveal, useScrolled } from "./_motion"
 import { PainBreakdown, PlatLogo, type PlatId } from "./_screens"
 import { LOGOS_CLIENTES } from "@/lib/logos-clientes"
 import { reportsByPlatform } from "@/lib/reports-catalog"
-import { precoStr, valorMensalExibido } from "@/lib/pricing"
+import {
+  CICLOS,
+  economiaAnualPct,
+  precoStr,
+  ROTULO_CICLO,
+  valorMensalExibido,
+  type BillingCycle,
+} from "@/lib/pricing"
 import type { LandingNumeros } from "@/lib/data/landing-numeros"
 
 const STYLES = `
@@ -1433,42 +1440,49 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean; spy?: boolean }[] = 
   { id: "redes", label: "Redes" },
 ]
 
-/* Preço dos planos. A BASE é o ANUAL (valor por mês); o mensal custa +30%.
-   O anual é cobrado à vista no cartão (12 meses de uma vez, 1 cobrança/ano).
-   A regra do +30% vem de @/lib/pricing (fonte única, dividida com o checkout). */
+/* Preço dos planos. A BASE é o ANUAL À VISTA (valor por mês). O anual em 12x
+   leva o acréscimo editável em Clientes → Preços dos planos; o mensal, +30%.
+   As duas regras vêm de @/lib/pricing (fonte única, dividida com o checkout). */
 
 /** Preço de um plano: primeira loja + cada loja adicional. */
 type PrecoPlanoLanding = { first: number; add: number }
 
-/** Bloco de preço de um card — mostra a 1ª loja (grande) + o adicional por
- *  loja. Alterna entre anual (base) e mensal (+30%). */
+/** Bloco de preço de um card — a 1ª loja (grande) + o adicional por loja.
+ *  Muda com o ciclo: anual à vista (base), 12x (base + acréscimo), mensal (+30%). */
 function PrecoValor({
   preco,
-  anual,
+  ciclo,
+  acrescimo12xPct,
   dark = false,
 }: {
   preco: PrecoPlanoLanding
-  anual: boolean
+  ciclo: BillingCycle
+  acrescimo12xPct: number
   dark?: boolean
 }) {
-  const cycle = anual ? "anual" : "mensal"
-  const first = valorMensalExibido(preco.first, cycle)
-  const add = valorMensalExibido(preco.add, cycle)
+  const regra = { acrescimo12xPct }
+  const first = valorMensalExibido(preco.first, ciclo, regra)
+  const add = valorMensalExibido(preco.add, ciclo, regra)
   const muted = dark ? "text-[oklch(0.62_0_0)]" : "text-[oklch(0.5_0.01_48)]"
   const brand = dark ? "text-[oklch(0.82_0.14_55)]" : "text-[var(--brand-strong)]"
   return (
     <div className="relative">
       <div className="mt-4 flex items-baseline gap-1.5">
+        {ciclo === "anual_12x" && <span className={`text-sm ${muted}`}>12x</span>}
         <span className="text-5xl font-medium tracking-tight">R$ {precoStr(first)}</span>
-        <span className={`text-sm ${muted}`}>/mês · 1ª loja</span>
+        <span className={`text-sm ${muted}`}>
+          {ciclo === "anual_12x" ? "· 1ª loja" : "/mês · 1ª loja"}
+        </span>
       </div>
       <p className={`mt-1.5 text-sm font-medium ${brand}`}>
         + R$ {precoStr(add)} por loja adicional
       </p>
       <p className={`mt-1 text-xs ${muted}`}>
-        {anual
-          ? `No anual: 1ª loja R$ ${precoStr(preco.first * 12)} à vista · adicionais R$ ${precoStr(preco.add * 12)}`
-          : "Cobrado todo mês · cancela quando quiser"}
+        {ciclo === "anual"
+          ? `À vista: 1ª loja R$ ${precoStr(preco.first * 12)}/ano · adicionais R$ ${precoStr(preco.add * 12)}/ano`
+          : ciclo === "anual_12x"
+            ? "12 parcelas no cartão · renova a cada 12 meses"
+            : "Cobrado todo mês · cancela quando quiser"}
       </p>
     </div>
   )
@@ -1546,6 +1560,7 @@ function EsteiraClientes() {
 export function LandingV3({
   precos,
   numeros,
+  acrescimo12xPct,
 }: {
   /** Preços vindos do /plataforma: 1ª loja + adicional por plano. */
   precos: {
@@ -1555,11 +1570,13 @@ export function LandingV3({
   }
   /** Prova social calculada pelo cron — ver `lib/data/landing-numeros.ts`. */
   numeros: LandingNumeros
+  /** Acréscimo do anual em 12x (editável no /clientes). */
+  acrescimo12xPct: number
 }) {
   const scrolled = useScrolled(20)
   const [active, setActive] = useState("")
   const [demoResult, setDemoResult] = useState(false)
-  const [anual, setAnual] = useState(true)
+  const [ciclo, setCiclo] = useState<BillingCycle>("anual")
 
   // Scrollspy: marca no menu a seção que está em vista.
   useEffect(() => {
@@ -1985,45 +2002,55 @@ export function LandingV3({
             </h2>
           </Reveal>
           <Reveal delay={70}>
-            <p className="mt-2 text-center text-sm text-[oklch(0.5_0.01_48)]">Por loja. No mensal, cancela quando quiser; no anual, você paga à vista e evita os 30% a mais.</p>
+            <p className="mt-2 text-center text-sm text-[oklch(0.5_0.01_48)]">Por loja. O anual à vista é o melhor preço; em 12x, o ano cabe no cartão; no mensal, cancela quando quiser.</p>
           </Reveal>
 
-          {/* Toggle Mensal / Anual */}
+          {/* Os três ciclos. O selo de economia sai da mesma constante do
+              +30% (1 − 1/1,3 = 23%), pra nunca prometer mais do que a conta dá. */}
           <Reveal delay={100}>
             <div className="mt-4 flex flex-col items-center gap-2">
-              <div className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white p-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setAnual(true)}
-                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                    anual
-                      ? "bg-[var(--brand)] text-white"
-                      : "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
-                  }`}
-                >
-                  Anual
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                      anual ? "bg-white/20 text-white" : "bg-[var(--brand-soft)] text-[var(--brand-strong)]"
-                    }`}
-                  >
-                    melhor preço
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAnual(false)}
-                  className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                    anual
-                      ? "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
-                      : "bg-[var(--brand)] text-white"
-                  }`}
-                >
-                  Mensal
-                </button>
+              <div
+                role="radiogroup"
+                aria-label="Ciclo de cobrança"
+                className="inline-flex flex-wrap items-center justify-center gap-1 rounded-full border border-black/10 bg-white p-1 shadow-sm"
+              >
+                {CICLOS.map((c) => {
+                  const ativo = ciclo === c
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={ativo}
+                      onClick={() => setCiclo(c)}
+                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors sm:px-5 ${
+                        ativo
+                          ? "bg-[var(--brand)] text-white"
+                          : "text-[oklch(0.45_0.01_48)] hover:text-[oklch(0.25_0.01_48)]"
+                      }`}
+                    >
+                      {ROTULO_CICLO[c]}
+                      {c === "anual" && (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            ativo
+                              ? "bg-white/20 text-white"
+                              : "bg-[var(--brand-soft)] text-[var(--brand-strong)]"
+                          }`}
+                        >
+                          Economize {economiaAnualPct()}%
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
               <p className="text-xs text-[oklch(0.5_0.01_48)]">
-                Anual = 1 cobrança à vista no cartão, sem os 30% a mais do mensal.
+                {ciclo === "anual"
+                  ? "1 cobrança à vista no cartão, sem os 30% a mais do mensal."
+                  : ciclo === "anual_12x"
+                    ? `O ano em 12 parcelas no cartão: ${String(acrescimo12xPct).replace(".", ",")}% sobre o à vista${acrescimo12xPct < 30 ? ", ainda abaixo do mensal" : ""}.`
+                    : "Cobrado todo mês no cartão. Cancela quando quiser."}
               </p>
             </div>
           </Reveal>
@@ -2035,7 +2062,7 @@ export function LandingV3({
                 <span className="absolute right-6 top-6 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-medium text-[var(--brand-strong)]">Comece aqui</span>
                 <h3 className="text-lg font-medium">Essencial</h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Pra ver seu lucro no delivery</p>
-                <PrecoValor preco={precos.essencial} anual={anual} />
+                <PrecoValor preco={precos.essencial} ciclo={ciclo} acrescimo12xPct={acrescimo12xPct} />
                 <ul className="mt-4 space-y-2 text-[15px]">
                   {[
                     "Upload iFood, 99 e Keeta",
@@ -2072,7 +2099,7 @@ export function LandingV3({
                   Pro
                 </h3>
                 <p className="mt-1 text-sm text-[oklch(0.5_0.01_48)]">Gestão financeira completa</p>
-                <PrecoValor preco={precos.pro} anual={anual} />
+                <PrecoValor preco={precos.pro} ciclo={ciclo} acrescimo12xPct={acrescimo12xPct} />
                 <p className="mt-5 text-[13px] font-medium text-[var(--brand-strong)]">Tudo do Essencial, e mais:</p>
                 <ul className="mt-3 space-y-2 text-[15px]">
                   {[
@@ -2111,7 +2138,7 @@ export function LandingV3({
                   DeliveryOS AI
                 </h3>
                 <p className="relative mt-1 text-sm text-[oklch(0.72_0.012_60)]">A IA que lê a loja e te diz o que fazer</p>
-                <PrecoValor preco={precos.ai} anual={anual} dark />
+                <PrecoValor preco={precos.ai} ciclo={ciclo} acrescimo12xPct={acrescimo12xPct} dark />
                 <p className="relative mt-5 text-[13px] font-medium text-[oklch(0.8_0.12_55)]">Tudo do Pro, e mais:</p>
                 <ul className="relative mt-3 space-y-2 text-[15px] text-[oklch(0.88_0_0)]">
                   {[

@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic"
 export default async function SimuladoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sub?: string; ref?: string }>
+  searchParams: Promise<{ sub?: string; ref?: string; inst?: string }>
 }) {
   const supabase = await createClient()
   const { data: auth } = await supabase.auth.getUser()
@@ -22,9 +22,9 @@ export default async function SimuladoPage({
   // Fora do modo simulado, não existe checkout de teste.
   if (!asaasIsMock()) redirect("/assinatura")
 
-  const { sub, ref } = await searchParams
+  const { sub, ref, inst } = await searchParams
   const isUpgrade = (ref ?? "").startsWith("upgrade:")
-  if (!sub && !isUpgrade) redirect("/assinatura")
+  if (!sub && !inst && !isUpgrade) redirect("/assinatura")
 
   const plano = await getPlanoAtual()
 
@@ -46,18 +46,30 @@ export default async function SimuladoPage({
         <div className="mt-6 rounded-xl border bg-muted/30 p-4 text-left">
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-medium">
-              {isUpgrade ? "Upgrade DeliveryOS AI" : "Delivery OS · mensal"}
+              {isUpgrade
+                ? "Upgrade DeliveryOS AI"
+                : inst
+                  ? "Delivery OS · anual em 12x"
+                  : "Delivery OS · mensal"}
             </span>
             <span className="text-lg font-semibold tabular-nums">
-              {plano ? fmtBRL(plano.mensalidade) : "—"}
+              {plano
+                ? inst
+                  ? `12x ${fmtBRL(plano.valorMensalCiclo)}`
+                  : fmtBRL(plano.mensalidade)
+                : "—"}
             </span>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {isUpgrade ? "Proração de teste" : `Assinatura de teste ${sub}`}
+            {isUpgrade
+              ? "Proração de teste"
+              : inst
+                ? `Parcelamento de teste ${inst}`
+                : `Assinatura de teste ${sub}`}
           </p>
         </div>
 
-        <SimuladoActions sub={sub ?? null} upgrade={isUpgrade} />
+        <SimuladoActions sub={sub ?? null} inst={inst ?? null} upgrade={isUpgrade} />
       </div>
     </div>
   )

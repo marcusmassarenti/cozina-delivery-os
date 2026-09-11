@@ -16,7 +16,7 @@ import {
 
 import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 import { getClientsOverview } from "@/lib/data/plataforma"
-import { getDefaultPlan } from "@/lib/data/assinatura"
+import { getDefaultPlan, getRegraCiclos } from "@/lib/data/assinatura"
 import { getPacoteConfig } from "@/lib/data/ia-chat"
 import { daysUntil } from "@/lib/data/billing"
 import { fmtBRL, fmtNum } from "@/lib/format"
@@ -32,6 +32,7 @@ export default async function PlataformaPage() {
   const myHoldingId = await getCurrentHoldingId()
   const defaultPlan = await getDefaultPlan()
   const pacote = await getPacoteConfig()
+  const regraCiclos = await getRegraCiclos()
 
   const nowMs = Date.now()
   const now = new Date(nowMs)
@@ -145,7 +146,11 @@ export default async function PlataformaPage() {
               tiver aparelho ativo em qualquer cliente — e a tela mostra o
               número antes, que é o que impede um envio pro vazio. */}
           <AvisoPushDialog holdingId="" holdingName="todos os clientes" />
-          <PlanSettingsDialog precos={defaultPlan} pacotePreco={pacote.preco} />
+          <PlanSettingsDialog
+            precos={defaultPlan}
+            pacotePreco={pacote.preco}
+            acrescimo12xPct={regraCiclos.acrescimo12xPct}
+          />
           <NovoClienteDialog />
         </div>
       </div>

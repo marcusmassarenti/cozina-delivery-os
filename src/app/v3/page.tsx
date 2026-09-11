@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { getDefaultPlan } from "@/lib/data/assinatura"
+import { getDefaultPlan, getRegraCiclos } from "@/lib/data/assinatura"
 import { getLandingNumeros } from "@/lib/data/landing-numeros"
 import { LandingV3 } from "../deliveryos/_landing_v3"
 
@@ -10,9 +10,14 @@ export const metadata: Metadata = {
 }
 
 export default async function V3Page() {
-  const [precos, numeros] = await Promise.all([
+  const [precos, regra, numeros] = await Promise.all([
     getDefaultPlan(),
+    getRegraCiclos(),
     getLandingNumeros(),
   ])
-  return <LandingV3 precos={precos} numeros={numeros} />
+  return <LandingV3
+      precos={precos}
+      numeros={numeros}
+      acrescimo12xPct={regra.acrescimo12xPct}
+    />
 }

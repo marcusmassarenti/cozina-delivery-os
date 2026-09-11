@@ -313,7 +313,7 @@ export function ClientDetailView({
                 {/* Ciclo mensal custa +30% sobre a base (que é a do plano
                     anual). Sem mostrar esse passo, a conta "149 + 4×99"
                     simplesmente não fecha com o total. */}
-                {c.billingCycle === "mensal" ? (
+                {c.billingCycle !== "anual" ? (
                   <>
                     <span className="opacity-60">
                       {fmtBRL(
@@ -323,10 +323,15 @@ export function ClientDetailView({
                     </span>
                     <span
                       className="opacity-70"
-                      title="O preço de tabela é o do plano anual, por mês. Quem paga mês a mês paga 30% a mais."
+                      title={
+                        c.billingCycle === "mensal"
+                          ? "O preço de tabela é o do plano anual, por mês. Quem paga mês a mês paga 30% a mais."
+                          : "O preço de tabela é o do anual à vista, por mês. No anual em 12x, cada parcela leva o acréscimo do 12x."
+                      }
                     >
                       {" "}
-                      × 1,3 (mensal) ={" "}
+                      × {c.cicloMult.toLocaleString("pt-BR")} (
+                      {c.billingCycle === "mensal" ? "mensal" : "anual em 12x"}) ={" "}
                     </span>
                   </>
                 ) : null}

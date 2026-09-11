@@ -1758,3 +1758,109 @@ export function clienteSuspensoInterno(d: {
     }),
   }
 }
+
+/**
+ * O Termo de Adesão, no dia em que o 1º pagamento confirma.
+ *
+ * Mesmo desenho do comprovante da proposta: o e-mail fica na caixa do cliente,
+ * fora do nosso banco, com data, IP e hash — um registro que só existisse do
+ * lado de quem cobra valeria menos como prova. O texto completo fica no link.
+ */
+export function termoAdesao(d: {
+  numero: string
+  token: string
+  nome: string | null
+  empresa: string
+  plano: string
+  lojas: number
+  ciclo: string
+  valor: string
+  inicio: string
+  aceitoPor: string
+  email: string
+  quando: string
+  ip: string
+  hash: string
+}) {
+  const linha = (rot: string, val: string) => `
+    <tr>
+      <td style="padding:5px 12px 5px 0;font-size:13px;color:${SUAVE};white-space:nowrap;vertical-align:top;">${rot}</td>
+      <td style="padding:5px 0;font-size:13px;color:${TINTA};vertical-align:top;">${val || "—"}</td>
+    </tr>`
+
+  const quadro = `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0 14px;">
+    <tr>
+      <td style="background:#fafafa;border:1px solid ${LINHA};border-radius:12px;padding:20px 22px;">
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:${TINTA};">Termo de Adesão nº ${d.numero}</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${linha("Contratante", d.empresa)}
+          ${linha("Plano", d.plano)}
+          ${linha("Lojas", String(d.lojas))}
+          ${linha("Ciclo", d.ciclo)}
+          ${linha("Valor", d.valor)}
+          ${linha("Início", d.inicio)}
+        </table>
+      </td>
+    </tr>
+  </table>`
+
+  const comprovante = `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px;">
+    <tr>
+      <td style="border:1px solid ${LINHA};border-radius:12px;padding:16px 22px;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:${TINTA};">Registro do aceite</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${linha("Aceito por", d.aceitoPor)}
+          ${linha("E-mail", d.email)}
+          ${linha("Data e hora", `${d.quando} (horário de Brasília)`)}
+          ${linha("Endereço IP", d.ip)}
+        </table>
+        <p style="margin:10px 0 4px;font-size:12px;color:${SUAVE};">Hash do documento (SHA-256)</p>
+        <p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;color:${TEXTO};word-break:break-all;">${d.hash}</p>
+      </td>
+    </tr>
+  </table>`
+
+  return {
+    assunto: `Seu contrato do Delivery OS — Termo de Adesão ${d.numero}`,
+    html: layout({
+      titulo: "Sua assinatura está ativa",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} O pagamento foi confirmado. Este é o seu Termo de Adesão ao Delivery OS, com as condições que você aceitou ao assinar. Guarde este e-mail: ele é o seu comprovante.</p>
+        ${quadro}
+        ${comprovante}
+        <p style="margin:0;font-size:14px;line-height:1.6;">O termo completo — condições do seu ciclo e o contrato de prestação de serviços na íntegra — está no link abaixo, e dá pra salvar em PDF por lá. O aceite foi registrado nos termos do art. 4º, I, da Lei nº 14.063/2020; o hash acima identifica o conteúdo aceito, e qualquer alteração nele produziria outro.</p>`,
+      cta: { texto: "Ver o termo completo", url: `${SITE}/contrato/adesao/${d.token}` },
+      ps: "Não reconhece esta contratação? Responda este e-mail agora — a gente resolve na hora.",
+    }),
+  }
+}
+
+/**
+ * Renovação do anual em 12x: a cobrança do ano seguinte já foi emitida.
+ *
+ * Sai 15 dias antes do fim do período, com o link de pagamento. É o e-mail que
+ * separa "renovou" de "foi cortado sem entender": sem ele, o cliente só
+ * descobriria no dia em que o acesso caísse.
+ */
+export function renovacao12x(d: {
+  nome: string | null
+  empresa: string
+  fim: string
+  parcela: string
+  total: string
+  link: string
+}) {
+  return {
+    assunto: `Renovação do seu plano anual — Delivery OS`,
+    html: layout({
+      titulo: "Seu plano anual renova em 15 dias",
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} O período de 12 meses da ${d.empresa} termina em <strong>${d.fim}</strong>. A cobrança dos próximos 12 meses já está pronta: <strong>12x de ${d.parcela}</strong> no cartão (total ${d.total}).</p>
+        <p style="margin:0 0 14px;">É só pagar pelo link até ${d.fim}. Sem o pagamento, o acesso continua por mais 7 dias de tolerância e depois é suspenso — seus dados ficam guardados.</p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:${SUAVE};">Prefere outro ciclo (à vista ou mensal)? Responda este e-mail que a gente troca.</p>`,
+      cta: { texto: "Pagar a renovação", url: d.link },
+    }),
+  }
+}

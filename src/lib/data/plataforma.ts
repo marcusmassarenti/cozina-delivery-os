@@ -23,6 +23,7 @@ import {
 } from "@/components/platform-logo"
 import {
   getDefaultPlan,
+  getRegraCiclos,
   precoDoPlano,
   type PlanId,
 } from "@/lib/data/assinatura"
@@ -30,7 +31,12 @@ import {
   getAuditoriaDoCliente,
   type EntradaAuditoria,
 } from "@/lib/data/auditoria"
-import { valorMensalExibido, type BillingCycle } from "@/lib/pricing"
+import {
+  cicloDoBanco,
+  multiplicadorDoCiclo,
+  valorMensalExibido,
+  type BillingCycle,
+} from "@/lib/pricing"
 import { getFaturasDoCliente, type Fatura } from "@/lib/data/faturas"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
@@ -112,8 +118,10 @@ export type ClientOverview = {
    * que ninguém sabe explicar é a origem de discussão de fatura.
    */
   precoNegociado: boolean
-  /** "mensal" custa +30% sobre a base (que é a do plano anual). */
+  /** "mensal" custa +30% sobre a base (que é a do plano anual); "anual_12x", o acréscimo do 12x. */
   billingCycle: BillingCycle
+  /** Fator do ciclo sobre a base: 1 (anual), 1 + acréscimo (12x), 1,3 (mensal). */
+  cicloMult: number
   /** Conta da própria casa: fora do MRR/ARPA e da emissão de faturas. */
   contaInterna: boolean
   contaInternaNota: string | null
@@ -298,7 +306,7 @@ export async function getClientsOverview(): Promise<{
 
   // Tabela de preços vigente (editável em /plataforma). Uma vez só, fora do
   // laço — é a régua de TODOS os clientes sem preço negociado.
-  const precos = await getDefaultPlan()
+  const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
 
   const brands = brandsRes.data ?? []
   const units = unitsRes.data ?? []
@@ -422,7 +430,7 @@ export async function getClientsOverview(): Promise<{
       nino_trial_ends_at: string | null
       asaas_subscription_id: string | null
       asaas_last_event: { event?: string; at?: string } | null
-      billing_cycle: "mensal" | "anual" | null
+      billing_cycle: string | null
     }
     const billing = {
       paymentMethod: hh.payment_method ?? null,
@@ -464,13 +472,14 @@ export async function getClientsOverview(): Promise<{
      * `billing_cycle` só é preenchido por quem assina pelo self-service. Nulo
      * = cobrança manual, que sempre usou a base anual — e continua usando.
      */
-    const ciclo = (hh.billing_cycle ?? "anual") as BillingCycle
+    const ciclo = cicloDoBanco(hh.billing_cycle)
     const mensalCheio = precoNegociado
       ? (billing.monthlyFee ?? 0) + extraUnits * (pricePerUnit ?? 0)
       : planoDoCliente
         ? valorMensalExibido(
             precoDoPlano(precos, planoDoCliente, activeUnits),
             ciclo,
+            regra,
           )
         : 0
 
@@ -537,6 +546,7 @@ export async function getClientsOverview(): Promise<{
       /** Antes do desconto — pra tela mostrar "de X por Y". */
       mensalCheio,
       billingCycle: ciclo,
+      cicloMult: multiplicadorDoCiclo(ciclo, regra),
       precoNegociado,
       contaInterna: Boolean(hh.conta_interna),
       contaInternaNota: (hh.conta_interna_nota as string | null) ?? null,
