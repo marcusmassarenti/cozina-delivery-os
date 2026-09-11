@@ -1447,6 +1447,15 @@ const NAV_LINKS: { id: string; label: string; ai?: boolean; spy?: boolean }[] = 
 /** Preço de um plano: primeira loja + cada loja adicional. */
 type PrecoPlanoLanding = { first: number; add: number }
 
+/** Rodapé dos botões dos planos: o que a pessoa assume em cada ciclo. Era
+ *  "cancela quando quiser" em qualquer ciclo — no 12x isso engana, porque
+ *  cancelar interrompe só a renovação e as parcelas seguem no cartão. */
+const RODAPE_CTA: Record<BillingCycle, string> = {
+  anual: "Por loja · 1 cobrança por ano",
+  anual_12x: "Por loja · 12x no cartão",
+  mensal: "Por loja · cancela quando quiser",
+}
+
 /** Bloco de preço de um card — a 1ª loja (grande) + o adicional por loja.
  *  Muda com o ciclo: anual à vista (base), 12x (base + acréscimo), mensal (+30%). */
 function PrecoValor({
@@ -2120,7 +2129,7 @@ export function LandingV3({
                   <a href="/cadastro" className="btn-ghost flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3 text-base font-medium hover:bg-black/[0.02]">
                     Quero o Pro
                   </a>
-                  <p className="mt-2 text-center text-xs text-[oklch(0.5_0.01_48)]">Por loja · cancela quando quiser</p>
+                  <p className="mt-2 text-center text-xs text-[oklch(0.5_0.01_48)]">{RODAPE_CTA[ciclo]}</p>
                 </div>
               </div>
             </Reveal>
@@ -2161,7 +2170,7 @@ export function LandingV3({
                     Quero a IA
                     <ArrowRight className="arrow-slide size-5" strokeWidth={2.2} />
                   </a>
-                  <p className="mt-2 text-center text-xs text-[oklch(0.6_0_0)]">Por loja · cancela quando quiser</p>
+                  <p className="mt-2 text-center text-xs text-[oklch(0.6_0_0)]">{RODAPE_CTA[ciclo]}</p>
                 </div>
               </div>
             </Reveal>
