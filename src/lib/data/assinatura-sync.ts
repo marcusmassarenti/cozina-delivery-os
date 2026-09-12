@@ -121,16 +121,26 @@ export async function sincronizarValorAssinatura(
 
     if (valor <= 0) return { ok: false, motivo: "valor zerado" }
 
-    // Não bate na API à toa: só quando o valor realmente mudou.
     const atual = h.asaas_sub_valor != null ? Number(h.asaas_sub_valor) : null
-    if (atual != null && Math.abs(atual - valor) < 0.01) {
-      return { ok: true, motivo: "valor já está correto", de: atual, para: valor }
-    }
 
+    /* A DESCRIÇÃO TAMBÉM PRECISA ANDAR — e é ela que o cliente lê na fatura.
+     *
+     * Esta rotina só falava com o Asaas quando o VALOR mudava. Quem tem preço
+     * fechado nunca muda de valor, então a descrição congelava no dia da
+     * criação: medido em 12/09/26 no painel do Asaas, a cobrança do Grupo Le
+     * Brunch dizia "Essencial · 1 loja" (é Pro, 17 lojas) e a da DG FOODS,
+     * "Pro · 56 lojas" (são 71). O cliente recebe isso por e-mail.
+     *
+     * São 8 clientes com assinatura: uma chamada por dia cada um é barato
+     * demais pra justificar um número errado na fatura de quem paga.
+     *
+     * O rótulo do plano AI já é "DeliveryOS AI" — sem esta checagem, a fatura
+     * saía "DeliveryOS DeliveryOS AI · 4 lojas" (Tech Assessoria). */
     const rotulo = plano ? (PLANOS_META[plano]?.label ?? plano) : "Plano"
+    const nomePlano = rotulo.startsWith("DeliveryOS") ? rotulo : `DeliveryOS ${rotulo}`
     await asaasUpdateSubscription(String(h.asaas_subscription_id), {
       value: valor,
-      description: `DeliveryOS ${rotulo} · ${ativas} loja${ativas !== 1 ? "s" : ""}`,
+      description: `${nomePlano} · ${ativas} loja${ativas !== 1 ? "s" : ""}`,
       // Reflete nas cobranças futuras JÁ geradas. Sem isso a próxima fatura
       // sairia no valor velho e a correção só valeria dali a dois meses.
       updatePendingPayments: true,
@@ -141,6 +151,11 @@ export async function sincronizarValorAssinatura(
       .update({ asaas_sub_valor: valor })
       .eq("id", holdingId)
 
+    // Quem chama só reporta o que MUDOU de valor — a descrição atualizada em
+    // silêncio não precisa virar linha de log todo dia.
+    if (atual != null && Math.abs(atual - valor) < 0.01) {
+      return { ok: true, motivo: "valor já está correto", de: atual, para: valor }
+    }
     return { ok: true, de: atual ?? undefined, para: valor }
   } catch (e) {
     // Nunca derruba quem chamou: cadastrar loja não pode falhar por causa do
