@@ -1,0 +1,45 @@
+name: Backup Supabase
+
+on:
+  schedule:
+    # 06:00 UTC = 03:00 BRT
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-supabase
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pg_dump (Postgres 16 client)
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16 jq
+
+      - name: Run backup
+        run: |
+          chmod +x scripts/backup/backup.sh
+          ./scripts/backup/backup.sh
