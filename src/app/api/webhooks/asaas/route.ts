@@ -61,6 +61,23 @@ function addMonths(iso: string, months: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * O vencimento que a holding guarda é o PRÓXIMO, não o que acabou de ser pago.
+ *
+ * ── POR QUE (Marcus, 12/09/26) ───────────────────────────────────────────
+ * Isto gravava `payment.dueDate` — a data da cobrança recém-paga, ou seja,
+ * uma data no passado. A régua de e-mail avisa 5, 2 e 0 dias ANTES do
+ * vencimento, então ela nunca disparava pra quem paga pelo Asaas: medido em
+ * 12/09/26, DG FOODS (13/08), Le Brunch (24/08) e Tech (21/08) estavam todas
+ * com data vencida no cadastro e nenhum lembrete saía.
+ *
+ * Ciclo desconhecido soma 1 MÊS, não 12. Errar pra menos adianta um lembrete;
+ * errar pra mais esconde a cobrança por um ano.
+ */
+function proximoVencimento(pago: string, ciclo: string | null): string {
+  return addMonths(pago, ciclo === "anual" || ciclo === "anual_12x" ? 12 : 1)
+}
+
 type AsaasPayment = {
   id?: string
   customer?: string
@@ -120,13 +137,14 @@ export async function POST(req: Request) {
     // Acha a holding pela assinatura, pelo parcelamento do 12x (vigente ou
     // renovação) ou, no pior caso, pelo cliente.
     const COLS =
-      "id, pending_plan_tier, asaas_installment_id, asaas_installment_renovacao_id, parcelado_ate"
+      "id, pending_plan_tier, asaas_installment_id, asaas_installment_renovacao_id, parcelado_ate, billing_cycle"
     type Linha = {
       id: string
       pending_plan_tier: string | null
       asaas_installment_id: string | null
       asaas_installment_renovacao_id: string | null
       parcelado_ate: string | null
+      billing_cycle: string | null
     }
     let linha: Linha | null = null
     if (subscriptionId) {
@@ -354,8 +372,14 @@ export async function POST(req: Request) {
       // Fora do patch de propósito: mexe em unit_platforms, não em holdings.
       retomouPagamento = true
       patch.payment_method = "Asaas"
+      // No 12x o fim do período já é a data da renovação; nos demais, soma o
+      // ciclo à cobrança paga (ver `proximoVencimento`).
       if (ehParcela && fimParcelado) patch.due_date = fimParcelado
-      else if (payment.dueDate) patch.due_date = String(payment.dueDate)
+      else if (payment.dueDate)
+        patch.due_date = proximoVencimento(
+          String(payment.dueDate),
+          linha?.billing_cycle ?? null,
+        )
       // Pagamento confirmado → CONCEDE o plano escolhido (pending → plan_tier).
       // É aqui, e só aqui, que a feature é liberada. Limpa o pendente.
       if (pendingPlanTier) {
