@@ -134,6 +134,7 @@ export type ClientOverview = {
   cortesiaNota: string | null
   /** Relação encerrada de propósito: vai pra aba de arquivados, sai de MRR, faturas e envios. */
   encerradoEm: string | null
+  encerradoMotivo: string | null
   /** Convidado a migrar a cobrança manual pro Asaas (destrava /assinatura). */
   conviteAsaasEm: string | null
   /** Preço da 1ª loja e de cada adicional no plano vigente do cliente. */
@@ -293,7 +294,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota, encerrado_em",
+      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota, encerrado_em, encerrado_motivo",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -313,6 +314,7 @@ export async function getClientsOverview(): Promise<{
         cortesia: false,
         cortesia_nota: null,
         encerrado_em: null,
+        encerrado_motivo: null,
         convite_asaas_em: null,
         indicado_por: null,
         desconto_primeira_fatura_pct: null,
@@ -584,6 +586,7 @@ export async function getClientsOverview(): Promise<{
       cortesia: Boolean((hh as { cortesia?: boolean | null }).cortesia),
       cortesiaNota: (hh as { cortesia_nota?: string | null }).cortesia_nota ?? null,
       encerradoEm: (hh as { encerrado_em?: string | null }).encerrado_em ?? null,
+      encerradoMotivo: (hh as { encerrado_motivo?: string | null }).encerrado_motivo ?? null,
       conviteAsaasEm: (hh.convite_asaas_em as string | null) ?? null,
       planoFirst: planoDoCliente ? precos[planoDoCliente].first : null,
       planoAdd: planoDoCliente ? precos[planoDoCliente].add : null,

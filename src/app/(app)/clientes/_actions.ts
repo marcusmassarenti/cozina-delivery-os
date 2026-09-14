@@ -11,6 +11,8 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { normalizaTipoCliente } from "@/lib/tipos-cliente"
 import { sincronizarValorAssinatura } from "@/lib/data/assinatura-sync"
 import { auditar } from "@/lib/data/auditoria"
+import { asaasCancelSubscription } from "@/lib/asaas/client"
+import { hojeBR } from "@/lib/dia-br"
 import { quitarFaturaComPagamento } from "@/lib/data/faturas"
 import { acharIndicadorPorCodigo } from "@/lib/data/indicacoes"
 import {
@@ -1025,6 +1027,137 @@ export async function toggleCarteira(
     revalidatePath("/clientes")
     // O menu é montado no layout — sem isto o item só aparece no F5.
     revalidatePath("/", "layout")
+    return { ok: true }
+  })
+}
+
+// ─── Encerrar / reabrir cliente ──────────────────────────────────────────────
+
+/**
+ * Encerra a relação com um cliente (super-admin).
+ *
+ * ── POR QUE (Marcus, 14/09/2026) ──────────────────────────────────────────
+ * Não existia botão: encerrar era um UPDATE à mão em `encerrado_em`, e várias
+ * rotinas nem olhavam a marca. Agora o encerrado vai pra aba de arquivados e
+ * sai de MRR, faturas, régua, e-mails e sync (ver `entraNoMrr`, faturas.ts,
+ * regua-email.ts…).
+ *
+ * NÃO COMUNICA NINGUÉM — decisão do Marcus. Nenhum e-mail, push ou aviso.
+ *
+ * Ordem: o Asaas (externo) primeiro. Se o cancelamento lá falhar, nada muda
+ * aqui — melhor que um cliente "encerrado" que continua sendo cobrado.
+ * Parcelamento anual (12x) NÃO é cancelado por aqui: parcela paga não se
+ * remove, e estorno é decisão da operação.
+ */
+export async function encerrarCliente(
+  holdingId: string,
+  motivo: string,
+  cancelarAssinaturaAsaas: boolean,
+): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+    if (holdingId === (await getCurrentHoldingId()))
+      return { ok: false, message: "Não dá pra encerrar a própria empresa." }
+    const motivoLimpo = motivo.trim()
+    if (motivoLimpo.length < 3)
+      return { ok: false, message: "Escreva o motivo do encerramento." }
+
+    const { data: h, error: eH } = await admin
+      .from("holdings")
+      .select("id, name, encerrado_em, asaas_subscription_id")
+      .eq("id", holdingId)
+      .maybeSingle()
+    if (eH || !h) return { ok: false, message: eH?.message ?? "Cliente não encontrado." }
+    if (h.encerrado_em) return { ok: false, message: "Este cliente já está encerrado." }
+
+    const assinatura = (h.asaas_subscription_id as string | null) ?? null
+    let asaasCancelada = false
+    if (assinatura && cancelarAssinaturaAsaas) {
+      try {
+        await asaasCancelSubscription(assinatura)
+        asaasCancelada = true
+      } catch (e) {
+        return {
+          ok: false,
+          message: `O Asaas não cancelou a assinatura (${e instanceof Error ? e.message : "erro"}). Nada foi alterado.`,
+        }
+      }
+    }
+
+    const hoje = hojeBR()
+    const { error: eUp } = await admin
+      .from("holdings")
+      .update({
+        encerrado_em: hoje,
+        encerrado_motivo: motivoLimpo,
+        ...(asaasCancelada ? { asaas_subscription_id: null } : {}),
+      })
+      .eq("id", holdingId)
+      .is("encerrado_em", null)
+    if (eUp) return { ok: false, message: eUp.message }
+
+    // Fatura em aberto de cliente encerrado não é dívida a cobrar: cancela,
+    // deixando na nota o porquê (o histórico continua de pé).
+    const { data: abertas } = await admin
+      .from("holding_invoices")
+      .select("id, nota")
+      .eq("holding_id", holdingId)
+      .eq("status", "aberta")
+    const dataBR = hoje.split("-").reverse().join("/")
+    let faturasCanceladas = 0
+    for (const f of (abertas ?? []) as { id: string; nota: string | null }[]) {
+      const { error } = await admin
+        .from("holding_invoices")
+        .update({
+          status: "cancelada",
+          nota: `${f.nota ? `${f.nota} | ` : ""}Cancelada no encerramento do cliente (${dataBR})`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", f.id)
+        .eq("status", "aberta")
+      if (!error) faturasCanceladas++
+    }
+
+    await auditar("cliente.encerrado", holdingId, {
+      motivo: motivoLimpo,
+      faturasCanceladas,
+      assinaturaAsaasCancelada: asaasCancelada ? assinatura : null,
+    })
+    revalidatePath("/clientes")
+    return {
+      ok: true,
+      message: `Encerrado. ${faturasCanceladas} fatura${faturasCanceladas !== 1 ? "s" : ""} em aberto cancelada${faturasCanceladas !== 1 ? "s" : ""}${asaasCancelada ? " e assinatura do Asaas cancelada" : ""}.`,
+    }
+  })
+}
+
+/**
+ * Reabre um cliente encerrado. Só tira a marca: faturas canceladas continuam
+ * canceladas e assinatura cancelada no Asaas não volta — cobrança se configura
+ * de novo, de propósito, pra ninguém ser cobrado sem decisão. O sync das lojas
+ * retoma sozinho (ver unidades-encerradas.ts).
+ */
+export async function reabrirCliente(holdingId: string): Promise<BillingActionState> {
+  return guard(async () => {
+    const { admin } = await requireSuperadmin()
+    if (!holdingId) return { ok: false, message: "Cliente não identificado." }
+    const { data: h } = await admin
+      .from("holdings")
+      .select("encerrado_em, encerrado_motivo")
+      .eq("id", holdingId)
+      .maybeSingle()
+    if (!h?.encerrado_em) return { ok: false, message: "Este cliente não está encerrado." }
+    const { error } = await admin
+      .from("holdings")
+      .update({ encerrado_em: null, encerrado_motivo: null })
+      .eq("id", holdingId)
+    if (error) return { ok: false, message: error.message }
+    await auditar("cliente.reaberto", holdingId, {
+      estavaEncerradoDesde: h.encerrado_em,
+      motivoAnterior: h.encerrado_motivo,
+    })
+    revalidatePath("/clientes")
     return { ok: true }
   })
 }

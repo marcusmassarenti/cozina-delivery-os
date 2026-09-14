@@ -364,7 +364,11 @@ export function ClientsTable({
             </thead>
             <tbody>
               {pageRows.map((c) => {
-                const st = STATUS[c.billingStatus]
+                // Encerrado ganha do status de cobrança: senão um encerrado marcado como pago
+                // aparecia "PAGO" dentro da aba de arquivados.
+                const st = c.encerradoEm
+                  ? { label: "Encerrado", cls: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" }
+                  : STATUS[c.billingStatus]
                 const dias = agoDays(c.lastLogin, nowMs)
                 const sumido = dias != null && dias >= 14
                 const canSelect = c.id !== myHoldingId

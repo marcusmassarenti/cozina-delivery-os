@@ -28,6 +28,7 @@ import { PlanControls } from "./plan-controls"
 import { CarteiraToggle } from "./carteira-toggle"
 import { DescontoNegociado } from "./desconto-negociado"
 import { IndicadoPor } from "./indicado-por"
+import { ClienteEncerradoAviso, EncerrarClienteBotao } from "./encerrar-cliente"
 
 /** Dias de hoje até uma data ISO (fuso SP). Inline pra não puxar server-only. */
 function daysUntil(dateISO: string): number {
@@ -168,7 +169,11 @@ export function ClientDetailView({
    *  detalhe (o router.refresh não atualiza o conteúdo do drawer). */
   onChanged?: () => void
 }) {
-  const st = STATUS[c.billingStatus]
+  // Encerrado ganha do status de cobrança: senão um encerrado marcado como pago
+  // aparecia "PAGO" dentro da aba de arquivados.
+  const st = c.encerradoEm
+    ? { label: "Encerrado", cls: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" }
+    : STATUS[c.billingStatus]
   const waLink = (n: string | null) => {
     const d = onlyDigits(n)
     if (!d) return null
@@ -189,6 +194,7 @@ export function ClientDetailView({
         <div className="flex flex-wrap items-center gap-2 border-b pb-3">
           <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
           <VerComoBotao holdingId={c.id} holdingName={c.name} />
+          <EncerrarClienteBotao holdingId={c.id} holdingName={c.name} encerradoEm={c.encerradoEm} temAssinaturaAsaas={!!c.asaasSubscriptionId} parceladoAnual={c.billingCycle === "anual_12x"} faturasAbertas={c.faturas.filter((f) => f.status === "aberta").length} onChanged={onChanged} />
         </div>
       )}
       {!embedded && (
@@ -214,6 +220,7 @@ export function ClientDetailView({
             <span className="ml-auto">
               <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
               <VerComoBotao holdingId={c.id} holdingName={c.name} />
+              <EncerrarClienteBotao holdingId={c.id} holdingName={c.name} encerradoEm={c.encerradoEm} temAssinaturaAsaas={!!c.asaasSubscriptionId} parceladoAnual={c.billingCycle === "anual_12x"} faturasAbertas={c.faturas.filter((f) => f.status === "aberta").length} onChanged={onChanged} />
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -223,6 +230,10 @@ export function ClientDetailView({
             {c.users !== 1 ? "s" : ""}
           </p>
         </div>
+      )}
+
+      {c.encerradoEm && (
+        <ClienteEncerradoAviso encerradoEm={c.encerradoEm} motivo={c.encerradoMotivo} />
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">

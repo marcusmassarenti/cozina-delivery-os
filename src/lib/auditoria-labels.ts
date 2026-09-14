@@ -12,6 +12,8 @@ export const ACAO_LABEL: Record<string, string> = {
   "pagamento.removido": "Pagamento removido",
   "cliente.criado": "Cliente criado",
   "cliente.removido": "Cliente removido",
+  "cliente.encerrado": "Cliente encerrado",
+  "cliente.reaberto": "Cliente reaberto",
   "conta_interna.alterada": "Conta interna alterada",
   "convite_asaas.alterado": "Convite Asaas",
   "indicacao.definida": "Indicação vinculada",

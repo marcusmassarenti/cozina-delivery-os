@@ -21,6 +21,9 @@ export type AcaoAuditada =
   | "pagamento.removido"
   | "cliente.criado"
   | "cliente.removido"
+  /** Relação encerrada / retomada pela tela de Clientes (holdings.encerrado_em). */
+  | "cliente.encerrado"
+  | "cliente.reaberto"
   | "conta_interna.alterada"
   | "convite_asaas.alterado"
   | "indicacao.definida"
