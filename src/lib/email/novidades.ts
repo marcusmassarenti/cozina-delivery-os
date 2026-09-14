@@ -43,6 +43,8 @@ export async function enviarNovidades(opts: {
     // A conta interna (a nossa) fica de fora: novidade que eu mesmo escrevi
     // não precisa voltar por e-mail.
     .eq("conta_interna", false)
+    // Cliente encerrado não recebe mais nada.
+    .is("encerrado_em", null)
     .order("name")
 
   for (const h of (holdings ?? []) as { id: string; name: string }[]) {

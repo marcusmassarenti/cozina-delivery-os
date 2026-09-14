@@ -31,9 +31,12 @@ export type SinaisDeArquivo = {
   trialEndsAt: string | null
   /** Lojas ATIVAS. Zero + trial vencido = cadastro que nunca virou cliente. */
   activeUnits: number
+  /** Relação encerrada de propósito (`holdings.encerrado_em`). */
+  encerradoEm?: string | null
 }
 
 export function ehClienteArquivado(c: SinaisDeArquivo): boolean {
+  if (c.encerradoEm) return true
   if (c.billingStatus === "suspended") return true
   return (
     c.trialEndsAt !== null && c.trialEndsAt < hojeISO() && c.activeUnits === 0

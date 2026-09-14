@@ -46,6 +46,7 @@ export async function enviarResumoSemanal(): Promise<ResultadoResumo> {
     .from("holdings")
     .select("id, name")
     .eq("conta_interna", false)
+    .is("encerrado_em", null) // encerrado não recebe mais nada
 
   for (const h of (holdings ?? []) as { id: string; name: string }[]) {
     const { data } = await admin.rpc("resumo_semanal", {

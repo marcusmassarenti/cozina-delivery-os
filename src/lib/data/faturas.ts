@@ -103,6 +103,13 @@ export async function getResumoCobranca(): Promise<ResumoCobranca> {
     .from("holding_invoices")
     .select("holding_id, valor, pago_valor, status, vencimento, pago_em")
 
+  // Fatura de cliente encerrado não é inadimplência a cobrar — sai do resumo.
+  const { data: encRows } = await admin
+    .from("holdings")
+    .select("id")
+    .not("encerrado_em", "is", null)
+  const encerrados = new Set(((encRows ?? []) as { id: string }[]).map((h) => h.id))
+
   const out: ResumoCobranca = {
     emAtraso: 0,
     valorEmAtraso: 0,
@@ -114,6 +121,7 @@ export async function getResumoCobranca(): Promise<ResumoCobranca> {
   const inadimplentes = new Set<string>()
 
   for (const r of (data ?? []) as Record<string, unknown>[]) {
+    if (encerrados.has(String(r.holding_id))) continue
     const status = String(r.status)
     const valor = Number(r.valor ?? 0)
     if (status === "aberta") {
@@ -159,7 +167,7 @@ export async function emitirFaturasDoMes(
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, cortesia, billing_cycle, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
+      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, cortesia, encerrado_em, billing_cycle, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
     )
 
   // Lojas ATIVAS por cliente — é a base do preço por loja.
@@ -189,6 +197,11 @@ export async function emitirFaturasDoMes(
     // Cortesia combinada: cliente real que usa sem pagar — não gera cobrança.
     if (h.cortesia) {
       out.puladas.push({ cliente: nome, motivo: "cortesia" })
+      continue
+    }
+    // Cliente encerrado não gera cobrança nova.
+    if (h.encerrado_em) {
+      out.puladas.push({ cliente: nome, motivo: "encerrado" })
       continue
     }
     const emTeste =

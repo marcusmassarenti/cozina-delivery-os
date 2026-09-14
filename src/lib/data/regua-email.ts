@@ -55,6 +55,7 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
     )
     .eq("conta_interna", false)
     .eq("cortesia", false)
+    .is("encerrado_em", null)
 
   if (!holdings?.length) return out
 

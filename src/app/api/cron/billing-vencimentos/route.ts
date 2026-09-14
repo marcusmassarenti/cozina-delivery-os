@@ -61,7 +61,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await admin
     .from("holdings")
-    .select("id, name, paid, due_date, suspend_on, asaas_subscription_id, cortesia")
+    .select("id, name, paid, due_date, suspend_on, asaas_subscription_id, cortesia, encerrado_em")
     .eq("paid", true)
     .not("due_date", "is", null)
     .lt("due_date", hoje)
@@ -77,10 +77,12 @@ export async function GET(req: Request) {
     suspend_on: string | null
     asaas_subscription_id: string | null
     cortesia: boolean | null
+    encerrado_em: string | null
   }[]).filter(
     (h) =>
       !h.asaas_subscription_id && // Asaas é do webhook
       !h.cortesia &&
+      !h.encerrado_em &&
       vencimentoEfetivo(h.due_date) < hoje,
   )
 

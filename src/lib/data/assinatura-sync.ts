@@ -47,7 +47,7 @@ export async function sincronizarValorAssinatura(
     const { data: h } = await admin
       .from("holdings")
       .select(
-        "id, name, plan_tier, monthly_fee, price_per_unit, included_units, asaas_subscription_id, conta_interna, cortesia, asaas_sub_valor, billing_cycle, desconto_tipo, desconto_valor, desconto_ate",
+        "id, name, plan_tier, monthly_fee, price_per_unit, included_units, asaas_subscription_id, conta_interna, cortesia, encerrado_em, asaas_sub_valor, billing_cycle, desconto_tipo, desconto_valor, desconto_ate",
       )
       .eq("id", holdingId)
       .maybeSingle()
@@ -55,6 +55,7 @@ export async function sincronizarValorAssinatura(
     if (!h) return { ok: false, motivo: "cliente não encontrado" }
     if (h.conta_interna) return { ok: false, motivo: "conta interna" }
     if (h.cortesia) return { ok: false, motivo: "cortesia" }
+    if (h.encerrado_em) return { ok: false, motivo: "encerrado" }
     if (!h.asaas_subscription_id)
       return { ok: false, motivo: "sem assinatura recorrente" }
 
@@ -177,6 +178,7 @@ export async function sincronizarTodasAssinaturas(): Promise<
     .not("asaas_subscription_id", "is", null)
     .eq("conta_interna", false)
     .eq("cortesia", false)
+    .is("encerrado_em", null)
 
   const out: { cliente: string; de?: number; para?: number; motivo?: string }[] =
     []

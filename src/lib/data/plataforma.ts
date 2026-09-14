@@ -132,6 +132,8 @@ export type ClientOverview = {
    */
   cortesia: boolean
   cortesiaNota: string | null
+  /** Relação encerrada de propósito: vai pra aba de arquivados, sai de MRR, faturas e envios. */
+  encerradoEm: string | null
   /** Convidado a migrar a cobrança manual pro Asaas (destrava /assinatura). */
   conviteAsaasEm: string | null
   /** Preço da 1ª loja e de cada adicional no plano vigente do cliente. */
@@ -190,7 +192,7 @@ export type PlatformTotals = {
  * ainda está no teste grátis. Atrasado (ainda não suspenso) segue contando.
  */
 export function entraNoMrr(c: ClientOverview): boolean {
-  if (c.contaInterna || c.cortesia) return false
+  if (c.contaInterna || c.cortesia || c.encerradoEm) return false
   return c.billingStatus !== "suspended" && c.billingStatus !== "trial"
 }
 
@@ -291,7 +293,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota",
+      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota, encerrado_em",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -310,6 +312,7 @@ export async function getClientsOverview(): Promise<{
         conta_interna_nota: null,
         cortesia: false,
         cortesia_nota: null,
+        encerrado_em: null,
         convite_asaas_em: null,
         indicado_por: null,
         desconto_primeira_fatura_pct: null,
@@ -580,6 +583,7 @@ export async function getClientsOverview(): Promise<{
       contaInternaNota: (hh.conta_interna_nota as string | null) ?? null,
       cortesia: Boolean((hh as { cortesia?: boolean | null }).cortesia),
       cortesiaNota: (hh as { cortesia_nota?: string | null }).cortesia_nota ?? null,
+      encerradoEm: (hh as { encerrado_em?: string | null }).encerrado_em ?? null,
       conviteAsaasEm: (hh.convite_asaas_em as string | null) ?? null,
       planoFirst: planoDoCliente ? precos[planoDoCliente].first : null,
       planoAdd: planoDoCliente ? precos[planoDoCliente].add : null,
