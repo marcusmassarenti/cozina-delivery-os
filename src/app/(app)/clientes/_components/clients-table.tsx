@@ -466,6 +466,7 @@ export function ClientsTable({
                             Asaas ✓
                           </span>
                         ) : c.contaInterna ||
+                          c.cortesia ||
                           c.billingStatus === "trial" ||
                           c.billingStatus === "none" ? (
                           // Em teste ou sem cobrança não há o que migrar —
