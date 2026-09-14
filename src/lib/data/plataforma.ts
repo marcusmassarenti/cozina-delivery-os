@@ -37,7 +37,7 @@ import {
   valorMensalExibido,
   type BillingCycle,
 } from "@/lib/pricing"
-import { getFaturasDoCliente, type Fatura } from "@/lib/data/faturas"
+import { getFaturasDoCliente, getResumoCobranca, type Fatura } from "@/lib/data/faturas"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
 import {
   computeBillingStatus,
@@ -125,6 +125,13 @@ export type ClientOverview = {
   /** Conta da própria casa: fora do MRR/ARPA e da emissão de faturas. */
   contaInterna: boolean
   contaInternaNota: string | null
+  /**
+   * Cortesia combinada: cliente de verdade que usa sem pagar. Fora do MRR,
+   * dos pagantes e das faturas/Asaas — mas recebe e-mail de produto e resumo
+   * semanal normalmente (por isso NÃO é conta interna).
+   */
+  cortesia: boolean
+  cortesiaNota: string | null
   /** Convidado a migrar a cobrança manual pro Asaas (destrava /assinatura). */
   conviteAsaasEm: string | null
   /** Preço da 1ª loja e de cada adicional no plano vigente do cliente. */
@@ -168,7 +175,23 @@ export type PlatformTotals = {
   received: number
   pending: number
   overdueAmount: number
+  /** Clientes distintos com fatura vencida (depois do dia útil do vencimento). */
+  clientesInadimplentes: number
   mrr: number
+  /** Entram no MRR com valor > 0. */
+  pagantes: number
+  /** Receita média por pagante. */
+  arpa: number
+}
+
+/**
+ * O que conta como receita RECORRENTE — regra única do MRR, dos pagantes e do
+ * MRR por plano. Fica fora: conta interna, cortesia, cliente suspenso e quem
+ * ainda está no teste grátis. Atrasado (ainda não suspenso) segue contando.
+ */
+export function entraNoMrr(c: ClientOverview): boolean {
+  if (c.contaInterna || c.cortesia) return false
+  return c.billingStatus !== "suspended" && c.billingStatus !== "trial"
 }
 
 export async function getClientsOverview(): Promise<{
@@ -185,7 +208,10 @@ export async function getClientsOverview(): Promise<{
       received: 0,
       pending: 0,
       overdueAmount: 0,
+      clientesInadimplentes: 0,
       mrr: 0,
+      pagantes: 0,
+      arpa: 0,
     },
   }
   if (!(await isSuperadmin())) return empty
@@ -265,7 +291,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle",
+      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -282,6 +308,8 @@ export async function getClientsOverview(): Promise<{
         carteira_habilitada: false,
         conta_interna: false,
         conta_interna_nota: null,
+        cortesia: false,
+        cortesia_nota: null,
         convite_asaas_em: null,
         indicado_por: null,
         desconto_primeira_fatura_pct: null,
@@ -550,6 +578,8 @@ export async function getClientsOverview(): Promise<{
       precoNegociado,
       contaInterna: Boolean(hh.conta_interna),
       contaInternaNota: (hh.conta_interna_nota as string | null) ?? null,
+      cortesia: Boolean((hh as { cortesia?: boolean | null }).cortesia),
+      cortesiaNota: (hh as { cortesia_nota?: string | null }).cortesia_nota ?? null,
       conviteAsaasEm: (hh.convite_asaas_em as string | null) ?? null,
       planoFirst: planoDoCliente ? precos[planoDoCliente].first : null,
       planoAdd: planoDoCliente ? precos[planoDoCliente].add : null,
@@ -585,28 +615,32 @@ export async function getClientsOverview(): Promise<{
     }
   })
 
-  // MRR/recebido/etc usam a mensalidade calculada (base + lojas extras).
-  // Conta interna vale ZERO aqui: é dinheiro que sai e volta pro mesmo bolso,
-  // e o MRR é justamente o número que se olha pra decidir se o negócio anda.
-  // Ela continua na LISTA (uso real da plataforma), só não soma receita.
-  const fee = (c: ClientOverview) => (c.contaInterna ? 0 : c.computedMonthly)
+  // Cards financeiros — PONTO ÚNICO (a página e o Analytics leem daqui).
+  //
+  // ── POR QUE (Marcus, 14/09/2026) ──────────────────────────────────────────
+  // O MRR somava a mensalidade de TODOS, inclusive o cliente suspenso
+  // (Empreender, 2 faturas em aberto), e "Recebido / A receber / Em atraso"
+  // liam a marca `paid` do cadastro em vez das faturas: com as 4 faturas de
+  // setembro em aberto, a tela dizia R$ 5.161,84 recebidos e R$ 0 a receber.
+  // Agora o MRR é só receita recorrente de fato (`entraNoMrr`) e o dinheiro
+  // vem de `holding_invoices` — com vencimento em fim de semana/feriado valendo
+  // no próximo dia útil (lib/dia-br.ts).
+  const resumo = await getResumoCobranca()
+  const noMrr = clients.filter(entraNoMrr)
+  const mrr = noMrr.reduce((s, c) => s + c.computedMonthly, 0)
+  const pagantes = noMrr.filter((c) => c.computedMonthly > 0).length
   const totals: PlatformTotals = {
     clients: clients.length,
     units: clients.reduce((s, c) => s + c.units, 0),
     activeUnits: clients.reduce((s, c) => s + c.activeUnits, 0),
     users: clients.reduce((s, c) => s + c.users, 0),
-    received: clients
-      .filter((c) => c.billingStatus === "paid")
-      .reduce((s, c) => s + fee(c), 0),
-    pending: clients
-      .filter((c) => c.billingStatus === "pending")
-      .reduce((s, c) => s + fee(c), 0),
-    overdueAmount: clients
-      .filter(
-        (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
-      )
-      .reduce((s, c) => s + fee(c), 0),
-    mrr: clients.reduce((s, c) => s + fee(c), 0),
+    received: resumo.recebidoNoMes,
+    pending: resumo.valorAVencer,
+    overdueAmount: resumo.valorEmAtraso,
+    clientesInadimplentes: resumo.clientesInadimplentes,
+    mrr,
+    pagantes,
+    arpa: pagantes > 0 ? mrr / pagantes : 0,
   }
 
   return { clients, totals }
@@ -1062,13 +1096,12 @@ export async function getPlatformAnalytics(
     const t = (c.planTier ?? "sem") as PlanoBreak["tier"]
     const b = base[t] ?? base.sem
     b.clientes += 1
-    b.mrr += c.computedMonthly
+    if (entraNoMrr(c)) b.mrr += c.computedMonthly
   }
   const porPlano = [base.essencial, base.pro, base.ai, base.sem].filter(
     (p) => p.clientes > 0,
   )
 
-  const pagantes = clients.filter((c) => c.billingStatus === "paid").length
   const trials = clients.filter((c) => c.billingStatus === "trial").length
 
   return {
@@ -1080,9 +1113,9 @@ export async function getPlatformAnalytics(
     resumo: {
       mrr: totals.mrr,
       clientesAtivos: totals.clients,
-      pagantes,
+      pagantes: totals.pagantes,
       trials,
-      arpa: pagantes > 0 ? totals.mrr / pagantes : 0,
+      arpa: totals.arpa,
       recebidoTotal: receitaPorMes.reduce((s, v) => s + v, 0),
     },
   }

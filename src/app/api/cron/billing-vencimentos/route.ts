@@ -18,6 +18,7 @@
  * pode ter caído no fim de semana é pior que esperar uma semana.
  */
 import { createAdminClient } from "@/lib/supabase/admin"
+import { hojeBR, vencimentoEfetivo } from "@/lib/dia-br"
 import { registrarCron } from "@/lib/cron/registrar"
 import { getDefaultPlan, getRegraCiclos } from "@/lib/data/assinatura"
 import { mensalidadeDoCliente } from "@/lib/data/mensalidade"
@@ -55,11 +56,12 @@ export async function GET(req: Request) {
   return registrarCron("billing-vencimentos", async () => {
 
   const admin = createAdminClient()
-  const hoje = new Date().toISOString().slice(0, 10)
+  // Brasília, não UTC — e vencimento em fim de semana/feriado só conta no dia útil seguinte.
+  const hoje = hojeBR()
 
   const { data, error } = await admin
     .from("holdings")
-    .select("id, name, paid, due_date, suspend_on, asaas_subscription_id")
+    .select("id, name, paid, due_date, suspend_on, asaas_subscription_id, cortesia")
     .eq("paid", true)
     .not("due_date", "is", null)
     .lt("due_date", hoje)
@@ -74,11 +76,17 @@ export async function GET(req: Request) {
     due_date: string
     suspend_on: string | null
     asaas_subscription_id: string | null
-  }[]).filter((h) => !h.asaas_subscription_id) // Asaas é do webhook
+    cortesia: boolean | null
+  }[]).filter(
+    (h) =>
+      !h.asaas_subscription_id && // Asaas é do webhook
+      !h.cortesia &&
+      vencimentoEfetivo(h.due_date) < hoje,
+  )
 
   const rebaixados: { nome: string; venceu: string; suspendeEm: string }[] = []
   for (const h of candidatos) {
-    const suspendeEm = h.suspend_on ?? addDays(h.due_date, TOLERANCIA_DIAS)
+    const suspendeEm = h.suspend_on ?? addDays(vencimentoEfetivo(h.due_date), TOLERANCIA_DIAS)
     const { error: e } = await admin
       .from("holdings")
       .update({ paid: false, suspend_on: suspendeEm })
@@ -110,14 +118,14 @@ export async function GET(req: Request) {
   const { data: caiuHoje } = await admin
     .from("holdings")
     .select(
-      "id, name, due_date, suspend_on, conta_interna, encerrado_em, plan_tier, monthly_fee, price_per_unit, included_units, billing_cycle, desconto_tipo, desconto_valor, desconto_ate",
+      "id, name, due_date, suspend_on, conta_interna, cortesia, encerrado_em, plan_tier, monthly_fee, price_per_unit, included_units, billing_cycle, desconto_tipo, desconto_valor, desconto_ate",
     )
     .eq("paid", false)
     .not("suspend_on", "is", null)
     .lte("suspend_on", hoje)
 
   const aSuspender = ((caiuHoje ?? []) as Record<string, unknown>[]).filter(
-    (h) => !h.conta_interna && !h.encerrado_em,
+    (h) => !h.conta_interna && !h.cortesia && !h.encerrado_em,
   )
 
   if (aSuspender.length > 0) {

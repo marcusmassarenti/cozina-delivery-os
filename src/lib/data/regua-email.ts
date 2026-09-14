@@ -24,7 +24,10 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getDefaultPlan, precoDoPlano, type PlanId } from "@/lib/data/assinatura"
 
-const hojeISO = () => new Date().toISOString().slice(0, 10)
+import { hojeBR, vencimentoEfetivo } from "@/lib/dia-br"
+
+// Brasília, não UTC (em UTC o dia virava às 21h).
+const hojeISO = () => hojeBR()
 const fmtData = (iso: string) => {
   const [a, m, d] = iso.split("-")
   return `${d}/${m}/${a}`
@@ -51,6 +54,7 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
       "id, name, created_at, trial_ends_at, paid, due_date, suspend_on, plan_tier, monthly_fee, price_per_unit, included_units, conta_interna, billing_cycle",
     )
     .eq("conta_interna", false)
+    .eq("cortesia", false)
 
   if (!holdings?.length) return out
 
@@ -326,8 +330,11 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
     // a renovação receberia "sua fatura vence em 5 dias" de uma cobrança que
     // não existe.
     const venc = h.due_date ? String(h.due_date) : null
-    if (venc && plano && h.billing_cycle !== "anual_12x") {
-      const faltamPraVencer = diasEntre(hoje, venc)
+    // Vence em fim de semana/feriado? Os toques e o "venceu" contam do próximo
+    // dia útil (lib/dia-br.ts). A trava de duplicidade segue com a data gravada.
+    const vencUtil = venc ? vencimentoEfetivo(venc) : null
+    if (venc && vencUtil && plano && h.billing_cycle !== "anual_12x") {
+      const faltamPraVencer = diasEntre(hoje, vencUtil)
       // TRÊS toques por ciclo: 5 dias, 2 dias e no dia do vencimento.
       //
       // Antes era um só, entre 1 e 3 dias, com o tipo fixo "fatura-vencendo" —
@@ -353,7 +360,7 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
           `${toque.tipo}-${venc}` as TipoEmail,
           faturaVencendo({
             ...dados,
-            vencimento: fmtData(venc),
+            vencimento: fmtData(vencUtil),
             diasRestantes: faltamPraVencer,
             suspendeEm: h.suspend_on ? fmtData(String(h.suspend_on)) : undefined,
           }),
@@ -364,7 +371,7 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
           "fatura-vencida",
           faturaVencida({
             ...dados,
-            vencimento: fmtData(venc),
+            vencimento: fmtData(vencUtil),
             suspendeEm: h.suspend_on ? fmtData(String(h.suspend_on)) : undefined,
           }),
         )

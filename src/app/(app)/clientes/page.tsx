@@ -38,13 +38,13 @@ export default async function PlataformaPage() {
   const now = new Date(nowMs)
   const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 
-  const emAtraso = clients.filter(
-    (c) => c.billingStatus === "overdue" || c.billingStatus === "suspended",
-  ).length
+  // Quem tem fatura vencida — vem das faturas (getClientsOverview), não da marca de pago.
+  const emAtraso = totals.clientesInadimplentes
   const assinaturasAsaas = clients.filter((c) => c.asaasActive).length
 
   // ── KPIs de SaaS ──────────────────────────────────────────────────
-  const pagantes = clients.filter((c) => c.billingStatus === "paid").length
+  // Pagante = entra no MRR com valor > 0 (regra única em entraNoMrr).
+  const pagantes = totals.pagantes
   const novosNoMes = clients.filter((c) =>
     (c.createdAt ?? "").slice(0, 7) === mesAtual,
   ).length
@@ -60,7 +60,7 @@ export default async function PlataformaPage() {
       c.asaasLastEvent === "SUBSCRIPTION_CANCELED" &&
       (c.asaasLastEventAt ?? "").slice(0, 7) === mesAtual,
   ).length
-  const arpa = pagantes > 0 ? totals.mrr / pagantes : 0
+  const arpa = totals.arpa
 
   const kpisFin = [
     { label: "Receita mensal (MRR)", value: fmtBRL(totals.mrr), icon: Wallet },

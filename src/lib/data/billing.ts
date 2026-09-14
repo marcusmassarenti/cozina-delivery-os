@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 import { getCurrentHoldingId, isSuperadmin } from "@/lib/auth/permissions"
 
 export type BillingStatus =
@@ -75,7 +76,8 @@ export function computeBillingStatus(
     return today <= b.trialEndsAt ? "trial" : "suspended"
   }
   if (b.suspendOn && today >= b.suspendOn) return "suspended"
-  if (b.dueDate && today > b.dueDate) return "overdue"
+  // Vencimento em fim de semana/feriado só atrasa depois do próximo dia útil.
+  if (b.dueDate && today > vencimentoEfetivo(b.dueDate)) return "overdue"
   if (b.dueDate) return "pending"
   return "none"
 }

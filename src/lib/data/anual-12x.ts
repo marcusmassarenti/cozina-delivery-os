@@ -62,7 +62,7 @@ export async function emitirRenovacoes12x(
   const { data, error } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, billing_cycle, desconto_tipo, desconto_valor, desconto_ate, asaas_customer_id, parcelado_ate, conta_interna, encerrado_em",
+      "id, name, cortesia, plan_tier, monthly_fee, price_per_unit, included_units, billing_cycle, desconto_tipo, desconto_valor, desconto_ate, asaas_customer_id, parcelado_ate, conta_interna, encerrado_em",
     )
     .eq("billing_cycle", "anual_12x")
     .eq("paid", true)
@@ -77,7 +77,7 @@ export async function emitirRenovacoes12x(
   }
 
   const alvo = ((data ?? []) as Record<string, unknown>[]).filter(
-    (h) => !h.conta_interna && !h.encerrado_em && h.asaas_customer_id,
+    (h) => !h.conta_interna && !h.cortesia && !h.encerrado_em && h.asaas_customer_id,
   )
   if (alvo.length === 0) return out
 

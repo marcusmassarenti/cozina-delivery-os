@@ -12,6 +12,7 @@ import { aplicarDescontos } from "@/lib/data/descontos"
 import { cicloDoBanco, valorMensalExibido } from "@/lib/pricing"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { hojeBR, vencimentoEfetivo } from "@/lib/dia-br"
 import {
   getDefaultPlan,
   getRegraCiclos,
@@ -37,7 +38,8 @@ export type Fatura = {
   vencida: boolean
 }
 
-const hojeISO = () => new Date().toISOString().slice(0, 10)
+// Brasília, não UTC: em UTC o "hoje" virava às 21h e a fatura aparecia vencida 3h antes.
+const hojeISO = () => hojeBR()
 
 function mapFatura(r: Record<string, unknown>, hoje: string): Fatura {
   const status = String(r.status) as Fatura["status"]
@@ -56,7 +58,7 @@ function mapFatura(r: Record<string, unknown>, hoje: string): Fatura {
     pagoValor: r.pago_valor != null ? Number(r.pago_valor) : null,
     origem: String(r.origem ?? "auto"),
     nota: (r.nota as string | null) ?? null,
-    vencida: status === "aberta" && vencimento < hoje,
+    vencida: status === "aberta" && vencimentoEfetivo(vencimento) < hoje,
   }
 }
 
@@ -115,7 +117,7 @@ export async function getResumoCobranca(): Promise<ResumoCobranca> {
     const status = String(r.status)
     const valor = Number(r.valor ?? 0)
     if (status === "aberta") {
-      if (String(r.vencimento) < hoje) {
+      if (vencimentoEfetivo(String(r.vencimento)) < hoje) {
         out.emAtraso++
         out.valorEmAtraso += valor
         inadimplentes.add(String(r.holding_id))
@@ -157,7 +159,7 @@ export async function emitirFaturasDoMes(
   const { data: holdings } = await admin
     .from("holdings")
     .select(
-      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, billing_cycle, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
+      "id, name, plan_tier, monthly_fee, price_per_unit, included_units, due_date, trial_ends_at, created_at, conta_interna, cortesia, billing_cycle, desconto_primeira_fatura_pct, desconto_tipo, desconto_valor, desconto_ate, desconto_nota",
     )
 
   // Lojas ATIVAS por cliente — é a base do preço por loja.
@@ -182,6 +184,11 @@ export async function emitirFaturasDoMes(
     // criaria inadimplência fantasma todo mês.
     if (h.conta_interna) {
       out.puladas.push({ cliente: nome, motivo: "conta interna" })
+      continue
+    }
+    // Cortesia combinada: cliente real que usa sem pagar — não gera cobrança.
+    if (h.cortesia) {
+      out.puladas.push({ cliente: nome, motivo: "cortesia" })
       continue
     }
     const emTeste =

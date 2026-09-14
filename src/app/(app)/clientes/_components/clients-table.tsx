@@ -489,6 +489,12 @@ export function ClientsTable({
                               interna
                             </span>
                           </span>
+                        ) : c.cortesia ? (
+                          <span title={c.cortesiaNota ?? "Cortesia combinada — usa sem pagar, fora do MRR e sem fatura."}>
+                            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                              cortesia
+                            </span>
+                          </span>
                         ) : c.computedMonthly > 0 ? (
                           <>
                             {fmtBRL(c.computedMonthly)}/mês
@@ -515,7 +521,7 @@ export function ClientsTable({
                             cobrança: o cron diário só rebaixa quem TEM data.
                             Sem isso o cliente fica "em dia" pra sempre e a
                             mensalidade nunca é cobrada. */}
-                        {c.paid && !c.dueDate && !c.contaInterna && (
+                        {c.paid && !c.dueDate && !c.contaInterna && !c.cortesia && (
                           <div
                             title="Marcado como pago mas sem data de vencimento — o sistema nunca vai cobrar nem suspender este cliente."
                             className="mt-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
