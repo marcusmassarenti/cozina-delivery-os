@@ -14,6 +14,7 @@ import {
 import { todayISO } from "@/lib/data/billing"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getAReceberDelivery } from "@/lib/data/a-receber-delivery"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 
 /** Filtro de loja: "todas" (consolidado) | "rede" (sem loja) | <unitId>. */
 export type Loja = string | undefined
@@ -195,7 +196,8 @@ export async function getCaixaHoldingId(): Promise<string | null> {
 
 function entryStatus(paidDate: string | null, dueDate: string | null): EntryStatus {
   if (paidDate) return "efetivado"
-  if (dueDate && dueDate < todayISO()) return "atrasado"
+  // Vencimento em fim de semana/feriado só atrasa depois do próximo dia útil (lib/dia-br.ts).
+  if (dueDate && vencimentoEfetivo(dueDate) < todayISO()) return "atrasado"
   return "pendente"
 }
 
@@ -415,6 +417,11 @@ export async function getEntries(
 
   const { data } = await q
   let rows = (data ?? []).map(mapEntry).filter((e) => !e.hidden)
+  // O banco já trouxe due_date < hoje; aqui tira quem ainda está no prazo pelo dia útil.
+  if (filters.openOverdue) {
+    const hoje = todayISO()
+    rows = rows.filter((e) => !!e.dueDate && vencimentoEfetivo(e.dueDate) < hoje)
+  }
   if (filters.excludeAccountIds?.length) {
     const ex = new Set(filters.excludeAccountIds)
     rows = rows.filter((e) => !(e.accountId && ex.has(e.accountId)))
@@ -546,7 +553,7 @@ export async function getCaixaSummary(
     if (r.account_id && cardSet.has(r.account_id)) continue // compra de cartão → fica na fatura
     const v = Number(r.value ?? 0)
     const efetivado = !!r.paid_date
-    const atrasado = !efetivado && r.due_date && r.due_date < today
+    const atrasado = !efetivado && r.due_date && vencimentoEfetivo(r.due_date) < today
     if (r.kind === "receita") {
       if (efetivado) s.receitaEfetivada += v
       else {
@@ -650,7 +657,8 @@ export async function getCaixaDashboard(
   for (const e of pend) {
     if (e.kind !== "despesa" && e.kind !== "receita") continue
     const panel = e.kind === "despesa" ? pagamentos : recebimentos
-    const d = e.dueDate
+    // Conta pelo dia útil: vence sábado → "vence hoje" na segunda, não "em atraso".
+    const d = e.dueDate ? vencimentoEfetivo(e.dueDate) : null
     if (!d) continue
     if (d < today) {
       panel.emAtraso.count++

@@ -9,6 +9,7 @@ import {
   getCardAccountIds,
   type Loja,
 } from "@/lib/data/caixa"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 
 /**
  * Fluxo de Caixa PROJETADO — saldo corrido do caixa hoje somado às entradas e
@@ -139,7 +140,7 @@ export async function getFluxoCaixa(
     if (e.account_id && cardIds.has(e.account_id as string)) continue // cartão sai via fatura
     if (!e.due_date) continue
     const v = Number(e.value ?? 0)
-    const vencido = (e.due_date as string) < today
+    const vencido = vencimentoEfetivo(e.due_date as string) < today
     const b = at(e.due_date as string)
     if (e.kind === "receita") {
       b.entManual += v

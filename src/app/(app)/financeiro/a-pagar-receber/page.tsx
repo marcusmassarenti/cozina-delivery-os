@@ -3,6 +3,7 @@ import { ArrowDownCircle, ArrowUpCircle } from "lucide-react"
 import { getAging, type AgingLado, type AgingBucket } from "@/lib/data/aging"
 import { getCaixaHoldingId, getCategoriesFlat, type FinCategory } from "@/lib/data/caixa"
 import { fmtBRL, fmtBRLShort } from "@/lib/format"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 
 function fmtDate(d: string | null): string {
   if (!d) return "sem venc."
@@ -12,7 +13,8 @@ function fmtDate(d: string | null): string {
 function diasAtraso(due: string | null): number | null {
   if (!due) return null
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())
-  const a = new Date(`${due}T00:00:00-03:00`).getTime()
+  // A partir do dia útil do vencimento (mesma regra do aging).
+  const a = new Date(`${vencimentoEfetivo(due)}T00:00:00-03:00`).getTime()
   const b = new Date(`${today}T00:00:00-03:00`).getTime()
   const d = Math.round((b - a) / 86_400_000)
   return d > 0 ? d : null

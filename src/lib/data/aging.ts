@@ -7,6 +7,7 @@ import {
   type FinEntry,
   type Loja,
 } from "@/lib/data/caixa"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 
 /**
  * Aging de Contas a Pagar / a Receber — organiza os lançamentos EM ABERTO
@@ -60,7 +61,8 @@ function diasAtraso(due: string, today: string): number {
 }
 function bucketFor(due: string | null, today: string): AgingBucketKey {
   if (!due) return "a_vencer" // sem vencimento → trata como a vencer
-  const d = diasAtraso(due, today)
+  // Dias de atraso contam a partir do dia útil do vencimento.
+  const d = diasAtraso(vencimentoEfetivo(due), today)
   if (d <= 0) return "a_vencer"
   if (d <= 30) return "d1_30"
   if (d <= 60) return "d31_60"

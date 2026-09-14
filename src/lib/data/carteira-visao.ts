@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getRealMonthlyForUnitsForRange } from "./range-aggregation"
 import { segundaDaSemana } from "./relatorio-semanal"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 
 /**
  * A primeira tela da agência — T1 do painel.
@@ -492,8 +493,9 @@ export async function visaoDaCarteira(
     mrr: comMensalidade.reduce((s2, l) => s2 + Number(l.mensalidade), 0),
     lojasSemMensalidade: ativas.length - comMensalidade.length,
     recebido: somaCob((c) => c.pago_em !== null),
-    aReceber: somaCob((c) => c.pago_em === null && c.vencimento >= hojeISO),
-    atrasado: somaCob((c) => c.pago_em === null && c.vencimento < hojeISO),
+    // Vencimento em fim de semana/feriado vale no próximo dia útil (lib/dia-br.ts).
+    aReceber: somaCob((c) => c.pago_em === null && vencimentoEfetivo(c.vencimento) >= hojeISO),
+    atrasado: somaCob((c) => c.pago_em === null && vencimentoEfetivo(c.vencimento) < hojeISO),
     despesasPagas: pagas,
     // Sobra usa só dinheiro que se MOVEU. Com o previsto, seria uma sobra
     // que existe na planilha e não na conta.

@@ -2,6 +2,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { vencimentoEfetivo } from "@/lib/dia-br"
 
 /**
  * O P&L da AGÊNCIA — T8.
@@ -135,7 +136,7 @@ export async function financeiroDaAgencia(periodo: {
     /* PAGO GANHA DE VENCIDO, sempre — a mesma ordem do `computeBillingStatus`
        da cobrança do SaaS. Conta pago depois do vencimento é conta paga, e
        marcá-la de vermelha faria a tela cobrar dinheiro que já entrou. */
-    situacao: c.pago_em ? "pago" : c.vencimento < hoje ? "atrasado" : "aberto",
+    situacao: c.pago_em ? "pago" : vencimentoEfetivo(c.vencimento) < hoje ? "atrasado" : "aberto",
   }))
 
   const despesas: Despesa[] = ((despRaw ?? []) as unknown as {
