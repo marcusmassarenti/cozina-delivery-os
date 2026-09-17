@@ -12,7 +12,7 @@ import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 import { getCancelamentoCestaByUnits } from "./ifood-imported"
 
 import type { PlatformId } from "@/components/platform-logo"
-import { getFinanceiroResumoByUnits } from "@/lib/data/ifood-imported"
+import { getFinanceiroResumoByUnitsOuErro } from "@/lib/data/ifood-imported"
 import { getReceitaPropriaByUnits } from "@/lib/data/lancamentos"
 import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
@@ -29,12 +29,78 @@ export type EvolucaoPonto = {
  * Métricas por unidade no mês, somando só as plataformas pedidas.
  * Retorna um Map keyed por unitId (mesmas chaves de `unitIds`).
  */
+type ResumoIfood = Awaited<
+  ReturnType<typeof getFinanceiroResumoByUnitsOuErro>
+>["resumo"]
+
+/** O mês calculado + o que NÃO veio. */
+export type MetricasDoMes = {
+  metricas: Map<string, UnitMetrics>
+  /**
+   * Plataformas cuja consulta falhou mesmo depois de tentar de novo. Vazio =
+   * veio tudo. Quando tem algo aqui, os números do mês estão INCOMPLETOS e
+   * quem vai AFIRMAR um valor (o Nino, um e-mail) tem de desistir dele.
+   */
+  falhas: string[]
+  /** O resumo do iFood já buscado — pra reaproveitar em vez de consultar de novo. */
+  ifoodResumo: ResumoIfood | null
+}
+
+/**
+ * O resumo do iFood com até 3 tentativas.
+ *
+ * É a consulta mais pesada do mês, e é a que falha quando muitas chegam
+ * juntas. Tentar de novo com uma pausa curta resolve a maioria dos casos sem
+ * ninguém perceber; só depois da terceira o erro sobe.
+ */
+async function resumoIfoodComRetentativa(
+  unitIds: string[],
+  year: number,
+  month: number,
+): Promise<{ resumo: ResumoIfood; erro: string | null }> {
+  let ultimo = await getFinanceiroResumoByUnitsOuErro(unitIds, year, month)
+  for (let tentativa = 1; tentativa < 3 && ultimo.erro; tentativa++) {
+    await new Promise((r) => setTimeout(r, 400 * tentativa))
+    ultimo = await getFinanceiroResumoByUnitsOuErro(unitIds, year, month)
+  }
+  if (ultimo.erro) {
+    console.error(
+      `[metricas] iFood ${year}-${month} falhou após 3 tentativas: ${ultimo.erro}`,
+    )
+  }
+  return ultimo
+}
+
 export async function getUnitMetricsForMonth(
   unitIds: string[],
   platforms: PlatformId[],
   year: number,
   month: number,
 ): Promise<Map<string, UnitMetrics>> {
+  return (await getUnitMetricsForMonthComFalhas(unitIds, platforms, year, month))
+    .metricas
+}
+
+/**
+ * O mesmo cálculo de `getUnitMetricsForMonth`, dizendo o que falhou.
+ *
+ * ── POR QUE EXISTE (Marcus, 17/09/26) ────────────────────────────────────
+ * Consulta que falhava virava mapa vazio, e mapa vazio é indistinguível de
+ * "não vendeu". O Nino montou a análise do ano da JK com o iFood de março e
+ * de junho faltando e anunciou "março caiu 74%" — os R$ 56.835,90 que ele deu
+ * como faturamento do mês eram só a Keeta; o real era R$ 252.068. E a promoção
+ * sumiu em cinco meses, virando "cortou totalmente o marketing" numa loja que
+ * investia de R$ 16 mil a R$ 28 mil todo mês.
+ *
+ * As telas seguem usando a versão que devolve só o mapa (e ganham a nova
+ * tentativa). Quem precisa AFIRMAR um número usa esta.
+ */
+export async function getUnitMetricsForMonthComFalhas(
+  unitIds: string[],
+  platforms: PlatformId[],
+  year: number,
+  month: number,
+): Promise<MetricasDoMes> {
   const want = new Set(platforms)
   // Receita própria (balcão, salão, telefone) não é de plataforma nenhuma.
   // Entra só quando a pergunta é sobre a loja INTEIRA — filtrar por "iFood" e
@@ -44,10 +110,8 @@ export async function getUnitMetricsForMonth(
   const querTodas = (["ifood", "99food", "keeta", "cardapioweb"] as const).every(
     (p) => want.has(p),
   )
-  const [ifood, nine, keeta, cw, propria, cestaCancelada] = await Promise.all([
-    want.has("ifood")
-      ? getFinanceiroResumoByUnits(unitIds, year, month)
-      : null,
+  const [ifoodR, nine, keeta, cw, propria, cestaCancelada] = await Promise.all([
+    want.has("ifood") ? resumoIfoodComRetentativa(unitIds, year, month) : null,
     want.has("99food")
       ? getNinefoodResumoByUnits(unitIds, year, month)
       : null,
@@ -63,6 +127,9 @@ export async function getUnitMetricsForMonth(
     // mi e o Marcus leu a diferença no tooltip (31/08/26).
     want.has("ifood") ? getCancelamentoCestaByUnits(unitIds, year, month) : null,
   ])
+
+  const ifood = ifoodR?.resumo ?? null
+  const falhas: string[] = ifoodR?.erro ? ["iFood"] : []
 
   const out = new Map<string, UnitMetrics>()
   for (const id of unitIds) {
@@ -139,7 +206,7 @@ export async function getUnitMetricsForMonth(
       hasData,
     })
   }
-  return out
+  return { metricas: out, falhas, ifoodResumo: ifood }
 }
 
 /**

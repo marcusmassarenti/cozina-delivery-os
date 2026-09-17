@@ -49,6 +49,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.27.1",
+    date: "2026-09-17",
+    tag: "Correção",
+    title: "Nino AI não confunde mais \u201cnão carregou\u201d com \u201cnão vendeu\u201d",
+    summary:
+      "Quando o histórico de um mês não carregava, o Nino recebia o mês sem o iFood e tirava conclusões em cima disso. Agora ele avisa que o número não veio.",
+    areas: [
+      {
+        area: "Nino AI",
+        items: [
+          {
+            kind: "correcao",
+            title: "Mês que não carregou deixa de virar queda",
+            antes:
+              "Se a consulta de um mês falhasse, o histórico chegava ao Nino sem o iFood daquele mês. Ele podia anunciar uma queda forte ou dizer que a loja cortou o marketing \u2014 com números que eram só de parte das plataformas.",
+            depois:
+              "O sistema tenta de novo antes de desistir. Se ainda assim o mês não vier, ele chega marcado como indisponível: o Nino não usa esse mês em comparação nem projeção e avisa que basta perguntar de novo.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.27.0",
     date: "2026-09-11",
     tag: "Novidade",

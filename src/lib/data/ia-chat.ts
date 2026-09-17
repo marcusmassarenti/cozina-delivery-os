@@ -18,11 +18,13 @@ import { requireAuth } from "@/lib/auth/guards"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
 import { getVisibleUnits } from "@/lib/data/units"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
-import { getUnitMetricsForMonth } from "@/lib/data/comparativo"
+import {
+  getUnitMetricsForMonthComFalhas,
+  type MetricasDoMes,
+} from "@/lib/data/comparativo"
 import {
   getCancelamentosPorMotivo,
   getCancelamentoCestaByUnits,
-  getFinanceiroResumoByUnits,
   getPromocoesByUnits,
   getCoverageMatrix,
   type PromocoesSnapshot,
@@ -591,14 +593,19 @@ function montarContexto(
          * exemplo, e exemplo ganha. Então a marca vai no exemplo.
          */
         historico_mensal: historico.map((h) =>
-          linha(
-            h.mes === periodo ? `${h.mes} (PARCIAL)` : h.mes,
-            h.bruto,
-            h.liquido,
-            h.pedidos,
-            h.cancelados,
-            h.promocoes,
-          ),
+          // Mês que não carregou vai com os campos VAZIOS. Zero seria lido
+          // como "não vendeu" — e foi exatamente assim que nasceu o "março
+          // caiu 74%" da JK.
+          h.indisponivel
+            ? linha(`${h.mes} (INDISPONIVEL)`, null, null, null, null, null)
+            : linha(
+                h.mes === periodo ? `${h.mes} (PARCIAL)` : h.mes,
+                h.bruto,
+                h.liquido,
+                h.pedidos,
+                h.cancelados,
+                h.promocoes,
+              ),
         ),
         // Até que dia ESTA loja tem dado, por plataforma. É o denominador de
         // qualquer projeção do mês corrente — ver a regra no prompt.
@@ -645,12 +652,21 @@ function montarContexto(
   )
 
   // Histórico da REDE por mês (soma das lojas) — pra "resumo do ano da rede".
-  const redeMes = new Map<string, { bruto: number; pedidos: number }>()
+  const redeMes = new Map<
+    string,
+    { bruto: number; pedidos: number; indisponivel: boolean }
+  >()
   for (const serie of histMap.values()) {
     for (const m of serie) {
-      const cur = redeMes.get(m.mes) ?? { bruto: 0, pedidos: 0 }
-      cur.bruto += m.bruto
-      cur.pedidos += m.pedidos
+      const cur =
+        redeMes.get(m.mes) ?? { bruto: 0, pedidos: 0, indisponivel: false }
+      // Uma loja sem o mês já basta: somar as outras daria um total da rede
+      // menor que o real, com cara de total.
+      if (m.indisponivel) cur.indisponivel = true
+      else {
+        cur.bruto += m.bruto
+        cur.pedidos += m.pedidos
+      }
       redeMes.set(m.mes, cur)
     }
   }
@@ -659,7 +675,9 @@ function montarContexto(
   const historico_rede_mensal = [...redeMes.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([mes, v]) =>
-      linha(mes === periodo ? `${mes} (PARCIAL)` : mes, round(v.bruto), v.pedidos),
+      v.indisponivel
+        ? linha(`${mes} (INDISPONIVEL)`, null, null)
+        : linha(mes === periodo ? `${mes} (PARCIAL)` : mes, round(v.bruto), v.pedidos),
     )
 
   const payload = {
@@ -669,8 +687,9 @@ function montarContexto(
     // nome do campo em toda linha. Esta é a legenda das colunas.
     legenda_das_tabelas: {
       historico_mensal:
-        "mes|bruto|liquido|pedidos|cancelados|promocoes_marketing_custeado_pela_loja — o mês marcado (PARCIAL) está INCOMPLETO: NUNCA subtraia ele de um mês fechado. Pra comparar, use comparativo_mesmo_recorte.",
-      historico_rede_mensal: "mes|faturamento_bruto|pedidos",
+        "mes|bruto|liquido|pedidos|cancelados|promocoes_marketing_custeado_pela_loja — o mês marcado (PARCIAL) está INCOMPLETO: NUNCA subtraia ele de um mês fechado. Pra comparar, use comparativo_mesmo_recorte. O mês marcado (INDISPONIVEL) não carregou nesta resposta: os campos vêm vazios de propósito.",
+      historico_rede_mensal:
+        "mes|faturamento_bruto|pedidos — o mês marcado (INDISPONIVEL) não carregou nesta resposta: campos vazios de propósito.",
       por_plataforma: "plataforma|bruto|liquido|taxa_da_plataforma",
       periodos_por_loja: "loja|bruto|pedidos|cancelados",
       periodos_por_loja_plataforma: "loja|plataforma|bruto|liquido",
@@ -1186,6 +1205,11 @@ type MesLoja = {
   cancelados: number
   /** Promoção custeada pela loja no mês — o "marketing" do lojista. */
   promocoes: number
+  /**
+   * Preenchido quando a consulta do mês FALHOU (ex.: "iFood"). Aí os números
+   * acima são zeros de preenchimento e não podem chegar ao modelo como valor.
+   */
+  indisponivel?: string
 }
 
 /**
@@ -1200,34 +1224,56 @@ async function historicoMensalDoAno(
   ateMes: number,
 ): Promise<Map<string, MesLoja[]>> {
   const meses = Array.from({ length: ateMes }, (_, i) => i + 1)
-  // Métrica e cesta de cancelados de cada mês, tudo em paralelo — o bruto da
-  // série tem que seguir a MESMA régua do mês corrente (total com cancelados),
-  // senão o histórico não fecha com o número que a tela mostra.
-  //
-  // A promoção custeada pela loja vem junto: sem ela na SÉRIE, o Nino só
-  // enxergava marketing do mês corrente e respondia "não tenho esse dado" pra
-  // qualquer pergunta comparativa ("essas lojas reduziram o investimento?").
-  // O resumo do iFood já é buscado dentro de getUnitMetricsForMonth com os
-  // mesmos argumentos e é memoizado por mês fechado — pedir de novo aqui é
-  // acerto de cache, não consulta nova.
-  // `getCancelamentoCestaByUnits` saiu daqui: a cesta dos cancelados agora
-  // vive dentro do `getUnitMetricsForMonth`, uma vez só.
-  const [mapsPorMes, finPorMes] = await Promise.all([
-    Promise.all(
-      meses.map((m) => getUnitMetricsForMonth(unitIds, TODAS_PLATAFORMAS, year, m)),
-    ),
-    Promise.all(meses.map((m) => getFinanceiroResumoByUnits(unitIds, year, m))),
-  ])
+
+  /* ── 3 MESES POR VEZ, E NÃO OS 9 JUNTOS (17/09/26) ─────────────────────
+   * Eram duas levas em paralelo — as métricas de cada mês e, de novo, o
+   * resumo do iFood de cada mês pra tirar a promoção. Rede inteira × 9 meses
+   * × as consultas de cada plataforma chegando no banco de uma vez. Algumas
+   * falhavam, a falha virava "sem dado", e o Nino montou a análise do ano da
+   * JK sem o iFood de março e junho e sem a promoção de cinco meses.
+   *
+   * Agora a promoção sai do MESMO resumo do iFood já buscado (metade das
+   * chamadas), os meses vão em lotes de 3, e o mês que falhar mesmo assim
+   * entra MARCADO em vez de sumir. Mês fechado bem-sucedido fica em cache,
+   * então o custo dos lotes é quase só na primeira pergunta do dia. */
+  const LOTE = 3
+  const resultados: MetricasDoMes[] = []
+  for (let i = 0; i < meses.length; i += LOTE) {
+    resultados.push(
+      ...(await Promise.all(
+        meses
+          .slice(i, i + LOTE)
+          .map((m) =>
+            getUnitMetricsForMonthComFalhas(unitIds, TODAS_PLATAFORMAS, year, m),
+          ),
+      )),
+    )
+  }
+
   const hist = new Map<string, MesLoja[]>()
   for (const id of unitIds) hist.set(id, [])
   meses.forEach((m, i) => {
-    const map = mapsPorMes[i]
-    const fin = finPorMes[i]
+    const { metricas, falhas, ifoodResumo } = resultados[i]!
+    const mes = `${String(m).padStart(2, "0")}/${year}`
     for (const id of unitIds) {
-      const mt = map.get(id)
+      // Consulta falhou: o mês entra MARCADO, nunca some nem vira número
+      // menor. A marca viaja até o contexto — ver `montarContexto`.
+      if (falhas.length > 0) {
+        hist.get(id)!.push({
+          mes,
+          bruto: 0,
+          liquido: 0,
+          pedidos: 0,
+          cancelados: 0,
+          promocoes: 0,
+          indisponivel: falhas.join(", "),
+        })
+        continue
+      }
+      const mt = metricas.get(id)
       if (!mt || !mt.hasData) continue
       hist.get(id)!.push({
-        mes: `${String(m).padStart(2, "0")}/${year}`,
+        mes,
         // A cesta dos cancelados JÁ vem dentro do `getUnitMetricsForMonth`
         // desde 31/08/26 (a régua do portal foi pra dentro da função pra
         // parar de existir em dois lugares). Somar aqui de novo dobrava.
@@ -1237,7 +1283,7 @@ async function historicoMensalDoAno(
         cancelados: mt.cancelados,
         // Vem negativo do extrato (é dedução); o lojista pensa nele como
         // valor investido, então entra positivo.
-        promocoes: round(Math.abs(fin.get(id)?.promocaoLoja ?? 0)),
+        promocoes: round(Math.abs(ifoodResumo?.get(id)?.promocaoLoja ?? 0)),
       })
     }
   })
@@ -1519,7 +1565,7 @@ O contexto tem:
 - NÃO NARRE A CONSULTA. Ao usar uma ferramenta, não escreva "deixa eu buscar", "vou consultar", "preciso verificar" nem anuncie o que vai fazer: a tela já mostra sozinha que você está consultando, e a frase ainda emenda no resultado. Chame a ferramenta e responda direto com o que ela trouxe.
 - FERRAMENTAS: além do contexto acima, você pode BUSCAR dados que não vêm prontos. Elas existem porque carregar tudo em toda pergunta sairia caro e lento — então o que é pesado fica sob demanda. USE sem hesitar quando a pergunta pedir, e NUNCA diga "não tenho esse dado" antes de checar se alguma delas cobre o assunto: produtos_vendidos (item mais/menos vendido, o que caiu), financeiro_e_caixa (saldo, contas a pagar/receber, vencidos, projeção de caixa), dre_e_resultado (lucro, custos, margem por plataforma), funil_e_perfil_de_venda (conversão, horário de pico, forma de pagamento, entrega x retirada), programas_e_repasses (Super Restaurante, plano de comissão, repasse da Keeta), producao_e_insumos (quanto comprar) e status_das_integracoes (até quando cada plataforma trouxe dado). Se uma devolver "erro", responda o que der com o resto e diga com franqueza qual pedaço falhou.
 - Pra QUALQUER OUTRO RECORTE de datas — uma semana ("de 13 a 20"), um fim de semana, um dia isolado, "a semana passada", "os últimos 7 dias" — use a FERRAMENTA faturamento_por_periodo (descrita abaixo). Nunca some os dias de cabeça e nunca diga que não tem o recorte: a ferramenta calcula.
-- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução". O "historico_mensal" de cada loja tem AINDA a última coluna "promocoes_marketing_custeado_pela_loja": é o investimento em marketing daquela loja MÊS A MÊS. É com ela que você responde qualquer pergunta comparativa sobre marketing ("essas lojas reduziram o investimento?", "quem cortou promoção?", "o marketing subiu ou caiu?") — compare os meses e diga em R$ e em %.
+- "historico_rede_mensal" e, em cada loja, "historico_mensal": a série mês a mês do ANO corrente (faturamento, líquido, pedidos, cancelados). MÊS MARCADO (INDISPONIVEL): a consulta daquele mês FALHOU agora — NÃO é mês sem venda. NUNCA diga que a loja vendeu zero, caiu, cresceu ou cortou marketing nesse mês; NUNCA estime o valor; NUNCA use esse mês em comparação, média, projeção, ranking ou tendência (compare só entre os meses que vieram). Avise o dono UMA vez, numa frase, que o número daquele mês não carregou nesta resposta e que basta perguntar de novo em instantes. Use pra "resumo do ano", "compare com o mês passado", "qual mês foi melhor", "evolução". O "historico_mensal" de cada loja tem AINDA a última coluna "promocoes_marketing_custeado_pela_loja": é o investimento em marketing daquela loja MÊS A MÊS. É com ela que você responde qualquer pergunta comparativa sobre marketing ("essas lojas reduziram o investimento?", "quem cortou promoção?", "o marketing subiu ou caiu?") — compare os meses e diga em R$ e em %.
 - Em cada loja, "marketing": o que a LOJA investiu em promoção no mês (R$ e % do faturamento). ATENÇÃO ao vocabulário do dono: quando ele diz "marketing", "investimento", "mídia", "anúncio" ou "publicidade", ele quase sempre quer dizer PROMOÇÃO/DESCONTO CUSTEADO PELA LOJA — que é exatamente este campo. Responda com ele em vez de dizer que não tem o dado. Se vier null, a loja não bancou promoção no mês (o que é uma resposta: ela NÃO investiu). O que o sistema realmente não tem é gasto com Google Ads, influenciador ou mídia fora das plataformas — só diga isso se ele perguntar especificamente por esses.
 - Em cada loja, "retorno_das_promocoes": o RETORNO do marketing — roas_da_loja (quantos reais de venda cada real investido pela loja trouxe), campanhas_ativas, venda_gerada_pelas_promocoes e o investido no período. ROAS 6 quer dizer R$ 6 de venda por R$ 1 investido. Use pra "vale a pena a promoção", "qual meu ROAS", "a promoção tá dando retorno", "qual loja aproveita melhor". ATENÇÃO À RÉGUA: este bloco vem do relatório de Promoções, cuja janela é escolhida na exportação, tem qualquer tamanho e NÃO é o mês calendário — o campo "periodo" diz exatamente de quando é. SEMPRE cite o período ao dar o ROAS ("no período de X a Y, seu ROAS foi Z"), e NUNCA some nem compare o "investido_..._no_periodo" daqui com o valor mensal de promoção do "historico_mensal": são recortes diferentes e misturá-los produz dois números de marketing brigando. Pra QUANTO foi investido, use o mensal; pra RETORNO, use este. Se o bloco inteiro vier null, a loja não tem esse relatório importado — aí você tem o investimento (mensal) mas não o retorno, e deve dizer isso em vez de estimar ROAS. Se "roas_da_loja" vier null mas "sem_roas_porque" trouxer texto, NÃO diga que falta dado: leia o motivo e explique (loja que não custeou nada teve a promoção bancada pelo iFood/rede — ela vendeu sem pôr dinheiro, o que é excelente e não "sem informação").
 - Em cada loja, "quebra_taxas_ifood": pra onde vai o desconto do iFood no mês — comissao, entrega, servicos_logisticos, promocoes (custeada pela loja) e outros_descontos — este último junta o pacote de anúncios e a MENSALIDADE do plano iFood (57 lojas pagam, de R$ 55 a R$ 150/mês, cobrança de período e não de pedido). Em R$. Use pra "pra onde vai minha taxa", "quanto pago de comissão", "o iFood tá pesando onde". É SÓ do iFood (99Food/Keeta ainda não trazem esse detalhe) — deixe isso claro. Se vier null, a loja não tem lançamento de iFood no mês.
