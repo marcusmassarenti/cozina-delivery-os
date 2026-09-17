@@ -11,6 +11,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { comRetentativa } from "@/lib/data/paginate"
 import { textoOuNull } from "@/lib/format"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
@@ -71,13 +72,18 @@ async function pageAll<T>(
   build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
   pageSize = 1000,
   maxRows = 200000,
+  /** Página que falhou mesmo com as novas tentativas: o resultado é PARCIAL. */
+  onErro?: (mensagem: string) => void,
 ): Promise<T[]> {
   const all: T[] = []
   let from = 0
   while (from < maxRows) {
-    const { data, error } = await build(from, from + pageSize - 1)
+    const { data, error } = await comRetentativa(() =>
+      build(from, from + pageSize - 1),
+    )
     if (error) {
       console.error("keeta pageAll error:", error.message)
+      onErro?.(error.message)
       break
     }
     if (!data || data.length === 0) break
@@ -101,10 +107,16 @@ export async function getKeetaResumoByUnits(
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
+  /**
+   * Recebe o que falhou na leitura. Com algo aqui, o resumo está INCOMPLETO —
+   * ver `getUnitMetricsForMonthComFalhas`. Opcional: as telas não passam.
+   */
+  falhas?: string[],
 ): Promise<Map<string, KeetaResumo>> {
   const out = new Map<string, KeetaResumo>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
+  const registrar = (m: string) => falhas?.push(`keeta: ${m}`)
 
   // Loja diária (bruto, pedidos, cancelados)
   const loja = await pageAll<{
@@ -126,7 +138,7 @@ export async function getKeetaResumoByUnits(
       q = q.gte("data", dateRange.start).lte("data", dateRange.end)
     }
     return q.order("id").range(a, b)
-  })
+  }, undefined, undefined, registrar)
   for (const r of loja) {
     const cur = out.get(r.unit_id) ?? emptyKeeta()
     cur.bruto += Number(r.vendas_itens) || 0
@@ -160,7 +172,7 @@ export async function getKeetaResumoByUnits(
       q = q.gte("data", dateRange.start).lte("data", dateRange.end)
     }
     return q.order("id").range(a, b)
-  })
+  }, undefined, undefined, registrar)
   const brutoFromPedidos = new Map<string, number>()
   const countFromPedidos = new Map<string, number>()
   for (const r of pedidos) {

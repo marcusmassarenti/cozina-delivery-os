@@ -110,12 +110,18 @@ export async function getUnitMetricsForMonthComFalhas(
   const querTodas = (["ifood", "99food", "keeta", "cardapioweb"] as const).every(
     (p) => want.has(p),
   )
+  // Recebem o que falhou na leitura da 99 e da Keeta (paginação/RPC que não
+  // terminou mesmo tentando de novo). Com algo aqui, o mês está incompleto.
+  const falhasNine: string[] = []
+  const falhasKeeta: string[] = []
   const [ifoodR, nine, keeta, cw, propria, cestaCancelada] = await Promise.all([
     want.has("ifood") ? resumoIfoodComRetentativa(unitIds, year, month) : null,
     want.has("99food")
-      ? getNinefoodResumoByUnits(unitIds, year, month)
+      ? getNinefoodResumoByUnits(unitIds, year, month, undefined, falhasNine)
       : null,
-    want.has("keeta") ? getKeetaResumoByUnits(unitIds, year, month) : null,
+    want.has("keeta")
+      ? getKeetaResumoByUnits(unitIds, year, month, undefined, falhasKeeta)
+      : null,
     want.has("cardapioweb")
       ? getCardapioWebResumoByUnits(unitIds, year, month)
       : null,
@@ -129,7 +135,11 @@ export async function getUnitMetricsForMonthComFalhas(
   ])
 
   const ifood = ifoodR?.resumo ?? null
-  const falhas: string[] = ifoodR?.erro ? ["iFood"] : []
+  const falhas: string[] = [
+    ...(ifoodR?.erro ? ["iFood"] : []),
+    ...(falhasNine.length > 0 ? ["99"] : []),
+    ...(falhasKeeta.length > 0 ? ["Keeta"] : []),
+  ]
 
   const out = new Map<string, UnitMetrics>()
   for (const id of unitIds) {

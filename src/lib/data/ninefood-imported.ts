@@ -13,7 +13,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { fetchAllRows } from "@/lib/data/paginate"
+import { comRetentativa, fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { cancelamentoRankingLabel } from "@/lib/ninefood/cancelamento"
@@ -36,7 +36,9 @@ async function pageAll<T>(
   const all: T[] = []
   let from = 0
   while (from < maxRows) {
-    const { data, error } = await build(from, from + pageSize - 1)
+    const { data, error } = await comRetentativa(() =>
+      build(from, from + pageSize - 1),
+    )
     if (error) {
       console.error("ninefood-imported pageAll error:", error.message)
       break
@@ -132,17 +134,21 @@ async function getNinefoodPedidosPorDia(
   unitIds: string[],
   de: string,
   ate: string,
+  onErro?: (mensagem: string) => void,
 ): Promise<Map<string, Map<string, DiaPedidos>>> {
   const out = new Map<string, Map<string, DiaPedidos>>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
-  const { data, error } = await admin.rpc("ninefood_pedidos_diario", {
-    p_unit_ids: unitIds,
-    p_de: de,
-    p_ate: ate,
-  })
+  const { data, error } = await comRetentativa(() =>
+    admin.rpc("ninefood_pedidos_diario", {
+      p_unit_ids: unitIds,
+      p_de: de,
+      p_ate: ate,
+    }),
+  )
   if (error) {
     console.error("getNinefoodPedidosPorDia:", error.message)
+    onErro?.(error.message)
     return out
   }
   for (const r of (data ?? []) as {
@@ -169,15 +175,21 @@ export async function getNinefoodResumoByUnits(
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
+  /**
+   * Recebe o que falhou na leitura. Com algo aqui, o resumo está INCOMPLETO —
+   * ver `getUnitMetricsForMonthComFalhas`. Opcional: as telas não passam.
+   */
+  falhas?: string[],
 ): Promise<Map<string, NinefoodResumo>> {
   const out = new Map<string, NinefoodResumo>()
   if (unitIds.length === 0) return out
+  const registrar = (m: string) => falhas?.push(`99: ${m}`)
 
   const admin = createAdminClient()
   const mm = String(month).padStart(2, "0")
   const de = dateRange?.start ?? `${year}-${mm}-01`
   const ate = dateRange?.end ?? isoDate(new Date(year, month, 0))
-  const pedidosPorDia = await getNinefoodPedidosPorDia(unitIds, de, ate)
+  const pedidosPorDia = await getNinefoodPedidosPorDia(unitIds, de, ate, registrar)
   // Pagina: ninefood_daily_loja é 1 linha por loja por dia; com a rede
   // crescendo (~35 lojas × 30 dias = 1050) passa do cap de 1000 do Supabase e
   // descartaria dias silenciosamente. fetchAllRows + .order('id') resolve.
@@ -211,6 +223,7 @@ export async function getNinefoodResumoByUnits(
       return q.order("id").range(from, to)
     },
     "getNinefoodResumoByUnits",
+    { onErro: registrar },
   )
 
   // Agrega em JS por unit_id
@@ -247,7 +260,13 @@ export async function getNinefoodResumoByUnits(
   // entra pelas MÉTRICAS OPERACIONAIS (avaliação, aceitação, tempo — que a
   // API não expõe) e segue sendo a fonte do financeiro nos dias/lojas SEM
   // API. Loja só-planilha não muda em nada.
-  const apiPorDia = await ninefoodApiPorDia(unitIds, year, month, dateRange)
+  const apiPorDia = await ninefoodApiPorDia(
+    unitIds,
+    year,
+    month,
+    dateRange,
+    registrar,
+  )
   const diasApiPorUnit = new Map<string, Set<string>>()
   for (const [u, dias] of apiPorDia) diasApiPorUnit.set(u, new Set(dias.keys()))
 
@@ -620,6 +639,7 @@ async function ninefoodApiPorDia(
   year: number,
   month: number,
   dateRange?: { start: string; end: string },
+  onErro?: (mensagem: string) => void,
 ): Promise<Map<string, Map<string, DiaApi>>> {
   const out = new Map<string, Map<string, DiaApi>>()
   if (unitIds.length === 0) return out
@@ -630,13 +650,16 @@ async function ninefoodApiPorDia(
   const ate = dateRange?.end ?? isoDate(new Date(year, month, 0))
 
   const admin = createAdminClient()
-  const { data, error } = await admin.rpc("ninefood_api_diario", {
-    p_unit_ids: unitIds,
-    p_de: de,
-    p_ate: ate,
-  })
+  const { data, error } = await comRetentativa(() =>
+    admin.rpc("ninefood_api_diario", {
+      p_unit_ids: unitIds,
+      p_de: de,
+      p_ate: ate,
+    }),
+  )
   if (error) {
     console.error("ninefoodApiPorDia:", error.message)
+    onErro?.(error.message)
     return out
   }
 
