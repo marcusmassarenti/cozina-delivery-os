@@ -42,3 +42,33 @@ export function focarAbaDoCampoInvalido(
     })
   })
 }
+
+/** Campos da aba "Operação". Todo o resto do cadastro fica em "Dados". */
+const CAMPOS_DA_OPERACAO = new Set([
+  "tipo_operacao",
+  "regime_fiscal",
+  "tipo_entrega",
+  "data_inauguracao",
+  "data_encerramento",
+  "platforms",
+])
+
+/**
+ * A aba do primeiro erro que o SERVIDOR devolveu — o complemento da função
+ * acima, que só cobre o que o navegador reprova.
+ *
+ * ── POR QUE (Marcus, 19/09/26) ───────────────────────────────────────────
+ * O CNPJ é a única exigência que o navegador não cobra: só o servidor. O erro
+ * dele aparece na aba "Dados"; quem clicava em Criar estando em "Operação"
+ * via só a frase do rodapé e nada destacado. Foi assim que o cadastro do KFC
+ * Parque Shopping (DG, 18/09) "não deixava criar com o encerramento" — o
+ * encerramento era só o último campo mexido.
+ */
+export function abaDoErroDoServidor(
+  fieldErrors: Record<string, string> | undefined,
+): "dados" | "operacao" | null {
+  const campos = Object.keys(fieldErrors ?? {})
+  if (campos.length === 0) return null
+  // "Dados" primeiro: é a primeira aba, e o CNPJ (o caso real) mora nela.
+  return campos.some((c) => !CAMPOS_DA_OPERACAO.has(c)) ? "dados" : "operacao"
+}

@@ -1,6 +1,9 @@
 "use client"
 
-import { focarAbaDoCampoInvalido } from "@/components/unidades/aba-com-erro"
+import {
+  abaDoErroDoServidor,
+  focarAbaDoCampoInvalido,
+} from "@/components/unidades/aba-com-erro"
 import { DadosDaUnidade, OperacaoDaUnidade } from "@/components/unidades/dados-da-unidade"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import * as React from "react"
@@ -184,6 +187,12 @@ const [solicitacao99State, solicitar99Action] = useActionState(
   const [cidade, setCidade] = React.useState(unit.city ?? "")
   const router = useRouter()
 
+  // Servidor recusou (ex.: CNPJ, que o navegador não cobra): leva à aba do
+  // campo com erro — ver `abaDoErroDoServidor`.
+  React.useEffect(() => {
+    const aba = abaDoErroDoServidor(state.fieldErrors)
+    if (aba) setAba(aba)
+  }, [state])
   React.useEffect(() => {
     if (solicitacaoState.ok) router.refresh()
   }, [solicitacaoState.ok, router])

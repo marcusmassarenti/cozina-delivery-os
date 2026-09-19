@@ -276,7 +276,15 @@ export async function createUnit(
   })
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
+    // A mensagem diz O QUE falta. "Corrija os campos destacados" não servia
+    // quando o campo estava na OUTRA aba — não havia nada destacado à vista
+    // (KFC Parque Shopping, DG, 18/09/26: o CNPJ faltava na aba "Dados" e a
+    // pessoa estava em "Operação", e culpou o campo de encerramento).
+    return {
+      ok: false,
+      fieldErrors,
+      message: `Falta corrigir: ${Object.values(fieldErrors).join(" · ")}.`,
+    }
   }
 
   try {
@@ -549,7 +557,15 @@ export async function updateUnit(
   })
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { ok: false, fieldErrors, message: "Corrija os campos destacados." }
+    // A mensagem diz O QUE falta. "Corrija os campos destacados" não servia
+    // quando o campo estava na OUTRA aba — não havia nada destacado à vista
+    // (KFC Parque Shopping, DG, 18/09/26: o CNPJ faltava na aba "Dados" e a
+    // pessoa estava em "Operação", e culpou o campo de encerramento).
+    return {
+      ok: false,
+      fieldErrors,
+      message: `Falta corrigir: ${Object.values(fieldErrors).join(" · ")}.`,
+    }
   }
 
   try {

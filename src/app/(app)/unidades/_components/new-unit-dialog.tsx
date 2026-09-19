@@ -1,6 +1,9 @@
 "use client"
 
-import { focarAbaDoCampoInvalido } from "@/components/unidades/aba-com-erro"
+import {
+  abaDoErroDoServidor,
+  focarAbaDoCampoInvalido,
+} from "@/components/unidades/aba-com-erro"
 import { DadosDaUnidade, OperacaoDaUnidade } from "@/components/unidades/dados-da-unidade"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CampoCnpj } from "@/components/unidades/campo-cnpj"
@@ -92,6 +95,12 @@ export function NewUnitDialog({
    * exatamente quem está pronto pra conectar; mandar embora nessa hora é
    * perder a única pessoa com o contexto na cabeça.
    */
+  // Servidor recusou (ex.: CNPJ, que o navegador não cobra): leva à aba do
+  // campo com erro — ver `abaDoErroDoServidor`.
+  React.useEffect(() => {
+    const aba = abaDoErroDoServidor(state.fieldErrors)
+    if (aba) setAba(aba)
+  }, [state])
   React.useEffect(() => {
     if (state.ok && state.criada) {
       setEtapa("conectar")
