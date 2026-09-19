@@ -5,17 +5,106 @@ import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 
 import {
   Fila99Panel,
+  type LojaSemPedido99,
   type Solicitacao99,
 } from "@/app/(app)/integracao/99food/_components/fila-99-panel"
 
-/** Quantas do 99 esperam ação — alimenta o badge da aba. */
-export async function pendencias99(): Promise<number> {
+/**
+ * A fila do 99 inteira, numa conta só — o selo da aba e a lista usam ESTA.
+ *
+ * ── POR QUE (Marcus, 19/09/26) ───────────────────────────────────────────
+ * O selo mostrava 15 e a lista 16: o selo contava pedidos abertos de todo
+ * mundo, a lista mostrava também a Vbfood (encerrada, pedido recusado). E
+ * nenhum dos dois via a DG, com 35 lojas marcadas com o 99 e sem conexão —
+ * ela nunca PEDIU pelo sistema. A fila passa a ser a situação da loja:
+ *
+ *   pedido aberto (pendente/solicitada)
+ *   + loja marcada com o 99, sem vínculo e sem pedido aberto
+ *   − cliente fora da operação (suspenso, encerrado, conta interna)
+ */
+async function filaDo99(): Promise<{
+  fora: Set<string>
+  abertasPorUnidade: Set<string>
+  abertas: number
+  semPedido: LojaSemPedido99[]
+}> {
   const admin = createAdminClient()
-  const { count } = await admin
-    .from("ninefood_activation_requests")
-    .select("id", { count: "exact", head: true })
-    .in("status", ["pendente", "solicitada"])
-  return count ?? 0
+  const [fora, reqs, plats, links] = await Promise.all([
+    clientesForaDaOperacao(),
+    admin
+      .from("ninefood_activation_requests")
+      .select("unit_id, holding_id")
+      .in("status", ["pendente", "solicitada"]),
+    admin
+      .from("unit_platforms")
+      .select(
+        "unit_id, units!inner(code, name, cnpj, active, brands(holding_id, holdings(name)))",
+      )
+      .eq("platform", "99food")
+      .eq("active", true),
+    admin
+      .from("ninefood_store_links")
+      .select("unit_id")
+      .eq("active", true)
+      .not("unit_id", "is", null),
+  ])
+
+  const abertasValidas = (
+    (reqs.data ?? []) as { unit_id: string | null; holding_id: string | null }[]
+  ).filter((r) => !r.holding_id || !fora.has(r.holding_id))
+  const abertasPorUnidade = new Set(
+    abertasValidas.map((r) => r.unit_id).filter((u): u is string => !!u),
+  )
+  const ligadas = new Set(
+    ((links.data ?? []) as { unit_id: string }[]).map((l) => l.unit_id),
+  )
+
+  const semPedido: LojaSemPedido99[] = (
+    (plats.data ?? []) as unknown as {
+      unit_id: string
+      units: {
+        code: string | null
+        name: string
+        cnpj: string | null
+        active: boolean
+        brands: {
+          holding_id: string | null
+          holdings: { name: string } | null
+        } | null
+      } | null
+    }[]
+  )
+    .filter((p) => {
+      const u = p.units
+      const h = u?.brands?.holding_id
+      return (
+        !!u &&
+        u.active &&
+        !!h &&
+        !fora.has(h) &&
+        !ligadas.has(p.unit_id) &&
+        !abertasPorUnidade.has(p.unit_id)
+      )
+    })
+    .map((p) => ({
+      unitId: p.unit_id,
+      unitLabel: `${p.units!.code ? `${p.units!.code} · ` : ""}${p.units!.name}`,
+      holdingName: p.units!.brands?.holdings?.name ?? "—",
+      cnpj: p.units!.cnpj,
+    }))
+    .sort(
+      (a, b) =>
+        a.holdingName.localeCompare(b.holdingName) ||
+        a.unitLabel.localeCompare(b.unitLabel, "pt-BR", { numeric: true }),
+    )
+
+  return { fora, abertasPorUnidade, abertas: abertasValidas.length, semPedido }
+}
+
+/** Quantas do 99 esperam ação — alimenta o badge da aba (mesma conta da lista). */
+export async function pendencias99(): Promise<number> {
+  const f = await filaDo99()
+  return f.abertas + f.semPedido.length
 }
 
 /**
@@ -72,11 +161,12 @@ export async function lojasConectadas99(): Promise<
 
 export async function Aba99() {
   const admin = createAdminClient()
+  const fila = await filaDo99()
 
   const { data } = await admin
     .from("ninefood_activation_requests")
     .select(
-      "id, cnpj, loja_99, status, nota, created_at, cliente_confirmou_at, holdings(name), units(code, name)",
+      "id, cnpj, loja_99, status, nota, created_at, cliente_confirmou_at, holding_id, holdings(name), units(code, name)",
     )
     .order("created_at", { ascending: false })
     .limit(200)
@@ -90,10 +180,14 @@ export async function Aba99() {
       nota: string | null
       created_at: string
       cliente_confirmou_at: string | null
+      holding_id: string | null
       holdings: { name: string } | null
       units: { code: string | null; name: string } | null
     }>
-  ).map((r) => ({
+  )
+    // Cliente fora da operação (a Vbfood, encerrada) não é fila de trabalho.
+    .filter((r) => !r.holding_id || !fila.fora.has(r.holding_id))
+    .map((r) => ({
     id: r.id,
     cnpj: r.cnpj,
     loja99: r.loja_99,
@@ -110,9 +204,9 @@ export async function Aba99() {
   // Em aberto primeiro: a fila serve pra AGIR, e o resolvido é histórico.
   const ordem = { pendente: 0, solicitada: 1, recusada: 2, ativa: 3 } as const
   itens.sort((a, b) => ordem[a.status] - ordem[b.status])
-  const emAberto = itens.filter(
-    (i) => i.status === "pendente" || i.status === "solicitada",
-  ).length
+  const emAberto =
+    itens.filter((i) => i.status === "pendente" || i.status === "solicitada")
+      .length + fila.semPedido.length
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,7 +240,11 @@ export async function Aba99() {
         troca — a conexão atual dele pode parar.
       </p>
       <Link99Botao />
-      <Fila99Panel itens={itens} conectadas={await lojasConectadas99()} />
+      <Fila99Panel
+        itens={itens}
+        semPedido={fila.semPedido}
+        conectadas={await lojasConectadas99()}
+      />
     </div>
   )
 }

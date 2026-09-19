@@ -111,6 +111,23 @@ const ROTULO: Record<Solicitacao99["status"], { txt: string; cls: string }> = {
  * por cliente com os blocos "Comigo" e "Com o cliente". "Ignoradas" não existe
  * aqui — no 99 não há merchant solto pra arquivar.
  */
+/**
+ * Loja marcada com o 99 no cadastro, sem conexão e sem pedido aberto.
+ *
+ * ── POR QUE (Marcus, 19/09/26) ───────────────────────────────────────────
+ * "Esse número 15 na 99 são quantidade de conexão? Não deveria aparecer
+ * todos os clientes?" A fila só mostrava SOLICITAÇÕES — e a DG, com 35 lojas
+ * marcadas com 99 e sem conexão, nunca pediu pelo sistema, então não existia
+ * aqui. É o mesmo erro de 20/08 nas Conectadas, do outro lado: medir o
+ * pedido em vez da situação da loja.
+ */
+export type LojaSemPedido99 = {
+  unitId: string
+  unitLabel: string
+  holdingName: string
+  cnpj: string | null
+}
+
 export type LojaConectada99 = {
   id: string
   unitLabel: string
@@ -121,8 +138,11 @@ export type LojaConectada99 = {
 export function Fila99Panel({
   itens: todos,
   conectadas,
+  semPedido = [],
 }: {
   itens: Solicitacao99[]
+  /** Marcadas com 99, sem conexão e sem pedido aberto — ver o tipo. */
+  semPedido?: LojaSemPedido99[]
   /**
    * As lojas REALMENTE vinculadas (ninefood_store_links), não as solicitações
    * com status "ativa". Ver a nota em `lojasConectadas99` — a maioria das
@@ -136,9 +156,12 @@ export function Fila99Panel({
       abas={["pendencias", "conectadas"]}
       placeholder="Loja, CNPJ ou cliente"
       contagens={{
-        pendencias: todos.filter(
-          (s) => s.status === "pendente" || s.status === "solicitada",
-        ).length,
+        // A MESMA conta do selo da aba (`pendencias99`): pedido aberto + loja
+        // sem pedido. Selo e lista discordando foi metade da pergunta.
+        pendencias:
+          todos.filter(
+            (s) => s.status === "pendente" || s.status === "solicitada",
+          ).length + semPedido.length,
         conectadas: conectadas.length,
       }}
     >
@@ -153,6 +176,9 @@ export function Fila99Panel({
         ) : (
           <Fila99Conteudo
             busca={busca}
+            semPedido={semPedido.filter((l) =>
+              combina(busca, l.unitLabel, l.cnpj ?? "", l.holdingName),
+            )}
             itens={todos
               .filter((s) => s.status !== "ativa")
               .filter((s) =>
@@ -225,22 +251,25 @@ function Conectadas99({
 
 function Fila99Conteudo({
   itens,
+  semPedido,
   aba,
   busca,
 }: {
   itens: Solicitacao99[]
+  semPedido: LojaSemPedido99[]
   aba: "pendencias" | "conectadas" | "ignoradas"
   busca: string
 }) {
   // O feedback de cada ação mora na LINHA (ver `Linha99`): aqui em cima ele
   // aparecia em todas as linhas do grupo ao mesmo tempo.
-  if (itens.length === 0) {
+  if (itens.length === 0 && semPedido.length === 0) {
     return (
       <div className="rounded-lg border bg-card p-6 text-center">
-        <p className="text-sm font-medium">Nenhuma solicitação na fila</p>
+        <p className="text-sm font-medium">Nenhuma loja esperando o 99</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Quando um cliente pedir a conexão do 99 pela tela da unidade, ela
-          aparece aqui — e você recebe um e-mail.
+          Toda loja marcada com o 99 no cadastro já está conectada. Quando um
+          cliente pedir a conexão, ou marcar o 99 numa loja nova, ela aparece
+          aqui.
         </p>
       </div>
     )
@@ -253,9 +282,17 @@ function Fila99Conteudo({
       {/* AGRUPADO POR CLIENTE, igual ao iFood. Com 15 lojas de uma rede só, a
           lista plana obrigava a ler cliente por cliente pra achar a que
           interessa — e some a noção de "esta rede toda está esperando". */}
-      {[...new Map(itens.map((s) => [s.holdingName, true])).keys()].map(
+      {[
+        ...new Map(
+          [...itens, ...semPedido].map((s) => [s.holdingName, true]),
+        ).keys(),
+      ].map(
         (cliente) => {
           const doCliente = itens.filter((s) => s.holdingName === cliente)
+          const semPedidoDoCliente = semPedido.filter(
+            (l) => l.holdingName === cliente,
+          )
+          const total = doCliente.length + semPedidoDoCliente.length
           const comigo = doCliente.filter((s) => s.status === "pendente")
           const comCliente = doCliente.filter((s) => s.status === "solicitada")
           const resto = doCliente.filter(
@@ -277,21 +314,60 @@ function Fila99Conteudo({
                 <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/cliente:rotate-90" />
                 <span className="font-semibold">{cliente}</span>
                 <span className="text-xs text-muted-foreground">
-                  {doCliente.length} loja{doCliente.length > 1 ? "s" : ""}
+                  {total} loja{total > 1 ? "s" : ""}
                   {comigo.length > 0 && ` · ${comigo.length} comigo`}
                   {comCliente.length > 0 &&
                     ` · ${comCliente.length} com o cliente`}
+                  {semPedidoDoCliente.length > 0 &&
+                    ` · ${semPedidoDoCliente.length} sem pedido`}
                 </span>
               </summary>
               <div className="border-t p-3">
                 <Grupo titulo="Comigo" itens={comigo} />
                 <Grupo titulo="Com o cliente" itens={comCliente} />
+                <GrupoSemPedido itens={semPedidoDoCliente} />
                 <Grupo titulo="Resolvidas" itens={resto} />
               </div>
             </details>
           )
         },
       )}
+    </div>
+  )
+}
+
+/**
+ * Lojas marcadas com o 99 que ninguém pediu pra conectar. Não há ação da
+ * operação a fazer por linha: quem destrava é o DONO, autorizando o app — pelo
+ * link desta tela ou pelo Portal do Parceiro. Assim que ele autoriza, o 99
+ * avisa por webhook e a loja sai daqui sozinha.
+ */
+function GrupoSemPedido({ itens }: { itens: LojaSemPedido99[] }) {
+  if (itens.length === 0) return null
+  return (
+    <div className="mb-3 last:mb-0">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Sem pedido de conexão · {itens.length}
+      </p>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Marcadas com o 99 no cadastro, mas ainda sem conexão. O dono autoriza
+        pelo link acima (ou pelo Portal do Parceiro) e a loja entra sozinha.
+      </p>
+      <ul className="space-y-1.5">
+        {itens.map((l) => (
+          <li
+            key={l.unitId}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+          >
+            <span className="font-medium">{l.unitLabel}</span>
+            {l.cnpj ? (
+              <CopiarCnpj cnpj={l.cnpj} />
+            ) : (
+              <span className="text-xs text-muted-foreground">sem CNPJ</span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

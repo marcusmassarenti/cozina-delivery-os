@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { Abas, ehAba } from "./_abas/abas"
 import { AbaGeral } from "./_abas/aba-geral"
 import { AbaIfood } from "./_abas/aba-ifood"
-import { Aba99 } from "./_abas/aba-99"
+import { Aba99, pendencias99 } from "./_abas/aba-99"
 import { AbaCardapioWeb } from "./_abas/aba-cardapioweb"
 import { AbaKeeta } from "./_abas/aba-keeta"
 import { AbaApi } from "./_abas/aba-api"
@@ -43,10 +43,10 @@ export default async function ConexoesPage({
       .from("ifood_activation_requests")
       .select("id", { count: "exact", head: true })
       .in("status", ["pendente", "solicitada"]),
-    admin
-      .from("ninefood_activation_requests")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["pendente", "solicitada"]),
+    // A MESMA conta da lista da aba (pedido aberto + loja sem pedido, sem
+    // cliente fora da operação). Antes era só pedido aberto: 15 no selo, 16
+    // na lista, e a DG com 35 lojas pendentes invisível nos dois.
+    pendencias99(),
   ])
 
   return (
@@ -63,7 +63,7 @@ export default async function ConexoesPage({
 
       <Abas
         atual={aba}
-        pendencias={{ ifood: ifood.count ?? 0, "99food": noventa.count ?? 0 }}
+        pendencias={{ ifood: ifood.count ?? 0, "99food": noventa }}
       />
 
       {/* O conteúdo herda a borda da aba ativa, pra leitura de "pasta". */}
