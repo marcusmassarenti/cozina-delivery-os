@@ -13,7 +13,13 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-const TABS: { href: string; label: string; icon: LucideIcon }[] = [
+const TABS: {
+  href: string
+  label: string
+  icon: LucideIcon
+  /** Só o super-admin da plataforma vê (ex.: perfis, que são globais). */
+  soSuperadmin?: boolean
+}[] = [
   { href: "/minha-conta/informacoes", label: "Informações", icon: FileText },
   {
     href: "/minha-conta/personalizacao",
@@ -23,15 +29,21 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/minha-conta/relatorios", label: "Relatórios", icon: ClipboardList },
   { href: "/minha-conta/assinatura", label: "Assinatura", icon: CreditCard },
   { href: "/minha-conta/seguranca", label: "Segurança", icon: Lock },
-  { href: "/minha-conta/permissoes", label: "Permissões", icon: ShieldCheck },
+  // Perfis valem pra todos os clientes — editar é coisa do dono da plataforma.
+  {
+    href: "/minha-conta/permissoes",
+    label: "Permissões",
+    icon: ShieldCheck,
+    soSuperadmin: true,
+  },
   { href: "/minha-conta/usuarios", label: "Usuários", icon: Users },
 ]
 
-export function ContaTabs() {
+export function ContaTabs({ superadmin = false }: { superadmin?: boolean }) {
   const path = usePathname()
   return (
     <nav className="-mb-px mt-4 flex gap-1 overflow-x-auto">
-      {TABS.map((t) => {
+      {TABS.filter((t) => !t.soSuperadmin || superadmin).map((t) => {
         const active = path.startsWith(t.href)
         return (
           <Link

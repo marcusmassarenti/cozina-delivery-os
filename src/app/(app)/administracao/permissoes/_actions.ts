@@ -2,7 +2,22 @@
 
 import { revalidatePath, updateTag } from "next/cache"
 
-import { requireAdmin } from "@/lib/auth/guards"
+import { requireSuperadmin } from "@/lib/auth/guards"
+
+/*
+ * ⚠️ SÓ O SUPER-ADMIN MEXE AQUI (19/09/26).
+ *
+ * Os perfis (`app_roles` + `role_module_perms`) são GLOBAIS — não têm dono,
+ * valem pra todos os clientes. Estas ações exigiam só `requireAdmin`, que
+ * aceita o administrador de QUALQUER empresa: o admin de um cliente podia
+ * mudar o que o "franqueado" ou o "gerente" enxergam e fazem em todas as
+ * outras empresas do sistema, inclusive o escopo de dados. Não precisa da
+ * tela pra isso — server action se chama direto; por isso a trava mora aqui,
+ * e a da página é só a segunda linha.
+ *
+ * Se um dia os clientes precisarem de perfis próprios, o caminho é perfil
+ * POR EMPRESA (coluna de dono em app_roles), não devolver esta tela a eles.
+ */
 import { MODULES, type DataScope } from "@/lib/auth/permissions"
 
 export type PermActionState = { ok: boolean; message?: string; roleId?: string }
@@ -36,7 +51,7 @@ export async function saveRole(input: {
   perms: PermRow[]
 }): Promise<PermActionState> {
   try {
-    const { admin } = await requireAdmin()
+    const { admin } = await requireSuperadmin()
     const { roleId, dataScope } = input
     if (!roleId) return { ok: false, message: "Perfil inválido." }
     if (dataScope !== "holding" && dataScope !== "unit") {
@@ -93,7 +108,7 @@ export async function createRole(input: {
   dataScope: DataScope
 }): Promise<PermActionState> {
   try {
-    const { admin } = await requireAdmin()
+    const { admin } = await requireSuperadmin()
     const label = input.label.trim()
     if (!label) return { ok: false, message: "Dê um nome ao perfil." }
     const key = slugify(label)
@@ -146,7 +161,7 @@ export async function createRole(input: {
 /** Apaga um perfil custom (perfis de sistema são bloqueados). */
 export async function deleteRole(roleId: string): Promise<PermActionState> {
   try {
-    const { admin } = await requireAdmin()
+    const { admin } = await requireSuperadmin()
     if (!roleId) return { ok: false, message: "Perfil inválido." }
 
     const { data: role } = await admin

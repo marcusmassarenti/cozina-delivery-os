@@ -46,7 +46,7 @@ export default async function MinhaContaLayout({
             </span>
           )}
         </div>
-        <ContaTabs />
+        <ContaTabs superadmin={superadmin} />
       </div>
       {children}
     </div>

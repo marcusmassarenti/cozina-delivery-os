@@ -3,13 +3,14 @@ import { notFound } from "next/navigation"
 import {
   MODULES,
   getRolesConfig,
-  userCan,
+  isSuperadmin,
 } from "@/lib/auth/permissions"
 import { PermissionsManager } from "./_components/permissions-manager"
 
 export default async function PermissoesPage() {
-  // Gate de página: só quem gere usuários/acessos vê isto.
-  if (!(await userCan("usuarios", "edit"))) notFound()
+  // Só o super-admin: os perfis valem pra TODOS os clientes — ver o aviso em
+  // `_actions.ts`. Pra quem não é, a tela não existe (404), igual à aba.
+  if (!(await isSuperadmin())) notFound()
 
   const roles = await getRolesConfig()
 
