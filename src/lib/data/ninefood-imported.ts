@@ -13,6 +13,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { registrarFalhaDeLeitura } from "@/lib/data/falhas-leitura"
 import { comRetentativa, fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
@@ -183,7 +184,10 @@ export async function getNinefoodResumoByUnits(
 ): Promise<Map<string, NinefoodResumo>> {
   const out = new Map<string, NinefoodResumo>()
   if (unitIds.length === 0) return out
-  const registrar = (m: string) => falhas?.push(`99: ${m}`)
+  const registrar = (m: string) => {
+    falhas?.push(`99: ${m}`)
+    registrarFalhaDeLeitura("99")
+  }
 
   const admin = createAdminClient()
   const mm = String(month).padStart(2, "0")

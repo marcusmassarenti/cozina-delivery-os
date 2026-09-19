@@ -11,9 +11,9 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { comRetentativa } from "@/lib/data/paginate"
+import { registrarFalhaDeLeitura } from "@/lib/data/falhas-leitura"
 import { textoOuNull } from "@/lib/format"
-import { fetchAllRows } from "@/lib/data/paginate"
+import { comRetentativa, fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { currentPeriod } from "@/lib/period"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
@@ -116,7 +116,10 @@ export async function getKeetaResumoByUnits(
   const out = new Map<string, KeetaResumo>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
-  const registrar = (m: string) => falhas?.push(`keeta: ${m}`)
+  const registrar = (m: string) => {
+    falhas?.push(`keeta: ${m}`)
+    registrarFalhaDeLeitura("Keeta")
+  }
 
   // Loja diária (bruto, pedidos, cancelados)
   const loja = await pageAll<{

@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowUpRight } from "lucide-react"
 
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
+import { MarcaParcial } from "@/components/dashboard/marca-parcial"
 
 export type HeroMetric = {
   label: string
@@ -20,6 +21,12 @@ export type HeroMetric = {
    * o KpiCard, converte pra HeroMetric — e o campo caía fora silenciosamente.
    */
   title?: string
+  /**
+   * Leitura de alguma plataforma não terminou: o número vai com o selo
+   * "parcial" (este texto é o hover). A frase completa fica numa linha acima
+   * da faixa — ver `AvisoLeituraParcial`.
+   */
+  parcial?: string | null
 }
 
 function DeltaSeta({ delta }: { delta: number | null | undefined }) {
@@ -97,6 +104,7 @@ export function HeroFaixa({
                 {m.value}
               </span>
               <DeltaSeta delta={m.delta} />
+              {m.parcial && <MarcaParcial aviso={m.parcial} />}
             </div>
             {m.sub && (
               <span className="text-[11px] leading-tight text-muted-foreground">

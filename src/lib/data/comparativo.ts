@@ -58,11 +58,9 @@ async function resumoIfoodComRetentativa(
   year: number,
   month: number,
 ): Promise<{ resumo: ResumoIfood; erro: string | null }> {
-  let ultimo = await getFinanceiroResumoByUnitsOuErro(unitIds, year, month)
-  for (let tentativa = 1; tentativa < 3 && ultimo.erro; tentativa++) {
-    await new Promise((r) => setTimeout(r, 400 * tentativa))
-    ultimo = await getFinanceiroResumoByUnitsOuErro(unitIds, year, month)
-  }
+  // As 3 tentativas moram dentro de `getFinanceiroResumoByUnitsOuErro` desde
+  // 17/09/26 (as telas passaram a usar também). Repetir aqui dava até 9.
+  const ultimo = await getFinanceiroResumoByUnitsOuErro(unitIds, year, month)
   if (ultimo.erro) {
     console.error(
       `[metricas] iFood ${year}-${month} falhou após 3 tentativas: ${ultimo.erro}`,

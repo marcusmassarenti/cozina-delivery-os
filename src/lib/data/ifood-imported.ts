@@ -10,6 +10,7 @@
 import "server-only"
 
 import { unstable_cache } from "next/cache"
+import { registrarFalhaDeLeitura } from "@/lib/data/falhas-leitura"
 
 import { TAG_FINANCEIRO_IFOOD } from "@/lib/cache-tags"
 
@@ -18,7 +19,7 @@ import { cache as reactCache } from "react"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { textoOuNull } from "@/lib/format"
 import { currentPeriod } from "@/lib/period"
-import { fetchAllRows } from "@/lib/data/paginate"
+import { comRetentativa, fetchAllRows } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 
@@ -1572,8 +1573,13 @@ export async function getFinanceiroResumoByUnitsOuErro(
   dateRange?: { start: string; end: string },
 ): Promise<{ resumo: Map<string, FinanceiroResumo>; erro: string | null }> {
   if (unitIds.length === 0) return { resumo: new Map(), erro: null }
-  const { data, error } = await resumoRpc(unitIds, year, month, dateRange)
-  if (error) return { resumo: new Map(), erro: error }
+  const { data, error } = await comRetentativa(() =>
+    resumoRpc(unitIds, year, month, dateRange),
+  )
+  if (error) {
+    registrarFalhaDeLeitura("iFood")
+    return { resumo: new Map(), erro: error }
+  }
   return { resumo: mapearResumo(data), erro: null }
 }
 
@@ -1586,9 +1592,14 @@ export async function getFinanceiroResumoByUnits(
   const out = new Map<string, FinanceiroResumo>()
   if (unitIds.length === 0) return out
 
-  const { data, error } = await resumoRpc(unitIds, year, month, dateRange)
+  const { data, error } = await comRetentativa(() =>
+    resumoRpc(unitIds, year, month, dateRange),
+  )
   if (error) {
+    // Continua devolvendo vazio (opção A: a tela mostra o número COM aviso),
+    // mas agora anota — a página pergunta no fim e marca como parcial.
     console.error("getFinanceiroResumoByUnits RPC error:", error)
+    registrarFalhaDeLeitura("iFood")
     return out
   }
   return mapearResumo(data)

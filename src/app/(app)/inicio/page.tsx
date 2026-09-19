@@ -69,6 +69,11 @@ import {
 } from "@/components/dashboard/graficos/ranking-detalhado"
 import { ComposicaoBruto } from "@/components/dashboard/graficos/composicao-bruto-chart"
 import { HeroFaixa, type HeroMetric } from "@/components/dashboard/hero-faixa"
+import { AvisoLeituraParcial } from "@/components/dashboard/marca-parcial"
+import {
+  avisoDeLeituraParcial,
+  falhasDeLeituraDaRequisicao,
+} from "@/lib/data/falhas-leitura"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import {
   getVisibleUnits,
@@ -1110,7 +1115,23 @@ export default async function Home({
   // Vazio de propósito: o `trend` do card já diz "repasse + venda direta", que
   // é mais informativo que o antigo "o que de fato entra" e vem da régua.
   const SUB_MANCHETE: Record<string, string> = {}
+  /* Leitura que não terminou (opção A, 17/09/26): o número aparece, com o
+   * selo "parcial". Lido AQUI, depois de tudo que alimenta estes cards —
+   * inclusive as setas do mês passado —, e por isso a frase diz "os números
+   * marcados", não "este número": a falha pode ter sido em qualquer um. */
+  const avisoParcial = avisoDeLeituraParcial(falhasDeLeituraDaRequisicao())
+  // A nota média vem das avaliações, não dessas leituras — fica sem selo.
+  const DEPENDE_DAS_LEITURAS = new Set<string>([
+    "Faturamento Bruto",
+    ROTULOS.ficaNaLoja,
+    "Pedidos",
+    "Pedidos Cancelados",
+    "Média Pedidos/Dia",
+    "Ticket Médio",
+  ])
   const manchete: HeroMetric[] = kpisOrdenados.map((k) => ({
+    parcial:
+      avisoParcial && DEPENDE_DAS_LEITURAS.has(k.label) ? avisoParcial : null,
     label: k.label,
     value: k.value,
     // Card sem valor não leva seta. "— ↘100%" dizia, na mesma linha, que o
@@ -1383,6 +1404,7 @@ export default async function Home({
             )}
           </div>
           <div data-tour="db-kpis" className="flex flex-col gap-3">
+            {avisoParcial && <AvisoLeituraParcial aviso={avisoParcial} />}
             {/* Linha 1: os 4 do topo (dinheiro), maiores. */}
             <HeroFaixa metrics={manchete.slice(0, 4)} cols={4} big />
             {/* Linha 2: os 5 de operação. */}

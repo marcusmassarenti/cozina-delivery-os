@@ -40,6 +40,14 @@ import { getCurrentUserContext } from "@/lib/auth/context"
 import { lerFinanceiro, ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 import { fmtBRL, fmtNum, fmtPct } from "@/lib/format"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
+import {
+  AvisoLeituraParcial,
+  MarcaParcial,
+} from "@/components/dashboard/marca-parcial"
+import {
+  avisoDeLeituraParcial,
+  falhasDeLeituraDaRequisicao,
+} from "@/lib/data/falhas-leitura"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { getImportCoverageForMonth } from "@/lib/data/relatorio-diario"
 import {
@@ -251,6 +259,10 @@ export default async function UnidadeDetalhePage({
       : 0
   const notaFonte = notaParts.map((p) => p.plat).join(" + ")
 
+  // Leitura que não terminou nesta carga (opção A): os números da faixa vão
+  // com o selo "parcial". Lido depois do Promise.all que busca todos eles.
+  const avisoParcial = avisoDeLeituraParcial(falhasDeLeituraDaRequisicao())
+
   // m = monthly mesclado: soma plataformas importadas (iFood + 99 + Keeta).
   // Usa o monthly do PERÍODO SELECIONADO (não o unit.monthly, que é do mês
   // corrente e zerava o DRE ao olhar meses passados).
@@ -410,6 +422,7 @@ export default async function UnidadeDetalhePage({
             }
           />
           <HeroKpis
+            aviso={avisoParcial}
             monthly={m}
             notaMedia={notaMediaMerged}
             notasCount={notasTotal}
@@ -484,6 +497,7 @@ const PLAT_BAR_COLOR: Record<string, string> = {
 }
 
 function HeroKpis({
+  aviso,
   monthly: m,
   notaMedia,
   notasCount,
@@ -491,6 +505,8 @@ function HeroKpis({
   cancelCesta,
   freteProprioFaltando,
 }: {
+  /** Leitura de plataforma que não terminou — ver `lib/data/falhas-leitura`. */
+  aviso?: string | null
   monthly: UnitMonthly
   notaMedia: number
   notasCount: number
@@ -542,12 +558,15 @@ function HeroKpis({
     tone?: "pos" | "neg" | "warn"
     /** Tooltip (hover) — explica o conceito quando difere do portal. */
     title?: string
+    /** Depende das leituras de plataforma (leva o selo "parcial" se falharem). */
+    dasLeituras?: boolean
   }[] = [
     {
       // Bruto TOTAL (com cancelados) = "Valor das vendas" do portal iFood.
       // Marcus: o hero mostra o n\u00FAmero do portal; margem/taxas/percentuais
       // continuam calculados na base v\u00E1lida (ap\u00F3s cancelamentos), como o DRE.
       label: "Bruto",
+      dasLeituras: true,
       value: fmtBRL(fin.brutoTotal),
       title: dePedidos
         ? "Soma do que os clientes pagaram nos pedidos que a API do iFood j\u00E1 entregou. O extrato do m\u00EAs ainda n\u00E3o chegou \u2014 quando chegar este valor sobe, porque a cesta do extrato \u00E9 contada ANTES das promo\u00E7\u00F5es."
@@ -566,6 +585,7 @@ function HeroKpis({
     },
     {
       label: ROTULOS.ficaNaLoja,
+      dasLeituras: true,
       // Sem extrato não há taxa nem repasse — mostrar R$ 0,00 e 0% diria que o
       // iFood ficou com o faturamento inteiro da loja.
       value: repasseDesconhecido ? "—" : fmtBRL(fin.ficaNaLoja),
@@ -584,6 +604,7 @@ function HeroKpis({
     },
     {
       label: "Resultado",
+      dasLeituras: true,
       // Resultado nasce do que fica na loja. Sem repasse conhecido ele seria
       // só "menos o CMV", que não é resultado nenhum.
       value: repasseDesconhecido ? "—" : fmtBRL(fin.resultado),
@@ -600,11 +621,13 @@ function HeroKpis({
     },
     {
       label: "Ticket médio",
+      dasLeituras: true,
       value: fmtBRL(m.ticketMedio),
       sub: dePedidos ? "sobre o pago pelo cliente" : undefined,
     },
     {
       label: "Cancelamento",
+      dasLeituras: true,
       value: fmtPct(cancelPct),
       sub: `${fmtNum(m.pedidosCancelados)} ped`,
       tone: cancelPct > 5 ? "warn" : undefined,
@@ -637,6 +660,7 @@ function HeroKpis({
 
   return (
     <div className="space-y-3">
+      {aviso && <AvisoLeituraParcial aviso={aviso} />}
       {/* Faixa de KPIs densa */}
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s) => (
@@ -649,9 +673,10 @@ function HeroKpis({
               {s.label}
             </p>
             <p
-              className={`mt-0.5 text-lg font-bold tracking-tight tabular-nums ${toneCls(s.tone)}`}
+              className={`mt-0.5 flex flex-wrap items-center gap-x-1.5 text-lg font-bold tracking-tight tabular-nums ${toneCls(s.tone)}`}
             >
               {s.value}
+              {aviso && s.dasLeituras && <MarcaParcial aviso={aviso} />}
             </p>
             {s.sub && (
               <p className="truncate text-[10px] text-muted-foreground">

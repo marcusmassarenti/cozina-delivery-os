@@ -49,6 +49,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.28.0",
+    date: "2026-09-17",
+    tag: "Melhoria",
+    title: "Número que não carregou inteiro agora avisa",
+    summary:
+      "Se a leitura de uma plataforma não terminar, os números do topo aparecem com o selo \u201Cparcial\u201D e uma linha dizendo qual plataforma faltou.",
+    // Aparece raramente e só quando acontece — não vale interromper ninguém.
+    semPopup: true,
+    areas: [
+      {
+        area: "Início e página da loja",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Selo \u201Cparcial\u201D quando uma leitura não termina",
+            antes:
+              "Se a consulta ao iFood, à 99 ou à Keeta falhasse no meio, o painel mostrava o que tinha conseguido ler como se fosse o total \u2014 o faturamento simplesmente aparecia menor.",
+            depois:
+              "O sistema tenta de novo antes de desistir. Se ainda assim não completar, os números afetados ganham o selo \u201Cparcial\u201D e uma linha explica qual plataforma não carregou. Recarregar a página costuma resolver.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.27.1",
     date: "2026-09-17",
     tag: "Correção",
