@@ -7,7 +7,7 @@
  *
  * O XLSX do 99 Food já vem agregado por dia, então a planilha é SELECT direto
  * + agg em JS. O financeiro da API é o oposto (uma linha por pedido) e sai
- * agregado do Postgres, pela RPC `ninefood_api_diario` — ver a migration 0227.
+ * agregado do Postgres, pela RPC `ninefood_api_diario_v2` — ver as migrations 0227 e 0259.
  */
 
 import "server-only"
