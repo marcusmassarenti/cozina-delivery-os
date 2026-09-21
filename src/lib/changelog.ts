@@ -49,6 +49,30 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.28.1",
+    date: "2026-09-21",
+    tag: "Melhoria",
+    title: "Busca de loja na tela de Avaliações",
+    summary:
+      "O seletor de unidade das Avaliações ganhou um campo de busca por nome ou código.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Avaliações",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Achar a loja digitando",
+            antes:
+              "Para abrir as avaliações de uma loja era preciso rolar a lista inteira de unidades até encontrá-la.",
+            depois:
+              "É só digitar parte do nome ou o código (ex.: “sushi” ou “04”). A opção “Toda a rede” volta para a visão geral.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.28.0",
     date: "2026-09-17",
     tag: "Melhoria",
