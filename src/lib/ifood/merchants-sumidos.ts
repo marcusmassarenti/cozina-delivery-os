@@ -27,6 +27,7 @@ import "server-only"
  * ALGUÉM foi visto, uma varredura que não rodou simplesmente não gera aviso.
  */
 import { createAdminClient } from "@/lib/supabase/admin"
+import { clientesForaDaOperacao } from "@/lib/data/clientes-fora-da-operacao"
 
 /** Folga depois da última varredura antes de considerar sumido. */
 const TOLERANCIA_HORAS = 2
@@ -79,22 +80,48 @@ export async function merchantsSumidos(): Promise<MerchantSumido[]> {
 
   // Quais deles estavam VINCULADOS — esses são os graves: a loja sincronizava
   // e vai parar sem que ninguém peça nada.
-  const { data: vinc } = await admin
-    .from("unit_platforms")
-    .select(
-      "api_store_id, unit_id, units!inner(code, name, brands!inner(holdings!inner(name)))",
-    )
-    .eq("platform", "ifood")
-    .in(
-      "api_store_id",
-      sumidos.map((m) => m.id),
-    )
+  const [{ data: vinc }, fora] = await Promise.all([
+    admin
+      .from("unit_platforms")
+      .select(
+        "api_store_id, unit_id, units!inner(code, name, active, brands!inner(holding_id, holdings!inner(name)))",
+      )
+      .eq("platform", "ifood")
+      .in(
+        "api_store_id",
+        sumidos.map((m) => m.id),
+      ),
+    clientesForaDaOperacao(),
+  ])
   const porMerchant = new Map<string, MerchantSumido["loja"]>()
+  /**
+   * Merchant de loja que NÃO É MAIS OPERAÇÃO — cliente encerrado, suspenso ou
+   * interno, ou unidade desativada. Sai da lista AQUI, na fonte.
+   *
+   * A régua era aplicada tela a tela: o e-mail de saúde filtrava, a aba
+   * Pendências das Conexões não — e a Pizzaria Quero Mais (Vbfood, encerrada
+   * em 14/09) seguia em vermelho como "revogada" uma semana depois do encerramento (Marcus,
+   * 21/09/26). Cada leitor novo desta lista teria que lembrar do filtro; com
+   * ele aqui, nenhum precisa.
+   */
+  const foraDaOperacao = new Set<string>()
   for (const v of (vinc ?? []) as unknown as {
     api_store_id: string
     unit_id: string
-    units: { code: string; name: string; brands: { holdings: { name: string } } }
+    units: {
+      code: string
+      name: string
+      active: boolean | null
+      brands: { holding_id: string | null; holdings: { name: string } }
+    }
   }[]) {
+    if (
+      v.units.active === false ||
+      (v.units.brands.holding_id && fora.has(v.units.brands.holding_id))
+    ) {
+      foraDaOperacao.add(v.api_store_id)
+      continue
+    }
     porMerchant.set(v.api_store_id, {
       unitId: v.unit_id,
       code: v.units.code,
@@ -103,14 +130,16 @@ export async function merchantsSumidos(): Promise<MerchantSumido[]> {
     })
   }
 
-  return sumidos.map((m) => ({
-    merchantId: m.id,
-    nome: m.name,
-    razaoSocial: m.corporate_name,
-    cnpj: m.cnpj,
-    desde: m.last_seen_at!,
-    loja: porMerchant.get(m.id) ?? null,
-  }))
+  return sumidos
+    .filter((m) => !foraDaOperacao.has(m.id))
+    .map((m) => ({
+      merchantId: m.id,
+      nome: m.name,
+      razaoSocial: m.corporate_name,
+      cnpj: m.cnpj,
+      desde: m.last_seen_at!,
+      loja: porMerchant.get(m.id) ?? null,
+    }))
 }
 
 /**
