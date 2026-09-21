@@ -84,6 +84,8 @@ function mergeNineResumo(acc: NinefoodResumo, v: NinefoodResumo) {
   acc.comissaoRs += v.comissaoRs
   acc.taxaCanalPagamentoRs += v.taxaCanalPagamentoRs
   acc.promocoesRs += v.promocoesRs
+  acc.promoLojaRs += v.promoLojaRs
+  acc.promocoesPlanilhaRs += v.promocoesPlanilhaRs
   acc.entregaRs += v.entregaRs
   acc.freteGratisLojaRs += v.freteGratisLojaRs
   acc.cancelamentosQtd += v.cancelamentosQtd

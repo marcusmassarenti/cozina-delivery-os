@@ -208,12 +208,12 @@ export async function resumoDaLoja(
        * é pior que em qualquer tela: ele compara com o portal do 99 e a
        * diferença vira desconfiança na integração inteira.
        *
-       * A RPC devolve a régua do PORTAL — bruto = "Renda total das vendas"
-       * (commissionBaseAmount menos o frete grátis que a loja bancou), sem
-       * cancelados — e já filtra `order_type = 1`. Ver a migration 0256: é
-       * o número que o cliente vê na tela do 99, ao centavo.
+       * A RPC devolve bruto = PREÇO DE CARDÁPIO ("Preço total dos itens sem
+       * as ofertas", o primeiro número do painel financeiro do 99), sem
+       * cancelados, e já filtra `order_type = 1`. É o mesmo bruto das telas
+       * desde a 0259 — o e-mail não pode dizer um número e o painel outro.
        */
-      const { data: dias } = await admin.rpc("ninefood_api_diario", {
+      const { data: dias } = await admin.rpc("ninefood_api_diario_v2", {
         p_unit_ids: [unitId],
         p_de: "2020-01-01",
         p_ate: hojeISO(),

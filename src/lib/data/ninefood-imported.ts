@@ -57,7 +57,12 @@ async function pageAll<T>(
 export type NinefoodResumo = {
   /** Soma dos pedidos do mês (do "Total de vendas realizadas") */
   pedidos: number
-  /** "Receita total de vendas" */
+  /**
+   * Faturamento bruto. Dia da API: PREÇO DE CARDÁPIO ("Preço total dos itens
+   * sem as ofertas" do painel financeiro do 99) — as ofertas e o frete grátis
+   * que a loja bancou saem depois, em `promocoesRs`. Dia de planilha: "Receita
+   * total de vendas" (já sem as ofertas). Ver a migration 0259.
+   */
   bruto: number
   /** "Receita total" (líquido pós-taxas) */
   liquido: number
@@ -65,8 +70,21 @@ export type NinefoodResumo = {
   comissaoRs: number
   /** Soma "Taxa de canal de pagamento da loja" */
   taxaCanalPagamentoRs: number
-  /** Soma "Despesas de ofertas da loja" */
+  /**
+   * Tudo que a loja deu de desconto e que separa o `bruto` do que o cliente
+   * pagou. Dia da API: oferta paga pela loja (`promoLojaRs`) + frete grátis
+   * bancado (`freteGratisLojaRs`). Dia de planilha: "Despesas de ofertas da
+   * loja" (`promocoesPlanilhaRs`).
+   */
   promocoesRs: number
+  /**
+   * Dia da API: oferta que a LOJA bancou (preço de cardápio − base de
+   * comissão), já sem a parte que o 99 co-financiou. É o "Despesas da loja
+   * com ofertas" do painel do 99. DESCONTO do bruto no DRE.
+   */
+  promoLojaRs: number
+  /** Dia de planilha: "Despesas de ofertas da loja", como sempre foi. */
+  promocoesPlanilhaRs: number
   /**
    * Entrega feita pelo 99 e cobrada da loja (`b2pDeliveryAmount`). Só a API
    * traz; a planilha diária não tem a coluna (fica 0). Sem esta linha o DRE
@@ -75,8 +93,8 @@ export type NinefoodResumo = {
   entregaRs: number
   /**
    * Frete grátis líquido que a loja bancou (`freeDeliveryOutcome +
-   * freeDeliverySubsidy`). INFORMATIVO: já está abatido do `bruto`, que é a
-   * "Renda total das vendas" do portal — NÃO subtrair de novo. Ver 0256.
+   * freeDeliverySubsidy`), só dia da API. É o "Custos de entrega" do painel
+   * do 99. DESCONTO do bruto no DRE (desde a 0259; antes era informativo).
    */
   freteGratisLojaRs: number
   /** Soma de cancelamentos comerciantes */
@@ -238,6 +256,10 @@ export async function getNinefoodResumoByUnits(
     comissao: number
     taxaPgto: number
     promo: number
+    /** Parte de `promo` que veio da planilha. */
+    promoPlanilha: number
+    /** Parte de `promo` que é oferta paga pela loja, dia da API. */
+    promoLojaApi: number
     entrega: number
     freteGratisLoja: number
     cancel: number
@@ -284,6 +306,8 @@ export async function getNinefoodResumoByUnits(
         comissao: 0,
         taxaPgto: 0,
         promo: 0,
+        promoPlanilha: 0,
+        promoLojaApi: 0,
         entrega: 0,
         freteGratisLoja: 0,
         cancel: 0,
@@ -313,6 +337,7 @@ export async function getNinefoodResumoByUnits(
       acc.comissao += Number(row.comissao_rs ?? 0)
       acc.taxaPgto += Number(row.taxa_canal_pagamento_rs ?? 0)
       acc.promo += Number(row.promocoes_rs ?? 0)
+      acc.promoPlanilha += Number(row.promocoes_rs ?? 0)
       acc.cancel += row.cancelamentos_qtd ?? 0
       if (row.data && (Number(row.bruto ?? 0) > 0 || (row.pedidos ?? 0) > 0)) {
         acc.diasComVenda.add(row.data)
@@ -353,6 +378,8 @@ export async function getNinefoodResumoByUnits(
         comissao: 0,
         taxaPgto: 0,
         promo: 0,
+        promoPlanilha: 0,
+        promoLojaApi: 0,
         entrega: 0,
         freteGratisLoja: 0,
         cancel: 0,
@@ -373,7 +400,12 @@ export async function getNinefoodResumoByUnits(
       acc.liquido += v.liquido
       acc.comissao += v.comissao
       acc.taxaPgto += v.taxaCanal
-      acc.promo += v.promo
+      // Desde a 0259 o bruto da API é o preço de cardápio: a oferta que a loja
+      // pagou e o frete grátis que ela bancou são o desconto até o que o
+      // cliente pagou. (`v.promo`, a oferta BRUTA, incluía a parte que o 99
+      // co-financia — na Duéle 6.370,30 onde a loja pagou 5.427,43.)
+      acc.promo += v.promoLoja + v.freteGratisLoja
+      acc.promoLojaApi += v.promoLoja
       acc.entrega += v.entrega
       acc.freteGratisLoja += v.freteGratisLoja
       acc.cancel += v.cancelados
@@ -482,24 +514,22 @@ export async function getNinefoodResumoByUnits(
      * e faz o lojista achar o canal ruim, este erra PARA CIMA — e ninguém
      * reclama de um número bom. Por isso passou despercebido.
      */
-    /* Todos os dias com venda vieram da API? Aí a régua é a do PORTAL (0256):
-     * o bruto é a "Renda total das vendas", que JÁ abate a promoção da loja,
-     * e a taxa que falta itemizar é a ENTREGA feita pelo 99. Na Pinheiros
-     * (ago/26) `bruto − comissão − taxa − entrega` = 5.972,61 = orderAmount,
-     * ao centavo. Subtrair a promoção de novo dava 5.777,61 — 195,00 a menos,
-     * o tamanho exato da promoção — e o DRE inventava um crédito. Em dia de
-     * PLANILHA a entrega não existe (0) e a promoção segue na conta, então a
-     * loja só-planilha é byte-idêntica. */
-    const todosDiasViaApi =
-      acc.diasComVenda.size > 0 &&
-      [...acc.diasComVenda].every((d) => diasDaApi?.has(d) ?? false)
+    /* A derivação é a identidade contábil da cascata do 99:
+     *
+     *   bruto − ofertas/frete da loja − comissão − taxa − entrega = líquido
+     *
+     * Dia da API (0259): o bruto é o preço de cardápio e `acc.promo` é a
+     * oferta paga pela loja + o frete grátis bancado — o que separa o
+     * cardápio da renda (conferido em 44 lojas, resíduo R$ 0,00). Dia de
+     * PLANILHA: bruto e promoção da planilha, a entrega não existe (0), e a
+     * loja só-planilha é byte-idêntica ao que era.
+     *
+     * Até a 0256 a API precisava de exceção aqui (o bruto era a renda e a
+     * promoção já tinha saído — subtraí-la de novo inventava um crédito na
+     * Pinheiros). Com a régua única a exceção deixou de existir. */
     const derivado = Math.max(
       0,
-      acc.bruto -
-        acc.comissao -
-        acc.taxaPgto -
-        acc.entrega -
-        (todosDiasViaApi ? 0 : acc.promo),
+      acc.bruto - acc.comissao - acc.taxaPgto - acc.entrega - acc.promo,
     )
     const gravadoPlausivel =
       liquidoGravado > 0 &&
@@ -549,6 +579,8 @@ export async function getNinefoodResumoByUnits(
       comissaoRs: acc.comissao,
       taxaCanalPagamentoRs: acc.taxaPgto,
       promocoesRs: acc.promo,
+      promoLojaRs: acc.promoLojaApi,
+      promocoesPlanilhaRs: acc.promoPlanilha,
       entregaRs: acc.entrega,
       freteGratisLojaRs: acc.freteGratisLoja,
       cancelamentosQtd: acc.cancel,
@@ -618,10 +650,12 @@ type DiaApi = {
   recebidoDireto: number
   entrega: number
   freteGratisLoja: number
+  /** Oferta paga pela loja (sem o co-financiamento do 99). */
+  promoLoja: number
 }
 
 /**
- * Lê o extrato da API agregado por loja/dia (RPC `ninefood_api_diario`).
+ * Lê o extrato da API agregado por loja/dia (RPC `ninefood_api_diario_v2`).
  *
  * ── POR QUE UMA RPC ───────────────────────────────────────────────────────
  * A versão anterior baixava CADA LINHA do `ninefood_api_bill` pelo PostgREST
@@ -655,7 +689,7 @@ async function ninefoodApiPorDia(
 
   const admin = createAdminClient()
   const { data, error } = await comRetentativa(() =>
-    admin.rpc("ninefood_api_diario", {
+    admin.rpc("ninefood_api_diario_v2", {
       p_unit_ids: unitIds,
       p_de: de,
       p_ate: ate,
@@ -680,6 +714,7 @@ async function ninefoodApiPorDia(
     recebido_direto: number | string
     entrega: number | string
     frete_gratis_loja: number | string
+    promo_loja: number | string
   }[]) {
     let porDia = out.get(r.unit_id)
     if (!porDia) {
@@ -697,6 +732,7 @@ async function ninefoodApiPorDia(
       recebidoDireto: Number(r.recebido_direto) || 0,
       entrega: Number(r.entrega) || 0,
       freteGratisLoja: Number(r.frete_gratis_loja) || 0,
+      promoLoja: Number(r.promo_loja) || 0,
     })
   }
   return out
@@ -726,6 +762,8 @@ export async function getNinefoodResumoForMonth(
       comissaoRs: 0,
       taxaCanalPagamentoRs: 0,
       promocoesRs: 0,
+      promoLojaRs: 0,
+      promocoesPlanilhaRs: 0,
       entregaRs: 0,
       freteGratisLojaRs: 0,
       cancelamentosQtd: 0,

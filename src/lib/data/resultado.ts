@@ -350,6 +350,8 @@ export type NetworkDrePlat = {
   cancelQtd?: number
   /** VR líquido à parte (só iFood). */
   vrLiquido: number
+  /** Desconto da loja entre o bruto e as taxas — 99 por API (ver DrePlat). */
+  descontos?: { label: string; value: number }[]
   /** Só iFood: dinheiro recebido direto na entrega (fora do repasse). Volta no
    * "Resultado total", igual ao DRE por unidade. */
   recebidoDireto?: number
@@ -418,7 +420,7 @@ export async function getNetworkDrePlatforms(
       // consolidado. Só iFood tem.
       recDireto: 0, mensalidade: 0,
     },
-    ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0, entrega: 0, freteGratis: 0 },
+    ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0, promoPlanilha: 0, promoLoja: 0, entrega: 0, freteGratis: 0 },
     ke: { bruto: 0, liq: 0, promo: 0 },
     // Canal próprio: sem comissão, sem promoção de plataforma. O que separa
     // bruto de líquido aqui é só cancelamento.
@@ -484,6 +486,8 @@ export async function getNetworkDrePlatforms(
       a.ni.comissao += nine!.comissaoRs
       a.ni.taxaPgto += nine!.taxaCanalPagamentoRs
       a.ni.promo += nine!.promocoesRs
+      a.ni.promoPlanilha += nine!.promocoesPlanilhaRs
+      a.ni.promoLoja += nine!.promoLojaRs
       a.ni.entrega += nine!.entregaRs
       a.ni.freteGratis += nine!.freteGratisLojaRs
     }
@@ -506,6 +510,7 @@ export async function getNetworkDrePlatforms(
     promoLoja: number,
     cancel?: { valor: number; qtd: number },
     recebidoDireto = 0,
+    descontos: { label: string; value: number }[] = [],
   ): NetworkDrePlat | null => {
     if (bruto <= 0) return null
     // Taxa REAL = bruto − repasse − recebido direto. O recebido direto não é
@@ -515,7 +520,8 @@ export async function getNetworkDrePlatforms(
     const lista: NetworkDrePlat["itens"] = itens.filter((i) => i.value > 0)
     // Item `info` aparece mas não soma: já está dentro do bruto (99).
     const somaItens = lista.reduce((s, i) => s + (i.info ? 0 : i.value), 0)
-    const derivada = bruto - liq - recebidoDireto
+    const descontoTotal = descontos.reduce((s, d) => s + Math.max(0, d.value), 0)
+    const derivada = bruto - descontoTotal - liq - recebidoDireto
 
     /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS, NÃO `bruto − líquido`.
      *
@@ -550,7 +556,8 @@ export async function getNetworkDrePlatforms(
      *
      * Agora o rótulo diz o que a linha é: uma diferença entre o que a
      * plataforma repassou e o que as taxas explicam. */
-    const naoExplicado = liq > 0 ? bruto - recebidoDireto - taxaTotal - liq : 0
+    const naoExplicado =
+      liq > 0 ? bruto - descontoTotal - recebidoDireto - taxaTotal - liq : 0
     if (Math.abs(naoExplicado) > 0.5) {
       lista.push({
         label:
@@ -571,7 +578,8 @@ export async function getNetworkDrePlatforms(
       cancelQtd: cancel?.qtd ?? 0,
       vrLiquido: vr,
       recebidoDireto,
-      promocoesLoja: Math.min(Math.abs(promoLoja), taxaTotal),
+      promocoesLoja: Math.min(Math.abs(promoLoja), taxaTotal + descontoTotal),
+      descontos,
       itens: lista,
     }
   }
@@ -601,12 +609,19 @@ export async function getNetworkDrePlatforms(
         { label: "Comissão", value: a.ni.comissao },
         { label: "Taxa de pagamento", value: a.ni.taxaPgto },
         { label: "Entrega pelo 99", value: a.ni.entrega },
-        // Já abatidas do bruto (portal): mostram, não somam. Ver 0256.
-        { label: "Promoções da loja", value: a.ni.promo, info: true },
-        { label: "Frete grátis bancado pela loja", value: a.ni.freteGratis, info: true },
+        // Loja só-planilha: o bruto já vem sem as ofertas — informa, não soma.
+        { label: "Promoções da loja", value: a.ni.promoPlanilha, info: true },
       ],
       0,
       a.ni.promo,
+      undefined,
+      0,
+      // API (0259): bruto = preço de cardápio; estas levam ao que o cliente
+      // pagou. Mesma abertura do DRE da loja.
+      [
+        { label: "Promoções pagas pela loja", value: a.ni.promoLoja },
+        { label: "Frete grátis bancado pela loja", value: a.ni.freteGratis },
+      ],
     ),
     make(
       "keeta",

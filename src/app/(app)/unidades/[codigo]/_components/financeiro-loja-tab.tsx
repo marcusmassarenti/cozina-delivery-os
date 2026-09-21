@@ -33,6 +33,7 @@ import { getKeetaPromocaoResumo } from "@/lib/data/keeta-promocoes"
 import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getAReceber99ForUnit } from "@/lib/data/ninefood-a-receber"
+import { getDepositos99 } from "@/lib/data/ninefood-repasses"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth, getEntregaPropria } from "@/lib/data/taxa-entrega"
 import { getUnitCostBreakdown } from "@/lib/data/unit-costs"
@@ -135,6 +136,7 @@ export async function FinanceiroLojaTab({
     entregaPropria,
     cwOp,
     aReceber99,
+    depositos99,
   ] = await Promise.all([
     // Estas SEGUEM o período escolhido — as tabelas têm data por pedido.
     getPagamentoResumoForMonth(unitId, year, month, dateRange),
@@ -166,6 +168,13 @@ export async function FinanceiroLojaTab({
     // pergunta é "quanto ainda vai cair na minha conta", que é sobre o
     // futuro, não sobre o mês que a pessoa está olhando.
     getAReceber99ForUnit(unitId),
+    // Depósitos que pagam as vendas DO PERÍODO — o par do líquido do DRE.
+    getDepositos99(
+      unitId,
+      dateRange?.start ?? `${year}-${String(month).padStart(2, "0")}-01`,
+      dateRange?.end ??
+        `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
+    ),
   ])
   // Fora do Promise.all de propósito: é leitura pequena e opcional — loja sem
   // relatório Super importado devolve vazio e o card some.
@@ -235,6 +244,8 @@ export async function FinanceiroLojaTab({
     // Só o iFood traz (da Conciliação): R$ e qtd de pedidos cancelados, pro
     // DRE abrir em "Vendas totais − cancelados" igual ao portal.
     cancel?: { valor: number; qtd: number },
+    // Desconto da loja entre o bruto e as taxas (99 por API, ver DrePlat).
+    descontos: { label: string; value: number }[] = [],
   ): DrePlat | null => {
     const p = m.platforms.find((x) => x.id === id)
     if (!p || p.bruto <= 0) return null
@@ -242,7 +253,8 @@ export async function FinanceiroLojaTab({
     // Item `info` aparece mas não soma: já está dentro do bruto (ver o tipo).
     const somaItens = lista.reduce((a, i) => a + (i.info ? 0 : i.value), 0)
     const recebidoDireto = p.recebidoDireto ?? 0
-    const derivada = p.bruto - p.liquido - recebidoDireto
+    const descontoTotal = descontos.reduce((a, d) => a + Math.max(0, d.value), 0)
+    const derivada = p.bruto - descontoTotal - p.liquido - recebidoDireto
 
     /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS. Mesma mudança de resultado.ts,
      * e o motivo nasceu nesta tela: a DRE da Pizzaria Forno a Lenha 4
@@ -265,7 +277,9 @@ export async function FinanceiroLojaTab({
      * o resto da conta, do tamanho exato das taxas. Chamar entulho de
      * conciliação de crédito faz o lojista somar no caixa o que não existe. */
     const naoExplicado =
-      p.liquido > 0 ? p.bruto - recebidoDireto - taxaTotal - p.liquido : 0
+      p.liquido > 0
+        ? p.bruto - descontoTotal - recebidoDireto - taxaTotal - p.liquido
+        : 0
     if (Math.abs(naoExplicado) > 0.5) {
       lista.push({
         label:
@@ -286,6 +300,7 @@ export async function FinanceiroLojaTab({
       recebidoDireto: p.recebidoDireto ?? 0,
       perdaCancelamento: cancel?.valor ?? 0,
       cancelQtd: cancel?.qtd ?? 0,
+      descontos,
       itens: lista,
     }
   }
@@ -344,16 +359,26 @@ export async function FinanceiroLojaTab({
         // Entrega feita pelo 99 e cobrada da loja. Só a API traz; sem esta
         // linha a Pinheiros mostrava "não explicada −R$ 1.675,92 (18,6%)".
         { label: "Entrega pelo 99", value: nineResumo.entregaRs },
-        // As duas abaixo JÁ estão abatidas do bruto (= "Renda total das
-        // vendas" do portal): mostram o que a loja deu, mas não somam.
-        { label: "Promoções da loja", value: nineResumo.promocoesRs, info: true },
+        // Dia de PLANILHA: o bruto dela já vem sem as ofertas, então a
+        // promoção só informa (não soma). Loja por API não tem esta linha —
+        // lá a oferta é desconto, logo abaixo.
         {
-          label: "Frete grátis bancado pela loja",
-          value: nineResumo.freteGratisLojaRs,
+          label: "Promoções da loja",
+          value: nineResumo.promocoesPlanilhaRs,
           info: true,
         },
       ],
       0,
+      undefined,
+      // API (0259): bruto = preço de cardápio, e estas duas levam até o que o
+      // cliente pagou. Mesmas linhas do painel financeiro do 99.
+      [
+        { label: "Promoções pagas pela loja", value: nineResumo.promoLojaRs },
+        {
+          label: "Frete grátis bancado pela loja",
+          value: nineResumo.freteGratisLojaRs,
+        },
+      ],
     ),
     buildPlat("keeta", "Keeta", keetaItens, 0),
   ].filter((p): p is DrePlat => p !== null)
@@ -417,7 +442,10 @@ export async function FinanceiroLojaTab({
               Só pra loja conectada por API: quem sobe planilha não tem
               `expect_settle_date`, e R$ 0,00 ali afirmaria "não há nada a
               receber" numa loja que vende. Ver ninefood-a-receber.ts. */}
-          {aReceber99 && aReceber99.valor > 0 && (
+          {/* Loja com depósitos no período: o card Recebíveis responde a
+              mesma pergunta com data e valor de cada depósito — a linha solta
+              repetiria um número diferente (ela não desconta reembolso). */}
+          {!depositos99 && aReceber99 && aReceber99.valor > 0 && (
             <p
               className="mt-2 px-1 text-xs text-muted-foreground"
               title={
@@ -506,9 +534,17 @@ export async function FinanceiroLojaTab({
           />
         )}
 
-        {/* Recebíveis — quando o dinheiro cai (repasse da Fatura da Keeta) */}
-        {keetaRepasse.ciclos.length > 0 && (
-          <RecebiveisPlataforma keeta={keetaRepasse} />
+        {/* Recebíveis — quando o dinheiro cai: 99 (data por pedido, da API)
+            e Keeta (repasse da Fatura), no mesmo card. */}
+        {(keetaRepasse.ciclos.length > 0 ||
+          (depositos99 && depositos99.length > 0)) && (
+          <RecebiveisPlataforma
+            keeta={keetaRepasse}
+            depositos99={depositos99}
+            liquido99Dre={
+              m.platforms.find((p) => p.id === "99food")?.liquido ?? 0
+            }
+          />
         )}
       </div>
 

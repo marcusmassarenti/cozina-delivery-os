@@ -49,6 +49,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.0",
+    date: "2026-09-21",
+    tag: "Melhoria",
+    title: "Faturamento do 99 igual ao painel financeiro do 99",
+    summary:
+      "O faturamento bruto do 99 passa a ser o preço de cardápio, o mesmo número que abre o painel financeiro do 99. O DRE desconta as promoções e o frete grátis que a loja bancou e segue até o líquido.",
+    areas: [
+      {
+        area: "DRE e página da loja",
+        items: [
+          {
+            kind: "melhoria",
+            title: "O DRE do 99 começa pelo mesmo número do painel do 99",
+            antes:
+              "O faturamento bruto do 99 já vinha com as ofertas da loja descontadas. Quem abria o painel financeiro do 99 via um valor bem maior (“Preço total dos itens sem as ofertas”) e não achava esse número em lugar nenhum daqui.",
+            depois:
+              "O bruto do 99 é o preço de cardápio. Logo abaixo, o DRE mostra “(−) Descontos da loja” (promoções pagas pela loja e frete grátis bancado), chega em “Vendas (o que o cliente pagou)” e só então desconta as taxas do 99. O líquido não muda. Como o bruto ficou maior, o percentual que fica na loja e o ticket médio do 99 mudam junto. Vale para lojas conectadas ao 99 por API.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.28.1",
     date: "2026-09-21",
     tag: "Melhoria",

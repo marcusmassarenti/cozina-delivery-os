@@ -28,6 +28,14 @@ export type DrePlat = {
   perdaCancelamento?: number
   /** Apenas iFood: quantidade de pedidos cancelados (total). */
   cancelQtd?: number
+  /**
+   * Desconto que a LOJA deu e que separa o bruto do que o cliente pagou —
+   * hoje só o 99 conectado por API, cujo bruto é o preço de cardápio (0259):
+   * "Promoções pagas pela loja" e "Frete grátis bancado pela loja", as mesmas
+   * linhas do painel financeiro do 99. Sai ANTES das taxas, e não entra em
+   * `taxaTotal`.
+   */
+  descontos?: { label: string; value: number }[]
   /** Abertura das taxas (pode ser parcial; Keeta vem vazio). `credit` = linha
    * positiva (estorno/promoção que a plataforma devolveu), pra fechar com a
    * taxa líquida real. */
@@ -186,7 +194,20 @@ export function DreDetalhado({
   // entrega (que o iFood desconta do repasse) e inflava a % de taxa — um
   // cliente comparou com o portal e viu "31%" onde a taxa real era menor.
   // Agora cada linha bate 1-a-1 com o Portal do Parceiro.
-  const taxas = Math.max(0, bruto - liquido - recebidoDireto)
+  // Descontos da loja (99 por API): saem do bruto ANTES das taxas. Em "Todas"
+  // o nome da plataforma vai junto — hoje só o 99 tem, mas a linha não pode
+  // fingir que o desconto é da rede inteira.
+  const descontosItens = (isTodas ? platforms : plat ? [plat] : []).flatMap(
+    (p) =>
+      (p.descontos ?? [])
+        .filter((d) => d.value > 0.005)
+        .map((d) => ({
+          label: isTodas && multi ? `${d.label} (${p.name})` : d.label,
+          value: d.value,
+        })),
+  )
+  const descontosTotal = descontosItens.reduce((a, d) => a + d.value, 0)
+  const taxas = Math.max(0, bruto - descontosTotal - liquido - recebidoDireto)
   // Faturou e o repasse não existe: é dado que falta (loja de API antes do
   // extrato do iFood), não taxa de 100%. Deriva do próprio número em vez de
   // vir por prop — assim vale na unidade, no DRE Grupo e no Resultado de uma
@@ -342,6 +363,32 @@ export function DreDetalhado({
             pct={brutoExibido > 0 ? (rp / brutoExibido) * 100 : 0}
           />
         </div>
+      )}
+
+      {/* Descontos da loja: a conta desce do preço de cardápio (o número que
+          o painel do 99 mostra primeiro) até o que o cliente pagou, e só
+          depois vêm as taxas. Antes o bruto já nascia sem as ofertas e o
+          lojista não achava no DRE os "R$ 20 mil" que via no 99 (Duéle,
+          21/09/26). */}
+      {descontosTotal > 0.005 && (
+        <>
+          <Row
+            label="(−) Descontos da loja"
+            value={`− ${fmtBRL(descontosTotal)}`}
+            muted
+            pct={pctOf(descontosTotal)}
+          />
+          <div className="mb-1 space-y-0.5 pl-1">
+            <ItemList itens={descontosItens} total={descontosTotal} base={bruto} />
+          </div>
+          <Divider />
+          <Row
+            label="= Vendas (o que o cliente pagou)"
+            value={fmtBRL(bruto - descontosTotal)}
+            bold
+            pct={pctOf(bruto - descontosTotal)}
+          />
+        </>
       )}
 
       {/* Faturou e não há repasse: o extrato do iFood ainda não chegou.
