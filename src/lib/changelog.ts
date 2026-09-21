@@ -55,6 +55,8 @@ export const CHANGELOG: Release[] = [
     title: "Faturamento do 99 igual ao painel financeiro do 99",
     summary:
       "O faturamento bruto do 99 passa a ser o preço de cardápio, o mesmo número que abre o painel financeiro do 99. O DRE desconta as promoções e o frete grátis que a loja bancou e segue até o líquido.",
+    // Marcus pediu pra tirar o pop-up (21/09/26): fica só na tela de Novidades.
+    semPopup: true,
     areas: [
       {
         area: "DRE e página da loja",
