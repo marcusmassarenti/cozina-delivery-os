@@ -330,7 +330,7 @@ function Checkout({
             ? "Pix"
             : plano?.billingType === "BOLETO"
               ? "boleto"
-              : plano?.billingType === "UNDEFINED"
+              : plano?.billingType === "UNDEFINED" || !plano?.billingTypeFixo
                 ? "cartão, Pix ou boleto"
                 : "cartão de crédito"}{" "}
           · cancele quando quiser.
@@ -443,6 +443,7 @@ function Checkout({
                   defaultNome={plano.name}
                   defaultPlan={defaultPlan}
                   billingType={plano.billingType}
+                  formaLivre={!plano.billingTypeFixo}
                   acrescimo12xPct={plano.regra.acrescimo12xPct}
                 />
               </>

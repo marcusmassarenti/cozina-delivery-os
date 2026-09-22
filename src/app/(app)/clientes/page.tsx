@@ -25,6 +25,8 @@ import { NovoClienteDialog } from "./_components/novo-cliente-dialog"
 import { AvisoPushDialog } from "./_components/aviso-push-dialog"
 import { PlanSettingsDialog } from "./_components/plan-settings-dialog"
 import { ClientsTable } from "./_components/clients-table"
+import { AtivacaoPainel } from "./_components/ativacao-painel"
+import { getAtivacaoClientes } from "@/lib/data/ativacao"
 
 export default async function PlataformaPage() {
   if (!(await isSuperadmin())) notFound()
@@ -33,6 +35,7 @@ export default async function PlataformaPage() {
   const defaultPlan = await getDefaultPlan()
   const pacote = await getPacoteConfig()
   const regraCiclos = await getRegraCiclos()
+  const ativacao = await getAtivacaoClientes()
 
   const nowMs = Date.now()
   const now = new Date(nowMs)
@@ -154,6 +157,10 @@ export default async function PlataformaPage() {
           <NovoClienteDialog />
         </div>
       </div>
+
+      {/* Ativação: em que etapa cada cliente novo parou (22/09/26). Fica no
+          topo porque é a fila que pede ação HOJE — o resto da tela é consulta. */}
+      <AtivacaoPainel clientes={ativacao} />
 
       {/* KPIs financeiros */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

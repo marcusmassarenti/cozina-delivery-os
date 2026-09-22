@@ -7,6 +7,7 @@ import {
   MapPin,
   Phone,
   ReceiptText,
+  MessageCircle,
   Sparkles,
   Store,
   User,
@@ -113,6 +114,39 @@ const NF_STATUS: Record<string, { label: string; cls: string }> = {
   PROCESSING_CANCELLATION: { label: "Cancelando", cls: "text-amber-600" },
 }
 
+const ETAPA_ROTULO: Record<string, string> = {
+  sem_loja: "sem loja",
+  sem_dado: "sem o 1º número",
+  sem_conexao: "sem conexão",
+  pronto_pra_assinar: "pronto pra assinar",
+  assinou: "assinante",
+}
+
+/**
+ * WhatsApp do titular com a mensagem da etapa dele — o mesmo do painel de
+ * Ativação, aqui dentro da ficha (Marcus, 22/09/26). Abre o WhatsApp de quem
+ * clica: sem integração paga, o envio é manual e sai do número do Marcus.
+ */
+function ChamarWhatsapp({
+  wa,
+}: {
+  wa: { link: string; etapa: string } | null
+}) {
+  if (!wa) return null
+  return (
+    <a
+      href={wa.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Abre o seu WhatsApp com a mensagem pronta pra etapa: ${ETAPA_ROTULO[wa.etapa] ?? wa.etapa}`}
+      className="mr-2 inline-flex items-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+    >
+      <MessageCircle className="size-4" />
+      Chamar no WhatsApp
+    </a>
+  )
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     // min-w-0 + break-words: item de grid tem largura mínima igual ao conteúdo,
@@ -192,6 +226,7 @@ export function ClientDetailView({
           cheia tem as mesmas ações dentro do próprio cabeçalho, mais abaixo. */}
       {embedded && (
         <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+          <ChamarWhatsapp wa={c.whatsappEtapa} />
           <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
           <VerComoBotao holdingId={c.id} holdingName={c.name} />
           <EncerrarClienteBotao holdingId={c.id} holdingName={c.name} encerradoEm={c.encerradoEm} temAssinaturaAsaas={!!c.asaasSubscriptionId} parceladoAnual={c.billingCycle === "anual_12x"} faturasAbertas={c.faturas.filter((f) => f.status === "aberta").length} onChanged={onChanged} />
@@ -218,6 +253,7 @@ export function ClientDetailView({
               </span>
             )}
             <span className="ml-auto">
+              <ChamarWhatsapp wa={c.whatsappEtapa} />
               <AvisoPushDialog holdingId={c.id} holdingName={c.name} />
               <VerComoBotao holdingId={c.id} holdingName={c.name} />
               <EncerrarClienteBotao holdingId={c.id} holdingName={c.name} encerradoEm={c.encerradoEm} temAssinaturaAsaas={!!c.asaasSubscriptionId} parceladoAnual={c.billingCycle === "anual_12x"} faturasAbertas={c.faturas.filter((f) => f.status === "aberta").length} onChanged={onChanged} />

@@ -157,6 +157,12 @@ export type PlanoOption = {
 export type PlanoAtual = {
   /** Forma de cobrança no Asaas. "CREDIT_CARD" é o padrão de quem não pediu outra. */
   billingType: string
+  /**
+   * A forma foi COMBINADA pela operação (ex.: DG em Pix)? Então a tela não
+   * oferece escolha. Sem nada combinado, o cliente escolhe cartão, Pix ou
+   * boleto no checkout.
+   */
+  billingTypeFixo: boolean
   holdingId: string
   name: string
   status: BillingStatus
@@ -331,6 +337,7 @@ export async function getPlanoAtual(): Promise<PlanoAtual | null> {
     // Forma de cobrança do cliente. Nulo = cartão (o padrão). A TELA usa isto
     // pra não prometer "pagamento no cartão" pra quem fechou em Pix.
     billingType: (h.asaas_billing_type as string | null) ?? "CREDIT_CARD",
+    billingTypeFixo: h.asaas_billing_type != null,
     status,
     trialEndsAt,
     activeUnits,

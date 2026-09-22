@@ -39,6 +39,7 @@ import {
 } from "@/lib/pricing"
 import { getFaturasDoCliente, getResumoCobranca, type Fatura } from "@/lib/data/faturas"
 import { getConsumoIaDoCliente } from "@/lib/data/ia-custos"
+import { getAtivacaoDoCliente } from "@/lib/data/ativacao"
 import {
   computeBillingStatus,
   effectiveTrialEnd,
@@ -708,6 +709,11 @@ export type ClientDetail = ClientOverview & {
   /** E-mail de login do admin (auth). */
   loginEmail: string | null
   contactWhatsapp: string | null
+  /**
+   * WhatsApp do titular com a mensagem da ETAPA em que o cliente está (sem
+   * loja, sem número…) — o mesmo do painel de Ativação. Nulo sem número.
+   */
+  whatsappEtapa: { link: string; etapa: string } | null
   usersList: ClientUser[]
   unitsFull: ClientUnitFull[]
   asaasCustomerId: string | null
@@ -1005,6 +1011,10 @@ export async function getClientDetail(
     contactName: contact?.name ?? null,
     loginEmail: contact?.email ?? null,
     contactWhatsapp: contact?.whatsapp ?? null,
+    whatsappEtapa: await (async () => {
+      const a = await getAtivacaoDoCliente(holdingId)
+      return a?.whatsappLink ? { link: a.whatsappLink, etapa: a.etapa } : null
+    })(),
     usersList,
     unitsFull,
     asaasCustomerId,

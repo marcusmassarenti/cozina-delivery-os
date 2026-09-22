@@ -36,7 +36,8 @@ export function SubscribeForm({
   jaTemCliente,
   defaultNome,
   defaultPlan,
-  billingType,
+  billingType: billingTypeCombinado,
+  formaLivre = false,
   acrescimo12xPct,
 }: {
   planos: PlanoOption[]
@@ -48,6 +49,8 @@ export function SubscribeForm({
   defaultPlan: PlanId
   /** Forma de cobrança do cliente. "CREDIT_CARD" é o padrão. */
   billingType: string
+  /** Nada combinado com a operação: o cliente escolhe cartão, Pix ou boleto. */
+  formaLivre?: boolean
   /** Acréscimo do anual em 12x (vem do banco — ver @/lib/pricing). */
   acrescimo12xPct: number
 }) {
@@ -59,9 +62,25 @@ export function SubscribeForm({
   // acréscimo; mensal custa +30%.
   const [ciclo, setCiclo] = React.useState<BillingCycle>("anual")
   const regra = { acrescimo12xPct }
+  /* Forma de pagamento escolhida aqui (22/09/26). Antes era só cartão, salvo
+   * pra quem a operação liberasse Pix/boleto à mão — e dono de restaurante
+   * pequeno nem sempre tem cartão com limite pra software. Cartão continua
+   * marcado de saída porque é o único que renova sozinho; o 12x é
+   * parcelamento no cartão e trava nele. */
+  const [forma, setForma] = React.useState<"CREDIT_CARD" | "PIX" | "BOLETO">(
+    "CREDIT_CARD",
+  )
+  const billingType = formaLivre
+    ? ciclo === "anual_12x"
+      ? "CREDIT_CARD"
+      : forma
+    : billingTypeCombinado
   // 12x é parcelamento no cartão: quem fechou em Pix/boleto não vê a opção.
   const ciclosDisponiveis = CICLOS.filter(
-    (c) => c !== "anual_12x" || (billingType !== "PIX" && billingType !== "BOLETO"),
+    (c) =>
+      c !== "anual_12x" ||
+      formaLivre ||
+      (billingTypeCombinado !== "PIX" && billingTypeCombinado !== "BOLETO"),
   )
 
   // Endereço (pra Nota Fiscal) — CEP autopreenche o resto via ViaCEP.
@@ -167,7 +186,7 @@ export function SubscribeForm({
             </div>
             <p className="text-center text-[11px] text-muted-foreground">
               {ciclo === "anual"
-                ? `1 cobrança à vista no cartão — ${eco}% a menos que o mensal.`
+                ? `1 cobrança à vista por ano — ${eco}% a menos que o mensal.`
                 : ciclo === "anual_12x"
                   ? `O ano em ${PARCELAS_12X} parcelas no cartão. O valor total usa o limite do cartão.`
                   : "Cobrado todo mês. Cancele quando quiser."}
@@ -438,10 +457,10 @@ export function SubscribeForm({
         )}
         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Check className="size-3 text-emerald-600" strokeWidth={3} />
-          {billingType === "PIX"
-            ? "Pix · a cobrança chega todo mês no seu e-mail"
-            : billingType === "BOLETO"
-              ? "Boleto · a cobrança chega todo mês no seu e-mail"
+          {billingType === "PIX" || billingType === "BOLETO"
+            ? `${billingType === "PIX" ? "Pix" : "Boleto"} · a cobrança chega ${
+                ciclo === "mensal" ? "todo mês" : "1 vez por ano"
+              } no seu e-mail`
               : billingType === "UNDEFINED"
                 ? "Você escolhe como pagar · cancele quando quiser"
                 : ciclo === "anual" && !precoCustom
@@ -451,6 +470,48 @@ export function SubscribeForm({
                     : "Cartão de crédito · renova automático · cancele quando quiser"}
         </p>
       </div>
+
+      {formaLivre && (
+        <div>
+          <input type="hidden" name="forma" value={billingType} />
+          <p className="mb-2 text-sm font-medium">Forma de pagamento</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {(
+              [
+                ["CREDIT_CARD", "Cartão de crédito", "renova sozinho"],
+                ["PIX", "Pix", ciclo === "mensal" ? "cobrança todo mês por e-mail" : "cobrança por e-mail"],
+                ["BOLETO", "Boleto", ciclo === "mensal" ? "cobrança todo mês por e-mail" : "cobrança por e-mail"],
+              ] as const
+            ).map(([id, rotulo, sub]) => {
+              const bloqueado = ciclo === "anual_12x" && id !== "CREDIT_CARD"
+              const ativo = billingType === id
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={bloqueado}
+                  onClick={() => setForma(id)}
+                  aria-pressed={ativo}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                    ativo
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  <p className="text-sm font-medium">{rotulo}</p>
+                  <p className="text-[11px] text-muted-foreground">{sub}</p>
+                </button>
+              )
+            })}
+          </div>
+          {ciclo === "anual_12x" && (
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              O anual em 12x é parcelado no cartão. Pra pagar com Pix ou
+              boleto, escolha o anual à vista ou o mensal.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* O ACEITE. É daqui que nasce o Termo de Adesão: o servidor recusa a
           assinatura sem esta caixa, grava quem aceitou (conta, IP, data) e o
@@ -496,7 +557,9 @@ export function SubscribeForm({
       <SubmitBtn
         label={
           jaTemCliente
-            ? "Ir para o pagamento no cartão"
+            ? billingType === "PIX" || billingType === "BOLETO"
+              ? "Ir para o pagamento"
+              : "Ir para o pagamento no cartão"
             : precoCustom
               ? `Assinar por ${fmtBRL(cobrancaAgora)}/mês`
               : ciclo === "anual"

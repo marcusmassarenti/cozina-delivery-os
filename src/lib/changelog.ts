@@ -49,6 +49,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.2",
+    date: "2026-09-22",
+    tag: "Melhoria",
+    title: "Assinar com Pix ou boleto",
+    summary:
+      "Na assinatura, além do cartão de crédito, agora dá pra escolher Pix ou boleto.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Assinatura",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Escolha como pagar",
+            antes: "A assinatura era só no cartão de crédito.",
+            depois:
+              "Escolha cartão (renova sozinho), Pix ou boleto — nesses dois, a cobrança chega no seu e-mail. O anual em 12x continua no cartão.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.1",
     date: "2026-09-22",
     tag: "Melhoria",

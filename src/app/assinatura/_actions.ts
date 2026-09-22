@@ -228,7 +228,14 @@ export async function assinar(
   const hr = (hRow ?? {}) as Record<string, string | null | undefined>
   // Já assinou alguma vez (assinatura ou 12x)? Então cupom de 1ª fatura não vale.
   const jaAssinou = !!(hr.asaas_subscription_id || hr.asaas_installment_id)
-  const billingType = (hr.asaas_billing_type ?? null) as AsaasBillingType | null
+  // Forma COMBINADA pela operação vence; sem nada combinado, vale a escolha
+  // do cliente no checkout (cartão, Pix ou boleto — ver SubscribeForm).
+  const formaEscolhida = String(formData.get("forma") ?? "")
+  const escolhaDoCliente: AsaasBillingType | null =
+    !hr.asaas_billing_type && (formaEscolhida === "PIX" || formaEscolhida === "BOLETO")
+      ? formaEscolhida
+      : null
+  const billingType = (hr.asaas_billing_type ?? escolhaDoCliente) as AsaasBillingType | null
   // O 12x é parcelamento no CARTÃO. Boleto parcelado vira carnê, e aí o cliente
   // pode parar no meio — justamente o que esta opção existe pra evitar.
   if (ciclo === "anual_12x" && (billingType === "PIX" || billingType === "BOLETO"))
@@ -602,6 +609,9 @@ export async function assinar(
         .update({
           asaas_subscription_id: subscriptionId,
           payment_method: "Asaas",
+          // Pix/boleto escolhido no checkout fica gravado: é o que a tela de
+          // Plano e as mudanças de plano leem pra saber como ele paga.
+          ...(escolhaDoCliente ? { asaas_billing_type: escolhaDoCliente } : {}),
           billing_cycle: ciclo,
           // Um 12x que terminou não pode ficar pendurado ao lado da assinatura nova.
           asaas_installment_id: null,
