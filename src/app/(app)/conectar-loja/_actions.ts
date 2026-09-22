@@ -363,3 +363,35 @@ export async function marcarInicio99(unitId: string): Promise<void> {
     // quebra.
   }
 }
+
+/**
+ * Link de autorização do 99, GERADO NO CLIQUE, pra loja do próprio cliente.
+ *
+ * Até 22/09/26 o link era uma constante no código, gerada em 18/08 — e esses
+ * links valem 7 dias (`lib/ninefood/link-autorizacao.ts`). Todo cliente novo
+ * desde 25/08 clicava num link vencido, bem no passo que devia ser o mais
+ * fácil de fazer sozinho.
+ *
+ * Aqui a trava não é "superadmin" (como na tela de operação): é o cliente ter
+ * acesso à loja que está conectando. A URL é do nosso app e não expõe dado de
+ * ninguém; quem a usa só autoriza a PRÓPRIA conta do 99.
+ */
+export async function linkAutorizacao99DaLoja(
+  unitId: string,
+): Promise<{ ok: true; url: string } | { ok: false; erro: string }> {
+  const loja = await unidadeDoUsuario(unitId)
+  if (!loja) return { ok: false, erro: "Loja não encontrada." }
+  // Fotografa as lojas do 99 ANTES de ele sair — é o recorte que permite
+  // achar a dele na volta.
+  await marcarInicio99(unitId)
+  const { gerarLinkAutorizacao99 } = await import("@/lib/ninefood/link-autorizacao")
+  const r = await gerarLinkAutorizacao99()
+  if (!r.ok) {
+    console.error("linkAutorizacao99DaLoja:", r.error)
+    return {
+      ok: false,
+      erro: "O 99 não respondeu agora. Tente de novo em instantes.",
+    }
+  }
+  return { ok: true, url: r.url }
+}

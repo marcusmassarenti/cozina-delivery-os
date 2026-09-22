@@ -45,6 +45,11 @@ export async function enviarNovidades(opts: {
     .eq("conta_interna", false)
     // Cliente encerrado não recebe mais nada.
     .is("encerrado_em", null)
+    // Só quem já assina. Novidade de produto pra quem está no teste — a
+    // Maracayá recebeu a de agosto no dia seguinte ao cadastro, antes de ter
+    // uma loja — disputa atenção com o único e-mail que importa naquela
+    // hora: o próximo passo pra ver os próprios números.
+    .eq("paid", true)
     .order("name")
 
   for (const h of (holdings ?? []) as { id: string; name: string }[]) {

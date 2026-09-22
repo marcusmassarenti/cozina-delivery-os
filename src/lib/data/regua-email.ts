@@ -25,6 +25,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getDefaultPlan, precoDoPlano, type PlanId } from "@/lib/data/assinatura"
 
 import { hojeBR, vencimentoEfetivo } from "@/lib/dia-br"
+import { effectiveTrialEnd } from "@/lib/data/billing"
 
 // Brasília, não UTC (em UTC o dia virava às 21h).
 const hojeISO = () => hojeBR()
@@ -292,7 +293,13 @@ export async function rodarReguaEmail(): Promise<ResultadoRegua> {
       else out.falhas.push({ cliente: nome, tipo, erro: r.erro ?? "?" })
     }
 
-    const trialFim = h.trial_ends_at ? String(h.trial_ends_at) : null
+    // O MESMO fim de teste que a tela usa (`effectiveTrialEnd`: nunca além de
+    // cadastro + 7 dias). Ler o `trial_ends_at` cru fazia o e-mail anunciar
+    // uma data e o sistema bloquear em outra.
+    const trialFim = effectiveTrialEnd(
+      h.trial_ends_at ? String(h.trial_ends_at) : null,
+      h.created_at ? String(h.created_at) : null,
+    )
     const pago = Boolean(h.paid)
 
     // 1) Boas-vindas — todo cliente com e-mail confirmado recebe uma vez.

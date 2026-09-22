@@ -108,6 +108,18 @@ export function SignupForm() {
       {state.message && !state.ok && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
           {state.message}
+          {/* A mensagem manda chamar no WhatsApp — o link tem que estar aqui,
+              senão a pessoa fica com a instrução e sem o caminho. */}
+          {state.message.includes("WhatsApp") && (
+            <a
+              href="https://wa.me/5511995125139?text=Oi!%20Tentei%20criar%20minha%20conta%20no%20Delivery%20OS%20e%20deu%20erro."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 block font-semibold underline"
+            >
+              Chamar no WhatsApp
+            </a>
+          )}
         </div>
       )}
 

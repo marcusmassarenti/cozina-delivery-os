@@ -44,6 +44,15 @@ const DIAS_DE_SILENCIO = 1
  */
 const DIAS_ATE_EXPIRAR = 3
 
+/**
+ * Filtro "a vez do cliente começou antes de `corte`". O começo é o carimbo de
+ * lançamento no portal quando existe; senão, o `updated_at` — que é quando o
+ * pedido virou `solicitada` (o botão "Avisar cliente pra aprovar").
+ */
+function desdeNossoAviso(corte: string): string {
+  return `lancado_no_portal_at.lt.${corte},and(lancado_no_portal_at.is.null,updated_at.lt.${corte})`
+}
+
 export type ResultadoCobranca = {
   clientes: number
   lojas: number
@@ -72,17 +81,24 @@ export async function cobrarConfirmacaoDeConexao(
   const dias = opts.diasMinimos ?? DIAS_DE_SILENCIO
   const corte = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString()
 
-  // Solicitações abertas, antigas e ainda não cobradas.
+  // Solicitações em que JÁ É A VEZ DO CLIENTE, paradas e ainda não cobradas.
+  //
+  // ⚠️ SÓ `solicitada`, E O RELÓGIO CONTA DO NOSSO AVISO (22/09/26). Antes
+  // entrava `pendente` também, contado da criação do pedido — e `pendente`
+  // quer dizer que NÓS ainda não cadastramos o CNPJ no portal do iFood. Um
+  // dia de atraso nosso virava um e-mail perguntando ao cliente "você
+  // aprovou?" antes de ele ter recebido o pedido pra aprovar; três dias
+  // viravam recusa. A demora era nossa e a cobrança caía nele.
   let q = admin
     .from("ifood_activation_requests")
     .select("id, holding_id, unit_id, cnpj, created_at, units!inner(id, name)")
-    .in("status", ["pendente", "solicitada"])
+    .eq("status", "solicitada")
     .is("cobranca_enviada_em", null)
     // Pausada = já sabemos que a bola não é do cliente. Perguntar "você
     // aprovou?" a quem aprovou e está travado do outro lado é o e-mail que
     // ensina a ignorar os nossos. Ver `pausarAutomacao` mais abaixo.
     .is("automacao_pausada_em", null)
-    .lt("created_at", corte)
+    .or(desdeNossoAviso(corte))
   if (opts.holdingIds?.length) q = q.in("holding_id", opts.holdingIds)
   const { data: reqs } = await q
 
@@ -226,8 +242,11 @@ export async function expirarSolicitacoesParadas(
     .select(
       "id, holding_id, unit_id, cnpj, created_at, automacao_pausada_em, automacao_pausada_motivo, units!inner(id, name)",
     )
-    .in("status", ["pendente", "solicitada"])
-    .lt("created_at", corte)
+    // Mesma régua da cobrança: só expira o que já era a vez do cliente, e
+    // contado do nosso aviso — `pendente` é espera nossa e fica na fila de
+    // Pendências da operação.
+    .eq("status", "solicitada")
+    .or(desdeNossoAviso(corte))
 
   const linhas = ((reqs ?? []) as unknown as {
     id: string

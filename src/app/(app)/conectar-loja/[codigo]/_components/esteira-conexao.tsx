@@ -7,13 +7,16 @@ import { Check, Download, ExternalLink, Loader2 } from "lucide-react"
 import { PlatformLogo, type PlatformId } from "@/components/platform-logo"
 import type { PassoConexao } from "@/lib/data/onboarding-conexao"
 
-import { concluirPasso, marcarInicio99 } from "../../_actions"
+import { concluirPasso, linkAutorizacao99DaLoja } from "../../_actions"
 
-/** Link de autorização do 99 — é do NOSSO app, igual pra todo cliente. */
-const LINK_99 =
-  "https://merchant.99app.com/pt-BR/manager/app-authorize?app_id=5764607791719778299&enterprise_name=Lab+of+Change+Ltda&scope=all&sign=0c55fa392114d4fb9830fd3003fcda84&time=1787088970&uid=646635983585588890"
+/* O link do 99 NÃO é constante: vale 7 dias e é gerado no clique
+ * (`linkAutorizacao99DaLoja`). Ficou fixo de 18/08 a 22/09/26 — vencido para
+ * todo cliente novo desde 25/08. */
+const LINK_99 = "#gerar-no-clique"
 
-const LINK_CW = "https://deliveryos.food/conectar/cardapioweb"
+/* Vai com a loja (`unit_id`): sem ela a instalação volta sem saber de qual
+ * unidade é e, em conta com mais de uma loja, sobrava pra vincular na mão. */
+const LINK_CW = "/conectar/cardapioweb"
 
 type Copy = {
   titulo: string
@@ -62,10 +65,10 @@ const COPY: Record<PlatformId, Copy> = {
   keeta: {
     titulo: "Keeta",
     como:
-      "A Keeta ainda não tem integração automática — o único caminho é a planilha que você exporta no portal dela.",
+      "A Keeta ainda não tem integração automática — o único caminho é o relatório que você exporta no portal dela.",
     depois:
-      "Baixe o modelo, preencha com o relatório da Keeta e suba na tela de Importação. Não há o que conectar aqui.",
-    acao: { rotulo: "Baixar modelo", href: "/importacao", externo: false },
+      "Exporte o relatório no portal da Keeta e suba do jeito que ele vem na tela de Importação — o passo a passo está lá. Não há o que conectar aqui.",
+    acao: { rotulo: "Ver como exportar", href: "/importacao?guia=1", externo: false },
     botao: "Entendi, vou pela planilha",
   },
 }
@@ -85,6 +88,22 @@ export function EsteiraConexao({
   const [ocupado, setOcupado] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<Record<string, string>>({})
   const [erro, setErro] = React.useState<Record<string, string>>({})
+
+  /* 99: o link nasce no clique. A aba abre JÁ no clique (síncrono) e recebe a
+   * URL quando ela chega — abrir depois do `await` cai no bloqueador de
+   * pop-up do navegador. */
+  async function abrir99() {
+    setErro((p) => ({ ...p, "99food": "" }))
+    const aba = window.open("about:blank", "_blank")
+    const r = await linkAutorizacao99DaLoja(unitId)
+    if (r.ok) {
+      if (aba) aba.location.href = r.url
+      else window.location.href = r.url
+    } else {
+      aba?.close()
+      setErro((p) => ({ ...p, "99food": r.erro }))
+    }
+  }
 
   async function concluir(platform: PlatformId) {
     setOcupado(platform)
@@ -177,13 +196,18 @@ export function EsteiraConexao({
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {c.acao && (
                       <a
-                        href={c.acao.href}
+                        href={
+                          p.platform === "cardapioweb"
+                            ? `${c.acao.href}?unit_id=${encodeURIComponent(unitId)}`
+                            : c.acao.href
+                        }
                         target={c.acao.externo ? "_blank" : undefined}
                         rel={c.acao.externo ? "noopener noreferrer" : undefined}
-                        onClick={() => {
-                          // Fotografa as lojas do 99 ANTES de ele sair — é o
-                          // recorte que permite achar a dele na volta.
-                          if (p.platform === "99food") void marcarInicio99(unitId)
+                        onClick={(e) => {
+                          if (p.platform === "99food") {
+                            e.preventDefault()
+                            void abrir99()
+                          }
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                       >
