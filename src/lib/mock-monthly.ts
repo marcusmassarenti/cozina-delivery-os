@@ -20,7 +20,7 @@ export type PlatformBreakdown = {
    *  - Taxa real da plataforma = (bruto − liquido) − promocoesLoja
    *  - Promoções da loja = promocoesLoja
    * iFood: Promoção custeada pela loja. 99 Food: campo promocoes_rs.
-   * Keeta: soma de outras_despesas (cupons/multas bancadas pela loja).
+   * Keeta: soma de keeta_pedidos.despesa (promoção bancada pela loja — ver keeta-imported).
    */
   promocoesLoja?: number
 }

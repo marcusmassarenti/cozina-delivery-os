@@ -46,9 +46,17 @@ export type KeetaResumo = {
   hasData: boolean
   /**
    * Promoções/cupons que a LOJA bancou (não taxa que a Keeta cobra).
-   * Proxy: sum(keeta_pedidos.outras_despesas) — é o campo que dispara em
-   * pedidos com cupom (R$ 119 num pedido de R$ 154) e bate com o conceito
-   * de "promoção custeada pela loja" do iFood/99 Food.
+   *
+   * Vem de `keeta_pedidos.despesa`. ⚠️ Até 22/09/26 vinha de
+   * `outras_despesas`, que é a TAXA DE PAGAMENTO ONLINE — o "Para onde vai o
+   * bruto" da Le Brunch (ago/26) mostrava R$ 2,3 mil de promoção onde a
+   * fatura da Keeta diz R$ 39 mil, e jogava o resto como "taxa da
+   * plataforma" (a Keeta parecia cobrar 50%). A identidade do relatório de
+   * pedido fecha ao centavo, pedido a pedido:
+   *   ganhos_liquidos = vendas_itens − despesa − comissao − outras_despesas
+   * e as somas batem com a fatura nos meses fechados (abr–jul/26, até 22
+   * lojas, diferença de 1–2%): despesa ≈ promo_loja; comissao ≈ comissão +
+   * taxa de distância; outras_despesas ≈ taxa de pagamento online.
    */
   promocoesLoja: number
 }
@@ -163,11 +171,11 @@ export async function getKeetaResumoByUnits(
     unit_id: string
     ganhos_liquidos: number | string | null
     vendas_itens: number | string | null
-    outras_despesas: number | string | null
+    despesa: number | string | null
   }>((a, b) => {
     let q = admin
       .from("keeta_pedidos")
-      .select("unit_id, ganhos_liquidos, vendas_itens, outras_despesas")
+      .select("unit_id, ganhos_liquidos, vendas_itens, despesa")
       .in("unit_id", unitIds)
       .eq("ref_year", year)
       .eq("ref_month", month)
@@ -181,7 +189,7 @@ export async function getKeetaResumoByUnits(
   for (const r of pedidos) {
     const cur = out.get(r.unit_id) ?? emptyKeeta()
     cur.liquido += Number(r.ganhos_liquidos) || 0
-    cur.promocoesLoja += Math.abs(Number(r.outras_despesas) || 0)
+    cur.promocoesLoja += Math.abs(Number(r.despesa) || 0)
     out.set(r.unit_id, cur)
     brutoFromPedidos.set(
       r.unit_id,

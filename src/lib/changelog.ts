@@ -49,6 +49,30 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.3",
+    date: "2026-09-22",
+    tag: "Correção",
+    title: "Promoções da Keeta no lugar certo",
+    summary:
+      "A promoção que a loja banca na Keeta aparecia como taxa da plataforma. Agora ela fica separada, igual ao iFood e ao 99.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Para onde vai o bruto e DRE",
+        items: [
+          {
+            kind: "correcao",
+            title: "Keeta: promoção x taxa",
+            antes:
+              "O sistema lia como promoção um campo que é, na verdade, a taxa de pagamento online. A promoção de verdade caía em “taxa da plataforma”, e a Keeta parecia cobrar metade das vendas.",
+            depois:
+              "A promoção bancada pela loja vem do campo certo e bate com a fatura da Keeta. O líquido não muda — muda só quanto do desconto é taxa e quanto é promoção sua.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.2",
     date: "2026-09-22",
     tag: "Melhoria",
