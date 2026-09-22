@@ -162,6 +162,14 @@ async function aplicarCadastroExigente(
     platformsCount: number
     /** Campos do perfil — quando ausente, só as regras antigas valem. */
     perfil?: Record<string, string | null> | null
+    /**
+     * CRIAÇÃO pede o mínimo (CNPJ + plataforma): o perfil completo e a
+     * inauguração passam a ser cobrados na EDIÇÃO. Um cliente em teste que
+     * esbarra em 17 campos antes do primeiro número vai embora — ver
+     * `DadosDaUnidade` (22/09/26). O banner "cadastro incompleto" da tela de
+     * Unidades segue pedindo o resto.
+     */
+    criacao?: boolean
   },
 ): Promise<void> {
   // ⚠️ O CNPJ é cobrado ANTES da isenção do superadmin, de propósito.
@@ -180,10 +188,11 @@ async function aplicarCadastroExigente(
   // Trava só a EDIÇÃO — nada impede o dado das plataformas de continuar
   // entrando. Loja incompleta segue sincronizando; o que não dá mais é
   // salvar uma alteração deixando o cadastro pela metade.
-  if (!dados.dataInauguracao)
-    fieldErrors.data_inauguracao = "Inauguração obrigatória"
   if (dados.platformsCount === 0)
     fieldErrors.platforms = "Selecione ao menos uma plataforma"
+  if (dados.criacao) return
+  if (!dados.dataInauguracao)
+    fieldErrors.data_inauguracao = "Inauguração obrigatória"
 
   const perfil = dados.perfil
   if (!perfil) return
@@ -273,6 +282,7 @@ export async function createUnit(
     dataInauguracao,
     platformsCount: platforms.length,
     perfil,
+    criacao: true,
   })
 
   if (Object.keys(fieldErrors).length > 0) {

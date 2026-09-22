@@ -49,6 +49,50 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.1",
+    date: "2026-09-22",
+    tag: "Melhoria",
+    title: "Começar ficou mais rápido",
+    summary:
+      "Cadastrar uma loja nova pede só nome, CNPJ, cidade e plataformas, e o roteiro da tela inicial leva direto aos primeiros números.",
+    // Só quem está começando vê o roteiro; quem já usa não precisa ser interrompido.
+    semPopup: true,
+    areas: [
+      {
+        area: "Unidades e tela inicial",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Nova loja em menos de um minuto",
+            antes:
+              "Criar uma loja exigia o cadastro completo: endereço, regime fiscal, modelo da unidade, responsável e mais.",
+            depois:
+              "Na criação, só nome, CNPJ, cidade e plataformas são obrigatórios — o CNPJ traz o resto da Receita. O que faltar aparece em “cadastro incompleto” pra completar depois.",
+          },
+          {
+            kind: "melhoria",
+            title: "Roteiro até os seus números",
+            depois:
+              "Quem está começando vê três passos na tela inicial: cadastrar a loja, subir o primeiro relatório (os números aparecem em minutos) e conectar as plataformas. Se a conexão do iFood estiver com a gente, o roteiro avisa.",
+          },
+          {
+            kind: "novo",
+            title: "Seu primeiro relatório: ver já ou integrar",
+            depois:
+              "No iFood e no 99 dá pra escolher: subir um relatório e ver os números hoje, ou integrar a loja pra atualizar sozinho (99 em minutos, iFood em até 24h). E tem um botão pra falar direto com a gente no WhatsApp.",
+          },
+          {
+            kind: "correcao",
+            title: "Link de autorização do 99 sempre válido",
+            antes:
+              "O botão “Autorizar no 99” abria um link que podia estar vencido.",
+            depois: "O link é gerado na hora do clique.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.0",
     date: "2026-09-21",
     tag: "Melhoria",

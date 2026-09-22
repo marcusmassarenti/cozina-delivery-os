@@ -135,7 +135,7 @@ export function NewUnitDialog({
           </DialogTitle>
           <DialogDescription>
             {etapa === "cadastro"
-              ? "Cadastre uma loja da sua operação. O código é gerado automaticamente."
+              ? "Agora só o nome, o CNPJ, a cidade e as plataformas são obrigatórios — digite o CNPJ e a Receita preenche o resto. O que faltar dá pra completar depois."
               : "Marcar a plataforma no cadastro diz onde a loja vende. Conectar é o que faz o dado entrar sozinho."}
           </DialogDescription>
         </DialogHeader>
@@ -164,6 +164,7 @@ export function NewUnitDialog({
 
             <TabsContent value="dados" data-aba="dados" className="pt-3">
               <DadosDaUnidade
+                completo={false}
                 erroCnpj={state.fieldErrors?.cnpj}
                 cidade={cidade}
                 onCidade={setCidade}
@@ -190,18 +191,11 @@ export function NewUnitDialog({
             </TabsContent>
 
             <TabsContent value="operacao" data-aba="operacao" className="pt-3">
-              <OperacaoDaUnidade>
+              <OperacaoDaUnidade completo={false}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="text-xs font-medium">
-                      Inauguração{cadastroExigente ? " *" : ""}
-                    </label>
-                    <Input
-                      className="mt-1"
-                      name="data_inauguracao"
-                      type="date"
-                      required={cadastroExigente}
-                    />
+                    <label className="text-xs font-medium">Inauguração</label>
+                    <Input className="mt-1" name="data_inauguracao" type="date" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">

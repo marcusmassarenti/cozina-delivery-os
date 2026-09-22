@@ -59,13 +59,13 @@ export function WelcomeTour({
     },
     {
       icon: FileUp,
-      title: "Traga seus números",
-      body: "O jeito mais rápido é conectar a loja: iFood, 99 Food e Cardápio Web entram sozinhos, todo dia. A Keeta ainda é por planilha — sobe na tela de Importação e o sistema consolida tudo.",
+      title: "Seus números ainda hoje",
+      body: "Subindo o relatório de vendas do portal do iFood (ou do 99 ou da Keeta), o painel mostra faturamento, taxas e quanto sobra em poucos minutos. Depois, conectando a loja, o dado passa a entrar sozinho todo dia.",
     },
     {
       icon: Rocket,
       title: "Seus primeiros passos",
-      body: "Pronto pra começar? Sugerimos: personalizar seu logo, conferir suas lojas e fazer a 1ª importação.",
+      body: "São 3 passos: cadastrar a loja, subir o primeiro relatório e conectar as plataformas. O roteiro fica na tela inicial até você terminar.",
     },
   ]
 
@@ -79,6 +79,14 @@ export function WelcomeTour({
     setOpen(false)
     await markOnboarded()
     router.refresh()
+  }
+
+  /* Os atalhos eram <div> sem destino — pareciam botão e não levavam a lugar
+   * nenhum, bem no último slide, quando a pessoa está pronta pra começar. */
+  async function irPara(href: string) {
+    setOpen(false)
+    await markOnboarded()
+    router.push(href)
   }
 
   return (
@@ -109,9 +117,9 @@ export function WelcomeTour({
         {/* Atalhos só no último slide */}
         {isLast && (
           <div className="grid grid-cols-3 gap-2 px-6 pt-3">
-            <Shortcut icon={Palette} label="Logo" />
-            <Shortcut icon={Store} label="Lojas" />
-            <Shortcut icon={Upload} label="Importar" />
+            <Shortcut icon={Store} label="1. Cadastrar loja" onClick={() => void irPara("/unidades")} />
+            <Shortcut icon={Upload} label="2. Subir relatório" onClick={() => void irPara("/importacao?comecar=1")} />
+            <Shortcut icon={Palette} label="Personalizar" onClick={() => void irPara("/minha-conta/personalizacao")} />
           </div>
         )}
 
@@ -155,14 +163,20 @@ export function WelcomeTour({
 function Shortcut({
   icon: Icon,
   label,
+  onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
+  onClick: () => void
 }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-lg border bg-card py-2.5 text-[11px] text-muted-foreground">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center gap-1 rounded-lg border bg-card py-2.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+    >
       <Icon className="size-4 text-foreground/70" />
       {label}
-    </div>
+    </button>
   )
 }

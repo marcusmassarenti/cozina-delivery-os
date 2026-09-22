@@ -1307,7 +1307,7 @@ export default async function Home({
           conectar tem a tela de Conexões; quem não quer não precisa ser
           lembrado toda vez que abre o painel. */}
 
-      {onboarding && onboarding.done < onboarding.total && (
+      {onboarding && onboarding.emTeste && onboarding.done < onboarding.total && (
         <OnboardingChecklist
           progress={onboarding} />
       )}
@@ -1485,8 +1485,8 @@ export default async function Home({
             Cadastrar minha primeira loja
           </Link>
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Leva menos de um minuto — nome, cidade e em quais plataformas ela
-            vende.
+            Leva menos de um minuto — nome, CNPJ e em quais plataformas ela
+            vende. A Receita preenche o resto.
           </p>
         </div>
       ) : (

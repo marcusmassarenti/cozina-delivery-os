@@ -23,6 +23,7 @@ import { getEnabledReports } from "@/lib/data/report-prefs"
 import {
   assertCanView,
   getAccessibleUnitIds,
+  getCurrentHoldingId,
   isSuperadmin,
 } from "@/lib/auth/permissions"
 
@@ -32,6 +33,8 @@ import { DownloadGuide } from "./_components/download-guide"
 import { ImportChecklist } from "./_components/import-checklist"
 import { ImportForm } from "./_components/import-form"
 import { ImportTour } from "./_components/import-tour"
+import { PrimeiroRelatorio } from "./_components/primeiro-relatorio"
+import { WhatsappMarcus } from "@/components/onboarding/whatsapp-marcus"
 
 // O Server Action de importação roda no contexto desta rota. A Conciliação do
 // iFood traz dezenas de milhares de lançamentos por lote (9 lojas ≈ 60k linhas),
@@ -113,6 +116,8 @@ export default async function ImportacaoPage({
     loja?: string
     motivo?: string
     detalhe?: string
+    /** Modo enxuto: "seu primeiro relatório" (vem do roteiro da tela inicial). */
+    comecar?: string
   }>
 }) {
   const sp = await searchParams
@@ -130,6 +135,64 @@ export default async function ImportacaoPage({
     platforms: u.platforms.filter(ehMarketplace),
     externalStoreIds: u.externalStoreIds,
   }))
+
+  /* MODO ENXUTO — quem chega do passo 2 do roteiro ("veja os números da sua
+   * loja hoje"). A tela completa abre com 13 relatórios em vermelho e um guia
+   * de 5 passos: é o muro em que o cliente novo desiste. Aqui ele vê UM
+   * relatório por plataforma, como baixar, e o upload logo abaixo. */
+  if (sp.comecar === "1") {
+    const hid = await getCurrentHoldingId()
+    const { data: hold } = hid
+      ? await createAdminClient().from("holdings").select("name").eq("id", hid).maybeSingle()
+      : { data: null }
+    const empresa = (hold?.name as string | undefined) ?? null
+    const plataformas = [
+      ...new Set(availableUnitsLite.flatMap((u) => u.platforms as string[])),
+    ]
+    return (
+      <div className="flex flex-1 flex-col gap-5 bg-muted/30 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Seu primeiro relatório
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
+            Um arquivo só já monta o seu painel. Baixe no portal da plataforma,
+            arraste aqui, e em poucos minutos aparecem faturamento, taxas e
+            quanto sobra pra você.
+          </p>
+        </div>
+
+        <PrimeiroRelatorio
+          plataformas={plataformas}
+          conectarHref={
+            availableUnitsLite[0]
+              ? `/conectar-loja/${encodeURIComponent(availableUnitsLite[0].code)}`
+              : "/unidades"
+          }
+        />
+
+        <WhatsappMarcus empresa={empresa} />
+
+        <div className="rounded-xl border bg-card p-5">
+          <p className="mb-3 text-sm font-semibold">Arraste o arquivo aqui</p>
+          <ImportForm
+            availableUnits={availableUnitsLite}
+            cadastroExigente={!(await isSuperadmin())}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <Link href="/inicio" className="font-semibold text-primary hover:underline">
+            Subi o arquivo — ver meus números →
+          </Link>
+          <Link href="/importacao" className="hover:underline">
+            Ver todos os relatórios e o guia completo
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const recentResult = await getRecentImports(histPage)
 
   const recent = recentResult.items

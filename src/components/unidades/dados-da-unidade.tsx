@@ -69,7 +69,16 @@ export function DadosDaUnidade({
   onCidade,
   onUf,
   nome,
+  completo = true,
 }: {
+  /**
+   * Exige o cadastro inteiro (razão social, endereço, cozinha…). A CRIAÇÃO
+   * passa `false`: pede só nome, CNPJ e cidade e deixa o resto pra depois.
+   * Um cliente novo em teste não pode esbarrar em 17 campos antes de ver o
+   * primeiro número (a Maracayá passou 5 horas no sistema em 14/09/26 e saiu
+   * sem nenhuma loja cadastrada). A Receita já preenche quase tudo pelo CNPJ.
+   */
+  completo?: boolean
   perfil?: PerfilUnidade
   erroCnpj?: string
   cidade: string
@@ -150,7 +159,7 @@ export function DadosDaUnidade({
       <Campo label="Razão social" span={7}>
         <input
           name="razao_social"
-            required
+            required={completo}
           value={razao}
           onChange={(e) => setRazao(e.target.value)}
           placeholder="vem da Receita ao consultar o CNPJ"
@@ -161,7 +170,7 @@ export function DadosDaUnidade({
       <Campo label="Tipo de cozinha" span={5}>
         <select
           name="tipo_cozinha"
-            required
+            required={completo}
           value={cozinha}
           onChange={(e) => {
             escolhidaNaMao.current = true
@@ -187,7 +196,7 @@ export function DadosDaUnidade({
       <Campo label="Endereço" span={7}>
         <input
           name="logradouro"
-            required
+            required={completo}
           value={logradouro}
           onChange={(e) => setLogradouro(e.target.value)}
           placeholder="rua / avenida"
@@ -197,7 +206,7 @@ export function DadosDaUnidade({
       <Campo label="Número" span={2}>
         <input
           name="numero"
-            required
+            required={completo}
           value={numero}
           onChange={(e) => setNumero(e.target.value)}
           className={inputCls}
@@ -215,7 +224,7 @@ export function DadosDaUnidade({
       <Campo label="Bairro" span={4}>
         <input
           name="bairro"
-            required
+            required={completo}
           value={bairro}
           onChange={(e) => setBairro(e.target.value)}
           className={inputCls}
@@ -224,7 +233,7 @@ export function DadosDaUnidade({
       <Campo label="CEP" span={3}>
         <input
           name="cep"
-            required
+            required={completo}
           value={cep}
           onChange={(e) => setCep(e.target.value)}
           className={inputCls}
@@ -243,7 +252,7 @@ export function DadosDaUnidade({
       <Campo label="Telefone" span={4}>
         <input
           name="telefone"
-            required
+            required={completo}
           value={telefone}
           onChange={(e) => setTelefone(e.target.value)}
           placeholder="(11) 90000-0000"
@@ -253,7 +262,7 @@ export function DadosDaUnidade({
       <Campo label="Responsável" span={4}>
         <input
           name="responsavel_nome"
-            required
+            required={completo}
           defaultValue={perfil?.responsavelNome ?? ""}
           placeholder="quem toca a loja"
           className={inputCls}
@@ -297,7 +306,10 @@ export function DadosDaUnidade({
 export function OperacaoDaUnidade({
   perfil,
   children,
+  completo = true,
 }: {
+  /** Ver `DadosDaUnidade`: a criação pede o mínimo. */
+  completo?: boolean
   perfil?: PerfilUnidade
   /** Plataformas, IDs e inaugurações — cada diálogo monta o seu. */
   children: React.ReactNode
@@ -308,7 +320,7 @@ export function OperacaoDaUnidade({
         <Campo label="Modelo da unidade" span={6}>
           <select
             name="tipo_operacao"
-            required
+            required={completo}
             defaultValue={perfil?.tipoOperacao ?? "propria"}
             className={inputCls}
           >
@@ -326,7 +338,7 @@ export function OperacaoDaUnidade({
         <Campo label="Regime fiscal" span={6}>
           <select
             name="regime_fiscal"
-            required
+            required={completo}
             defaultValue={perfil?.regimeFiscal ?? "simples"}
             className={inputCls}
           >
@@ -337,7 +349,7 @@ export function OperacaoDaUnidade({
         <Campo label="Quem entrega" span={6}>
           <select
             name="tipo_entrega"
-            required
+            required={completo}
             defaultValue={perfil?.tipoEntrega ?? ""}
             className={inputCls}
           >

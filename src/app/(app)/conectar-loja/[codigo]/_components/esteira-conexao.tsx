@@ -41,7 +41,7 @@ const COPY: Record<PlatformId, Copy> = {
     como:
       "A conexão do iFood tem três mãos: você pede aqui, nós cadastramos a sua loja no portal do iFood, e aí você autoriza dentro do app de Integrações.",
     depois:
-      "Ao concluir, avisamos nosso time. Quando cadastrarmos, você recebe um e-mail dizendo que chegou a sua vez de autorizar.",
+      "Ao concluir, avisamos nosso time: cadastramos a sua loja em até 24h e você recebe um e-mail dizendo que chegou a sua vez de autorizar.",
     botao: "Pedir conexão com o iFood",
   },
   "99food": {

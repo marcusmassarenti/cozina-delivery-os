@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Palette,
+  Plug,
   Rocket,
   Store,
   Upload,
@@ -14,11 +15,19 @@ import {
 } from "lucide-react"
 
 import type { OnboardingProgress } from "@/lib/data/onboarding"
+import { WhatsappMarcus } from "@/components/onboarding/whatsapp-marcus"
 
 const BRAND = "oklch(0.65 0.21 35)"
 
-type StepKey = "logo" | "units" | "import"
+type StepKey = "units" | "import" | "conexao"
 
+/**
+ * O roteiro vai até o PRIMEIRO NÚMERO, na ordem que dá número mais cedo
+ * (22/09/26). Antes o passo 1 era o logo — que não mostra nada — e o 3
+ * empurrava a conexão por API, que no iFood leva dias e depende do nosso time.
+ * Subir um relatório leva minutos: é ele que mostra o painel no primeiro dia,
+ * enquanto a conexão corre em paralelo.
+ */
 const STEPS: {
   key: StepKey
   icon: React.ComponentType<{ className?: string }>
@@ -28,32 +37,28 @@ const STEPS: {
   cta: string
 }[] = [
   {
-    key: "logo",
-    icon: Palette,
-    title: "Personalize sua conta",
-    desc: "Suba o logo da sua empresa e ajuste o nome em Personalização.",
-    href: "/minha-conta/personalizacao",
-    cta: "Personalizar",
-  },
-  {
     key: "units",
     icon: Store,
-    title: "Cadastre suas lojas",
-    desc: "Adicione suas unidades em Unidades — tudo é organizado por loja.",
+    title: "Cadastre sua loja",
+    desc: "Nome, CNPJ e onde ela vende. Digite o CNPJ e a Receita preenche o resto.",
     href: "/unidades",
     cta: "Cadastrar loja",
   },
   {
     key: "import",
     icon: Upload,
-    title: "Traga os dados da sua loja",
-    // O texto anterior mandava baixar planilha do iFood, e só. Hoje três
-    // plataformas conectam por API e trazem tudo sozinhas — empurrar planilha
-    // pra quem pode conectar é fazer o cliente trabalhar à toa no primeiro
-    // contato com o sistema.
-    desc: "O jeito mais rápido é conectar a loja por API (iFood, 99 Food ou Cardápio Web) — aí o dado entra sozinho, todo dia. Se preferir, dá pra subir os relatórios em planilha.",
-    href: "/importacao?guia=1",
-    cta: "Importar",
+    title: "Veja os números da sua loja hoje",
+    desc: "Baixe o relatório de vendas no portal do iFood (ou do 99 ou da Keeta) e suba aqui, do jeito que ele vem. Em poucos minutos aparecem faturamento, taxas e quanto sobra pra você.",
+    href: "/importacao?comecar=1",
+    cta: "Subir relatório",
+  },
+  {
+    key: "conexao",
+    icon: Plug,
+    title: "Deixe tudo atualizando sozinho",
+    desc: "Conecte a loja às plataformas e o dado passa a entrar todo dia, sem planilha.",
+    href: "/unidades",
+    cta: "Conectar",
   },
 ]
 
@@ -82,10 +87,22 @@ export function OnboardingChecklist({
   if (dismissed) return null
 
   const doneMap: Record<StepKey, boolean> = {
-    logo: progress.hasLogo,
     units: progress.hasUnits,
     import: progress.hasImported,
+    conexao: progress.hasConnection,
   }
+  const hrefDe = (s: (typeof STEPS)[number]) =>
+    s.key === "conexao" && progress.primeiraLoja
+      ? `/conectar-loja/${encodeURIComponent(progress.primeiraLoja)}`
+      : s.href
+  // Pedido do iFood em aberto: diz de quem é a vez. Silêncio aqui fazia o
+  // cliente achar que o sistema não funciona — ou que o problema era dele.
+  const avisoIfood =
+    progress.ifoodEspera === "nossa"
+      ? "iFood: estamos liberando a sua loja no portal do iFood — em até 24h. Você recebe um e-mail quando for a sua vez de aprovar. Enquanto isso, o passo 2 já mostra seus números."
+      : progress.ifoodEspera === "cliente"
+        ? "iFood: chegou a sua vez — aprove o Delivery OS no Portal do Parceiro (Integrações). Os dados começam a entrar em até 15 minutos."
+        : null
   const firstTodo = STEPS.find((s) => !doneMap[s.key])?.key
   const pct = Math.round((progress.done / progress.total) * 100)
 
@@ -112,10 +129,12 @@ export function OnboardingChecklist({
           <Rocket className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Primeiros passos</p>
+          <p className="text-sm font-semibold">
+            Veja os números da sua loja em 3 passos
+          </p>
           <p className="text-xs text-muted-foreground">
-            {progress.done} de {progress.total} concluídos · configure sua conta
-            em minutos
+            {progress.done} de {progress.total} concluídos · os dois primeiros
+            levam uns 10 minutos
           </p>
         </div>
         {/* Barra de progresso */}
@@ -184,10 +203,15 @@ export function OnboardingChecklist({
                       {s.desc}
                     </p>
                   )}
+                  {!done && s.key === "conexao" && avisoIfood && (
+                    <p className="mt-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] leading-relaxed text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                      {avisoIfood}
+                    </p>
+                  )}
                 </div>
                 {!done && (
                   <Link
-                    href={s.href}
+                    href={hrefDe(s)}
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
                       isCurrent
                         ? "text-white hover:-translate-y-0.5"
@@ -202,9 +226,31 @@ export function OnboardingChecklist({
               </div>
             )
           })}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[#25D366]/[0.06] px-5 py-3">
+            <p className="text-xs text-muted-foreground">
+              <b className="font-semibold text-foreground">
+                Prefere fazer com a gente?
+              </b>{" "}
+              Fale direto com o Marcus, fundador do Delivery OS.
+            </p>
+            <WhatsappMarcus empresa={progress.empresa} variante="linha" />
+          </div>
           <div className="px-5 py-2.5 text-[11px] text-muted-foreground">
             Depois disso, explore <b>Relatórios</b>, <b>DRE</b> e{" "}
             <b>Avaliações</b> — tudo se preenche a cada importação.
+            {!progress.hasLogo && (
+              <>
+                {" "}
+                Quer a sua marca no sistema?{" "}
+                <Link
+                  href="/minha-conta/personalizacao"
+                  className="font-medium text-foreground underline"
+                >
+                  <Palette className="mr-0.5 inline size-3" />
+                  Personalizar
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}
