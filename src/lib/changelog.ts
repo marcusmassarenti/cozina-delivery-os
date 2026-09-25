@@ -49,6 +49,43 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.5",
+    date: "2026-09-25",
+    tag: "Melhoria",
+    title: "Responsável nos atendimentos e edição no financeiro da agência",
+    summary:
+      "Cada atendimento tem um gestor responsável — já vem o gestor da loja — e dá pra filtrar pelos de cada um. No financeiro da agência, cobranças e despesas lançadas agora podem ser editadas.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Carteira · Atendimentos",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Responsável pela tarefa",
+            antes:
+              "O atendimento só sabia a loja. Não dizia de quem era a tarefa, e todo mundo via a mesma lista.",
+            depois:
+              "Ao escolher a loja, o gestor dela já vem como responsável (dá pra trocar). A troca fica registrada no histórico, e o filtro por responsável gera o link da tela de cada gestor.",
+          },
+        ],
+      },
+      {
+        area: "Carteira · Financeiro da agência",
+        items: [
+          {
+            kind: "melhoria",
+            title: "Editar cobrança e despesa",
+            antes:
+              "Depois de lançar, só dava pra dar baixa — valor, vencimento ou loja errados não tinham conserto.",
+            depois:
+              "O lápis em cada linha abre o lançamento preenchido pra corrigir. Apagar a data de pagamento volta o lançamento pra em aberto.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.4",
     date: "2026-09-25",
     tag: "Correção",

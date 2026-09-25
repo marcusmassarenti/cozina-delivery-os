@@ -4,20 +4,34 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Plus, RotateCcw } from "lucide-react"
+import { CheckCircle2, Plus, RotateCcw, UserRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { SeletorBusca } from "@/components/shared/seletor-busca"
-import { TIPOS, type Atendimento } from "@/lib/data/atendimentos-tipos"
+import {
+  TIPOS,
+  type Atendimento,
+  type GestorSimples,
+} from "@/lib/data/atendimentos-tipos"
 
 import {
   abrirAtendimento,
   alternarResolvido,
   registrarPasso,
+  trocarResponsavel,
   type AtendimentoState,
 } from "../_actions"
 
-export type LojaSimples = { id: string; code: string; name: string }
+export type LojaSimples = {
+  id: string
+  code: string
+  name: string
+  /** Gestor da loja — vira o responsável padrão ao abrir atendimento. */
+  gestorId: string | null
+}
+
+/** "todos" | "sem" (sem responsável) | id do gestor. */
+type FiltroGestor = string
 
 const INICIAL: AtendimentoState = { ok: false }
 
@@ -33,17 +47,40 @@ const quando = (iso: string) =>
 export function AtendimentosView({
   atendimentos,
   lojas,
+  gestores,
+  gestorInicial,
   mostrandoResolvidos,
 }: {
   atendimentos: Atendimento[]
   lojas: LojaSimples[]
+  gestores: GestorSimples[]
+  gestorInicial: FiltroGestor
   mostrandoResolvidos: boolean
 }) {
   const router = useRouter()
   const [busca, setBusca] = React.useState("")
   const [tipo, setTipo] = React.useState("")
+  const [gestor, setGestor] = React.useState<FiltroGestor>(gestorInicial)
+
+  /* O filtro vai pra URL: "/carteira/atendimentos?gestor=<id>" é a tela de
+     cada gestor, e é esse link que ele salva. */
+  const irPara = (g: FiltroGestor, resolvidos: boolean) => {
+    const q = new URLSearchParams()
+    if (resolvidos) q.set("resolvidos", "1")
+    if (g !== "todos") q.set("gestor", g)
+    const qs = q.toString()
+    router.replace(`/carteira/atendimentos${qs ? `?${qs}` : ""}`)
+  }
+
+  const doGestor = (a: Atendimento) =>
+    gestor === "todos" ||
+    (gestor === "sem" ? a.gestorId === null : a.gestorId === gestor)
+
+  const abertosPor = (id: string | null) =>
+    atendimentos.filter((a) => !a.resolvidoEm && a.gestorId === id).length
 
   const filtrados = atendimentos.filter((a) => {
+    if (!doGestor(a)) return false
     if (tipo && a.tipo !== tipo) return false
     if (!busca.trim()) return true
     const q = busca.trim().toLowerCase()
@@ -55,7 +92,11 @@ export function AtendimentosView({
   return (
     <div className="flex flex-col gap-4">
       <span data-tour="at-abrir">
-        <Abrir lojas={lojas} />
+        <Abrir
+          lojas={lojas}
+          gestores={gestores}
+          responsavelPadrao={gestor !== "todos" && gestor !== "sem" ? gestor : ""}
+        />
       </span>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -65,6 +106,25 @@ export function AtendimentosView({
           placeholder="Buscar por loja ou assunto"
           className="h-9 min-w-[200px] flex-1 rounded-md border bg-background px-2.5 text-xs outline-none focus:border-ring sm:max-w-xs"
         />
+        {gestores.length > 0 && (
+          <select
+            value={gestor}
+            onChange={(e) => {
+              setGestor(e.target.value)
+              irPara(e.target.value, mostrandoResolvidos)
+            }}
+            aria-label="Responsável"
+            className="h-9 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
+          >
+            <option value="todos">Todos os responsáveis</option>
+            {gestores.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.nome} ({abertosPor(g.id)})
+              </option>
+            ))}
+            <option value="sem">Sem responsável ({abertosPor(null)})</option>
+          </select>
+        )}
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value)}
@@ -81,11 +141,7 @@ export function AtendimentosView({
           <input
             type="checkbox"
             checked={mostrandoResolvidos}
-            onChange={(e) =>
-              router.push(
-                `/carteira/atendimentos${e.target.checked ? "?resolvidos=1" : ""}`,
-              )
-            }
+            onChange={(e) => irPara(gestor, e.target.checked)}
             className="size-3.5"
           />
           Mostrar resolvidos
@@ -105,7 +161,7 @@ export function AtendimentosView({
       ) : (
         <div data-tour="at-lista" className="flex flex-col gap-4">
           {filtrados.map((a) => (
-            <Cartao key={a.id} a={a} />
+            <Cartao key={a.id} a={a} gestores={gestores} />
           ))}
         </div>
       )}
@@ -113,7 +169,13 @@ export function AtendimentosView({
   )
 }
 
-function Cartao({ a }: { a: Atendimento }) {
+function Cartao({
+  a,
+  gestores,
+}: {
+  a: Atendimento
+  gestores: GestorSimples[]
+}) {
   const [aberto, setAberto] = React.useState(false)
   const resolvido = a.resolvidoEm !== null
 
@@ -146,6 +208,13 @@ function Cartao({ a }: { a: Atendimento }) {
               ? "aberto hoje"
               : `${a.dias}d em aberto`}
         </span>
+        {gestores.length > 0 && (
+          <Responsavel
+            atendimentoId={a.id}
+            gestorId={a.gestorId}
+            gestores={gestores}
+          />
+        )}
         <span className="text-xs text-muted-foreground">
           {a.passos.length} passo{a.passos.length === 1 ? "" : "s"}
         </span>
@@ -193,9 +262,19 @@ function Cartao({ a }: { a: Atendimento }) {
   )
 }
 
-function Abrir({ lojas }: { lojas: LojaSimples[] }) {
+function Abrir({
+  lojas,
+  gestores,
+  responsavelPadrao,
+}: {
+  lojas: LojaSimples[]
+  gestores: GestorSimples[]
+  /** Filtrando por um gestor, é ele quem vem marcado antes de escolher a loja. */
+  responsavelPadrao: string
+}) {
   const [state, action] = useActionState(abrirAtendimento, INICIAL)
   const [mostrar, setMostrar] = React.useState(false)
+  const [responsavel, setResponsavel] = React.useState(responsavelPadrao)
   const router = useRouter()
   const ref = React.useRef<HTMLFormElement>(null)
 
@@ -230,6 +309,12 @@ function Abrir({ lojas }: { lojas: LojaSimples[] }) {
           placeholder="Escolha a loja…"
           vazio={null}
           obrigatorio
+          // A loja traz o gestor dela como responsável — é quem cuida dela.
+          // Loja sem gestor mantém o que já estava escolhido.
+          onChange={(id) => {
+            const g = lojas.find((l) => l.id === id)?.gestorId
+            if (g) setResponsavel(g)
+          }}
         />
         <select
           name="tipo"
@@ -243,6 +328,29 @@ function Abrir({ lojas }: { lojas: LojaSimples[] }) {
           ))}
         </select>
       </div>
+      {gestores.length > 0 && (
+        <label className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <UserRound className="size-3.5" /> Responsável
+          </span>
+          <select
+            name="gestorId"
+            value={responsavel}
+            onChange={(e) => setResponsavel(e.target.value)}
+            className="h-9 min-w-[200px] rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
+          >
+            <option value="">Sem responsável</option>
+            {gestores.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.nome}
+              </option>
+            ))}
+          </select>
+          <span className="text-[11px] text-muted-foreground">
+            vem o gestor da loja; dá pra trocar
+          </span>
+        </label>
+      )}
       <input
         name="titulo"
         required
@@ -269,6 +377,52 @@ function Abrir({ lojas }: { lojas: LojaSimples[] }) {
           Cancelar
         </Button>
       </div>
+    </form>
+  )
+}
+
+/**
+ * Responsável no próprio cartão: troca direto no seletor. A troca vai pro
+ * histórico como passo (ver `trocarResponsavel`).
+ */
+function Responsavel({
+  atendimentoId,
+  gestorId,
+  gestores,
+}: {
+  atendimentoId: string
+  gestorId: string | null
+  gestores: GestorSimples[]
+}) {
+  const [state, action, pendente] = useActionState(trocarResponsavel, INICIAL)
+  const router = useRouter()
+  const ref = React.useRef<HTMLFormElement>(null)
+  React.useEffect(() => {
+    if (state.ok) router.refresh()
+  }, [state, router])
+
+  return (
+    <form ref={ref} action={action} className="inline-flex items-center gap-1">
+      <input type="hidden" name="atendimentoId" value={atendimentoId} />
+      <UserRound className="size-3.5 text-muted-foreground" />
+      <select
+        name="gestorId"
+        defaultValue={gestorId ?? ""}
+        disabled={pendente}
+        onChange={() => ref.current?.requestSubmit()}
+        title="Responsável — trocar fica registrado no histórico"
+        className={`h-7 max-w-[160px] rounded-md border bg-background px-1.5 text-[11px] outline-none focus:border-ring disabled:opacity-60 ${
+          gestorId ? "" : "text-amber-700 dark:text-amber-400"
+        }`}
+      >
+        <option value="">Sem responsável</option>
+        {gestores.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.nome}
+          </option>
+        ))}
+      </select>
+      {state.error && <span className="text-[11px] text-rose-600">{state.error}</span>}
     </form>
   )
 }

@@ -120,3 +120,93 @@ export async function alternarPago(
   revalidatePath("/carteira/financeiro")
   return { ok: true }
 }
+
+/**
+ * Editar o que já foi lançado (pedido do Marcus, 25/09/26 — "depois que eu
+ * lanço não consigo mexer, eu tenho que dar baixa").
+ *
+ * Mesmas regras do lançamento, e a holding no WHERE: sem ela, um id colado
+ * editaria o lançamento de outra agência. Competência da cobrança acompanha
+ * o vencimento, como no lançamento.
+ */
+export async function editarCobranca(
+  _prev: FinState,
+  formData: FormData,
+): Promise<FinState> {
+  await requireModulePermission("financeiro", "edit")
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, error: "Sem empresa na sessão." }
+
+  const id = String(formData.get("id") ?? "")
+  if (!id) return { ok: false, error: "Cobrança não encontrada." }
+  const valor = paraNumero(String(formData.get("valor") ?? ""))
+  if (valor === null || valor <= 0) return { ok: false, error: "Valor inválido." }
+  const vencimento = String(formData.get("vencimento") ?? "").trim()
+  if (!vencimento) return { ok: false, error: "Informe o vencimento." }
+
+  const unitId = String(formData.get("unitId") ?? "").trim()
+  if (unitId) {
+    const { data } = await createAdminClient()
+      .from("units")
+      .select("id, brands!inner(holding_id)")
+      .eq("id", unitId)
+      .eq("brands.holding_id", holdingId)
+      .maybeSingle()
+    if (!data) return { ok: false, error: "Loja fora da sua agência." }
+  }
+
+  const { data, error } = await createAdminClient()
+    .from("agencia_cobrancas")
+    .update({
+      unit_id: unitId || null,
+      competencia: `${vencimento.slice(0, 7)}-01`,
+      valor,
+      vencimento,
+      pago_em: String(formData.get("pagoEm") ?? "").trim() || null,
+      observacao: String(formData.get("observacao") ?? "").trim() || null,
+    })
+    .eq("id", id)
+    .eq("holding_id", holdingId)
+    .select("id")
+  if (error) return { ok: false, error: error.message }
+  if (!data || data.length === 0)
+    return { ok: false, error: "Cobrança não encontrada." }
+  revalidatePath("/carteira/financeiro")
+  return { ok: true }
+}
+
+export async function editarDespesa(
+  _prev: FinState,
+  formData: FormData,
+): Promise<FinState> {
+  await requireModulePermission("financeiro", "edit")
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, error: "Sem empresa na sessão." }
+
+  const id = String(formData.get("id") ?? "")
+  if (!id) return { ok: false, error: "Despesa não encontrada." }
+  const valor = paraNumero(String(formData.get("valor") ?? ""))
+  if (valor === null || valor <= 0) return { ok: false, error: "Valor inválido." }
+  const descricao = String(formData.get("descricao") ?? "").trim()
+  if (!descricao) return { ok: false, error: "Descreva a despesa." }
+  const vencimento = String(formData.get("vencimento") ?? "").trim()
+  if (!vencimento) return { ok: false, error: "Informe o vencimento." }
+
+  const { data, error } = await createAdminClient()
+    .from("agencia_despesas")
+    .update({
+      categoria: String(formData.get("categoria") ?? "").trim() || "Outros",
+      descricao,
+      valor,
+      vencimento,
+      pago_em: String(formData.get("pagoEm") ?? "").trim() || null,
+    })
+    .eq("id", id)
+    .eq("holding_id", holdingId)
+    .select("id")
+  if (error) return { ok: false, error: error.message }
+  if (!data || data.length === 0)
+    return { ok: false, error: "Despesa não encontrada." }
+  revalidatePath("/carteira/financeiro")
+  return { ok: true }
+}

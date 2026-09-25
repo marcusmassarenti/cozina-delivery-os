@@ -4,14 +4,21 @@ import * as React from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Plus } from "lucide-react"
+import { Pencil, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { SeletorBusca } from "@/components/shared/seletor-busca"
 import { fmtBRL } from "@/lib/format"
 import type { Cobranca, Despesa } from "@/lib/data/carteira-financeiro"
 
-import { alternarPago, lancarCobranca, lancarDespesa, type FinState } from "../_actions"
+import {
+  alternarPago,
+  editarCobranca,
+  editarDespesa,
+  lancarCobranca,
+  lancarDespesa,
+  type FinState,
+} from "../_actions"
 
 export type LojaSimples = { id: string; code: string; name: string }
 
@@ -45,7 +52,7 @@ export function FinanceiroView({
             {cobrancas.map((c) => (
               <li
                 key={c.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm"
+                className="relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm"
               >
                 <span className="min-w-0 flex-1 truncate">
                   {c.loja ?? "Sem loja"}
@@ -67,6 +74,7 @@ export function FinanceiroView({
                   {fmtBRL(c.valor)}
                 </span>
                 <Baixa id={c.id} tipo="cobranca" pago={c.situacao === "pago"} />
+                <EditarCobranca cobranca={c} lojas={lojas} />
               </li>
             ))}
           </ul>
@@ -84,7 +92,7 @@ export function FinanceiroView({
             {despesas.map((d) => (
               <li
                 key={d.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm"
+                className="relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm"
               >
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
                   {d.categoria}
@@ -102,6 +110,7 @@ export function FinanceiroView({
                   {fmtBRL(d.valor)}
                 </span>
                 <Baixa id={d.id} tipo="despesa" pago={d.pagoEm !== null} />
+                <EditarDespesa despesa={d} />
               </li>
             ))}
           </ul>
@@ -208,13 +217,61 @@ function NovaDespesa() {
   )
 }
 
+/** Valor no formato que o campo aceita de volta: 1234.5 → "1234,50". */
+const paraCampo = (v: number) => v.toFixed(2).replace(".", ",")
+
+/**
+ * Editar o que já foi lançado — o mesmo formulário, aberto já preenchido.
+ * Antes o único jeito de mexer era dar baixa (Marcus, 25/09/26).
+ */
+function EditarCobranca({
+  cobranca: c,
+  lojas,
+}: {
+  cobranca: Cobranca
+  lojas: LojaSimples[]
+}) {
+  return (
+    <Formulario acao={editarCobranca} rotulo="Editar" editar>
+      <input type="hidden" name="id" value={c.id} />
+      <SeletorBusca
+        name="unitId"
+        valorInicial={c.unitId ?? ""}
+        opcoes={lojas.map((l) => ({ id: l.id, rotulo: l.name, detalhe: l.code }))}
+        placeholder="Sem loja específica"
+        vazio="Sem loja específica"
+      />
+      <Campo nome="valor" rotulo="Valor (R$)" valor={paraCampo(c.valor)} />
+      <Campo nome="vencimento" rotulo="Vencimento" tipo="date" valor={c.vencimento} />
+      <Campo nome="pagoEm" rotulo="Pago em (vazio = em aberto)" tipo="date" valor={c.pagoEm ?? ""} />
+      <Campo nome="observacao" rotulo="Observação" valor={c.observacao ?? ""} placeholder="opcional" />
+    </Formulario>
+  )
+}
+
+function EditarDespesa({ despesa: d }: { despesa: Despesa }) {
+  return (
+    <Formulario acao={editarDespesa} rotulo="Editar" editar>
+      <input type="hidden" name="id" value={d.id} />
+      <Campo nome="categoria" rotulo="Categoria" valor={d.categoria} />
+      <Campo nome="descricao" rotulo="Descrição" valor={d.descricao} />
+      <Campo nome="valor" rotulo="Valor (R$)" valor={paraCampo(d.valor)} />
+      <Campo nome="vencimento" rotulo="Vencimento" tipo="date" valor={d.vencimento} />
+      <Campo nome="pagoEm" rotulo="Pago em (vazio = em aberto)" tipo="date" valor={d.pagoEm ?? ""} />
+    </Formulario>
+  )
+}
+
 function Formulario({
   acao,
   rotulo,
+  editar = false,
   children,
 }: {
   acao: (p: FinState, f: FormData) => Promise<FinState>
   rotulo: string
+  /** Lápis na linha em vez do botão "+ Cobrança", e "Salvar" no lugar de "Lançar". */
+  editar?: boolean
   children: React.ReactNode
 }) {
   const [state, action] = useActionState(acao, INICIAL)
@@ -230,6 +287,19 @@ function Formulario({
   }, [state.ok, router])
 
   if (!mostrar) {
+    if (editar) {
+      return (
+        <button
+          type="button"
+          onClick={() => setMostrar(true)}
+          title={rotulo}
+          aria-label={rotulo}
+          className="inline-flex size-6 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Pencil className="size-3" />
+        </button>
+      )
+    }
     return (
       <Button size="sm" variant="outline" onClick={() => setMostrar(true)}>
         <Plus className="size-3.5" /> {rotulo}
@@ -240,12 +310,13 @@ function Formulario({
     <form
       ref={ref}
       action={action}
-      className="absolute right-4 z-10 mt-2 flex w-64 flex-col gap-2 rounded-xl border bg-card p-3 shadow-xl"
+      className={`absolute right-4 z-10 mt-2 flex w-64 flex-col gap-2 rounded-xl border bg-card p-3 shadow-xl ${editar ? "top-full" : ""}`}
     >
+      {editar && <p className="text-xs font-semibold">Editar lançamento</p>}
       {children}
       {state.error && <p className="text-[11px] text-rose-600">{state.error}</p>}
       <div className="flex gap-2">
-        <Enviar />
+        <Enviar rotulo={editar ? "Salvar" : "Lançar"} />
         <Button type="button" size="sm" variant="ghost" onClick={() => setMostrar(false)}>
           Cancelar
         </Button>
@@ -259,11 +330,14 @@ function Campo({
   rotulo,
   tipo = "text",
   placeholder,
+  valor,
 }: {
   nome: string
   rotulo: string
   tipo?: string
   placeholder?: string
+  /** Valor já preenchido (edição). */
+  valor?: string
 }) {
   return (
     <label className="flex flex-col gap-0.5">
@@ -272,17 +346,18 @@ function Campo({
         name={nome}
         type={tipo}
         placeholder={placeholder}
+        defaultValue={valor}
         className="h-8 rounded-md border bg-background px-2 text-xs outline-none focus:border-ring"
       />
     </label>
   )
 }
 
-function Enviar() {
+function Enviar({ rotulo }: { rotulo: string }) {
   const { pending } = useFormStatus()
   return (
     <Button type="submit" size="sm" disabled={pending}>
-      {pending ? "Salvando…" : "Lançar"}
+      {pending ? "Salvando…" : rotulo}
     </Button>
   )
 }

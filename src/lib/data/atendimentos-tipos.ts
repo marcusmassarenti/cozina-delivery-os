@@ -38,4 +38,10 @@ export type Atendimento = {
   /** Dias em aberto — ou quantos levou pra resolver. */
   dias: number
   passos: Passo[]
+  /** Gestor responsável pela tarefa (padrão = gestor da loja). */
+  gestorId: string | null
+  gestorNome: string | null
 }
+
+/** Um gestor da agência, como aparece nos seletores de responsável. */
+export type GestorSimples = { id: string; nome: string }

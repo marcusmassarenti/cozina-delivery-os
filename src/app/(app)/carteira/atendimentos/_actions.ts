@@ -40,6 +40,25 @@ async function lojaDaHolding(unitId: string): Promise<boolean> {
   return !!data
 }
 
+/**
+ * O gestor é desta agência? `null` = sem responsável (válido).
+ * Devolve o nome, que vai pro histórico quando o responsável muda.
+ */
+async function gestorDaHolding(
+  gestorId: string,
+): Promise<{ ok: boolean; nome: string | null }> {
+  if (!gestorId) return { ok: true, nome: null }
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return { ok: false, nome: null }
+  const { data } = await createAdminClient()
+    .from("gestores")
+    .select("nome")
+    .eq("id", gestorId)
+    .eq("holding_id", holdingId)
+    .maybeSingle()
+  return data ? { ok: true, nome: data.nome as string } : { ok: false, nome: null }
+}
+
 export async function abrirAtendimento(
   _prev: AtendimentoState,
   formData: FormData,
@@ -55,12 +74,21 @@ export async function abrirAtendimento(
   if (!titulo) return { ok: false, error: "Escreva o que está sendo feito." }
   if (!(await lojaDaHolding(unitId)))
     return { ok: false, error: "Loja fora do seu acesso." }
+  const gestorId = String(formData.get("gestorId") ?? "").trim()
+  if (!(await gestorDaHolding(gestorId)).ok)
+    return { ok: false, error: "Responsável fora da sua agência." }
 
   const eu = await quemSou()
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("atendimentos")
-    .insert({ unit_id: unitId, tipo, titulo, aberto_por: eu.id })
+    .insert({
+      unit_id: unitId,
+      tipo,
+      titulo,
+      aberto_por: eu.id,
+      gestor_id: gestorId || null,
+    })
     .select("id")
     .single()
   if (error) return { ok: false, error: error.message }
@@ -138,6 +166,55 @@ export async function alternarResolvido(
     .update({ resolvido_em: resolver ? new Date().toISOString() : null })
     .eq("id", id)
   if (error) return { ok: false, error: error.message }
+  revalidatePath("/carteira/atendimentos")
+  return { ok: true }
+}
+
+/**
+ * Passar a tarefa pra outro gestor (ou tirar o responsável).
+ *
+ * A troca vira um PASSO no histórico — "Responsável: Diego → Paulo Victor",
+ * com quem trocou e quando. O histórico é append-only (ver a página), e uma
+ * tarefa que muda de mão sem registro reabre a pergunta "de quem era isso
+ * em julho?" que a tela existe pra responder.
+ */
+export async function trocarResponsavel(
+  _prev: AtendimentoState,
+  formData: FormData,
+): Promise<AtendimentoState> {
+  await requireModulePermission("unidades", "edit")
+  const id = String(formData.get("atendimentoId") ?? "")
+  const gestorId = String(formData.get("gestorId") ?? "").trim()
+
+  const admin = createAdminClient()
+  const { data: at } = await admin
+    .from("atendimentos")
+    .select("unit_id, gestor_id, gestores(nome)")
+    .eq("id", id)
+    .maybeSingle()
+  if (!at) return { ok: false, error: "Atendimento não encontrado." }
+  if (!(await lojaDaHolding(at.unit_id as string)))
+    return { ok: false, error: "Atendimento fora do seu acesso." }
+  if ((at.gestor_id ?? "") === gestorId) return { ok: true }
+
+  const novo = await gestorDaHolding(gestorId)
+  if (!novo.ok) return { ok: false, error: "Responsável fora da sua agência." }
+
+  const { error } = await admin
+    .from("atendimentos")
+    .update({ gestor_id: gestorId || null })
+    .eq("id", id)
+  if (error) return { ok: false, error: error.message }
+
+  const antes =
+    (at.gestores as unknown as { nome: string } | null)?.nome ?? "sem responsável"
+  const eu = await quemSou()
+  await admin.from("atendimento_passos").insert({
+    atendimento_id: id,
+    texto: `Responsável: ${antes} → ${novo.nome ?? "sem responsável"}`,
+    autor: eu.id,
+    autor_nome: eu.nome,
+  })
   revalidatePath("/carteira/atendimentos")
   return { ok: true }
 }

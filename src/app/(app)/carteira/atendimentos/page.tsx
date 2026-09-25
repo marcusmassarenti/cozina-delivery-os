@@ -1,8 +1,13 @@
 import { ClipboardList } from "lucide-react"
 
 import { assertCanView, getCurrentHoldingId } from "@/lib/auth/permissions"
-import { listarAtendimentos } from "@/lib/data/atendimentos"
+import {
+  listarAtendimentos,
+  listarGestoresAtivos,
+  meuGestorId,
+} from "@/lib/data/atendimentos"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { createClient } from "@/lib/supabase/server"
 
 import {
   AtendimentosView,
@@ -23,16 +28,24 @@ export const metadata = { title: "Atendimentos · Delivery OS" }
 export default async function AtendimentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ resolvidos?: string }>
+  searchParams: Promise<{ resolvidos?: string; gestor?: string }>
 }) {
   const sp = await searchParams
   await assertCanView("unidades")
   const incluirResolvidos = sp.resolvidos === "1"
 
-  const [atendimentos, lojas] = await Promise.all([
+  const {
+    data: { user },
+  } = await (await createClient()).auth.getUser()
+  const [atendimentos, lojas, gestores, meu] = await Promise.all([
     listarAtendimentos({ incluirResolvidos }),
     listarLojas(),
+    listarGestoresAtivos(),
+    meuGestorId(user?.id ?? null),
   ])
+  // Filtro por responsável: o da URL (link que o gestor salva) > o gestor
+  // ligado ao login de quem abriu > todos.
+  const gestorInicial = sp.gestor ?? meu ?? "todos"
 
   return (
     <div className="flex flex-1 flex-col gap-4 bg-muted/30 p-4 sm:p-6">
@@ -52,6 +65,8 @@ export default async function AtendimentosPage({
       <AtendimentosView
         atendimentos={atendimentos}
         lojas={lojas}
+        gestores={gestores}
+        gestorInicial={gestorInicial}
         mostrandoResolvidos={incluirResolvidos}
       />
     </div>
@@ -63,12 +78,20 @@ async function listarLojas(): Promise<LojaSimples[]> {
   if (!holdingId) return []
   const { data } = await createAdminClient()
     .from("units")
-    .select("id, code, name, brands!inner(holding_id)")
+    .select("id, code, name, gestor_id, brands!inner(holding_id)")
     .eq("brands.holding_id", holdingId)
     .order("code")
-  return ((data ?? []) as unknown as LojaSimples[]).map((u) => ({
+  return (
+    (data ?? []) as unknown as {
+      id: string
+      code: string
+      name: string
+      gestor_id: string | null
+    }[]
+  ).map((u) => ({
     id: u.id,
     code: u.code,
     name: u.name,
+    gestorId: u.gestor_id,
   }))
 }

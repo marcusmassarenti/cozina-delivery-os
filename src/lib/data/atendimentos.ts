@@ -2,7 +2,13 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCurrentHoldingId } from "@/lib/auth/permissions"
-import { TIPOS, type Atendimento, type Passo, type TipoAtendimento } from "./atendimentos-tipos"
+import {
+  TIPOS,
+  type Atendimento,
+  type GestorSimples,
+  type Passo,
+  type TipoAtendimento,
+} from "./atendimentos-tipos"
 
 /**
  * Atendimentos — T6 do painel da agência.
@@ -33,7 +39,7 @@ export async function listarAtendimentos(opts?: {
   let q = admin
     .from("atendimentos")
     .select(
-      "id, unit_id, tipo, titulo, aberto_em, resolvido_em, units!inner(code, name, brands!inner(holding_id))",
+      "id, unit_id, tipo, titulo, aberto_em, resolvido_em, gestor_id, gestores(nome), units!inner(code, name, brands!inner(holding_id))",
     )
     .eq("units.brands.holding_id", holdingId)
     .order("aberto_em", { ascending: false })
@@ -48,6 +54,8 @@ export async function listarAtendimentos(opts?: {
     titulo: string
     aberto_em: string
     resolvido_em: string | null
+    gestor_id: string | null
+    gestores: { nome: string } | null
     units: { code: string; name: string }
   }[]
   if (linhas.length === 0) return []
@@ -87,7 +95,45 @@ export async function listarAtendimentos(opts?: {
     resolvidoEm: l.resolvido_em,
     dias: dias(l.aberto_em, l.resolvido_em),
     passos: porAtendimento.get(l.id) ?? [],
+    gestorId: l.gestor_id,
+    gestorNome: l.gestores?.nome ?? null,
   }))
+}
+
+/** Gestores ativos da agência da sessão — as opções de responsável. */
+export async function listarGestoresAtivos(): Promise<GestorSimples[]> {
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return []
+  const { data } = await createAdminClient()
+    .from("gestores")
+    .select("id, nome")
+    .eq("holding_id", holdingId)
+    .eq("ativo", true)
+    .order("nome")
+  return ((data ?? []) as { id: string; nome: string }[]).map((g) => ({
+    id: g.id,
+    nome: g.nome,
+  }))
+}
+
+/**
+ * O gestor ligado ao login de quem está vendo, se houver.
+ *
+ * Gestor não precisa de login (0243), mas quando tem, a tela de atendimentos
+ * abre já filtrada nos dele — é a "tela do gestor" que o Marcus pediu.
+ */
+export async function meuGestorId(userId: string | null): Promise<string | null> {
+  if (!userId) return null
+  const holdingId = await getCurrentHoldingId()
+  if (!holdingId) return null
+  const { data } = await createAdminClient()
+    .from("gestores")
+    .select("id")
+    .eq("holding_id", holdingId)
+    .eq("user_id", userId)
+    .eq("ativo", true)
+    .maybeSingle()
+  return (data?.id as string | undefined) ?? null
 }
 
 /** Quantos atendimentos abertos cada loja tem — a T2 mostra isso no cartão. */

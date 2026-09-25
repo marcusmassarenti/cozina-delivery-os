@@ -23,6 +23,8 @@ import { vencimentoEfetivo } from "@/lib/dia-br"
 
 export type Cobranca = {
   id: string
+  /** Pra edição: o formulário abre com a loja já escolhida. */
+  unitId: string | null
   loja: string | null
   competencia: string
   valor: number
@@ -92,7 +94,7 @@ export async function financeiroDaAgencia(periodo: {
         .eq("brands.holding_id", holdingId),
       admin
         .from("agencia_cobrancas")
-        .select("id, competencia, valor, vencimento, pago_em, observacao, units(name)")
+        .select("id, unit_id, competencia, valor, vencimento, pago_em, observacao, units(name)")
         .eq("holding_id", holdingId)
         .gte("vencimento", periodo.start)
         .lte("vencimento", periodo.end)
@@ -119,6 +121,7 @@ export async function financeiroDaAgencia(periodo: {
   const hoje = hojeISO()
   const cobrancas: Cobranca[] = ((cobRaw ?? []) as unknown as {
     id: string
+    unit_id: string | null
     competencia: string
     valor: number | string
     vencimento: string
@@ -127,6 +130,7 @@ export async function financeiroDaAgencia(periodo: {
     units: { name: string } | null
   }[]).map((c) => ({
     id: c.id,
+    unitId: c.unit_id,
     loja: c.units?.name ?? null,
     competencia: c.competencia,
     valor: Number(c.valor),
