@@ -720,12 +720,19 @@ export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
       year = row.ref_year
       month = row.ref_month
     } else if (row.ref_date) {
-      const d = new Date(row.ref_date)
-      year = d.getFullYear()
-      month = d.getMonth() + 1
+      // Lida como TEXTO ("2026-09-01"), não com `new Date`: a data sem hora
+      // vira meia-noite UTC, que no fuso de Brasília ainda é o dia anterior —
+      // o dia 1º caía no mês de trás, e o 01/01/1970 que a Qualidade gravou
+      // em 18/08 (parser já corrigido) virava "Dezembro/1969" no seletor.
+      const [y, m] = String(row.ref_date).slice(0, 10).split("-").map(Number)
+      year = y
+      month = m
     } else {
       continue
     }
+    // Data que não pode ser venda (carimbo zerado, ano de dois dígitos) não
+    // entra no seletor — senão vira o primeiro mês de todos os filtros "de".
+    if (!(year >= 2020) || !(month >= 1 && month <= 12)) continue
     // Ignora período no futuro (não existe venda futura): blinda contra ref
     // bogus no log — ex.: data outlier que jogou o ref pra dezembro.
     if (year > curYear || (year === curYear && month > curMonth)) continue
@@ -1789,8 +1796,55 @@ export async function getCancelamentoCestaByUnits(
   month: number,
   dateRange?: { start: string; end: string },
 ): Promise<Map<string, CancelamentoCesta>> {
+  if (unitIds.length === 0) return new Map()
+  const corrente = mesCorrenteBR()
+  const fechado =
+    year < corrente.ano || (year === corrente.ano && month < corrente.mes)
+  if (!fechado) return cestaCanceladosCalculo(unitIds, year, month, dateRange)
+
+  /* MÊS FECHADO RESPONDE DO CACHE (DG FOODS, 25/09/26).
+   *
+   * Esta conta rodava inteira a cada abertura, sem cache nenhum: baixa os
+   * cancelamentos do mês e depois as linhas de cada pedido cancelado, de 50
+   * em 50. Pra rede de 80 lojas a Evolução fazia isso pros 9 meses — 60 a 85
+   * requisições por abertura, mesmo com o resumo do iFood já vindo do cache.
+   * Mesma régua e mesma tag do resumo: a gravação que toca mês fechado
+   * derruba as duas juntas.
+   *
+   * FALHA NÃO ENTRA NO CACHE: `fetchAllRows` devolve o que conseguiu ler e
+   * segue; aqui a falha vira exceção, o unstable_cache não guarda nada e a
+   * conta roda de novo sem cache — o mesmo resultado de antes desta mudança.
+   * Map não atravessa o cache (é JSON), por isso vai como lista de pares. */
+  const recorte = dateRange ? `${dateRange.start}..${dateRange.end}` : "mes"
+  const chave = `${year}-${month}-${recorte}-${[...unitIds].sort().join(",")}`
+  try {
+    const pares = await unstable_cache(
+      async () => {
+        let falha: string | null = null
+        const m = await cestaCanceladosCalculo(unitIds, year, month, dateRange, (e) => {
+          falha = e
+        })
+        if (falha) throw new Error(`cesta dos cancelados falhou: ${falha}`)
+        return [...m.entries()]
+      },
+      ["ifood-cesta-cancelados", chave],
+      { tags: [TAG_FINANCEIRO_IFOOD], revalidate: 86_400 },
+    )()
+    return new Map(pares)
+  } catch (e) {
+    console.error("getCancelamentoCestaByUnits (cache):", e)
+    return cestaCanceladosCalculo(unitIds, year, month, dateRange)
+  }
+}
+
+async function cestaCanceladosCalculo(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+  onErro?: (mensagem: string) => void,
+): Promise<Map<string, CancelamentoCesta>> {
   const out = new Map<string, CancelamentoCesta>()
-  if (unitIds.length === 0) return out
   const admin = createAdminClient()
 
   // Tipo mínimo do builder do Supabase pro que esta função usa. Estava como
@@ -1825,6 +1879,7 @@ export async function getCancelamentoCestaByUnits(
         .order("id")
         .range(from, to),
     "ifood_financeiro_lancamentos cancelados cesta",
+    { onErro },
   )
   // chave composta unidade|pedido (o mesmo nº de pedido não repete entre
   // lojas na prática, mas custa nada blindar)

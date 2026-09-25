@@ -66,7 +66,15 @@ export const CHANGELOG: Release[] = [
             antes:
               "Os meses já fechados eram recalculados a cada abertura. Em redes com dezenas de lojas, a conta passava do tempo limite e a tela ficava parada no Hub.",
             depois:
-              "Os meses fechados ficam guardados e só são recalculados quando algo neles muda de verdade. A Evolução busca os meses em partes, sem sobrecarregar.",
+              "Os meses fechados ficam guardados e só são recalculados quando algo neles muda de verdade — inclusive o valor dos pedidos cancelados. A Evolução busca os meses em partes, sem sobrecarregar.",
+          },
+          {
+            kind: "correcao",
+            title: "“Dezembro/1969” no seletor de período",
+            antes:
+              "Uma importação antiga do relatório de Qualidade ficou com a data zerada, e o seletor de período passou a oferecer “Dezembro/1969” como primeiro mês.",
+            depois:
+              "Datas impossíveis ficam fora do seletor, e o dia 1º de cada mês não escorrega mais para o mês anterior.",
           },
         ],
       },
