@@ -33,7 +33,13 @@ export async function ultimoDiaComDado(
   const admin = createAdminClient()
   const mm = String(month).padStart(2, "0")
   const ini = `${year}-${mm}-01`
-  const fim = `${year}-${mm}-31`
+  // O ÚLTIMO dia de verdade, não "31". Com 31 fixo, todo mês de 30 dias (e
+  // fevereiro) pedia "2026-09-31" — data que não existe, o banco recusa com
+  // 400 nas 4 consultas, esta função devolve null calada e o dashboard volta
+  // a cortar por "hoje": o dia ainda vazio conta como dia de venda zero, que é
+  // exatamente o susto de 05/08 que ela existe pra evitar. Visto em 25/09/26
+  // nos logs do banco, abrindo o painel da DG FOODS.
+  const fim = `${year}-${mm}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`
 
   const ultimo = async (
     tabela: string,

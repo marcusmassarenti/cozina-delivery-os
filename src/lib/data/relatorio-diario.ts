@@ -152,12 +152,17 @@ export async function getImportCoverageForMonth(
       .pop() ?? null
 
   // Cardápio Web: o pedido é a fonte (não há relatório a importar — é API).
+  // A coluna é `criado_em` — `data_pedido` não existe nesta tabela, e a
+  // consulta voltava 400 em toda chamada: o "último dia" do Cardápio Web
+  // saía sempre vazio (visto nos logs do banco em 25/09/26). O banco devolve
+  // o horário no fuso de São Paulo (TimeZone do papel), então o dia lido
+  // pelos 10 primeiros caracteres já é o dia BRT.
   let qcw = admin
     .from("cardapioweb_pedidos")
-    .select("data_pedido")
-    .gte("data_pedido", `${year}-${mm}-01`)
-    .lte("data_pedido", `${year}-${mm}-${String(lastDay).padStart(2, "0")}T23:59:59`)
-    .order("data_pedido", { ascending: false })
+    .select("criado_em")
+    .gte("criado_em", `${year}-${mm}-01`)
+    .lte("criado_em", `${year}-${mm}-${String(lastDay).padStart(2, "0")}T23:59:59`)
+    .order("criado_em", { ascending: false })
     .limit(1)
   if (filterUnitIds) qcw = qcw.in("unit_id", filterUnitIds)
   const { data: dcw } = await qcw
@@ -166,7 +171,7 @@ export async function getImportCoverageForMonth(
     ifood: parseDay(ifoodLatest),
     ninefood: parseDay(ninefoodLatest),
     keeta: parseDay(dk?.[0]?.data as string | undefined),
-    cardapioweb: parseDay(dcw?.[0]?.data_pedido as string | undefined),
+    cardapioweb: parseDay(dcw?.[0]?.criado_em as string | undefined),
   }
 }
 

@@ -101,20 +101,52 @@ export async function rpcMensalComCache<T>(
 }
 
 /**
- * Limpa os agregados em cache. Chamada depois de QUALQUER gravação que mexa em
- * mês fechado (importação, sync, reimportação).
+ * Limpa os agregados em cache. Chamada depois de gravação que mexa em mês
+ * fechado (importação, sync, reimportação).
  *
- * Derruba tudo de propósito: descobrir exatamente qual plataforma foi tocada
- * custa mais atenção do que o cache economiza, e errar pra menos aqui significa
- * número velho na tela do cliente.
+ * Sem argumento derruba tudo — é o que as importações manuais usam: são raras,
+ * disparadas por gente, e errar pra menos ali significa número velho na tela.
+ *
+ * ⚠️ ROTINA AUTOMÁTICA NÃO PODE DERRUBAR TUDO (DG FOODS, 25/09/26). O cron dos
+ * webhooks do 99 roda a cada 10 min e chamava esta função sem argumento ao
+ * terminar — derrubando também o cache do iFood, que o 99 nem toca. Na
+ * prática o mês fechado nunca ficava em cache: toda abertura de relatório
+ * recalculava todos os meses no banco. Pra rede de 80 lojas, a Evolução pedia
+ * 9 meses de uma vez, as consultas passavam dos 8s e eram canceladas (105
+ * falhas em 5 minutos); o cliente clicava no Hub de Relatórios e nada abria.
+ * Rotina automática usa `limparSeTocouMesFechado`, com a tag da própria
+ * plataforma.
  */
-export async function limparCacheAgregados(): Promise<void> {
+export async function limparCacheAgregados(
+  tags: readonly string[] = TODAS_AS_TAGS,
+): Promise<void> {
   try {
     const { revalidateTag } = await import("next/cache")
     // Next 16 exige o perfil de expiração no segundo argumento.
-    for (const t of TODAS_AS_TAGS) revalidateTag(t, { expire: 0 })
+    for (const t of tags) revalidateTag(t, { expire: 0 })
   } catch (e) {
     // Fora de um contexto de request (script avulso) não há cache pra limpar.
     console.warn("limparCacheAgregados ignorado:", e)
   }
+}
+
+/**
+ * Derruba o cache de UMA plataforma, e só se a gravação tocou mês FECHADO.
+ *
+ * Mês corrente nunca entra no cache (ver `rpcMensalComCache`), então gravar
+ * pedido de hoje não deixa nada velho — derrubar ali só joga fora o cache dos
+ * meses encerrados, que é justamente o que segura as telas pesadas de pé.
+ * Devolve se derrubou, pra quem chama poder registrar.
+ */
+export async function limparSeTocouMesFechado(
+  tag: string,
+  meses: Iterable<{ year: number; month: number }>,
+): Promise<boolean> {
+  for (const m of meses) {
+    if (mesFechado(m.year, m.month)) {
+      await limparCacheAgregados([tag])
+      return true
+    }
+  }
+  return false
 }

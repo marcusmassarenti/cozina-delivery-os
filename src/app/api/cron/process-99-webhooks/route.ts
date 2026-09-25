@@ -419,9 +419,33 @@ export async function GET(req: Request) {
       .in("id", slice)
   }
 
-  // Entrou pedido novo → o agregado mensal em cache ficou velho.
-  const { limparCacheAgregados } = await import("@/lib/cache-tags")
-  await limparCacheAgregados()
+  // Entrou pedido → o agregado mensal em cache PODE ter ficado velho — mas só
+  // o do 99, e só se o pedido é de mês fechado.
+  //
+  // Antes derrubava TUDO a cada rodada (a cada 10 min, o dia inteiro),
+  // inclusive o cache do iFood, que o 99 nem toca. O mês fechado nunca ficava
+  // em cache e as telas pesadas das redes grandes estouravam o tempo do banco
+  // (DG FOODS, 25/09/26 — ver `limparCacheAgregados`).
+  //
+  // Pedido novo: a competência dele. Conclusão/cancelamento só trazem a hora
+  // do evento, e o pedido é de no máximo algumas horas antes — mas pode ser da
+  // véspera. Recuar 2 dias cobre o pedido da virada do mês com folga.
+  const { limparSeTocouMesFechado, TAG_99FOOD } = await import(
+    "@/lib/cache-tags"
+  )
+  const mesesTocados: { year: number; month: number }[] = newRows.map((r) => ({
+    year: Number(r.ref_year),
+    month: Number(r.ref_month),
+  }))
+  for (const e of [...finishes, ...cancels]) {
+    const quando = tsToDate(e.payload?.timestamp) ?? new Date(e.received_at)
+    const recuado = new Date(quando.getTime() - 2 * 24 * 60 * 60 * 1000)
+    const emBR = new Date(
+      recuado.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+    )
+    mesesTocados.push({ year: emBR.getFullYear(), month: emBR.getMonth() + 1 })
+  }
+  await limparSeTocouMesFechado(TAG_99FOOD, mesesTocados)
 
   return Response.json({
     ok: true,

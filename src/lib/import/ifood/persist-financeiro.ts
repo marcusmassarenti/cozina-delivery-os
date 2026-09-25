@@ -481,8 +481,27 @@ async function persistFinanceiroDestravado(
   // encerrado por 24h — e reimportação é justamente o caso em que um mês
   // encerrado muda. Sem esta linha, a recuperação de junho de 29/07 teria
   // corrigido o banco e o painel continuaria mostrando o número quebrado.
-  const { limparCacheAgregados } = await import("@/lib/cache-tags")
-  await limparCacheAgregados()
+  //
+  // Só o do iFood, e só se a carga tocou mês fechado: o sync diário grava o
+  // mês corrente, que nunca está em cache — derrubar ali apagava à toa o
+  // cache de todos os meses encerrados (ver `limparCacheAgregados`). A régua
+  // é a competência (ref_year/ref_month), a mesma que o resumo filtra.
+  const { limparSeTocouMesFechado, TAG_FINANCEIRO_IFOOD } = await import(
+    "@/lib/cache-tags"
+  )
+  const mesesTocados = new Map<string, { year: number; month: number }>()
+  for (const l of parsed.lancamentos) {
+    mesesTocados.set(`${l.refYear}-${l.refMonth}`, {
+      year: l.refYear,
+      month: l.refMonth,
+    })
+  }
+  // A carga antiga removida acima é das MESMAS competências — entra também.
+  for (const c of competencias) {
+    const [y, m] = c.split("-").map(Number)
+    if (y && m) mesesTocados.set(`${y}-${m}`, { year: y, month: m })
+  }
+  await limparSeTocouMesFechado(TAG_FINANCEIRO_IFOOD, mesesTocados.values())
 
   return {
     substituido,

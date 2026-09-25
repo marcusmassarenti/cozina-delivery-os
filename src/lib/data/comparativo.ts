@@ -226,11 +226,23 @@ export async function getEvolucaoSeries(
   platforms: PlatformId[],
   periods: { year: number; month: number }[],
 ): Promise<EvolucaoPonto[]> {
-  const maps = await Promise.all(
-    periods.map((p) =>
-      getUnitMetricsForMonth(unitIds, platforms, p.year, p.month),
-    ),
-  )
+  // DE 3 EM 3 MESES, não todos juntos (DG FOODS, 25/09/26). Com 80 lojas,
+  // pedir janeiro a setembro de uma vez eram 9 meses × várias consultas
+  // pesadas disputando o banco ao mesmo tempo: cada uma sozinha leva ~1,6 s,
+  // mas juntas passavam dos 8 s de limite e eram canceladas — o cliente
+  // clicava em "Evolução" e a tela não abria. Mês fechado normalmente vem do
+  // cache; o lote só pesa quando o cache está frio, e é aí que ele protege.
+  const LOTE = 3
+  const maps: Awaited<ReturnType<typeof getUnitMetricsForMonth>>[] = []
+  for (let i = 0; i < periods.length; i += LOTE) {
+    maps.push(
+      ...(await Promise.all(
+        periods
+          .slice(i, i + LOTE)
+          .map((p) => getUnitMetricsForMonth(unitIds, platforms, p.year, p.month)),
+      )),
+    )
+  }
   return periods.map((p, i) => {
     let bruto = 0
     let liquido = 0

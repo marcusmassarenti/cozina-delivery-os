@@ -49,6 +49,43 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.4",
+    date: "2026-09-25",
+    tag: "Correção",
+    title: "Relatórios abrindo em redes grandes",
+    summary:
+      "Em redes com muitas lojas, alguns relatórios do Hub demoravam tanto que não abriam. Agora abrem, e o painel volta a comparar o mês pelo último dia com venda.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Hub de Relatórios",
+        items: [
+          {
+            kind: "correcao",
+            title: "Evolução, Resultado da rede e outros não abriam",
+            antes:
+              "Os meses já fechados eram recalculados a cada abertura. Em redes com dezenas de lojas, a conta passava do tempo limite e a tela ficava parada no Hub.",
+            depois:
+              "Os meses fechados ficam guardados e só são recalculados quando algo neles muda de verdade. A Evolução busca os meses em partes, sem sobrecarregar.",
+          },
+        ],
+      },
+      {
+        area: "Dashboard e Relatório Diário",
+        items: [
+          {
+            kind: "correcao",
+            title: "Último dia com venda em meses de 30 dias",
+            antes:
+              "Em setembro (e em todo mês de 30 dias) o painel não achava o último dia com venda e comparava até hoje — contando o dia ainda sem dado como venda zero.",
+            depois:
+              "O painel compara o mês pelo último dia que já tem venda, em qualquer mês. O Relatório Diário também passou a mostrar até onde chegou o Cardápio Web.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.3",
     date: "2026-09-22",
     tag: "Correção",
