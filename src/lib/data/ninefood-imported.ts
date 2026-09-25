@@ -1620,6 +1620,39 @@ export type NetworkNinefoodAvaliacoes = {
   hasData: boolean
 }
 
+/**
+ * Quanto do mês da 99 veio pelo RELATÓRIO de pedidos — a única porta das
+ * avaliações da 99.
+ *
+ * A API da 99 não tem avaliação (conferido de novo em 25/09/26: as 82
+ * páginas da doc do 99Food Protocol, e os eventos de webhook que recebemos,
+ * não têm nota, review nem rating). O pedido chega pelo webhook SEM nota; a
+ * nota só entra quando alguém importa "Dados do pedido" do portal. Sem este
+ * número, a tela dizia "0 avaliações" e parecia que a loja não foi avaliada.
+ */
+export async function coberturaRelatorio99(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+): Promise<{ pedidos: number; doRelatorio: number }> {
+  const admin = createAdminClient()
+  const monthStr = String(month).padStart(2, "0")
+  const inicio = `${year}-${monthStr}-01`
+  const prox = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`
+  const contar = (soRelatorio: boolean) => {
+    let q = admin
+      .from("ninefood_pedidos")
+      .select("id", { count: "exact", head: true })
+      .gte("data", inicio)
+      .lt("data", prox)
+    if (soRelatorio) q = q.not("import_id", "is", null)
+    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
+    return q
+  }
+  const [a, b] = await Promise.all([contar(false), contar(true)])
+  return { pedidos: a.count ?? 0, doRelatorio: b.count ?? 0 }
+}
+
 export async function getNetworkNinefoodAvaliacoesForMonth(
   year: number,
   month: number,

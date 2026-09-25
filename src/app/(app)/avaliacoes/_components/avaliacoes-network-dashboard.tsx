@@ -14,7 +14,10 @@ import { PlatformLogo, type PlatformId,
 import {
   getNetworkAvaliacoesForMonth,
 } from "@/lib/data/ifood-imported"
-import { getNetworkNinefoodAvaliacoesForMonth } from "@/lib/data/ninefood-imported"
+import {
+  coberturaRelatorio99,
+  getNetworkNinefoodAvaliacoesForMonth,
+} from "@/lib/data/ninefood-imported"
 import {
   getAvaliacoesByUnitForMonth,
 } from "@/lib/data/avaliacoes-network"
@@ -60,13 +63,21 @@ export async function AvaliacoesNetworkDashboard({
    */
   cwUnitIds: string[]
 }) {
-  const [ifood, nine, keeta, cw, byUnit] = await Promise.all([
+  const [ifood, nine, keeta, cw, byUnit, cob99] = await Promise.all([
     getNetworkAvaliacoesForMonth(year, month, unitIds),
     getNetworkNinefoodAvaliacoesForMonth(year, month, unitIds),
     getNetworkKeetaAvaliacoesForMonth(year, month, unitIds),
     getNetworkCardapioWebAvaliacoesForMonth(cwUnitIds, year, month),
     getAvaliacoesByUnitForMonth(year, month, unitIds),
+    coberturaRelatorio99(year, month, unitIds).catch(() => null),
   ])
+  /* Avaliação da 99 só entra pelo relatório "Dados do pedido" (a API não tem
+     nota). Teve pedido no mês e o relatório cobre menos de 90% deles → avisa,
+     em vez de deixar "0 avaliações" parecer que ninguém avaliou. */
+  const falta99 =
+    cob99 && cob99.pedidos > 0 && cob99.doRelatorio < cob99.pedidos * 0.9
+      ? cob99
+      : null
 
   // Plataforma "ativa" do filtro (null = rede combinada)
   const active =
@@ -305,6 +316,19 @@ export async function AvaliacoesNetworkDashboard({
               total={nine.total}
               notaMedia={nine.notaMedia}
               active={plataforma === "99food"}
+              aviso={
+                falta99 && (
+                  <>
+                    {falta99.doRelatorio === 0
+                      ? "Nenhum relatório de pedidos da 99 importado neste mês"
+                      : `O relatório de pedidos cobre só ${fmtNum(falta99.doRelatorio)} de ${fmtNum(falta99.pedidos)} pedidos do mês`}
+                    {" — a nota da 99 não vem pela integração, só pelo relatório “Dados do pedido” do portal. "}
+                    <Link href="/importacao" className="font-medium underline underline-offset-2">
+                      Importar
+                    </Link>
+                  </>
+                )
+              }
             />
             <PlatformStat
               platform="keeta"
@@ -583,33 +607,43 @@ function PlatformStat({
   total,
   notaMedia,
   active,
+  aviso,
 }: {
   platform: PlatformId
   total: number
   notaMedia: number
   active?: boolean
+  /** Por que o número pode estar incompleto (ex.: relatório da 99 faltando). */
+  aviso?: React.ReactNode
 }) {
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${
+      className={`rounded-lg border px-3 py-2.5 ${
         active ? "border-primary bg-primary/5" : "bg-card"
       }`}
     >
-      <PlatformLogo platform={platform} size="md" />
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold">
-          {rotuloPlataforma(platform)}
-        </p>
-        <p className="text-[10px] text-muted-foreground tabular-nums">
-          {fmtNum(total)} avaliações
-        </p>
+      <div className="flex items-center gap-3">
+        <PlatformLogo platform={platform} size="md" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold">
+            {rotuloPlataforma(platform)}
+          </p>
+          <p className="text-[10px] text-muted-foreground tabular-nums">
+            {fmtNum(total)} avaliações
+          </p>
+        </div>
+        <span className="flex items-center gap-1 text-sm font-bold tabular-nums">
+          {total > 0 ? notaMedia.toFixed(2) : "—"}
+          {total > 0 && (
+            <Star className="size-3.5 fill-amber-400 stroke-amber-400" />
+          )}
+        </span>
       </div>
-      <span className="flex items-center gap-1 text-sm font-bold tabular-nums">
-        {total > 0 ? notaMedia.toFixed(2) : "—"}
-        {total > 0 && (
-          <Star className="size-3.5 fill-amber-400 stroke-amber-400" />
-        )}
-      </span>
+      {aviso && (
+        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+          {aviso}
+        </p>
+      )}
     </div>
   )
 }
