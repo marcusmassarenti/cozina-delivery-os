@@ -37,12 +37,15 @@ export function PlanSettingsDialog({
   precos,
   pacotePreco,
   acrescimo12xPct,
+  respostaAutoPreco,
 }: {
   precos: PrecosPlano
   /** Preço do pacote de perguntas extras do Consultor IA (Fase 2). */
   pacotePreco: number
   /** Acréscimo do anual em 12x sobre a base, em %. */
   acrescimo12xPct: number
+  /** Adicional de resposta automática: preço padrão por loja ligada. */
+  respostaAutoPreco: number
 }) {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
@@ -164,6 +167,23 @@ export function PlanSettingsDialog({
             <p className="mt-1 text-[11px] text-muted-foreground">
               Preço de cada pacote de perguntas extras que o cliente compra
               quando a cota do mês acaba.
+            </p>
+          </div>
+
+          <div className="border-t pt-3">
+            <label htmlFor="respostaAutoPreco" className="text-xs font-medium">
+              Resposta automática de avaliações — por loja/mês (R$)
+            </label>
+            <input
+              id="respostaAutoPreco"
+              name="respostaAutoPreco"
+              inputMode="decimal"
+              defaultValue={String(respostaAutoPreco).replace(".", ",")}
+              className={inputCls}
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Adicional somado à mensalidade, por loja ligada. Vale pra quem não
+              tem um valor combinado na ficha.
             </p>
           </div>
 

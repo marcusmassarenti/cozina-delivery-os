@@ -15,6 +15,7 @@ import "server-only"
 
 import { asaasUpdateSubscription } from "@/lib/asaas/client"
 import { mensalidadeDoCliente } from "@/lib/data/mensalidade"
+import { adicionalRespostaAuto } from "@/lib/data/adicional-resposta-auto"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { contarLojasCompartilhadas } from "@/lib/data/lojas-compartilhadas"
 import {
@@ -97,13 +98,18 @@ export async function sincronizarValorAssinatura(
      * Asaas o preço de tabela puro. Ou seja: ela DESFAZIA o desconto e o ciclo
      * toda vez que rodasse — inclusive por cima de um valor corrigido à mão no
      * painel do Asaas, sem deixar rastro. */
-    const [precos, regra] = await Promise.all([getDefaultPlan(), getRegraCiclos()])
+    const [precos, regra, adicional] = await Promise.all([
+      getDefaultPlan(),
+      getRegraCiclos(),
+      adicionalRespostaAuto(holdingId),
+    ])
     const mensal = mensalidadeDoCliente(
       h as Parameters<typeof mensalidadeDoCliente>[0],
       ativas,
       precos,
       new Date().toISOString().slice(0, 10),
       regra,
+      adicional.total,
     ).valor
 
     /* ⚠️ O ANUAL À VISTA É COBRADO POR ANO — o valor da assinatura é 12×.
@@ -142,7 +148,13 @@ export async function sincronizarValorAssinatura(
     const nomePlano = rotulo.startsWith("DeliveryOS") ? rotulo : `DeliveryOS ${rotulo}`
     await asaasUpdateSubscription(String(h.asaas_subscription_id), {
       value: valor,
-      description: `${nomePlano} · ${ativas} loja${ativas !== 1 ? "s" : ""}`,
+      // O adicional aparece na descrição: é o que o cliente lê na fatura, e
+      // um valor maior sem explicação vira chamado.
+      description:
+        `${nomePlano} · ${ativas} loja${ativas !== 1 ? "s" : ""}` +
+        (adicional.total > 0
+          ? ` + Resposta automática (${adicional.lojasLigadas} loja${adicional.lojasLigadas !== 1 ? "s" : ""})`
+          : ""),
       // Reflete nas cobranças futuras JÁ geradas. Sem isso a próxima fatura
       // sairia no valor velho e a correção só valeria dali a dois meses.
       updatePendingPayments: true,

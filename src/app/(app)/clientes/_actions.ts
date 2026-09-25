@@ -384,6 +384,7 @@ export async function setPlatformPlan(
     const aF = money("ai_first")
     const aA = money("ai_add")
     const pacotePreco = money("pacotePreco") // pacote de perguntas do Consultor IA
+    const respostaAutoPreco = money("respostaAutoPreco") // adicional por loja
     // Acréscimo do anual em 12x sobre a base (%). A base é o anual à vista.
     const acrescimo12x = money("acrescimo12x")
     if (acrescimo12x != null && acrescimo12x > 100)
@@ -407,6 +408,7 @@ export async function setPlatformPlan(
         ai_add: aA,
         // Só sobrescreve o preço do pacote se veio no form.
         ...(pacotePreco != null ? { ia_pack_price: pacotePreco } : {}),
+        ...(respostaAutoPreco != null ? { resposta_auto_preco_loja: respostaAutoPreco } : {}),
         ...(acrescimo12x != null ? { acrescimo_12x_pct: acrescimo12x } : {}),
         updated_at: new Date().toISOString(),
       },
@@ -465,6 +467,12 @@ export async function setClientBilling(
       ? btRaw
       : null
 
+    // Adicional de resposta automática: vazio = padrão da plataforma (null);
+    // 0 = cortesia. Negativo não existe.
+    const respostaAutoPreco = money("respostaAutoPreco")
+    if (respostaAutoPreco != null && respostaAutoPreco < 0)
+      return { ok: false, message: "O preço do adicional não pode ser negativo." }
+
     const { error } = await admin
       .from("holdings")
       .update({
@@ -473,6 +481,7 @@ export async function setClientBilling(
         payment_method: paymentMethod,
         monthly_fee: monthlyFee,
         price_per_unit: pricePerUnit,
+        resposta_auto_preco_loja: respostaAutoPreco,
         included_units: includedUnits,
         due_date: dueDate,
         paid,
@@ -481,6 +490,11 @@ export async function setClientBilling(
       })
       .eq("id", holdingId)
     if (error) return { ok: false, message: error.message }
+
+    // O preço do adicional muda a mensalidade: leva pro Asaas agora, não no
+    // cron de amanhã (silencioso se o cliente não tiver assinatura).
+    const { sincronizarValorAssinatura } = await import("@/lib/data/assinatura-sync")
+    await sincronizarValorAssinatura(holdingId)
 
     revalidatePath("/clientes")
     revalidatePath("/", "layout")

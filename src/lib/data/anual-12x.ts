@@ -105,12 +105,16 @@ export async function emitirRenovacoes12x(
       ativas += await contarLojasCompartilhadas(holdingId)
 
       // No ciclo 12x, a "mensalidade" é a parcela (com o desconto negociado).
+      const { adicionalRespostaAuto } = await import(
+        "@/lib/data/adicional-resposta-auto"
+      )
       const parcela = mensalidadeDoCliente(
         h as Parameters<typeof mensalidadeDoCliente>[0],
         ativas,
         precos,
         hoje,
         regra,
+        (await adicionalRespostaAuto(holdingId)).total,
       ).valor
       if (parcela <= 0) {
         out.erros.push(`${nome}: parcela zerada — renovação não emitida`)

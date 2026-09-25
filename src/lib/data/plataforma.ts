@@ -107,6 +107,8 @@ export type ClientOverview = {
   paymentMethod: string | null
   monthlyFee: number | null
   pricePerUnit: number | null
+  /** Preço combinado do adicional de resposta automática (null = padrão; 0 = cortesia). */
+  respostaAutoPrecoLoja: number | null
   includedUnits: number
   billableUnits: number // lojas cobradas (ativas)
   extraUnits: number // lojas além das inclusas
@@ -295,7 +297,7 @@ export async function getClientsOverview(): Promise<{
   const hFull = await admin
     .from("holdings")
     .select(
-      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota, encerrado_em, encerrado_motivo",
+      "id, name, slug, created_at, establishment_type, carteira_habilitada, payment_method, monthly_fee, price_per_unit, included_units, due_date, paid, suspend_on, trial_ends_at, plan_tier, nino_trial_ends_at, asaas_subscription_id, asaas_last_event, conta_interna, conta_interna_nota, convite_asaas_em, desconto_tipo, desconto_valor, desconto_ate, desconto_nota, indicado_por, desconto_primeira_fatura_pct, billing_cycle, cortesia, cortesia_nota, encerrado_em, encerrado_motivo, resposta_auto_preco_loja",
     )
     .order("created_at")
   const holdings = hFull.error
@@ -322,6 +324,7 @@ export async function getClientsOverview(): Promise<{
         payment_method: null,
         monthly_fee: null,
         price_per_unit: null,
+        resposta_auto_preco_loja: null,
         included_units: 1,
         due_date: null,
         paid: true,
@@ -455,6 +458,7 @@ export async function getClientsOverview(): Promise<{
       payment_method: string | null
       monthly_fee: number | string | null
       price_per_unit: number | string | null
+      resposta_auto_preco_loja: number | string | null
       included_units: number | null
       due_date: string | null
       paid: boolean | null
@@ -573,6 +577,8 @@ export async function getClientsOverview(): Promise<{
       lastLogin,
       ...billing,
       pricePerUnit,
+      respostaAutoPrecoLoja:
+        hh.resposta_auto_preco_loja != null ? Number(hh.resposta_auto_preco_loja) : null,
       includedUnits,
       billableUnits,
       extraUnits,

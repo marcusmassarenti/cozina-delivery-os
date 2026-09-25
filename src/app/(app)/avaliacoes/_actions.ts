@@ -116,6 +116,7 @@ export async function responderAvaliacaoIfood(
         resposta_texto: t,
         respondida_em: new Date().toISOString(),
         status_avaliacao: "REPLIED",
+        resposta_origem: "manual",
       })
       .eq("id", av.id)
     revalidatePath("/relatorios/avaliacoes-negativos")
@@ -149,6 +150,7 @@ export async function responderAvaliacaoIfood(
       // oficial na próxima passada.
       respondida_em: new Date().toISOString(),
       status_avaliacao: "REPLIED",
+      resposta_origem: "manual",
     })
     .eq("id", av.id)
 

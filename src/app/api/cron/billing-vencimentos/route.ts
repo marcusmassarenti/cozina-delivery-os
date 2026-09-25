@@ -152,12 +152,16 @@ export async function GET(req: Request) {
           ativas = count ?? 0
         }
 
+        const { adicionalRespostaAuto } = await import(
+          "@/lib/data/adicional-resposta-auto"
+        )
         const { valor } = mensalidadeDoCliente(
           h as Parameters<typeof mensalidadeDoCliente>[0],
           ativas,
           precos,
           hoje,
           regra,
+          (await adicionalRespostaAuto(holdingId)).total,
         )
         const venc = h.due_date ? fmtBR(String(h.due_date)) : null
         const dia = String(h.suspend_on)

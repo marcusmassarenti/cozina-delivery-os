@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { precoRespostaAutoPadrao } from "@/lib/data/adicional-resposta-auto"
 import {
   AlertTriangle,
   Building2,
@@ -152,6 +153,7 @@ export default async function PlataformaPage() {
           <PlanSettingsDialog
             precos={defaultPlan}
             pacotePreco={pacote.preco}
+            respostaAutoPreco={await precoRespostaAutoPadrao()}
             acrescimo12xPct={regraCiclos.acrescimo12xPct}
           />
           <NovoClienteDialog />

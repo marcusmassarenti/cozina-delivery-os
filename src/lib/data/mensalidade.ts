@@ -35,6 +35,13 @@ export function mensalidadeDoCliente(
   hojeISO: string,
   /** Acréscimo do 12x — vem do banco (`getRegraCiclos`), nunca de um padrão. */
   regra: RegraCiclos,
+  /**
+   * Adicionais mensais (hoje: resposta automática de avaliações — ver
+   * `lib/data/adicional-resposta-auto.ts`). Somados DEPOIS do desconto: o
+   * desconto negociado é sobre o plano, não sobre o que o cliente contratou
+   * à parte.
+   */
+  adicionais = 0,
 ): { cheio: number; valor: number } {
   let cheio: number
   if (h.monthly_fee != null) {
@@ -59,5 +66,10 @@ export function mensalidadeDoCliente(
     ate: (h.desconto_ate ?? null) as string | null,
   }
   // Cupom fora: ele vale só na 1ª fatura, e isto aqui é o que se repete.
-  return { cheio, valor: aplicarDescontos(cheio, negociado, 0, hojeISO).valor }
+  const extra = Math.max(0, adicionais)
+  return {
+    cheio: Math.round((cheio + extra) * 100) / 100,
+    valor:
+      Math.round((aplicarDescontos(cheio, negociado, 0, hojeISO).valor + extra) * 100) / 100,
+  }
 }

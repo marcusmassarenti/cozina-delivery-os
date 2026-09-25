@@ -32,6 +32,8 @@ export type BillingClient = {
   paymentMethod: string | null
   monthlyFee: number | null
   pricePerUnit: number | null
+  /** Adicional de resposta automática: preço por loja combinado (null = padrão). */
+  respostaAutoPrecoLoja: number | null
   includedUnits: number
   billableUnits: number
   dueDate: string | null
@@ -204,6 +206,25 @@ export function EditBillingDialog({
               </div>
             )}
           </details>
+
+          <Field label="Resposta automática de avaliações — preço por loja (R$)">
+            <Input
+              name="respostaAutoPreco"
+              inputMode="decimal"
+              placeholder="vazio = preço padrão da plataforma"
+              defaultValue={
+                client.respostaAutoPrecoLoja != null
+                  ? client.respostaAutoPrecoLoja.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                    })
+                  : ""
+              }
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Adicional cobrado por loja com a resposta automática ligada. Vazio
+              usa o padrão; <b>0</b> é cortesia (liga sem cobrar).
+            </p>
+          </Field>
 
           <Field label="Como o cliente paga a assinatura">
             <select

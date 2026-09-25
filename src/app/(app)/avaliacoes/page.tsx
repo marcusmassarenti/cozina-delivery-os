@@ -23,6 +23,7 @@ import {
 import { AlertTriangle } from "lucide-react"
 
 import { PendentesResposta } from "./_components/pendentes-resposta"
+import { RespostaAutomaticaCard } from "./_components/resposta-automatica-card"
 import { AvaliacoesFilters } from "./_components/avaliacoes-filters"
 import { AvaliacoesNetworkDashboard } from "./_components/avaliacoes-network-dashboard"
 
@@ -182,6 +183,13 @@ export default async function AvaliacoesPage({
       <Suspense fallback={null}>
         <PendentesResposta />
       </Suspense>
+
+      {/* Resposta automática das notas 4 e 5 — liga por loja. */}
+      <div data-print="hide">
+        <Suspense fallback={null}>
+          <RespostaAutomaticaCard />
+        </Suspense>
+      </div>
 
       {/* Body */}
       {!selectedUnit ? (

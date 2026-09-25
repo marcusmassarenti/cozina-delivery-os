@@ -23,7 +23,7 @@ const PRECOS: Record<
   { entrada: number; saida: number; cacheLeitura: number; cacheEscrita: number }
 > = {
   "claude-haiku-4-5": { entrada: 1, saida: 5, cacheLeitura: 0.1, cacheEscrita: 1.25 },
-  "claude-sonnet-5": { entrada: 3, saida: 15, cacheLeitura: 0.3, cacheEscrita: 3.75 },
+  "claude-sonnet-5": { entrada: 2, saida: 10, cacheLeitura: 0.2, cacheEscrita: 2.5 },
   "claude-sonnet-4-6": { entrada: 3, saida: 15, cacheLeitura: 0.3, cacheEscrita: 3.75 },
   "claude-opus-4-8": { entrada: 5, saida: 25, cacheLeitura: 0.5, cacheEscrita: 6.25 },
 }
@@ -61,7 +61,7 @@ function mesCorrente(): string {
 export async function registrarUsoIa(
   holdingId: string | null,
   uso: UsoIa,
-  origem: "nino" | "diagnostico" | "outro" = "nino",
+  origem: "nino" | "diagnostico" | "avaliacao" | "outro" = "nino",
 ): Promise<void> {
   if (!holdingId) return
   // Sem token nenhum = nada a cobrar (ex.: erro antes de gerar).

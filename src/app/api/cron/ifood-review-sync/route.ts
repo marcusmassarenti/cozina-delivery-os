@@ -67,6 +67,27 @@ export async function GET(req: Request) {
       console.error("syncIfoodHorarios:", e)
     }
 
+    // Resposta automática (notas 4 e 5, só loja que ligou). DEPOIS do sync —
+    // é ele que trouxe as novas — e ANTES do aviso de prazo, senão o aviso
+    // cobraria o que a automática acabou de responder. Teto de 120 s: o resto
+    // fica pra amanhã (a avaliação tem 5 dias). Não derruba o cron.
+    let respostaAuto: Awaited<
+      ReturnType<
+        typeof import("@/lib/avaliacoes/resposta-automatica").responderAvaliacoesAutomaticamente
+      >
+    > | null = null
+    try {
+      const { responderAvaliacoesAutomaticamente } = await import(
+        "@/lib/avaliacoes/resposta-automatica"
+      )
+      respostaAuto = await responderAvaliacoesAutomaticamente({
+        limiteMs: 120_000,
+        unitIds,
+      })
+    } catch (e) {
+      console.error("responderAvaliacoesAutomaticamente:", e)
+    }
+
     // Aviso de último dia pra responder avaliação. Fica DEPOIS do sync de
     // propósito: é ele que acabou de atualizar o status, e avisar antes usaria
     // a foto de ontem — anunciando como pendente o que a loja já respondeu
@@ -104,6 +125,7 @@ export async function GET(req: Request) {
       conexoes,
       expurgo,
       prazoAvaliacoes,
+      respostaAuto,
       horarios,
     })
   } catch (e) {

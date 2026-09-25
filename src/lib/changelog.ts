@@ -49,6 +49,38 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.30.0",
+    date: "2026-09-25",
+    tag: "Novidade",
+    title: "Resposta automática de avaliações do iFood",
+    summary:
+      "Escolha quais estrelas o sistema responde sozinho, loja por loja — e as avaliações ruins que precisam de você passam a aparecer num aviso, antes do prazo de 5 dias do iFood acabar.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Avaliações",
+        items: [
+          {
+            kind: "novo",
+            title: "Resposta automática (adicional por loja)",
+            antes:
+              "Cada resposta no iFood era escrita à mão — e a maioria das avaliações passava do prazo de 5 dias sem resposta da loja.",
+            depois:
+              "Você escolhe as estrelas (padrão 4 e 5) e liga as lojas. Todo dia de manhã a IA responde: agradece elogios e, nas críticas, pede desculpas e diz que vai levar pra equipe — sem prometer reembolso, cupom ou desconto. Casos delicados (saúde, higiene, item faltando, reembolso, Procon) ficam sempre pra você.",
+          },
+          {
+            kind: "novo",
+            title: "Aviso das avaliações ruins",
+            antes:
+              "Uma nota 1 podia passar os 5 dias sem ninguém ver, e o iFood publicava sem a sua resposta.",
+            depois:
+              "Ao entrar no sistema, as avaliações ruins que ainda dá pra responder aparecem num aviso, com o campo de resposta ali mesmo. “Responder depois” esconde por 24 horas.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.6",
     date: "2026-09-25",
     tag: "Melhoria",
