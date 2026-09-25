@@ -270,3 +270,99 @@ export async function avaliacoesRuinsParaPopup(): Promise<{
   const ia = itens.length > 0 ? await getIaStatus() : null
   return { itens, podeIa: !!ia?.podeUsar }
 }
+
+/**
+ * 👍/👎 numa resposta automática — e, no 👎, "como eu teria respondido".
+ *
+ * Não mexe no que foi pro iFood (ele só deixa editar por 10 min). O voto e a
+ * correção alimentam `exemplosDeTom`: a próxima resposta da IA sai no jeito
+ * que o cliente aprovou. `voto = 0` desfaz.
+ */
+export async function avaliarResposta(
+  avaliacaoId: string,
+  voto: 1 | -1 | 0,
+  correcao?: string | null,
+): Promise<AutoState> {
+  const [pode, verComo] = await Promise.all([
+    userCan("avaliacoes", "edit"),
+    getVerComoHoldingId(),
+  ])
+  if (!pode) return { ok: false, message: "Seu perfil não pode avaliar respostas." }
+  if (verComo !== null)
+    return { ok: false, message: "No modo “ver como o cliente” nada é alterado." }
+
+  const admin = createAdminClient()
+  const { data: av } = await admin
+    .from("ifood_avaliacoes")
+    .select("unit_id, resposta_origem")
+    .eq("id", avaliacaoId)
+    .maybeSingle()
+  if (!av || !["ia", "modelo"].includes(String(av.resposta_origem)))
+    return { ok: false, message: "Resposta não encontrada." }
+  const [units, emprestadas] = await Promise.all([
+    getVisibleUnits(),
+    getUnidadesSomenteLeitura(),
+  ])
+  const uid = av.unit_id as string
+  if (!units.some((u) => u.id === uid) || emprestadas.has(uid))
+    return { ok: false, message: "Essa loja não pode ser alterada por você." }
+
+  const texto = textoOuNull(correcao ?? null)?.slice(0, 600) ?? null
+  const {
+    data: { user },
+  } = await (await createClient()).auth.getUser()
+  const { error } = await admin
+    .from("ifood_avaliacoes")
+    .update(
+      voto === 0
+        ? {
+            resposta_feedback: null,
+            resposta_feedback_texto: null,
+            resposta_feedback_por: null,
+            resposta_feedback_em: null,
+          }
+        : {
+            resposta_feedback: voto,
+            // Correção só existe no 👎: no 👍 a resposta publicada É o exemplo.
+            resposta_feedback_texto: voto === -1 ? texto : null,
+            resposta_feedback_por: user?.id ?? null,
+            resposta_feedback_em: new Date().toISOString(),
+          },
+    )
+    .eq("id", avaliacaoId)
+  if (error) return { ok: false, message: error.message }
+  return { ok: true }
+}
+
+/**
+ * Quantas a automática respondeu desde `desde` — o aviso ao abrir o sistema.
+ * Só pra quem enxerga avaliações e fora do "ver como".
+ */
+export async function respondidasAutoDesde(
+  desde: string,
+): Promise<{ total: number; lojas: number; ultima: string | null }> {
+  const vazio = { total: 0, lojas: 0, ultima: null }
+  if ((await getVerComoHoldingId()) !== null) return vazio
+  if (!(await userCan("avaliacoes", "view"))) return vazio
+  const t = Date.parse(desde)
+  if (!Number.isFinite(t)) return vazio
+  const units = await getVisibleUnits()
+  if (units.length === 0) return vazio
+  const { data } = await createAdminClient()
+    .from("ifood_avaliacoes")
+    .select("unit_id, respondida_em")
+    .in(
+      "unit_id",
+      units.map((u) => u.id),
+    )
+    .in("resposta_origem", ["ia", "modelo"])
+    .gt("respondida_em", new Date(t).toISOString())
+    .order("respondida_em", { ascending: false })
+    .limit(1000)
+  const linhas = (data ?? []) as { unit_id: string; respondida_em: string }[]
+  return {
+    total: linhas.length,
+    lojas: new Set(linhas.map((l) => l.unit_id)).size,
+    ultima: linhas[0]?.respondida_em ?? null,
+  }
+}

@@ -49,6 +49,38 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.31.0",
+    date: "2026-09-25",
+    tag: "Novidade",
+    title: "Veja e avalie as respostas automáticas",
+    summary:
+      "Tudo o que a resposta automática publicou fica numa lista em Avaliações. Diga se ficou bom — no 👎 escreva como você teria respondido, e as próximas saem no seu jeito.",
+    // O próprio aviso "N avaliações respondidas por você" já apresenta isto.
+    semPopup: true,
+    areas: [
+      {
+        area: "Avaliações",
+        items: [
+          {
+            kind: "novo",
+            title: "Respondidas automaticamente",
+            antes:
+              "A resposta automática publicava no iFood e você só via o texto abrindo o portal do iFood.",
+            depois:
+              "Em Avaliações, a lista das respostas dos últimos 30 dias, com filtro por loja. Ao entrar no sistema, um aviso conta quantas saíram desde a sua última visita — e toda segunda chega um resumo por e-mail.",
+          },
+          {
+            kind: "novo",
+            title: "👍/👎 que ensina o seu jeito",
+            antes: "A IA respondia no mesmo tom para todas as lojas.",
+            depois:
+              "Cada resposta ganha 👍/👎. No 👎, escreva como você teria respondido: a IA passa a usar as respostas aprovadas, as corrigidas e as que a loja já escreveu à mão como exemplo do tom daquela loja.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.30.0",
     date: "2026-09-25",
     tag: "Novidade",

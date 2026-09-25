@@ -3,6 +3,7 @@ import "server-only"
 import { registrarCron } from "@/lib/cron/registrar"
 import { enviarResumoSemanal } from "@/lib/push/resumo-semanal"
 import { avisarClientesSemDado } from "@/lib/email/avisar-sem-dado"
+import { enviarResumoRespostaAuto } from "@/lib/email/resposta-auto-semanal"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,6 +35,16 @@ export async function GET(req: Request) {
       avisos = { erro: String(e) }
     }
 
-    return Response.json({ ok: true, ranAt: new Date().toISOString(), ...r, avisos })
+    // Resumo da resposta automática — só pra quem teve resposta na semana.
+    // Mesmo cron pela mesma razão do aviso acima (cadência e público iguais).
+    let respostaAuto: Awaited<ReturnType<typeof enviarResumoRespostaAuto>> | { erro: string }
+    try {
+      respostaAuto = await enviarResumoRespostaAuto()
+    } catch (e) {
+      console.error("resumo-semanal: resumo da resposta automática falhou:", e)
+      respostaAuto = { erro: String(e) }
+    }
+
+    return Response.json({ ok: true, ranAt: new Date().toISOString(), ...r, avisos, respostaAuto })
   })
 }

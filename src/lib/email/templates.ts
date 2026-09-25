@@ -1864,3 +1864,61 @@ export function renovacao12x(d: {
     }),
   }
 }
+
+/** Texto de cliente dentro do HTML do e-mail — comentário do iFood é livre. */
+function escaparHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+/**
+ * Resumo semanal da resposta automática (Marcus, 25/09/26: "seria legal um
+ * aviso das avaliações respondidas").
+ *
+ * Só sai pra quem teve resposta na semana — e-mail de "nada aconteceu" ensina
+ * a arquivar. Mostra o placar, o que ficou pra pessoa e 3 exemplos REAIS do
+ * que foi publicado: o dono precisa ver o texto que saiu em nome dele, e o
+ * botão leva pra lista onde ele dá 👍/👎 (e a IA aprende o tom).
+ */
+export function respostaAutoSemana(d: {
+  nome: string | null
+  respondidas: number
+  lojas: number
+  paraVoce: number
+  exemplos: { loja: string; nota: number; comentario: string; resposta: string }[]
+  url: string
+}) {
+  const ex = d.exemplos
+    .map(
+      (e) => `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 12px;">
+        <tr><td style="border:1px solid ${LINHA};border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.5;">
+          <p style="margin:0 0 4px;font-size:12px;color:${SUAVE};">${escaparHtml(e.loja)} · <span style="color:#f59e0b;">${"★".repeat(Math.max(1, Math.min(5, e.nota)))}</span></p>
+          <p style="margin:0 0 6px;font-style:italic;color:${TINTA};">“${escaparHtml(e.comentario)}”</p>
+          <p style="margin:0;color:${TEXTO};">↳ ${escaparHtml(e.resposta)}</p>
+        </td></tr>
+      </table>`,
+    )
+    .join("")
+
+  const plural = d.respondidas === 1 ? "avaliação respondida" : "avaliações respondidas"
+  return {
+    assunto: `${d.respondidas} ${plural} por você esta semana`,
+    html: layout({
+      titulo: `${d.respondidas} ${plural} por você`,
+      corpo: `
+        <p style="margin:0 0 14px;">${oi(d.nome)} Nos últimos 7 dias a resposta automática publicou <strong>${d.respondidas} resposta${d.respondidas === 1 ? "" : "s"}</strong> no iFood${d.lojas > 1 ? ` em ${d.lojas} lojas` : ""} — sem ninguém precisar parar pra isso.</p>
+        ${
+          d.paraVoce > 0
+            ? `<p style="margin:0 0 14px;"><strong>${d.paraVoce} ficaram pra você</strong>: são os casos delicados (saúde, item faltando, reembolso…) que a automática nunca responde sozinha. Eles aparecem no aviso de notas baixas quando você abre o sistema.</p>`
+            : ""
+        }
+        ${ex ? `<p style="margin:22px 0 10px;font-weight:600;color:${TINTA};">Algumas do que saiu:</p>${ex}` : ""}
+        <p style="margin:18px 0 0;">Diga se ficaram boas: no 👎 dá pra escrever como você teria respondido, e as próximas saem no seu jeito.</p>`,
+      cta: { texto: "Ver e avaliar as respostas", url: d.url },
+    }),
+  }
+}

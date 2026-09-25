@@ -23,7 +23,7 @@ import {
 import { AlertTriangle } from "lucide-react"
 
 import { PendentesResposta } from "./_components/pendentes-resposta"
-import { RespostaAutomaticaCard } from "./_components/resposta-automatica-card"
+import { RespostaAutoBotao } from "./_components/resposta-auto-botao"
 import { AvaliacoesFilters } from "./_components/avaliacoes-filters"
 import { AvaliacoesNetworkDashboard } from "./_components/avaliacoes-network-dashboard"
 
@@ -146,6 +146,11 @@ export default async function AvaliacoesPage({
             options={availablePeriods}
             enableRange
           />
+          {/* Resposta automática (controle + o que foi publicado) numa janela:
+              fora da tela, que fica só com os números (Marcus, 25/09/26). */}
+          <Suspense fallback={null}>
+            <RespostaAutoBotao />
+          </Suspense>
           <ExportPdfButton
             aviso={{
               faltando: proc.comLacuna.map((p) => p.rotulo),
@@ -183,13 +188,6 @@ export default async function AvaliacoesPage({
       <Suspense fallback={null}>
         <PendentesResposta />
       </Suspense>
-
-      {/* Resposta automática das notas 4 e 5 — liga por loja. */}
-      <div data-print="hide">
-        <Suspense fallback={null}>
-          <RespostaAutomaticaCard />
-        </Suspense>
-      </div>
 
       {/* Body */}
       {!selectedUnit ? (

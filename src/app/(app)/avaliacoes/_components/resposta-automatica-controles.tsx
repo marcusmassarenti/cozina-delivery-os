@@ -12,7 +12,14 @@ import {
   responderPendentesAgora,
 } from "../_actions-auto"
 
-type Loja = { id: string; code: string; name: string; ativa: boolean }
+type Loja = {
+  id: string
+  code: string
+  name: string
+  ativa: boolean
+  /** Ligada sem cobrança (cortesia daquela loja): não pede confirmação de preço. */
+  cortesia?: boolean
+}
 
 export function RespostaAutomaticaControles({
   lojas,
@@ -55,13 +62,17 @@ export function RespostaAutomaticaControles({
   const cobra = precoLoja > 0 && !emTeste
   // Ligar loja acrescenta valor à mensalidade: pede confirmação com o número
   // na tela. Desligar não pede — tirar cobrança nunca precisa de freio.
-  const [confirmar, setConfirmar] = useState<string[] | null>(null)
+  // `ids` = tudo que o clique liga; `pagas` = só as que entram na cobrança
+  // (cortesia liga junto, mas não soma no preço mostrado).
+  const [confirmar, setConfirmar] = useState<{ ids: string[]; pagas: number } | null>(null)
 
   function pedir(ids: string[], ligar: boolean) {
-    const novas = ids.filter((id) => !ativa(id))
+    const novas = ids.filter(
+      (id) => !ativa(id) && !lojas.find((l) => l.id === id)?.cortesia,
+    )
     if (ligar && cobra && novas.length > 0) {
       setMsg(null)
-      setConfirmar(novas)
+      setConfirmar({ ids, pagas: novas.length })
       return
     }
     alterar(ids, ligar)
@@ -242,14 +253,14 @@ export function RespostaAutomaticaControles({
       {confirmar && (
         <div className="flex flex-wrap items-center gap-2 border-t bg-amber-50 px-4 py-2.5 text-xs dark:bg-amber-950/20">
           <span className="min-w-0 flex-1">
-            Ligar {confirmar.length} loja{confirmar.length === 1 ? "" : "s"}{" "}
-            acrescenta <b>{fmtBRL(precoLoja * confirmar.length)}/mês</b> à sua
+            Ligar {confirmar.pagas} loja{confirmar.pagas === 1 ? "" : "s"}{" "}
+            acrescenta <b>{fmtBRL(precoLoja * confirmar.pagas)}/mês</b> à sua
             mensalidade, a partir da próxima fatura. Dá pra desligar quando
             quiser.
           </span>
           <button
             type="button"
-            onClick={() => alterar(confirmar, true)}
+            onClick={() => alterar(confirmar.ids, true)}
             className="rounded-md bg-primary px-2.5 py-1 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
             Contratar e ligar
@@ -345,6 +356,11 @@ export function RespostaAutomaticaControles({
                       #{l.code}
                     </span>
                     {l.name}
+                    {l.cortesia && (
+                      <span className="ml-1.5 rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                        cortesia
+                      </span>
+                    )}
                   </span>
                   <button
                     type="button"

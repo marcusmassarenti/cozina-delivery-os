@@ -14,6 +14,7 @@ import { podeVerSuporte } from "@/lib/data/holding-demo"
 import { podeVerCarteira } from "@/lib/data/carteira-acesso"
 import { SaudeSemanalModal } from "@/components/saude-semanal-modal"
 import { AvaliacoesRuinsPopup } from "@/components/avaliacoes-ruins-popup"
+import { RespondidasAutoAviso } from "@/components/respondidas-auto-aviso"
 import { NinoCortesiaModal } from "@/components/nino-cortesia-modal"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -253,6 +254,8 @@ export default async function AppLayout({
         {/* Notas 1–3 do iFood ainda no prazo — pede uma pessoa. Busca no
             cliente e no máximo a cada 30 min: não pesa em toda navegação. */}
         <AvaliacoesRuinsPopup />
+        {/* "A automática respondeu N por você" — leva à lista com 👍/👎. */}
+        <RespondidasAutoAviso />
         {/* Balão de suporte. Só pro CLIENTE: quem é da plataforma responde no
             painel de chamados, e ver o próprio balão ali só confundiria.
             ⚠️ LIMITADO enquanto o painel de chamados não existe. Ligar pra

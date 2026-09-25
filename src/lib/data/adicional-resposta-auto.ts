@@ -6,7 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
  * Adicional "Resposta automática de avaliações" — o valor que entra na
  * mensalidade (Marcus, 25/09/26).
  *
- * POR LOJA LIGADA: preço × lojas ativas com `resposta_auto_avaliacoes`.
+ * POR LOJA LIGADA: preço × lojas ativas com `resposta_auto_avaliacoes`,
+ * menos as marcadas como cortesia (`units.resposta_auto_cortesia` — a Koike
+ * da DG, 25/09/26: cortesia de UMA loja, não do cliente inteiro).
  * Preço = o combinado com o cliente (`holdings.resposta_auto_preco_loja`) ou,
  * se nulo, o padrão da plataforma (`platform_settings`). 0 = cortesia.
  *
@@ -21,6 +23,7 @@ export type AdicionalRespostaAuto = {
   precoLoja: number
   /** Veio de um valor combinado com o cliente (não do padrão). */
   precoCombinado: boolean
+  /** Lojas ligadas que PAGAM (cortesia fica de fora). */
   lojasLigadas: number
   /** precoLoja × lojasLigadas — o que entra na mensalidade. */
   total: number
@@ -58,6 +61,7 @@ export async function adicionalRespostaAuto(
       .in("brand_id", brandIds)
       .eq("active", true)
       .eq("resposta_auto_avaliacoes", true)
+      .eq("resposta_auto_cortesia", false)
     lojasLigadas = count ?? 0
   }
   const combinado = h?.resposta_auto_preco_loja

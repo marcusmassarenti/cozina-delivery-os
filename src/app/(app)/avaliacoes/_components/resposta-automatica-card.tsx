@@ -36,15 +36,27 @@ export async function RespostaAutomaticaCard() {
       .eq("platform", "ifood")
       .not("api_store_id", "is", null)
       .in("unit_id", ids),
-    admin.from("units").select("id, resposta_auto_avaliacoes").in("id", ids),
+    admin
+      .from("units")
+      .select("id, resposta_auto_avaliacoes, resposta_auto_cortesia")
+      .in("id", ids),
   ])
   const apiSet = new Set((comApi ?? []).map((r) => r.unit_id as string))
   const ligada = new Map(
     (flags ?? []).map((r) => [r.id as string, !!r.resposta_auto_avaliacoes]),
   )
+  const cortesia = new Set(
+    (flags ?? []).filter((r) => r.resposta_auto_cortesia).map((r) => r.id as string),
+  )
   const lojas = minhas
     .filter((u) => apiSet.has(u.id))
-    .map((u) => ({ id: u.id, code: u.code, name: u.name, ativa: ligada.get(u.id) ?? false }))
+    .map((u) => ({
+      id: u.id,
+      code: u.code,
+      name: u.name,
+      ativa: ligada.get(u.id) ?? false,
+      cortesia: cortesia.has(u.id),
+    }))
   if (lojas.length === 0) return null
 
   // O que a automática fez nos últimos 30 dias, nas lojas visíveis.

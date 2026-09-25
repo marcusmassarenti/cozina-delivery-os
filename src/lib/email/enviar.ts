@@ -208,6 +208,13 @@ export type TipoEmail =
    * receberia o aviso da primeira renovação e nunca mais.
    */
   | `renovacao-12x-${string}`
+  /**
+   * Resumo semanal da resposta automática. A SEGUNDA-FEIRA entra no tipo pelo
+   * mesmo motivo das faturas: a trava de duplicidade é (cliente, tipo), então
+   * com tipo fixo o resumo sairia uma vez na vida — com a data, uma por semana,
+   * e um cron repetido na mesma segunda não manda duas.
+   */
+  | `resposta-auto-semana-${string}`
 
 export type ResultadoEnvio = {
   ok: boolean
