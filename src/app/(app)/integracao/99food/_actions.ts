@@ -27,6 +27,38 @@ export type Solicitacao99State = {
 
 type Status = "pendente" | "solicitada" | "ativa" | "recusada"
 
+/**
+ * "99 conectado" NA HORA do vínculo — igual ao iFood e ao Cardápio Web.
+ *
+ * ── POR QUE (Marcus, 25/09/26): "deveria disparar na hora de eu vincular" ──
+ * Os dois caminhos de vínculo do 99 rodavam o backfill e paravam aí: o aviso
+ * ficava pro cron das 5h. As 14 lojas da DG vinculadas em 25/09 às 19h
+ * dormiram sem e-mail, com o histórico já fechado desde o clique.
+ *
+ * O backfill acabou de rodar no mesmo request, então o portão do histórico
+ * (`historicoFechado`) já é verdade aqui. `soSeCompleto` segura o caso raro de
+ * histórico com pendência — esse continua caindo na varredura do cron.
+ * Devolve o pedaço da mensagem pro admin saber se saiu ou não.
+ */
+async function avisarConectado99(unitId: string): Promise<string> {
+  try {
+    const { avisarConexaoAtivada } = await import("@/lib/email/conexao-ativada")
+    await avisarConexaoAtivada(unitId, "99food", { soSeCompleto: true })
+    const { data } = await createAdminClient()
+      .from("unit_platforms")
+      .select("email_conectado_at")
+      .eq("unit_id", unitId)
+      .eq("platform", "99food")
+      .maybeSingle()
+    return data?.email_conectado_at
+      ? " E-mail de conexão enviado ao cliente."
+      : " E-mail de conexão sai no próximo sync (histórico ainda fechando)."
+  } catch (e) {
+    console.error("[99] aviso de conexão ao vincular:", e)
+    return " E-mail de conexão sai no próximo sync."
+  }
+}
+
 /** Move a solicitação de status. Não toca no vínculo — ver `vincularLoja99`. */
 export async function atualizarSolicitacao99(
   _prev: Solicitacao99State,
@@ -165,6 +197,13 @@ export async function avisarClienteAutorizar99(
   return { ok: true, message: `Pedido marcado como solicitado. ${aviso}` }
 }
 
+export type CandidataUnidade99 = {
+  id: string
+  rotulo: string
+  cliente: string
+  tem99: boolean
+}
+
 export type Verificacao99 = {
   ok: boolean
   /**
@@ -178,6 +217,13 @@ export type Verificacao99 = {
     appShopId: string
     shopId: string
     unidade?: { id: string; rotulo: string } | null
+    /**
+     * Sem `unidade` deduzida: as unidades SEM vínculo no 99 pra escolher à
+     * mão. Do cliente dono do prefixo do slug ("dg-…") quando dá pra saber;
+     * senão, de todos os clientes. `tem99` = 99 marcado no cadastro — sem
+     * ele o vínculo é recusado (ver `vincularLojaLivre99`).
+     */
+    candidatas?: CandidataUnidade99[]
   }[]
   /** Quantas o portal devolveu no total (autorizadas, vinculadas ou não). */
   total?: number
@@ -257,10 +303,83 @@ export async function verificarLojas99(): Promise<Verificacao99> {
     lista.push({ id: p.unit_id, rotulo: `${p.units.code} · ${p.units.name}` })
     porShop.set(p.external_store_id, lista)
   }
-  const livres = semDono.map((l) => {
+  const resolvidas = semDono.map((l) => {
     const c = porShop.get(l.shopId) ?? []
     return { ...l, unidade: c.length === 1 ? c[0]! : null }
   })
+
+  /* Pra quem não resolveu pelo `shop_id` (Marcus, 25/09/26: "colocar uma
+   * opção para eu vincular manualmente, aparecendo as lojas do cliente"):
+   * as unidades ativas que ainda NÃO têm vínculo no 99. O cliente sai do
+   * prefixo do slug — "dg-bananafood-01" é da mesma holding que as outras
+   * "dg-…" já vinculadas. Prefixo sem histórico: lista todos os clientes. */
+  const pendentes = resolvidas.filter((l) => !l.unidade)
+  let livres: NonNullable<Verificacao99["livres"]> = resolvidas
+  if (pendentes.length > 0) {
+    const [{ data: unis }, { data: plats99 }] = await Promise.all([
+      admin
+        .from("units")
+        .select("id, code, name, brands!inner(holding_id, holdings!inner(name))")
+        .eq("active", true),
+      admin
+        .from("unit_platforms")
+        .select("unit_id")
+        .eq("platform", "99food")
+        .eq("active", true),
+    ])
+    type U = {
+      id: string
+      code: string
+      name: string
+      brands: { holding_id: string; holdings: { name: string } | null } | null
+    }
+    const todas = (unis ?? []) as unknown as U[]
+    const holdingDe = new Map(todas.map((u) => [u.id, u.brands?.holding_id ?? ""]))
+    const com99 = new Set((plats99 ?? []).map((p) => p.unit_id as string))
+    const linkadas = new Set(
+      ((links ?? []) as { app_shop_id: string; unit_id: string | null }[])
+        .filter((l) => l.unit_id)
+        .map((l) => l.unit_id as string),
+    )
+    const prefixo = (slug: string) => slug.split("-")[0]?.toLowerCase() ?? ""
+    const holdingsDoPrefixo = new Map<string, Set<string>>()
+    for (const l of (links ?? []) as { app_shop_id: string; unit_id: string | null }[]) {
+      if (!l.unit_id) continue
+      const h = holdingDe.get(l.unit_id)
+      if (!h) continue
+      const k = prefixo(l.app_shop_id)
+      const set = holdingsDoPrefixo.get(k) ?? new Set<string>()
+      set.add(h)
+      holdingsDoPrefixo.set(k, set)
+    }
+    const sem = todas
+      .filter((u) => !linkadas.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        rotulo: `${u.code} · ${u.name}`,
+        cliente: u.brands?.holdings?.name ?? "—",
+        holdingId: u.brands?.holding_id ?? "",
+        tem99: com99.has(u.id),
+      }))
+      .sort(
+        (a, b) =>
+          a.cliente.localeCompare(b.cliente, "pt-BR") ||
+          Number(b.tem99) - Number(a.tem99) ||
+          a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true }),
+      )
+    livres = resolvidas.map((l) => {
+      if (l.unidade) return l
+      const hs = holdingsDoPrefixo.get(prefixo(l.appShopId))
+      // Só confia no prefixo quando ele aponta pra UM cliente.
+      const doCliente = hs && hs.size === 1 ? [...hs][0]! : null
+      return {
+        ...l,
+        candidatas: sem
+          .filter((u) => !doCliente || u.holdingId === doCliente)
+          .map((u) => ({ id: u.id, rotulo: u.rotulo, cliente: u.cliente, tem99: u.tem99 })),
+      }
+    })
+  }
 
   return {
     ok: true,
@@ -304,6 +423,7 @@ export async function vincularLojaLivre99(
 
   const appShopId = String(formData.get("app_shop_id") ?? "").trim()
   const unitId = String(formData.get("unit_id") ?? "").trim()
+  const shopId = String(formData.get("shop_id") ?? "").trim()
   if (!appShopId) return { ok: false, error: "Loja do 99 não informada." }
   if (!unitId) return { ok: false, error: "Escolha a unidade." }
 
@@ -354,6 +474,28 @@ export async function vincularLojaLivre99(
   )
   if (errLink) return { ok: false, error: errLink.message }
 
+  /* Vínculo escolhido à mão: grava o `shop_id` do 99 no cadastro da unidade,
+   * que é o elo que o "Verificar" e o webhook usam pra achar a loja sozinhos.
+   * Só preenche vazio e só se nenhuma outra unidade já usa o id — sobrescrever
+   * um cadastro existente é decisão de pessoa, não efeito colateral. */
+  if (shopId) {
+    const { data: outra } = await admin
+      .from("unit_platforms")
+      .select("unit_id")
+      .eq("platform", "99food")
+      .eq("external_store_id", shopId)
+      .neq("unit_id", unitId)
+      .limit(1)
+    if ((outra ?? []).length === 0) {
+      await admin
+        .from("unit_platforms")
+        .update({ external_store_id: shopId })
+        .eq("unit_id", unitId)
+        .eq("platform", "99food")
+        .is("external_store_id", null)
+    }
+  }
+
   // Backfill na hora — a regra do Marcus (18/08/26). Não derruba o vínculo se
   // falhar: o que ficar sem carimbo o cron das 5h recolhe.
   let historico = ""
@@ -369,12 +511,14 @@ export async function vincularLojaLivre99(
     historico = " Histórico ficou pendente — o cron termina."
   }
 
+  const aviso = await avisarConectado99(unitId)
+
   revalidatePath("/integracao/99food")
   revalidatePath("/conexoes")
   revalidatePath("/inicio")
   return {
     ok: true,
-    message: `Vinculada a ${unidade.code} · ${unidade.name}.${historico}`,
+    message: `Vinculada a ${unidade.code} · ${unidade.name}.${historico}${aviso}`,
   }
 }
 
@@ -456,11 +600,13 @@ export async function vincularLoja99(
     .eq("id", id)
   if (error) return { ok: false, error: error.message }
 
+  const aviso = await avisarConectado99(req.unit_id as string)
+
   revalidatePath("/integracao/99food")
   revalidatePath("/clientes/conexoes")
   revalidatePath("/unidades")
   return {
     ok: true,
-    message: `Loja vinculada! O cron diário já traz o financeiro dela.${historico}`,
+    message: `Loja vinculada! O cron diário já traz o financeiro dela.${historico}${aviso}`,
   }
 }

@@ -18,6 +18,7 @@ import {
   vincularLoja99,
   vincularLojaLivre99,
   type Solicitacao99State,
+  type CandidataUnidade99,
   type Verificacao99,
 } from "../_actions"
 
@@ -606,9 +607,12 @@ function VerificarNo99() {
  * self-service) não tem card nenhum. Clicar não fazia nada, e a tela virava
  * um beco: mostrava o problema e não oferecia a saída.
  *
- * Agora a unidade vem resolvida pelo `shop_id` e o vínculo é um clique. Sem
- * unidade deduzida, a tela diz POR QUE não deu — quase sempre é o `shop_id`
- * que falta no cadastro, e é lá que se resolve.
+ * Agora a unidade vem resolvida pelo `shop_id` e o vínculo é um clique.
+ *
+ * Sem unidade deduzida (Marcus, 25/09/26: a Banana Food, a Meio Kilo e a
+ * Edmai's da DG autorizaram sem o ID do 99 no cadastro), a tela oferece as
+ * unidades do cliente que ainda NÃO têm 99 vinculado. Escolher grava o
+ * `shop_id` no cadastro, então da próxima vez ela se resolve sozinha.
  */
 function LojaLivre99({
   loja,
@@ -617,11 +621,15 @@ function LojaLivre99({
     appShopId: string
     shopId: string
     unidade?: { id: string; rotulo: string } | null
+    candidatas?: CandidataUnidade99[]
   }
 }) {
   const [estado, acao] = useActionState(vincularLojaLivre99, {
     ok: false,
   } as Solicitacao99State)
+  const [escolhida, setEscolhida] = React.useState("")
+  const candidatas = loja.candidatas ?? []
+  const clientes = [...new Set(candidatas.map((c) => c.cliente))]
 
   if (estado.ok) {
     return (
@@ -637,6 +645,7 @@ function LojaLivre99({
       className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-2 py-1.5"
     >
       <input type="hidden" name="app_shop_id" value={loja.appShopId} />
+      <input type="hidden" name="shop_id" value={loja.shopId} />
       <span className="font-mono text-[11px]">{loja.appShopId}</span>
 
       {loja.unidade ? (
@@ -647,11 +656,41 @@ function LojaLivre99({
           </span>
           <BotaoVincular rotulo="Vincular" />
         </>
+      ) : candidatas.length > 0 ? (
+        <>
+          <span className="text-[11px] text-muted-foreground">→</span>
+          <select
+            name="unit_id"
+            value={escolhida}
+            onChange={(e) => setEscolhida(e.target.value)}
+            className="h-7 max-w-[340px] rounded-md border bg-background px-2 text-xs"
+          >
+            <option value="">Escolha a unidade…</option>
+            {clientes.map((cliente) => (
+              <optgroup key={cliente} label={cliente}>
+                {candidatas
+                  .filter((c) => c.cliente === cliente)
+                  .map((c) => (
+                    <option key={c.id} value={c.id} disabled={!c.tem99}>
+                      {c.rotulo}
+                      {c.tem99 ? "" : " — sem 99 no cadastro"}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+          {escolhida && <BotaoVincular rotulo="Vincular" />}
+          <span className="w-full text-[11px] text-muted-foreground">
+            O ID do 99 (<span className="font-mono">{loja.shopId}</span>) não
+            está no cadastro de nenhuma unidade. Só aparecem unidades sem
+            vínculo no 99; ao vincular, o ID fica gravado nela.
+          </span>
+        </>
       ) : (
         <span className="text-[11px] text-muted-foreground">
           sem unidade com esse ID do 99 (
-          <span className="font-mono">{loja.shopId}</span>) no cadastro — preencha
-          o ID em /unidades e verifique de novo
+          <span className="font-mono">{loja.shopId}</span>) e nenhuma unidade
+          livre pra escolher — cadastre a unidade em /unidades e verifique de novo
         </span>
       )}
 
