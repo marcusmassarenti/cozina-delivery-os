@@ -291,6 +291,7 @@ async function loadIfood(
     year,
     month,
     TAG_FINANCEIRO_IFOOD,
+    ["unit_id", "dia"],
   )
 
   if (error) {

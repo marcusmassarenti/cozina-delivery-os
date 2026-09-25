@@ -54,7 +54,7 @@ export const CHANGELOG: Release[] = [
     tag: "Correção",
     title: "Relatórios abrindo em redes grandes",
     summary:
-      "Em redes com muitas lojas, alguns relatórios do Hub demoravam tanto que não abriam. Agora abrem, e o painel volta a comparar o mês pelo último dia com venda.",
+      "Em redes com muitas lojas, alguns relatórios do Hub demoravam tanto que não abriam — e três deles mostravam o iFood incompleto. Agora abrem mais rápido e com o faturamento inteiro.",
     semPopup: true,
     areas: [
       {
@@ -75,6 +75,19 @@ export const CHANGELOG: Release[] = [
               "Uma importação antiga do relatório de Qualidade ficou com a data zerada, e o seletor de período passou a oferecer “Dezembro/1969” como primeiro mês.",
             depois:
               "Datas impossíveis ficam fora do seletor, e o dia 1º de cada mês não escorrega mais para o mês anterior.",
+          },
+        ],
+      },
+      {
+        area: "Relatório Diário, Infos Diária e Ranking",
+        items: [
+          {
+            kind: "correcao",
+            title: "Redes grandes: faturamento do iFood completo por dia",
+            antes:
+              "Em redes com mais de ~30 lojas no iFood, a conta por loja e por dia parava nas primeiras 1.000 linhas. Numa rede de 80 lojas, agosto aparecia com cerca de um quarto a menos no Relatório Diário, nas Infos Diária e no Ranking.",
+            depois:
+              "Todas as linhas entram na conta, e esses três relatórios mostram o faturamento completo. Redes menores não mudam.",
           },
         ],
       },

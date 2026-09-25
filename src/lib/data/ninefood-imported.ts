@@ -14,7 +14,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { registrarFalhaDeLeitura } from "@/lib/data/falhas-leitura"
-import { comRetentativa, fetchAllRows } from "@/lib/data/paginate"
+import { comRetentativa, fetchAllRows, rpcTodasAsLinhas } from "@/lib/data/paginate"
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { cancelamentoRankingLabel } from "@/lib/ninefood/cancelamento"
@@ -158,12 +158,19 @@ async function getNinefoodPedidosPorDia(
   const out = new Map<string, Map<string, DiaPedidos>>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
-  const { data, error } = await comRetentativa(() =>
-    admin.rpc("ninefood_pedidos_diario", {
-      p_unit_ids: unitIds,
-      p_de: de,
-      p_ate: ate,
-    }),
+  // Todas as páginas: uma linha por loja × dia passa de 1000 em rede
+  // grande (ver `rpcTodasAsLinhas`).
+  const { data, error } = await rpcTodasAsLinhas<Record<string, unknown>>(
+    (from, to) =>
+      admin
+        .rpc("ninefood_pedidos_diario", {
+          p_unit_ids: unitIds,
+          p_de: de,
+          p_ate: ate,
+        })
+        .order("unit_id")
+        .order("dia")
+        .range(from, to),
   )
   if (error) {
     console.error("getNinefoodPedidosPorDia:", error.message)
@@ -688,12 +695,19 @@ async function ninefoodApiPorDia(
   const ate = dateRange?.end ?? isoDate(new Date(year, month, 0))
 
   const admin = createAdminClient()
-  const { data, error } = await comRetentativa(() =>
-    admin.rpc("ninefood_api_diario_v2", {
-      p_unit_ids: unitIds,
-      p_de: de,
-      p_ate: ate,
-    }),
+  // Todas as páginas: uma linha por loja × dia passa de 1000 em rede
+  // grande (ver `rpcTodasAsLinhas`).
+  const { data, error } = await rpcTodasAsLinhas<Record<string, unknown>>(
+    (from, to) =>
+      admin
+        .rpc("ninefood_api_diario_v2", {
+          p_unit_ids: unitIds,
+          p_de: de,
+          p_ate: ate,
+        })
+        .order("unit_id")
+        .order("dia")
+        .range(from, to),
   )
   if (error) {
     console.error("ninefoodApiPorDia:", error.message)

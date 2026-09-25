@@ -69,3 +69,40 @@ export async function fetchAllRows<T>(
   }
   return all
 }
+
+/**
+ * TODAS as linhas de uma RPC que devolve tabela, de 1000 em 1000.
+ *
+ * ⚠️ POR QUE (DG FOODS, 25/09/26) ─────────────────────────────────────────
+ * RPC também é cortada no limite de 1000 linhas do PostgREST, e sem aviso.
+ * `ifood_financeiro_diario_by_units` devolve uma linha por loja × dia: com 80
+ * lojas, agosto tem 1.554 linhas e chegavam 1.000 — o Relatório Diário, as
+ * Infos Diária e o Ranking da DG liam R$ 803.844 de R$ 1.086.592 (26% a
+ * menos). Rede pequena não sente: 14 lojas × 31 dias cabem numa página.
+ *
+ * Diferente de `fetchAllRows`, aqui falha NÃO devolve o pedaço lido: volta
+ * erro, e quem chama decide (cai no caminho alternativo, marca parcial).
+ * Número que vai pro cache e pro ranking não pode ser metade com cara de
+ * inteiro.
+ *
+ * `build` precisa ORDENAR por uma chave única da linha (ex.: unit_id, dia) —
+ * sem ordem, a paginação de uma função pode pular ou repetir linha.
+ */
+export async function rpcTodasAsLinhas<T>(
+  build: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[] | null; error: { message: string } | null }> {
+  const todas: T[] = []
+  const SIZE = 1000
+  for (let from = 0; from < 1_000_000; from += SIZE) {
+    const { data, error } = await comRetentativa(() =>
+      build(from, from + SIZE - 1),
+    )
+    if (error) return { data: null, error }
+    todas.push(...(data ?? []))
+    if (!data || data.length < SIZE) break
+  }
+  return { data: todas, error: null }
+}

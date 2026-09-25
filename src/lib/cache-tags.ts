@@ -12,6 +12,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { rpcTodasAsLinhas } from "@/lib/data/paginate"
 
 /** Conciliação do iFood — tudo derivado de ifood_financeiro_lancamentos. */
 export const TAG_FINANCEIRO_IFOOD = "ifood-financeiro"
@@ -61,14 +62,25 @@ export async function rpcMensalComCache<T>(
   year: number,
   month: number,
   tag: string,
+  /** Chave única de cada linha, pra paginar sem pular nem repetir. */
+  ordem: string[] = ["unit_id"],
 ): Promise<{ data: T[] | null; error: string | null }> {
   const chamar = async () => {
-    const { data, error } = await createAdminClient().rpc(nome, {
-      p_unit_ids: unitIds,
-      p_year: year,
-      p_month: month,
+    // Todas as páginas, não só a primeira: rede grande passa de 1000 linhas
+    // (ver `rpcTodasAsLinhas`).
+    const { data, error } = await rpcTodasAsLinhas<T>((from, to) => {
+      let q = createAdminClient().rpc(nome, {
+        p_unit_ids: unitIds,
+        p_year: year,
+        p_month: month,
+      })
+      for (const c of ordem) q = q.order(c)
+      return q.range(from, to) as unknown as PromiseLike<{
+        data: T[] | null
+        error: { message: string } | null
+      }>
     })
-    return { data: (data ?? null) as T[] | null, error: error?.message ?? null }
+    return { data: data ?? null, error: error?.message ?? null }
   }
 
   if (!mesFechado(year, month)) return chamar()
@@ -92,7 +104,9 @@ export async function rpcMensalComCache<T>(
 
   return unstable_cache(
     semCachearFalha,
-    [nome, `${year}-${month}-${[...unitIds].sort().join(",")}`],
+    // "paginado" na chave: as entradas antigas foram gravadas com só as
+    // primeiras 1000 linhas e valeriam mais 24h — chave nova descarta todas.
+    [nome, "paginado", `${year}-${month}-${[...unitIds].sort().join(",")}`],
     { tags: [tag], revalidate: 86_400 },
   )().catch((e) => ({
     data: null,

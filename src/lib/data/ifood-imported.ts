@@ -12,7 +12,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { registrarFalhaDeLeitura } from "@/lib/data/falhas-leitura"
 
-import { TAG_FINANCEIRO_IFOOD } from "@/lib/cache-tags"
+import { TAG_FINANCEIRO_IFOOD, TODAS_AS_TAGS } from "@/lib/cache-tags"
 
 import { cache as reactCache } from "react"
 
@@ -666,6 +666,13 @@ export type AvailablePeriod = {
  * popular o dropdown de seletor de período. Sempre inclui o mês corrente
  * (mesmo sem dados) pra UX consistente.
  */
+type LinhaPeriodo = {
+  report_type: string
+  ref_year: number | null
+  ref_month: number | null
+  ref_date: string | null
+}
+
 export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
   const admin = createAdminClient()
 
@@ -683,21 +690,52 @@ export async function getAvailablePeriods(): Promise<AvailablePeriod[]> {
         ? allowed
         : ["00000000-0000-0000-0000-000000000000"]
 
-  const data = await fetchAllRows<{
-    report_type: string
-    ref_year: number | null
-    ref_month: number | null
-    ref_date: string | null
-  }>(
-    (from, to) => {
-      let q = admin
-        .from("platform_imports")
-        .select("report_type, ref_year, ref_month, ref_date")
-      if (lojas) q = q.in("unit_id", lojas)
-      return q.order("id").range(from, to)
-    },
-    "platform_imports periodos",
-  )
+  /* A LISTA É CACHEADA POR CONJUNTO DE LOJAS (DG FOODS, 25/09/26).
+   *
+   * Pra montar ~200 combinações de mês, esta função baixava o histórico
+   * inteiro de importações — 23 mil linhas da DG, em 24 páginas uma atrás da
+   * outra. Medido: 5,5 s dos 8,3 s do Ticket Médio, e o mesmo custo em quase
+   * todo relatório do Hub e nas 8 telas com seletor de período.
+   *
+   * Vale 10 minutos e cai junto com as tags dos agregados — toda gravação que
+   * mexe em mês fechado já derruba essas tags, e é só aí que um mês novo
+   * aparece no seletor. O mês corrente entra FORA do cache (abaixo), senão a
+   * virada do mês esperaria o cache vencer. Leitura parcial não é guardada. */
+  const buscar = async (estrito: boolean): Promise<LinhaPeriodo[]> => {
+    let falha: string | null = null
+    const linhas = await fetchAllRows<LinhaPeriodo>(
+      (from, to) => {
+        let q = admin
+          .from("platform_imports")
+          .select("report_type, ref_year, ref_month, ref_date")
+        if (lojas) q = q.in("unit_id", lojas)
+        return q.order("id").range(from, to)
+      },
+      "platform_imports periodos",
+      { onErro: (e) => (falha = e) },
+    )
+    if (falha && estrito) throw new Error(`periodos disponiveis: ${falha}`)
+    // Só o que o seletor usa, sem repetição: 23 mil linhas viram ~200.
+    const vistos = new Set<string>()
+    return linhas.filter((l) => {
+      const k = `${l.report_type}|${l.ref_year}|${l.ref_month}|${l.ref_date}`
+      if (vistos.has(k)) return false
+      vistos.add(k)
+      return true
+    })
+  }
+  const chave = lojas ? [...lojas].sort().join(",") : "todas"
+  let data: LinhaPeriodo[]
+  try {
+    data = await unstable_cache(() => buscar(true), ["periodos-disponiveis", chave], {
+      tags: [...TODAS_AS_TAGS],
+      revalidate: 600,
+    })()
+  } catch (e) {
+    console.error("getAvailablePeriods (cache):", e)
+    // Sem cache: o comportamento de antes — o que deu pra ler, com o log.
+    data = await buscar(false)
+  }
 
   const map = new Map<string, AvailablePeriod>()
   // Sempre inclui o mês corrente (mesmo sem dados). Fuso de Brasília (não o UTC

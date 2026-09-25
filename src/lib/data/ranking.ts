@@ -20,6 +20,7 @@ import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import type { ReportPlatform } from "@/lib/data/relatorio-diario-types"
 import { getNetworkResultadoForMonth } from "@/lib/data/resultado"
 import {
+  currentPeriod,
   firstDayOfMonth,
   lastDayOfMonth,
   type DateRange,
@@ -178,7 +179,12 @@ export async function getRankingData(
   // --- Evolução: rede mês a mês no ano do início, AGORA POR PLATAFORMA ---
   // O total sai da soma das plataformas, não de uma chamada "todas" extra —
   // 12 consultas a menos e o total sempre bate com as linhas do gráfico.
-  const evoMonths = Array.from({ length: 12 }, (_, i) => i + 1)
+  // Só até o mês corrente: mês futuro não tem venda e o gráfico já cortava o
+  // fim vazio. Eram 12 consultas (3 meses × 4 plataformas) jogadas fora a
+  // cada abertura, disputando o banco com as que importam.
+  const agora = currentPeriod()
+  const ultimoMes = startYear < agora.year ? 12 : startYear === agora.year ? agora.month : 0
+  const evoMonths = Array.from({ length: ultimoMes }, (_, i) => i + 1)
   const evoCells: { month: number; plat: PlatformId }[] = []
   for (const m of evoMonths) {
     for (const plat of PLATS) evoCells.push({ month: m, plat })
@@ -204,7 +210,9 @@ export async function getRankingData(
 
   const [cellResults, evoResults, resultadoResults] = await Promise.all([
     Promise.all(cells.map((c) => c.promise)),
-    mapLimit(evoTarefas, 6, (fn) => fn()),
+    // 3, não 6 (DG FOODS, 25/09/26): cada mês da rede de 80 lojas leva ~2,3 s
+    // sozinho no banco; 6 juntos passavam dos 8 s e eram cancelados.
+    mapLimit(evoTarefas, 3, (fn) => fn()),
     Promise.all(resultadoPromises),
   ])
 
