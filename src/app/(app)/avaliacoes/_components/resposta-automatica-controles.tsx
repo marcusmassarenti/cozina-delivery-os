@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Bot, ChevronDown, Loader2 } from "lucide-react"
 
@@ -36,47 +36,64 @@ export function RespostaAutomaticaControles({
   notas: number[]
 }) {
   const router = useRouter()
-  const [pendente, start] = useTransition()
   const [rodando, startRodar] = useTransition()
   const [msg, setMsg] = useState<string | null>(null)
   const [aberta, setAberta] = useState(false)
 
-  const ligadas = lojas.filter((l) => l.ativa).length
+  /* Estado LOCAL de cada loja, trocado NO CLIQUE (Marcus, 25/09/26: "demora
+     demais pra habilitar"). Antes o interruptor só virava depois de o servidor
+     gravar, falar com o Asaas e a tela inteira de Avaliações ser refeita duas
+     vezes — 7 a 10 s parado. Agora vira na hora e só volta se o servidor
+     recusar. */
+  const [ativas, setAtivas] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(lojas.map((l) => [l.id, l.ativa])),
+  )
+  const ativa = (id: string) => !!ativas[id]
+
+  const ligadas = lojas.filter((l) => ativa(l.id)).length
   const todas = ligadas === lojas.length
   const cobra = precoLoja > 0 && !emTeste
   // Ligar loja acrescenta valor à mensalidade: pede confirmação com o número
   // na tela. Desligar não pede — tirar cobrança nunca precisa de freio.
   const [confirmar, setConfirmar] = useState<string[] | null>(null)
 
-  function pedir(ids: string[], ativa: boolean) {
-    const novas = ids.filter((id) => !lojas.find((l) => l.id === id)?.ativa)
-    if (ativa && cobra && novas.length > 0) {
+  function pedir(ids: string[], ligar: boolean) {
+    const novas = ids.filter((id) => !ativa(id))
+    if (ligar && cobra && novas.length > 0) {
       setMsg(null)
       setConfirmar(novas)
       return
     }
-    alterar(ids, ativa)
+    alterar(ids, ligar)
   }
 
-  function alterar(ids: string[], ativa: boolean) {
+  function alterar(ids: string[], ligar: boolean) {
     setMsg(null)
     setConfirmar(null)
-    start(async () => {
-      const r = await definirRespostaAutomatica(ids, ativa)
-      if (!r.ok) setMsg(r.message ?? "Não deu certo.")
-      router.refresh()
-    })
+    const antes = Object.fromEntries(ids.map((id) => [id, ativa(id)]))
+    setAtivas((a) => ({ ...a, ...Object.fromEntries(ids.map((id) => [id, ligar])) }))
+    void definirRespostaAutomatica(ids, ligar).then(
+      (r) => {
+        if (r.ok) return
+        setAtivas((a) => ({ ...a, ...antes }))
+        setMsg(r.message ?? "Não deu certo.")
+      },
+      () => {
+        setAtivas((a) => ({ ...a, ...antes }))
+        setMsg("Não deu certo — tente de novo.")
+      },
+    )
   }
 
-  // Estado LOCAL das estrelas, alinhado ao que o servidor confirma. Ler a
-  // prop a cada clique deixou tela e banco diferentes em dois cliques rápidos
-  // (a prop ainda era a de antes do primeiro). Um clique por vez, e a tela
-  // passa a mostrar o que ficou gravado.
+  // Estado LOCAL das estrelas. Ler a prop a cada clique deixou tela e banco
+  // diferentes em dois cliques rápidos (a prop ainda era a de antes do
+  // primeiro). Cada clique manda a seleção INTEIRA e só a resposta do último
+  // pedido vale — então dá pra clicar em sequência sem travar o botão e sem
+  // uma resposta atrasada desfazer o clique seguinte.
   const [notasSel, setNotasSel] = useState<number[]>(notas)
-  const [salvandoNotas, startNotas] = useTransition()
+  const ultimoPedido = useRef(0)
 
   function trocarNota(n: number) {
-    if (salvandoNotas) return
     const nova = notasSel.includes(n)
       ? notasSel.filter((x) => x !== n)
       : [...notasSel, n]
@@ -87,15 +104,23 @@ export function RespostaAutomaticaControles({
     setMsg(null)
     const antes = notasSel
     setNotasSel(nova)
-    startNotas(async () => {
-      const r = await definirNotasRespostaAuto(nova)
-      if (!r.ok) {
+    const meu = ++ultimoPedido.current
+    void definirNotasRespostaAuto(nova).then(
+      (r) => {
+        if (meu !== ultimoPedido.current) return
+        if (!r.ok) {
+          setNotasSel(antes)
+          setMsg(r.message ?? "Não deu certo.")
+          return
+        }
+        if (r.notas) setNotasSel([...r.notas].sort())
+      },
+      () => {
+        if (meu !== ultimoPedido.current) return
         setNotasSel(antes)
-        setMsg(r.message ?? "Não deu certo.")
-        return
-      }
-      if (r.notas) setNotasSel([...r.notas].sort())
-    })
+        setMsg("Não deu certo — tente de novo.")
+      },
+    )
   }
 
   const notasTxt = [...notasSel].sort().join(", ").replace(/, (\d)$/, " e $1")
@@ -147,7 +172,6 @@ export function RespostaAutomaticaControles({
                   key={n}
                   type="button"
                   aria-pressed={on}
-                  disabled={salvandoNotas}
                   onClick={() => trocarNota(n)}
                   className={`inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 font-medium tabular-nums transition-colors disabled:opacity-60 ${
                     on
@@ -196,7 +220,6 @@ export function RespostaAutomaticaControles({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            disabled={pendente}
             onClick={() => pedir(lojas.map((l) => l.id), !todas)}
             className="rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-60"
           >
@@ -226,7 +249,6 @@ export function RespostaAutomaticaControles({
           </span>
           <button
             type="button"
-            disabled={pendente}
             onClick={() => alterar(confirmar, true)}
             className="rounded-md bg-primary px-2.5 py-1 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
@@ -327,17 +349,16 @@ export function RespostaAutomaticaControles({
                   <button
                     type="button"
                     role="switch"
-                    aria-checked={l.ativa}
+                    aria-checked={ativa(l.id)}
                     aria-label={`Resposta automática em ${l.name}`}
-                    disabled={pendente}
-                    onClick={() => pedir([l.id], !l.ativa)}
+                    onClick={() => pedir([l.id], !ativa(l.id))}
                     className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
-                      l.ativa ? "bg-emerald-500" : "bg-muted-foreground/30"
+                      ativa(l.id) ? "bg-emerald-500" : "bg-muted-foreground/30"
                     }`}
                   >
                     <span
                       className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
-                        l.ativa ? "left-[18px]" : "left-0.5"
+                        ativa(l.id) ? "left-[18px]" : "left-0.5"
                       }`}
                     />
                   </button>

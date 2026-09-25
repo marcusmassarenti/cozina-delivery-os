@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { after } from "next/server"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
@@ -29,8 +30,11 @@ export type AutoState = { ok: boolean; message?: string }
 
 /** Lojas que o usuário pode ligar/desligar: visíveis, dele, com API do iFood. */
 async function lojasPermitidas(ids: string[]): Promise<string[]> {
-  const visiveis = new Set((await getVisibleUnits()).map((u) => u.id))
-  const emprestadas = await getUnidadesSomenteLeitura()
+  const [units, emprestadas] = await Promise.all([
+    getVisibleUnits(),
+    getUnidadesSomenteLeitura(),
+  ])
+  const visiveis = new Set(units.map((u) => u.id))
   const pedidas = ids.filter((id) => visiveis.has(id) && !emprestadas.has(id))
   if (pedidas.length === 0) return []
   const { data } = await createAdminClient()
@@ -46,9 +50,12 @@ export async function definirRespostaAutomatica(
   unitIds: string[],
   ativa: boolean,
 ): Promise<AutoState> {
-  if (!(await userCan("avaliacoes", "edit")))
-    return { ok: false, message: "Seu perfil não pode responder avaliações." }
-  if ((await getVerComoHoldingId()) !== null)
+  const [pode, verComo] = await Promise.all([
+    userCan("avaliacoes", "edit"),
+    getVerComoHoldingId(),
+  ])
+  if (!pode) return { ok: false, message: "Seu perfil não pode responder avaliações." }
+  if (verComo !== null)
     return { ok: false, message: "No modo “ver como o cliente” nada é alterado." }
 
   const ids = await lojasPermitidas(unitIds)
@@ -74,13 +81,24 @@ export async function definirRespostaAutomatica(
 
   /* O adicional é cobrado por loja ligada: a mensalidade muda AGORA, não no
      cron de amanhã. Silencioso se falhar (sem assinatura, conta interna...) —
-     o cron diário de assinaturas reconcilia. */
+     o cron diário de assinaturas reconcilia.
+
+     Em `after()` (Marcus, 25/09/26: "demora demais pra habilitar"): o clique
+     esperava a ida e volta ao Asaas E a tela de Avaliações inteira ser refeita
+     (3–4 s, duas vezes). O botão já mostra o novo estado na hora; a cobrança
+     é acertada logo depois da resposta, sem prender ninguém. Sem
+     `revalidatePath` pelo mesmo motivo: o cartão guarda o estado sozinho. */
   const holdingId = await getCurrentHoldingId()
   if (holdingId) {
-    const { sincronizarValorAssinatura } = await import("@/lib/data/assinatura-sync")
-    await sincronizarValorAssinatura(holdingId)
+    after(async () => {
+      try {
+        const { sincronizarValorAssinatura } = await import("@/lib/data/assinatura-sync")
+        await sincronizarValorAssinatura(holdingId)
+      } catch (e) {
+        console.error("[resposta-auto] sync da assinatura:", e)
+      }
+    })
   }
-  revalidatePath("/avaliacoes")
   return { ok: true }
 }
 
@@ -91,9 +109,12 @@ export async function definirRespostaAutomatica(
 export async function definirNotasRespostaAuto(
   notas: number[],
 ): Promise<AutoState & { notas?: number[] }> {
-  if (!(await userCan("avaliacoes", "edit")))
-    return { ok: false, message: "Seu perfil não pode responder avaliações." }
-  if ((await getVerComoHoldingId()) !== null)
+  const [pode, verComo] = await Promise.all([
+    userCan("avaliacoes", "edit"),
+    getVerComoHoldingId(),
+  ])
+  if (!pode) return { ok: false, message: "Seu perfil não pode responder avaliações." }
+  if (verComo !== null)
     return { ok: false, message: "No modo “ver como o cliente” nada é alterado." }
   const holdingId = await getCurrentHoldingId()
   if (!holdingId) return { ok: false, message: "Conta não identificada." }
@@ -109,7 +130,8 @@ export async function definirNotasRespostaAuto(
     .select("resposta_auto_notas")
     .single()
   if (error) return { ok: false, message: error.message }
-  revalidatePath("/avaliacoes")
+  // Sem revalidatePath: refazer a tela inteira custava 3–4 s por estrela, e o
+  // cartão já mostra o que o banco devolveu.
   return { ok: true, notas: (data?.resposta_auto_notas as number[] | null) ?? validas }
 }
 
