@@ -79,6 +79,23 @@ const SALDO_FECHADO = (tipo?: string, status?: string) =>
   (tipo === "SALDO POSITIVO" || tipo === "SALDO NEGATIVO") &&
   status === "CLOSED"
 
+/**
+ * O ciclo da SEMANA EM ANDAMENTO: mesmos tipos de saldo, status OPEN.
+ *
+ * Ficava de fora — a regra acima foi escrita pro Fechamento, onde saldo
+ * aberto não é dinheiro do ciclo. Mas o portal mostra esse ciclo como "Em
+ * aberto" com valor e previsão (Santo Peixe/DG, 25/09/26: 21–27/09,
+ * R$ 6.079,84, previsão 30/09 — a API devolvia exatamente isso), e o lojista
+ * compara o card com o portal. Grava com status 'OPEN'; quem só quer ciclo
+ * fechado filtra (ver `fechamentos.ts`).
+ *
+ * ⚠️ A data do saldo aberto é o CALENDÁRIO ORIGINAL. Pra quem antecipa ela é
+ * semanas depois do dinheiro de verdade (Duéle: 21/10 num ciclo que cai
+ * ~30/09). Quem lê trata isso — ver `getRepassesIfood`.
+ */
+const SALDO_ABERTO = (tipo?: string, status?: string) =>
+  (tipo === "SALDO POSITIVO" || tipo === "SALDO NEGATIVO") && status === "OPEN"
+
 /** Sinal certo: SALDO NEGATIVO já vem negativo na API, mas não custa garantir. */
 const comSinal = (tipo: string | undefined, v: number) =>
   tipo === "SALDO NEGATIVO" ? -Math.abs(v) : v
@@ -116,6 +133,23 @@ export async function sincronizarRepassesIfood(
   const porCiclo = new Map<string, Linha>()
 
   const fatias = fatiar(de, ate)
+  // SÓ A SETTLEMENTS vai até 6 dias DEPOIS de `ate`: ela só devolve o ciclo
+  // cujo fim cabe na janela, e o cron pede "até hoje" — numa quinta, a semana
+  // em andamento (que fecha no domingo) ficava de fora. Medido na Santo Peixe
+  // em 25/09/26: janela até 25/09 → sem o ciclo 21–27/09; até 27/09 → vem.
+  //
+  // ⚠️ A DE ANTECIPAÇÕES NÃO PODE: com o fim da janela no futuro ela devolve
+  // 200 VAZIO, calada (mesma família do limite de 31 dias acima). Estendi as
+  // duas na primeira tentativa e a Duéle perdeu as datas antecipadas e a taxa
+  // de três ciclos — voltaram pro calendário original.
+  const fatiasSettlements = fatiar(
+    de,
+    (() => {
+      const d = new Date(`${ate}T12:00:00Z`)
+      d.setUTCDate(d.getUTCDate() + 6)
+      return d.toISOString().slice(0, 10)
+    })(),
+  )
   let antecipados = 0
 
   // 1) ANTECIPAÇÕES primeiro: quem antecipa tem a data real só aqui.
@@ -165,7 +199,10 @@ export async function sincronizarRepassesIfood(
 
   // 2) SETTLEMENTS pros ciclos que NÃO foram antecipados. Aqui a data prevista
   //    é a data real, porque não houve antecipação pra deslocar nada.
-  for (const [fDe, fAte] of fatias) {
+  //    O saldo em aberto (semana em andamento) é juntado à parte e só entra
+  //    no fim, se o ciclo não tiver nada fechado.
+  const abertos = new Map<string, Linha>()
+  for (const [fDe, fAte] of fatiasSettlements) {
     const set = await getSettlements(merchantId, fDe, fAte, "calculo")
     if (set.ok) {
       for (const p of set.data?.settlements ?? []) {
@@ -175,6 +212,26 @@ export async function sincronizarRepassesIfood(
         const chave = `${ini}|${fim}`
         if (porCiclo.has(chave)) continue // antecipado: a data boa é a de cima
         for (const it of p.closingItems ?? []) {
+          if (SALDO_ABERTO(it.type, it.status)) {
+            const v = comSinal(it.type, Number(it.amount ?? 0))
+            const atual = abertos.get(chave)
+            abertos.set(chave, {
+              unit_id: unitId,
+              merchant_id: merchantId,
+              ciclo_inicio: ini,
+              ciclo_fim: fim,
+              tipo: "SALDO ABERTO",
+              status: "OPEN",
+              valor_bruto: (atual?.valor_bruto ?? 0) + v,
+              taxa_antecipacao: 0,
+              valor_liquido: (atual?.valor_liquido ?? 0) + v,
+              data_prevista:
+                it.paymentDate?.slice(0, 10) ?? atual?.data_prevista ?? null,
+              data_pagamento:
+                it.paymentDate?.slice(0, 10) ?? atual?.data_pagamento ?? null,
+            })
+            continue
+          }
           if (!SALDO_FECHADO(it.type, it.status)) continue
           const v = comSinal(it.type, Number(it.amount ?? 0))
           const atual = porCiclo.get(chave)
@@ -196,6 +253,10 @@ export async function sincronizarRepassesIfood(
         }
       }
     }
+  }
+
+  for (const [chave, l] of abertos) {
+    if (!porCiclo.has(chave)) porCiclo.set(chave, l)
   }
 
   const linhas = [...porCiclo.values()]

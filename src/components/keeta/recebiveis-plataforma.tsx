@@ -96,7 +96,20 @@ function periodoCurto(de: string, ate: string) {
   return `${fmtDia(de)}–${fmtDia(ate)}`
 }
 
-function Tile({ caiu, dia, valor, sub }: { caiu: boolean; dia: string | null; valor: number; sub?: string }) {
+function Tile({
+  caiu,
+  dia,
+  valor,
+  sub,
+  aprox = false,
+}: {
+  caiu: boolean
+  dia: string | null
+  valor: number
+  sub?: string
+  /** Data estimada: mostra "~" antes do dia. */
+  aprox?: boolean
+}) {
   return (
     <li className="flex items-center justify-between gap-2 rounded border bg-muted/20 px-2 py-1">
       <span className="flex min-w-0 items-center gap-1.5">
@@ -106,7 +119,8 @@ function Tile({ caiu, dia, valor, sub }: { caiu: boolean; dia: string | null; va
           <Clock className="size-3 shrink-0 text-amber-600" />
         )}
         <span className="truncate">
-          Cai {fmtDia(dia)}
+          Cai {aprox ? "~" : ""}
+          {fmtDia(dia)}
           {sub && <span className="text-[10px] text-muted-foreground"> · {sub}</span>}
         </span>
       </span>
@@ -208,7 +222,8 @@ function SecaoIfood({ repasses }: { repasses: RepassesIfood }) {
   const { ciclos, cicloAbertoDesde } = repasses
   const total = ciclos.reduce((a, c) => a + c.liquido, 0)
   const caiu = ciclos.filter((c) => c.caiu).reduce((a, c) => a + c.liquido, 0)
-  const antecipados = ciclos.filter((c) => c.taxaAntecipacao > 0)
+  const antecipados = ciclos.filter((c) => c.taxaAntecipacao > 0 && !c.estimado)
+  const aberto = ciclos.find((c) => c.aberto)
   const taxa = antecipados.reduce((a, c) => a + c.taxaAntecipacao, 0)
   const brutoAntecipado = antecipados.reduce((a, c) => a + c.valorBruto, 0)
   const diasAntes =
@@ -238,10 +253,22 @@ function SecaoIfood({ repasses }: { repasses: RepassesIfood }) {
             caiu={c.caiu}
             dia={c.dataPagamento}
             valor={c.liquido}
-            sub={`vendas ${periodoCurto(c.inicio, c.fim)}`}
+            aprox={c.estimado}
+            sub={`vendas ${periodoCurto(c.inicio, c.fim)}${c.aberto ? " · em aberto" : ""}`}
           />
         ))}
       </ul>
+      {aberto && (
+        <p className="mt-1.5 flex items-start gap-1 text-[11px] text-muted-foreground">
+          <Clock className="mt-0.5 size-3 shrink-0 text-amber-600" />
+          <span>
+            Semana {periodoCurto(aberto.inicio, aberto.fim)} em aberto: o valor
+            ainda cresce até o iFood fechar o ciclo no domingo.
+            {aberto.estimado &&
+              ` Como a loja antecipa, a data e a taxa (−${fmtBRL(aberto.taxaAntecipacao)}) são estimadas pelo último ciclo antecipado — pelo calendário original cairia em ${fmtDia(aberto.dataPrevista)}.`}
+          </span>
+        </p>
+      )}
       {cicloAbertoDesde && (
         <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
           <Clock className="size-3 shrink-0 text-amber-600" />

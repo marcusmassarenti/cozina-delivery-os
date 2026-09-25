@@ -66,7 +66,7 @@ export const CHANGELOG: Release[] = [
             antes:
               "O card mostrava só 99 e Keeta — o iFood aparecia como “não disponibiliza o repasse”.",
             depois:
-              "Cada ciclo do iFood com o dia em que cai (a data real, inclusive pra quem antecipa), o valor e a taxa de antecipação do período. A semana em andamento entra quando o iFood fecha o ciclo, no domingo.",
+              "Cada ciclo do iFood com o dia em que cai (a data real, inclusive pra quem antecipa), o valor e a taxa de antecipação do período. A semana em andamento aparece como “em aberto”, igual ao portal — pra quem antecipa, com data e taxa estimadas.",
           },
         ],
       },

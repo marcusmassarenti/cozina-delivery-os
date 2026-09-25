@@ -81,16 +81,21 @@ export async function getRecebidoSemana(
     nineDiario,
     vrRows,
   ] = await Promise.all([
+    // Só ciclo FECHADO: desde 25/09/26 a tabela também guarda o saldo da
+    // semana em andamento (status OPEN), que ainda muda e não é o que a
+    // semana rendeu nem o que caiu na conta.
     admin
       .from("ifood_repasses")
       .select("valor_liquido")
       .eq("unit_id", unitId)
+      .or("status.is.null,status.neq.OPEN")
       .gte("ciclo_inicio", inicio)
       .lte("ciclo_fim", fim),
     admin
       .from("ifood_repasses")
       .select("valor_liquido")
       .eq("unit_id", unitId)
+      .or("status.is.null,status.neq.OPEN")
       .gte("data_pagamento", inicio)
       .lte("data_pagamento", fim),
     admin
