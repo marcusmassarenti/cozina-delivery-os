@@ -34,6 +34,7 @@ import { getKeetaPedidoResumoForMonth } from "@/lib/data/keeta-pedidos"
 import { getNinefoodResumoForMonth } from "@/lib/data/ninefood-imported"
 import { getAReceber99ForUnit } from "@/lib/data/ninefood-a-receber"
 import { getDepositos99 } from "@/lib/data/ninefood-repasses"
+import { getRepassesIfood } from "@/lib/data/ifood-repasses"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getDeliveryFeeForMonth, getEntregaPropria } from "@/lib/data/taxa-entrega"
 import { getUnitCostBreakdown } from "@/lib/data/unit-costs"
@@ -137,6 +138,7 @@ export async function FinanceiroLojaTab({
     cwOp,
     aReceber99,
     depositos99,
+    repassesIfood,
   ] = await Promise.all([
     // Estas SEGUEM o período escolhido — as tabelas têm data por pedido.
     getPagamentoResumoForMonth(unitId, year, month, dateRange),
@@ -170,6 +172,14 @@ export async function FinanceiroLojaTab({
     getAReceber99ForUnit(unitId),
     // Depósitos que pagam as vendas DO PERÍODO — o par do líquido do DRE.
     getDepositos99(
+      unitId,
+      dateRange?.start ?? `${year}-${String(month).padStart(2, "0")}-01`,
+      dateRange?.end ??
+        `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
+    ),
+    // Repasses do iFood que pagam as vendas DO PERÍODO — ciclo, data real de
+    // pagamento e taxa de antecipação (API de antecipações, ver o módulo).
+    getRepassesIfood(
       unitId,
       dateRange?.start ?? `${year}-${String(month).padStart(2, "0")}-01`,
       dateRange?.end ??
@@ -534,13 +544,16 @@ export async function FinanceiroLojaTab({
           />
         )}
 
-        {/* Recebíveis — quando o dinheiro cai: 99 (data por pedido, da API)
-            e Keeta (repasse da Fatura), no mesmo card. */}
+        {/* Recebíveis — quando o dinheiro cai: iFood (ciclo, da API de
+            antecipações), 99 (data por pedido, da API) e Keeta (repasse da
+            Fatura), no mesmo card. */}
         {(keetaRepasse.ciclos.length > 0 ||
-          (depositos99 && depositos99.length > 0)) && (
+          (depositos99 && depositos99.length > 0) ||
+          (repassesIfood && repassesIfood.ciclos.length > 0)) && (
           <RecebiveisPlataforma
             keeta={keetaRepasse}
             depositos99={depositos99}
+            repassesIfood={repassesIfood}
             liquido99Dre={
               m.platforms.find((p) => p.id === "99food")?.liquido ?? 0
             }

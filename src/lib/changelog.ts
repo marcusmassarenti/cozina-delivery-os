@@ -49,6 +49,30 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.6",
+    date: "2026-09-25",
+    tag: "Melhoria",
+    title: "Quando cai o dinheiro do iFood",
+    summary:
+      "O card Recebíveis agora mostra o iFood: cada semana de vendas, o dia em que o dinheiro cai e quanto a antecipação custou.",
+    semPopup: true,
+    areas: [
+      {
+        area: "Unidade · Financeiro",
+        items: [
+          {
+            kind: "melhoria",
+            title: "iFood no Recebíveis · quando cai",
+            antes:
+              "O card mostrava só 99 e Keeta — o iFood aparecia como “não disponibiliza o repasse”.",
+            depois:
+              "Cada ciclo do iFood com o dia em que cai (a data real, inclusive pra quem antecipa), o valor e a taxa de antecipação do período. A semana em andamento entra quando o iFood fecha o ciclo, no domingo.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.29.5",
     date: "2026-09-25",
     tag: "Melhoria",

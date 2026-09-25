@@ -7,6 +7,7 @@ import { PlatformLogo } from "@/components/platform-logo"
 import { fmtBRL, fmtNum } from "@/lib/format"
 import type { KeetaRepasseResumo } from "@/lib/data/keeta-repasses"
 import type { Deposito99 } from "@/lib/data/ninefood-repasses"
+import type { RepassesIfood } from "@/lib/data/ifood-repasses"
 
 function fmtDia(d: string | null) {
   if (!d) return "—"
@@ -16,10 +17,12 @@ function fmtDia(d: string | null) {
 
 /**
  * Recebíveis — "quando cai o dinheiro", com seletor de plataforma igual ao
- * "Para onde vai o bruto": 99 (API, data prevista por pedido) e Keeta
+ * "Para onde vai o bruto": iFood (ciclo da API de antecipações, com a data
+ * real e a taxa de antecipar), 99 (API, data prevista por pedido) e Keeta
  * (repasse da Fatura). Sem "Todas": cada plataforma paga num calendário
  * próprio, e somar datas de ciclos diferentes não responde "quando cai".
- * O iFood não entra: não disponibiliza o repasse em relatório.
+ * O iFood entrou em 25/09/26 — o card dizia que ele não disponibilizava o
+ * repasse, mas `ifood_repasses` já era gravado desde agosto.
  *
  * O 99 vem conciliado com o DRE (Duéle / DG FOODS, 21/09/26): o dono compara o
  * extrato do banco com o líquido da tela no meio do mês e acha que recebe
@@ -29,19 +32,25 @@ export function RecebiveisPlataforma({
   keeta,
   depositos99,
   liquido99Dre = 0,
+  repassesIfood,
 }: {
   keeta: KeetaRepasseResumo
   depositos99?: Deposito99[] | null
   /** Líquido do 99 no DRE, mesmo período — pra conciliar. */
   liquido99Dre?: number
+  repassesIfood?: RepassesIfood | null
 }) {
+  const temIfood = !!repassesIfood && repassesIfood.ciclos.length > 0
   const tem99 = !!depositos99 && depositos99.length > 0
   const temKeeta = keeta.ciclos.length > 0
   const plats = [
+    ...(temIfood ? (["ifood"] as const) : []),
     ...(tem99 ? (["99food"] as const) : []),
     ...(temKeeta ? (["keeta"] as const) : []),
   ]
-  const [sel, setSel] = React.useState<"99food" | "keeta">(plats[0] ?? "99food")
+  const [sel, setSel] = React.useState<"ifood" | "99food" | "keeta">(
+    plats[0] ?? "99food",
+  )
   if (plats.length === 0) return null
   const multi = plats.length > 1
   return (
@@ -71,14 +80,11 @@ export function RecebiveisPlataforma({
         </div>
       </div>
 
+      {sel === "ifood" && temIfood && <SecaoIfood repasses={repassesIfood!} />}
       {sel === "99food" && tem99 && (
         <Secao99 depositos={depositos99!} liquidoDre={liquido99Dre} />
       )}
       {sel === "keeta" && temKeeta && <SecaoKeeta keeta={keeta} />}
-
-      <p className="mt-3 text-[10px] text-muted-foreground">
-        O iFood não aparece aqui — não disponibiliza o repasse em relatório.
-      </p>
     </div>
   )
 }
@@ -179,6 +185,77 @@ function Secao99({ depositos, liquidoDre }: { depositos: Deposito99[]; liquidoDr
             </li>
           </ul>
         </details>
+      )}
+    </div>
+  )
+}
+
+/** Dias entre duas datas ISO (b − a). */
+function diasEntre(a: string, b: string) {
+  return Math.round(
+    (new Date(`${b}T12:00:00Z`).getTime() - new Date(`${a}T12:00:00Z`).getTime()) /
+      86_400_000,
+  )
+}
+
+/**
+ * iFood por ciclo. O valor é o que CAI na conta (já sem a taxa de antecipar),
+ * e a antecipação ganha linha própria: é custo que o lojista quase nunca vê —
+ * o portal mostra o valor que caiu, não quanto ele deixou de receber pra
+ * receber antes.
+ */
+function SecaoIfood({ repasses }: { repasses: RepassesIfood }) {
+  const { ciclos, cicloAbertoDesde } = repasses
+  const total = ciclos.reduce((a, c) => a + c.liquido, 0)
+  const caiu = ciclos.filter((c) => c.caiu).reduce((a, c) => a + c.liquido, 0)
+  const antecipados = ciclos.filter((c) => c.taxaAntecipacao > 0)
+  const taxa = antecipados.reduce((a, c) => a + c.taxaAntecipacao, 0)
+  const brutoAntecipado = antecipados.reduce((a, c) => a + c.valorBruto, 0)
+  const diasAntes =
+    antecipados.length > 0
+      ? antecipados.reduce(
+          (a, c) =>
+            a +
+            (c.dataPrevista && c.dataPagamento
+              ? diasEntre(c.dataPagamento, c.dataPrevista)
+              : 0),
+          0,
+        ) / antecipados.length
+      : 0
+
+  return (
+    <div>
+      <div className="mb-2">
+        <p className="text-xs tabular-nums text-muted-foreground">
+          a cair <b className="text-amber-600">{fmtBRL(total - caiu)}</b> ·
+          já caiu <b className="text-emerald-600">{fmtBRL(caiu)}</b>
+        </p>
+      </div>
+      <ul className="grid gap-1 text-xs sm:grid-cols-2">
+        {ciclos.map((c) => (
+          <Tile
+            key={`${c.inicio}|${c.fim}`}
+            caiu={c.caiu}
+            dia={c.dataPagamento}
+            valor={c.liquido}
+            sub={`vendas ${periodoCurto(c.inicio, c.fim)}`}
+          />
+        ))}
+      </ul>
+      {cicloAbertoDesde && (
+        <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Clock className="size-3 shrink-0 text-amber-600" />
+          Vendas desde {fmtDia(cicloAbertoDesde)} estão na semana em aberto — o
+          iFood fecha o ciclo no domingo e informa valor e data em seguida.
+        </p>
+      )}
+      {taxa > 0.005 && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          Antecipação: <b className="text-foreground tabular-nums">−{fmtBRL(taxa)}</b>{" "}
+          de taxa ({((taxa / brutoAntecipado) * 100).toFixed(2).replace(".", ",")}%
+          do valor antecipado) pra receber{" "}
+          {diasAntes >= 1 ? `~${Math.round(diasAntes)} dias antes do previsto` : "antes do previsto"}.
+        </p>
       )}
     </div>
   )
