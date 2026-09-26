@@ -159,9 +159,19 @@ async function getUnitsUncached(): Promise<Unit[]> {
     inaugByUnit.set(row.unit_id, inaug)
   }
   const units = unitsRes.data ?? []
-  const unitIds = units.map((u) => u.id)
-  const { year, month } = currentYearMonth()
-  const monthlyByUnit = await getRealMonthlyForUnits(unitIds, year, month)
+  /* SEM o agregado do mês (Marcus, 25/09/26: "focar na fluidez").
+   *
+   * Esta lista alimenta quase toda tela (via getVisibleUnits), e junto com o
+   * nome das lojas ela calculava `getRealMonthlyForUnits` pra TODAS as 487
+   * lojas de TODOS os clientes — com cache de 60 s. Ou seja: a cada minuto, a
+   * primeira pessoa a abrir QUALQUER tela pagava o faturamento do sistema
+   * inteiro (11 s medidos no DRE a partir do localhost) só pra saber o nome
+   * das lojas. É o "lento de vez em quando" que não tinha explicação.
+   *
+   * Ninguém precisava dele: o Dashboard já recalcula `monthly` pro período
+   * escolhido (monthlyPeriodo), o DRE/Resultado usam o mês consultado, e a
+   * listagem de Unidades nunca leu (ver units-page.ts). `monthly` fica vazio
+   * aqui; quem precisa de número calcula pro período que mostra. */
 
   // Logo por loja (best-effort: a coluna pode ainda não existir — pré-migration
   // 0062. Sem ela, cai no logo da empresa / inicial).
@@ -185,13 +195,14 @@ async function getUnitsUncached(): Promise<Unit[]> {
       ordenarPlataformas(platformsByUnit.get(u.id) ?? []),
       externalIdsByUnit.get(u.id) ?? {},
       inaugByUnit.get(u.id) ?? {},
-      monthlyByUnit.get(u.id) ?? emptyMonthly,
+      emptyMonthly,
       logoByUnit.get(u.id) ?? null,
     ),
   )
 }
 
-export const getUnits = unstable_cache(getUnitsUncached, ["units-monthly-v2"], {
+// Chave nova: a versão antiga guardada no cache carregava `monthly` cheio.
+export const getUnits = unstable_cache(getUnitsUncached, ["units-lista-v3"], {
   revalidate: 60,
   tags: ["units", "reports"],
 })

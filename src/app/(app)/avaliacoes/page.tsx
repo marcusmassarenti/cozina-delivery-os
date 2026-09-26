@@ -117,11 +117,15 @@ export default async function AvaliacoesPage({
       : (availableForUnit[0] ?? null)
 
   /* De onde vem cada número — na tela e dentro do PDF. */
-  const proc = await procedenciaDoRange(
+  /* Sem `await`: o cabeçalho não espera a procedência (é a cobertura de
+     importação das 4 plataformas). Aviso e botão de PDF a leem num Suspense
+     próprio — a tela aparece e eles entram quando ela chega. */
+  const procP = procedenciaDoRange(
     periodRange.start,
     periodRange.end,
     networkUnitIds,
   )
+  procP.catch(() => {})
 
   return (
     <div data-print="page" className="flex flex-1 flex-col gap-6 bg-muted/30 p-6">
@@ -151,16 +155,15 @@ export default async function AvaliacoesPage({
           <Suspense fallback={null}>
             <RespostaAutoBotao />
           </Suspense>
-          <ExportPdfButton
-            aviso={{
-              faltando: proc.comLacuna.map((p) => p.rotulo),
-              linha: proc.linha,
-            }}
-          />
+          <Suspense fallback={<ExportPdfButton />}>
+            <ExportPdfComProcedencia procP={procP} />
+          </Suspense>
         </div>
       </div>
 
-      <ProcedenciaDados p={proc} />
+      <Suspense fallback={null}>
+        <ProcedenciaAsync procP={procP} />
+      </Suspense>
 
       {!isFullMonth && (
         <div
@@ -189,7 +192,14 @@ export default async function AvaliacoesPage({
         <PendentesResposta />
       </Suspense>
 
-      {/* Body */}
+      {/* Body — em Suspense (Marcus, 25/09/26: "ao clicar em avaliações
+          demorou muito pra abrir"). Cabeçalho, filtros e pendentes aparecem
+          na hora; os agregados das 4 plataformas chegam em seguida. A `key`
+          faz o esqueleto voltar quando o filtro muda. */}
+      <Suspense
+        key={`${unidadeCode ?? "rede"}|${plataformaParam ?? ""}|${periodRange.start}|${notasFiltro.join(",")}`}
+        fallback={<CorpoCarregando />}
+      >
       {!selectedUnit ? (
         <AvaliacoesNetworkDashboard
           year={year}
@@ -234,6 +244,25 @@ export default async function AvaliacoesPage({
           month={month}
         />
       ) : null}
+      </Suspense>
+    </div>
+  )
+}
+
+/** Esqueleto do corpo: 4 KPIs, distribuição + plataformas, comentários. */
+function CorpoCarregando() {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true" aria-label="Carregando avaliações">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 animate-pulse rounded-xl border bg-card" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="h-56 animate-pulse rounded-xl border bg-card" />
+        <div className="h-56 animate-pulse rounded-xl border bg-card" />
+      </div>
+      <div className="h-72 animate-pulse rounded-xl border bg-card" />
     </div>
   )
 }
@@ -258,5 +287,23 @@ function NoPlatformsState({ unitName }: { unitName: string }) {
         <PlatformLogo platform="keeta" size="sm" />
       </div>
     </div>
+  )
+}
+
+type ProcP = ReturnType<typeof procedenciaDoRange>
+
+async function ProcedenciaAsync({ procP }: { procP: ProcP }) {
+  return <ProcedenciaDados p={await procP} />
+}
+
+async function ExportPdfComProcedencia({ procP }: { procP: ProcP }) {
+  const proc = await procP
+  return (
+    <ExportPdfButton
+      aviso={{
+        faltando: proc.comLacuna.map((p) => p.rotulo),
+        linha: proc.linha,
+      }}
+    />
   )
 }

@@ -218,7 +218,11 @@ export async function getNinefoodResumoByUnits(
   const mm = String(month).padStart(2, "0")
   const de = dateRange?.start ?? `${year}-${mm}-01`
   const ate = dateRange?.end ?? isoDate(new Date(year, month, 0))
-  const pedidosPorDia = await getNinefoodPedidosPorDia(unitIds, de, ate, registrar)
+  /* As três leituras (pedidos por dia, planilha diária, API) não dependem uma
+     da outra: saem juntas (Marcus, 25/09/26: "focar na fluidez"). Antes iam
+     em fila — e o Gráfico de Evolução chama isto uma vez por mês do ano. */
+  const pedidosPorDiaP = getNinefoodPedidosPorDia(unitIds, de, ate, registrar)
+  const apiPorDiaP = ninefoodApiPorDia(unitIds, year, month, dateRange, registrar)
   // Pagina: ninefood_daily_loja é 1 linha por loja por dia; com a rede
   // crescendo (~35 lojas × 30 dias = 1050) passa do cap de 1000 do Supabase e
   // descartaria dias silenciosamente. fetchAllRows + .order('id') resolve.
@@ -293,13 +297,7 @@ export async function getNinefoodResumoByUnits(
   // entra pelas MÉTRICAS OPERACIONAIS (avaliação, aceitação, tempo — que a
   // API não expõe) e segue sendo a fonte do financeiro nos dias/lojas SEM
   // API. Loja só-planilha não muda em nada.
-  const apiPorDia = await ninefoodApiPorDia(
-    unitIds,
-    year,
-    month,
-    dateRange,
-    registrar,
-  )
+  const [apiPorDia, pedidosPorDia] = await Promise.all([apiPorDiaP, pedidosPorDiaP])
   const diasApiPorUnit = new Map<string, Set<string>>()
   for (const [u, dias] of apiPorDia) diasApiPorUnit.set(u, new Set(dias.keys()))
 

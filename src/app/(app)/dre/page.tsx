@@ -92,6 +92,7 @@ export default async function ResultadoPage({
     dCw,
     availablePeriods,
     cwOp,
+    caixaCustos,
   ] =
     await Promise.all([
       getNetworkResultadoForMonth(year, month, filterIds),
@@ -109,16 +110,17 @@ export default async function ResultadoPage({
         year,
         month,
       ),
+      // Custos operacionais que vivem no Caixa (aluguel, folha, fixas…) — unem
+      // o DRE do delivery com as despesas de operação numa visão só. Junto do
+      // resto: não depende de nada acima (antes esperava a fila inteira).
+      getCaixaCustosPorGrupo(
+        matrixUnits.map((u) => u.id),
+        year,
+        month,
+      ),
     ])
   const { totals, rows, unitsComFaturamento, unitsComCusto } = resultado
 
-  // Custos operacionais que vivem no Caixa (aluguel, folha, fixas…) — unem o
-  // DRE do delivery com as despesas de operação numa visão só.
-  const caixaCustos = await getCaixaCustosPorGrupo(
-    matrixUnits.map((u) => u.id),
-    year,
-    month,
-  )
 
   // Séries diárias por plataforma pro gráfico interativo (faturamento + pedidos)
   const toSeries = (m: typeof dTodas) => ({
@@ -160,40 +162,33 @@ export default async function ResultadoPage({
   const margemSemVrPct =
     totals.bruto > 0 ? (margemSemVr / totals.bruto) * 100 : 0
 
-  // Custo de entrega das lojas com faturamento (parte das taxas das plataformas)
-  const deliveryFee = hasData
-    ? await getNetworkDeliveryFee(
-        rows.map((r) => r.unitId),
-        year,
-        month,
-      )
-    : { ifood: 0, ninefood: 0, keeta: 0, total: 0 }
+  /* Entrega, antecipação e VR por bandeira dependem só das lojas com
+     faturamento (`rows`) — e não uma da outra. Saem juntos (antes: em fila). */
+  const lojasComFat = rows.map((r) => r.unitId)
+  const [deliveryFee, antecipFeeMap, pagamento] = hasData
+    ? await Promise.all([
+        // Custo de entrega das lojas com faturamento (parte das taxas das plataformas)
+        getNetworkDeliveryFee(lojasComFat, year, month),
+        // Taxa de antecipação iFood somada na rede — alimenta o "Recebido real
+        // no caixa" do DRE detalhado (não altera margem/KPIs).
+        getAntecipacaoFeeByUnits(lojasComFat, year, month),
+        // VR por bandeira (iFood) — surfa da tela Pedidos
+        getNetworkPagamentoResumo(year, month, lojasComFat),
+      ])
+    : [
+        { ifood: 0, ninefood: 0, keeta: 0, total: 0 },
+        new Map<string, number>(),
+        null,
+      ]
   const entregaPctBruto =
     totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
 
 
-  // Taxa de antecipação iFood somada na rede — alimenta o "Recebido real no
-  // caixa" do DRE detalhado (não altera margem/KPIs).
-  const antecipFeeMap = hasData
-    ? await getAntecipacaoFeeByUnits(
-        rows.map((r) => r.unitId),
-        year,
-        month,
-      )
-    : new Map<string, number>()
   const antecipTotal = Array.from(antecipFeeMap.values()).reduce(
     (a, b) => a + b,
     0,
   )
 
-  // VR por bandeira (iFood) — surfa da tela Pedidos
-  const pagamento = hasData
-    ? await getNetworkPagamentoResumo(
-        year,
-        month,
-        rows.map((r) => r.unitId),
-      )
-    : null
 
   // VR da rede pro DRE detalhado: líquido autoritativo (totals.vrLiquido);
   // bruto/taxa derivados pela regra dos 8% (líquido = bruto × 0,92), idêntico

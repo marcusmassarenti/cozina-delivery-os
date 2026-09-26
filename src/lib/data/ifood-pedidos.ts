@@ -9,6 +9,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { rpcTodasAsLinhas } from "@/lib/data/paginate"
 
 /** Bandeiras de VR conhecidas, na ordem de exibição. */
 export const VR_BANDEIRAS = [
@@ -115,35 +116,79 @@ async function pageAll<T>(
   return all
 }
 
-type Row = {
-  unit_id: string
-  total_pago_cliente: number | string | null
-  valor_itens: number | string | null
-  forma_grupo: string | null
+
+/** Um grupo de pedidos já somado no banco (ifood_pedidos_pagamento_grupos). */
+type GrupoPagamento = {
+  forma_grupo: string
+  turno: string
+  produto_logistico: string
   bandeira_vr: string | null
-  status_final: string | null
-  turno: string | null
-  incentivo_ifood: number | string | null
-  incentivo_loja: number | string | null
-  incentivo_rede: number | string | null
-  taxa_servico: number | string | null
-  taxas_comissoes: number | string | null
-  taxa_entrega_cliente: number | string | null
-  valor_liquido: number | string | null
-  produto_logistico: string | null
+  situacao: "concluido" | "cancelado" | "outro"
+  pedidos: number | string
+  total_pago: number | string
+  valor_itens: number | string
+  incentivo_ifood: number | string
+  incentivo_loja: number | string
+  incentivo_rede: number | string
+  taxa_servico: number | string
+  taxas_comissoes: number | string
+  taxa_entrega_cliente: number | string
+  valor_liquido: number | string
 }
 
-const SELECT_COLS =
-  "unit_id, total_pago_cliente, valor_itens, forma_grupo, bandeira_vr, status_final, turno, incentivo_ifood, incentivo_loja, incentivo_rede, taxa_servico, taxas_comissoes, taxa_entrega_cliente, valor_liquido, produto_logistico"
-
-function aggregate(rows: Row[]): PagamentoResumo {
-  if (rows.length === 0) return emptyResumo()
+/**
+ * O painel de pagamentos a partir dos GRUPOS que o banco já somou (migration
+ * 0269) — em vez de baixar todo pedido do mês com 15 colunas (2,2 s no CnP).
+ * Mesmo resultado do `aggregate()` acima (conferido em 25/09/26); os grupos
+ * vêm pelas mesmas chaves que ele usa pra contar.
+ */
+async function pagamentoResumoViaBanco(
+  unitIds: string[] | null,
+  year: number,
+  month: number,
+  dateRange?: { start: string; end: string },
+): Promise<PagamentoResumo> {
+  const admin = createAdminClient()
+  const { data, error } = await rpcTodasAsLinhas<GrupoPagamento>((a, b) =>
+    admin
+      .rpc("ifood_pedidos_pagamento_grupos", {
+        p_unit_ids: unitIds,
+        p_year: year,
+        p_month: month,
+        p_de: dateRange?.start ?? null,
+        p_ate: dateRange?.end ?? null,
+      })
+      .order("forma_grupo")
+      .order("turno")
+      .order("produto_logistico")
+      .order("bandeira_vr")
+      .order("situacao")
+      .range(a, b),
+  )
+  if (error) {
+    console.error("ifood_pedidos_pagamento_grupos:", error.message)
+    return emptyResumo()
+  }
+  const grupos = data ?? []
+  if (grupos.length === 0) return emptyResumo()
   const num = (v: number | string | null) => Number(v) || 0
 
   const byBandeira = new Map<string, { pedidos: number; valor: number }>()
   const byGrupo = new Map<string, { pedidos: number; valor: number }>()
   const byTurno = new Map<string, { pedidos: number; valor: number }>()
   const byEntrega = new Map<string, { pedidos: number; valor: number }>()
+  const soma = (
+    m: Map<string, { pedidos: number; valor: number }>,
+    key: string,
+    pedidos: number,
+    v: number,
+  ) => {
+    const e = m.get(key) ?? { pedidos: 0, valor: 0 }
+    e.pedidos += pedidos
+    e.valor += v
+    m.set(key, e)
+  }
+  let totalPedidos = 0
   let totalValor = 0
   let valorItens = 0
   let vrPedidos = 0
@@ -157,50 +202,36 @@ function aggregate(rows: Row[]): PagamentoResumo {
   let taxasComissoes = 0
   let taxaEntregaCliente = 0
   let valorLiquido = 0
-
-  const bump = (
-    m: Map<string, { pedidos: number; valor: number }>,
-    key: string,
-    v: number,
-  ) => {
-    const e = m.get(key) ?? { pedidos: 0, valor: 0 }
-    e.pedidos += 1
-    e.valor += v
-    m.set(key, e)
-  }
-
-  for (const r of rows) {
-    const v = num(r.total_pago_cliente)
+  for (const g of grupos) {
+    const n = num(g.pedidos)
+    const v = num(g.total_pago)
+    totalPedidos += n
     totalValor += v
-    valorItens += num(r.valor_itens)
-    incentivoIfood += num(r.incentivo_ifood)
-    incentivoLoja += num(r.incentivo_loja)
-    incentivoRede += num(r.incentivo_rede)
-    taxaServico += Math.abs(num(r.taxa_servico))
-    taxasComissoes += Math.abs(num(r.taxas_comissoes))
-    taxaEntregaCliente += num(r.taxa_entrega_cliente)
-    valorLiquido += num(r.valor_liquido)
-
-    const status = (r.status_final || "").toUpperCase()
-    if (status.includes("CONCLU")) concluidos += 1
-    else if (status.includes("CANCEL")) cancelados += 1
-
-    bump(byGrupo, r.forma_grupo || "Outros", v)
-    bump(byTurno, r.turno || "—", v)
-    bump(byEntrega, r.produto_logistico || "—", v)
-    if (r.bandeira_vr) {
-      vrPedidos += 1
+    valorItens += num(g.valor_itens)
+    incentivoIfood += num(g.incentivo_ifood)
+    incentivoLoja += num(g.incentivo_loja)
+    incentivoRede += num(g.incentivo_rede)
+    taxaServico += num(g.taxa_servico)
+    taxasComissoes += num(g.taxas_comissoes)
+    taxaEntregaCliente += num(g.taxa_entrega_cliente)
+    valorLiquido += num(g.valor_liquido)
+    if (g.situacao === "concluido") concluidos += n
+    else if (g.situacao === "cancelado") cancelados += n
+    soma(byGrupo, g.forma_grupo, n, v)
+    soma(byTurno, g.turno, n, v)
+    soma(byEntrega, g.produto_logistico, n, v)
+    if (g.bandeira_vr) {
+      vrPedidos += n
       vrValor += v
-      bump(byBandeira, r.bandeira_vr, v)
+      soma(byBandeira, g.bandeira_vr, n, v)
     }
   }
 
-  const round = (n: number) => Math.round(n * 100) / 100
+  const round = (x: number) => Math.round(x * 100) / 100
   const toList = (m: Map<string, { pedidos: number; valor: number }>): PorChave[] =>
     Array.from(m.entries())
       .map(([chave, e]) => ({ chave, pedidos: e.pedidos, valor: round(e.valor) }))
       .sort((a, b) => b.pedidos - a.pedidos)
-
   const porBandeira: VrPorBandeira[] = VR_BANDEIRAS.map((bandeira) => {
     const b = byBandeira.get(bandeira) ?? { pedidos: 0, valor: 0 }
     return { bandeira, pedidos: b.pedidos, valor: round(b.valor) }
@@ -211,17 +242,16 @@ function aggregate(rows: Row[]): PagamentoResumo {
     }
   }
   porBandeira.sort((a, b) => b.valor - a.valor)
-
   const mix: MixForma[] = FORMA_GRUPOS.map((grupo) => {
     const g = byGrupo.get(grupo) ?? { pedidos: 0, valor: 0 }
     return { grupo, pedidos: g.pedidos, valor: round(g.valor) }
   }).filter((g) => g.pedidos > 0)
 
   return {
-    totalPedidos: rows.length,
+    totalPedidos,
     totalValor: round(totalValor),
     valorItens: round(valorItens),
-    ticketMedio: rows.length > 0 ? round(totalValor / rows.length) : 0,
+    ticketMedio: totalPedidos > 0 ? round(totalValor / totalPedidos) : 0,
     concluidos,
     cancelados,
     vrPedidos,
@@ -253,18 +283,8 @@ export async function getPagamentoResumoForMonth(
    */
   dateRange?: { start: string; end: string },
 ): Promise<PagamentoResumo> {
-  const admin = createAdminClient()
-  const rows = await pageAll<Row>((a, b) => {
-    let q = admin
-      .from("ifood_pedidos")
-      .select(SELECT_COLS)
-      .eq("unit_id", unitId)
-    q = dateRange
-      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
-      : q.eq("ref_year", year).eq("ref_month", month)
-    return q.order("id").range(a, b)
-  })
-  return aggregate(rows)
+  // Somado no banco (0269) — ver pagamentoResumoViaBanco.
+  return pagamentoResumoViaBanco([unitId], year, month, dateRange)
 }
 
 /** Resumo de pagamento/VR da rede no mês (com filtro opcional de unidades). */
@@ -275,19 +295,10 @@ export async function getNetworkPagamentoResumo(
   /** Recorte de dias do filtro. Sem ele a tela somava o mês inteiro. */
   dateRange?: { start: string; end: string },
 ): Promise<PagamentoResumo> {
-  const admin = createAdminClient()
-  const rows = await pageAll<Row>((a, b) => {
-    let q = admin.from("ifood_pedidos").select(SELECT_COLS)
-    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
-    // sempre o mês inteiro, e uma semana traria os números dos 30 dias.
-    q = dateRange
-      ? q.gte("data", dateRange.start).lte("data", dateRange.end)
-      : q.eq("ref_year", year).eq("ref_month", month)
-    q = q.order("id").range(a, b)
-    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
-    return q
-  })
-  return aggregate(rows)
+  /* Somado no banco (0269): baixar todo pedido do mês custava 2,5 s no CnP e
+     9–12 s na DG (20 mil pedidos). Conferido igual em 25/09/26 — rede, loja
+     e recorte de dias (a DATA manda quando há range, como antes). */
+  return pagamentoResumoViaBanco(filterUnitIds ?? null, year, month, dateRange)
 }
 
 export type VrPorUnidade = {
@@ -406,6 +417,119 @@ export async function getIfoodPedidosResumoByUnits(
   }))
 }
 
+/**
+ * VR por loja a partir do que o banco já somou (migration 0270) — mesma saída
+ * de `getVrByUnits`, sem baixar todo pedido do mês.
+ */
+async function vrPorLojaViaBanco(
+  year: number,
+  month: number,
+  filterUnitIds?: string[],
+  dateRange?: { start: string; end: string },
+): Promise<VrPorUnidade[]> {
+  const admin = createAdminClient()
+  const { data, error } = await rpcTodasAsLinhas<{
+    unit_id: string
+    bandeira_vr: string | null
+    pedidos: number | string
+    total_pago: number | string
+    valor_itens: number | string
+    valor_liquido: number | string
+  }>((a, b) =>
+    admin
+      .rpc("ifood_pedidos_vr_por_loja", {
+        p_unit_ids: filterUnitIds ?? null,
+        p_year: year,
+        p_month: month,
+        p_de: dateRange?.start ?? null,
+        p_ate: dateRange?.end ?? null,
+      })
+      .order("unit_id")
+      .order("bandeira_vr")
+      .range(a, b),
+  )
+  if (error) {
+    console.error("ifood_pedidos_vr_por_loja:", error.message)
+    return []
+  }
+  const linhas = data ?? []
+  if (linhas.length === 0) return []
+  const num = (v: number | string | null) => Number(v) || 0
+  const round = (x: number) => Math.round(x * 100) / 100
+
+  type Acc = {
+    totalPedidos: number
+    totalValor: number
+    valorItens: number
+    valorLiquido: number
+    vrPedidos: number
+    vrValor: number
+    bandeiras: Map<string, { pedidos: number; valor: number }>
+  }
+  const porLoja = new Map<string, Acc>()
+  for (const l of linhas) {
+    const a = porLoja.get(l.unit_id) ?? {
+      totalPedidos: 0,
+      totalValor: 0,
+      valorItens: 0,
+      valorLiquido: 0,
+      vrPedidos: 0,
+      vrValor: 0,
+      bandeiras: new Map(),
+    }
+    const n = num(l.pedidos)
+    const v = num(l.total_pago)
+    a.totalPedidos += n
+    a.totalValor += v
+    a.valorItens += num(l.valor_itens)
+    a.valorLiquido += num(l.valor_liquido)
+    if (l.bandeira_vr) {
+      a.vrPedidos += n
+      a.vrValor += v
+      const b = a.bandeiras.get(l.bandeira_vr) ?? { pedidos: 0, valor: 0 }
+      b.pedidos += n
+      b.valor += v
+      a.bandeiras.set(l.bandeira_vr, b)
+    }
+    porLoja.set(l.unit_id, a)
+  }
+
+  const unitIds = Array.from(porLoja.keys())
+  const { data: units } = await admin.from("units").select("id, code, name").in("id", unitIds)
+  const nameMap = new Map((units ?? []).map((u) => [u.id, { code: u.code, name: u.name }]))
+
+  return unitIds
+    .map((id) => {
+      const a = porLoja.get(id)!
+      // Mesma ordem do `aggregate()`: bandeiras conhecidas primeiro, depois as
+      // outras, e tudo por valor.
+      const porBandeira: VrPorBandeira[] = VR_BANDEIRAS.map((bandeira) => {
+        const b = a.bandeiras.get(bandeira) ?? { pedidos: 0, valor: 0 }
+        return { bandeira, pedidos: b.pedidos, valor: round(b.valor) }
+      }).filter((b) => b.pedidos > 0)
+      for (const [bandeira, b] of a.bandeiras) {
+        if (!VR_BANDEIRAS.includes(bandeira as VrBandeira)) {
+          porBandeira.push({ bandeira, pedidos: b.pedidos, valor: round(b.valor) })
+        }
+      }
+      porBandeira.sort((x, y) => y.valor - x.valor)
+      return {
+        unitId: id,
+        unitCode: nameMap.get(id)?.code ?? "?",
+        unitName: nameMap.get(id)?.name ?? "(unidade)",
+        vrPedidos: a.vrPedidos,
+        vrValor: round(a.vrValor),
+        totalPedidos: a.totalPedidos,
+        totalValor: round(a.totalValor),
+        valorItens: round(a.valorItens),
+        valorLiquido: round(a.valorLiquido),
+        faturamento: 0, // preenchido na página com a conciliação
+        porBandeira,
+      }
+    })
+    .sort((x, y) => y.totalValor - x.totalValor)
+}
+
 export async function getVrByUnits(
   year: number,
   month: number,
@@ -413,52 +537,7 @@ export async function getVrByUnits(
   /** Período customizado do dashboard. Quando vem, manda no lugar do mês. */
   dateRange?: { start: string; end: string },
 ): Promise<VrPorUnidade[]> {
-  const admin = createAdminClient()
-  const rows = await pageAll<Row & { bandeira_vr: string | null }>((a, b) => {
-    let q = admin.from("ifood_pedidos").select(SELECT_COLS)
-    // Filtra por DATA quando há range: com ref_year/ref_month o recorte seria
-    // sempre o mês inteiro, e um período de 10 dias traria o VR dos 30.
-    if (dateRange) {
-      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
-    } else {
-      q = q.eq("ref_year", year).eq("ref_month", month)
-    }
-    q = q.order("id").range(a, b)
-    if (filterUnitIds) q = q.in("unit_id", filterUnitIds)
-    return q
-  })
-  if (rows.length === 0) return []
-
-  const byUnit = new Map<string, Row[]>()
-  for (const r of rows) {
-    const arr = byUnit.get(r.unit_id) ?? []
-    arr.push(r)
-    byUnit.set(r.unit_id, arr)
-  }
-  const unitIds = Array.from(byUnit.keys())
-  const { data: units } = await admin
-    .from("units")
-    .select("id, code, name")
-    .in("id", unitIds)
-  const nameMap = new Map(
-    (units ?? []).map((u) => [u.id, { code: u.code, name: u.name }]),
-  )
-
-  const out: VrPorUnidade[] = unitIds.map((id) => {
-    const ag = aggregate(byUnit.get(id)!)
-    return {
-      unitId: id,
-      unitCode: nameMap.get(id)?.code ?? "?",
-      unitName: nameMap.get(id)?.name ?? "(unidade)",
-      vrPedidos: ag.vrPedidos,
-      vrValor: ag.vrValor,
-      totalPedidos: ag.totalPedidos,
-      totalValor: ag.totalValor,
-      valorItens: ag.valorItens,
-      valorLiquido: ag.valorLiquido,
-      faturamento: 0, // preenchido na página com a conciliação
-      porBandeira: ag.porBandeira,
-    }
-  })
-  return out.sort((a, b) => b.totalValor - a.totalValor)
+  /* Somado no banco (0270): baixar todo pedido do mês custava 2,3 s no CnP
+     e 7–11 s na DG. Conferido igual em 25/09/26 (rede, mês e recorte). */
+  return vrPorLojaViaBanco(year, month, filterUnitIds, dateRange)
 }

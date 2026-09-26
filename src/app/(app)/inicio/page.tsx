@@ -268,6 +268,49 @@ export default async function Home({
   // venda eram comparados contra 5 do mês passado e divididos por 5 na média
   // por dia. Medido: queda real de 12%, exibida como 30%. Dia vazio contado
   // como dia de venda zero é a pior forma de errar, porque parece notícia.
+  /* Tudo o que NÃO depende do corte sai daqui junto (Marcus, 25/09/26:
+     "focar na fluidez"). Avisos, placar, conexões novas e dia da semana
+     esperavam um atrás do outro — e atrás do `ultimoDiaComDado` — antes da
+     fase 2a sequer começar. Cada promessa ganha um `.catch` vazio só pra não
+     virar rejeição sem dono enquanto não é aguardada; o `await` lá embaixo
+     continua estourando normalmente. */
+  const avisosP = Promise.all([
+    getTenantPlatforms(activeUnitIds),
+    isApiSyncEnabled(),
+    // Botão de sync por plataforma só com ≥1 loja vinculada de verdade.
+    getApiSyncVinculos(),
+    // Aviso (superadmin) de clientes esperando a conexão do iFood.
+    getSolicitacoesIfoodPendentes(),
+    // Aviso do CLIENTE: "falta você aprovar" / "sua loja foi conectada".
+    getMinhasSolicitacoesIfood(),
+    // Custo de IA da plataforma no mês (a função já é superadmin-only).
+    getConsumoIaPorCliente(),
+    // Lojas que declararam plataforma e nunca importaram nada — aviso
+    // discreto na faixa de cobertura, com a saída "não vendo nessa plataforma".
+    getLojasSemDado(activeUnitIds),
+    // Cadastro pela metade: desde 09/08/26 salvar edição exige tudo preenchido,
+    // e descobrir isso no meio de outra tarefa é o pior momento.
+    getCadastroIncompleto(),
+  ])
+  avisosP.catch(() => {})
+  // Placar de resposta às avaliações — mesmo escopo do resto da tela.
+  const placarP = getPlacarResposta(activeUnitIds)
+  placarP.catch(() => {})
+  const conexoesP = Promise.all([
+    getConexoesNovas(activeUnitIds),
+    getPrimeirasAvaliacoes(activeUnitIds),
+    getAvisosFechados(),
+    getMinhasSolicitacoes99(),
+  ])
+  conexoesP.catch(() => {})
+  const diaSemanaP = getVendasPorDiaSemana(
+    activeUnitIds,
+    periodRange.start,
+    periodRange.end,
+    plataformasFilter.length ? plataformasFilter : null,
+  )
+  diaSemanaP.catch(() => {})
+
   const ultimoDia = mesCorrente
     ? await ultimoDiaComDado(activeUnitIds, year, month)
     : null
@@ -321,25 +364,7 @@ export default async function Home({
     consumoIaPlataforma,
     lojasSemDado,
     cadastroIncompleto,
-  ] = await Promise.all([
-    getTenantPlatforms(activeUnitIds),
-    isApiSyncEnabled(),
-    // Botão de sync por plataforma só com ≥1 loja vinculada de verdade.
-    getApiSyncVinculos(),
-    // Aviso (superadmin) de clientes esperando a conexão do iFood.
-    getSolicitacoesIfoodPendentes(),
-    // Aviso do CLIENTE: "falta você aprovar" / "sua loja foi conectada".
-    getMinhasSolicitacoesIfood(),
-    // Custo de IA da plataforma no mês (a função já é superadmin-only).
-    getConsumoIaPorCliente(),
-      // Lojas que declararam plataforma e nunca importaram nada — aviso
-    // discreto na faixa de cobertura, com a saída "não vendo nessa plataforma".
-    getLojasSemDado(activeUnitIds),
-    // Lojas do iFood que nunca pediram conexão — faixa "conectar".
-    // Cadastro pela metade: desde 09/08/26 salvar edição exige tudo preenchido,
-    // e descobrir isso no meio de outra tarefa é o pior momento.
-    getCadastroIncompleto(),
-])
+  ] = await avisosP
   cron.marca("avisos")
   // Texto curto que descreve o escopo dos cards. Franqueado vê "sua/suas
   // loja(s)" (não "rede" — ele só enxerga as dele); admin vê "rede" ou o
@@ -449,23 +474,12 @@ export default async function Home({
   // Respeita o filtro de plataforma que o dashboard já tem no topo — sem
   // isso o card ficaria somando as 4 enquanto o resto da tela mostra uma.
   // Placar de resposta às avaliações — mesmo escopo do resto da tela.
-  const placarResposta = await getPlacarResposta(activeUnitIds)
-
-  const [conexoesNovas, primeirasAvaliacoes, fechadosSet, minhasSolicitacoes99] =
-    await Promise.all([
-    getConexoesNovas(activeUnitIds),
-    getPrimeirasAvaliacoes(activeUnitIds),
-    getAvisosFechados(),
-    getMinhasSolicitacoes99(),
-  ])
+  const [
+    placarResposta,
+    [conexoesNovas, primeirasAvaliacoes, fechadosSet, minhasSolicitacoes99],
+    diaSemanaRede,
+  ] = await Promise.all([placarP, conexoesP, diaSemanaP])
   const avisosFechados = [...fechadosSet]
-
-  const diaSemanaRede = await getVendasPorDiaSemana(
-    activeUnitIds,
-    periodRange.start,
-    periodRange.end,
-    plataformasFilter.length ? plataformasFilter : null,
-  )
 
   /**
    * Plataforma fora do filtro não é buscada.

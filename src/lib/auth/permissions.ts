@@ -27,12 +27,27 @@ import { COOKIE_VER_COMO } from "@/lib/auth/ver-como"
  */
 export const getAuthUser = cache(
   async (): Promise<{ id: string; email: string | null } | null> => {
-    const supabase = await createClient()
-    const { data } = await supabase.auth.getUser()
-    if (!data?.user) return null
-    return { id: data.user.id, email: data.user.email ?? null }
+    const user = await getUsuarioVerificado()
+    if (!user) return null
+    return { id: user.id, email: user.email ?? null }
   },
 )
+
+/**
+ * O usuário COMPLETO, verificado no servidor do Supabase Auth — UMA ida por
+ * request, compartilhada (Marcus, 25/09/26: "focar na fluidez").
+ *
+ * Cada tela perguntava "quem é?" ao Auth até 4 vezes: layout, contexto do
+ * usuário, permissões e o 2FA (o `listFactors` do supabase-js chama
+ * `getUser` por dentro). Todas querem a MESMA resposta — o `user` com
+ * `factors` e `email_confirmed_at` —, então todas leem daqui.
+ */
+export const getUsuarioVerificado = cache(async () => {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.getUser()
+  if (error || !data?.user) return null
+  return data.user
+})
 
 /**
  * Catálogo de módulos (linhas da matriz). Todo módulo expõe as 3 ações

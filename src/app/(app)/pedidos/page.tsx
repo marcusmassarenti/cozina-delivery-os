@@ -85,7 +85,8 @@ export default async function PedidosPage({
   // Horário programado no iFood — mesmo escopo de lojas do resto da tela.
   // Falha aqui não pode derrubar a página de Pedidos: sem horário o card
   // simplesmente não aparece.
-  const horariosIfood = await getHorariosDaRede(ids).catch(() => null)
+  // Sem await aqui: corre junto com os dados da plataforma (lido lá embaixo).
+  const horariosIfoodP = getHorariosDaRede(ids).catch(() => null)
   // Marketplaces + Cardápio Web. Antes só marketplace, porque a tela inteira
   // era sobre VR, subsídio e comissão — que não existem em canal próprio. A
   // aba do Cardápio Web mostra OUTRA coisa (tipo de pedido, horário, forma de
@@ -216,6 +217,7 @@ export default async function PedidosPage({
     plataforma === "cardapioweb"
       ? await getOperacaoCardapioWeb(ids, year, month, queryRange)
       : null
+  const horariosIfood = await horariosIfoodP
 
   // Cobertura (lojas com dado) por plataforma — pro texto de consolidado.
   const dataCodes =

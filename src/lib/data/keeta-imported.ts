@@ -129,73 +129,37 @@ export async function getKeetaResumoByUnits(
     registrarFalhaDeLeitura("Keeta")
   }
 
-  // Loja diária (bruto, pedidos, cancelados)
-  const loja = await pageAll<{
-    unit_id: string
-    vendas_itens: number | string
-    total_pedidos: number | null
-    pedidos_cancelados: number | null
-    tempo_aberto_h: number | string | null
-  }>((a, b) => {
-    let q = admin
-      .from("keeta_daily_loja")
-      .select(
-        "unit_id, vendas_itens, total_pedidos, pedidos_cancelados, tempo_aberto_h",
-      )
-      .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-    if (dateRange) {
-      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
-    }
-    return q.order("id").range(a, b)
-  }, undefined, undefined, registrar)
-  for (const r of loja) {
-    const cur = out.get(r.unit_id) ?? emptyKeeta()
-    cur.bruto += Number(r.vendas_itens) || 0
-    cur.pedidos += r.total_pedidos || 0
-    cur.cancelamentosQtd += r.pedidos_cancelados || 0
-    // Horas abertas: soma e conta os dias, pra virar média por dia aberto.
-    // Média sobre TODOS os dias do mês daria a impressão de que a loja abre
-    // menos do que abre — dia sem dado não é dia fechado.
-    const h = Number(r.tempo_aberto_h)
-    if (Number.isFinite(h) && h > 0) {
-      cur.horasAbertasSoma += h
-      cur.diasComAbertura += 1
-    }
-    out.set(r.unit_id, cur)
-  }
-
-  // Pedidos (líquido + promoções da loja)
-  const pedidos = await pageAll<{
-    unit_id: string
-    ganhos_liquidos: number | string | null
-    vendas_itens: number | string | null
-    despesa: number | string | null
-  }>((a, b) => {
-    let q = admin
-      .from("keeta_pedidos")
-      .select("unit_id, ganhos_liquidos, vendas_itens, despesa")
-      .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-    if (dateRange) {
-      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
-    }
-    return q.order("id").range(a, b)
-  }, undefined, undefined, registrar)
+  /* Loja diária + pedidos somados NO BANCO (migration 0268) — antes eram
+     milhares de linhas cruas (5.266 pedidos no CnP em setembro, 1,3–1,8 s).
+     Conferido loja a loja contra a versão em JS em 25/09/26 (0 diferenças).
+     Os fallbacks abaixo continuam iguais. */
+  const { data: linhas, error } = await admin.rpc("keeta_resumo_por_loja", {
+    p_unit_ids: unitIds,
+    p_year: year,
+    p_month: month,
+    p_de: dateRange?.start ?? null,
+    p_ate: dateRange?.end ?? null,
+  })
+  if (error) registrar(error.message)
   const brutoFromPedidos = new Map<string, number>()
   const countFromPedidos = new Map<string, number>()
-  for (const r of pedidos) {
-    const cur = out.get(r.unit_id) ?? emptyKeeta()
-    cur.liquido += Number(r.ganhos_liquidos) || 0
-    cur.promocoesLoja += Math.abs(Number(r.despesa) || 0)
-    out.set(r.unit_id, cur)
-    brutoFromPedidos.set(
-      r.unit_id,
-      (brutoFromPedidos.get(r.unit_id) ?? 0) + (Number(r.vendas_itens) || 0),
-    )
-    countFromPedidos.set(r.unit_id, (countFromPedidos.get(r.unit_id) ?? 0) + 1)
+  for (const r of (linhas ?? []) as Record<string, string | number>[]) {
+    const unitId = String(r.unit_id)
+    const cur = out.get(unitId) ?? emptyKeeta()
+    cur.bruto += Number(r.loja_bruto) || 0
+    cur.pedidos += Number(r.loja_pedidos) || 0
+    cur.cancelamentosQtd += Number(r.loja_cancelados) || 0
+    // Horas abertas: soma e conta só os dias com abertura > 0, pra virar
+    // média por dia aberto (dia sem dado não é dia fechado).
+    cur.horasAbertasSoma += Number(r.horas_soma) || 0
+    cur.diasComAbertura += Number(r.dias_abertura) || 0
+    cur.liquido += Number(r.ped_liquido) || 0
+    cur.promocoesLoja += Number(r.ped_promo) || 0
+    out.set(unitId, cur)
+    if (Number(r.ped_qtd) > 0) {
+      brutoFromPedidos.set(unitId, Number(r.ped_bruto) || 0)
+      countFromPedidos.set(unitId, Number(r.ped_qtd) || 0)
+    }
   }
 
   // Finaliza: fallbacks + derivados
@@ -378,42 +342,28 @@ export async function getNetworkKeetaTopItemsForMonth(
   limit = 5,
   filterUnitIds?: string[],
 ): Promise<KeetaTopItem[]> {
-  const admin = createAdminClient()
-  const rows = await pageAll<{
-    nome_item: string
-    qtd_vendida: number | string
-    preco_medio: number | string
-  }>((a, b) => {
-    let q = admin
-      .from("keeta_daily_item")
-      .select("nome_item, qtd_vendida, preco_medio")
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-      .order("id")
-      .range(a, b)
-    if (filterUnitIds)
-      q = q.in("unit_id", filterUnitIds)
-    return q
+  /* Somado NO BANCO (migration 0268): baixar keeta_daily_item cru custava
+     2,6 s no CnP (6.983 linhas) só pra agrupar por nome. Mesma regra: Σ qtd e
+     Σ(qtd × preço médio), nome vazio fora, ordenado por receita. Conferido
+     item a item contra a versão em JS em 25/09/26 (0 diferenças). */
+  const { data, error } = await createAdminClient().rpc("keeta_top_itens_mes", {
+    p_year: year,
+    p_month: month,
+    p_unit_ids: filterUnitIds ?? null,
+    p_limit: limit,
   })
-
-  const acc = new Map<string, KeetaTopItem>()
-  for (const r of rows) {
-    if (!r.nome_item) continue
-    const cur = acc.get(r.nome_item) ?? {
-      nomeItem: r.nome_item,
-      qtdVendida: 0,
-      valorTotal: 0,
-    }
-    const qtd = Number(r.qtd_vendida) || 0
-    const preco = Number(r.preco_medio) || 0
-    cur.qtdVendida += qtd
-    cur.valorTotal += qtd * preco
-    acc.set(r.nome_item, cur)
+  if (error) {
+    console.error("keeta_top_itens_mes:", error.message)
+    registrarFalhaDeLeitura("Keeta")
+    return []
   }
-  return Array.from(acc.values())
-    .map((it) => ({ ...it, valorTotal: Math.round(it.valorTotal * 100) / 100 }))
-    .sort((a, b) => b.valorTotal - a.valorTotal)
-    .slice(0, limit)
+  return ((data ?? []) as { nome_item: string; qtd_vendida: number | string; valor_total: number | string }[]).map(
+    (r) => ({
+      nomeItem: r.nome_item,
+      qtdVendida: Number(r.qtd_vendida) || 0,
+      valorTotal: Math.round((Number(r.valor_total) || 0) * 100) / 100,
+    }),
+  )
 }
 
 export type KeetaCancelamentoMotivo = {

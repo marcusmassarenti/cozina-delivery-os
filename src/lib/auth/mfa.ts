@@ -19,6 +19,7 @@ import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
 import { aparelhoConfiavel } from "./trusted-device"
+import { getUsuarioVerificado } from "./permissions"
 
 export type MfaStatus = {
   /** Já existe um app autenticador confirmado nesta conta. */
@@ -35,15 +36,19 @@ export type MfaStatus = {
 export async function getMfaStatus(): Promise<MfaStatus> {
   const supabase = await createClient()
 
+  // O nível (aal1/aal2) vem do JWT da sessão — leitura local, sem rede.
   const { data: aal } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  const { data: fatores } = await supabase.auth.mfa.listFactors()
-
-  // `listFactors().totp` já vem só com os verificados; `all` traz os demais.
-  const verificado = fatores?.totp?.[0] ?? null
-  const pendentes = (fatores?.all ?? [])
-    .filter((f) => f.status !== "verified")
-    .map((f) => f.id)
+  /* Os fatores vêm do usuário VERIFICADO no servidor, o mesmo que o
+     `listFactors()` do supabase-js lê por dentro (ele chama `getUser` e
+     separa `user.factors`). Lendo do cache do request, o 2FA deixa de custar
+     uma ida extra ao Auth em toda tela — a regra é idêntica: totp verificado
+     = ativo; o resto = pendente. */
+  const user = await getUsuarioVerificado()
+  const todos = user?.factors ?? []
+  const verificado =
+    todos.find((f) => f.factor_type === "totp" && f.status === "verified") ?? null
+  const pendentes = todos.filter((f) => f.status !== "verified").map((f) => f.id)
 
   const deveCodigo =
     aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2"

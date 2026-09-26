@@ -16,9 +16,8 @@ import "server-only"
 
 import { cache } from "react"
 
-import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getCurrentHoldingId } from "@/lib/auth/permissions"
+import { getCurrentHoldingId, getUsuarioVerificado } from "@/lib/auth/permissions"
 
 export type UserContext = {
   userId: string | null
@@ -52,9 +51,9 @@ const FALLBACK: UserContext = {
 export const getCurrentUserContext = cache(loadCurrentUserContext)
 
 async function loadCurrentUserContext(): Promise<UserContext> {
-  const supabase = await createClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return FALLBACK
+  const user = await getUsuarioVerificado()
+  if (!user) return FALLBACK
+  const authData = { user }
 
   const userId = authData.user.id
   const admin = createAdminClient()

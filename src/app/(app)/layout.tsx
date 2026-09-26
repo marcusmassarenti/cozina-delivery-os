@@ -21,6 +21,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { getCurrentUserContext } from "@/lib/auth/context"
 import { getMfaStatus } from "@/lib/auth/mfa"
 import {
+  getUsuarioVerificado,
   MODULES,
   userCan,
   isSuperadmin,
@@ -43,15 +44,50 @@ export default async function AppLayout({
   children: React.ReactNode
 }>) {
   const supabase = await createClient()
-  const { data, error } = await supabase.auth.getUser()
-  if (error || !data.user) {
+  // Mesma resposta do Auth que permissões, contexto e 2FA usam (uma ida só
+  // por request — ver `getUsuarioVerificado`).
+  const usuario = await getUsuarioVerificado()
+  if (!usuario) {
     redirect("/login")
   }
+  const data = { user: usuario }
+
+  /* Tudo o que o layout precisa sai JUNTO (Marcus, 25/09/26: "focar na
+     fluidez"). Eram ~10 esperas em fila — cada uma uma ida ao banco — antes
+     de qualquer tela aparecer. São só leituras: as travas (2FA, suspensão)
+     continuam decidindo ANTES de qualquer coisa ser mostrada. */
+  const [
+    mfa,
+    userContext,
+    moduleChecks,
+    superadmin,
+    holdingAtual,
+    verComoId,
+    semanaVista,
+    billing,
+    carteira,
+  ] = await Promise.all([
+    getMfaStatus(),
+    getCurrentUserContext(),
+    // Módulos que o perfil do usuário pode "Ver" — alimenta o filtro do menu.
+    Promise.all(
+      MODULES.map(async (m) => ({
+        key: m.key,
+        ok: await userCan(m.key, "view"),
+      })),
+    ),
+    isSuperadmin(),
+    // Só pro gate do balão de suporte (ver podeVerSuporte).
+    getCurrentHoldingId(),
+    getVerComoHoldingId(),
+    semanaVistaPeloUsuario(data.user.id),
+    getCurrentHoldingBilling(),
+    podeVerCarteira(),
+  ])
 
   // 2FA: quem ativou passou pela senha mas ainda deve o código. Sem esta trava
   // aqui — no layout que envolve TODAS as telas autenticadas — o segundo fator
   // seria decorativo: bastaria digitar a URL de qualquer página pra entrar.
-  const mfa = await getMfaStatus()
   if (mfa.precisaVerificar) {
     redirect("/login/verificacao")
   }
@@ -71,7 +107,6 @@ export default async function AppLayout({
     if (error) console.error("touch_last_seen:", error.message)
   })
 
-  const userContext = await getCurrentUserContext()
 
   // Boas-vindas no primeiro acesso. `after` = roda depois da resposta ir
   // embora, então não custa nada no tempo de carregar a tela. A própria função
@@ -91,18 +126,7 @@ export default async function AppLayout({
     })
   })
 
-  // Módulos que o perfil do usuário pode "Ver" — alimenta o filtro do menu.
-  const moduleChecks = await Promise.all(
-    MODULES.map(async (m) => ({
-      key: m.key,
-      ok: await userCan(m.key, "view"),
-    })),
-  )
   const allowedModules = moduleChecks.filter((m) => m.ok).map((m) => m.key)
-  const superadmin = await isSuperadmin()
-  // Só pro gate do balão de suporte (ver podeVerSuporte).
-  const holdingAtual = await getCurrentHoldingId()
-  const verComoId = await getVerComoHoldingId()
 
   /* Aviso semanal de saúde das lojas — 1x por semana, a partir da segunda.
    *
@@ -116,13 +140,11 @@ export default async function AppLayout({
    * a ação de marcar como visto seria bloqueada, e o pop-up voltaria a cada
    * clique sem jeito de fechar. */
   const semanaAtual = semanaIso()
-  const jaViu =
-    verComoId !== null || (await semanaVistaPeloUsuario(data.user.id)) === semanaAtual
+  const jaViu = verComoId !== null || semanaVista === semanaAtual
   const avisoSaude = jaViu ? null : await getAvisoSemanalSaude()
 
   // Cobrança: cliente sem pagar e passou da data de suspensão → bloqueia.
   // Super-admin (dono) nunca é bloqueado.
-  const billing = await getCurrentHoldingBilling()
   if (!superadmin && billing?.status === "suspended") {
     redirect("/suspenso")
   }
@@ -165,7 +187,7 @@ export default async function AppLayout({
              menu tivesse portão próprio, um dia os dois divergiriam e o botão
              abriria um painel que não está montado. */
           podeVerSuporte={!superadmin && podeVerSuporte(holdingAtual)}
-          podeVerCarteira={await podeVerCarteira()}
+          podeVerCarteira={carteira}
         />
         <SidebarInset>
           <TopBar
