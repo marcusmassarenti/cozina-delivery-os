@@ -44,7 +44,14 @@ export type ResultadoUnitRow = {
   unitCode: string
   unitName: string
   pedidos: number
+  /** Base VÁLIDA (sem os pedidos cancelados) — é sobre ela que os % saem. */
   bruto: number
+  /**
+   * Cesta dos pedidos cancelados do iFood. O bruto EXIBIDO é `bruto +
+   * cancelados` — a régua do portal, a mesma do Dashboard (Marcus, 25/09/26:
+   * "com cancelados em tudo").
+   */
+  cancelados: number
   /** Parte do bruto que veio de venda fora das plataformas (lançada à mão). */
   receitaPropria: number
   /** Taxas retidas pelas plataformas = bruto − líquido das plataformas */
@@ -80,6 +87,8 @@ export type ResultadoUnitRow = {
 export type ResultadoTotals = {
   pedidos: number
   bruto: number
+  /** Cesta dos cancelados do iFood — ver ResultadoUnitRow.cancelados. */
+  cancelados: number
   /** Parte do bruto que veio de venda fora das plataformas (lançada à mão). */
   receitaPropria: number
   taxasPlataforma: number
@@ -122,7 +131,7 @@ export async function getNetworkResultadoForMonth(
   }
   const unitIds = active.map((u) => u.id)
 
-  const [finByUnit, nineByUnit, keetaByUnit, cwByUnit, manualByUnit, keetaPorLoja] =
+  const [finByUnit, nineByUnit, keetaByUnit, cwByUnit, manualByUnit, keetaPorLoja, cestaByUnit] =
     await Promise.all([
       getFinanceiroResumoByUnits(unitIds, year, month),
       getNinefoodResumoByUnits(unitIds, year, month),
@@ -130,6 +139,7 @@ export async function getNetworkResultadoForMonth(
       getCardapioWebResumoByUnits(unitIds, year, month),
       getRealMonthlyForUnits(unitIds, year, month),
       getKeetaPedidoPorLoja(unitIds, year, month),
+      getCancelamentoCestaByUnits(unitIds, year, month),
     ])
   // Promoção custeada pela loja na Keeta (vem do "Pedidos recentes").
   const keetaPromoLojaByUnit = new Map(
@@ -267,6 +277,7 @@ export async function getNetworkResultadoForMonth(
       unitName: u.name,
       pedidos,
       bruto,
+      cancelados: cestaByUnit.get(u.id)?.valor ?? 0,
       receitaPropria,
       taxasPlataforma,
       promocoesLoja,
@@ -294,6 +305,7 @@ export async function getNetworkResultadoForMonth(
     (acc, r) => {
       acc.pedidos += r.pedidos
       acc.bruto += r.bruto
+      acc.cancelados += r.cancelados
       acc.receitaPropria += r.receitaPropria
       acc.taxasPlataforma += r.taxasPlataforma
       acc.promocoesLoja += r.promocoesLoja
@@ -309,6 +321,7 @@ export async function getNetworkResultadoForMonth(
     {
       pedidos: 0,
       bruto: 0,
+      cancelados: 0,
       receitaPropria: 0,
       taxasPlataforma: 0,
       promocoesLoja: 0,

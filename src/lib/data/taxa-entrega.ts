@@ -1,24 +1,21 @@
 /**
- * Taxa/custo de entrega por unidade e plataforma, no mês.
- *
- * Cada plataforma reporta a entrega de um jeito:
- *  - iFood : lançamento "Taxa entrega iFood" no Financeiro (vem negativo =
- *            custo descontado do repasse). Somamos o valor absoluto.
- *  - Keeta : coluna taxa_entrega em keeta_pedidos (faixa de frete por pedido).
- *  - 99    : a taxa de entrega vem zerada no export atual, então usamos o
- *            custo logístico + o custo da loja com frete grátis (ninefood_pedidos).
- *            O custo logístico tem DUAS origens (planilha e webhook orderNew);
- *            a RPC faz coalesce entre elas — ver migration 0160. Sem o webhook,
- *            o mês corrente aparecia com custo ZERO do 99 até alguém subir o
- *            arquivo, e zero parecia "não gastou" em vez de "não importou".
- *
- * É um CUSTO de entrega da loja — serve pra análise de margem/operação.
+ * Custo de entrega = o que a LOJA pagou de entrega, por unidade e plataforma
+ * (Marcus, 25/09/26 — migration 0273, `entrega_paga_pela_loja_by_units`):
+ *  - iFood : frete grátis que a loja bancou ("Promoção custeada pela loja no
+ *            delivery"). A "Taxa entrega iFood" da entrega parceira é paga pelo
+ *            CLIENTE — o portal a marca como informativa — e saiu da conta.
+ *  - 99    : entrega cobrada da loja + frete grátis bancado. API primeiro (a
+ *            régua do 99 desde a 0259); planilha só onde a API não tem.
+ *  - Keeta : taxa de distância. O frete por pedido (`taxa_entrega`) é pago
+ *            pelo cliente e nem entra na conta do repasse — saiu da conta.
+ * Antes o card somava as duas entregas pagas pelo cliente: no CnP de set/26,
+ * R$ 130,8 mil "de custo", dos quais R$ 117 mil eram do cliente.
  */
 
 import "server-only"
 
 import {
-  rpcMensalComCache,
+  mesFechadoComCache,
   TAG_99FOOD,
   TAG_FINANCEIRO_IFOOD,
   TAG_KEETA,
@@ -37,36 +34,9 @@ function emptyFee(): DeliveryFee {
   return { ifood: 0, ninefood: 0, keeta: 0, total: 0 }
 }
 
-async function pageAll<T>(
-  build: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000,
-  maxRows = 300000,
-): Promise<T[]> {
-  const all: T[] = []
-  let from = 0
-  while (from < maxRows) {
-    const { data, error } = await build(from, from + pageSize - 1)
-    if (error) {
-      console.error("taxa-entrega pageAll error:", error.message)
-      break
-    }
-    if (!data || data.length === 0) break
-    all.push(...data)
-    if (data.length < pageSize) break
-    from += pageSize
-  }
-  return all
-}
-
 /**
- * Custo de entrega por unidade no mês, separado por plataforma.
- * Retorna só unidades com algum custo.
- *
- * Caminho rápido: 3 RPCs agregados no Postgres (em paralelo). Se as funções
- * ainda não existirem (migration 0020 não rodada), cai no fallback paginado.
+ * Custo de entrega pago pela loja, por unidade, separado por plataforma.
+ * Retorna só unidades com algum custo. Mês cheio ou recorte de dias.
  */
 export async function getDeliveryFeeByUnits(
   unitIds: string[],
@@ -74,222 +44,47 @@ export async function getDeliveryFeeByUnits(
   month: number,
   dateRange?: { start: string; end: string },
 ): Promise<Map<string, DeliveryFee>> {
-  const out = new Map<string, DeliveryFee>()
-  if (unitIds.length === 0) return out
-  // Range custom: pula RPCs (que não suportam) e vai direto pro paginated
-  // adaptado. RPCs são otimizadas pra mês inteiro só.
-  if (dateRange) {
-    return getDeliveryFeeByUnitsPaginated(unitIds, year, month, dateRange)
-  }
-  const admin = createAdminClient()
-  const ensureFee = (id: string) => {
-    let f = out.get(id)
-    if (!f) {
-      f = emptyFee()
-      out.set(id, f)
-    }
-    return f
-  }
-
-  // Mês fechado responde do cache; mês corrente vai ao banco. Cada plataforma
-  // com a SUA tag: reimportar a fatura da Keeta não pode invalidar o iFood
-  // junto sem necessidade (e, mais importante, não pode DEIXAR de invalidar a
-  // Keeta).
-  const [ifoodRes, nineRes, keetaRes] = await Promise.all([
-    rpcMensalComCache<Record<string, unknown>>(
-      "ifood_taxa_entrega_by_units", unitIds, year, month, TAG_FINANCEIRO_IFOOD,
-    ),
-    rpcMensalComCache<Record<string, unknown>>(
-      "ninefood_custo_entrega_by_units", unitIds, year, month, TAG_99FOOD,
-    ),
-    rpcMensalComCache<Record<string, unknown>>(
-      "keeta_taxa_entrega_by_units", unitIds, year, month, TAG_KEETA,
-    ),
-  ])
-
-  if (ifoodRes.error || nineRes.error || keetaRes.error) {
-    console.error(
-      "getDeliveryFeeByUnits rpc, usando fallback:",
-      ifoodRes.error ?? nineRes.error ?? keetaRes.error,
-    )
-    return getDeliveryFeeByUnitsPaginated(unitIds, year, month)
-  }
-
-  type FeeRow = { unit_id: string; taxa: number | string }
-  for (const r of (ifoodRes.data ?? []) as FeeRow[])
-    ensureFee(r.unit_id).ifood = Number(r.taxa) || 0
-  for (const r of (nineRes.data ?? []) as FeeRow[])
-    ensureFee(r.unit_id).ninefood = Number(r.taxa) || 0
-  for (const r of (keetaRes.data ?? []) as FeeRow[])
-    ensureFee(r.unit_id).keeta = Number(r.taxa) || 0
-
-  for (const f of out.values()) {
-    f.total = Math.round((f.ifood + f.ninefood + f.keeta) * 100) / 100
-  }
-  return out
-}
-
-/** Fallback antigo (e caminho do range custom): pagina as 3 tabelas e soma em JS. */
-async function getDeliveryFeeByUnitsPaginated(
-  unitIds: string[],
-  year: number,
-  month: number,
-  dateRange?: { start: string; end: string },
-): Promise<Map<string, DeliveryFee>> {
-  const out = new Map<string, DeliveryFee>()
-  if (unitIds.length === 0) return out
-  const admin = createAdminClient()
-  const ensure = (id: string) => {
-    let f = out.get(id)
-    if (!f) {
-      f = emptyFee()
-      out.set(id, f)
-    }
-    return f
-  }
-
-  // iFood: lançamento "Taxa entrega iFood" (negativo = custo)
-  const ifood = await pageAll<{ unit_id: string; valor: number | string }>(
-    (a, b) => {
-      let q = admin
-        .from("ifood_financeiro_lancamentos")
-        .select("unit_id, valor")
-        .in("unit_id", unitIds)
-        .eq("ref_year", year)
-        .eq("ref_month", month)
-        .eq("descricao_lancamento", "Taxa entrega iFood")
-      if (dateRange) {
-        q = q
-          .gte("data_fato_gerador", dateRange.start)
-          .lte("data_fato_gerador", `${dateRange.end}T23:59:59`)
+  if (unitIds.length === 0) return new Map()
+  // Mês fechado sai do cache; quem grava em mês fechado derruba as tags.
+  const entradas = await mesFechadoComCache({
+    nome: "entrega-paga-pela-loja",
+    unitIds,
+    year,
+    month,
+    recorte: dateRange ? `${dateRange.start}..${dateRange.end}` : undefined,
+    tags: [TAG_FINANCEIRO_IFOOD, TAG_99FOOD, TAG_KEETA],
+    calcular: async (falhas) => {
+      const { data, error } = await createAdminClient().rpc(
+        "entrega_paga_pela_loja_by_units",
+        {
+          p_unit_ids: unitIds,
+          p_year: year,
+          p_month: month,
+          p_de: dateRange?.start ?? null,
+          p_ate: dateRange?.end ?? null,
+        },
+      )
+      if (error) {
+        console.error("entrega_paga_pela_loja_by_units:", error.message)
+        falhas.push(error.message)
+        return [] as [string, DeliveryFee][]
       }
-      return q.order("id").range(a, b)
+      return ((data ?? []) as Record<string, number | string>[]).map((r) => {
+        const api = Number(r.ninefood_api) || 0
+        const planilha = Number(r.ninefood_planilha) || 0
+        const f: DeliveryFee = {
+          ifood: Math.max(0, Number(r.ifood) || 0),
+          // API primeiro (0259); planilha só onde a API não tem nada.
+          ninefood: api > 0 ? api : planilha,
+          keeta: Number(r.keeta) || 0,
+          total: 0,
+        }
+        f.total = Math.round((f.ifood + f.ninefood + f.keeta) * 100) / 100
+        return [String(r.unit_id), f] as [string, DeliveryFee]
+      })
     },
-  )
-  // Soma COM SINAL (e nega no fim), n\u00E3o `Math.abs` linha a linha.
-  //
-  // O cancelamento estorna a taxa numa linha POSITIVA de mesmo valor. Com
-  // `abs()` em cada linha, o -8,99 da venda e o +8,99 do estorno viravam
-  // 17,98 em vez de zero: o pedido cancelado entrava no custo EM DOBRO.
-  // Medido em ago/26 \u2014 R$ 4.761,73 de custo de entrega inventado na rede,
-  // R$ 1.921,93 s\u00F3 no Churrasco no Pote (R$ 79.326,88 exibidos contra
-  // R$ 77.394,96 reais).
-  //
-  // Somar com sinal resolve os dois casos de uma vez e sem join: cancelamento
-  // total se anula, e cancelamento PARCIAL abate a parte devolvida \u2014 que
-  // um filtro por `fato_gerador = 'Venda'` deixaria passar.
-  for (const r of ifood) {
-    ensure(r.unit_id).ifood -= Number(r.valor) || 0
-  }
-
-  // 99 Food: custo logístico + frete grátis bancado pela loja.
-  // Fonte 1 (preferida) = relatório manual (ninefood_pedidos). Fonte 2 (fallback
-  // automático) = extrato da API (ninefood_api_bill.raw), pra lojas/meses só-API.
-  const manualNine = new Map<string, number>()
-  const nine = await pageAll<{
-    unit_id: string
-    custos_logisticos: number | string | null
-    custo_loja_oferta_entrega_gratis: number | string | null
-  }>((a, b) => {
-    let q = admin
-      .from("ninefood_pedidos")
-      .select("unit_id, custos_logisticos, custo_loja_oferta_entrega_gratis")
-      .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-    if (dateRange) {
-      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
-    }
-    return q.order("id").range(a, b)
   })
-  for (const r of nine) {
-    manualNine.set(
-      r.unit_id,
-      (manualNine.get(r.unit_id) ?? 0) +
-        Math.abs(Number(r.custos_logisticos) || 0) +
-        Math.abs(Number(r.custo_loja_oferta_entrega_gratis) || 0),
-    )
-  }
-
-  // API: mapeia app_shop_id → unit_id e soma o custo do extrato (centavos).
-  const apiNine = new Map<string, number>()
-  const { data: links } = await admin
-    .from("ninefood_store_links")
-    .select("app_shop_id, unit_id")
-    .in("unit_id", unitIds)
-  const shopToUnit = new Map<string, string>()
-  for (const l of links ?? [])
-    shopToUnit.set(l.app_shop_id as string, l.unit_id as string)
-  const shopIds = [...shopToUnit.keys()]
-  if (shopIds.length > 0) {
-    const bills = await pageAll<{
-      app_shop_id: string
-      business_date: string
-      raw: Record<string, unknown> | null
-    }>((a, b) => {
-      let q = admin
-        .from("ninefood_api_bill")
-        .select("app_shop_id, business_date, raw")
-        .in("app_shop_id", shopIds)
-      if (dateRange) {
-        q = q
-          .gte("business_date", dateRange.start)
-          .lte("business_date", dateRange.end)
-      } else {
-        const last = new Date(year, month, 0).getDate()
-        q = q
-          .gte("business_date", `${year}-${String(month).padStart(2, "0")}-01`)
-          .lte("business_date", `${year}-${String(month).padStart(2, "0")}-${last}`)
-      }
-      return q.order("id").range(a, b)
-    })
-    const num = (raw: Record<string, unknown> | null, k: string) =>
-      Number((raw?.[k] as string | number | undefined) ?? 0) || 0
-    for (const r of bills) {
-      const unitId = shopToUnit.get(r.app_shop_id)
-      if (!unitId) continue
-      const cents =
-        Math.abs(num(r.raw, "b2pDeliveryAmount")) +
-        Math.abs(num(r.raw, "freeDeliveryOutcome")) -
-        num(r.raw, "freeDeliverySubsidy")
-      apiNine.set(unitId, (apiNine.get(unitId) ?? 0) + cents / 100)
-    }
-  }
-
-  // Preferência: manual quando > 0, senão API.
-  for (const unitId of unitIds) {
-    const m = manualNine.get(unitId) ?? 0
-    const value = m > 0 ? m : (apiNine.get(unitId) ?? 0)
-    if (value > 0) ensure(unitId).ninefood += value
-  }
-
-  // Keeta: taxa_entrega por pedido
-  const keeta = await pageAll<{
-    unit_id: string
-    taxa_entrega: number | string | null
-  }>((a, b) => {
-    let q = admin
-      .from("keeta_pedidos")
-      .select("unit_id, taxa_entrega")
-      .in("unit_id", unitIds)
-      .eq("ref_year", year)
-      .eq("ref_month", month)
-    if (dateRange) {
-      q = q.gte("data", dateRange.start).lte("data", dateRange.end)
-    }
-    return q.order("id").range(a, b)
-  })
-  for (const r of keeta) {
-    ensure(r.unit_id).keeta += Math.abs(Number(r.taxa_entrega) || 0)
-  }
-
-  for (const f of out.values()) {
-    f.ifood = Math.round(f.ifood * 100) / 100
-    f.ninefood = Math.round(f.ninefood * 100) / 100
-    f.keeta = Math.round(f.keeta * 100) / 100
-    f.total = Math.round((f.ifood + f.ninefood + f.keeta) * 100) / 100
-  }
-  return out
+  return new Map(entradas.filter(([, f]) => f.total > 0))
 }
 
 /** Custo de entrega de 1 unidade no mês. */

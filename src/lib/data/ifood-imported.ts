@@ -1743,10 +1743,22 @@ export async function getFinanceiroResumoForMonth(
 // ─── Antecipação (taxa de receber adiantado) ─────────────────────────
 
 /**
- * Taxa de antecipação do iFood por loja no mês (de ifood_antecipacoes,
- * populada pelo sync). É o juro de receber o repasse adiantado — NÃO vem na
- * Conciliação. O DRE da loja mostra como "Recebido real no caixa" = líquido −
- * esta taxa. Retorna Map<unitId, feeAmount> (R$, positivo). Loja sem dado = 0.
+ * Taxa de antecipação do iFood por loja no mês — o juro de receber o repasse
+ * adiantado. NÃO vem na Conciliação. O DRE mostra como "Recebido real no
+ * caixa" = líquido − esta taxa. Retorna Map<unitId, R$ positivo>. Loja sem
+ * dado = 0.
+ *
+ * FONTE (25/09/26): os ciclos FECHADOS de `ifood_repasses` — a mesma do card
+ * "Recebíveis" da loja e do "Do DRE ao caixa", conferida ao centavo contra o
+ * portal e o extrato bancário. O ciclo do iFood nunca cruza a virada do mês
+ * (medido: somar por início ou por fim do ciclo dá igual em todos os meses),
+ * então "ciclos do mês" não conta nada duas vezes.
+ *
+ * Antes lia só `ifood_antecipacoes`, que o sync grava por DATA DE CÁLCULO da
+ * antecipação e por isso atrasa no mês corrente: em set/26 dizia R$ 365 pra
+ * todas as lojas contra R$ 10.765 nos repasses, e o DRE mostrava "Recebido
+ * real no caixa" quase igual ao líquido. Ela fica como reserva pra loja/mês
+ * que `ifood_repasses` não cobre (antes de jul/26).
  */
 export async function getAntecipacaoFeeByUnits(
   unitIds: string[],
@@ -1756,20 +1768,37 @@ export async function getAntecipacaoFeeByUnits(
   const out = new Map<string, number>()
   if (unitIds.length === 0) return out
   const admin = createAdminClient()
-  const { data, error } = await admin
-    .from("ifood_antecipacoes")
-    .select("unit_id, fee_amount")
-    .in("unit_id", unitIds)
-    .eq("ref_year", year)
-    .eq("ref_month", month)
-  if (error) {
-    // Tabela pode não existir ainda (migration não aplicada) — degrada pra 0.
-    console.error("getAntecipacaoFeeByUnits:", error.message)
-    return out
+  const mm = String(month).padStart(2, "0")
+  const de = `${year}-${mm}-01`
+  const ate = `${year}-${mm}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`
+  const [repasses, tabela] = await Promise.all([
+    admin
+      .from("ifood_repasses")
+      .select("unit_id, taxa_antecipacao, status")
+      .in("unit_id", unitIds)
+      .gte("ciclo_inicio", de)
+      .lte("ciclo_inicio", ate),
+    admin
+      .from("ifood_antecipacoes")
+      .select("unit_id, fee_amount")
+      .in("unit_id", unitIds)
+      .eq("ref_year", year)
+      .eq("ref_month", month),
+  ])
+  if (repasses.error) console.error("getAntecipacaoFeeByUnits (repasses):", repasses.error.message)
+  if (tabela.error) console.error("getAntecipacaoFeeByUnits:", tabela.error.message)
+  // Loja com QUALQUER ciclo no mês (até o aberto) é coberta pelos repasses —
+  // taxa 0 ali é "não antecipou", não "não sei".
+  const cobertas = new Set<string>()
+  for (const r of repasses.data ?? []) {
+    cobertas.add(r.unit_id)
+    if (r.status === "OPEN") continue // semana em andamento: sem taxa real ainda
+    out.set(r.unit_id, (out.get(r.unit_id) ?? 0) + (Number(r.taxa_antecipacao) || 0))
   }
-  for (const r of data ?? []) {
-    out.set(r.unit_id, Number(r.fee_amount) || 0)
+  for (const r of tabela.data ?? []) {
+    if (!cobertas.has(r.unit_id)) out.set(r.unit_id, Number(r.fee_amount) || 0)
   }
+  for (const [k, v] of out) out.set(k, Math.round(v * 100) / 100)
   return out
 }
 

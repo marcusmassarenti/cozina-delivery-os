@@ -152,7 +152,9 @@ export function ResultadoTable({
                     {fmtNum(r.pedidos)}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    {fmtBRL(r.bruto)}
+                    {/* Com os cancelados — régua do portal, igual ao
+                        Dashboard. O % do resultado segue na base válida. */}
+                    {fmtBRL(r.bruto + (r.cancelados ?? 0))}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {fmtBRL(r.totalLiquido)}
@@ -207,7 +209,7 @@ export function ResultadoTable({
                 {fmtNum(totals.pedidos)}
               </td>
               <td className="px-3 py-2.5 text-right tabular-nums">
-                {fmtBRL(totals.bruto)}
+                {fmtBRL(totals.bruto + (totals.cancelados ?? 0))}
               </td>
               <td className="px-3 py-2.5 text-right tabular-nums">
                 {fmtBRL(totals.totalLiquido)}

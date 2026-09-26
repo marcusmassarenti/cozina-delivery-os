@@ -647,16 +647,20 @@ export default async function Home({
   }
   cron.marca("cesta")
 
-  // Vitrine por loja (tabela/detalhe): o faturamento exibido também é o TOTAL
-  // com cancelados. Ticket/margem já foram derivados na base válida.
+  // Vitrine por loja (ranking/detalhe): o faturamento exibido é o MESMO do
+  // topo e do DRE — com os cancelados do iFood (régua do portal) e com a
+  // receita própria (balcão). Sem a receita própria, a Pinheiros aparecia
+  // R$ 2,4 mil abaixo do DRE e o ranking não somava o topo (25/09/26).
+  // Ticket/margem já foram derivados na base válida.
   const unitsDisplay = unitsToShow.map((u) => {
-    const c = cestaByUnit.get(u.id)
-    return c && c.valor > 0
+    const extra =
+      (cestaByUnit.get(u.id)?.valor ?? 0) + (u.monthly.receitaPropria ?? 0)
+    return extra > 0
       ? {
           ...u,
           monthly: {
             ...u.monthly,
-            faturamentoBruto: u.monthly.faturamentoBruto + c.valor,
+            faturamentoBruto: u.monthly.faturamentoBruto + extra,
           },
         }
       : u
@@ -935,7 +939,7 @@ export default async function Home({
       value: fmtBRLShort(taxaEntregaValor),
       trend:
         taxaEntregaValor > 0
-          ? `${fmtPct(taxaEntregaPctBruto)} do faturamento bruto`
+          ? `${fmtPct(taxaEntregaPctBruto)} do bruto · o que a loja pagou`
           : aguardandoExtrato || brutoDePedidos
             // "Sem dado de entrega" era meia-verdade: o dado existe no iFood,
             // só não chegou ainda. Frase que soa definitiva num estado

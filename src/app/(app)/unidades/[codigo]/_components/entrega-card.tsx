@@ -63,14 +63,19 @@ export function EntregaCard({
     )
   }
 
-  // ⚠️ Na Keeta, deliveryFee.keeta é o frete que o CLIENTE pagou, não custo da
-  // loja. O custo real dela é a taxa de distância (custoExtra).
+  /* O que a LOJA pagou de entrega (0273): no iFood, o frete grátis que ela
+     bancou; na Keeta, a taxa de distância; na 99, entrega cobrada + frete
+     grátis. É o mesmo número do card "Custo de entrega" do Dashboard e do DRE.
+     O custo TOTAL da entrega parceira do iFood fica só como base da barra —
+     o resto dele o cliente (ou o próprio iFood) pagou. */
   const custoDe = (q: QuemPagaEntrega) =>
     q.plataforma === "keeta"
       ? q.custoExtra
       : q.plataforma === "ifood"
         ? deliveryFee.ifood
         : deliveryFee.ninefood
+  const baseDe = (q: QuemPagaEntrega) =>
+    q.plataforma === "ifood" ? Math.max(q.custoTotalEntrega, custoDe(q)) : custoDe(q)
   const total = linhas.reduce((s, q) => s + custoDe(q), 0)
 
   return (
@@ -85,8 +90,9 @@ export function EntregaCard({
 
       <div className="space-y-2.5">
         {linhas.map((q) => {
-          const base = q.lojaBancou + q.clientePagou
+          const entregas = q.lojaBancou + q.clientePagou
           const custo = custoDe(q)
+          const base = baseDe(q)
           // ⚠️ A barra é por VALOR, não por número de pedidos.
           //
           // Antes ela mostrava a fatia de PEDIDOS que a loja tocou (69,8% no
@@ -94,7 +100,7 @@ export function EntregaCard({
           // menor que a sobra, o que parecia conta errada. Não era: a loja
           // subsidia PARTE da entrega em muitos pedidos. Misturar as duas
           // unidades na mesma linha é que estava errado.
-          const pctLoja = custo > 0 ? (q.valorBancadoPelaLoja / custo) * 100 : 0
+          const pctLoja = base > 0 ? (q.valorBancadoPelaLoja / base) * 100 : 0
 
           return (
             <div key={q.plataforma}>
@@ -122,11 +128,11 @@ export function EntregaCard({
                 <span>
                   {q.valorBancadoPelaLoja > 0 && (
                     <span className="text-amber-700 dark:text-amber-400">
-                      {fmtBRL(q.valorBancadoPelaLoja)} de {fmtBRL(custo)} ·{" "}
+                      {fmtBRL(q.valorBancadoPelaLoja)} de {fmtBRL(base)} ·{" "}
                     </span>
                   )}
                   em {q.lojaBancou.toLocaleString("pt-BR")} de{" "}
-                  {base.toLocaleString("pt-BR")} entregas
+                  {entregas.toLocaleString("pt-BR")} entregas
                 </span>
                 {/* Só a Keeta informa de verdade quanto o cliente pagou de
                     frete. No iFood e na 99, o que sobra do custo não é
@@ -149,10 +155,10 @@ export function EntregaCard({
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        {fmtPct(bruto > 0 ? (total / bruto) * 100 : 0)} do bruto · já está dentro
-        das taxas (no DRE acima). Em âmbar, quanto do <strong>custo</strong> da
-        entrega a loja bancou como promoção — o resto vem do frete do cliente ou
-        de subsídio da plataforma.
+        {fmtPct(bruto > 0 ? (total / bruto) * 100 : 0)} do bruto · o que a loja
+        pagou de entrega. Em âmbar, quanto do <strong>custo</strong> da entrega a
+        loja bancou como promoção — o resto vem do frete do cliente ou de
+        subsídio da plataforma, e não sai do bolso dela.
       </p>
     </div>
   )

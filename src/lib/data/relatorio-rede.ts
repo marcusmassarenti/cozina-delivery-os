@@ -128,6 +128,7 @@ export async function getNetworkReportForRange(
   const totals: ResultadoTotals = {
     pedidos: 0,
     bruto: 0,
+    cancelados: 0,
     receitaPropria: 0,
     taxasPlataforma: 0,
     promocoesLoja: 0,
@@ -151,6 +152,10 @@ export async function getNetworkReportForRange(
   for (const r of parts) {
     totals.pedidos += r.totals.pedidos
     totals.bruto += r.totals.bruto
+    totals.cancelados += r.totals.cancelados
+    // Receita própria faltava aqui: o período somava o bruto (que já a
+    // inclui) mas deixava a quebra zerada.
+    totals.receitaPropria += r.totals.receitaPropria
     totals.taxasPlataforma += r.totals.taxasPlataforma
     totals.promocoesLoja += r.totals.promocoesLoja
     totals.liquidoPlataformas += r.totals.liquidoPlataformas

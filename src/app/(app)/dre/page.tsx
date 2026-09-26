@@ -305,7 +305,7 @@ export default async function ResultadoPage({
               value={fmtBRLShort(deliveryFee.total)}
               hint={
                 deliveryFee.total > 0
-                  ? `${fmtPct(entregaPctBruto)} do bruto · dentro das taxas`
+                  ? `${fmtPct(entregaPctBruto)} do bruto · o que a loja pagou`
                   : "sem dado de entrega"
               }
               tone="warn"

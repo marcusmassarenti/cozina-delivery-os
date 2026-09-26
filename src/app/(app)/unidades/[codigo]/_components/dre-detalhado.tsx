@@ -318,14 +318,18 @@ export function DreDetalhado({
             (platforms.length === 1 && platforms[0].id === "ifood")
           return (
             <>
+              {/* Faturamento bruto = COM os cancelados — a régua do portal,
+                  e o mesmo número do Dashboard e do topo da loja (Marcus,
+                  25/09/26: "com cancelados em tudo"). Os percentuais abaixo
+                  seguem na base válida (= Vendas válidas). */}
               <Row
                 label={
                   escopoIfood
-                    ? "Vendas totais — o “Valor das vendas” do portal"
-                    : "Vendas totais (antes dos cancelamentos)"
+                    ? "Faturamento bruto — o “Valor das vendas” do portal"
+                    : "Faturamento bruto (com cancelados, como no portal)"
                 }
-                value={fmtBRL(bruto + perdaCancel)}
-                muted
+                value={fmtBRL(brutoExibido + perdaCancel)}
+                bold
               />
               <Row
                 label={`(−) Pedidos cancelados${escopoIfood ? "" : " no iFood"}${
@@ -339,7 +343,7 @@ export function DreDetalhado({
           )
         })()}
       <Row
-        label={perdaCancel > 0.005 ? "= Faturamento bruto" : "Faturamento bruto"}
+        label={perdaCancel > 0.005 ? "= Vendas válidas" : "Faturamento bruto"}
         value={fmtBRL(brutoExibido)}
         bold
         pct={100}

@@ -296,6 +296,17 @@ export async function FinanceiroLojaTab({
   // iFood: com a Conciliação, a abertura certa (comissão, transação,
   // promoção da loja, mensalidade/anúncios — entrega parceira e serviço
   // cobrado do cliente são do cliente, não custo). Sem ela, o que o `m` tem.
+  /* Promoção vem do EXTRATO, não da planilha de Pedidos — a mesma regra do
+     DRE da rede (10/08/26). A planilha não existe em loja só-API e o card
+     dizia "R$ 0,00" pra iFood e loja com R$ 14,8 mil de promoção no extrato
+     (Brooklin, set/26). Sem extrato, cai no que a planilha tiver. */
+  const temPromoExtrato =
+    !!ifood?.hasData && Math.abs(ifood.promocaoIfood) + Math.abs(ifood.promocaoLoja) > 0
+  const promoIfood = temPromoExtrato ? Math.abs(ifood!.promocaoIfood) : pagamento.incentivoIfood
+  const promoLojaIfood = temPromoExtrato ? Math.abs(ifood!.promocaoLoja) : pagamento.incentivoLoja
+  // Turno só existe na planilha de Pedidos; pela API tudo vem como "—".
+  const temTurno = pagamento.porTurno.some((t) => t.chave !== "—")
+
   const ifoodItens: ItemTaxaDre[] = ifood?.hasData
     ? itensTaxaIfood({
         comissao: ifood.comissaoIfood,
@@ -694,43 +705,39 @@ export async function FinanceiroLojaTab({
                 <PlatformLogo platform="ifood" size="sm" />
               </span>
             </div>
-            <MiniRow label="iFood" value={fmtBRL(pagamento.incentivoIfood)} />
-            <MiniRow
-              label="Loja (investiu)"
-              value={fmtBRL(pagamento.incentivoLoja)}
-            />
-            <TotalRow
-              label="Total em promoções"
-              value={fmtBRL(pagamento.incentivoIfood + pagamento.incentivoLoja)}
-            />
+            <MiniRow label="iFood" value={fmtBRL(promoIfood)} />
+            <MiniRow label="Loja (investiu)" value={fmtBRL(promoLojaIfood)} />
+            <TotalRow label="Total em promoções" value={fmtBRL(promoIfood + promoLojaIfood)} />
             <p className="mt-2 text-[11px] text-muted-foreground">
               &quot;Loja&quot; = promoção que a própria loja bancou (saiu do
               bolso dela pra atrair pedido).
             </p>
           </div>
-          <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <Truck className="size-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Por turno</h3>
-              <span className="ml-auto">
-                <PlatformLogo platform="ifood" size="sm" />
-              </span>
+          {temTurno && (
+            <div className="rounded-xl border bg-card p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Truck className="size-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Por turno</h3>
+                <span className="ml-auto">
+                  <PlatformLogo platform="ifood" size="sm" />
+                </span>
+              </div>
+              {[...pagamento.porTurno]
+                .sort((a, b) => turnoRank(a.chave) - turnoRank(b.chave))
+                .map((tn) => (
+                  <MiniRow
+                    key={tn.chave}
+                    label={tn.chave}
+                    value={`${fmtNum(tn.pedidos)} ped`}
+                  />
+                ))}
+              <TotalRow
+                value={`${fmtNum(
+                  pagamento.porTurno.reduce((a, t) => a + t.pedidos, 0),
+                )} ped`}
+              />
             </div>
-            {[...pagamento.porTurno]
-              .sort((a, b) => turnoRank(a.chave) - turnoRank(b.chave))
-              .map((tn) => (
-                <MiniRow
-                  key={tn.chave}
-                  label={tn.chave}
-                  value={`${fmtNum(tn.pedidos)} ped`}
-                />
-              ))}
-            <TotalRow
-              value={`${fmtNum(
-                pagamento.porTurno.reduce((a, t) => a + t.pedidos, 0),
-              )} ped`}
-            />
-          </div>
+          )}
         </div>
       )}
 

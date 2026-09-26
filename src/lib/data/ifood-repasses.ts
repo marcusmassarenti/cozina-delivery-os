@@ -66,6 +66,47 @@ function diaSeguinte(iso: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Dias depois do fim do ciclo em que o dinheiro cai + taxa em % do bruto. */
+export type PadraoAntecipacao = { dias: number; taxa: number }
+
+/**
+ * O padrão de quem antecipa, tirado do último ciclo FECHADO da loja. Tem que
+ * ser o último fechado, não o último antecipado: loja que antecipou uma vez e
+ * parou recebe no calendário normal, e aí vale a data da API (`null`).
+ * Usado pelo card da loja e pelo "Do DRE ao caixa" da rede — um lugar só.
+ */
+export function padraoAntecipacao(ultimoFechado: {
+  ciclo_fim: string
+  data_pagamento: string | null
+  valor_bruto: number | string
+  taxa_antecipacao: number | string
+}): PadraoAntecipacao | null {
+  const bruto = Number(ultimoFechado.valor_bruto) || 0
+  const taxa = Number(ultimoFechado.taxa_antecipacao) || 0
+  if (!ultimoFechado.data_pagamento || taxa <= 0 || bruto <= 0) return null
+  return {
+    dias: Math.round(
+      (Date.parse(`${ultimoFechado.data_pagamento}T12:00:00Z`) -
+        Date.parse(`${ultimoFechado.ciclo_fim}T12:00:00Z`)) /
+        86_400_000,
+    ),
+    taxa: taxa / bruto,
+  }
+}
+
+/** Data, taxa e líquido estimados da semana aberta de quem antecipa. */
+export function estimarCicloAberto(
+  c: { ciclo_fim: string; valor_bruto: number | string },
+  p: PadraoAntecipacao,
+): { dataPagamento: string; taxa: number; liquido: number } {
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const fim = new Date(`${c.ciclo_fim}T12:00:00Z`)
+  fim.setUTCDate(fim.getUTCDate() + p.dias)
+  const bruto = r2(Number(c.valor_bruto) || 0)
+  const taxa = r2(bruto * p.taxa)
+  return { dataPagamento: fim.toISOString().slice(0, 10), taxa, liquido: r2(bruto - taxa) }
+}
+
 export async function getRepassesIfood(
   unitId: string,
   de: string,
@@ -98,10 +139,8 @@ export async function getRepassesIfood(
   }[]
 
   // Loja que antecipa: o último ciclo FECHADO dá o padrão (dias depois do fim
-  // do ciclo e taxa em %) pra estimar a semana aberta. Tem que ser o último
-  // fechado, não o último antecipado: loja que antecipou uma vez e parou
-  // recebe no calendário normal, e a data da API vale.
-  let padrao: { dias: number; taxa: number } | null = null
+  // do ciclo e taxa em %) pra estimar a semana aberta.
+  let padrao: PadraoAntecipacao | null = null
   if (linhas.some((l) => l.status === "OPEN")) {
     const { data: ult } = await createAdminClient()
       .from("ifood_repasses")
@@ -112,33 +151,21 @@ export async function getRepassesIfood(
       .order("ciclo_fim", { ascending: false })
       .limit(1)
       .maybeSingle()
-    if (ult && Number(ult.taxa_antecipacao) > 0 && Number(ult.valor_bruto) > 0) {
-      padrao = {
-        dias: Math.round(
-          (Date.parse(`${ult.data_pagamento}T12:00:00Z`) -
-            Date.parse(`${ult.ciclo_fim}T12:00:00Z`)) /
-            86_400_000,
-        ),
-        taxa: Number(ult.taxa_antecipacao) / Number(ult.valor_bruto),
-      }
-    }
+    padrao = ult ? padraoAntecipacao(ult) : null
   }
 
   const ciclos: CicloIfood[] = linhas.map((c) => {
     const aberto = c.status === "OPEN"
     if (aberto && padrao) {
-      const fim = new Date(`${c.ciclo_fim}T12:00:00Z`)
-      fim.setUTCDate(fim.getUTCDate() + padrao.dias)
-      const bruto = r2(c.valor_bruto)
-      const taxa = r2(bruto * padrao.taxa)
+      const est = estimarCicloAberto(c, padrao)
       return {
         inicio: c.ciclo_inicio,
         fim: c.ciclo_fim,
-        valorBruto: bruto,
-        taxaAntecipacao: taxa,
-        liquido: r2(bruto - taxa),
+        valorBruto: r2(c.valor_bruto),
+        taxaAntecipacao: est.taxa,
+        liquido: est.liquido,
         dataPrevista: c.data_prevista,
-        dataPagamento: fim.toISOString().slice(0, 10),
+        dataPagamento: est.dataPagamento,
         caiu: false,
         aberto: true,
         estimado: true,

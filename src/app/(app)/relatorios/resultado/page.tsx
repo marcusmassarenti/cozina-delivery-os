@@ -205,7 +205,7 @@ export default async function RelatoriosPage({
     {
       label: "Custo de entrega",
       value: fmtBRL(report.custoEntrega),
-      trend: `${fmtPct(custoEntregaPct)} do bruto`,
+      trend: `${fmtPct(custoEntregaPct)} do bruto · o que a loja pagou`,
       icon: Bike,
     },
     {
