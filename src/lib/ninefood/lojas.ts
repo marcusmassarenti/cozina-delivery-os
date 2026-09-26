@@ -230,6 +230,13 @@ export async function sincronizarLojas99(): Promise<Sincronizacao99> {
     }
   }
 
+  /* Vínculo novo muda de quem são as faturas JÁ gravadas (o sync grava até
+     loja sem dono), inclusive de meses fechados — cache da 99 fora. */
+  if (casadas.length > 0) {
+    const { limparCacheAgregados, TAG_99FOOD } = await import("@/lib/cache-tags")
+    await limparCacheAgregados([TAG_99FOOD])
+  }
+
   const comDono = new Set(casadas)
   const semVinculo = lojas.filter(
     (l) =>

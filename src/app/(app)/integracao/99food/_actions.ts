@@ -28,6 +28,17 @@ export type Solicitacao99State = {
 type Status = "pendente" | "solicitada" | "ativa" | "recusada"
 
 /**
+ * Vínculo novo ou repontado muda de quem são as faturas JÁ gravadas (o sync
+ * grava até loja sem dono) — inclusive de meses fechados, que vêm de cache
+ * desde 25/09/26. O backfill só derruba o que ele mesmo grava; o que já
+ * estava lá precisa deste empurrão.
+ */
+async function limparCacheDa99() {
+  const { limparCacheAgregados, TAG_99FOOD } = await import("@/lib/cache-tags")
+  await limparCacheAgregados([TAG_99FOOD])
+}
+
+/**
  * "99 conectado" NA HORA do vínculo — igual ao iFood e ao Cardápio Web.
  *
  * ── POR QUE (Marcus, 25/09/26): "deveria disparar na hora de eu vincular" ──
@@ -473,6 +484,7 @@ export async function vincularLojaLivre99(
     { onConflict: "app_shop_id" },
   )
   if (errLink) return { ok: false, error: errLink.message }
+  await limparCacheDa99()
 
   /* Vínculo escolhido à mão: grava o `shop_id` do 99 no cadastro da unidade,
    * que é o elo que o "Verificar" e o webhook usam pra achar a loja sozinhos.
@@ -571,6 +583,7 @@ export async function vincularLoja99(
     { onConflict: "app_shop_id" },
   )
   if (errLink) return { ok: false, error: errLink.message }
+  await limparCacheDa99()
 
   /**
    * Backfill NA HORA — a regra do Marcus (18/08/26): "loja vinculada tem que

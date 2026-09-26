@@ -1,6 +1,8 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { fetchAllRows } from "@/lib/data/paginate"
+import { mesFechadoComCache, TAG_CARDAPIOWEB } from "@/lib/cache-tags"
 
 /**
  * Camada de leitura do Cardápio Web no MESMO contrato das outras plataformas
@@ -150,7 +152,9 @@ async function buscarLinhas(
   unitIds: string[],
   year: number,
   month: number,
-  dateRange?: DateRange,
+  dateRange: DateRange | undefined,
+  /** Recebe o erro de leitura — com algo aqui o resumo NÃO entra no cache. */
+  falhas: string[],
 ): Promise<Linha[]> {
   if (unitIds.length === 0) return []
   const admin = createAdminClient()
@@ -158,31 +162,41 @@ async function buscarLinhas(
   const installs = await installIdsDeProducao()
   if (installs.length === 0) return []
 
-  let q = admin
-    .from("cardapioweb_pedidos")
-    .select("unit_id, status, total")
-    .in("unit_id", unitIds)
-    .in("install_id", installs)
-    // Só venda direta: pedido de marketplace que passou por aqui já é contado
-    // pela integração daquele marketplace.
-    .in("sales_channel", CANAIS_PROPRIOS)
-    .eq("ref_year", year)
-    .eq("ref_month", month)
+  /* PAGINADO (25/09/26). Era uma consulta só, e o PostgREST devolve no máximo
+     1.000 linhas SEM avisar: a rede inteira de um mês passa disso fácil (a
+     conta demo tem ~3.000 pedidos/mês de canal próprio) e o bruto saía
+     cortado com cara de completo. Os clientes reais ainda não chegaram lá —
+     o Churrasco Royal tem 8 lojas e 634 pedidos no melhor mês. */
+  return fetchAllRows<Linha>(
+    (from, to) => {
+      let q = admin
+        .from("cardapioweb_pedidos")
+        .select("unit_id, status, total")
+        .in("unit_id", unitIds)
+        .in("install_id", installs)
+        // Só venda direta: pedido de marketplace que passou por aqui já é
+        // contado pela integração daquele marketplace.
+        .in("sales_channel", CANAIS_PROPRIOS)
+        .eq("ref_year", year)
+        .eq("ref_month", month)
 
-  // Range custom (filtro de período) restringe DENTRO do mês — ref_year/mes
-  // ficam pra pegar o índice.
-  if (dateRange) {
-    q = q
-      .gte("criado_em", inicioDoDiaBRT(dateRange.start))
-      .lte("criado_em", fimDoDiaBRT(dateRange.end))
-  }
-
-  const { data, error } = await q
-  if (error) {
-    console.error("cardapioweb resumo error:", error.message)
-    return []
-  }
-  return (data ?? []) as Linha[]
+      // Range custom (filtro de período) restringe DENTRO do mês —
+      // ref_year/mes ficam pra pegar o índice.
+      if (dateRange) {
+        q = q
+          .gte("criado_em", inicioDoDiaBRT(dateRange.start))
+          .lte("criado_em", fimDoDiaBRT(dateRange.end))
+      }
+      return q.order("id").range(from, to)
+    },
+    "cardapioweb resumo",
+    {
+      onErro: (m) => {
+        console.error("cardapioweb resumo error:", m)
+        falhas.push(`cardapioweb: ${m}`)
+      },
+    },
+  ) as Promise<Linha[]>
 }
 
 /** Resumo do mês por unidade. Só aparece unidade que tem pedido no período. */
@@ -192,7 +206,31 @@ export async function getCardapioWebResumoByUnits(
   month: number,
   dateRange?: DateRange,
 ): Promise<Map<string, CardapioWebResumo>> {
-  const linhas = await buscarLinhas(unitIds, year, month, dateRange)
+  if (unitIds.length === 0) return new Map()
+  // Mês FECHADO sai do cache (25/09/26). Sync, backfill, detalhe e avaliações
+  // do Cardápio Web derrubam TAG_CARDAPIOWEB quando gravam mês fechado.
+  const entradas = await mesFechadoComCache({
+    nome: "cardapioweb-resumo",
+    unitIds,
+    year,
+    month,
+    recorte: dateRange ? `${dateRange.start}..${dateRange.end}` : undefined,
+    tags: [TAG_CARDAPIOWEB],
+    calcular: async (f) => [
+      ...(await cardapioWebResumoSemCache(unitIds, year, month, dateRange, f)).entries(),
+    ],
+  })
+  return new Map(entradas)
+}
+
+async function cardapioWebResumoSemCache(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange: DateRange | undefined,
+  falhas: string[],
+): Promise<Map<string, CardapioWebResumo>> {
+  const linhas = await buscarLinhas(unitIds, year, month, dateRange, falhas)
   const porUnidade = new Map<string, CardapioWebResumo>()
 
   for (const l of linhas) {

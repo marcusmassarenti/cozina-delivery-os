@@ -72,6 +72,12 @@ export async function vincularSeObvio(
     console.error(`[cw-vinculo] falhou em ${installId}: ${error.message}`)
     return null
   }
+  // Loja nova no Cardápio Web: o que já foi gravado passa a contar pra ela,
+  // inclusive em mês fechado (que vem de cache).
+  {
+    const { limparCacheAgregados, TAG_CARDAPIOWEB } = await import("@/lib/cache-tags")
+    await limparCacheAgregados([TAG_CARDAPIOWEB])
+  }
 
   // Marca o canal na unidade — o mesmo que a tela de vínculo manual faz.
   //

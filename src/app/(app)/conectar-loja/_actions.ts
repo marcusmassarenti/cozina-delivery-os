@@ -155,6 +155,10 @@ export async function concluirPasso(
           },
           { onConflict: "app_shop_id" },
         )
+        // Faturas já gravadas dessa loja passam a contar pra unidade —
+        // inclusive de meses fechados, que vêm de cache.
+        const { limparCacheAgregados, TAG_99FOOD } = await import("@/lib/cache-tags")
+        await limparCacheAgregados([TAG_99FOOD])
         conectouAgora = true
         mensagem = "Conectado! Já estamos trazendo o histórico."
       } else {

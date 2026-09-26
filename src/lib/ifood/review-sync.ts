@@ -16,6 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { isAppHomologation } from "./auth"
 import { fetchAllReviews, getReview, type IfoodReview } from "./review"
 import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import { limparSeTocouMesFechado, TAG_AVALIACOES_IFOOD } from "@/lib/cache-tags"
 
 /** Tags de ELOGIO padrão do iFood (mesmas que o import gravava). Chave =
  *  minúsculo pra casar sem se importar com a caixa da API ("Comida Saborosa"
@@ -157,6 +158,7 @@ export async function syncIfoodReviews(
   unitIds: string[] | null,
 ): Promise<ReviewSyncResult> {
   const admin = createAdminClient()
+  const mesesNovos = new Map<string, { year: number; month: number }>()
 
   // Diagnóstico do ambiente (calculado 1x): o valor CRU do flag (com aspas via
   // JSON, pra ver espaço/enter/ausência) e se as credenciais existem.
@@ -259,6 +261,9 @@ export async function syncIfoodReviews(
     // Quais avaliações JÁ têm tag no banco (import ou sync anterior) — não
     // precisam do detalhe de novo. Só busca detalhe das novas.
     const jaTag = new Set<string>()
+    // Quais já existiam (com ou sem tag) — avaliação NOVA de mês fechado
+    // derruba o cache das avaliações por loja no fim da rodada.
+    const jaExistia = new Set<string>()
     const pedidos = base.map((x) => x.row.pedido_id_longo)
     if (pedidos.length > 0) {
       const { data: ex } = await admin
@@ -271,6 +276,7 @@ export async function syncIfoodReviews(
         tags_positivas: string[] | null
         tags_negativas: string[] | null
       }[]) {
+        jaExistia.add(e.pedido_id_longo)
         if ((e.tags_positivas?.length ?? 0) > 0 || (e.tags_negativas?.length ?? 0) > 0)
           jaTag.add(e.pedido_id_longo)
       }
@@ -330,6 +336,15 @@ export async function syncIfoodReviews(
       continue
     }
 
+    for (const { row } of base) {
+      const d = String(row.data_avaliacao ?? "")
+      if (!jaExistia.has(row.pedido_id_longo) && d.length >= 7)
+        mesesNovos.set(d.slice(0, 7), {
+          year: Number(d.slice(0, 4)),
+          month: Number(d.slice(5, 7)),
+        })
+    }
+
     // Log no Histórico de Importações (source='api' distingue da planilha) —
     // só quando a loja trouxe avaliação, pra não poluir com linhas de 0. Falha
     // aqui é só telemetria: não derruba o sync.
@@ -370,6 +385,11 @@ export async function syncIfoodReviews(
       puladas,
     })
   }
+
+  /* Avaliações por loja de mês FECHADO vêm de cache desde 25/09/26 (a
+     Evolução pede o ano inteiro). Avaliação nova de mês passado — a virada do
+     mês ou o histórico de uma loja recém-conectada — derruba esse cache. */
+  await limparSeTocouMesFechado(TAG_AVALIACOES_IFOOD, mesesNovos.values())
 
   return {
     lojasProcessadas: resultados.length,

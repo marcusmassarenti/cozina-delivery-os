@@ -19,6 +19,7 @@ import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import { limparSeTocouMesFechado, TAG_CARDAPIOWEB } from "@/lib/cache-tags"
 
 import type { CwAmbiente, CwAuthMode } from "./auth"
 import {
@@ -169,6 +170,7 @@ export async function sincronizarInstall(
   // Alvo alargado reabre um backfill que já tinha se dado por concluído —
   // senão a loja que terminou nos 6 meses nunca buscaria o resto do ano.
   let backfillConcluido = st.backfill_concluido && cursor <= alvo
+  let bfMeses: { year: number; month: number }[] | undefined
 
   if (!backfillConcluido && inc.ok) {
     const fim = new Date(cursor)
@@ -177,6 +179,7 @@ export async function sincronizarInstall(
     const inicioReal = inicio < alvo ? alvo : inicio
 
     const bf = await importarHistorico(install, inicioReal, fim)
+    bfMeses = bf.meses
     resultado.backfill = {
       de: iso(inicioReal),
       ate: iso(fim),
@@ -250,6 +253,17 @@ export async function sincronizarInstall(
       updated_at: new Date().toISOString(),
     })
     .eq("install_id", installId)
+
+  /* Cache dos meses FECHADOS do Cardápio Web (resumo e avaliações por loja
+     vêm de cache desde 25/09/26). Derruba só se esta rodada gravou algo de
+     mês fechado: backfill, a virada do mês no incremental, detalhe de pedido
+     antigo ou avaliação nova de mês passado. */
+  await limparSeTocouMesFechado(TAG_CARDAPIOWEB, [
+    ...inc.meses,
+    ...(bfMeses ?? []),
+    ...det.meses,
+    ...(aval.mesesNovos ?? []),
+  ])
 
   // Registra no Histórico de Importações. Sem isto, a integração rodava todo
   // dia e a tela dizia "Nenhuma importação ainda" — pro lojista, nada estava

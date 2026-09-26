@@ -18,6 +18,7 @@ import { comRetentativa, fetchAllRows, rpcTodasAsLinhas } from "@/lib/data/pagin
 import { monthOperationWindow } from "@/lib/data/operation-window"
 import { getAccessibleUnitIds } from "@/lib/auth/permissions"
 import { cancelamentoRankingLabel } from "@/lib/ninefood/cancelamento"
+import { mesFechadoComCache, TAG_99FOOD } from "@/lib/cache-tags"
 
 /**
  * Pagina uma query do Supabase via .range() em loop. O hard-cap de 1000
@@ -207,8 +208,34 @@ export async function getNinefoodResumoByUnits(
    */
   falhas?: string[],
 ): Promise<Map<string, NinefoodResumo>> {
+  if (unitIds.length === 0) return new Map()
+  /* Mês FECHADO sai do cache (25/09/26): a Evolução do Dashboard e do Hub
+     pedia os 9 meses do ano a cada abertura. Quem grava em mês fechado
+     derruba TAG_99FOOD — planilha, webhooks e o sync financeiro. */
+  const entradas = await mesFechadoComCache({
+    nome: "ninefood-resumo",
+    unitIds,
+    year,
+    month,
+    recorte: dateRange ? `${dateRange.start}..${dateRange.end}` : undefined,
+    tags: [TAG_99FOOD],
+    plataforma: "99",
+    falhas,
+    calcular: async (f) => [
+      ...(await ninefoodResumoSemCache(unitIds, year, month, dateRange, f)).entries(),
+    ],
+  })
+  return new Map(entradas)
+}
+
+async function ninefoodResumoSemCache(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange: { start: string; end: string } | undefined,
+  falhas: string[],
+): Promise<Map<string, NinefoodResumo>> {
   const out = new Map<string, NinefoodResumo>()
-  if (unitIds.length === 0) return out
   const registrar = (m: string) => {
     falhas?.push(`99: ${m}`)
     registrarFalhaDeLeitura("99")

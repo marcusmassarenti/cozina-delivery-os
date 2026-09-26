@@ -12,6 +12,13 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRows } from "@/lib/data/paginate"
 import { installIdsDeProducao } from "@/lib/data/cardapioweb-imported"
+import {
+  mesFechadoComCache,
+  TAG_99FOOD,
+  TAG_AVALIACOES_IFOOD,
+  TAG_CARDAPIOWEB,
+  TAG_KEETA,
+} from "@/lib/cache-tags"
 
 type Dist = Record<1 | 2 | 3 | 4 | 5, number>
 
@@ -54,7 +61,29 @@ export async function getAvaliacoesByUnitForMonth(
   month: number,
   filterUnitIds?: string[],
 ): Promise<UnitAvaliacaoRow[]> {
+  /* Mês FECHADO sai do cache (25/09/26) — a Evolução pede os 9 meses do ano
+     a cada abertura. Só lê NOTA (resposta não muda nada aqui), então quem
+     derruba é quem grava avaliação: sync do iFood, planilhas (99/Keeta) e o
+     Cardápio Web. "units" entra porque a linha leva o NOME da loja. */
+  return mesFechadoComCache({
+    nome: "avaliacoes-por-loja",
+    unitIds: filterUnitIds,
+    year,
+    month,
+    tags: [TAG_AVALIACOES_IFOOD, TAG_99FOOD, TAG_KEETA, TAG_CARDAPIOWEB, "units"],
+    calcular: (f) => avaliacoesPorLojaSemCache(year, month, filterUnitIds, f),
+  })
+}
+
+async function avaliacoesPorLojaSemCache(
+  year: number,
+  month: number,
+  filterUnitIds: string[] | undefined,
+  falhas: string[],
+): Promise<UnitAvaliacaoRow[]> {
   const admin = createAdminClient()
+  // Página que falha não pode virar "loja sem avaliação" guardada 24 h.
+  const onErro = (m: string) => falhas.push(`avaliacoes: ${m}`)
 
   // Range mês (iFood usa data_avaliacao DATE; 99 usa data_avaliacao TIMESTAMP)
   const monthStr = String(month).padStart(2, "0")
@@ -84,6 +113,7 @@ export async function getAvaliacoesByUnitForMonth(
         return qIfood
       },
       "ifood_avaliacoes por unidade",
+      { onErro },
     ),
     fetchAllRows<{ unit_id: string; nivel_avaliacao: number | string | null }>(
       (from, to) => {
@@ -100,6 +130,7 @@ export async function getAvaliacoesByUnitForMonth(
         return q99
       },
       "ninefood_pedidos avaliacoes por unidade",
+      { onErro },
     ),
     // Keeta: avaliação em keeta_pedidos (pontuacao_avaliacao + data_avaliacao DATE)
     fetchAllRows<{
@@ -120,6 +151,7 @@ export async function getAvaliacoesByUnitForMonth(
         return qKeeta
       },
       "keeta_pedidos avaliacoes por unidade",
+      { onErro },
     ),
     cwInstalls.length === 0
       ? Promise.resolve([] as { unit_id: string | null; nota: number | null }[])
@@ -139,6 +171,7 @@ export async function getAvaliacoesByUnitForMonth(
             return qCw
           },
           "cardapioweb_avaliacoes por unidade",
+          { onErro },
         ),
   ])
 

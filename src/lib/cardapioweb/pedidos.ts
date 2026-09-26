@@ -21,6 +21,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import type { CwAmbiente, CwAuthMode } from "./auth"
 import { fetchCw } from "./client"
 
+/** Mês (competência) que uma gravação tocou — pra derrubar o cache certo. */
+export type MesTocado = { year: number; month: number }
+
 export type CwInstall = {
   id: string
   ambiente: CwAmbiente
@@ -172,11 +175,19 @@ export async function importarHistorico(
   install: CwInstall,
   inicio: Date,
   fim: Date,
-): Promise<{ ok: boolean; paginas: number; pedidos: number; erro?: string }> {
+): Promise<{
+  ok: boolean
+  paginas: number
+  pedidos: number
+  /** Competências das linhas gravadas (cache de mês fechado — ver sync.ts). */
+  meses: MesTocado[]
+  erro?: string
+}> {
   const admin = createAdminClient()
   let pagina = 1
   let totalPaginas = 1
   let gravados = 0
+  const meses = new Map<string, MesTocado>()
 
   while (pagina <= totalPaginas) {
     const res = await fetchCw<HistoryResponse>({
@@ -204,6 +215,7 @@ export async function importarHistorico(
         ok: false,
         paginas: pagina - 1,
         pedidos: gravados,
+        meses: [...meses.values()],
         erro: res.error ?? `HTTP ${res.status}`,
       }
     }
@@ -242,16 +254,28 @@ export async function importarHistorico(
           ok: false,
           paginas: pagina,
           pedidos: gravados,
+          meses: [...meses.values()],
           erro: error.message,
         }
       }
       gravados += linhas.length
+      for (const l of linhas)
+        if (l.ref_year && l.ref_month)
+          meses.set(`${l.ref_year}-${l.ref_month}`, {
+            year: l.ref_year,
+            month: l.ref_month,
+          })
     }
 
     pagina++
   }
 
-  return { ok: true, paginas: totalPaginas, pedidos: gravados }
+  return {
+    ok: true,
+    paginas: totalPaginas,
+    pedidos: gravados,
+    meses: [...meses.values()],
+  }
 }
 
 // ─── 2) Detalhe (caro — 1 chamada por pedido) ───────────────────────────
@@ -418,12 +442,19 @@ async function inserirItens(
 export async function detalharPendentes(
   install: CwInstall,
   limite = 80,
-): Promise<{ processados: number; erros: number; restantes: number }> {
+): Promise<{
+  processados: number
+  erros: number
+  restantes: number
+  /** Competências dos pedidos que ganharam valor (cache de mês fechado). */
+  meses: MesTocado[]
+}> {
   const admin = createAdminClient()
+  const meses = new Map<string, MesTocado>()
 
   const { data: pendentes } = await admin
     .from("cardapioweb_pedidos")
-    .select("id, order_id")
+    .select("id, order_id, ref_year, ref_month")
     .eq("install_id", install.id)
     .eq("detalhe_ok", false)
     .lt("detalhe_tentativas", 3)
@@ -456,6 +487,11 @@ export async function detalharPendentes(
     try {
       await gravarDetalhe(install, p.id as string, res.data)
       processados++
+      if (p.ref_year && p.ref_month)
+        meses.set(`${p.ref_year}-${p.ref_month}`, {
+          year: Number(p.ref_year),
+          month: Number(p.ref_month),
+        })
     } catch (e) {
       erros++
       await admin.rpc("cardapioweb_marcar_erro_detalhe", {
@@ -472,5 +508,5 @@ export async function detalharPendentes(
     .eq("detalhe_ok", false)
     .lt("detalhe_tentativas", 3)
 
-  return { processados, erros, restantes: count ?? 0 }
+  return { processados, erros, restantes: count ?? 0, meses: [...meses.values()] }
 }

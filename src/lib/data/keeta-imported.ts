@@ -11,6 +11,7 @@
 import "server-only"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { mesFechadoComCache, TAG_KEETA } from "@/lib/cache-tags"
 import { registrarFalhaDeLeitura } from "@/lib/data/falhas-leitura"
 import { textoOuNull } from "@/lib/format"
 import { comRetentativa, fetchAllRows } from "@/lib/data/paginate"
@@ -121,8 +122,33 @@ export async function getKeetaResumoByUnits(
    */
   falhas?: string[],
 ): Promise<Map<string, KeetaResumo>> {
+  if (unitIds.length === 0) return new Map()
+  // Mês FECHADO sai do cache — a Keeta só muda por importação, que derruba
+  // TAG_KEETA (ver `mesFechadoComCache`).
+  const entradas = await mesFechadoComCache({
+    nome: "keeta-resumo",
+    unitIds,
+    year,
+    month,
+    recorte: dateRange ? `${dateRange.start}..${dateRange.end}` : undefined,
+    tags: [TAG_KEETA],
+    plataforma: "Keeta",
+    falhas,
+    calcular: async (f) => [
+      ...(await keetaResumoSemCache(unitIds, year, month, dateRange, f)).entries(),
+    ],
+  })
+  return new Map(entradas)
+}
+
+async function keetaResumoSemCache(
+  unitIds: string[],
+  year: number,
+  month: number,
+  dateRange: { start: string; end: string } | undefined,
+  falhas: string[],
+): Promise<Map<string, KeetaResumo>> {
   const out = new Map<string, KeetaResumo>()
-  if (unitIds.length === 0) return out
   const admin = createAdminClient()
   const registrar = (m: string) => {
     falhas?.push(`keeta: ${m}`)

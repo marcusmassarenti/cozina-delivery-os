@@ -259,5 +259,13 @@ export async function processarShopBindStatus(
     }
   }
 
+  /* Vínculo que ganhou dono (ou foi desativado) muda de quem são as faturas
+     JÁ gravadas, inclusive de meses fechados — que vêm de cache desde
+     25/09/26. O backfill só derruba o que ele mesmo grava. */
+  if (out.vinculadas.length > 0 || out.desvinculadas.length > 0) {
+    const { limparCacheAgregados, TAG_99FOOD } = await import("@/lib/cache-tags")
+    await limparCacheAgregados([TAG_99FOOD])
+  }
+
   return out
 }

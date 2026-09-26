@@ -13,6 +13,10 @@ import { unstable_cache } from "next/cache"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { rpcTodasAsLinhas } from "@/lib/data/paginate"
+import {
+  registrarFalhaDeLeitura,
+  type PlataformaLeitura,
+} from "@/lib/data/falhas-leitura"
 
 /** Conciliação do iFood — tudo derivado de ifood_financeiro_lancamentos. */
 export const TAG_FINANCEIRO_IFOOD = "ifood-financeiro"
@@ -20,11 +24,17 @@ export const TAG_FINANCEIRO_IFOOD = "ifood-financeiro"
 export const TAG_99FOOD = "99food-pedidos"
 /** Fatura e pedidos da Keeta. */
 export const TAG_KEETA = "keeta-dados"
+/** Pedidos e avaliações do Cardápio Web (sync, backfill, detalhe). */
+export const TAG_CARDAPIOWEB = "cardapioweb-dados"
+/** Avaliações do iFood (sync da API e planilha). */
+export const TAG_AVALIACOES_IFOOD = "ifood-avaliacoes"
 
 export const TODAS_AS_TAGS = [
   TAG_FINANCEIRO_IFOOD,
   TAG_99FOOD,
   TAG_KEETA,
+  TAG_CARDAPIOWEB,
+  TAG_AVALIACOES_IFOOD,
 ] as const
 
 /** Mês corrente em São Paulo — o único que ainda pode mudar sozinho. */
@@ -112,6 +122,77 @@ export async function rpcMensalComCache<T>(
     data: null,
     error: e instanceof Error ? e.message : String(e),
   }))
+}
+
+/** Leitura que terminou com falha: devolve o parcial, mas não entra no cache. */
+class LeituraParcial extends Error {
+  constructor(
+    readonly falhas: string[],
+    readonly parcial: unknown,
+  ) {
+    super("leitura parcial")
+    this.name = "LeituraParcial"
+  }
+}
+
+/**
+ * Qualquer agregado de mês FECHADO com cache — o mesmo contrato do
+ * `rpcMensalComCache`, pra quem monta o número em JS (Marcus, 25/09/26:
+ * "focar na fluidez"; o Gráfico de Evolução pede o ano inteiro a cada
+ * abertura do Dashboard, e só o iFood ficava guardado).
+ *
+ *  • Mês corrente nunca entra: ainda muda sozinho.
+ *  • LEITURA COM FALHA NÃO ENTRA. `calcular` recebe um `falhas[]`; se algo
+ *    cair ali, o parcial vai pra tela (com o aviso de sempre) e a próxima
+ *    requisição tenta de novo — a lição de julho/26 da Pinheiros, quando um
+ *    erro guardado por 24 h tirou o iFood inteiro do mês sem ninguém ver.
+ *  • Se o PRÓPRIO cache falhar, calcula direto: cache é atalho, não pode
+ *    derrubar tela.
+ *
+ * O valor tem que ser JSON puro (Map vira `[...map.entries()]` antes). A
+ * chave leva as lojas ORDENADAS e o recorte de dias: o mesmo mês pedido pra
+ * outro conjunto de lojas ou outro recorte é outra resposta.
+ *
+ * Quem grava em mês fechado derruba as `tags` (ver `limparSeTocouMesFechado`).
+ */
+export async function mesFechadoComCache<T>(opts: {
+  nome: string
+  unitIds: string[] | undefined
+  year: number
+  month: number
+  /** "mes" ou "AAAA-MM-DD..AAAA-MM-DD". */
+  recorte?: string
+  tags: string[]
+  calcular: (falhas: string[]) => Promise<T>
+  /** Do chamador: recebe o que falhou (mesmo com cache no caminho). */
+  falhas?: string[]
+  /** Pra reavisar a tela quando a falha acontece dentro do cache. */
+  plataforma?: PlataformaLeitura
+}): Promise<T> {
+  const { year, month } = opts
+  if (!mesFechado(year, month)) return opts.calcular(opts.falhas ?? [])
+
+  const lojas = opts.unitIds ? [...opts.unitIds].sort().join(",") : "todas"
+  try {
+    return await unstable_cache(
+      async () => {
+        const f: string[] = []
+        const r = await opts.calcular(f)
+        if (f.length > 0) throw new LeituraParcial(f, r)
+        return r
+      },
+      [opts.nome, "v1", `${year}-${month}`, opts.recorte ?? "mes", lojas],
+      { tags: opts.tags, revalidate: 86_400 },
+    )()
+  } catch (e) {
+    if (e instanceof LeituraParcial) {
+      opts.falhas?.push(...e.falhas)
+      if (opts.plataforma) registrarFalhaDeLeitura(opts.plataforma)
+      return e.parcial as T
+    }
+    console.error(`[cache] ${opts.nome} ${year}-${month}: calculando sem cache —`, e)
+    return opts.calcular(opts.falhas ?? [])
+  }
 }
 
 /**

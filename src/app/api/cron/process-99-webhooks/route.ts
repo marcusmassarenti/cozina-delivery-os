@@ -194,6 +194,10 @@ export async function GET(req: Request) {
           { unit_id: alvoUnitId, app_shop_id: appShopId, active: true },
           { onConflict: "app_shop_id" },
         )
+        // Vínculo novo: faturas já gravadas passam a contar pra unidade,
+        // inclusive de meses fechados (que vêm de cache).
+        const cache = await import("@/lib/cache-tags")
+        await cache.limparCacheAgregados([cache.TAG_99FOOD])
         await admin
           .from("ninefood_activation_requests")
           .update({

@@ -14,6 +14,11 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getAllShopBillDetail, type NinefoodBillRow } from "./financeiro"
 import { idsDeUnidadesForaDoSync } from "@/lib/data/unidades-inativas"
+import {
+  limparCacheAgregados,
+  limparSeTocouMesFechado,
+  TAG_99FOOD,
+} from "@/lib/cache-tags"
 
 const cents = (v: number | null | undefined) => Math.round(Number(v ?? 0)) / 100
 
@@ -167,6 +172,14 @@ export async function syncNinefoodFinanceiro(opts: {
   ])
 
   const results: ShopSyncResult[] = []
+  /* Meses em que ESTA rodada gravou fatura — pra derrubar o cache dos meses
+     fechados da 99 no fim (o resumo do mês fechado vem de cache desde
+     25/09/26). Sem isto, o backfill de uma loja nova gravava julho e agosto
+     e a tela continuava mostrando os meses sem a 99 por até 24 h. */
+  const mesesTocados = new Map<string, { year: number; month: number }>()
+  // Vínculo novo muda de quem são as faturas JÁ gravadas (o resumo junta pelo
+  // vínculo), mesmo as de meses fora da janela desta rodada.
+  let vinculoMudou = false
   for (const link of (((links as any[]) ?? []) as StoreLink[])
     // Loja fechada não sincroniza. Link SEM unidade continua entrando: é
     // assim que a loja nova é descoberta e vinculada na primeira rodada.
@@ -189,6 +202,7 @@ export async function syncNinefoodFinanceiro(opts: {
       })
       const cityHint = rows[0]?.cityName ?? null
       const { unitId, created } = await resolveUnitForLink(admin, link, cityHint)
+      if (!link.unit_id && unitId) vinculoMudou = true
       res.unitId = unitId
       res.unitCreated = created
 
@@ -221,10 +235,19 @@ export async function syncNinefoodFinanceiro(opts: {
       ).length
 
       for (let i = 0; i < records.length; i += 500) {
+        const lote = records.slice(i, i + 500)
         const { error } = await admin
           .from("ninefood_api_bill")
-          .upsert(records.slice(i, i + 500), { onConflict: "app_shop_id,order_id,order_type" })
+          .upsert(lote, { onConflict: "app_shop_id,order_id,order_type" })
         if (error) throw new Error(error.message)
+        for (const r of lote) {
+          const d = String(r.business_date ?? "")
+          if (d.length >= 7)
+            mesesTocados.set(d.slice(0, 7), {
+              year: Number(d.slice(0, 4)),
+              month: Number(d.slice(5, 7)),
+            })
+        }
       }
       res.count = records.length
       res.bruto = records
@@ -265,5 +288,7 @@ export async function syncNinefoodFinanceiro(opts: {
     }
     results.push(res)
   }
+  if (vinculoMudou) await limparCacheAgregados([TAG_99FOOD])
+  else await limparSeTocouMesFechado(TAG_99FOOD, mesesTocados.values())
   return { results, startDate: opts.startDate, endDate: opts.endDate }
 }

@@ -81,6 +81,12 @@ export type ResultadoAvaliacoes = {
   /** Até onde a varredura voltou — pra tela poder dizer o alcance. */
   ate: string | null
   erro?: string
+  /**
+   * Competências das avaliações que NÃO existiam antes. O upsert repassa a
+   * janela de retroatividade inteira todo dia; só avaliação nova muda a nota
+   * de um mês — e só ela derruba o cache do mês fechado (ver sync.ts).
+   */
+  mesesNovos?: { year: number; month: number }[]
 }
 
 /**
@@ -124,6 +130,11 @@ export async function sincronizarAvaliacoes(
   let paginas = 0
   let total = 0
   let ate: string | null = null
+  const mesesNovos = new Map<string, { year: number; month: number }>()
+  const comMeses = <T extends object>(r: T) => ({
+    ...r,
+    mesesNovos: [...mesesNovos.values()],
+  })
 
   let fim = new Date()
   for (let j = 0; j < janelas; j++) {
@@ -153,7 +164,7 @@ export async function sincronizarAvaliacoes(
       if (!r.ok) {
         // Falha vira erro reportado, não silêncio: uma janela que não veio é
         // avaliação faltando, e faltar avaliação parece "loja pouco avaliada".
-        return { novas, paginas, total, ate, erro: `HTTP ${r.status}` }
+        return comMeses({ novas, paginas, total, ate, erro: `HTTP ${r.status}` })
       }
 
       const lista = r.data?.reviews ?? []
@@ -188,11 +199,28 @@ export async function sincronizarAvaliacoes(
         })
 
       if (linhas.length > 0) {
+        // Quais já existiam — pra saber que mês mudou de verdade.
+        const { data: jaTinha } = await admin
+          .from("cardapioweb_avaliacoes")
+          .select("review_id")
+          .eq("install_id", install.id)
+          .in(
+            "review_id",
+            linhas.map((l) => l.review_id),
+          )
+        const existentes = new Set((jaTinha ?? []).map((x) => String(x.review_id)))
         const { error } = await admin
           .from("cardapioweb_avaliacoes")
           .upsert(linhas, { onConflict: "install_id,review_id" })
-        if (error) return { novas, paginas, total, ate, erro: error.message }
+        if (error)
+          return comMeses({ novas, paginas, total, ate, erro: error.message })
         novas += linhas.length
+        for (const l of linhas)
+          if (!existentes.has(l.review_id) && l.ref_year && l.ref_month)
+            mesesNovos.set(`${l.ref_year}-${l.ref_month}`, {
+              year: l.ref_year,
+              month: l.ref_month,
+            })
       }
 
       const totalPaginas = r.data?.pagination?.total_pages ?? 1
@@ -212,7 +240,7 @@ export async function sincronizarAvaliacoes(
       .eq("install_id", install.id)
   }
 
-  return { novas, paginas, total, ate }
+  return comMeses({ novas, paginas, total, ate })
 }
 
 /** "YYYY-MM" no fuso de São Paulo. */

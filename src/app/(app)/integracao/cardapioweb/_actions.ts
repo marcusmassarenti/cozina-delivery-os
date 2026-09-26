@@ -230,6 +230,11 @@ export async function vincularUnidadeAction(
       .select("id")
     reassociados[chave] = (data ?? []).length
   }
+  // Pedido antigo mudou de loja — inclusive de mês fechado, que vem de cache.
+  {
+    const { limparCacheAgregados, TAG_CARDAPIOWEB } = await import("@/lib/cache-tags")
+    await limparCacheAgregados([TAG_CARDAPIOWEB])
+  }
 
   // Marca o canal na unidade, pra ela aparecer com o selo do Cardápio Web na
   // listagem sem ninguém precisar lembrar de ir lá marcar na mão.

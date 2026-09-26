@@ -95,6 +95,10 @@ export async function confirmeiAutorizacao99(
       },
       { onConflict: "app_shop_id" },
     )
+    // Faturas já gravadas dessa loja passam a contar pra unidade — inclusive
+    // de meses fechados, que vêm de cache.
+    const { limparCacheAgregados, TAG_99FOOD } = await import("@/lib/cache-tags")
+    await limparCacheAgregados([TAG_99FOOD])
     await admin
       .from("ninefood_activation_requests")
       .update({ status: "ativa", updated_at: agora })
