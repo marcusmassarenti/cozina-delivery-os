@@ -18,6 +18,8 @@ import { PlatformLogo } from "@/components/platform-logo"
 import {
   getAntecipacaoFeeByUnits,
   getAvailablePeriods,
+  getFinanceiroResumoByUnits,
+  type FinanceiroResumo,
 } from "@/lib/data/ifood-imported"
 import { getDailyReportMatrix } from "@/lib/data/relatorio-diario"
 import { getVisibleUnits } from "@/lib/data/units"
@@ -165,7 +167,7 @@ export default async function ResultadoPage({
   /* Entrega, antecipação e VR por bandeira dependem só das lojas com
      faturamento (`rows`) — e não uma da outra. Saem juntos (antes: em fila). */
   const lojasComFat = rows.map((r) => r.unitId)
-  const [deliveryFee, antecipFeeMap, pagamento] = hasData
+  const [deliveryFee, antecipFeeMap, pagamento, finPromo] = hasData
     ? await Promise.all([
         // Custo de entrega das lojas com faturamento (parte das taxas das plataformas)
         getNetworkDeliveryFee(lojasComFat, year, month),
@@ -174,12 +176,32 @@ export default async function ResultadoPage({
         getAntecipacaoFeeByUnits(lojasComFat, year, month),
         // VR por bandeira (iFood) — surfa da tela Pedidos
         getNetworkPagamentoResumo(year, month, lojasComFat),
+        // Promoções do EXTRATO (quem bancou) — ver o card lá embaixo.
+        getFinanceiroResumoByUnits(lojasComFat, year, month),
       ])
     : [
         { ifood: 0, ninefood: 0, keeta: 0, total: 0 },
         new Map<string, number>(),
         null,
+        new Map<string, FinanceiroResumo>(),
       ]
+  /* Promoção vem do EXTRATO, não da planilha de Pedidos — mesma correção da
+     tela Pedidos (10/08/26): a planilha não existe nas lojas só-API (0 de
+     147.134 pedidos com incentivo preenchido) e o card mostrava R$ 0,00 pro
+     iFood e pra loja numa rede que investiu R$ 67 mil no mês. Sem extrato
+     nenhum, cai no que a planilha tiver. */
+  const promoExtrato = [...finPromo.values()].reduce(
+    (acc, f) => ({
+      ifood: acc.ifood + Math.abs(f.promocaoIfood),
+      loja: acc.loja + Math.abs(f.promocaoLoja),
+    }),
+    { ifood: 0, loja: 0 },
+  )
+  const temPromoExtrato = promoExtrato.ifood + promoExtrato.loja > 0
+  const promoIfood = temPromoExtrato ? promoExtrato.ifood : (pagamento?.incentivoIfood ?? 0)
+  const promoLojaIfood = temPromoExtrato ? promoExtrato.loja : (pagamento?.incentivoLoja ?? 0)
+  // Turno só existe na planilha de Pedidos; pela API tudo vem como "—".
+  const temTurno = (pagamento?.porTurno ?? []).some((t) => t.chave !== "—")
   const entregaPctBruto =
     totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
 
@@ -481,25 +503,18 @@ export default async function ResultadoPage({
                       <PlatformLogo platform="ifood" size="sm" />
                     </span>
                   </div>
-                  <MiniRow
-                    label="iFood"
-                    value={fmtBRL(pagamento.incentivoIfood)}
-                  />
-                  <MiniRow
-                    label="Loja (investiu)"
-                    value={fmtBRL(pagamento.incentivoLoja)}
-                  />
+                  <MiniRow label="iFood" value={fmtBRL(promoIfood)} />
+                  <MiniRow label="Loja (investiu)" value={fmtBRL(promoLojaIfood)} />
                   <TotalRow
                     label="Total em promoções"
-                    value={fmtBRL(
-                      pagamento.incentivoIfood + pagamento.incentivoLoja,
-                    )}
+                    value={fmtBRL(promoIfood + promoLojaIfood)}
                   />
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     &quot;Loja&quot; = promoção que a própria loja bancou (saiu
                     do bolso dela pra atrair pedido).
                   </p>
                 </div>
+                {temTurno && (
                 <div className="rounded-xl border bg-card p-5 shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
                     <Truck className="size-4 text-muted-foreground" />
@@ -523,6 +538,7 @@ export default async function ResultadoPage({
                     )} ped`}
                   />
                 </div>
+                )}
               </div>
             </div>
           )}

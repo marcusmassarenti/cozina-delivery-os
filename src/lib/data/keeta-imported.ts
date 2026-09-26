@@ -60,6 +60,19 @@ export type KeetaResumo = {
    * taxa de distância; outras_despesas ≈ taxa de pagamento online.
    */
   promocoesLoja: number
+  /**
+   * Abertura das taxas pelos PEDIDOS (0272), com sinal — fecha ao centavo:
+   * líquido = vendas − promoção − comissão − pagamento online + outros ganhos.
+   * É o que o DRE usa (a Fatura é por ciclo de repasse e fica incompleta no
+   * mês corrente). Zero quando a loja não tem relatório de pedidos no mês.
+   */
+  promoLojaComSinalRs: number
+  /** Comissão + taxa de distância (coluna `comissao` do relatório). */
+  comissaoRs: number
+  /** Taxa de pagamento online (`outras_despesas`). */
+  pagamentoOnlineRs: number
+  /** Créditos da Keeta pra loja (`outros_ganhos`). */
+  outrosGanhosRs: number
 }
 
 function emptyKeeta(): KeetaResumo {
@@ -74,6 +87,10 @@ function emptyKeeta(): KeetaResumo {
     promocoesLoja: 0,
     horasAbertasSoma: 0,
     diasComAbertura: 0,
+    promoLojaComSinalRs: 0,
+    comissaoRs: 0,
+    pagamentoOnlineRs: 0,
+    outrosGanhosRs: 0,
   }
 }
 
@@ -126,7 +143,8 @@ export async function getKeetaResumoByUnits(
   // Mês FECHADO sai do cache — a Keeta só muda por importação, que derruba
   // TAG_KEETA (ver `mesFechadoComCache`).
   const entradas = await mesFechadoComCache({
-    nome: "keeta-resumo",
+    // "-2": as entradas antigas não têm a abertura das taxas (0272).
+    nome: "keeta-resumo-2",
     unitIds,
     year,
     month,
@@ -181,6 +199,10 @@ async function keetaResumoSemCache(
     cur.diasComAbertura += Number(r.dias_abertura) || 0
     cur.liquido += Number(r.ped_liquido) || 0
     cur.promocoesLoja += Number(r.ped_promo) || 0
+    cur.promoLojaComSinalRs += Number(r.ped_promo_com_sinal) || 0
+    cur.comissaoRs += Number(r.ped_comissao) || 0
+    cur.pagamentoOnlineRs += Number(r.ped_pagamento) || 0
+    cur.outrosGanhosRs += Number(r.ped_outros_ganhos) || 0
     out.set(unitId, cur)
     if (Number(r.ped_qtd) > 0) {
       brutoFromPedidos.set(unitId, Number(r.ped_bruto) || 0)

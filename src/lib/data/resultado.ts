@@ -14,6 +14,13 @@
 
 import "server-only"
 
+import {
+  itensTaxaIfood,
+  itensTaxaKeeta,
+  montarPlataformaDre,
+  ROTULO_DIFERENCA_IFOOD,
+  type PlataformaDre,
+} from "@/lib/dre/plataformas-dre"
 import { brutoIfoodComoNoPortal } from "@/lib/ifood-bruto"
 
 import { lerFinanceiro } from "@/lib/financeiro/regua"
@@ -27,11 +34,7 @@ import { getNinefoodResumoByUnits } from "@/lib/data/ninefood-imported"
 import { getKeetaResumoByUnits } from "@/lib/data/keeta-imported"
 import { getKeetaPedidoPorLoja } from "@/lib/data/keeta-pedidos"
 import { getCardapioWebResumoByUnits } from "@/lib/data/cardapioweb-imported"
-import {
-  PLATAFORMAS,
-  type MarketplaceId,
-  type PlatformId,
-} from "@/components/platform-logo"
+import { PLATAFORMAS, type MarketplaceId } from "@/components/platform-logo"
 import { getKeetaFaturaTaxasByUnits } from "@/lib/data/keeta-repasses"
 import { getRealMonthlyForUnits } from "@/lib/data/lancamentos"
 import { emptyMonthly, type UnitMonthly } from "@/lib/mock-monthly"
@@ -337,30 +340,8 @@ export async function getNetworkResultadoForMonth(
 
 // ─── DRE detalhado da rede (taxas itemizadas por plataforma) ──────────
 
-export type NetworkDrePlat = {
-  id: PlatformId
-  name: string
-  bruto: number
-  liquido: number
-  taxaTotal: number
-  /** Só iFood: cesta dos pedidos cancelados (o DRE abre em "Vendas totais −
-   * cancelados", igual ao portal). */
-  perdaCancelamento?: number
-  /** Só iFood: quantidade de pedidos cancelados. */
-  cancelQtd?: number
-  /** VR líquido à parte (só iFood). */
-  vrLiquido: number
-  /** Desconto da loja entre o bruto e as taxas — 99 por API (ver DrePlat). */
-  descontos?: { label: string; value: number }[]
-  /** Só iFood: dinheiro recebido direto na entrega (fora do repasse). Volta no
-   * "Resultado total", igual ao DRE por unidade. */
-  recebidoDireto?: number
-  /** Promoção/cupom que a LOJA bancou — separa "taxa real da plataforma" das
-   * decisões de campanha da loja no card "Para onde vai o bruto". */
-  promocoesLoja: number
-  /** `info` = mostra mas não soma (já dentro do bruto). Ver DrePlat. */
-  itens: { label: string; value: number; credit?: boolean; info?: boolean }[]
-}
+/** Linha de plataforma do DRE da rede — mesma forma do DRE da loja. */
+export type NetworkDrePlat = PlataformaDre
 
 /**
  * Abertura das taxas por plataforma SOMADA na rede — alimenta o DreDetalhado da
@@ -418,10 +399,10 @@ export async function getNetworkDrePlatforms(
       // dinheiro que a loja embolsou fora do repasse. O DRE por unidade já
       // devolve isso no "Resultado total"; a rede esquecia, subestimando o
       // consolidado. Só iFood tem.
-      recDireto: 0, mensalidade: 0,
+      recDireto: 0, mensalidade: 0, transacao: 0,
     },
     ni: { bruto: 0, liq: 0, comissao: 0, taxaPgto: 0, promo: 0, promoPlanilha: 0, promoLoja: 0, entrega: 0, freteGratis: 0 },
-    ke: { bruto: 0, liq: 0, promo: 0 },
+    ke: { bruto: 0, liq: 0, promo: 0, promoSinal: 0, comissao: 0, pagamento: 0, outros: 0 },
     // Canal próprio: sem comissão, sem promoção de plataforma. O que separa
     // bruto de líquido aqui é só cancelamento.
     cw: { bruto: 0, liq: 0, cancelQtd: 0 },
@@ -473,6 +454,7 @@ export async function getNetworkDrePlatforms(
       // itemizados nesse padrão — caem no resto "Cancelamentos / outros".
       a.if.entrega += Math.abs(fin!.taxaEntrega)
       a.if.comissao += Math.abs(fin!.comissaoIfood)
+      a.if.transacao += Math.abs(fin!.taxaTransacao)
       a.if.promo += Math.abs(fin!.promocaoLoja)
       a.if.recDireto += fin!.recebidoDireto
       // Mensalidade do plano + pacote de anúncios: cobranças de PERÍODO.
@@ -493,173 +475,88 @@ export async function getNetworkDrePlatforms(
     }
     a.ke.bruto += keBruto
     a.ke.liq += keLiq
-    if (hasKeeta) a.ke.promo += keeta!.promocoesLoja
+    if (hasKeeta) {
+      a.ke.promo += keeta!.promocoesLoja
+      a.ke.promoSinal += keeta!.promoLojaComSinalRs
+      a.ke.comissao += keeta!.comissaoRs
+      a.ke.pagamento += keeta!.pagamentoOnlineRs
+      a.ke.outros += keeta!.outrosGanhosRs
+    }
     a.cw.bruto += cwBruto
     a.cw.liq += cwLiq
     if (hasCw) a.cw.cancelQtd += cwU!.cancelamentosQtd
     a.vr += Math.max(0, mm.vrRecebido - mm.vrTaxaMedia8)
   }
 
-  const make = (
-    id: PlatformId,
-    name: string,
-    bruto: number,
-    liq: number,
-    itens: { label: string; value: number; info?: boolean }[],
-    vr: number,
-    promoLoja: number,
-    cancel?: { valor: number; qtd: number },
-    recebidoDireto = 0,
-    descontos: { label: string; value: number }[] = [],
-  ): NetworkDrePlat | null => {
-    if (bruto <= 0) return null
-    // Taxa REAL = bruto − repasse − recebido direto. O recebido direto não é
-    // taxa (é dinheiro que a loja pegou na entrega); sem descontá-lo aqui, a
-    // linha por plataforma inflaria e não somaria o header. Mesma conta do DRE
-    // por unidade (financeiro-loja-tab).
-    const lista: NetworkDrePlat["itens"] = itens.filter((i) => i.value > 0)
-    // Item `info` aparece mas não soma: já está dentro do bruto (99).
-    const somaItens = lista.reduce((s, i) => s + (i.info ? 0 : i.value), 0)
-    const descontoTotal = descontos.reduce((s, d) => s + Math.max(0, d.value), 0)
-    const derivada = bruto - descontoTotal - liq - recebidoDireto
-
-    /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS, NÃO `bruto − líquido`.
-     *
-     * A derivação parece mais segura e não é: ela depende do líquido, e o
-     * líquido do 99 é a peça frágil da conta — a "Receita total" do relatório
-     * não é receita menos taxa, e a `receita_real_loja` do relatório de
-     * pedidos vem corrompida em parte das lojas (a Jardins marcou R$ 1.021,48
-     * sobre R$ 53.445,18 de venda em ago/26). Já a comissão, a taxa de
-     * pagamento e as promoções vêm itemizadas do relatório oficial e foram
-     * conferidas ao centavo.
-     *
-     * ⚠️ O QUE ISSO CONSERTA, e por que o cliente reclamou: era
-     * `Math.max(0, bruto − líquido − recebido)`. Na Pizzaria Forno a Lenha 4
-     * (DG FOODS) essa conta dava −R$ 2.688,14, o `max` devolvia ZERO, e a
-     * tela dizia "Taxas das plataformas R$ 0,00" com R$ 11.601,89 de taxa
-     * itemizada logo abaixo. O lojista viu e perguntou se tinha ficado sem
-     * taxa nenhuma. O zero não era arredondamento: era um negativo escondido.
-     *
-     * A diferença entre as duas contas continua aparecendo, mas com o nome
-     * certo — ver abaixo. */
-    const taxaTotal = somaItens > 0 ? somaItens : Math.max(0, derivada)
-
-    /* A diferença vira LINHA VISÍVEL, e só é chamada de crédito quando dá
-     * pra afirmar isso.
-     *
-     * Antes, qualquer sobra negativa virava "Créditos / estornos da
-     * plataforma" — um rótulo que afirma que a plataforma devolveu dinheiro.
-     * Na Forno a Lenha esse "crédito" era de R$ 11.601,89, exatamente o valor
-     * das taxas, porque era só o resto da conta. Chamar entulho de
-     * conciliação de crédito faz o lojista somar no caixa dinheiro que não
-     * existe.
-     *
-     * Agora o rótulo diz o que a linha é: uma diferença entre o que a
-     * plataforma repassou e o que as taxas explicam. */
-    const naoExplicado =
-      liq > 0 ? bruto - descontoTotal - recebidoDireto - taxaTotal - liq : 0
-    if (Math.abs(naoExplicado) > 0.5) {
-      lista.push({
-        label:
-          naoExplicado > 0
-            ? "Diferença não explicada pelas taxas"
-            : "Recebido a mais que as taxas explicam",
-        value: Math.abs(naoExplicado),
-        credit: naoExplicado < 0,
-      })
-    }
-    return {
-      id,
-      name,
-      bruto,
-      liquido: liq,
-      taxaTotal,
-      perdaCancelamento: cancel?.valor ?? 0,
-      cancelQtd: cancel?.qtd ?? 0,
-      vrLiquido: vr,
-      recebidoDireto,
-      promocoesLoja: Math.min(Math.abs(promoLoja), taxaTotal + descontoTotal),
-      descontos,
-      itens: lista,
-    }
-  }
+  // Montagem compartilhada com o DRE da loja — ver `lib/dre/plataformas-dre.ts`
+  // (por que a linha é a taxa real, a entrega parceira não é custo e a Keeta
+  // vem dos pedidos).
   return [
-    make(
-      "ifood",
-      "iFood",
-      a.if.bruto,
-      a.if.liq,
-      [
-        { label: "Taxa de entrega", value: a.if.entrega },
-        { label: "Comissão + serviço", value: a.if.comissao },
-        { label: "Promoções (loja bancou)", value: a.if.promo },
-        { label: "Mensalidade / anúncios", value: a.if.mensalidade },
-      ],
-      a.vr,
-      a.if.promo,
-      { valor: a.if.cancelValor, qtd: a.if.cancelQtd },
-      a.if.recDireto,
-    ),
-    make(
-      "99food",
-      "99 Food",
-      a.ni.bruto,
-      a.ni.liq,
-      [
+    montarPlataformaDre({
+      id: "ifood",
+      name: "iFood",
+      bruto: a.if.bruto,
+      liquido: a.if.liq,
+      itens: itensTaxaIfood({
+        comissao: a.if.comissao,
+        transacao: a.if.transacao,
+        promoLoja: a.if.promo,
+        mensalidadeAnuncios: a.if.mensalidade,
+      }),
+      vrLiquido: a.vr,
+      promoLoja: a.if.promo,
+      cancel: { valor: a.if.cancelValor, qtd: a.if.cancelQtd },
+      recebidoDireto: a.if.recDireto,
+      rotuloDiferenca: ROTULO_DIFERENCA_IFOOD,
+    }),
+    montarPlataformaDre({
+      id: "99food",
+      name: "99 Food",
+      bruto: a.ni.bruto,
+      liquido: a.ni.liq,
+      itens: [
         { label: "Comissão", value: a.ni.comissao },
         { label: "Taxa de pagamento", value: a.ni.taxaPgto },
         { label: "Entrega pelo 99", value: a.ni.entrega },
         // Loja só-planilha: o bruto já vem sem as ofertas — informa, não soma.
         { label: "Promoções da loja", value: a.ni.promoPlanilha, info: true },
       ],
-      0,
-      a.ni.promo,
-      undefined,
-      0,
+      promoLoja: a.ni.promo,
       // API (0259): bruto = preço de cardápio; estas levam ao que o cliente
       // pagou. Mesma abertura do DRE da loja.
-      [
+      descontos: [
         { label: "Promoções pagas pela loja", value: a.ni.promoLoja },
         { label: "Frete grátis bancado pela loja", value: a.ni.freteGratis },
       ],
-    ),
-    make(
-      "keeta",
-      "Keeta",
-      a.ke.bruto,
-      a.ke.liq,
-      // Quebra oficial da Fatura (aba Histórico) somada na rede. Sem Fatura,
-      // ao menos a promoção que a loja bancou; o resto vira Cancelamentos.
-      keFat.hasData
-        ? [
-            { label: "Comissão", value: keFat.comissao },
-            { label: "Taxa de distância", value: keFat.taxaDistancia },
-            { label: "Taxa de pagamento online", value: keFat.taxaPagamentoOnline },
-            { label: "Saque antecipado", value: keFat.taxaSaqueAntecipado },
-            { label: "Taxa de serviço mensal", value: keFat.taxaServicoMensal },
-            { label: "Publicidade / marketing", value: keFat.publicidade },
-            { label: "Ajuste de comissão", value: keFat.ajusteComissao },
-            { label: "Serviço da Ajuda", value: keFat.deducaoAjuda },
-            { label: "Promoções (loja bancou)", value: keFat.promoLoja },
-          ]
-        : [{ label: "Promoções (loja bancou)", value: a.ke.promo }],
-      0,
-      keFat.hasData ? keFat.promoLoja : a.ke.promo,
-    ),
-    // Canal próprio. `itens` vai vazio de propósito: não há comissão, taxa de
-    // entrega nem promoção de plataforma pra abrir. A diferença entre bruto e
-    // líquido é só cancelamento, e o `make` já a rotula como
-    // "Cancelamentos / outros" — que aqui é literalmente o que ela é.
-    make(
-      "cardapioweb",
-      "Cardápio Web",
-      a.cw.bruto,
-      a.cw.liq,
-      [],
-      0,
-      0,
-      { valor: Math.max(0, a.cw.bruto - a.cw.liq), qtd: a.cw.cancelQtd },
-    ),
+    }),
+    montarPlataformaDre({
+      id: "keeta",
+      name: "Keeta",
+      bruto: a.ke.bruto,
+      liquido: a.ke.liq,
+      itens: itensTaxaKeeta({
+        pedidos: {
+          comissao: a.ke.comissao,
+          pagamentoOnline: a.ke.pagamento,
+          promoLoja: a.ke.promoSinal,
+          outrosGanhos: a.ke.outros,
+        },
+        fatura: keFat,
+        promoFallback: a.ke.promo,
+      }),
+      promoLoja: a.ke.promo,
+    }),
+    // Canal próprio: sem comissão, sem promoção de plataforma. A diferença
+    // entre bruto e líquido é só cancelamento.
+    montarPlataformaDre({
+      id: "cardapioweb",
+      name: "Cardápio Web",
+      bruto: a.cw.bruto,
+      liquido: a.cw.liq,
+      itens: [],
+      cancel: { valor: Math.max(0, a.cw.bruto - a.cw.liq), qtd: a.cw.cancelQtd },
+      rotuloDiferenca: { falta: "Cancelamentos / outros", sobra: "Recebido a mais" },
+    }),
   ].filter((p): p is NetworkDrePlat => p !== null)
 }
 
@@ -695,7 +592,8 @@ export async function getNetworkDrePlatformsForRange(
       vrLiquido: number
       recebidoDireto: number
       promocoesLoja: number
-      itens: Map<string, { value: number; credit?: boolean }>
+      itens: Map<string, { value: number; credit?: boolean; info?: boolean }>
+      descontos: Map<string, number>
     }
   >()
   for (const monthPlats of parts) {
@@ -710,7 +608,10 @@ export async function getNetworkDrePlatformsForRange(
         vrLiquido: 0,
         recebidoDireto: 0,
         promocoesLoja: 0,
-        itens: new Map<string, { value: number; credit?: boolean }>(),
+        itens: new Map<string, { value: number; credit?: boolean; info?: boolean }>(),
+        // Descontos da loja (99 por API) somados por rótulo — antes ficavam de
+        // fora do período e o DRE de vários meses perdia essa linha.
+        descontos: new Map<string, number>(),
       }
       cur.bruto += p.bruto
       cur.liquido += p.liquido
@@ -721,10 +622,12 @@ export async function getNetworkDrePlatformsForRange(
       cur.recebidoDireto += p.recebidoDireto ?? 0
       cur.promocoesLoja += p.promocoesLoja
       for (const it of p.itens) {
-        const e = cur.itens.get(it.label) ?? { value: 0, credit: it.credit }
+        const e = cur.itens.get(it.label) ?? { value: 0, credit: it.credit, info: it.info }
         e.value += it.value
         cur.itens.set(it.label, e)
       }
+      for (const d of p.descontos ?? [])
+        cur.descontos.set(d.label, (cur.descontos.get(d.label) ?? 0) + d.value)
       byId.set(p.id, cur)
     }
   }
@@ -741,10 +644,12 @@ export async function getNetworkDrePlatformsForRange(
       vrLiquido: c.vrLiquido,
       recebidoDireto: c.recebidoDireto,
       promocoesLoja: c.promocoesLoja,
+      descontos: [...c.descontos].map(([label, value]) => ({ label, value })),
       itens: [...c.itens].map(([label, e]) => ({
         label,
         value: e.value,
         credit: e.credit,
+        info: e.info,
       })),
     }
   })

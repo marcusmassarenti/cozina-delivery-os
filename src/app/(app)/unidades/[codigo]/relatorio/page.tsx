@@ -230,7 +230,7 @@ export default async function RelatorioMensalUnidade({
 
       {/* Financeiro completo (DRE, taxas, VR por bandeira, mix, turnos, por dia) */}
       <Secao titulo="Financeiro">
-        <FinanceiroLojaTab unitId={unit.id} monthly={m} year={year} month={month} />
+        <FinanceiroLojaTab unitId={unit.id} monthly={m} year={year} month={month} ifood={fin} keeta={keeta} />
       </Secao>
 
       {/* Cardápio — cada plataforma começa em uma página nova */}

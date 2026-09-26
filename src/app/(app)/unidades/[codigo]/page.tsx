@@ -24,6 +24,7 @@ import {
   getAvaliacoesResumoForMonth,
   getCancelamentoCestaForMonth,
   getFinanceiroResumoForMonth,
+  type FinanceiroResumo,
 } from "@/lib/data/ifood-imported"
 import {
   getNinefoodAvaliacoesResumoForMonth,
@@ -33,6 +34,7 @@ import {
 import {
   getKeetaAvaliacoesResumoForMonth,
   getKeetaResumoForMonth,
+  type KeetaResumo,
 } from "@/lib/data/keeta-imported"
 import { getAccessibleUnitIds } from "@/lib/auth/roles"
 import { isSuperadmin, userCan } from "@/lib/auth/permissions"
@@ -457,6 +459,8 @@ export default async function UnidadeDetalhePage({
             fechamentos={fechamentos}
             canEditFechamento={canEditFechamento}
             naCarteira={naCarteira}
+            ifoodResumo={fin}
+            keetaResumo={keeta}
           />
         </>
       ) : (
@@ -739,9 +743,14 @@ async function DetailTabs({
   fechamentos,
   canEditFechamento,
   naCarteira,
+  ifoodResumo,
+  keetaResumo,
 }: {
   unit: Unit
   monthlyMerged: UnitMonthly
+  /** Resumos do período — abertura das taxas do DRE (aba Financeiro). */
+  ifoodResumo: FinanceiroResumo
+  keetaResumo: KeetaResumo
   /** Plataformas habilitadas na loja (unit_platforms.active) — só essas viram chip. */
   platforms: PlatformId[]
   usaIfood: boolean
@@ -890,6 +899,8 @@ async function DetailTabs({
             month={month}
             periodoParcial={!isFullMonth}
             dateRange={isFullMonth ? undefined : periodRange}
+            ifood={ifoodResumo}
+            keeta={keetaResumo}
           />
         </Suspense>
       </TabsContent>

@@ -45,6 +45,15 @@ import { UnitCostsEditor } from "./unit-costs-editor"
 import { ReceitaPropriaCard } from "./receita-propria-card"
 import { BrutoBreakdown } from "./bruto-breakdown"
 import { DreDetalhado, type DrePlat } from "./dre-detalhado"
+import {
+  itensTaxaIfood,
+  itensTaxaKeeta,
+  montarPlataformaDre,
+  ROTULO_DIFERENCA_IFOOD,
+  type ItemTaxaDre,
+} from "@/lib/dre/plataformas-dre"
+import type { FinanceiroResumo } from "@/lib/data/ifood-imported"
+import type { KeetaResumo } from "@/lib/data/keeta-imported"
 import { getQuemPagaEntrega } from "@/lib/data/taxa-entrega"
 import { EntregaCard } from "./entrega-card"
 import { getSuperCriterios } from "@/lib/data/super"
@@ -99,9 +108,18 @@ export async function FinanceiroLojaTab({
   month,
   periodoParcial = false,
   dateRange,
+  ifood,
+  keeta,
 }: {
   unitId: string
   monthly: UnitMonthly
+  /**
+   * Resumos do período (os mesmos que a página já busca). Dão a abertura das
+   * taxas do DRE — ver `lib/dre/plataformas-dre.ts`. Sem eles, a abertura cai
+   * no `monthly` (loja sem conciliação/pedidos importados).
+   */
+  ifood?: FinanceiroResumo | null
+  keeta?: KeetaResumo | null
   year: number
   month: number
   /** Recorte de dias quando o filtro não é o mês inteiro. */
@@ -244,121 +262,94 @@ export async function FinanceiroLojaTab({
         }
       : undefined
 
-  // Abertura das taxas por plataforma pro DRE detalhado. iFood vem itemizado
-  // do `m`; 99 Food do seu resumo (comissão/taxa/promoções); Keeta só o total.
+  // Abertura das taxas por plataforma pro DRE detalhado — montagem única com
+  // o DRE da rede (`lib/dre/plataformas-dre.ts`): a linha é a taxa real
+  // (bruto − descontos − repasse − recebido direto) e a abertura soma ela.
   const buildPlat = (
     id: PlatformId,
     name: string,
-    itens: { label: string; value: number; info?: boolean }[],
+    itens: ItemTaxaDre[],
     vr: number,
     // Só o iFood traz (da Conciliação): R$ e qtd de pedidos cancelados, pro
     // DRE abrir em "Vendas totais − cancelados" igual ao portal.
     cancel?: { valor: number; qtd: number },
     // Desconto da loja entre o bruto e as taxas (99 por API, ver DrePlat).
     descontos: { label: string; value: number }[] = [],
+    rotuloDiferenca?: { falta: string; sobra: string },
   ): DrePlat | null => {
     const p = m.platforms.find((x) => x.id === id)
-    if (!p || p.bruto <= 0) return null
-    const lista: DrePlat["itens"] = itens.filter((i) => i.value > 0)
-    // Item `info` aparece mas não soma: já está dentro do bruto (ver o tipo).
-    const somaItens = lista.reduce((a, i) => a + (i.info ? 0 : i.value), 0)
-    const recebidoDireto = p.recebidoDireto ?? 0
-    const descontoTotal = descontos.reduce((a, d) => a + Math.max(0, d.value), 0)
-    const derivada = p.bruto - descontoTotal - p.liquido - recebidoDireto
-
-    /* O TOTAL É A SOMA DAS TAXAS ITEMIZADAS. Mesma mudança de resultado.ts,
-     * e o motivo nasceu nesta tela: a DRE da Pizzaria Forno a Lenha 4
-     * (DG FOODS) mostrava "Taxas das plataformas R$ 0,00" com R$ 11.601,89
-     * de taxa itemizada logo abaixo, e o lojista perguntou se tinha ficado
-     * sem taxa nenhuma.
-     *
-     * O zero vinha de `Math.max(0, bruto − líquido − recebido)`: a conta dava
-     * −R$ 2.688,14 e o `max` devolvia zero. Um negativo escondido, não um
-     * arredondamento.
-     *
-     * A itemização é a fonte confiável — comissão, taxa de pagamento e
-     * promoções vêm do relatório oficial e batem ao centavo. Já o líquido do
-     * 99 não: a "Receita total" do relatório não é receita menos taxa, e a
-     * `receita_real_loja` vem corrompida em parte das lojas. */
-    const taxaTotal = somaItens > 0 ? somaItens : Math.max(0, derivada)
-
-    /* A diferença que sobra ganha o nome do que ela é. "Créditos / estornos
-     * da plataforma" afirma que a plataforma devolveu dinheiro — e ali era só
-     * o resto da conta, do tamanho exato das taxas. Chamar entulho de
-     * conciliação de crédito faz o lojista somar no caixa o que não existe. */
-    const naoExplicado =
-      p.liquido > 0
-        ? p.bruto - descontoTotal - recebidoDireto - taxaTotal - p.liquido
-        : 0
-    if (Math.abs(naoExplicado) > 0.5) {
-      lista.push({
-        label:
-          naoExplicado > 0
-            ? "Diferença não explicada pelas taxas"
-            : "Recebido a mais que as taxas explicam",
-        value: Math.abs(naoExplicado),
-        credit: naoExplicado < 0,
-      })
-    }
-    return {
+    if (!p) return null
+    return montarPlataformaDre({
       id,
       name,
       bruto: p.bruto,
       liquido: p.liquido,
-      taxaTotal,
+      itens,
       vrLiquido: vr,
       recebidoDireto: p.recebidoDireto ?? 0,
-      perdaCancelamento: cancel?.valor ?? 0,
-      cancelQtd: cancel?.qtd ?? 0,
       descontos,
-      itens: lista,
-    }
+      cancel,
+      rotuloDiferenca,
+    })
   }
-  // Quebra da taxa da Keeta — prioridade: Fatura (oficial) → Pedidos recentes
-  // → resto. NÃO muda o total (bruto − líquido); só detalha a abertura.
-  const keetaItens: { label: string; value: number }[] = keetaFaturaTaxas.hasData
-    ? [
-        { label: "Comissão", value: keetaFaturaTaxas.comissao },
-        { label: "Taxa de distância", value: keetaFaturaTaxas.taxaDistancia },
-        { label: "Taxa de pagamento online", value: keetaFaturaTaxas.taxaPagamentoOnline },
-        { label: "Saque antecipado", value: keetaFaturaTaxas.taxaSaqueAntecipado },
-        { label: "Taxa de serviço mensal", value: keetaFaturaTaxas.taxaServicoMensal },
-        { label: "Publicidade / marketing", value: keetaFaturaTaxas.publicidade },
-        { label: "Ajuste de comissão", value: keetaFaturaTaxas.ajusteComissao },
-        { label: "Serviço da Ajuda", value: keetaFaturaTaxas.deducaoAjuda },
-        { label: "Promoções (loja bancou)", value: keetaFaturaTaxas.promoLoja },
+
+  // iFood: com a Conciliação, a abertura certa (comissão, transação,
+  // promoção da loja, mensalidade/anúncios — entrega parceira e serviço
+  // cobrado do cliente são do cliente, não custo). Sem ela, o que o `m` tem.
+  const ifoodItens: ItemTaxaDre[] = ifood?.hasData
+    ? itensTaxaIfood({
+        comissao: ifood.comissaoIfood,
+        transacao: ifood.taxaTransacao,
+        promoLoja: ifood.promocaoLoja,
+        mensalidadeAnuncios:
+          Math.abs(ifood.pacoteAnuncios) + Math.abs(ifood.mensalidade),
+      })
+    : [
+        { label: "Comissão", value: m.taxaComissaoIfood },
+        { label: "Promoções (loja bancou)", value: m.promocoes },
+        { label: "Serviços logísticos", value: m.servicosLogisticos },
+        { label: "Mensalidade / anúncios", value: m.outrosDescontosIfood },
       ]
-    : keetaPed.hasData
-      ? [
-          { label: "Comissão", value: keetaPed.comissaoBasica },
-          { label: "Taxa de distância", value: keetaPed.taxaDistancia },
-          { label: "Taxa de pagamento online", value: keetaPed.taxaPagamentoOnline },
-          { label: "Saque antecipado", value: keetaPed.taxaSaqueAntecipado },
-          { label: "Promoções (loja bancou)", value: keetaPed.promoLoja },
-        ]
-      : []
+
+  // Keeta: pedidos primeiro (fecham ao centavo com o repasse), Fatura como
+  // reserva, e os pedidos recentes só se nenhum dos dois existir.
+  const keetaTemPedidos =
+    !!keeta?.hasData &&
+    Math.abs(keeta.comissaoRs) + Math.abs(keeta.pagamentoOnlineRs) + Math.abs(keeta.promoLojaComSinalRs) > 0
+  const keetaItens: ItemTaxaDre[] =
+    keetaTemPedidos || keetaFaturaTaxas.hasData
+      ? itensTaxaKeeta({
+          pedidos: keetaTemPedidos
+            ? {
+                comissao: keeta!.comissaoRs,
+                pagamentoOnline: keeta!.pagamentoOnlineRs,
+                promoLoja: keeta!.promoLojaComSinalRs,
+                outrosGanhos: keeta!.outrosGanhosRs,
+              }
+            : null,
+          fatura: keetaFaturaTaxas,
+        })
+      : keetaPed.hasData
+        ? [
+            { label: "Comissão", value: keetaPed.comissaoBasica },
+            { label: "Taxa de distância", value: keetaPed.taxaDistancia },
+            { label: "Taxa de pagamento online", value: keetaPed.taxaPagamentoOnline },
+            { label: "Saque antecipado", value: keetaPed.taxaSaqueAntecipado },
+            { label: "Promoções (loja bancou)", value: keetaPed.promoLoja },
+          ]
+        : []
 
   const dreTaxas = [
     buildPlat(
       "ifood",
       "iFood",
-      [
-        { label: "Taxa de entrega", value: m.taxaEntregaIfood },
-        { label: "Comissão + serviço", value: m.taxaComissaoIfood },
-        { label: "Promoções (loja bancou)", value: m.promocoes },
-        { label: "Serviços logísticos", value: m.servicosLogisticos },
-        {
-          // "Mensalidade" no rótulo porque é o que a maioria das lojas paga
-          // aqui: 57 delas, de R$ 55 a R$ 150/mês. "Outros / anúncios"
-          // escondia justamente a cobrança mais comum da linha.
-          label: "Mensalidade / anúncios",
-          value: m.outrosDescontosIfood,
-        },
-      ],
+      ifoodItens,
       vrLiquido,
       cancelCesta.valor > 0
         ? { valor: cancelCesta.valor, qtd: cancelCesta.qtd }
         : undefined,
+      [],
+      ROTULO_DIFERENCA_IFOOD,
     ),
     buildPlat(
       "99food",

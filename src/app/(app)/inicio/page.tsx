@@ -2743,7 +2743,10 @@ function platformTotalsMerged(
       if (id === "ifood") {
         const imp = finByUnit.get(u.id)
         if (imp?.hasData) {
-          bruto += imp.bruto
+          // A régua do portal (com o frete da entrega própria) — a mesma do
+          // DRE e do resto do painel. Com `imp.bruto` cru, a taxa do iFood
+          // aqui saía menor que a do DRE pelo valor do frete próprio.
+          bruto += brutoIfoodComoNoPortal(imp)
           liquido += imp.liquido
           recebidoDireto += imp.recebidoDireto
         } else {
