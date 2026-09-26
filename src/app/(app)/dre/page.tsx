@@ -46,6 +46,7 @@ import {
 import { BrutoBreakdown } from "@/app/(app)/unidades/[codigo]/_components/bruto-breakdown"
 
 import { ResultadoTable } from "./_components/resultado-table"
+import { promocoesIfoodQuemBancou, temTurnoReal } from "@/lib/dre/plataformas-dre"
 import { DoDreAoCaixa } from "./_components/do-dre-ao-caixa"
 import { getRecebiveisRede } from "@/lib/data/recebiveis-rede"
 import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
@@ -193,23 +194,11 @@ export default async function ResultadoPage({
         new Map<string, FinanceiroResumo>(),
         null,
       ]
-  /* Promoção vem do EXTRATO, não da planilha de Pedidos — mesma correção da
-     tela Pedidos (10/08/26): a planilha não existe nas lojas só-API (0 de
-     147.134 pedidos com incentivo preenchido) e o card mostrava R$ 0,00 pro
-     iFood e pra loja numa rede que investiu R$ 67 mil no mês. Sem extrato
-     nenhum, cai no que a planilha tiver. */
-  const promoExtrato = [...finPromo.values()].reduce(
-    (acc, f) => ({
-      ifood: acc.ifood + Math.abs(f.promocaoIfood),
-      loja: acc.loja + Math.abs(f.promocaoLoja),
-    }),
-    { ifood: 0, loja: 0 },
+  const { ifood: promoIfood, loja: promoLojaIfood } = promocoesIfoodQuemBancou(
+    [...finPromo.values()],
+    pagamento,
   )
-  const temPromoExtrato = promoExtrato.ifood + promoExtrato.loja > 0
-  const promoIfood = temPromoExtrato ? promoExtrato.ifood : (pagamento?.incentivoIfood ?? 0)
-  const promoLojaIfood = temPromoExtrato ? promoExtrato.loja : (pagamento?.incentivoLoja ?? 0)
-  // Turno só existe na planilha de Pedidos; pela API tudo vem como "—".
-  const temTurno = (pagamento?.porTurno ?? []).some((t) => t.chave !== "—")
+  const temTurno = temTurnoReal(pagamento?.porTurno)
   const entregaPctBruto =
     totals.bruto > 0 ? (deliveryFee.total / totals.bruto) * 100 : 0
 

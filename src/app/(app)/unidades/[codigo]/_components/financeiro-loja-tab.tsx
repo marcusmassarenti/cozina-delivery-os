@@ -49,7 +49,9 @@ import {
   itensTaxaIfood,
   itensTaxaKeeta,
   montarPlataformaDre,
+  promocoesIfoodQuemBancou,
   ROTULO_DIFERENCA_IFOOD,
+  temTurnoReal,
   type ItemTaxaDre,
 } from "@/lib/dre/plataformas-dre"
 import type { FinanceiroResumo } from "@/lib/data/ifood-imported"
@@ -296,16 +298,11 @@ export async function FinanceiroLojaTab({
   // iFood: com a Conciliação, a abertura certa (comissão, transação,
   // promoção da loja, mensalidade/anúncios — entrega parceira e serviço
   // cobrado do cliente são do cliente, não custo). Sem ela, o que o `m` tem.
-  /* Promoção vem do EXTRATO, não da planilha de Pedidos — a mesma regra do
-     DRE da rede (10/08/26). A planilha não existe em loja só-API e o card
-     dizia "R$ 0,00" pra iFood e loja com R$ 14,8 mil de promoção no extrato
-     (Brooklin, set/26). Sem extrato, cai no que a planilha tiver. */
-  const temPromoExtrato =
-    !!ifood?.hasData && Math.abs(ifood.promocaoIfood) + Math.abs(ifood.promocaoLoja) > 0
-  const promoIfood = temPromoExtrato ? Math.abs(ifood!.promocaoIfood) : pagamento.incentivoIfood
-  const promoLojaIfood = temPromoExtrato ? Math.abs(ifood!.promocaoLoja) : pagamento.incentivoLoja
-  // Turno só existe na planilha de Pedidos; pela API tudo vem como "—".
-  const temTurno = pagamento.porTurno.some((t) => t.chave !== "—")
+  const { ifood: promoIfood, loja: promoLojaIfood } = promocoesIfoodQuemBancou(
+    ifood?.hasData ? [ifood] : [],
+    pagamento,
+  )
+  const temTurno = temTurnoReal(pagamento.porTurno)
 
   const ifoodItens: ItemTaxaDre[] = ifood?.hasData
     ? itensTaxaIfood({

@@ -205,3 +205,34 @@ export function montarPlataformaDre(p: {
     itens: lista,
   }
 }
+
+/**
+ * Promoções do iFood por quem bancou — card "Promoções (quem bancou)" do DRE
+ * da rede e da aba Financeiro da loja (um lugar só: a loja ficou sem esta
+ * regra e mostrou R$ 0,00 com R$ 14,8 mil no extrato, Brooklin set/26).
+ *
+ * Vem do EXTRATO, não da planilha de Pedidos (10/08/26): a planilha não
+ * existe em loja só-API — 0 de 147.134 pedidos com incentivo preenchido — e
+ * o card dizia R$ 0,00 numa rede que investiu R$ 67 mil no mês. Sem extrato
+ * nenhum, cai no que a planilha tiver. (A tela Pedidos tem a versão com o
+ * estorno aberto, de propósito.)
+ */
+export function promocoesIfoodQuemBancou(
+  extrato: { promocaoIfood: number; promocaoLoja: number }[],
+  planilha?: { incentivoIfood: number; incentivoLoja: number } | null,
+): { ifood: number; loja: number } {
+  const ext = extrato.reduce(
+    (a, f) => ({
+      ifood: a.ifood + Math.abs(f.promocaoIfood),
+      loja: a.loja + Math.abs(f.promocaoLoja),
+    }),
+    { ifood: 0, loja: 0 },
+  )
+  if (ext.ifood + ext.loja > 0) return ext
+  return { ifood: planilha?.incentivoIfood ?? 0, loja: planilha?.incentivoLoja ?? 0 }
+}
+
+/** Turno só existe na planilha de Pedidos; pela API tudo vem como "—". */
+export function temTurnoReal(porTurno: { chave: string }[] | null | undefined): boolean {
+  return (porTurno ?? []).some((t) => t.chave !== "—")
+}
