@@ -46,6 +46,8 @@ import {
 import { BrutoBreakdown } from "@/app/(app)/unidades/[codigo]/_components/bruto-breakdown"
 
 import { ResultadoTable } from "./_components/resultado-table"
+import { DoDreAoCaixa } from "./_components/do-dre-ao-caixa"
+import { getRecebiveisRede } from "@/lib/data/recebiveis-rede"
 import { ROTULOS, DEFINICOES } from "@/lib/financeiro/regua"
 
 /**
@@ -167,7 +169,10 @@ export default async function ResultadoPage({
   /* Entrega, antecipação e VR por bandeira dependem só das lojas com
      faturamento (`rows`) — e não uma da outra. Saem juntos (antes: em fila). */
   const lojasComFat = rows.map((r) => r.unitId)
-  const [deliveryFee, antecipFeeMap, pagamento, finPromo] = hasData
+  const mm = String(month).padStart(2, "0")
+  const inicioMes = `${year}-${mm}-01`
+  const fimMes = `${year}-${mm}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`
+  const [deliveryFee, antecipFeeMap, pagamento, finPromo, recebiveis] = hasData
     ? await Promise.all([
         // Custo de entrega das lojas com faturamento (parte das taxas das plataformas)
         getNetworkDeliveryFee(lojasComFat, year, month),
@@ -178,12 +183,15 @@ export default async function ResultadoPage({
         getNetworkPagamentoResumo(year, month, lojasComFat),
         // Promoções do EXTRATO (quem bancou) — ver o card lá embaixo.
         getFinanceiroResumoByUnits(lojasComFat, year, month),
+        // "Do DRE ao caixa": quando o líquido do período cai na conta.
+        getRecebiveisRede(lojasComFat, inicioMes, fimMes),
       ])
     : [
         { ifood: 0, ninefood: 0, keeta: 0, total: 0 },
         new Map<string, number>(),
         null,
         new Map<string, FinanceiroResumo>(),
+        null,
       ]
   /* Promoção vem do EXTRATO, não da planilha de Pedidos — mesma correção da
      tela Pedidos (10/08/26): a planilha não existe nas lojas só-API (0 de
@@ -353,6 +361,15 @@ export default async function ResultadoPage({
               operacao={totals.custoOperacao}
             />
           </div>
+
+          {/* Do DRE ao caixa — o mesmo líquido, pela data em que cai na conta.
+              Fica fora da demonstração de propósito: não soma no resultado. */}
+          {recebiveis && (
+            <DoDreAoCaixa
+              dados={recebiveis}
+              liquidoDre={Object.fromEntries(drePlats.map((p) => [p.id, p.liquido]))}
+            />
+          )}
 
           {/* Despesas operacionais do Caixa (aluguel, folha, fixas) — completam
               o DRE do delivery. Só aparece quando há custo lançado no Caixa. */}
